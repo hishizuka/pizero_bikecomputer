@@ -1,0 +1,37 @@
+#Speed(GPS) / Dist.(GPS) / Track
+#Vert.Spd/ Altitude / Accum.Alt.
+#(something) / GlideRatio / Time
+
+MAIN:
+  STATUS: true
+  LAYOUT:
+    Speed(GPS): [0, 0]
+    Dist.(GPS): [0, 1]
+    Heading(GPS): [0, 2]
+    Vert.Spd: [1, 0]
+    Altitude: [1, 1]
+    Accum.Alt.: [1, 2]
+    GlideRatio: [2, 0]
+    Timer: [2, 1]
+    Time: [2, 2]
+
+MULTI_SCAN:
+  STATUS: false
+
+ALTITUDE_GRAPH:
+  STATUS: true
+
+ACC_GRAPH:
+  STATUS: true
+
+PERFORMANCE_GRAPH:
+  STATUS: false
+
+COURSE_PROFILE_GRAPH:
+  STATUS: false
+
+SIMPLE_MAP:
+  STATUS: true
+
+QML_MAP:
+  STATUS: false

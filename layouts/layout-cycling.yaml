@@ -1,0 +1,125 @@
+MAIN:
+  STATUS: true
+  LAYOUT:
+    Power: [0, 0, 1, 2]
+    HR: [0, 2]
+    Speed: [1, 0]
+    Cad.: [1, 1]
+    Timer: [1, 2]
+    Dist.: [2, 0]
+    Work: [2, 1]
+    Ascent: [2, 2]
+
+GPS:
+  STATUS: true
+  LAYOUT:
+    Latitude: [0, 0]
+    Longitude: [0, 1]
+    Alt.(GPS): [0, 2]
+    Speed(GPS): [1, 0]
+    Dist.(GPS): [1, 1]
+    Satellites: [1, 2]
+    Error: [2, 0]
+    Error(x): [2, 1]
+    Error(y): [2, 2]
+    Heading(GPS): [3, 0]
+    GPSTime: [3, 1]
+    GPS Fix: [3,2]
+
+I2C:
+  STATUS: true
+  LAYOUT:
+    Pressure: [0, 0]
+    Altitude: [0, 1]
+    Vert.Spd: [0, 2]
+    Accum.Alt.: [1, 0]
+    Ascent: [1, 1]
+    Descent: [1, 2]
+    GlideRatio: [2, 0]
+    Light: [2, 1]
+    Heading: [2, 2]
+    CPU_MEM: [3, 0, 4, 2]
+    Temp: [3,2]
+
+ALTITUDE_GRAPH:
+  STATUS: true
+
+ACC_GRAPH:
+  STATUS: true
+    
+ANT+_raw:
+  STATUS: true
+  LAYOUT:
+    Speed(ANT+): [0,0]
+    Speed(GPS): [0,1]
+    Speed17(ANT+): [0,2]
+    Power17(ANT+): [0,3]
+    Dist.(ANT+): [1,0]
+    Dist.(GPS): [1,1]
+    Dist.17(ANT+): [1,2]
+    Work17(ANT+): [1,3]
+    Power16(ANT+): [2,0]
+    Power16s(ANT+): [2,1]
+    Power L(ANT+): [2,2]
+    Power18(ANT+): [2,3]
+    Torque Ef.(ANT+): [3,0]
+    Pedal Sm.(ANT+): [3,1]
+    Balance(ANT+): [3,2]
+    Work18(ANT+): [3,3]
+
+LAP_STAT-1:
+  STATUS: false
+  LAYOUT:
+    PLap HR: [0, 0]
+    Lap HR: [0, 1]
+    Ave HR: [0, 2]
+    PLap ASC: [0, 3]
+    PLMax HR: [1, 0]
+    LMax HR: [1, 1]
+    Max HR: [1, 2]
+    Lap ASC: [1, 3]
+    PLap CAD: [2, 0]
+    Lap CAD: [2, 1]
+    Ave CAD: [2, 2]
+    PLap DSC: [2, 3]
+    PLMax CAD: [3, 0]
+    LMax CAD: [3, 1]
+    Max CAD: [3, 2]
+    Lap DSC: [3, 3]
+
+LAP_STAT-2:
+  STATUS: false
+  LAYOUT:
+    PLap SPD: [0, 0]
+    Lap SPD: [0, 1]
+    Ave SPD: [0, 2]
+    PLap DIST: [0, 3]
+    PLMax SPD: [1, 0]
+    LMax SPD: [1, 1]
+    Max SPD: [1, 2]
+    Lap DIST: [1, 3]
+    PLap PWR: [2, 0]
+    Lap PWR: [2, 1]
+    Ave PWR: [2, 2]
+    PLap WRK: [2, 3]
+    PLMax PWR: [3, 0]
+    LMax PWR: [3, 1]
+    Max PWR: [3, 2]
+    Lap WRK: [3, 3]
+
+PERFORMANCE_GRAPH:
+  STATUS: true
+
+MULTI_SCAN:
+  STATUS: true
+
+COURSE_PROFILE_GRAPH:
+  STATUS: true
+
+SIMPLE_MAP:
+  STATUS: true
+
+QML_MAP:
+  STATUS: true
+
+
