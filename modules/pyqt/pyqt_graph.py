@@ -382,7 +382,7 @@ class CourseProfileGraphWidget(BaseMapWidget):
     self.plot.setXRange(min=self.map_pos['x'], max=x_end, padding=0)
     y_min = float('inf')
     y_max = -float('inf')
-    if self.map_pos['x_index'] < x_end_index:
+    if 0 <= self.map_pos['x_index'] < x_end_index:
       y_min = np.min(self.config.logger.course_altitude[self.map_pos['x_index']:x_end_index])
       y_max = np.max(self.config.logger.course_altitude[self.map_pos['x_index']:x_end_index])
     
