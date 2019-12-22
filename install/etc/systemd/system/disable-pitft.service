@@ -1,0 +1,13 @@
+[Unit]
+Description = set pitft brightness off
+Before = shutdown.target
+DefaultDependencies = no
+
+[Service]
+ExecStart = /usr/local/bin/disable-pitft
+Type = oneshot
+RemainAfterExit = true
+
+[Install]
+WantedBy = shutdown.target
+
