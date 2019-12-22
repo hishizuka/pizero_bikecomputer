@@ -17,5 +17,5 @@ fi
 
 # O: optimize
 # u: directly output to logging text
-/usr/bin/python3 -u pizero_bikecomputer.py  f > ./log/debug.txt 2> >(grep --line-buffered -v 'Operation timed out' | gawk '{print "[ERROR]", $0; fflush()}')
+/usr/bin/python3 -u pizero_bikecomputer.py -f > ./log/debug.txt 2> >(grep --line-buffered -v 'Operation timed out' | gawk '{print "[ERROR]", $0; fflush()}')
 
