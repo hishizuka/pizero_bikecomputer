@@ -1,10 +1,10 @@
 #!/bin/bash
 
-PGMDIR=/home/pi/pizero_bikecomputer_v1
+PGMDIR=/home/pi/pizero_bikecomputer
 
 export QT_QPA_PLATFORM=xcb
 
-cd /home/pi/pizero_bikecomputer_v1/
+cd /home/pi/pizero_bikecomputer/
 
 if [ -e ./log/debug.txt ]; then
 /bin/cp ./log/debug.txt ./log/debug.txt-`date "+%Y%m%d_%H%M%S"`
