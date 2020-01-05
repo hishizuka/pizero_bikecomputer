@@ -31,9 +31,10 @@ class Config():
   G_LANG = "EN"
 
   #loop interval
-  G_SENSOR_INTERVAL = 1.0 #[s] for sensor_core, GPS
+  G_SENSOR_INTERVAL = 1.0 #[s] for sensor_core
   G_ANT_INTERVAL = None #for ANT+
   G_I2C_INTERVAL = 0.2 #[s] for I2C (altitude, accelerometer, etc)
+  G_GPS_INTERVAL = 0.3 #[s] for GPS
   G_DRAW_INTERVAL = 1000 #[ms] for GUI
   G_LOGGING_INTERVAL = 1000 #[ms] for logger_core (log interval)
   G_REALTIME_GRAPH_INTERVAL = 200 #[ms] for pyqt_graph

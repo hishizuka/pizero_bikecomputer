@@ -12,12 +12,12 @@ _SENSOR_GPS = False
 try:
   from dateutil import tz
   from dateutil import parser
-  from gps3.agps3threaded import AGPS3mechanism
+  from gps3 import gps3
   from pyproj import Geod
   from pytz import timezone
   #device test
-  #_gps_socket = gps3.GPSDSocket()
-  #_gps_socket.close()
+  _gps_socket = gps3.GPSDSocket()
+  _gps_socket.close()
   _SENSOR_GPS = True
 except:
   pass
@@ -26,7 +26,8 @@ print('  GPS : ',_SENSOR_GPS)
 
 class SensorGPS(Sensor):
 
-  gps_thread = None
+  gps_socket = None
+  gps_datastream = None
   pre_lat = np.nan
   pre_lon = np.nan
   pre_alt = np.nan
@@ -45,38 +46,43 @@ class SensorGPS(Sensor):
     'epx', 'epy', 'epv','error',
     'time','utctime','mode']
   is_time_modified = False
-  is_timezone_modified = False
+  is_fixed = False
   is_altitude_modified = False
 
   def sensor_init(self):
     if _SENSOR_GPS:
       self.geo = Geod(ellps='WGS84')
-      self.gps_thread = AGPS3mechanism()
-      self.gps_thread.stream_data()
-      #run_thread(self, usnap=.2, daemon=True
-      self.gps_thread.run_thread()
+      self.gps_socket = gps3.GPSDSocket()
+      self.gps_datastream = gps3.DataStream()
+      self.gps_socket.connect()
+      self.gps_socket.watch()
     self.reset()
     self.reset_course_index()
     for element in self.elements:
       self.values[element] = np.nan
-    self.course_i = 0
 
   def reset(self):
+    if 'distance' in self.values and 'distance_geod' in self.values:
+      print("GPS DISTANCE", self.values['distance'], self.values['distance_geod'])
     self.values['distance'] = 0
+    self.values['distance_geod'] = 0
   
   def reset_course_index(self):
     self.values['course_index'] = -1
     self.pre_index = -1
-    self.first_calc = False
+    self.first_update_course_index = False
 
   def quit(self):
     if _SENSOR_GPS:
-      self.gps_thread.stop()
+      self.gps_socket.close()
 
-  def update(self):
-
-    if not _SENSOR_GPS:
-      if self.config.G_DUMMY_OUTPUT:
+  def start(self):
+    if _SENSOR_GPS:
+      self.update()
+    elif self.config.G_DUMMY_OUTPUT:
+      course_i = 0
+      while not self.config.G_QUIT:
+        time.sleep(self.config.G_SENSOR_INTERVAL)
         for element in self.elements:
           self.values[element] = np.nan
         #self.values['track_str'] = "-"
@@ -88,20 +94,32 @@ class SensorGPS(Sensor):
           self.values['distance'] += self.values['speed']
         
         if self.config.logger != None and len(self.config.logger.course_longitude) > 0:
-          self.values['lat'] = self.config.logger.course_latitude[self.course_i]
-          self.values['lon'] = self.config.logger.course_longitude[self.course_i]
-          self.course_i += 5
-          if self.course_i >= len(self.config.logger.course_longitude)-1:
-            self.course_i = len(self.config.logger.course_longitude)-1
+          self.values['lat'] = self.config.logger.course_latitude[course_i]
+          self.values['lon'] = self.config.logger.course_longitude[course_i]
+          course_i += 5
+          course_i = course_i % len(self.config.logger.course_longitude)
+          if course_i >= len(self.config.logger.course_longitude)-1:
+            course_i = len(self.config.logger.course_longitude)-1
           index = self.values['course_index']
           if index == -1:
             index = 0
           self.values['course_index'] = self.get_course_index(index)
+          print(self.values['course_index'])
 
         self.values['timestamp'] = datetime.datetime.now()
-      return
 
-    g = self.gps_thread.data_stream
+  def update(self):
+    for new_data in self.gps_socket:
+      if self.config.G_QUIT:
+        break
+      time.sleep(self.config.G_GPS_INTERVAL)
+      if new_data:
+        self.gps_datastream.unpack(new_data)
+        self.get_GPS_values()
+
+  def get_GPS_values(self):
+    g = self.gps_datastream.TPV
+    gs = self.gps_datastream.SKY
     geo_inv_result = []
     
     if not np.isnan(self.values['lat']) and not np.isnan(self.values['lon']):
@@ -114,17 +132,17 @@ class SensorGPS(Sensor):
       self.values[element] = np.nan
     
     #coordinate
-    if g.lat != self.config.G_GPS_NULLVALUE and g.lon != self.config.G_GPS_NULLVALUE:
-      if (-90 <= g.lat <= 90) and (-180 <= g.lon <= 180):
-        self.values['lat'] = g.lat
-        self.values['lon'] = g.lon
+    if g['lat'] != self.config.G_GPS_NULLVALUE and g['lon'] != self.config.G_GPS_NULLVALUE:
+      if (-90 <= g['lat'] <= 90) and (-180 <= g['lon'] <= 180):
+        self.values['lat'] = g['lat']
+        self.values['lon'] = g['lon']
     else: #copy from pre value
         self.values['lat'] = self.pre_lat
         self.values['lon'] = self.pre_lon
     
     #altitude
-    if g.alt != self.config.G_GPS_NULLVALUE:
-      self.values['alt'] = g.alt
+    if g['alt'] != self.config.G_GPS_NULLVALUE:
+      self.values['alt'] = g['alt']
       #floor
       if self.values['alt'] < -500:
         self.values['alt'] = -500
@@ -136,34 +154,36 @@ class SensorGPS(Sensor):
       if not np.isnan(self.pre_lon) and not np.isnan (self.pre_lat):
         #2D distance : (x1, y1), (x2, y2)
         geo_inv_result = self.geo.inv(self.values['lon'],self.values['lat'],self.pre_lon,self.pre_lat)
+        dist = self.config.dist_on_earth(self.values['lon'],self.values['lat'],self.pre_lon,self.pre_lat)
         #need 3D distance? : (x1, y1, z1), (x2, y2, z2)
 
         if self.config.G_STOPWATCH_STATUS == "START":
           #unit: m
-          self.values['distance'] += geo_inv_result[2]
+          self.values['distance_geod'] += geo_inv_result[2]
+          self.values['distance'] += dist
     
     #speed
-    if g.speed != self.config.G_GPS_NULLVALUE:
+    if g['speed'] != self.config.G_GPS_NULLVALUE:
       #unit m/s
-      self.values['speed'] = g.speed
+      self.values['speed'] = g['speed']
       if self.values['speed'] <= self.config.G_GPS_SPEED_CUTOFF:
         self.values['speed'] = 0.0
     
     #track
-    if g.track != self.config.G_GPS_NULLVALUE and self.values['speed'] > 0.0:
-      self.values['track'] = g.track
+    if g['track'] != self.config.G_GPS_NULLVALUE and self.values['speed'] > 0.0:
+      self.values['track'] = g['track']
       self.values['track_str'] = self.get_direction_arrow_str(self.values['track'])
     
     #satellites
     (self.values['total_sats'], self.values['used_sats'])\
-     = self.satellites_used(g.satellites)
+     = self.satellites_used(gs['satellites'])
     self.values['used_sats_str'] \
       = str(self.values['used_sats']) + "/" + str(self.values['total_sats'])
     
     #err
     for error in ['epx', 'epy', 'epv']:
-      if eval("g."+error) != self.config.G_GPS_NULLVALUE:
-        self.values[error] = eval("g."+error)
+      if g[error] != self.config.G_GPS_NULLVALUE:
+        self.values[error] = g[error]
     if type(self.values['epx']) in [float, int] and type(self.values['epy']) in [float, int]\
       and not np.isnan(self.values['epx']) and not np.isnan(self.values['epy']):
         self.values['error'] = math.sqrt(self.values['epx'] * self.values['epy'])
@@ -171,36 +191,36 @@ class SensorGPS(Sensor):
       self.values['error'] = np.nan
     
     #UTC time
-    if g.time != self.config.G_GPS_NULLVALUE:
-      self.values['time'] = g.time
+    if g['time'] != self.config.G_GPS_NULLVALUE:
+      self.values['time'] = g['time']
       self.values['utctime'] = self.values['time'][11:16] #[11:19] for HH:MM:SS
       if not self.is_time_modified:
         self.is_time_modified = self.set_time()
     
     #fix
-    if g.mode != self.config.G_GPS_NULLVALUE:
-      self.values['mode'] = g.mode
-      if not self.is_timezone_modified and self.values['mode'] == 3: #3D Fix
-        self.is_timezone_modified = self.set_timezone()
+    if g['mode'] != self.config.G_GPS_NULLVALUE:
+      self.values['mode'] = g['mode']
+      if not self.is_fixed and self.values['mode'] == 3: #3D Fix
+        self.is_fixed = self.set_timezone()
     
     #timestamp
     self.values['timestamp'] = datetime.datetime.now()
 
-    #update course_index
+    #course_index
     index = self.values['course_index']
     if index == -1:
       index = 0
-    
-    #necessary to run in initial calc 
-    # or in running status (equal to distance between now and pre points)
-    if len(geo_inv_result) > 0 \
-      and (not self.first_calc or (self.first_calc and geo_inv_result[2] >= self.config.G_GPS_SPEED_CUTOFF)):
-      self.values['course_index'] = self.get_course_index(index)
-      self.first_calc = True
+    #only update first GPS fix and running for 
+    if len(geo_inv_result) > 0 and ( \
+      not self.first_update_course_index or \
+      (self.first_update_course_index and geo_inv_result[2] >= self.config.G_GPS_SPEED_CUTOFF) \
+      ):
+      index = self.get_course_index(index)
+      self.first_update_course_index = True
     else:
-      self.values['course_index'] = -1
+      index = -1
     #get valid value from past
-    if self.values['course_index'] == -1 and self.pre_index != -1:
+    if index == -1 and self.pre_index != -1:
       self.values['course_index'] = self.pre_index
     #update pre_value with valid value
     if self.values['course_index'] != -1:
@@ -272,7 +292,7 @@ class SensorGPS(Sensor):
     if self.config.logger == None or len(self.config.logger.course_longitude) == 0:
       return -1
     #no gps value
-    if np.isnan(self.values['lon']) or np.isnan(self.values['lat']) or not _SENSOR_GPS:
+    if np.isnan(self.values['lon']) or np.isnan(self.values['lat']):
       return -1
     
     #search with numpy
