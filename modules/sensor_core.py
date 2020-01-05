@@ -34,6 +34,7 @@ class SensorCore():
   values = {}
   process = None
   thread_ant = None
+  thread_gps = None
   thread_integrate = None
   threshold = {'HR':15, 'SPD':5, 'CDC':3, 'PWR':3}
   grade_range = 9
@@ -73,6 +74,7 @@ class SensorCore():
 
     time_profile = [datetime.datetime.now(),] #for time profile
     self.sensor_gps = SensorGPS(config, self.values['GPS'])
+    self.thread_gps = threading.Thread(target=self.sensor_gps.start, name="thread_gps", args=())
     time_profile.append(datetime.datetime.now()) #for time profile
     self.sensor_ant = SensorANT(config, self.values['ANT+'])
     self.thread_ant = threading.Thread(target=self.sensor_ant.start, name="thread_ant", args=())
@@ -100,6 +102,7 @@ class SensorCore():
     print("\tGPS/ANT+/I2C/GPIO/integrate/start:", sec_diff)
 
   def start(self):
+    self.thread_gps.start()
     self.thread_ant.start()
     self.sensor_gpio.update()
     self.thread_i2c.start()
@@ -136,7 +139,7 @@ class SensorCore():
       grade_use = {'ANT+': False, 'GPS': False}
       time_profile.append(datetime.datetime.now())
       #self.sensor_i2c.update()
-      self.sensor_gps.update()
+      #self.sensor_gps.update()
       self.sensor_ant.update() #for dummy
 
       now_time = datetime.datetime.now()
