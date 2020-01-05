@@ -62,10 +62,7 @@ class SensorGPS(Sensor):
       self.values[element] = np.nan
 
   def reset(self):
-    if 'distance' in self.values and 'distance_geod' in self.values:
-      print("GPS DISTANCE", self.values['distance'], self.values['distance_geod'])
     self.values['distance'] = 0
-    self.values['distance_geod'] = 0
   
   def reset_course_index(self):
     self.values['course_index'] = -1
@@ -104,7 +101,6 @@ class SensorGPS(Sensor):
           if index == -1:
             index = 0
           self.values['course_index'] = self.get_course_index(index)
-          print(self.values['course_index'])
 
         self.values['timestamp'] = datetime.datetime.now()
 
@@ -154,13 +150,11 @@ class SensorGPS(Sensor):
       if not np.isnan(self.pre_lon) and not np.isnan (self.pre_lat):
         #2D distance : (x1, y1), (x2, y2)
         geo_inv_result = self.geo.inv(self.values['lon'],self.values['lat'],self.pre_lon,self.pre_lat)
-        dist = self.config.dist_on_earth(self.values['lon'],self.values['lat'],self.pre_lon,self.pre_lat)
         #need 3D distance? : (x1, y1, z1), (x2, y2, z2)
 
         if self.config.G_STOPWATCH_STATUS == "START":
           #unit: m
-          self.values['distance_geod'] += geo_inv_result[2]
-          self.values['distance'] += dist
+          self.values['distance'] += geo_inv_result[2]
     
     #speed
     if g['speed'] != self.config.G_GPS_NULLVALUE:
