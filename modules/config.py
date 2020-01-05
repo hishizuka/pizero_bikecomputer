@@ -697,18 +697,19 @@ class Config():
       return dt
     print("err", ts, len(ts))
 
-  def dist_on_earth(self, pos0_lon, pos0_lat, pos1_lon, pos1_lat):
-    pos0_rad = [radians(pos0_lon), radians(pos0_lat)]
-    pos1_rad = [radians(pos1_lon), radians(pos1_lat)]
+  def dist_on_earth(self, p0_lon, p0_lat, p1_lon, p1_lat):
+    if p0_lon == p1_lon and p0_lat == p1_lat:
+      return 0
+    (r0_lon, r0_lat, r1_lon, r1_lat) = map(radians, [p0_lon, p0_lat, p1_lon, p1_lat])
     cos_d = \
-      sin(pos0_rad[1])*sin(pos1_rad[1]) \
-      + cos(pos0_rad[1]) * cos(pos1_rad[1]) * cos(pos0_rad[0] - pos1_rad[0])
+      sin(r0_lat)*sin(r1_lat) \
+      + cos(r0_lat) * cos(r1_lat) * cos(r0_lon - r1_lon)
     try:
       res = 1000*acos(cos_d)*6378.137
       return res
     except:
       traceback.print_exc()
       print("cos_d =", cos_d)
-      print("paramater:", pos0_lon, pos0_lat, pos1_lon, pos1_lat)
+      print("paramater:", p0_lon, p0_lat, p1_lon, p1_lat)
       return 0
-  
+ 

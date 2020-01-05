@@ -744,22 +744,6 @@ class SimpleMapWidget(BaseMapWidget):
     self.tracks_lon = []
     self.tracks_lat = []
 
-  def lonlat2pix(self, lon, lat):
-    if np.isnan(lon) or np.isnan(lat):
-      return(np.nan, np.nan)
-    x = 2**(self.zoomlevel+7)*(lon/180+1)
-    #y = 2**(self.zoomlevel+7)/np.pi*(-np.arctanh(np.sin(np.pi/180*lat))+np.arctanh(np.sin(np.pi/180*self.const_pixel)))
-    y = 2**(self.zoomlevel+7)*(-np.arctanh(np.sin(np.pi/180*lat))/np.pi+1)
-    return(x, y)
-  
-  def pix2lonlat(self, pix_x, pix_y):
-    if np.isnan(pix_x) or np.isnan(pix_y):
-      return(np.nan, np.nan)
-    x = 180*(pix_x/(2**(self.zoomlevel+7))-1)
-    #y = 180/np.pi*(np.arcsin(np.tanh(-np.pi/2**(self.zoomlevel+7)*pix_y+np.arctanh(np.sin(np.pi/180*self.const_pixel)))))
-    y = 180/np.pi*(np.arcsin(np.tanh(-np.pi/(2**(self.zoomlevel+7))*pix_y+np.pi)))
-    return(x, y)
-
   def calc_y_mod(self, lat):
     if np.isnan(lat):
       return
