@@ -45,14 +45,6 @@ class SensorSPI(Sensor):
         self.send_display = True
       except:
         pass
-    elif self.config.G_DISPLAY == 'DFRobot_RPi_Display':
-      try:
-        from .spi.dfrobot_rpi_display import DFRobotRPiDisplay
-        self.display = DFRobotRPiDisplay(self.config)
-        self.send_display = True
-      except:
-        pass
-
 
   def reset(self):
     for key in self.elements:
