@@ -114,7 +114,8 @@ class LoggerCore(QtCore.QObject):
     self.signal_stop.connect(self.timer_stop)
     t = datetime.datetime.utcnow()
     if _IMPORT_AMBIENT:
-      self.am = ambient.Ambient("8192", "2930b14626cec495","317fbd7966d4cacf")
+      #need to get ambient account
+      #self.am = ambient.Ambient(channel_ID, write_key)
       self.send_time = datetime.datetime.now()
     print("\tlogger_core : setup ambient...: done", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
     #loading course -> move to config value and loading from screen
