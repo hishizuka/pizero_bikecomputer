@@ -21,3 +21,10 @@ https://qiita.com/hishi/items/46619b271daaa9ad41b3
 
 # Abstract
 
+# License
+
+This repository is available under the [GNU Affero General Public License v3.0](https://github.com/hishizuka/pizero_bikecomputer/edit/master/LICENSE)
+
+# Author
+
+[hishizuka](https://github.com/hishizuka/) ([@pi0bikecomputer](https://twitter.com/pi0bikecomputer) at twitter)
