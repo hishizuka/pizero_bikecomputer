@@ -3,7 +3,21 @@
 # pizero_bikecomputer
 a GPS bike computer based on Raspberry Pi Zero (W, WH)
 
-detail
+detail in Japanese
 https://qiita.com/hishi/items/46619b271daaa9ad41b3
 
-documents is comming soon...
+# Table of Contents
+
+- [Abstract](#abstract)
+- [Features](#features)
+- [Assembly]
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Usage](#usage)
+- [Comparison with other bike computers](#comparison)
+  - [Overview](#overview)
+- [Q&A](#qa)
+
+
+# Abstract
+
