@@ -34,7 +34,7 @@ comming soon!
 
 ![title-03.png](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/100741/b355cb92-8e7f-6b3f-7cd0-98ba8803a56c.png)
 
-| Items | Edge830 | Pi Zero Cyclecomputer |
+| Items | Edge830 | Pi Zero Bikecomputer |
 |:-:|:-:|:-:|
 | Distance | 193.8 km  | 194.3 km  |
 | Work |  3,896 kJ | 3,929 kJ  |
