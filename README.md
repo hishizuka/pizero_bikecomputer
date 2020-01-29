@@ -19,11 +19,27 @@ https://qiita.com/hishi/items/46619b271daaa9ad41b3
 - [Q&A](#qa)
 
 
-# Abstract
-
 ...
 
 comming soon!
+
+
+# Abstract
+
+![image](https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F100741%2Fa6746d2f-bae0-a511-f6e7-972d4c6bc592.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=a8197e8537ebdd4fcd490776442855c7)
+
+# Comparison
+
+- 200km ride with Garmin Edge 830 and Pizero Bikecomputer ([strava activity](https://www.strava.com/activities/2834588492))
+
+![title-03.png](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/100741/b355cb92-8e7f-6b3f-7cd0-98ba8803a56c.png)
+
+| Items | Edge830 | Pi Zero Cyclecomputer |
+|:-:|:-:|:-:|
+| Distance | 193.8 km  | 194.3 km  |
+| Work |  3,896 kJ | 3,929 kJ  |
+| Moving time | 9:12 | 9:04  |
+| Total Ascent | 2,496 m | 2,569 m |
 
 # License
 
