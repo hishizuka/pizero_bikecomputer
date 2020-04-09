@@ -2,27 +2,19 @@ import sqlite3
 import time
 import datetime
 
+from .logger import Logger
+
 
 class config_local():
   G_LOG_DB = "./log.db~"
   G_LOG_DIR = "./"
-  G_PRODUCT = "Pizero Bikecomputer"
+  G_PRODUCT = "Pizero BIKECOMPUTER"
   G_VERSION_MAJOR = 0
   G_VERSION_MINOR = 1
   G_UNIT_ID = "0000000000000000"
 
 
-class LoggerCsv():
-        
-  config = None
-
-  #for DB
-  con = None
-  cur = None
-  
-  def __init__(self, config):
-    self.config = config
- 
+class LoggerCsv(Logger):
 
   def write_log(self):
     

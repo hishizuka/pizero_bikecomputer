@@ -104,7 +104,9 @@ class ScreenWidget(QtWidgets.QWidget):
     self.set_minimum_size()
     
   def set_minimum_size(self):
-    pass
+    w = int(self.width()/(self.max_width+1))
+    for i in range(self.max_width+1):
+      self.layout.setColumnMinimumWidth(i, w)
 
   def add_items(self):
     self.items = []
@@ -140,6 +142,9 @@ class ScreenWidget(QtWidgets.QWidget):
     pass
 
   def update_display(self):
+    if self.items is None:
+      return
+      
     for item in self.items:
       #item.update_value(eval(self.config.gui.gui_config.[item.name][1]))
       try:

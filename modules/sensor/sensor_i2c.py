@@ -101,7 +101,7 @@ class SensorI2C(Sensor):
     'vertical_speed', 
     'light',
     'motion', 'm_stat',
-    'heading',
+    'heading', 'heading_str',
     'voltage_battery', 'voltage_in', 'current_in', 'voltage_out', 'current_out', 
     'capacity_in', 'capacity_out', 'battery_percentage',
   )
@@ -137,11 +137,16 @@ class SensorI2C(Sensor):
   timestamp_array = []
   timestamp_size = vspeed_size # [s]
 
+  #for kalman filter
   kf = None
   dt = None
 
   def sensor_init(self):
+    self.vspeed_size *= int(1 / self.config.G_I2C_INTERVAL)
+    self.vspeed_bin *= int(1 / self.config.G_I2C_INTERVAL)
+    self.timestamp_size *= int(1 / self.config.G_I2C_INTERVAL)
     self.reset()
+    
     #barometic pressure & temperature sensor
     if _SENSOR['BMP280']:
       self.sensor['i2c_baro_temp'] = BMP280()
@@ -154,9 +159,16 @@ class SensorI2C(Sensor):
     if _SENSOR['BUTTON_SHIM']:
       self.button_shim = ButtonShim(self.config)
     
-    self.vspeed_size *= int(1 / self.config.G_I2C_INTERVAL)
-    self.vspeed_bin *= int(1 / self.config.G_I2C_INTERVAL)
-    self.timestamp_size *= int(1 / self.config.G_I2C_INTERVAL)
+    self.graph_values = {}
+    for g in self.graph_keys:
+      self.graph_values[g] = {}
+      for i in range(3):
+        self.graph_values[g][i] = [np.nan] * self.config.G_GUI_REALTIME_GRAPH_RANGE
+    self.timestamp_array = [None] * self.timestamp_size
+    self.vspeed_array = [np.nan] * self.vspeed_size
+    self.median_array = [np.nan] * self.median_size
+    for key in self.filter_array:
+      self.filter_array[key] = [np.nan] * self.filter_size[key]
 
   def reset(self):
     for key in self.elements:
@@ -166,13 +178,7 @@ class SensorI2C(Sensor):
     self.values['total_ascent'] = 0
     self.values['total_descent'] = 0
     self.values['accumulated_altitude'] = 0
-    #self.filter_array = {'LP1':[], 'LP2':[]}
-    self.graph_values = {}
-    for g in self.graph_keys:
-      self.graph_values[g] = {}
-      for i in range(3):
-        self.graph_values[g][i] = [np.nan] * self.config.G_GUI_REALTIME_GRAPH_RANGE
-    
+        
     #kalman filter for altitude
     self.dt = self.config.G_I2C_INTERVAL
     self.kf = KalmanFilter(dim_x=2, dim_z=1)
@@ -182,20 +188,22 @@ class SensorI2C(Sensor):
     self.kf.P *= 1000.
     self.kf.R = 5
     #self.kf.Q = Q_discrete_white_noise(2, self.dt, .1)
-    self.kf.Q = np.array([[.25*self.dt**4, .5*self.dt**3],
-                          [ .5*self.dt**3,    self.dt**2]])
+    self.kf.Q = np.array(
+      [[.25*self.dt**4, .5*self.dt**3],
+       [ .5*self.dt**3,    self.dt**2]])
 
   def start(self):
     while(not self.config.G_QUIT):
-      time.sleep(self.config.G_I2C_INTERVAL)
+      self.sleep()
+      #time.sleep(self.config.G_I2C_INTERVAL)
       self.update()
+      self.get_sleep_time(self.config.G_I2C_INTERVAL)
     
   def update(self):
     #timestamp
     self.values['timestamp'] = datetime.datetime.now()
-    if len(self.timestamp_array) >= self.timestamp_size:
-      del(self.timestamp_array[0])
-    self.timestamp_array.append(self.values['timestamp'])
+    self.timestamp_array[0:-1] = self.timestamp_array[1:]
+    self.timestamp_array[-1] = self.values['timestamp']
 
     if _SENSOR['NONE']:
       return
@@ -225,6 +233,9 @@ class SensorI2C(Sensor):
       traceback.print_exc()
     
     self.values['heading'] = self.sensor['i2c_imu'].values['heading']
+    #track
+    if self.values['heading'] != np.nan: # and self.config.G_STOPWATCH_STATUS == "START":
+      self.values['heading_str'] = self.config.get_track_str(self.values['heading'])
     self.values['m_stat'] = self.sensor['i2c_imu'].values['moving_status']
    
     acc = [0,0,0]
@@ -242,8 +253,8 @@ class SensorI2C(Sensor):
     #put into graph
     for g in self.graph_keys:
       for i in range(3):
-        del(self.graph_values[g][i][0])
-        self.graph_values[g][i].append(self.values['g_acc'][i])
+        self.graph_values[g][i][0:-1] = self.graph_values[g][i][1:]
+        self.graph_values[g][i][-1] = self.values['g_acc'][i]
 
   def read_baro_temp(self):
     try:
@@ -262,7 +273,7 @@ class SensorI2C(Sensor):
 
     #timestamp_diff
     if self.pre_timestamp_for_spike == None:
-      if len(self.timestamp_array) >= 1:
+      if self.timestamp_array[-1] != None:
         self.pre_timestamp_for_spike = self.timestamp_array[-1]
     else:
       timestamp_diff = (self.timestamp_array[-1]-self.pre_timestamp_for_spike).total_seconds()
@@ -287,10 +298,9 @@ class SensorI2C(Sensor):
     
     if not np.isnan(self.values['altitude_raw']):
       #median
-      if len(self.median_array) > self.median_size:
-        del(self.median_array[0])
-      self.median_array.append(self.values['altitude_raw'])
-      self.median_val = np.median(self.median_array)
+      self.median_array[0:-1] = self.median_array[1:]
+      self.median_array[-1] = self.values['altitude_raw']
+      self.median_val = np.nanmedian(self.median_array)
       
       #filterd altitude
       self.update_lp('LP1') #use median
@@ -305,7 +315,7 @@ class SensorI2C(Sensor):
       #total ascent/descent
       if self.config.G_STOPWATCH_STATUS == "START":
         v = self.filter_array['LP2'][-1]
-        if np.isnan(self.values['pre_altitude']):
+        if np.isnan(self.values['pre_altitude']) and not np.isnan(v):
           self.values['pre_altitude'] = v
         else:
           alt_diff = v - self.values['pre_altitude']
@@ -316,10 +326,9 @@ class SensorI2C(Sensor):
             self.values['pre_altitude'] = v
 
       #vertical speed (m/s)
-      if len(self.vspeed_array) >= self.vspeed_size:
-        del(self.vspeed_array[0])
-      self.vspeed_array.append(self.values['altitude_raw'])
-      if len(self.timestamp_array) >= self.vspeed_bin:
+      self.vspeed_array[0:-1] = self.vspeed_array[1:]
+      self.vspeed_array[-1] = self.values['altitude_raw']
+      if self.timestamp_array[-self.vspeed_bin] != None and self.timestamp_array[-1] != None:
         i = -self.vspeed_bin
         time_delta = (self.timestamp_array[-1] - self.timestamp_array[i]).total_seconds()
         if time_delta > 0:
@@ -346,20 +355,15 @@ class SensorI2C(Sensor):
   def update_lp(self, key):
     value = self.median_val 
     #LP + Median
-    if len(self.filter_array[key]) > 0:
+    if not np.isnan(self.filter_array[key][-1]):
       value = 1/self.filter_val[key] * value\
         + (self.filter_val[key]-1)/self.filter_val[key] * self.filter_array[key][-1]
       
-    if len(self.filter_array[key]) >= self.filter_size[key]:
-      del(self.filter_array[key][0])
-    #filter value
-    self.filter_array[key].append(value)
+    self.filter_array[key][0:-1] = self.filter_array[key][1:]
+    self.filter_array[key][-1] = value
 
   def update_kf(self):
     self.kf.predict()
     self.kf.update(self.values['altitude_raw'])
     self.values['altitude_kalman'] = self.kf.x[0][0]
-
-
-
 

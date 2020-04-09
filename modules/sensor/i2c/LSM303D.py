@@ -252,18 +252,22 @@ class LSM303D(i2c.i2c):
 
     #stop detection
     for i in range(X, Z+1):
-      if len(self.acc_var[i]) > self.mov_bin:
-        del(self.acc_var[i][0])
-      self.acc_var[i].append(self.values['acc_raw'][i])
+      #if len(self.acc_var[i]) > self.mov_bin:
+      #  del(self.acc_var[i][0])
+      #self.acc_var[i].append(self.values['acc_raw'][i])
+      self.acc_var[i][0:-1] = self.acc_var[i][1:]
+      self.acc_var[i][-1] = self.values['acc_raw'][i]
       self.acc_var_value[i] = np.var(self.acc_var[i])
     moving = 0
     if self.acc_var_value[0] > self.moving_threshold \
       and self.acc_var_value[1] > self.moving_threshold \
       and self.acc_var_value[2] > self.moving_threshold:
       moving = 1
-    if len(self.moving) > self.mov_bin:
-      del(self.moving[0])
-    self.moving.append(moving)
+    #if len(self.moving) > self.mov_bin:
+    #  del(self.moving[0])
+    #self.moving.append(moving)
+    self.moving[0:-1] = self.moving[1:]
+    self.moving[-1] = moving
     self.values['moving_status'] = self.moving[-1]
     
     if self.do_calibrate_position and sum(self.moving) == 0:

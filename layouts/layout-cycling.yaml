@@ -40,12 +40,6 @@ I2C:
     Heading: [2, 2]
     CPU_MEM: [3, 0, 4, 2]
     Temp: [3,2]
-
-ALTITUDE_GRAPH:
-  STATUS: true
-
-ACC_GRAPH:
-  STATUS: true
     
 ANT+_raw:
   STATUS: true
@@ -119,7 +113,6 @@ COURSE_PROFILE_GRAPH:
 SIMPLE_MAP:
   STATUS: true
 
-QML_MAP:
-  STATUS: true
-
+CUESHEET:
+  STATUS: false
 

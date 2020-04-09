@@ -21,9 +21,7 @@ GPIO_CHANNEL = 0
 GPIO_DISP = 27 #13 in GPIO.BOARD
 GPIO_SCS = 22 #15 in GPIO.BOARD
 GPIO_VCOMSEL = 17 #11 in GPIO.BOARD
-#GPIO_BACKLIGHT = 4 #7 in GPIO.BOARD
-#GPIO_BACKLIGHT = 23 #16 in GPIO.BOARD
-GPIO_BACKLIGHT = 18 #12 in GPIO.BOARD
+GPIO_BACKLIGHT = 18 #12 in GPIO.BOARD with hardware PWM in pigpio
 
 #update mode
 # https://www.j-display.com/product/pdf/Datasheet/3LPM027M128C_specification_ver02.pdf
@@ -38,7 +36,6 @@ SCREEN_HEIGHT = 240
 
 #BACKLIGHT frequency
 GPIO_BACKLIGHT_FREQ = 64
-#GPIO_BACKLIGHT_FREQ = 60
 
 class MipDisplay():
 
@@ -47,7 +44,6 @@ class MipDisplay():
   interval = 0.25
   pre_img = np.array([])
   buff_width = int(SCREEN_WIDTH*3/8)+2 #for 3bit update mode
-  #buff_width = int(SCREEN_WIDTH*4/8)+2 #for 4bit update mode
   brightness_index = 0
   brightness_table = [0,10,100]
 
@@ -77,9 +73,6 @@ class MipDisplay():
     GPIO.output(GPIO_VCOMSEL, 1) #H=VCOM(64Hz)
     time.sleep(0.1)
 
-    #GPIO.setup(GPIO_BACKLIGHT, GPIO.OUT)
-    #self.backlight = GPIO.PWM(GPIO_BACKLIGHT, GPIO_BACKLIGHT_FREQ)
-    #self.backlight.start(0)
     self.pig = pigpio.pi()
     self.pig.set_mode(GPIO_BACKLIGHT, pigpio.OUTPUT)
     self.pig.hardware_PWM(GPIO_BACKLIGHT, GPIO_BACKLIGHT_FREQ, 0)
@@ -97,6 +90,7 @@ class MipDisplay():
     self.spi.xfer2([0x20,0]) # ALL CLEAR MODE
     GPIO.output(GPIO_SCS, 0)
     time.sleep(0.000006)
+    self.set_brightness(0)
   
   def no_update(self):
     GPIO.output(GPIO_SCS, 1)
@@ -199,20 +193,16 @@ class MipDisplay():
   def set_brightness(self, b):
     if not _SENSOR_DISPLAY:
       return
-    #self.backlight.ChangeDutyCycle(b)
     self.pig.hardware_PWM(GPIO_BACKLIGHT, GPIO_BACKLIGHT_FREQ, b*10000)
-    time.sleep(0.05)
 
   def backlight_blink(self):
     if not _SENSOR_DISPLAY:
       return
     for x in range(2):
       for pw in range(0,100,1):
-        #self.backlight.ChangeDutyCycle(pw)
         self.pig.hardware_PWM(GPIO_BACKLIGHT, GPIO_BACKLIGHT_FREQ, pw*10000)
         time.sleep(0.05)
       for pw in range(100,0,-1):
-        #self.backlight.ChangeDutyCycle(pw)
         self.pig.hardware_PWM(GPIO_BACKLIGHT, GPIO_BACKLIGHT_FREQ, pw*10000)
         time.sleep(0.05)
 
@@ -220,10 +210,9 @@ class MipDisplay():
     if not _SENSOR_DISPLAY:
       return
     self.clear()
-    #self.backlight.stop()
     self.pig.stop()
     self.spi.close()
     GPIO.output(GPIO_DISP, 1)
-    #time.sleep(0.1)
+
 
 

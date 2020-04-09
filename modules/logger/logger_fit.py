@@ -4,6 +4,8 @@ import datetime
 import struct
 import traceback
 
+from .logger import Logger
+
 #cython
 try:
   import pyximport; pyximport.install()
@@ -19,9 +21,8 @@ class config_local():
   G_UNIT_ID_HEX = 0x12345678
 
 
-class LoggerFit():
+class LoggerFit(Logger):
 
-  config = None
   epoch_datetime = datetime.datetime(1989,12,31,0,0,0,0)
   profile = {
     0:{
@@ -565,4 +566,3 @@ if __name__=="__main__":
   #prf.add_function(l.crc)
   #prf.runcall(l.writeLog)
   #prf.print_stats()
-

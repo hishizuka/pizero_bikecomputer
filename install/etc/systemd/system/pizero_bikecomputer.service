@@ -6,8 +6,8 @@ Description=PizeroBikecomputer
 #After=gpsd.service local-fs.target
 
 [Service]
-WorkingDirectory=/home/pi/pizero_bikecomputer_v1
-ExecStart=/home/pi/pizero_bikecomputer_v1/exec-service.sh
+WorkingDirectory=/home/pi/pizero_bikecomputer
+ExecStart=/home/pi/pizero_bikecomputer/exec-service.sh
 
 Restart=no
 Type=simple

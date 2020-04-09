@@ -58,6 +58,7 @@ class GUI_Config():
     "Error(y)":(G_UNIT["GPS_error"],"self.sensor.values['GPS']['epy']"),
     "GPSTime":("{0:^s}","self.sensor.values['GPS']['utctime']"),
     "GPS Fix":("{0:^d}","self.sensor.values['GPS']['mode']"),
+    "Course Dist.":(G_UNIT["Distance"],"self.sensor.values['GPS']['course_distance']"),
     #ANT+ raw
     "HR(ANT+)":(G_UNIT["HeartRate"],\
       "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['HR']]['hr']"),
@@ -122,7 +123,8 @@ class GUI_Config():
     "ACC_X":("{0:^1.1f}","self.sensor.values['I2C']['g_acc'][0]"),
     "ACC_Y":("{0:^1.1f}","self.sensor.values['I2C']['g_acc'][1]"),
     "ACC_Z":("{0:^1.1f}","self.sensor.values['I2C']['g_acc'][2]"),
-    "Heading":("{0:^3.0f}","self.sensor.values['I2C']['heading']"),
+    #"Heading":("{0:^3.0f}","self.sensor.values['I2C']['heading']"),
+    "Heading":("{0:^s}","self.sensor.values['I2C']['heading_str']"),
     #General
     "Timer":("timer","self.logger.count"),
     "LapTime":("timer","self.logger.count_lap"),
@@ -187,9 +189,9 @@ class GUI_Config():
     
     #read layout
     if os.path.exists(self.config.G_LAYOUT_FILE):
-      self.readLayout()
+      self.read_layout()
 
-  def readLayout(self):
+  def read_layout(self):
     text = None
     with open(self.config.G_LAYOUT_FILE) as file:
       text = file.read()

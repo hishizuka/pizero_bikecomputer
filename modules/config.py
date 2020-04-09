@@ -1,15 +1,22 @@
 import sys
-import argparse
 import os
+import shutil
 import struct
 import subprocess
+import time
+import datetime
+import argparse
 import configparser
+import threading
+import queue
+import urllib.error
+import urllib.request
 import traceback
 import json
-import datetime
-from math import sin, cos, acos, radians
+from math import sin, cos, acos, radians, sqrt, tan, degrees
 
 import numpy as np
+import oyaml as yaml
 
 _IS_RASPI = False
 try:
@@ -27,28 +34,28 @@ class Config():
   # configurable values #
   #######################
 
-  #Language defined by G_LANG in gui_config.py
-  G_LANG = "EN"
-
   #loop interval
   G_SENSOR_INTERVAL = 1.0 #[s] for sensor_core
-  G_ANT_INTERVAL = None #for ANT+
-  G_I2C_INTERVAL = 0.2 #[s] for I2C (altitude, accelerometer, etc)
-  G_GPS_INTERVAL = 0.3 #[s] for GPS
-  G_DRAW_INTERVAL = 1000 #[ms] for GUI
-  G_LOGGING_INTERVAL = 1000 #[ms] for logger_core (log interval)
+  G_ANT_INTERVAL = 0.5 #[s] for ANT+. 0.25, 0.5, 1.0 only.
+  G_I2C_INTERVAL = 0.5 #[s] for I2C (altitude, accelerometer, etc)
+  G_GPS_INTERVAL = 1.0 #[s] for GPS
+  G_DRAW_INTERVAL = 1000 #[ms] for GUI (QtCore.QTimer)
+  #G_LOGGING_INTERVAL = 1000 #[ms] for logger_core (log interval)
+  G_LOGGING_INTERVAL = 1.0 #[s] for logger_core (log interval)
   G_REALTIME_GRAPH_INTERVAL = 200 #[ms] for pyqt_graph
   
   #log format switch
-  G_LOG_WRITE_CSV = False
+  G_LOG_WRITE_CSV = True
   G_LOG_WRITE_FIT = True
-  G_LOG_WRITE_TCX = False
 
   #average including ZERO when logging
   G_AVERAGE_INCLUDING_ZERO = {
     "cadence":False,
     "power":True
   }
+
+  #calculate index on course
+  G_COURSE_INDEXING = True
 
   ###########################
   # fixed or pointer values #
@@ -62,22 +69,57 @@ class Config():
   G_UNIT_ID_HEX = 0 #initialized in get_serial
 
   #install_dir 
-  G_INSTALL_PATH = os.path.expanduser('~') + "/pizero_bikecomputer/"
-  
-  #screenshot dir
-  G_SCREENSHOT_DIR = 'screenshot/'
+  G_INSTALL_PATH = os.path.expanduser('~') + "/pizero_bikecomputer_v1/"
   
   #layout def
   G_LAYOUT_FILE = "layout.yaml"
+
+  #Language defined by G_LANG in gui_config.py
+  G_LANG = "EN"
+  G_FONT_FILE = ""
+  G_FONT_FULLPATH = ""
+  G_FONT_NAME = ""
   
+  #course file
+  G_COURSE_FILE = "course/course.tcx"
+  #G_CUESHEET_FILE = "course/cue_sheet.csv"
+  G_CUESHEET_DISPLAY_NUM = 5 #max: 5
+  G_CUESHEET_SCROLL = False
+
   #log setting
   G_LOG_DIR = "log/"
   G_LOG_DB = G_LOG_DIR + "log.db"
   G_LOG_START_DATE = None
+  
+  #map setting
+  #default map (can overwrite in settings.conf)
+  G_MAP = 'toner'
+  #use dithering (convert command feom imagemagick)
+  G_DITHERING = False
+  G_MAP_CONFIG = {
+    'toner': {
+      # 0:z(zoom), 1:tile_x, 2:tile_y
+      'url': "http://a.tile.stamen.com/toner/{z}/{x}/{y}.png",
+      'attribution': 'Map tiles by Stamen Design, under CC BY 3.0.<br />Data by OpenStreetMap, under ODbL',
+    },
+    'wikimedia': {
+      'url': "https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png",
+      'attribution': '© OpenStreetMap contributors',
+    },
+    'jpn_kokudo_chiri_in': {
+      'url': "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
+      'attribution': '国土地理院'
+    },
+  }
+  #external input of G_MAP_CONFIG
+  G_MAP_LIST = "map.yaml"
 
   #config file (use in config only)
   config_file = "setting.conf"
   config_parser = None
+
+  #screenshot dir
+  G_SCREENSHOT_DIR = 'screenshot/'
 
   #debug switch (change with --debug option)
   G_IS_DEBUG = False
@@ -110,7 +152,9 @@ class Config():
   #ANT+ setting (overwritten with setting.conf)
   #[Todo] multiple pairing(2 or more riders), ANT+ ctrl(like edge remote)
   G_ANT = {
-    'INTERVAL':2, #ANT+ interval: 0:4Hz(0.25s), 1:2Hz(0.5s), 2:1Hz(1.0s)
+    #ANT+ interval internal variabl: 0:4Hz(0.25s), 1:2Hz(0.5s), 2:1Hz(1.0s)
+    #initialized by G_ANT_INTERVAL in __init()__
+    'INTERVAL':2, 
     'STATUS':True,
     'USE':{
       'HR':False,
@@ -183,7 +227,7 @@ class Config():
     'PiTFT': {'size':(320, 240),'touch':True},
     'MIP': {'size':(400, 240),'touch':False},
     'Papirus': {'size':(264, 176),'touch':False},
-    'DFRobot_RPi_Display': {'size':(250, 122),'touch':False}
+    #'DFRobot_RPi_Display': {'size':(250, 122),'touch':False}
   }
   G_WIDTH = 320
   G_HEIGHT = 240
@@ -229,8 +273,8 @@ class Config():
   G_DUMMY_POS_X = 139.767008
   G_DUMMY_POS_Y = 35.681929
   #for search point on course
-  G_GPS_ON_ROUTE_CUTOFF = 0 #[m] #generate from course
-  G_GPS_SEARCH_RANGE = 0.1 #[km] #100km/h -> 27.7m/s
+  G_GPS_ON_ROUTE_CUTOFF = 50 #[m] #generate from course
+  G_GPS_SEARCH_RANGE = 5 #[km] #100km/h -> 27.7m/s
 
   #STRAVA token (need to write setting.conf manually)
   G_STRAVA = {
@@ -320,6 +364,21 @@ class Config():
   #[Todo] ANT+ Control button action (now it is implemented in ButtonShim directly)
   G_ANT_CTRL_BUTTON_DEF = {}
   
+  #for track
+  TRACK_STR = [
+    'N','NE','E','SE',
+    'S','SW','W','NW',
+    'N',
+    ]
+
+  #for get_dist_on_earth
+  GEO_R1 = 6378.137
+  GEO_R2 = 6356.752314140
+  GEO_R1_2 = (GEO_R1*1000) ** 2
+  GEO_R2_2 = (GEO_R2*1000) ** 2
+  GEO_E2 = (GEO_R1_2 - GEO_R2_2) / GEO_R1_2
+  G_DISTANCE_BY_LAT1S = GEO_R2*1000 * 2*np.pi/360/60/60 #[m]
+  
   #######################
   # class objects       #
   #######################
@@ -330,7 +389,6 @@ class Config():
   #GUI (GUI_PyQt)
   gui = None
   gui_config = None
-
 
   def __init__(self):
 
@@ -360,6 +418,11 @@ class Config():
     if self.G_IS_DEBUG:
       print(args)
     
+    #object for setting.conf
+    self.config_parser = configparser.ConfigParser()
+    if os.path.exists(self.config_file):
+      self.read_config()
+    
     #set dir(for using from pitft desktop)
     if self.G_IS_RASPI:
       self.G_SCREENSHOT_DIR = self.G_INSTALL_PATH + self.G_SCREENSHOT_DIR 
@@ -367,23 +430,57 @@ class Config():
       self.G_LOG_DB = self.G_INSTALL_PATH + self.G_LOG_DB
       self.config_file = self.G_INSTALL_PATH + self.config_file
       self.G_LAYOUT_FILE = self.G_INSTALL_PATH + self.G_LAYOUT_FILE
-      
-    #object for setting.conf
-    self.config_parser = configparser.ConfigParser()
-    if os.path.exists(self.config_file):
-      self.read_config()
+      self.G_COURSE_FILE = self.G_INSTALL_PATH + self.G_COURSE_FILE
+    
+    #font file
+    if self.G_FONT_FILE != "" or self.G_FONT_FILE != None:
+      if os.path.exists(self.G_FONT_FILE):
+        self.G_FONT_FULLPATH = self.G_FONT_FILE
+
+    #map list
+    if os.path.exists(self.G_MAP_LIST):
+      self.read_map_list()
+    if self.G_MAP not in self.G_MAP_CONFIG:
+      print("don't exist map \"{}\" in {}".format(self.G_MAP, self.G_MAP_LIST), file=sys.stderr)
+      self.G_MAP = "toner"
 
     #mkdir
     if not os.path.exists(self.G_SCREENSHOT_DIR):
       os.mkdir(self.G_SCREENSHOT_DIR)
     if not os.path.exists(self.G_LOG_DIR):
       os.mkdir(self.G_LOG_DIR)
+    if not os.path.exists("maptile/"+self.G_MAP):
+      os.mkdir("maptile/"+self.G_MAP)
+    if not os.path.exists("maptile/.tmp/"):
+      os.mkdir("maptile/.tmp/")
+    if not os.path.exists("maptile/.tmp/"+self.G_MAP):
+      os.mkdir("maptile/.tmp/"+self.G_MAP)
 
     #get serial number
     self.get_serial()
     
     self.detect_display()
     self.set_resolution()
+
+    #set ant interval. 0:4Hz(0.25s), 1:2Hz(0.5s), 2:1Hz(1.0s)
+    if self.G_ANT_INTERVAL == 0.25:
+      self.G_ANT['INTERVAL'] = 0
+    elif self.G_ANT_INTERVAL == 0.5:
+      self.G_ANT['INTERVAL'] = 1
+    else:
+      self.G_ANT['INTERVAL'] = 2
+
+    #thread for downloading map tiles
+    self.download_queue = queue.Queue()
+    self.download_thread = threading.Thread(target=self.download_worker, name="download_worker", args=())
+    self.download_thread.start()
+    self.convert_cmd = shutil.which('convert')
+    if self.G_DITHERING and self.convert_cmd != None:
+      self.convert_queue = queue.Queue()
+      self.convert_thread = threading.Thread(target=self.convert_worker, name="convert_worker", args=())
+      self.convert_thread.start()
+    else:
+      self.G_DITHERING = False
 
   def set_logger(self, logger):
     self.logger = logger
@@ -429,9 +526,10 @@ class Config():
       f.close()
     except:
       pass
-
-  def exec_cmd(self, cmd):
-    print(cmd)
+  
+  def exec_cmd(self, cmd, cmd_print=True):
+    if cmd_print:
+      print(cmd)
     ver = sys.version_info
     try:
       if ver[0] >= 3 and ver[1] >= 5:
@@ -442,9 +540,10 @@ class Config():
     except:
       traceback.print_exc()
 
-  def exec_cmd_return_value(self, cmd):
+  def exec_cmd_return_value(self, cmd, cmd_print=True):
     string = ""
-    print(cmd)
+    if cmd_print:
+      print(cmd)
     ver = sys.version_info
     try:
       if ver[0] >= 3 and ver[1] >= 5:
@@ -468,9 +567,111 @@ class Config():
     except:
       traceback.print_exc()
   
+  def get_maptile_filename(self, z, x, y):
+    return "maptile/"+self.G_MAP+"/{0}-{1}-{2}.png".format(z, x, y)
+
+  def get_maptile_filename_tmp(self, z, x, y):
+    return "maptile/.tmp/"+self.G_MAP+"/{0}-{1}-{2}.png".format(z, x, y)
+
+  def download_maptile(self, z, x, y):
+    try:
+      _y = y
+      _z = z
+      if 'yahoo' in self.G_MAP:
+        _z += 1
+        _y = 2**(z-1)-y-1 
+      #throw cue if convert exists
+      map_dst = self.get_maptile_filename(z, x, y)
+      tmp_dst = self.get_maptile_filename_tmp(z, x, y)
+      dl_dst = map_dst
+      if self.G_DITHERING:
+        dl_dst = tmp_dst
+      self.download_queue.put((
+        self.G_MAP_CONFIG[self.G_MAP]['url'].format(z=_z, x=x, y=_y), 
+        dl_dst
+        ))
+      if self.G_DITHERING:
+        self.convert_queue.put((dl_dst, map_dst))
+      return True
+    except:
+      #traceback.print_exc()
+      return False
+
+  def download_worker(self):
+    last_download_time = datetime.datetime.now()
+    online = True
+
+    while not self.G_QUIT:
+      while online and not self.download_queue.empty():
+        url, dst_path = self.download_queue.get()
+        if self.download_file(url, dst_path):
+          self.download_queue.task_done()
+          last_download_time = datetime.datetime.now()
+        else:
+          online = False
+          self.download_queue.put((url, dst_path))
+      
+      if (datetime.datetime.now()-last_download_time).total_seconds() > 60*3: #[s]
+        last_download_time = datetime.datetime.now()
+        online = True
+
+      time.sleep(0.5)
+      
+  def download_file(self, url, dst_path):
+    try:
+      with urllib.request.urlopen(url, timeout=5) as web_file:
+        data = web_file.read()
+        with open(dst_path, mode='wb') as local_file:
+          local_file.write(data)
+          return True
+    except urllib.error.URLError as e:
+      return False
+  
+  def convert_worker(self):
+    if not self.G_DITHERING:
+      return
+
+    #last_convert_time = datetime.datetime.now()
+    cue_timestamp = datetime.datetime.now()
+    online = True
+    dl_dst = map_dst = None
+
+    while not self.G_QUIT:
+      if online and not self.convert_queue.empty():
+        dl_dst, map_dst = self.convert_queue.get()
+        cue_timestamp = datetime.datetime.now()
+     
+      if dl_dst != None and os.path.exists(dl_dst) and self.convert(dl_dst, map_dst):
+        self.convert_queue.task_done()
+        dl_dst = map_dst = None
+      else:
+        online = False
+      
+      #if not online or dl_dst == None:
+      if not online:
+        time.sleep(0.5)
+
+      if (datetime.datetime.now()-cue_timestamp).total_seconds() > 3: #[s]
+        cue_timestamp = datetime.datetime.now()
+        online = True
+  
+  def convert(self, dl_dst, map_dst):
+    try:
+      #convert xc:red xc:lime xc:blue xc:cyan xc:magenta xc:yellow xc:white xc:black -append 3bit_rgb.png
+      #convert in.png -dither FloydSteinberg -remap mymap.png out.png
+      convert_cmd = [self.convert_cmd, dl_dst, "-dither", "FloydSteinberg", "-remap", "img/3bit_rgb.png", dl_dst+".conv"]
+      self.exec_cmd(convert_cmd, cmd_print=False)
+      shutil.move(dl_dst+".conv", map_dst)
+      os.remove(dl_dst)
+      return True
+    except:
+      traceback.print_exc()
+      return False
+    
   def quit(self):
     print("quit")
     self.G_QUIT = True
+    time.sleep(0.1)
     self.logger.sensor.sensor_ant.quit()
     self.logger.sensor.sensor_gpio.quit()
     self.logger.sensor.sensor_spi.quit()
@@ -541,12 +742,12 @@ class Config():
       return
 
     #curl check
-    curl_status = self.exec_cmd_return_value(["which", "curl"])
-    if curl_status == "":
+    curl_cmd = shutil.which('curl')
+    if curl_cmd == None:
       print("curl does not exist")
       return
 
-    #file check
+    #file check/
     if not os.path.exists(self.G_STRAVA_UPLOAD_FILE):
       print("file does not exist")
       return
@@ -636,6 +837,10 @@ class Config():
         self.G_GPS_SPEED_CUTOFF = self.G_AUTOSTOP_CUTOFF
       if 'LANG' in self.config_parser['GENERAL']:
         self.G_LANG = self.config_parser['GENERAL']['LANG'].upper()
+      if 'FONT_FILE' in self.config_parser['GENERAL']:
+        self.G_FONT_FILE = self.config_parser['GENERAL']['FONT_FILE']
+      if 'MAP' in self.config_parser['GENERAL']:
+        self.G_MAP = self.config_parser['GENERAL']['MAP'].lower()
       
     if 'STRAVA' in self.config_parser:
       for k in self.G_STRAVA.keys():
@@ -658,6 +863,8 @@ class Config():
     self.config_parser['GENERAL']['DISPLAY'] = self.G_DISPLAY
     self.config_parser['GENERAL']['AUTOSTOP_CUTOFF'] = str(int(self.G_AUTOSTOP_CUTOFF*3.6))
     self.config_parser['GENERAL']['LANG'] = self.G_LANG
+    self.config_parser['GENERAL']['FONT_FILE'] = self.G_FONT_FILE
+    self.config_parser['GENERAL']['MAP'] = self.G_MAP
     
     self.config_parser['STRAVA'] = {}
     for k in self.G_STRAVA.keys():
@@ -665,10 +872,65 @@ class Config():
 
     self.config_parser['BT_ADDRESS'] = {}
     for k in self.G_BT_ADDRESS.keys():
-      self.config_parser['BT_ADDRESS'][k] = self.G_BT_ADDRESS[k] 
+      self.config_parser['BT_ADDRESS'][k] = self.G_BT_ADDRESS[k]
 
     with open(self.config_file, 'w') as file:
       self.config_parser.write(file)
+  
+  def read_map_list(self):
+    text = None
+    with open(self.G_MAP_LIST) as file:
+      text = file.read()
+      map_list = yaml.safe_load(text)
+      if map_list == None:
+        return
+      for key in map_list:
+        if map_list[key]['attribution'] == None:
+          map_list[key]['attribution'] = ""
+      self.G_MAP_CONFIG.update(map_list)
+
+  def get_track_str(self, drc):
+    #drc_int = int((drc + 11.25)/22.50)
+    track_int = int((drc + 22.5)/45.0)
+    return self.TRACK_STR[track_int]
+  
+  #return [m]
+  def get_dist_on_earth(self, p0_lon, p0_lat, p1_lon, p1_lat):
+    if p0_lon == p1_lon and p0_lat == p1_lat:
+      return 0
+    (r0_lon, r0_lat, r1_lon, r1_lat) = map(radians, [p0_lon, p0_lat, p1_lon, p1_lat])
+    delta_x = r1_lon-r0_lon
+    cos_d = \
+      sin(r0_lat)*sin(r1_lat) \
+      + cos(r0_lat) * cos(r1_lat) * cos(delta_x)
+    try:
+      res = 1000*acos(cos_d)*self.GEO_R1
+      return res
+    except:
+      traceback.print_exc()
+      print("cos_d =", cos_d)
+      print("paramater:", p0_lon, p0_lat, p1_lon, p1_lat)
+      return 0
+  
+  #return [m]
+  def get_dist_on_earth_hubeny(self, p0_lon, p0_lat, p1_lon, p1_lat):
+    if p0_lon == p1_lon and p0_lat == p1_lat:
+      return 0
+    (r0_lon, r0_lat, r1_lon, r1_lat) = map(radians, [p0_lon, p0_lat, p1_lon, p1_lat])
+    lat_t = (r0_lat + r1_lat) / 2
+    w = 1 - self.GEO_E2 * sin(lat_t) ** 2
+    c2 = cos(lat_t) ** 2
+    return sqrt((self.GEO_R2_2 / w ** 3) * (r0_lat - r1_lat) ** 2 + (self.GEO_R1_2 / w) * c2 * (r0_lon - r1_lon) ** 2)
+
+  def calc_azimuth(self, lat, lon):
+    rad_latitude = np.radians(lat)
+    rad_longitude = np.radians(lon)
+    rad_longitude_delta = rad_longitude[1:] - rad_longitude[0:-1]
+    azimuth = np.mod(np.degrees(np.arctan2(
+      np.sin(rad_longitude_delta), 
+      np.cos(rad_latitude[0:-1])*np.tan(rad_latitude[1:])-np.sin(rad_latitude[0:-1])*np.cos(rad_longitude_delta)
+      )), 360).astype(dtype='int16')
+    return azimuth
 
   #replacement of dateutil.parser.parse
   def datetime_myparser(self, ts):
@@ -696,20 +958,3 @@ class Config():
       )
       return dt
     print("err", ts, len(ts))
-
-  def dist_on_earth(self, p0_lon, p0_lat, p1_lon, p1_lat):
-    if p0_lon == p1_lon and p0_lat == p1_lat:
-      return 0
-    (r0_lon, r0_lat, r1_lon, r1_lat) = map(radians, [p0_lon, p0_lat, p1_lon, p1_lat])
-    cos_d = \
-      sin(r0_lat)*sin(r1_lat) \
-      + cos(r0_lat) * cos(r1_lat) * cos(r0_lon - r1_lon)
-    try:
-      res = 1000*acos(cos_d)*6378.137
-      return res
-    except:
-      traceback.print_exc()
-      print("cos_d =", cos_d)
-      print("paramater:", p0_lon, p0_lat, p1_lon, p1_lat)
-      return 0
- 

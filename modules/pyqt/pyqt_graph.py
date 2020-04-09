@@ -1,4 +1,4 @@
-import random
+import os
 import numpy as np
 import datetime
 
@@ -7,7 +7,11 @@ import PyQt5.QtWidgets as QtWidgets
 import PyQt5.QtGui as QtGui
 import pyqtgraph as pg
 
+from PIL import Image
+from math import cos
+
 from .pyqt_screen_widget import ScreenWidget
+from .pyqt_cuesheet_widget import CueSheetWidget
 
 pg.setConfigOptions(antialias=True)
 pg.setConfigOption('background', 'w')
@@ -61,6 +65,7 @@ class PerformanceGraphWidget(ScreenWidget):
 
   def set_font_size(self, length):
     self.font_size = int(length / 7)
+    self.set_minimum_size()
 
   def update_extra(self):
     all_nan = {'hr_graph': True, 'power_graph': True}
@@ -102,8 +107,8 @@ class BaseMapWidget(ScreenWidget):
   lock_status = True
 
   #map position
-  map_pos = {'x':np.nan, 'y':np.nan}
-  map_width = {'x':np.nan, 'y':np.nan}
+  map_pos = {'x':np.nan, 'y':np.nan} #center
+  map_area = {'w':np.nan, 'h':np.nan} #witdh(longitude diff) and height(latitude diff)
   move_pos = {'x':0, 'y':0}
 
   #current point
@@ -111,10 +116,14 @@ class BaseMapWidget(ScreenWidget):
   point_color = {'fix':None, 'lost':None}
 
   #show range from zoom
-  zoom = 2000 #[m]
+  zoom = 2000 #[m] #for CourseProfileGraphWidget
+  zoomlevel = 13 #for SimpleMapWidget
 
   #load course
   course_loaded = False
+
+  #course points
+  course_points_label = []
 
   def init_extra(self):
     self.gps_values = self.config.logger.sensor.values['GPS']
@@ -172,6 +181,10 @@ class BaseMapWidget(ScreenWidget):
   def add_extra(self):
     pass
 
+  #override disable
+  def set_minimum_size(self):
+    pass
+
   #for expanding row
   def resize_extra(self):
     n = self.layout.rowCount()
@@ -207,20 +220,22 @@ class BaseMapWidget(ScreenWidget):
     self.update_extra()
   def zoom_plus(self):
     self.zoom /= 2
+    self.zoomlevel += 1
     self.update_extra()
   def zoom_minus(self):
     self.zoom *= 2
+    self.zoomlevel -= 1
     self.update_extra()
 
   def get_max_zoom(self):
 
-    if len(self.config.logger.course_distance) == 0:
+    if len(self.config.logger.course.distance) == 0:
       return
     
     if self.config.G_MAX_ZOOM != 0:
       return
     z = self.zoom
-    dist = self.config.logger.course_distance[-1]
+    dist = self.config.logger.course.distance[-1]
     if(z/1000 < dist):
       while(z/1000 < dist):
         z *= 2
@@ -236,6 +251,21 @@ class BaseMapWidget(ScreenWidget):
   
   def update_extra(self):
     pass
+
+  def update_course_points(self):
+    if len(self.config.logger.course.point_distance) > 0 and self.config.G_CUESHEET_DISPLAY_NUM > 0 and self.config.G_COURSE_INDEXING :
+      cp_i = self.gps_values['course_point_index']  
+      #hide and show course_points
+      if cp_i > 0 and self.course_points_label[-cp_i].isVisible():
+        print("\t", "hide markers:", -cp_i, self.config.logger.course.point_name[cp_i-1])
+        for i in range(1, cp_i+1):
+          self.course_points_label[-i].hide()
+      if 0 < cp_i < len(self.course_points_label) and not self.course_points_label[-(cp_i+1)].isVisible():
+        for i in range(cp_i+1, len(self.course_points_label)+1):
+          self.course_points_label[-i].show()
+      return True
+
+    return False
 
 
 class CourseProfileGraphWidget(BaseMapWidget):
@@ -262,7 +292,7 @@ class CourseProfileGraphWidget(BaseMapWidget):
   #load course profile and display
   def load_course(self):
 
-    if len(self.config.logger.course_distance) == 0:
+    if len(self.config.logger.course.distance) == 0:
       return
     
     t = datetime.datetime.utcnow()
@@ -286,17 +316,56 @@ class CourseProfileGraphWidget(BaseMapWidget):
     t = datetime.datetime.utcnow()
 
     bg = pg.CourseProfileGraphItem(
-      x=self.config.logger.course_distance,
-      y=self.config.logger.course_altitude,
-      brushes=self.config.logger.colored_altitude, 
+      x=self.config.logger.course.distance,
+      y=self.config.logger.course.altitude,
+      brushes=self.config.logger.course.colored_altitude, 
       pen=pg.mkPen(color=(255,255,255,0), width=0.01)) #transparent(alpha=0) and thin line
     self.plot.addItem(bg)
+
+    self.course_points_plot = pg.ScatterPlotItem(pxMode=True, symbol="t")
+    self.course_points = []
+
+    for i in reversed(range(len(self.config.logger.course.point_distance))):
+      cp = {
+        'pos': [
+          self.config.logger.course.point_distance[i],
+          self.config.logger.course.point_altitude[i]
+          ],
+        'size': 10,
+        'pen': {'color': 'r', 'width': 1},
+        'brush': pg.mkBrush(color=(255,0,0))
+      }
+      self.course_points.append(cp)
+    self.course_points_plot.setData(self.course_points)
+    self.plot.addItem(self.course_points_plot)
+
+    self.course_points_label = []
+    if self.config.G_FONT_NAME != "":
+      self.font = QtGui.QFont(self.config.G_FONT_NAME)
+    for i in reversed(range(len(self.config.logger.course.point_distance))):
+      text = pg.TextItem(
+        text = self.config.logger.course.point_name[i],
+        anchor = (-0.1, 1.2), 
+        angle = 0, 
+        border = (255, 0, 0),
+        fill = (255, 255, 255),
+        color = (0, 0, 0),
+        )
+      #text.setTextWidth(int(self.config.G_WIDTH/2.5))
+      if self.config.G_FONT_NAME != "":
+        text.setFont(self.font)
+      self.plot.addItem(text)
+      text.setPos(
+        self.config.logger.course.point_distance[i],
+        self.config.logger.course.point_altitude[i]
+        )
+      self.course_points_label.append(text)
 
     print("\tpyqt_graph : plot course profile : ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
 
   def update_extra(self):
 
-    if len(self.config.logger.course_distance) == 0:
+    if len(self.config.logger.course.distance) == 0:
       return
 
     if not self.course_loaded:
@@ -315,23 +384,20 @@ class CourseProfileGraphWidget(BaseMapWidget):
     #initialize
     x_start = x_end = np.nan
     x_width = self.zoom/1000 * 0.8
-    dist_end = self.config.logger.course_distance[-1]
-    if np.isnan(self.gps_values['lon']) or np.isnan(self.gps_values['lat']):
-      self.graph_index = 0
-    else:
-      self.graph_index = self.gps_values['course_index']
+    dist_end = self.config.logger.course.distance[-1]
+    self.graph_index = self.gps_values['course_index']
+    x_start = self.config.logger.course.distance[self.graph_index]
     
     #get x,y from current position or start(temporary) without GPS
-    if not np.isnan(self.gps_values['lon']) and not np.isnan(self.gps_values['lat']):
+    if self.gps_values['on_course_status']:
       self.point['brush'] = self.point_color['fix']
-      x_start = self.config.logger.course_distance[self.graph_index]
     else:
       self.point['brush'] = self.point_color['lost']
-      x_start = 0
     
     #move x,y
     if self.lock_status:
       self.map_pos['x'] = x_start - x_width/10
+      #print(self.map_pos)
       if self.map_pos['x'] < 0:
         self.map_pos['x'] = 0
       self.map_pos['x_index'] = self.graph_index
@@ -340,7 +406,7 @@ class CourseProfileGraphWidget(BaseMapWidget):
       if self.map_pos['x'] <= 0:
         self.map_pos['x_index'] = 0
       elif self.map_pos['x'] >= dist_end:
-        self.map_pos['x_index'] = len(self.config.logger.course_distance)-1
+        self.map_pos['x_index'] = len(self.config.logger.course.distance)-1
       else:
         self.map_pos['x_index'] = self.gps_sensor.get_index_with_distance_cutoff(
           self.map_pos['x_index'], 
@@ -350,7 +416,7 @@ class CourseProfileGraphWidget(BaseMapWidget):
     x_end = self.map_pos['x'] + x_width
     x_end_index = 0
     if x_end >= dist_end:
-      x_end_index = len(self.config.logger.course_distance)-1
+      x_end_index = len(self.config.logger.course.distance)-1
     else:
       x_end_index = self.gps_sensor.get_index_with_distance_cutoff(
         self.map_pos['x_index'], 
@@ -371,9 +437,10 @@ class CourseProfileGraphWidget(BaseMapWidget):
         self.map_pos['x'] = 0
         x_end = x_width
    
-    if 0 <= self.graph_index < len(self.config.logger.course_distance):
-      self.point['pos'][0] = self.config.logger.course_distance[self.graph_index]
-      self.point['pos'][1] = self.config.logger.course_altitude[self.graph_index]
+    if 0 <= self.graph_index < len(self.config.logger.course.distance):
+      #self.point['pos'][0] = self.config.logger.course.distance[self.graph_index]
+      self.point['pos'][0] = self.gps_values['course_distance']/1000
+      self.point['pos'][1] = self.config.logger.course.altitude[self.graph_index]
       self.location.append(self.point)
       self.current_point.setData(self.location)
       self.plot.addItem(self.current_point)
@@ -383,9 +450,9 @@ class CourseProfileGraphWidget(BaseMapWidget):
     y_min = float('inf')
     y_max = -float('inf')
     if 0 <= self.map_pos['x_index'] < x_end_index:
-      y_min = np.min(self.config.logger.course_altitude[self.map_pos['x_index']:x_end_index])
-      y_max = np.max(self.config.logger.course_altitude[self.map_pos['x_index']:x_end_index])
-    
+      y_min = np.min(self.config.logger.course.altitude[self.map_pos['x_index']:x_end_index])
+      y_max = np.max(self.config.logger.course.altitude[self.map_pos['x_index']:x_end_index])
+   
     if y_min != float('inf') and y_max != -float('inf'):
       y_max = (y_max - y_min) * 1.1 + y_min
       y_max = (int(y_max/100)+1) * 100
@@ -395,24 +462,28 @@ class CourseProfileGraphWidget(BaseMapWidget):
     #reset move_pos
     self.move_pos['x'] = self.move_pos['y'] = 0
 
+    #course_points and cuesheet
+    self.update_course_points()
+
 
 class SimpleMapWidget(BaseMapWidget):
   
   #tracks
   tracks_lat = np.array([])
   tracks_lon = np.array([])
+  tracks_lat_pos = None
+  tracks_lon_pos = None
   tracks_timestamp = None
 
-  #course
-  course_plots = []
-  course_data = []
-  drawed_course = False
-
   #misc
-  zoomlevel = 17
-  const_pixel = 85.05112878 #not need?
   y_mod = 1.22 #31/25 at Tokyo(N35)
-  aspect = 320/200 #width/height
+  pre_zoomlevel = np.nan
+
+  drawn_tile = {}
+  tile_exists = {}
+  map_cuesheet_ratio = 1 #map:cuesheet = 1:0
+
+  font = ""
 
   def setup_ui_extra(self):
     super().setup_ui_extra()
@@ -420,30 +491,43 @@ class SimpleMapWidget(BaseMapWidget):
     #self.plot.showGrid(x=True, y=True, alpha=1)
     self.track_plot = self.plot.plot(self.tracks_lon, self.tracks_lat)
     #self.track_plot.setPen(pg.mkPen(color=(0,192,255,128), width=7))
-    self.track_plot.setPen(pg.mkPen(color=(0,128,255), width=7))
+    self.track_plot.setPen(pg.mkPen(color=(0,128,255), width=12))
 
     self.scale_plot = self.plot.plot()
-    self.scale_plot.setPen(pg.mkPen(color=(0,0,0), width=2))
+    self.scale_plot.setPen(pg.mkPen(color=(0,0,0), width=3))
     self.scale_text = pg.TextItem(
       text = "",
       anchor = (0.5, 1), 
       angle = 0, 
-      border = (255, 255, 255, 0),
-      fill = (255, 255, 255, 0),
+      border = (255, 255, 255, 255),
+      fill = (255, 255, 255, 255),
       color = (0, 0, 0),
       )
+    self.scale_text.setZValue(100)
     self.plot.addItem(self.scale_text)
+    
+    self.map_attribution = pg.TextItem(
+      #text = self.config.G_MAP_CONFIG[self.config.G_MAP]['attribution'],
+      html = '<div style="text-align: right;"><span style="color: #000; font-size: 10px;">' + self.config.G_MAP_CONFIG[self.config.G_MAP]['attribution'] + '</span></div>',
+      anchor = (1, 1), 
+      angle = 0, 
+      border = (255, 255, 255, 255),
+      fill = (255, 255, 255, 255),
+      color = (0, 0, 0),
+      )
+    self.map_attribution.setZValue(100)
+    self.plot.addItem(self.map_attribution)
 
     #self.load_course()
     t = datetime.datetime.utcnow()
     self.get_track() #heavy when resume
     print("\tpyqt_graph : get_track(init) : ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
 
-
   def add_extra(self):
 
     #map
     self.layout.addWidget(self.plot, 0, 0, 4, 3)
+    #print("### self.plot.width ###", self.plot.width())
 
     if self.config.G_AVAILABLE_DISPLAY[self.config.G_DISPLAY]['touch']:
       #zoom
@@ -462,65 +546,67 @@ class SimpleMapWidget(BaseMapWidget):
     self.layout.setColumnMinimumWidth(2, 40)
 
     #cue sheet
-    #self.cuesheet_widget = QtWidgets.QWidget(self)
-    #self.cuesheet_widget.setFixedWidth(int(self.config.G_WIDTH*0.4))
-    #self.cuesheet = [
-    #  QtWidgets.QLabel(),
-    #  QtWidgets.QLabel(),
-    #  QtWidgets.QLabel(),
-    #  ]
-    #self.cuesheet_layout = QtWidgets.QVBoxLayout(self.cuesheet_widget)
-    #font = QtGui.QFont("源ノ角ゴシック JP")
-    #for c in self.cuesheet:
-    #  c.setFont(font)
-    #  c.setWordWrap(True)
-    #  self.cuesheet_layout.addWidget(c)
-    #self.layout.addWidget(self.cuesheet_widget, 0, 4, 4, 5)
+    #if self.config.G_CUESHEET_DISPLAY_NUM > 0:
+    if len(self.config.logger.course.point_name) > 0 and self.config.G_CUESHEET_DISPLAY_NUM > 0 and self.config.G_COURSE_INDEXING:
+      self.cuesheet_widget = CueSheetWidget(self, self.config)
+      self.map_cuesheet_ratio = 0.7
+      self.layout.addWidget(self.cuesheet_widget, 0, 4, 4, 5)
+
+  def resizeEvent(self, event):
+    if len(self.config.logger.course.point_name) == 0 or self.config.G_CUESHEET_DISPLAY_NUM == 0 or not self.config.G_COURSE_INDEXING :
+      self.map_cuesheet_ratio = 1.0
+    #if self.config.G_CUESHEET_DISPLAY_NUM > 0:
+    else:
+      self.cuesheet_widget.setFixedWidth(int(self.width()*(1-self.map_cuesheet_ratio)))
+      self.cuesheet_widget.setFixedHeight(self.height())
+    self.plot.setFixedWidth(int(self.width()*(self.map_cuesheet_ratio)))
+    self.plot.setFixedHeight(self.height())
 
   def load_course(self):
-    self.course_plots = []
-    if len(self.config.logger.lat_by_slope) == 0:
+    if len(self.config.logger.course.latitude) == 0:
       return
 
     t = datetime.datetime.utcnow()
+
+    cp = pg.CoursePlotItem(
+      x=self.config.logger.course.longitude,
+      y=self.get_mod_lat_np(self.config.logger.course.latitude),
+      brushes=self.config.logger.course.colored_altitude, 
+      width=6)
+    self.plot.addItem(cp)
+
+    #test
+    if not self.config.G_IS_RASPI:
+      plot_verification = pg.ScatterPlotItem(pxMode=True)
+      test_points = []
+      for i in range(len(self.config.logger.course.longitude)):  
+        p = {
+          'pos': [self.config.logger.course.longitude[i], self.get_mod_lat(self.config.logger.course.latitude[i])],
+          'size': 2,
+          'pen': {'color': 'w', 'width': 1},
+          'brush':pg.mkBrush(color=(255,0,0))
+          }
+        test_points.append(p)
+      plot_verification.setData(test_points)
+      self.plot.addItem(plot_verification)
+    print("\tpyqt_graph : course_plot : ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
+      
+    #course point
+    if len(self.config.logger.course.point_longitude) == 0:
+      return
     
-    for i in range(len(self.config.G_SLOPE_CUTOFF)):
-      t1 = datetime.datetime.utcnow()
-      
-      if np.sum(np.isnan(self.config.logger.lat_by_slope[i])) == len(self.config.logger.lat_by_slope[i]):
-        continue
-      
-      pen_map = pg.mkPen(color=(
-          self.config.G_SLOPE_COLOR[i][0],
-          self.config.G_SLOPE_COLOR[i][1],
-          self.config.G_SLOPE_COLOR[i][2]
-        ),\
-        width=3\
-      )
-      curve = self.plot.plot(np.array([]),np.array([]))
-      curve.setPen(pen_map)
-      #conversion coordinate
-      self.course_data.append([
-        np.array(self.config.logger.lon_by_slope[i]),
-        np.array(list(map(lambda x: x * self.y_mod, self.config.logger.lat_by_slope[i]))),
-        ])
-      self.course_plots.append(curve)
-      
-    print("\tpyqt_graph : course_plots : ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
     t = datetime.datetime.utcnow()
 
-    #course point
     self.course_points_plot = pg.ScatterPlotItem(pxMode=True, symbol="t")
     self.course_points = []
 
-    #font = QtGui.QFont("源ノ角ゴシック JP")
-    for i in range(len(self.config.logger.course_point_longitude)):
-      if self.config.logger.course_point_point_type[i] == "Straight":
-        continue
+    for i in reversed(range(len(self.config.logger.course.point_longitude))):
+      #if self.config.logger.course.point_type[i] == "Straight":
+      #  continue
       cp = {
         'pos': [
-          self.config.logger.course_point_longitude[i],
-          self.y_mod * self.config.logger.course_point_latitude[i]
+          self.config.logger.course.point_longitude[i],
+          self.get_mod_lat(self.config.logger.course.point_latitude[i])
           ],
         'size': 10,
         'pen': {'color': 'r', 'width': 1},
@@ -533,9 +619,12 @@ class SimpleMapWidget(BaseMapWidget):
     print("\tpyqt_graph : load course_points_plot : ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
     t = datetime.datetime.utcnow()
 
-    for i in range(len(self.config.logger.course_point_longitude)):
-      if self.config.logger.course_point_point_type[i] == "Straight":
-        continue    
+    self.course_points_label = []
+    if self.config.G_FONT_NAME != "":
+      self.font = QtGui.QFont(self.config.G_FONT_NAME)
+    for i in reversed(range(len(self.config.logger.course.point_longitude))):
+      #if self.config.logger.course.point_type[i] == "Straight":
+      #  continue
 
       #CoursePointType from TCX schema
       # https://www8.garmin.com/xmlschemas/TrainingCenterDatabasev2.xsd
@@ -543,34 +632,36 @@ class SimpleMapWidget(BaseMapWidget):
       #  Left, Right, Straight, First Aid,
       #  4th Category, 3rd Category, 2nd Category, 1st Category,
       #  Hors Category, Sprint,
-      arrow = ""
-      if self.config.logger.course_point_point_type[i] == "Left":
-        arrow ="backarrow_black.png"
-      elif self.config.logger.course_point_point_type[i] == "Right":
-        arrow ="nextarrow_black.png"
-      else:
-        continue
+
+      #arrow = ""
+      #if self.config.logger.course.point_type[i] == "Left":
+      #  arrow ="backarrow_black.png"
+      #elif self.config.logger.course.point_type[i] == "Right":
+      #  arrow ="nextarrow_black.png"
+      #else:
+      #  continue
+
       # Create text object, use HTML tags to specify color/size
       #  http://www.pyqtgraph.org/documentation/graphicsItems/textitem.html
       text = pg.TextItem(
-        html = '<div style="text-align: center">' + \
-          '<img src="img/' + arrow + '" /></div>',
-        #  self.config.logger.course_point_notes[i] + '</div>',
-        #  #'<br><span style="color: #FF0; font-size: 16pt;">'PEAK</span></div>', 
-        #text = self.config.logger.course_point_name[i] #instead of arrow
+        #html = '<div style="text-align: center">' + '<img src="img/' + arrow + '" /></div>',
+        #html = '<div style="text-align: center">' + self.config.logger.course.point_name[i] + '</div>',
+        text = self.config.logger.course.point_name[i],
         anchor = (-0.1, 1.2), 
         angle = 0, 
         border = (255, 0, 0),
         fill = (255, 255, 255),
         color = (0, 0, 0),
         )
-      #text.setFont(font)
       #text.setTextWidth(int(self.config.G_WIDTH/2.5))
+      if self.config.G_FONT_NAME != "":
+        text.setFont(self.font)
       self.plot.addItem(text)
       text.setPos(
-        self.config.logger.course_point_longitude[i], 
-        self.y_mod * self.config.logger.course_point_latitude[i]
+        self.config.logger.course.point_longitude[i],
+        self.get_mod_lat(self.config.logger.course.point_latitude[i])
         )
+      self.course_points_label.append(text)
     
     print("\tpyqt_graph : display course_points_plot : ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
 
@@ -578,36 +669,27 @@ class SimpleMapWidget(BaseMapWidget):
 
     #t = datetime.datetime.utcnow()
 
-    if not self.course_loaded:
-      self.load_course()
-      self.course_loaded = True
-
-    #update aspect
-    self.aspect = self.height()/self.width()
-
     #display position
     if len(self.location) > 0 :
       self.plot.removeItem(self.current_point)
       self.location.pop()
     
-    #centering and zoom
-
-    #position #with conversion coordinate
-    self.point['pos'] = [self.gps_values['lon'], self.gps_values['lat']*self.y_mod]
-
+    #current position
+    self.point['pos'] = [self.gps_values['lon'], self.gps_values['lat']]
     #dummy position
     if np.isnan(self.gps_values['lon']) and np.isnan(self.gps_values['lat']):
       #recent point(from log or pre_point) / course start / fix(TOKYO station)
       if len(self.tracks_lon) > 0 and len(self.tracks_lat) > 0:
-        self.point['pos'] = [self.tracks_lon[-1], self.tracks_lat[-1]]
-      elif len(self.config.logger.course_longitude) > 0 and len(self.config.logger.course_latitude) > 0:
+        self.point['pos'] = [self.tracks_lon_pos, self.tracks_lat_pos]
+      elif len(self.config.logger.course.longitude) > 0 and len(self.config.logger.course.latitude) > 0:
         self.point['pos'] = [
-          self.config.logger.course_longitude[0],
-          self.config.logger.course_latitude[0] * self.y_mod
+          self.config.logger.course.longitude[0],
+          self.config.logger.course.latitude[0]
         ]
       else:
-        self.point['pos'] = [self.config.G_DUMMY_POS_X, self.config.G_DUMMY_POS_Y * self.y_mod]
-    
+        self.point['pos'] = [self.config.G_DUMMY_POS_X, self.config.G_DUMMY_POS_Y]
+    #update y_mod (adjust for lat:lon=1:1)
+    self.y_mod = self.calc_y_mod(self.point['pos'][1])
     #add position circle to map
     if not np.isnan(self.point['pos'][0]) and not np.isnan(self.point['pos'][1]):
       if self.gps_values['mode'] == 3:
@@ -617,116 +699,102 @@ class SimpleMapWidget(BaseMapWidget):
     else:
       #set dummy
       self.point['brush'] = self.point_color['lost']
-    self.location.append(self.point)
-    self.current_point.setData(self.location)
-    self.plot.addItem(self.current_point)
 
     #center position
     if self.lock_status:
       self.map_pos['x'] = self.point['pos'][0]
       self.map_pos['y'] = self.point['pos'][1]
       
-    #zoom to width
-    dist1s = {
-      'x':self.getLonDist1s(self.map_pos['y']/self.y_mod),
-      'y':self.getLatDist1s()
-      }
-    #[m] -> sec -> longitude or latitude
-    self.map_width['x'] = self.zoom/dist1s['x'] / 3600 
-    self.map_width['y'] = self.zoom/dist1s['y'] * self.y_mod * self.aspect / 3600
+    #set width and height
+    self.map_area['w'], self.map_area['h'] = self.get_geo_area(self.map_pos['x'], self.map_pos['y'])
 
     #move
     x_move = y_move = 0
-    if self.lock_status:
-      if not np.isnan(self.gps_values['lon']) and not np.isnan(self.gps_values['lat']):
-        graph_index = self.gps_values['course_index']
-        ahead_point = self.zoom*2/1000
-        if 0 <= graph_index <= len(self.config.logger.course_distance):
-          index = self.gps_sensor.get_index_with_distance_cutoff(
-            graph_index, 
-            ahead_point
-            )
-          x2 = self.config.logger.course_longitude[index]
-          y2 = self.config.logger.course_latitude[index]
-          x_delta = x2 - self.gps_values['lon']
-          y_delta = y2 - self.gps_values['lat']
-          x_move = 0.5 * self.map_width['x']
-          y_move = 0.5 * self.map_width['y']
-          if x_delta > x_move:
-            self.map_pos['x'] += x_move
-          elif x_delta < -x_move:
-            self.map_pos['x'] -= x_move
-          if y_delta > y_move:
-            self.map_pos['y'] += y_move
-          elif y_delta < -y_move:
-            self.map_pos['y'] -= y_move
-    else:
-      x_move = self.move_pos['x']*2/dist1s['x'] / 3600
-      y_move = self.move_pos['y']*2/dist1s['y'] * self.y_mod * self.aspect / 3600
+    if self.lock_status and len(self.config.logger.course.distance) > 0 and self.gps_values['on_course_status']:
+      index = self.gps_sensor.get_index_with_distance_cutoff(
+        self.gps_values['course_index'], 
+        #get some distance [m]
+        self.get_width_distance(self.map_pos['y'], self.map_area['w'])/1000,
+        )
+      x2 = self.config.logger.course.longitude[index]
+      y2 = self.config.logger.course.latitude[index]
+      x_delta = x2 - self.map_pos['x']
+      y_delta = y2 - self.map_pos['y']
+      #slide from center
+      x_move = 0.25 * self.map_area['w']
+      y_move = 0.25 * self.map_area['h']
+      if x_delta > x_move:
+        self.map_pos['x'] += x_move
+      elif x_delta < -x_move:
+        self.map_pos['x'] -= x_move
+      if y_delta > y_move:
+        self.map_pos['y'] += y_move
+      elif y_delta < -y_move:
+        self.map_pos['y'] -= y_move
+    elif not self.lock_status:
+      if self.move_pos['x'] > 0: ##################
+        x_move = self.map_area['w']/2
+      elif self.move_pos['x'] < 0:
+        x_move = -self.map_area['w']/2
+      if self.move_pos['y'] > 0:
+        y_move = self.map_area['h']/2
+      elif self.move_pos['y'] < 0:
+        y_move = -self.map_area['h']/2
       self.map_pos['x'] += x_move
       self.map_pos['y'] += y_move
-
-    x_start = x_end = y_start = y_end = np.nan
-    x_start = self.map_pos['x'] - self.map_width['x']
-    x_end = self.map_pos['x'] + self.map_width['x']
-    y_start = self.map_pos['y'] - self.map_width['y']
-    y_end = self.map_pos['y'] + self.map_width['y']
-
-    if not np.isnan(x_start) and not np.isnan(x_end):
-      self.plot.setXRange(x_start, x_end)
-    if not np.isnan(y_start) and not np.isnan(y_end):
-      self.plot.setYRange(y_start, y_end)
-
     self.move_pos['x'] = self.move_pos['y'] = 0
 
-    #draw course
-    for i in range(len(self.course_plots)):
-      if not self.drawed_course:
-        self.course_plots[i].setData(
-          x = self.course_data[i][0],
-          y = self.course_data[i][1],
-          connect="finite")
-    self.drawed_course = True
-    
+    self.map_area['w'], self.map_area['h'] = self.get_geo_area(self.map_pos['x'], self.map_pos['y'])
+
+    ###########
+    # drawing #
+    ###########
+
+    #current point
+    #print(self.point['pos'])
+    self.point['pos'][1] *= self.y_mod
+    self.location.append(self.point)
+    self.current_point.setData(self.location)
+    self.plot.addItem(self.current_point)
     #print("\tpyqt_graph : update_extra init : ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
-    #t = datetime.datetime.utcnow() 
+    #t = datetime.datetime.utcnow()
+
+    #set x and y ranges
+    x_start = x_end = y_start = y_end = np.nan
+    x_start = self.map_pos['x'] - self.map_area['w'] / 2
+    x_end = x_start + self.map_area['w']
+    y_start = self.map_pos['y'] - self.map_area['h'] / 2
+    y_end = y_start + self.map_area['h']
+    if not np.isnan(x_start) and not np.isnan(x_end):
+      self.plot.setXRange(x_start, x_end, padding=0)
+    if not np.isnan(y_start) and not np.isnan(y_end):
+      self.plot.setYRange(self.get_mod_lat(y_start), self.get_mod_lat(y_end), padding=0)
+
+    self.draw_map_tile(self.zoomlevel, x_start, x_end, y_start, y_end)
+    #print("\tpyqt_graph : update_extra map : ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
+    #t = datetime.datetime.utcnow()
+
+    if not self.course_loaded:
+      self.load_course()
+      self.course_loaded = True
     
+    #course_points and cuesheet
+    self.draw_cuesheet()
+    #print("\tpyqt_graph : update_extra cuesheet : ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
+    #t = datetime.datetime.utcnow()
+
     #draw track
     self.get_track()
     self.track_plot.setData(self.tracks_lon, self.tracks_lat)
-
     #print("\tpyqt_graph : update_extra track : ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
     #t = datetime.datetime.utcnow()
 
     #draw scale
-    scale_x1 = x_start + (x_end - x_start)/100
-    scale_dist = 2*self.zoom/8 #[m]
-    num = scale_dist/(10**int(np.log10(scale_dist)))
-    mod_factor = 1
-    if 1 < num < 2:
-      mod_factor = 2 / num
-    elif 2 < num < 5:
-      mod_factor = 5 / num
-    elif 5 < num < 10:
-      mod_factor = 10 / num
-    scale_x2 = scale_x1 + (x_end - x_start)/8*mod_factor
-    scale_y1 = y_start + (y_end - y_start)/100
-    y1_delta = scale_y1 + (y_end - y_start)/30
-    self.scale_plot.setData(
-      [scale_x1, scale_x1, scale_x2, scale_x2], 
-      [y1_delta, scale_y1, scale_y1, y1_delta],
-      )
-    
-    scale_unit = "m"
-    scale_label = int(scale_dist*mod_factor)
-    if scale_label >= 1000:
-      scale_label = int(scale_label/1000)
-      scale_unit = "km"
-    self.scale_text.setPlainText("{0}{1}".format(scale_label, scale_unit))
-    self.scale_text.setPos(
-        (scale_x1+scale_x2)/2,
-        y1_delta
-      )
+    self.draw_scale(x_start, y_start)
+    #draw map attribution
+    self.draw_map_attribution(x_start, y_start)
+    #print("\tpyqt_graph : update_extra draw map : ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
+    #t = datetime.datetime.utcnow()
     
   def get_track(self):
     #get track from SQL
@@ -736,23 +804,205 @@ class SimpleMapWidget(BaseMapWidget):
     (self.tracks_timestamp, lon, lat) = \
       self.config.logger.update_track(self.tracks_timestamp)
     if len(lon) > 0 and len(lat) > 0:
-      lat = list(map(lambda x: x * self.y_mod, lat))
+      self.tracks_lon_pos = lon[-1]
+      self.tracks_lat_pos = lat[-1]
       self.tracks_lon = np.append(self.tracks_lon, np.array(lon))
-      self.tracks_lat = np.append(self.tracks_lat, np.array(lat))
+      self.tracks_lat = np.append(self.tracks_lat, self.get_mod_lat_np(np.array(lat)))
 
   def reset_track(self):
     self.tracks_lon = []
     self.tracks_lat = []
 
+  def draw_map_tile(self, pixel_z, x_start, x_end, y_start, y_end):
+    
+    #get tile coordinates of display border points
+    p0 = {
+      "x": min(x_start, x_end),
+      "y": min(y_start, y_end)
+    }
+    p1 = {
+      "x": max(x_start, x_end),
+      "y": max(y_start, y_end)
+    }
+    #tile range
+    t0 = self.get_tile_xy(pixel_z, p0["x"], p0["y"])
+    t1 = self.get_tile_xy(pixel_z, p1["x"], p1["y"])
+    tile_x = sorted([t0[0], t1[0]])
+    tile_y = sorted([t0[1], t1[1]])
+
+    #tile download check
+    if self.zoomlevel not in self.tile_exists:
+      self.tile_exists[self.zoomlevel] = {}
+    
+    tiles = []
+
+    for i in range(tile_x[0], tile_x[1]+1):
+      for j in range(tile_y[0], tile_y[1]+1):
+        tiles.append((i,j))
+    
+    for i in [tile_x[0]-1, tile_x[1]+1]:
+      for j in range(tile_y[0]-1, tile_y[1]+2):
+        tiles.append((i,j))
+
+    for i in range(tile_x[0], tile_x[1]+1):
+      for j in [tile_y[0]-1, tile_y[1]+1]:
+        tiles.append((i,j))
+
+    for tile in tiles:
+      i = tile[0]
+      j = tile[1]
+      filename = self.config.get_maptile_filename(pixel_z, i, j)
+      key = "{0}-{1}".format(i,j)
+
+      if os.path.exists(filename) and os.path.getsize(filename) > 0:
+        self.tile_exists[self.zoomlevel][key] = True
+        continue
+      
+      #download is in progress
+      if key in self.tile_exists[self.zoomlevel]:
+        continue
+
+      #start downloading
+      self.tile_exists[self.zoomlevel][key] = False
+      if not self.config.download_maptile(pixel_z, i, j):
+        self.tile_exists[self.zoomlevel].discard(key)
+
+    draw_flag = False
+    if self.zoomlevel not in self.drawn_tile:
+      self.drawn_tile[self.zoomlevel] = set()
+      draw_flag = True
+    if self.pre_zoomlevel != self.zoomlevel:
+      self.drawn_tile[self.zoomlevel] = set()
+      draw_flag = True
+    for i in range(tile_x[0], tile_x[1]+1):
+      for j in range(tile_y[0], tile_y[1]+1):
+        key = "{0}-{1}".format(i,j)
+        if self.tile_exists[self.zoomlevel][key] and key not in self.drawn_tile[self.zoomlevel]:
+          self.drawn_tile[self.zoomlevel].add(key)
+          draw_flag = True
+    self.pre_zoomlevel = self.zoomlevel
+
+    if not draw_flag:
+      return
+    
+    imgarray = np.empty(
+      ((tile_x[1]-tile_x[0]+1)*256, (tile_y[1]-tile_y[0]+1)*256, 3), 
+      dtype='uint8'
+      )
+    for i in range(tile_x[0], tile_x[1]+1):
+      for j in range(tile_y[0], tile_y[1]+1):
+        filename = self.config.get_maptile_filename(pixel_z, i, j)
+        I = i - tile_x[0]
+        J = tile_y[1] - j
+        if os.path.exists(filename) and os.path.getsize(filename) > 0:
+          imgarray[I*256:(I+1)*256, J*256:(J+1)*256] = \
+            np.rot90(np.asarray(Image.open(filename).convert('RGB')).astype('uint8'), -1)
+        else:
+          #finally blank area
+          imgarray[I*256:(I+1)*256, J*256:(J+1)*256] = 255
+    imgitem = pg.ImageItem(imgarray)
+    saveimg = pg.ImageItem(np.fliplr(imgarray))
+    #saveimg.save("maptile/out.png")
+
+    imgarray_min_x, imgarray_max_y = \
+      self.get_xy_from_tile_xy(pixel_z, tile_x[0], tile_y[0])
+    imgarray_max_x, imgarray_min_y = \
+      self.get_xy_from_tile_xy(pixel_z, tile_x[1]+1, tile_y[1]+1)
+
+    self.plot.addItem(imgitem)
+    imgitem.setZValue(-100)
+    imgitem.setRect(
+      pg.QtCore.QRectF(
+        imgarray_min_x,
+        self.get_mod_lat(imgarray_min_y),
+        imgarray_max_x-imgarray_min_x,
+        self.get_mod_lat(imgarray_max_y)-self.get_mod_lat(imgarray_min_y),
+        )
+      )
+    x = imgarray_min_x
+    y = self.get_mod_lat(imgarray_min_y)
+    w = imgarray_max_x-imgarray_min_x
+    h = self.get_mod_lat(imgarray_max_y)-self.get_mod_lat(imgarray_min_y)
+  
+  def draw_scale(self, x_start, y_start):
+    #draw scale at left bottom
+    scale_factor = 8
+    scale_dist = self.get_width_distance(y_start, self.map_area['w'])/scale_factor
+    num = scale_dist/(10**int(np.log10(scale_dist)))
+    modify = 1
+    if 1 < num < 2:
+      modify = 2 / num
+    elif 2 < num < 5:
+      modify = 5 / num
+    elif 5 < num < 10:
+      modify = 10 / num
+    scale_x1 = x_start + self.map_area['w']/25
+    scale_x2 = scale_x1 + self.map_area['w']/scale_factor*modify
+    scale_y1 = y_start + self.map_area['h']/25
+    scale_y2 = scale_y1 + self.map_area['h']/30
+    scale_y1 = self.get_mod_lat(scale_y1)
+    scale_y2 = self.get_mod_lat(scale_y2)
+    self.scale_plot.setData(
+      [scale_x1, scale_x1, scale_x2, scale_x2], 
+      [scale_y2, scale_y1, scale_y1, scale_y2],
+      )
+    
+    scale_unit = "m"
+    scale_label = round(scale_dist*modify)
+    if scale_label >= 1000:
+      scale_label = int(scale_label/1000)
+      scale_unit = "km"
+    self.scale_text.setPlainText("{0}{1}".format(scale_label, scale_unit))
+    self.scale_text.setPos(
+      (scale_x1+scale_x2)/2,
+      scale_y2
+      )
+  
+  def draw_map_attribution(self, x_start, y_start):
+    #draw map attribution at right bottom
+    self.map_attribution.setPos(
+      x_start + self.map_area['w'],
+      self.get_mod_lat(y_start)
+      )
+
+  def draw_cuesheet(self):
+    if self.update_course_points():
+      #update cuesheet
+      self.cuesheet_widget.update_extra()
+
   def calc_y_mod(self, lat):
     if np.isnan(lat):
-      return
-    return self.getLatDist1s() / self.getLonDist1s(lat)
+      return np.nan
+    # (6356752 * 2*np.pi/360/60/60) / (6378137 * 2*np.pi*cos(lat/180*np.pi)/360/60/60)
+    return self.config.GEO_R2 / (self.config.GEO_R1 * cos(lat/180*np.pi))
   
-  def getLatDist1s(self):
-    return 6356752 * 2*np.pi/360/60/60 #[m]
+  def get_width_distance(self, lat, w):
+    return w * self.config.GEO_R1*1000 * 2*np.pi*cos(lat/180*np.pi)/360
+
+  def get_mod_lat(self, lat):
+    return lat * self.calc_y_mod(lat)
+
+  def get_mod_lat_np(self, lat):
+    return lat * self.config.GEO_R2 / (self.config.GEO_R1 * np.cos(lat/180*np.pi))
+
+  def get_geo_area(self, x, y):
+    tile_x, tile_y = self.get_tile_xy(self.zoomlevel, x, y)
+    pos_x0, pos_y0 = self.get_xy_from_tile_xy(self.zoomlevel, tile_x, tile_y)
+    pos_x1, pos_y1 = self.get_xy_from_tile_xy(self.zoomlevel, tile_x+1, tile_y+1)
+    return abs(pos_x1-pos_x0)/256*(self.width()*self.map_cuesheet_ratio), abs(pos_y1-pos_y0)/256*self.height()
   
-  def getLonDist1s(self, lat):
-    return 6378137 * 2*np.pi*np.cos(lat/180*np.pi)/360/60/60 #m
+  def get_tile_xy(self, z, x, y):
+    z = 2**(7+z)
+    l = 85.05112878
+    ret_x = z*(1+x/180)
+    ret_y = z/np.pi*(-np.arctanh(np.sin(np.pi/180*y)) + np.arctanh(np.sin(np.pi/180*l)))
+    return int(ret_x/256), int(ret_y/256)
+  
+  def get_xy_from_tile_xy(self, z, x, y):
+    z = 2**(7+z)
+    l = 85.05112878
+    ret_x = 180 * (x*256/z-1)
+    ret_y = 180/np.pi * (np.arcsin(np.tanh(-1*np.pi*y*256/z+np.arctanh(np.sin(np.pi/180*l)))))
+    return ret_x, ret_y
 
   

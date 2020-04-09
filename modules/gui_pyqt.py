@@ -1,4 +1,5 @@
 import sys
+import os
 from datetime import datetime
 import signal
 import io
@@ -10,11 +11,13 @@ import PyQt5.QtGui as QtGui
 from modules.gui_config import GUI_Config
 from modules.pyqt.pyqt_style import PyQtStyle
 import modules.pyqt.pyqt_graph as pyqt_graph
+import modules.pyqt.pyqt_graph_debug as pyqt_graph_debug
 import modules.pyqt.pyqt_multiscan_widget as pyqt_multiscan
 from modules.pyqt.pyqt_values_widget import ValuesWidget
 from modules.pyqt.menu.pyqt_menu_widget import TopMenuWidget, ANTMenuWidget, ANTDetailWidget
 from modules.pyqt.menu.pyqt_adjust_widget import AdjustAltitudeWidget, AdjustWheelCircumferenceWidget
 from modules.pyqt.menu.pyqt_debug_widget import DebugLogViewerWidget
+from modules.pyqt.pyqt_cuesheet_widget import CueSheetWidget
 
 class MyWindow(QtWidgets.QMainWindow):
   config = None
@@ -58,9 +61,12 @@ class GUI_PyQt(QtCore.QObject):
   stack_widget = None
   main_page = None
   main_page_index = 0
+  altitude_graph_widget = None
+  acc_graph_widget = None
   performance_graph_widget  = None
   course_profile_graph_widget = None
   simple_map_widget = None
+  cuesheet_widget = None
   multi_scan_widget = None
 
   display_buffer = None
@@ -131,18 +137,20 @@ class GUI_PyQt(QtCore.QObject):
     self.main_window.setCentralWidget(self.stack_widget)
     self.stack_widget.setContentsMargins(0,0,0,0)
 
-    QtGui.QFontDatabase.addApplicationFont('fonts/Yantramanav/Yantramanav-Black.ttf')
-    self.stack_widget.setStyleSheet("font-family: Yantramanav")
+    #default font
+    res = QtGui.QFontDatabase.addApplicationFont('fonts/Yantramanav/Yantramanav-Black.ttf')
+    if res != -1:
+      font_name = QtGui.QFontDatabase.applicationFontFamilies(res)[0]
+      self.stack_widget.setStyleSheet("font-family: {}".format(font_name))
+      print("add font:", font_name)
 
-    #QtGui.QFontDatabase.addApplicationFont('fonts/mplus-TESTFLIGHT-063/mplus-1p-black.ttf')
-    #self.stack_widget.setStyleSheet("font-family: M+ 1p black")
-
-    QtGui.QFontDatabase.addApplicationFont('fonts/source-han-sans/SourceHanSansJP-Bold.otf')
-    #self.stack_widget.setStyleSheet("font-family: 源ノ角ゴシック JP")
-
-    #http://pm85122.onamae.jp/851Gkktt.html
-    #QtGui.QFontDatabase.addApplicationFont('fonts/851Gkktt_005.ttf')
-    #self.stack_widget.setStyleSheet("font-family: 851Gkktt")
+    #Additional font from setting.conf
+    if self.config.G_FONT_FULLPATH != "":
+      res = QtGui.QFontDatabase.addApplicationFont(self.config.G_FONT_FULLPATH)
+      if res != -1:
+        self.config.G_FONT_NAME = QtGui.QFontDatabase.applicationFontFamilies(res)[0]
+        #self.stack_widget.setStyleSheet("font-family: {}".format(self.config.G_FONT_NAME))
+        print("add font:", self.config.G_FONT_NAME)
 
     #self.stack_widget.setWindowFlags(QtCore.Qt.FramelessWindowHint)
 
@@ -202,15 +210,25 @@ class GUI_PyQt(QtCore.QObject):
           ValuesWidget(self.main_page, self.config, self.gui_config.G_LAYOUT[k]["LAYOUT"])
           )
       else:
-        if k == "PERFORMANCE_GRAPH":
+        if k == "ALTITUDE_GRAPH":
+          self.altitude_graph_widget = pyqt_graph_debug.AltitudeGraphWidget(self.main_page, self.config)
+          self.main_page.addWidget(self.altitude_graph_widget)
+        elif k == "ACC_GRAPH":
+          self.acc_graph_widget = pyqt_graph_debug.AccelerationGraphWidget(self.main_page, self.config)
+          self.main_page.addWidget(self.acc_graph_widget)
+        elif k == "PERFORMANCE_GRAPH":
           self.performance_graph_widget = pyqt_graph.PerformanceGraphWidget(self.main_page, self.config)
           self.main_page.addWidget(self.performance_graph_widget)
-        elif k == "COURSE_PROFILE_GRAPH":
+        elif k == "COURSE_PROFILE_GRAPH" and os.path.exists(self.config.G_COURSE_FILE) and self.config.G_COURSE_INDEXING:
           self.course_profile_graph_widget = pyqt_graph.CourseProfileGraphWidget(self.main_page, self.config)
           self.main_page.addWidget(self.course_profile_graph_widget)
         elif k == "SIMPLE_MAP":
           self.simple_map_widget = pyqt_graph.SimpleMapWidget(self.main_page, self.config)
           self.main_page.addWidget(self.simple_map_widget)
+        elif k == "CUESHEET" and len(self.config.logger.course.point_name) > 0 and self.config.G_COURSE_INDEXING and \
+          self.config.G_CUESHEET_DISPLAY_NUM > 0:
+          self.cuesheet_widget = pyqt_graph.CueSheetWidget(self.main_page, self.config)
+          self.main_page.addWidget(self.cuesheet_widget)
         elif k == "MULTI_SCAN":
           self.multi_scan_widget = pyqt_multiscan.MultiScanWidget(self.main_page, self.config)
           self.main_page.addWidget(self.multi_scan_widget)
@@ -340,6 +358,7 @@ class GUI_PyQt(QtCore.QObject):
           print('reset')
           self.logger.reset_count()
           self.simple_map_widget.reset_track()
+          self.lap_button_count = 0
     elif self.button_box_widget.lap_button._state == 1:
       self.button_box_widget.lap_button._state = 0
       self.lap_button_count = 0

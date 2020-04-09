@@ -1,5 +1,7 @@
 /log/
 /screenshot/
+/maptile/*/*.png*
+/maptile/*/*/*.png*
 /.idea/
 /.vscode/
 __pycache__/
@@ -15,6 +17,7 @@ __pycache__/
 a.out
 setting.conf
 layout.yaml
+map.yaml
 nohup.out
 !.gitkeep
 

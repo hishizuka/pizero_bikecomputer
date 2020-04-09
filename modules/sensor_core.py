@@ -85,11 +85,7 @@ class SensorCore():
     time_profile.append(datetime.datetime.now()) #for time profile
     self.sensor_gpio = SensorGPIO(config, None)
     time_profile.append(datetime.datetime.now()) #for time profile
-
-    #self.sleep_timer.setInterval(self.config.G_SENSOR_INTERVAL)
-    #self.sleep_timer.timeout.connect(self.integrate)
-    #signal.signal(signal.SIGALRM, self.integrate)
-    #signal.setitimer(signal.ITIMER_REAL, 0.1, 1.0)
+    
     self.thread_integrate = threading.Thread(target=self.integrate, name="thread_integrate", args=())
     time_profile.append(datetime.datetime.now()) #for time profile
     self.start()
@@ -101,6 +97,9 @@ class SensorCore():
       sec_diff.append("{0:.6f}".format((time_profile[i]-time_profile[i-1]).total_seconds()))
     print("\tGPS/ANT+/I2C/GPIO/integrate/start:", sec_diff)
 
+  def test(self, arg1, arg2):
+    print("sensor_core_test", datetime.datetime.now())
+
   def start(self):
     self.thread_gps.start()
     self.thread_ant.start()
@@ -108,7 +107,6 @@ class SensorCore():
     self.thread_i2c.start()
     self.thread_integrate.start()
 
-  #def integrate(self, arg1, arg2):
   def integrate(self):
     pre_dst = {'ANT+':0, 'GPS': 0} 
     pre_ttlwork = {'ANT+':0}
@@ -119,14 +117,15 @@ class SensorCore():
     #alias for self.values
     v = {'GPS':self.values['GPS'], 'I2C':self.values['I2C']}
     #loop control
-    wait_time = self.config.G_SENSOR_INTERVAL
-    actual_loop_interval = self.config.G_SENSOR_INTERVAL
+    self.wait_time = self.config.G_SENSOR_INTERVAL
+    self.actual_loop_interval = self.config.G_SENSOR_INTERVAL
     time_profile = [None,]
     
     #if True:
     while(not self.config.G_QUIT):
-      time.sleep(wait_time)
+      time.sleep(self.wait_time)
       start_time = datetime.datetime.now()
+      #print(start_time)
 
       time_profile = [start_time,]
       hr = spd = cdc = pwr = self.config.G_ANT_NULLVALUE
@@ -275,8 +274,10 @@ class SensorCore():
       #grade (distance base)
       if dst_diff['USE'] > 0:
         for key in ['alt_diff', 'dst_diff']:
-          del(self.values['integrated'][key][0])
-          self.values['integrated'][key].append(eval(key+"['USE']"))
+          #del(self.values['integrated'][key][0])
+          #self.values['integrated'][key].append(eval(key+"['USE']"))
+          self.values['integrated'][key][0:-1] = self.values['integrated'][key][1:]
+          self.values['integrated'][key][-1] = eval(key+"['USE']")
           diff_sum[key] = sum(self.values['integrated'][key][-self.grade_bin:])
         #set grade
         gr = gl = self.config.G_ANT_NULLVALUE
@@ -302,10 +303,12 @@ class SensorCore():
 
       #grade (speed base)
       if self.config.G_ANT['USE']['SPD']:
-        dst_diff_spd['ANT+'] = spd * actual_loop_interval
+        dst_diff_spd['ANT+'] = spd * self.actual_loop_interval
         for key in ['alt_diff_spd', 'dst_diff_spd']:
-          del(self.values['integrated'][key][0])
-          self.values['integrated'][key].append(eval(key+"['ANT+']"))
+          #del(self.values['integrated'][key][0])
+          #self.values['integrated'][key].append(eval(key+"['ANT+']"))
+          self.values['integrated'][key][0:-1] = self.values['integrated'][key][1:]
+          self.values['integrated'][key][-1] = eval(key+"['ANT+']")
           diff_sum[key] = sum(self.values['integrated'][key][-self.grade_bin:])
         #set grade
         x = diff_sum['dst_diff_spd']**2 - diff_sum['alt_diff_spd']**2
@@ -398,14 +401,12 @@ class SensorCore():
         print("sec_diff:", datetime.datetime.now().strftime("%Y%m%d %H:%M:%S"), sec_diff)
    
       loop_time = (datetime.datetime.now() - start_time).total_seconds()
-      wait_time = self.config.G_SENSOR_INTERVAL - loop_time
-      actual_loop_interval = self.config.G_SENSOR_INTERVAL
-      if wait_time < -1 * 10 * self.config.G_SENSOR_INTERVAL:
-        wait_time = self.config.G_SENSOR_INTERVAL
-      while wait_time < 0:
-        wait_time += self.config.G_SENSOR_INTERVAL
-        print("loop_time: {:.3f}s, wait_time: {:.3f}s".format(loop_time, wait_time))
-        actual_loop_interval += self.config.G_SENSOR_INTERVAL
+      d1, d2 = divmod(loop_time, self.config.G_SENSOR_INTERVAL)
+      if d1 > self.config.G_SENSOR_INTERVAL * 10: #[s]
+        print(loop_time, d1, d2)
+        d1 = d2 = 0
+      self.wait_time = self.config.G_SENSOR_INTERVAL - d2
+      self.actual_loop_interval = (d1 + 1)*self.config.G_SENSOR_INTERVAL
 
   def get_lp_filterd_value(self, value, pre):
     o = p = self.config.G_ANT_NULLVALUE

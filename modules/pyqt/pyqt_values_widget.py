@@ -11,8 +11,8 @@ class ValuesWidget(ScreenWidget):
     super().__init__(parent, config)
 
   def set_minimum_size(self):
-    for i in range(self.max_width+1):
-      self.layout.setColumnMinimumWidth(i, int(self.config.G_WIDTH/(self.max_width+1)))
+    super().set_minimum_size()
+    h = int(self.height()/(self.max_height+1))
     for i in range(self.max_height+1):
-      self.layout.setRowMinimumHeight(i, int(self.config.G_HEIGHT/(self.max_height+1)))
+      self.layout.setRowMinimumHeight(i, h)
 
