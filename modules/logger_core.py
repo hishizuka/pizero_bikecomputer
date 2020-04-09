@@ -89,8 +89,8 @@ class LoggerCore():
     self.logger_fit = logger_fit.LoggerFit(self.config)
 
     if _IMPORT_AMBIENT:
-      t = datetime.datetime.utcnow()
-      self.am = ambient.Ambient()
+      #need to get ambient account
+      #self.am = ambient.Ambient(channel_ID, write_key)
       self.send_time = datetime.datetime.now()
       print("\tlogger_core : setup ambient...: done", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
     
