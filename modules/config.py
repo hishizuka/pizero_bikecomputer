@@ -69,7 +69,7 @@ class Config():
   G_UNIT_ID_HEX = 0 #initialized in get_serial
 
   #install_dir 
-  G_INSTALL_PATH = os.path.expanduser('~') + "/pizero_bikecomputer_v1/"
+  G_INSTALL_PATH = os.path.expanduser('~') + "/pizero_bikecomputer/"
   
   #layout def
   G_LAYOUT_FILE = "layout.yaml"
