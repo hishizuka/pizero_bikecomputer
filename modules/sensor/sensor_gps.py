@@ -455,7 +455,7 @@ class SensorGPS(Sensor):
         
         return
 
-    print("no result:", start)
+    #print("no result:", start)
     self.values['on_course_status'] = False
     #self.values['course_distance'] = self.config.logger.course.distance[start]*1000
 

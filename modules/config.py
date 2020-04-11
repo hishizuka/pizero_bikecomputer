@@ -36,7 +36,7 @@ class Config():
 
   #loop interval
   G_SENSOR_INTERVAL = 1.0 #[s] for sensor_core
-  G_ANT_INTERVAL = 0.5 #[s] for ANT+. 0.25, 0.5, 1.0 only.
+  G_ANT_INTERVAL = 1.0 #[s] for ANT+. 0.25, 0.5, 1.0 only.
   G_I2C_INTERVAL = 0.5 #[s] for I2C (altitude, accelerometer, etc)
   G_GPS_INTERVAL = 1.0 #[s] for GPS
   G_DRAW_INTERVAL = 1000 #[ms] for GUI (QtCore.QTimer)
@@ -69,7 +69,7 @@ class Config():
   G_UNIT_ID_HEX = 0 #initialized in get_serial
 
   #install_dir 
-  G_INSTALL_PATH = os.path.expanduser('~') + "/pizero_bikecomputer/"
+  G_INSTALL_PATH = os.path.expanduser('~') + "/pizero_bikecomputer_v1/"
   
   #layout def
   G_LAYOUT_FILE = "layout.yaml"

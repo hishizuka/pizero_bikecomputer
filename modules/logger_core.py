@@ -89,8 +89,8 @@ class LoggerCore():
     self.logger_fit = logger_fit.LoggerFit(self.config)
 
     if _IMPORT_AMBIENT:
-      #need to get ambient account
-      #self.am = ambient.Ambient(channel_ID, write_key)
+      t = datetime.datetime.utcnow()
+      self.am = ambient.Ambient()
       self.send_time = datetime.datetime.now()
       print("\tlogger_core : setup ambient...: done", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
     
@@ -546,7 +546,7 @@ class LoggerCore():
       db_file = db_file+".tmp"
       make_tmp_db = True
       shutil.copy(self.config.G_LOG_DB, db_file)
-      print("##### make_tmp_db")
+      #print("##### make_tmp_db")
 
     con = sqlite3.connect(db_file)
     cur = con.cursor()
@@ -584,9 +584,9 @@ class LoggerCore():
 
       #timestamp
       cur.execute("SELECT MAX(timestamp) FROM BIKECOMPUTER_LOG")
-      timestamp_new = cur.fetchone()
+      timestamp_new = cur.fetchone()[0]
       
-      print("length", test.shape[0], "->", np.sum(valid_points), "->", len(lat))
+      #print("length", test.shape[0], "->", np.sum(valid_points), "->", len(lat))
     cur.close()
     con.close()
 
