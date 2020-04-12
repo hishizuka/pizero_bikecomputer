@@ -20,6 +20,7 @@ _SENSOR = {
 try:
   #from envirophat import light, motion, analog
   from envirophat import light
+  light.light()
   #device test
   _SENSOR['ENVIRO'] = True
 except:
