@@ -29,6 +29,7 @@ class MarqueeLabel(QtWidgets.QLabel):
 
   def paintEvent(self, event):
     painter = QtGui.QPainter(self)
+    self.py = int(self.height()*0.9)
     if self.textLength <= self.width() or not self.config.G_CUESHEET_SCROLL:
       painter.drawText(self.px+5, self.py, self.text())
       return
@@ -38,6 +39,7 @@ class MarqueeLabel(QtWidgets.QLabel):
     painter.drawText(self.px, self.py, self.text())
     painter.translate(self.px, 0)
     self.px -= self._speed
+
 
 class CueSheetItem(QtWidgets.QVBoxLayout):
   dist = None

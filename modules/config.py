@@ -13,6 +13,7 @@ import urllib.error
 import urllib.request
 import traceback
 import json
+import socket
 from math import sin, cos, acos, radians, sqrt, tan, degrees
 
 import numpy as np
@@ -227,16 +228,17 @@ class Config():
     'PiTFT': {'size':(320, 240),'touch':True},
     'MIP': {'size':(400, 240),'touch':False},
     'Papirus': {'size':(264, 176),'touch':False},
-    #'DFRobot_RPi_Display': {'size':(250, 122),'touch':False}
+    'DFRobot_RPi_Display': {'size':(250, 122),'touch':False}
   }
   G_WIDTH = 320
   G_HEIGHT = 240
   #GUI mode
   G_GUI_MODE = "PyQt"
   #G_GUI_MODE = "QML" #not valid
+  G_BUF_IMAGE = "/tmp/buf.bmp"
 
   #hr and power graph (PerformanceGraphWidget)
-  G_GUI_HR_POWER_DISPLAY_RANGE = int(1*60/G_SENSOR_INTERVAL) # num (no unit)
+  G_GUI_HR_POWER_DISPLAY_RANGE = int(1*180/G_SENSOR_INTERVAL) # num (no unit)
   G_GUI_MIN_HR = 50
   G_GUI_MAX_HR = 180
   G_GUI_MIN_POWER = 30
@@ -245,7 +247,7 @@ class Config():
   G_GUI_REALTIME_GRAPH_RANGE = int(1*60/(G_REALTIME_GRAPH_INTERVAL/1000)) # num (no unit)
 
   #Graph color by slope
-  G_SLOPE_BIN = 500 #m
+  G_SLOPE_WINDOW_DISTANCE = 500 #m
   G_SLOPE_CUTOFF = (1,3,5,7,9,11,float("inf")) #by grade
   G_SLOPE_COLOR = (
    #(128,128,128,160),  #gray(base)
@@ -291,6 +293,19 @@ class Config():
   G_USE_AUTO_BACKLIGHT = True
   G_USE_AUTO_CUTOFF = 0
 
+  #IMU axis conversion
+  #  X: to North (up rotation is plus)
+  #  Y: to West (up rotation is plus)
+  #  Z: to down (plus)
+  G_IMU_AXIS_CONVERSION = {
+    'STATUS': False,
+    'COEF': np.ones(3) #X, Y, Z
+  }
+  G_IMU_AXIS_SWAP_XY = {
+    'STATUS': False,
+    'COEF': np.ones(2) #Y->X, X->Y
+  }
+
   #blue tooth setting
   G_BT_ADDRESS = {}
   G_BT_CMD_BASE = ["/usr/local/bin/bt-pan","client"]
@@ -304,11 +319,11 @@ class Config():
   G_GPIO_BUTTON_DEF = {
     'PiTFT' : {
       'MAIN':{
-        5:("brightness_control()","scroll_menu()"),
+        5:("scroll_prev()","dummy()"),
         6:("logger.count_laps()","logger.reset_count()"),
-        12:("get_screenshot()",""),
+        12:("brightness_control()","dummy()"),
         13:("logger.start_and_stop_manual()","quit()"),
-        16:("scroll_next()",""),
+        16:("scroll_next()","scroll_menu()"),
         },
       'MENU':{
         5:("scroll_menu()","dummy()"),
@@ -320,10 +335,10 @@ class Config():
       },
     'Papirus' : {
       'MAIN':{
-        16:("scroll_prev()","scroll_menu()"),#SW1(left)
+        16:("scroll_prev()","dummy()"),#SW1(left)
         26:("logger.count_laps()","logger.reset_count()"),#SW2
         20:("logger.start_and_stop_manual()","dummy()"),#SW3
-        21:("scroll_next()","dummy()"),#SW4
+        21:("scroll_next()","scroll_menu()"),#SW4
         },
       'MENU':{
         16:("scroll_menu()","dummy()"),
@@ -334,21 +349,21 @@ class Config():
       },
     'DFRobot_RPi_Display' : {
       'MAIN':{
-        29:("logger.start_and_stop_manual()","logger.reset_count()"),
-        28:("scroll_next()","scroll_menu()"),
+        21:("logger.start_and_stop_manual()","logger.reset_count()"),
+        20:("scroll_next()","scroll_menu()"),
         },
-      'MAIN':{
-        29:("press_space()","dummy()"),
-        28:("press_down()","scroll_menu()"),
+      'MENU':{
+        21:("press_space()","dummy()"),
+        20:("press_down()","scroll_menu()"),
         },
       },
     'Button_Shim' : {
       'MAIN':{
-        'A':("scroll_prev","scroll_menu"),
+        'A':("scroll_prev","dummy"),
         'B':("logger.count_laps","logger.reset_count"),
         'C':("get_screenshot","dummy"),
         'D':("logger.start_and_stop_manual","dummy"),
-        'E':("scroll_next","dummy"),
+        'E':("scroll_next","scroll_menu"),
         },
       'MENU':{
         'A':("scroll_menu","dummy"),
@@ -473,11 +488,13 @@ class Config():
     #thread for downloading map tiles
     self.download_queue = queue.Queue()
     self.download_thread = threading.Thread(target=self.download_worker, name="download_worker", args=())
+    self.download_thread.setDaemon(True)
     self.download_thread.start()
     self.convert_cmd = shutil.which('convert')
     if self.G_DITHERING and self.convert_cmd != None:
       self.convert_queue = queue.Queue()
       self.convert_thread = threading.Thread(target=self.convert_worker, name="convert_worker", args=())
+      self.convert_thread.setDaemon(True)
       self.convert_thread.start()
     else:
       self.G_DITHERING = False
@@ -573,7 +590,18 @@ class Config():
   def get_maptile_filename_tmp(self, z, x, y):
     return "maptile/.tmp/"+self.G_MAP+"/{0}-{1}-{2}.png".format(z, x, y)
 
+  def detect_network(self):
+    try:
+      socket.setdefaulttimeout(3)
+      socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect(("8.8.8.8", 53))
+      return True
+    except socket.error as ex:
+      return False
+
   def download_maptile(self, z, x, y):
+    if not self.detect_network():
+      return False
+
     try:
       _y = y
       _z = z
@@ -601,21 +629,13 @@ class Config():
     last_download_time = datetime.datetime.now()
     online = True
 
-    while not self.G_QUIT:
-      while online and not self.download_queue.empty():
-        url, dst_path = self.download_queue.get()
-        if self.download_file(url, dst_path):
-          self.download_queue.task_done()
-          last_download_time = datetime.datetime.now()
-        else:
-          online = False
-          self.download_queue.put((url, dst_path))
-      
-      if (datetime.datetime.now()-last_download_time).total_seconds() > 60*3: #[s]
-        last_download_time = datetime.datetime.now()
-        online = True
-
-      time.sleep(0.5)
+    #while True:
+    for url, dst_path in iter(self.download_queue.get, None):
+      #url, dst_path = self.download_queue.get()
+      if self.download_file(url, dst_path):
+        self.download_queue.task_done()
+      else:
+        self.download_queue.put((url, dst_path))
       
   def download_file(self, url, dst_path):
     try:
@@ -631,29 +651,29 @@ class Config():
     if not self.G_DITHERING:
       return
 
-    #last_convert_time = datetime.datetime.now()
-    cue_timestamp = datetime.datetime.now()
-    online = True
     dl_dst = map_dst = None
+    timeout = 5
 
-    while not self.G_QUIT:
-      if online and not self.convert_queue.empty():
-        dl_dst, map_dst = self.convert_queue.get()
-        cue_timestamp = datetime.datetime.now()
-     
-      if dl_dst != None and os.path.exists(dl_dst) and self.convert(dl_dst, map_dst):
+    #while True:
+    for dl_dst, map_dst in iter(self.convert_queue.get, None):
+      #dl_dst, map_dst = self.convert_queue.get()
+      
+      #wait until file appears
+      start_time = datetime.datetime.utcnow()
+      elapsed_time = 0
+      while not os.path.exists(dl_dst) and elapsed_time < timeout:
+        time.sleep(0.5)
+        elapsed_time = (datetime.datetime.utcnow()-start_time).total_seconds()
+      
+      if elapsed_time >= timeout:
+        self.download_queue.put((dl_dst, map_dst))
+        continue
+
+      if self.convert(dl_dst, map_dst):
         self.convert_queue.task_done()
         dl_dst = map_dst = None
       else:
-        online = False
-      
-      #if not online or dl_dst == None:
-      if not online:
-        time.sleep(0.5)
-
-      if (datetime.datetime.now()-cue_timestamp).total_seconds() > 3: #[s]
-        cue_timestamp = datetime.datetime.now()
-        online = True
+        self.download_queue.put((dl_dst, map_dst))
   
   def convert(self, dl_dst, map_dst):
     try:
@@ -670,14 +690,27 @@ class Config():
     
   def quit(self):
     print("quit")
+    if self.G_MANUAL_STATUS == "START":
+      self.logger.start_and_stop_manual()
     self.G_QUIT = True
     time.sleep(0.1)
+    
     self.logger.sensor.sensor_ant.quit()
     self.logger.sensor.sensor_gpio.quit()
     self.logger.sensor.sensor_spi.quit()
     self.logger.sensor.sensor_gps.quit()
     if self.G_IS_RASPI:
       GPIO.cleanup()
+    
+    #self.download_queue.join()
+    #self.download_thread.join(timeout=0.5)
+    if self.G_DITHERING:
+      #self.self.convert_queue.join()
+      #self.self.convert_thread.join(timeout=0.5)
+      pass
+    
+    #time.sleep(self.G_LOGGING_INTERVAL)
+    self.logger.quit()
     self.write_config()
 
   def poweroff(self):
@@ -790,6 +823,23 @@ class Config():
 
   def read_config(self):
     self.config_parser.read(self.config_file)
+         
+    if 'GENERAL' in self.config_parser:
+      if 'DISPLAY' in self.config_parser['GENERAL']:
+        self.G_DISPLAY = self.config_parser['GENERAL']['DISPLAY']
+        self.set_resolution()
+      if 'AUTOSTOP_CUTOFF' in self.config_parser['GENERAL']:
+        self.G_AUTOSTOP_CUTOFF = int(self.config_parser['GENERAL']['AUTOSTOP_CUTOFF'])/3.6
+        self.G_GPS_SPEED_CUTOFF = self.G_AUTOSTOP_CUTOFF
+      if 'WHEEL_CIRCUMFERENCE' in self.config_parser['GENERAL']:
+        self.G_WHEEL_CIRCUMFERENCE = int(self.config_parser['GENERAL']['WHEEL_CIRCUMFERENCE'])/1000
+      if 'LANG' in self.config_parser['GENERAL']:
+        self.G_LANG = self.config_parser['GENERAL']['LANG'].upper()
+      if 'FONT_FILE' in self.config_parser['GENERAL']:
+        self.G_FONT_FILE = self.config_parser['GENERAL']['FONT_FILE']
+      if 'MAP' in self.config_parser['GENERAL']:
+        self.G_MAP = self.config_parser['GENERAL']['MAP'].lower()
+
     if 'ANT' in self.config_parser:
       for key in self.config_parser['ANT']:
 
@@ -827,20 +877,18 @@ class Config():
         if self.G_ANT['ID'][key] != 0 and self.G_ANT['TYPE'][key] != 0:
           self.G_ANT['ID_TYPE'][key] = \
             struct.pack('<HB', self.G_ANT['ID'][key], self.G_ANT['TYPE'][key]) 
-     
-    if 'GENERAL' in self.config_parser:
-      if 'DISPLAY' in self.config_parser['GENERAL']:
-        self.G_DISPLAY = self.config_parser['GENERAL']['DISPLAY']
-        self.set_resolution()
-      if 'AUTOSTOP_CUTOFF' in self.config_parser['GENERAL']:
-        self.G_AUTOSTOP_CUTOFF = int(self.config_parser['GENERAL']['AUTOSTOP_CUTOFF'])/3.6
-        self.G_GPS_SPEED_CUTOFF = self.G_AUTOSTOP_CUTOFF
-      if 'LANG' in self.config_parser['GENERAL']:
-        self.G_LANG = self.config_parser['GENERAL']['LANG'].upper()
-      if 'FONT_FILE' in self.config_parser['GENERAL']:
-        self.G_FONT_FILE = self.config_parser['GENERAL']['FONT_FILE']
-      if 'MAP' in self.config_parser['GENERAL']:
-        self.G_MAP = self.config_parser['GENERAL']['MAP'].lower()
+    
+    if 'SENSOR_IMU' in self.config_parser:
+      for s, c, m in [
+        ['AXIS_CONVERSION_STATUS', 'AXIS_CONVERSION_COEF', self.G_IMU_AXIS_CONVERSION], 
+        ['AXIS_SWAP_XY_STATUS', 'AXIS_SWAP_XY_COEF', self.G_IMU_AXIS_SWAP_XY]]:
+        if s.lower() in self.config_parser['SENSOR_IMU']:
+          m['STATUS'] = self.config_parser['SENSOR_IMU'].getboolean(s)
+        if c.lower() in self.config_parser['SENSOR_IMU']:
+          coef = np.array(json.loads(self.config_parser['SENSOR_IMU'][c]))
+          n = m['COEF'].shape[0]
+          if np.sum((coef == 1) | (coef == -1)) == n:
+            m['COEF'] = coef[0:n]
       
     if 'STRAVA' in self.config_parser:
       for k in self.G_STRAVA.keys():
@@ -852,6 +900,15 @@ class Config():
         self.G_BT_ADDRESS[k] = str(self.config_parser['BT_ADDRESS'][k])
 
   def write_config(self):
+
+    self.config_parser['GENERAL'] = {}
+    self.config_parser['GENERAL']['DISPLAY'] = self.G_DISPLAY
+    self.config_parser['GENERAL']['AUTOSTOP_CUTOFF'] = str(int(self.G_AUTOSTOP_CUTOFF*3.6))
+    self.config_parser['GENERAL']['WHEEL_CIRCUMFERENCE'] = str(int(self.G_WHEEL_CIRCUMFERENCE*1000))
+    self.config_parser['GENERAL']['LANG'] = self.G_LANG
+    self.config_parser['GENERAL']['FONT_FILE'] = self.G_FONT_FILE
+    self.config_parser['GENERAL']['MAP'] = self.G_MAP
+
     if not self.G_DUMMY_OUTPUT:
       self.config_parser['ANT'] = {}
       self.config_parser['ANT']['STATUS'] = str(self.G_ANT['STATUS'])
@@ -859,13 +916,13 @@ class Config():
         for key2 in self.G_ANT[key1]:
           if key2 in ['HR','SPD','CDC','PWR']:
             self.config_parser['ANT'][key1+"_"+key2] = str(self.G_ANT[key1][key2])
-    self.config_parser['GENERAL'] = {}
-    self.config_parser['GENERAL']['DISPLAY'] = self.G_DISPLAY
-    self.config_parser['GENERAL']['AUTOSTOP_CUTOFF'] = str(int(self.G_AUTOSTOP_CUTOFF*3.6))
-    self.config_parser['GENERAL']['LANG'] = self.G_LANG
-    self.config_parser['GENERAL']['FONT_FILE'] = self.G_FONT_FILE
-    self.config_parser['GENERAL']['MAP'] = self.G_MAP
     
+    self.config_parser['SENSOR_IMU'] = {}
+    self.config_parser['SENSOR_IMU']['AXIS_CONVERSION_STATUS'] = str(self.G_IMU_AXIS_CONVERSION['STATUS'])
+    self.config_parser['SENSOR_IMU']['AXIS_CONVERSION_COEF'] = str(list(self.G_IMU_AXIS_CONVERSION['COEF']))
+    self.config_parser['SENSOR_IMU']['AXIS_SWAP_XY_STATUS'] = str(self.G_IMU_AXIS_SWAP_XY['STATUS'])
+    self.config_parser['SENSOR_IMU']['AXIS_SWAP_XY_COEF'] = str(list(self.G_IMU_AXIS_SWAP_XY['COEF']))
+
     self.config_parser['STRAVA'] = {}
     for k in self.G_STRAVA.keys():
       self.config_parser['STRAVA'][k] = self.G_STRAVA[k] 
@@ -873,6 +930,7 @@ class Config():
     self.config_parser['BT_ADDRESS'] = {}
     for k in self.G_BT_ADDRESS.keys():
       self.config_parser['BT_ADDRESS'][k] = self.G_BT_ADDRESS[k]
+
 
     with open(self.config_file, 'w') as file:
       self.config_parser.write(file)
@@ -890,7 +948,6 @@ class Config():
       self.G_MAP_CONFIG.update(map_list)
 
   def get_track_str(self, drc):
-    #drc_int = int((drc + 11.25)/22.50)
     track_int = int((drc + 22.5)/45.0)
     return self.TRACK_STR[track_int]
   

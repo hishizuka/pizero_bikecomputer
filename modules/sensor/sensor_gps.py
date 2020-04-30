@@ -2,25 +2,62 @@ import time
 import datetime
 import numpy as np
 import re
-import traceback
 
 from .sensor import Sensor
 
+  
 #GPS
-_SENSOR_GPS = False
+_SENSOR_GPS_BASIC = False
 try:
   from dateutil import tz
   from dateutil import parser
-  from gps3 import gps3
-  from pytz import timezone
-  #device test
-  _gps_socket = gps3.GPSDSocket()
-  _gps_socket.close()
-  _SENSOR_GPS = True
+  _SENSOR_GPS_BASIC = True
 except:
   pass
-print('  GPS : ',_SENSOR_GPS)
 
+_SENSOR_GPS_ADAFRUIT_I2C = False
+try:
+  if _SENSOR_GPS_BASIC:
+    import board
+    import busio
+    import adafruit_gps
+    _sensor_adafruit_gps = adafruit_gps.GPS_GtopI2C(busio.I2C(board.SCL, board.SDA), debug=False)
+    _SENSOR_GPS_ADAFRUIT_I2C = True
+except:
+  pass
+
+_SENSOR_GPS_GPSD = False
+try:
+  if _SENSOR_GPS_BASIC and not _SENSOR_GPS_ADAFRUIT_I2C:
+    from gps3 import gps3
+    #device test
+    _gps_socket = gps3.GPSDSocket()
+    _gps_socket.connect()
+    _gps_socket.close()
+    _SENSOR_GPS_GPSD = True
+except:
+  try:
+    _gps_socket.close()
+  except:
+    pass
+
+_SENSOR_GPS_ADAFRUIT_UART = False
+try:
+  if _SENSOR_GPS_BASIC and not _SENSOR_GPS_ADAFRUIT_I2C and not _SENSOR_GPS_GPSD:
+    import serial
+    import adafruit_gps
+    _uart = serial.Serial("/dev/ttyS0", baudrate=9600, timeout=10)
+    _sensor_adafruit_gps = adafruit_gps.GPS(_uart, debug=False)
+    _SENSOR_GPS_ADAFRUIT_UART = True
+except:
+  try:
+    _uart.close()
+  except:
+    pass
+
+print('  GPS : ', _SENSOR_GPS_GPSD)
+print('  GPS_ADAFRUIT_UART : ', _SENSOR_GPS_ADAFRUIT_UART)
+print('  GPS_ADAFRUIT_I2C : ', _SENSOR_GPS_ADAFRUIT_I2C)
 
 class SensorGPS(Sensor):
 
@@ -40,14 +77,21 @@ class SensorGPS(Sensor):
   is_fixed = False
   is_altitude_modified = False
   course_index_check = []
-  course_index_check_bin = 5 #number of loop by self.config.G_GPS_INTERVAL
+  course_index_check_window_size = 5 #number of loop by self.config.G_GPS_INTERVAL
 
   def sensor_init(self):
-    if _SENSOR_GPS:
+    if _SENSOR_GPS_GPSD:
       self.gps_socket = gps3.GPSDSocket()
       self.gps_datastream = gps3.DataStream()
       self.gps_socket.connect()
       self.gps_socket.watch()
+      self.config.G_GPS_NULLVALUE = "n/a"
+    elif _SENSOR_GPS_ADAFRUIT_I2C or _SENSOR_GPS_ADAFRUIT_UART:
+      self.adafruit_gps = _sensor_adafruit_gps
+      self.config.G_GPS_NULLVALUE = None
+      #(GPGLL), GPRMC, (GPVTG), GPGGA, GPGSA, GPGSV, (GPGSR), (GPGST)
+      self.adafruit_gps.send_command(b'PMTK314,0,1,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0')
+      self.adafruit_gps.send_command(b"PMTK220,1000")
     self.reset()
     for element in self.elements:
       self.values[element] = np.nan
@@ -61,15 +105,20 @@ class SensorGPS(Sensor):
     self.values['course_point_index'] = 0
     self.values['course_distance'] = 0
     self.values['on_course_status'] = False
-    self.course_index_check = [True]*self.course_index_check_bin
+    self.course_index_check = [True]*self.course_index_check_window_size
 
   def quit(self):
-    if _SENSOR_GPS:
+    if _SENSOR_GPS_GPSD:
       self.gps_socket.close()
+    elif _SENSOR_GPS_ADAFRUIT_UART:
+      _uart.close()
 
   def start(self):
-    if _SENSOR_GPS and not self.config.G_DUMMY_OUTPUT:
-      self.update()
+    if not self.config.G_DUMMY_OUTPUT:
+      if _SENSOR_GPS_GPSD:
+        self.update()
+      elif (_SENSOR_GPS_ADAFRUIT_UART or _SENSOR_GPS_ADAFRUIT_I2C):
+        self.update_adafruit()
     elif self.config.G_DUMMY_OUTPUT:
       self.dummy_update()
   
@@ -78,7 +127,6 @@ class SensorGPS(Sensor):
 
     while not self.config.G_QUIT:
       self.sleep()
-      self.get_sleep_time(self.config.G_GPS_INTERVAL)
 
       if self.config.logger == None or len(self.config.logger.course.latitude) == 0:
         continue
@@ -135,43 +183,90 @@ class SensorGPS(Sensor):
       print("get_course_index: ", (datetime.datetime.utcnow()-t2).total_seconds(), "sec")
 
       self.values['timestamp'] = datetime.datetime.now()
+      self.get_sleep_time(self.config.G_GPS_INTERVAL)
 
   def update(self):
     for new_data in self.gps_socket:
       if self.config.G_QUIT:
         break
-      #time.sleep(self.config.G_GPS_INTERVAL)
       self.sleep()
       if new_data:
         self.gps_datastream.unpack(new_data)
-        self.get_GPS_values()
+        self.init_GPS_values()
+        g = self.gps_datastream.TPV
+        self.get_GPS_basic_values(
+          g['lat'],
+          g['lon'],
+          g['alt'],
+          g['speed'],
+          g['track'],
+          g['mode'],
+          [g['epx'], g['epy'], g['epv']],
+          )
+        self.get_satellites(self.gps_datastream.SKY['satellites'])
+        self.get_utc_time(g['time'])
       self.get_sleep_time(self.config.G_GPS_INTERVAL)
 
-  def get_GPS_values(self):
-    g = self.gps_datastream.TPV
-    gs = self.gps_datastream.SKY
-    
+  def update_adafruit(self):
+    g = self.adafruit_gps
+    #self.start_time = datetime.datetime.now()
+    #self.wait_time = 0
+    while not self.config.G_QUIT:
+      #print(datetime.datetime.now(), self.wait_time)
+      #sleep
+      self.sleep()
+      cnt = 0
+      #while (datetime.datetime.now() - self.start_time).total_seconds() < self.wait_time:
+      #while cnt < 20:
+      for i in range(20):
+        g.update()
+        #print(datetime.datetime.now(), i)
+        #cnt += 1
+        time.sleep(0.04)
+      #self.start_time = datetime.datetime.now()
+      if g.has_fix:
+        self.init_GPS_values()
+        speed = 0
+        if g.speed_knots != None:
+          speed = g.speed_knots * 1.852 / 3.6
+        self.get_GPS_basic_values(
+          g.latitude,
+          g.longitude,
+          g.altitude_m,
+          speed,
+          g.track_angle_deg,
+          g.fix_quality_3d,
+          [self.config.G_GPS_NULLVALUE]*3,
+        )
+        self.get_satellites_adafruit(g.sats)
+        self.get_utc_time(time.strftime("%Y/%m/%d %H:%M:%S +0000", g.timestamp_utc))
+        
+      self.get_sleep_time(self.config.G_GPS_INTERVAL)
+
+  def init_GPS_values(self):
+    #backup values
     if not np.isnan(self.values['lat']) and not np.isnan(self.values['lon']):
       self.pre_lat = self.values['lat']
       self.pre_lon = self.values['lon']
       self.pre_alt = self.values['alt']
-    
     #initialize
     for element in self.elements:
       self.values[element] = np.nan
-    
+
+  def get_GPS_basic_values(self, lat, lon, alt, speed, track, mode, error):
+
     #coordinate
-    if g['lat'] != self.config.G_GPS_NULLVALUE and g['lon'] != self.config.G_GPS_NULLVALUE:
-      if (-90 <= g['lat'] <= 90) and (-180 <= g['lon'] <= 180):
-        self.values['lat'] = g['lat']
-        self.values['lon'] = g['lon']
+    if lat != self.config.G_GPS_NULLVALUE and lon != self.config.G_GPS_NULLVALUE:
+      if (-90 <= lat <= 90) and (-180 <= lon <= 180):
+        self.values['lat'] = lat
+        self.values['lon'] = lon
     else: #copy from pre value
       self.values['lat'] = self.pre_lat
       self.values['lon'] = self.pre_lon
     
     #altitude
-    if g['alt'] != self.config.G_GPS_NULLVALUE:
-      self.values['alt'] = g['alt']
+    if alt != self.config.G_GPS_NULLVALUE:
+      self.values['alt'] = alt
       #floor
       if self.values['alt'] < -500:
         self.values['alt'] = -500
@@ -190,45 +285,70 @@ class SensorGPS(Sensor):
           self.values['distance'] += dist
           
     #speed
-    if g['speed'] != self.config.G_GPS_NULLVALUE:
+    if speed != self.config.G_GPS_NULLVALUE:
       #unit m/s
-      self.values['speed'] = g['speed']
+      self.values['speed'] = speed
       if self.values['speed'] <= self.config.G_GPS_SPEED_CUTOFF:
         self.values['speed'] = 0.0
     
     #track
-    if g['track'] != self.config.G_GPS_NULLVALUE and self.config.G_STOPWATCH_STATUS == "START":
-      self.values['track'] = g['track']
+    if track != self.config.G_GPS_NULLVALUE and speed != self.config.G_GPS_NULLVALUE and \
+      self.values['speed'] > self.config.G_GPS_SPEED_CUTOFF:
+      self.values['track'] = int(track)
       self.values['track_str'] = self.config.get_track_str(self.values['track'])
     
-    #satellites
-    (self.values['total_sats'], self.values['used_sats'])\
-     = self.satellites_used(gs['satellites'])
-    self.values['used_sats_str'] \
-      = str(self.values['used_sats']) + "/" + str(self.values['total_sats'])
-    
+    #fix
+    if mode != self.config.G_GPS_NULLVALUE:
+      self.values['mode'] = mode
+      if not self.is_fixed and self.values['mode'] == 3: #3D Fix
+        self.is_fixed = self.set_timezone()
+
     #err
-    for error in ['epx', 'epy', 'epv']:
-      if g[error] != self.config.G_GPS_NULLVALUE:
-        self.values[error] = g[error]
+    error_key = ['epx', 'epy', 'epv']
+    for i, err in enumerate(error_key):
+      if error[i] != self.config.G_GPS_NULLVALUE:
+        self.values[err] = error[i]
     if type(self.values['epx']) in [float, int] and type(self.values['epy']) in [float, int]\
       and not np.isnan(self.values['epx']) and not np.isnan(self.values['epy']):
         self.values['error'] = np.sqrt(self.values['epx'] * self.values['epy'])
     else:
       self.values['error'] = np.nan
     
+  def get_satellites(self, gs):
+    gnum = guse = 0
+    
+    if not isinstance(gs, list):
+      return "0/0"
+    for satellites in gs:
+      gnum += 1
+      if satellites['used'] is True:
+        guse += 1
+    
+    self.values['used_sats'] = guse
+    self.values['total_sats'] = gnum
+    self.values['used_sats_str'] = str(guse) + "/" + str(gnum)
+ 
+  def get_satellites_adafruit(self, gs):
+    gnum = guse = 0
+    
+    if gs == None or len(gs) == 0:
+      return "0/0"
+    for v in gs.values():
+      gnum += 1
+      if v[3] != None:
+        guse += 1
+    
+    self.values['used_sats'] = guse
+    self.values['total_sats'] = gnum
+    self.values['used_sats_str'] = str(guse) + "/" + str(gnum)
+   
+  def get_utc_time(self, gps_time):
     #UTC time
-    if g['time'] != self.config.G_GPS_NULLVALUE:
-      self.values['time'] = g['time']
+    if gps_time != self.config.G_GPS_NULLVALUE:
+      self.values['time'] = gps_time
       self.values['utctime'] = self.values['time'][11:16] #[11:19] for HH:MM:SS
       if not self.is_time_modified:
         self.is_time_modified = self.set_time()
-    
-    #fix
-    if g['mode'] != self.config.G_GPS_NULLVALUE:
-      self.values['mode'] = g['mode']
-      if not self.is_fixed and self.values['mode'] == 3: #3D Fix
-        self.is_fixed = self.set_timezone()
     
     #timestamp
     self.values['timestamp'] = datetime.datetime.now()
@@ -245,20 +365,8 @@ class SensorGPS(Sensor):
         )
       self.is_altitude_modified = True
 
-  def satellites_used(self,feed):
-    total_satellites = 0
-    used_satellites = 0
-
-    if not isinstance(feed, list):
-      return 0, 0
-    for satellites in feed:
-      total_satellites += 1
-      if satellites['used'] is True:
-        used_satellites += 1
-    return total_satellites, used_satellites
-  
   def set_timezone(self):
-    print('attempt to modify timezone by gps...')
+    print('try to modify timezone by gps...')
     lat = self.values['lat']
     lon = self.values['lon']
     if np.isnan(lat) or np.isnan(lon):
@@ -268,7 +376,7 @@ class SensorGPS(Sensor):
     return True
 
   def set_time(self):
-    print('attempt to modify time by gps...')
+    print('try to modify time by gps...')
 
     #for ublox error
     #ValueError: ('Unknown string format:', '1970-01-01T00:00:00(null')
@@ -414,7 +522,7 @@ class SensorGPS(Sensor):
       #print("  dist_diff_h:", dist_diff_h, " /", self.config.G_GPS_ON_ROUTE_CUTOFF, "[m]")
       if dist_diff_h < self.config.G_GPS_ON_ROUTE_CUTOFF:
 
-        #stay forward while self.course_index_check_bin if search_indexes is except forward
+        #stay forward while self.course_index_check_window_size if search_indexes is except forward
         #prevent from changing course index quickly
         self.course_index_check[:-1] = self.course_index_check[1:]
         if i == 0:
@@ -482,5 +590,5 @@ class SensorGPS(Sensor):
     return min_index
 
   def hasGPS(self):
-    return _SENSOR_GPS
+    return _SENSOR_GPS_GPSD or _SENSOR_GPS_ADAFRUIT_I2C or _SENSOR_GPS_ADAFRUIT_UART
 

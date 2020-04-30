@@ -201,7 +201,7 @@ class TopMenuWidget(MenuWidget):
   def adjust_altitude(self):
     self.config.gui.change_menu_page(self.config.gui.gui_config.G_GUI_INDEX['Adjust Altitude'])
     #temporary
-    self.config.logger.sensor.sensor_i2c.calibrate_position()
+    self.config.logger.sensor.sensor_i2c.recalibrate_position()
 
   def debug_log(self):
     index = self.config.gui.gui_config.G_GUI_INDEX['Debug Log Viewer']
@@ -357,6 +357,7 @@ class ANTDetailWidget(MenuWidget):
         list_item.setSizeHint(ant_item.sizeHint())
         self.items.addItem(list_item)
         self.items.setItemWidget(list_item, ant_item)
+        #ant_item.set_icon('img/ant.png')
 
 
 class ANTListItemWidget(QtWidgets.QWidget):

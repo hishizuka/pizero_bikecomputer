@@ -129,14 +129,10 @@ class AltitudeGraphWidget(ScreenWidget):
     self.plot.setBackground(None)
     self.p1 = self.plot.plotItem
     self.p1.showGrid(y=True)
-    #self.p1.setLabels(left='HR')
     
     self.p2 = pg.ViewBox()
     self.p1.scene().addItem(self.p2)
     self.p2.setXLink(self.p1)
-    self.p3 = pg.ViewBox()
-    self.p1.scene().addItem(self.p3)
-    self.p3.setXLink(self.p1)
 
     self.plot.setXRange(0, self.config.G_GUI_HR_POWER_DISPLAY_RANGE)
     self.plot.setMouseEnabled(x=False, y=False)
@@ -145,7 +141,6 @@ class AltitudeGraphWidget(ScreenWidget):
     #for altitude_raw
     self.pen1 = pg.mkPen(color=(0,0,0), width=2)
     self.pen2 = pg.mkPen(color=(255,0,0), width=3)
-    self.pen3 = pg.mkPen(color=(0,0,255), width=3)
 
     self.y_range = 5
     self.y_shift = self.y_range * 0.25
@@ -167,12 +162,12 @@ class AltitudeGraphWidget(ScreenWidget):
   def update_extra(self):
    
     v = self.config.logger.sensor.values['integrated']
-    all_nan = {'altitude_graph': True, 'altitude_lp_graph': True, 'altitude_kf_graph': True}
+    all_nan = {'altitude_graph': True, 'altitude_kf_graph': True}
     for key in all_nan.keys():
       chk = np.isnan(v[key])
       if False in chk:
         all_nan[key] = False
-    m = [x for x in v['altitude_lp_graph'] if not np.isnan(x)]
+    m = [x for x in v['altitude_graph'] if not np.isnan(x)]
     median = None
     if len(m) > 0:
       median = m[-1]
@@ -190,33 +185,18 @@ class AltitudeGraphWidget(ScreenWidget):
         )
       )
 
-    if not all_nan['altitude_lp_graph']:
+    if not all_nan['altitude_kf_graph']:
       self.p2.clear()
       
       if median != None:
-        self.p2.setYRange(median-self.y_range-self.y_shift, median+self.y_range-self.y_shift)
+        self.p2.setYRange(median-self.y_range+self.y_shift, median+self.y_range+self.y_shift)
       
       self.p2.setGeometry(self.p1.vb.sceneBoundingRect())
       self.p2.linkedViewChanged(self.p1.vb, self.p2.XAxis)
       p = pg.PlotCurveItem(
-        v['altitude_lp_graph'], 
+        v['altitude_kf_graph'], 
         pen=self.pen2,
         connect="finite"
         )
       self.p2.addItem(p)
-
-    if not all_nan['altitude_kf_graph']:
-      self.p3.clear()
-      
-      if median != None:
-        self.p3.setYRange(median-self.y_range+self.y_shift, median+self.y_range+self.y_shift)
-      
-      self.p3.setGeometry(self.p1.vb.sceneBoundingRect())
-      self.p3.linkedViewChanged(self.p1.vb, self.p3.XAxis)
-      p = pg.PlotCurveItem(
-        v['altitude_kf_graph'], 
-        pen=self.pen3,
-        connect="finite"
-        )
-      self.p3.addItem(p)
 

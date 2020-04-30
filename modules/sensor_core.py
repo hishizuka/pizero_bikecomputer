@@ -38,11 +38,10 @@ class SensorCore():
   thread_integrate = None
   threshold = {'HR':15, 'SPD':5, 'CDC':3, 'PWR':3}
   grade_range = 9
-  grade_bin = 3
+  grade_window_size = 3
   graph_keys = [
     'hr_graph', 
     'power_graph', 
-    'altitude_lp_graph', 
     'altitude_kf_graph', 
     'altitude_graph',
     ]
@@ -278,7 +277,7 @@ class SensorCore():
           #self.values['integrated'][key].append(eval(key+"['USE']"))
           self.values['integrated'][key][0:-1] = self.values['integrated'][key][1:]
           self.values['integrated'][key][-1] = eval(key+"['USE']")
-          diff_sum[key] = sum(self.values['integrated'][key][-self.grade_bin:])
+          diff_sum[key] = sum(self.values['integrated'][key][-self.grade_window_size:])
         #set grade
         gr = gl = self.config.G_ANT_NULLVALUE
         gr = self.config.G_ANT_NULLVALUE
@@ -309,7 +308,7 @@ class SensorCore():
           #self.values['integrated'][key].append(eval(key+"['ANT+']"))
           self.values['integrated'][key][0:-1] = self.values['integrated'][key][1:]
           self.values['integrated'][key][-1] = eval(key+"['ANT+']")
-          diff_sum[key] = sum(self.values['integrated'][key][-self.grade_bin:])
+          diff_sum[key] = sum(self.values['integrated'][key][-self.grade_window_size:])
         #set grade
         x = diff_sum['dst_diff_spd']**2 - diff_sum['alt_diff_spd']**2
         y = diff_sum['alt_diff_spd']
@@ -336,7 +335,6 @@ class SensorCore():
         self.values['integrated'][g][0:-1] = self.values['integrated'][g][1:]
       self.values['integrated']['hr_graph'][-1] = hr
       self.values['integrated']['power_graph'][-1] = pwr
-      self.values['integrated']['altitude_lp_graph'][-1] = v['I2C']['altitude_LP']
       self.values['integrated']['altitude_kf_graph'][-1] = v['I2C']['altitude_kalman']
       self.values['integrated']['altitude_graph'][-1] = v['I2C']['altitude']
 

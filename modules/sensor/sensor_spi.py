@@ -45,17 +45,20 @@ class SensorSPI(Sensor):
         self.send_display = True
       except:
         pass
+    elif self.config.G_DISPLAY == 'DFRobot_RPi_Display':
+      try:
+        from .spi.dfrobot_rpi_display import DFRobotRPiDisplay
+        self.display = DFRobotRPiDisplay(self.config)
+        self.send_display = True
+      except:
+        pass
 
-  def reset(self):
-    for key in self.elements:
-      self.values[key] = np.nan
-  
   def quit(self):
     if not self.config.G_IS_RASPI:
       return
     if self.config.G_DISPLAY == 'PiTFT':
       pass
-    elif self.config.G_DISPLAY in ['MIP', 'Papirus'] and self.send_display:
+    elif self.config.G_DISPLAY in ['MIP', 'Papirus', 'DFRobot_RPi_Display'] and self.send_display:
       self.display.quit()
     
   def update(self, buf):
@@ -64,8 +67,10 @@ class SensorSPI(Sensor):
 
     if self.config.G_DISPLAY == 'PiTFT':
       pass
-    elif self.config.G_DISPLAY in ['MIP', 'Papirus'] and self.send_display:
+    elif self.config.G_DISPLAY in ['MIP', 'Papirus',] and self.send_display:
       self.display.update(Image.open(buf))
+    elif self.config.G_DISPLAY in ['DFRobot_RPi_Display'] and self.send_display:
+      self.display.update(buf)
 
   def screen_flash_long(self):
     if self.config.G_DISPLAY == 'MIP' and self.send_display:
@@ -83,7 +88,5 @@ class SensorSPI(Sensor):
       self.display.change_brightness()
     elif self.config.G_DISPLAY == 'MIP' and self.send_display:
       self.display.change_brightness()
-    #elif self.config.G_DISPLAY == 'Papirus' and self.send_display:
-    #  pass
 
 

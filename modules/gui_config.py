@@ -120,9 +120,9 @@ class GUI_Config():
     "Light":("{0:^5.0f}","self.sensor.values['I2C']['light']"),
     "Motion":("{0:^1.1f}","self.sensor.values['I2C']['motion']"),
     "M_Stat":("{0:^1.1f}","self.sensor.values['I2C']['m_stat']"),
-    "ACC_X":("{0:^1.1f}","self.sensor.values['I2C']['g_acc'][0]"),
-    "ACC_Y":("{0:^1.1f}","self.sensor.values['I2C']['g_acc'][1]"),
-    "ACC_Z":("{0:^1.1f}","self.sensor.values['I2C']['g_acc'][2]"),
+    "ACC_X":("{0:^1.1f}","self.sensor.values['I2C']['acc'][0]"),
+    "ACC_Y":("{0:^1.1f}","self.sensor.values['I2C']['acc'][1]"),
+    "ACC_Z":("{0:^1.1f}","self.sensor.values['I2C']['acc'][2]"),
     #"Heading":("{0:^3.0f}","self.sensor.values['I2C']['heading']"),
     "Heading":("{0:^s}","self.sensor.values['I2C']['heading_str']"),
     #General

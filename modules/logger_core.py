@@ -13,6 +13,8 @@ from .logger import loader_tcx
 from .logger import logger_csv
 from .logger import logger_fit
 
+import sqlite3worker
+
 #ambient 
 # online uploading service in Japan
 # https://ambidata.io
@@ -31,10 +33,6 @@ class LoggerCore():
   config = None
   sensor = None
 
-  #for DB
-  con = None
-  cur = None
-  
   #for timer
   count = 0
   count_lap = 0
@@ -107,17 +105,14 @@ class LoggerCore():
       self.record_stats['lap_max'][k] = 0
       self.record_stats['entire_max'][k] = 0
 
-    #sqlite3
+    #sqlite3 
+    self.sql_worker = sqlite3worker.Sqlite3Worker(self.config.G_LOG_DB)
     self.init_db()
-    con = sqlite3.connect(self.config.G_LOG_DB)
-    cur = con.cursor()    
-    cur.execute("SELECT timestamp FROM BIKECOMPUTER_LOG LIMIT 1")
-    first_row = cur.fetchone()
-    if first_row == None:
+    res = self.sql_worker.execute("SELECT timestamp FROM BIKECOMPUTER_LOG LIMIT 1")
+    if len(res) == 0:
       self.init_value() 
-    else: self.resume(cur)
-    cur.close()
-    con.close()
+    else:
+      self.resume()
 
     try:
       signal.signal(signal.SIGALRM, self.do_countup)
@@ -126,12 +121,13 @@ class LoggerCore():
       #for windows
       pass
 
+  def quit(self):
+    self.sql_worker.close()
+
   def init_db(self):
-    con = sqlite3.connect(self.config.G_LOG_DB)
-    cur = con.cursor()
-    cur.execute("SELECT * FROM sqlite_master WHERE type='table' and name='BIKECOMPUTER_LOG'")
-    if cur.fetchone() == None:
-      con.execute("""CREATE TABLE BIKECOMPUTER_LOG(
+    res = self.sql_worker.execute("SELECT * FROM sqlite_master WHERE type='table' and name='BIKECOMPUTER_LOG'")
+    if len(res) == 0:
+      self.sql_worker.execute("""CREATE TABLE BIKECOMPUTER_LOG(
         timestamp DATETIME,
         lap INTEGER, 
         timer INTEGER,
@@ -159,12 +155,9 @@ class LoggerCore():
         acc_y FLOAT,
         acc_z FLOAT,
         voltage_battery FLOAT,
-        voltage_in FLOAT,
-        current_in FLOAT,
+        current_battery FLOAT,
         voltage_out FLOAT,
         current_out FLOAT,
-        capacity_in FLOAT,
-        capacity_out FLOAT,
         battery_percentage FLOAT,
         total_ascent FLOAT,
         total_descent FLOAT,
@@ -189,12 +182,9 @@ class LoggerCore():
         avg_power_count INTEGER,
         avg_power_sum INTEGER
       )""")
-      cur.execute("CREATE INDEX lap_index ON BIKECOMPUTER_LOG(lap)")
-      cur.execute("CREATE INDEX total_timer_time_index ON BIKECOMPUTER_LOG(total_timer_time)")
-      cur.execute("CREATE INDEX timestamp_index ON BIKECOMPUTER_LOG(timestamp)")
-      con.commit()
-    cur.close()
-    con.close()
+      self.sql_worker.execute("CREATE INDEX lap_index ON BIKECOMPUTER_LOG(lap)")
+      self.sql_worker.execute("CREATE INDEX total_timer_time_index ON BIKECOMPUTER_LOG(total_timer_time)")
+      self.sql_worker.execute("CREATE INDEX timestamp_index ON BIKECOMPUTER_LOG(timestamp)")
       
   def do_countup(self, arg1, arg2):
     if self.config.G_STOPWATCH_STATUS != "START":
@@ -220,11 +210,9 @@ class LoggerCore():
     if status != None:
       self.config.G_STOPWATCH_STATUS = status
     if self.config.G_STOPWATCH_STATUS != "START":
-      #self.signal_start.emit()
       self.config.G_STOPWATCH_STATUS = "START"
       print("->START\t", datetime.datetime.now())
     elif self.config.G_STOPWATCH_STATUS == "START":
-      #self.signal_stop.emit()
       self.config.G_STOPWATCH_STATUS = "STOP"
       print("->STOP\t", datetime.datetime.now())
   
@@ -263,7 +251,11 @@ class LoggerCore():
     # backup and reset database
     t = datetime.datetime.now()
     self.init_value()
+    #close db connect
+    self.sql_worker.close()
     shutil.move(self.config.G_LOG_DB, self.config.G_LOG_DB+"-"+self.config.G_LOG_START_DATE)
+    #restart db connect
+    self.sql_worker = sqlite3worker.Sqlite3Worker(self.config.G_LOG_DB)
     self.init_db()
     print("DELETE :", (datetime.datetime.now()-t).total_seconds(),"sec")
 
@@ -350,15 +342,13 @@ class LoggerCore():
         self.record_stats['lap_max'][k] = v
    
     ## SQLite
-    con = sqlite3.connect(self.config.G_LOG_DB)
-    cur = con.cursor()
     now_time = datetime.datetime.utcnow()
-    cur.execute("""\
+    self.sql_worker.execute("""\
       INSERT INTO BIKECOMPUTER_LOG VALUES(\
         ?,?,?,?,\
         ?,?,?,?,?,?,?,?,\
         ?,?,?,?,?,?,\
-        ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,\
+        ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,\
         ?,?,?,?,?,?,?,?,\
         ?,?,?,?,\
         ?,?,?,?,?,?,?,?\
@@ -393,12 +383,9 @@ class LoggerCore():
        self.sensor.values['I2C']['acc'][1],
        self.sensor.values['I2C']['acc'][2],
        self.sensor.values['I2C']['voltage_battery'],
-       self.sensor.values['I2C']['voltage_in'],
-       self.sensor.values['I2C']['current_in'],
+       self.sensor.values['I2C']['current_battery'],
        self.sensor.values['I2C']['voltage_out'],
        self.sensor.values['I2C']['current_out'],
-       self.sensor.values['I2C']['capacity_in'],
-       self.sensor.values['I2C']['capacity_out'],
        self.sensor.values['I2C']['battery_percentage'],
        value['total_ascent'],
        value['total_descent'],
@@ -427,20 +414,17 @@ class LoggerCore():
        self.average['entire']['power']['sum']
        )
     )
-    con.commit()
     t2 = (datetime.datetime.utcnow() - now_time).total_seconds()
     if self.count % 1800 == 10:
       print("### DB insert ({}s) : {:.3f}s".format(self.count, t2))
-    cur.close()
-    con.close()
 
     #send online
     self.send_ambient()
 
-  def resume(self, cur):
-    cur.execute("SELECT count(*) FROM BIKECOMPUTER_LOG")
-    v = cur.fetchone()
-    if v[0] == 0: return
+  def resume(self):
+    res = self.sql_worker.execute("SELECT count(*) FROM BIKECOMPUTER_LOG")
+    if res[0][0] == 0:
+      return
     
     print("resume existing rides...")
     row_all = "\
@@ -451,11 +435,11 @@ class LoggerCore():
       avg_heart_rate,avg_cadence,avg_speed,avg_power,\
       lap_cad_count,lap_cad_sum,lap_power_count,lap_power_sum,\
       avg_cad_count,avg_cad_sum,avg_power_count,avg_power_sum"
-    cur.execute("\
+    res = self.sql_worker.execute("\
       SELECT %s FROM BIKECOMPUTER_LOG\
       WHERE total_timer_time = (SELECT MAX(total_timer_time) FROM BIKECOMPUTER_LOG)" \
       % (row_all))
-    value = list(cur.fetchone())
+    value = list(res[0])
     (self.lap, self.count_lap,self.count) = value[0:3]
 
     sn = self.sensor.values['integrated']
@@ -477,33 +461,36 @@ class LoggerCore():
     #print(self.average)
     
     #get lap
-    cur.execute("SELECT MAX(LAP) FROM BIKECOMPUTER_LOG")
-    max_lap = (cur.fetchone())[0]
+    res = self.sql_worker.execute("SELECT MAX(LAP) FROM BIKECOMPUTER_LOG")
+    max_lap = res[0][0]
+    
     #get max
     max_row = "MAX(heart_rate), MAX(cadence), MAX(speed), MAX(power)"
     main_item = ['heart_rate', 'cadence', 'speed', 'power']
-    cur.execute("SELECT %s FROM BIKECOMPUTER_LOG" % (max_row))
-    max_value = list(cur.fetchone())
+    res = self.sql_worker.execute("SELECT %s FROM BIKECOMPUTER_LOG" % (max_row))
+    max_value = list(res[0])
     for i,k in enumerate(main_item):
       self.record_stats['entire_max'][k] = 0
       if max_value[i] != None:
         self.record_stats['entire_max'][k] = max_value[i]
+    
     #get lap max
-    cur.execute("SELECT %s FROM BIKECOMPUTER_LOG WHERE LAP = %s" % (max_row,max_lap))
-    max_value = list(cur.fetchone())
+    res = self.sql_worker.execute("SELECT %s FROM BIKECOMPUTER_LOG WHERE LAP = %s" % (max_row,max_lap))
+    max_value = list(res[0])
     for i,k in enumerate(main_item):
       self.record_stats['lap_max'][k] = 0
       if max_value[i] != None:
         self.record_stats['lap_max'][k] = max_value[i]
+    
     #get pre lap
     if max_lap >= 1:
-      cur.execute("\
+      res = self.sql_worker.execute("\
         SELECT %s FROM BIKECOMPUTER_LOG\
         WHERE LAP = %s AND total_timer_time = (\
           SELECT MAX(total_timer_time) FROM BIKECOMPUTER_LOG\
           WHERE LAP = %s)" \
         % (row_all,max_lap-1,max_lap-1))
-      value = list(cur.fetchone())
+      value = list(res[0])
       
       index = 3
       for k in ['distance', 'accumulated_power', 'total_ascent', 'total_descent']:
@@ -514,8 +501,8 @@ class LoggerCore():
         index += 1
       
       #max
-      cur.execute("SELECT %s FROM BIKECOMPUTER_LOG WHERE LAP = %s" % (max_row,max_lap-1))
-      max_value = list(cur.fetchone())
+      res = self.sql_worker.execute("SELECT %s FROM BIKECOMPUTER_LOG WHERE LAP = %s" % (max_row,max_lap-1))
+      max_value = list(res[0])
       for i,k in enumerate(main_item):
         self.record_stats['pre_lap_max'][k] = max_value[i]
     #print(self.record_stats)
@@ -523,8 +510,7 @@ class LoggerCore():
 
     if not self.config.G_IS_RASPI and self.config.G_DUMMY_OUTPUT:
       select = "SELECT position_lat,position_long FROM BIKECOMPUTER_LOG"
-      cur.execute(select)
-      self.position_log = np.array(cur.fetchall())
+      self.position_log = np.array(self.sql_worker.execute(select))
  
   def update_track(self, timestamp):
     lon = np.array([])
@@ -546,16 +532,22 @@ class LoggerCore():
       db_file = db_file+".tmp"
       make_tmp_db = True
       shutil.copy(self.config.G_LOG_DB, db_file)
-      #print("##### make_tmp_db")
 
-    con = sqlite3.connect(db_file)
-    cur = con.cursor()
-    if timestamp is None:
-      cur.execute(select_base)
+    query = select_base
+    test = None
+    if timestamp != None:
+      query = query + "AND timestamp > '%s'" % timestamp
+
+    test = np.array([])
+    con = cur = None
+    if db_file == self.config.G_LOG_DB:
+      test = np.array(self.sql_worker.execute(query))
     else:
-      cur.execute(select_base + "AND timestamp > '%s'" % timestamp)
-    
-    test = np.array(cur.fetchall())
+      con = sqlite3.connect(db_file)
+      cur = con.cursor()
+      cur.execute(query)
+      test = np.array(cur.fetchall())
+
     if(test.shape[0] > 0):
       lat_raw = test[:,1].astype('float32')
       lon_raw = test[:,2].astype('float32')
@@ -583,12 +575,12 @@ class LoggerCore():
       lon = lon_raw[cond]
 
       #timestamp
-      cur.execute("SELECT MAX(timestamp) FROM BIKECOMPUTER_LOG")
-      timestamp_new = cur.fetchone()[0]
-      
-      #print("length", test.shape[0], "->", np.sum(valid_points), "->", len(lat))
-    cur.close()
-    con.close()
+      res = self.sql_worker.execute("SELECT MAX(timestamp) FROM BIKECOMPUTER_LOG")
+      timestamp_new = res[0][0]
+
+    if db_file != self.config.G_LOG_DB:
+      cur.close()
+      con.close()
 
     if timestamp is None:
       timestamp_new = str(datetime.datetime.utcnow())

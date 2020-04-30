@@ -222,7 +222,7 @@ class LoaderTcx():
 
     course_n = len(self.distance)
 
-    #make slope_smoothing by distance (self.config.G_SLOPE_BIN)
+    #make slope_smoothing by distance (self.config.G_SLOPE_WINDOW_DISTANCE)
 
     ##### obsolete #####
     #print(np.round(alt_diff[0:40], 1))
@@ -236,7 +236,7 @@ class LoaderTcx():
       distance = self.distance[i]*1000 #[m]
       altitude = self.altitude[i]
       
-      if not first_track and distance - pre_dist_slope >= self.config.G_SLOPE_BIN:
+      if not first_track and distance - pre_dist_slope >= self.config.G_SLOPE_WINDOW_DISTANCE:
         alt_end = altitude
         slope_smoothing = 100*(alt_end - alt_start)/ (distance - pre_dist_slope)
         

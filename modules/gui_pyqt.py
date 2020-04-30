@@ -95,8 +95,7 @@ class GUI_PyQt(QtCore.QObject):
     except:
       pass
 
-    if self.config.G_DISPLAY in ['MIP', 'Papirus']:
-      self.display_buffer = QtCore.QBuffer()
+    self.display_buffer = QtCore.QBuffer()
 
     self.init_window()
 

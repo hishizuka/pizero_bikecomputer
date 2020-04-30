@@ -865,7 +865,8 @@ class SimpleMapWidget(BaseMapWidget):
       #start downloading
       self.tile_exists[self.zoomlevel][key] = False
       if not self.config.download_maptile(pixel_z, i, j):
-        self.tile_exists[self.zoomlevel].discard(key)
+        if self.tile_exists[self.zoomlevel] == None:
+          self.tile_exists[self.zoomlevel].discard(key)
 
     draw_flag = False
     if self.zoomlevel not in self.drawn_tile:

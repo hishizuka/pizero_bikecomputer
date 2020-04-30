@@ -25,9 +25,9 @@ class SensorGPIO(Sensor):
       for key in self.config.G_GPIO_BUTTON_DEF[self.config.G_DISPLAY]['MAIN'].keys():
         self.buttonState[key] = False
         self.oldButtonState[key] = True
-        if self.config.G_DISPLAY == 'PiTFT':
+        if self.config.G_DISPLAY in ['PiTFT', 'DFRobot_RPi_Display']:
           GPIO.setup(key, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-        elif self.config.G_DISPLAY in ['Papirus', 'DFRobot_RPi_Display']:
+        elif self.config.G_DISPLAY in ['Papirus']:
           GPIO.setup(key, GPIO.IN)
 
   def my_callback(self, channel):

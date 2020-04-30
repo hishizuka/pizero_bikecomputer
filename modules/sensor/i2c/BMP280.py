@@ -44,9 +44,9 @@ FILTER = 4 # 16
 
 # standby settings
 # T_SB = 0 # 000 0.5ms
-T_SB = 1 # 001 62.5 ms
+#T_SB = 1 # 001 62.5 ms
 # T_SB = 2 # 010 125 ms
-# T_SB = 3 # 011 250ms
+T_SB = 3 # 011 250ms
 # T_SB = 4 # 100 500ms
 # T_SB = 5 # 101 1000ms
 # T_SB = 6 # 110 2000ms
@@ -74,6 +74,8 @@ class BMP280(i2c.i2c):
   TEST_VALUE = 0x58
 
   elements = ('temperature', 'pressure')
+  temperature = None
+  pressure = None
 
   def init_sensor(self):
     
@@ -156,8 +158,10 @@ class BMP280(i2c.i2c):
     pressure = (p + (var1 + var2 + (self.dig_P7)) / 16.0) / 100
 
     # Output data to screen
-    self.values['temperature'] = cTemp
     self.values['pressure'] = pressure
+    self.values['temperature'] = cTemp
+    self.pressure = self.values['pressure']
+    self.temperature = self.values['temperature']
 
 
 if __name__=='__main__':
