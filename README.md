@@ -1,10 +1,7 @@
 ![title](https://user-images.githubusercontent.com/12926652/73185921-4c3eb580-4162-11ea-863a-d7d973150ecf.png)
 
-# pizero_bikecomputer
+# Pi Zero Bikecomputer
 a GPS and ANT+ bike computer based on Raspberry Pi Zero (W, WH)
-
-detail in Japanese
-https://qiita.com/hishi/items/46619b271daaa9ad41b3
 
 # Table of Contents
 
@@ -25,6 +22,16 @@ comming soon!
 
 
 # Abstract
+
+Pi Zero Bikecomputer is a GPS and ANT+ bike computer based on Raspberry Pi Zero (W, WH). It measures and records position(GPS), ANT+ speed/cadence/power and I2C sensor values (pressure/temperature/altitude, etc). It displays these values, even maps and courses. 
+
+In this project, Pi Zero Bikecomputer got some basic functions. Next target is to add new functions which existing products do not have!
+
+detail in Japanese
+
+[I tried to make a bikecomputer, the result was pretty good](https://qiita.com/hishi/items/46619b271daaa9ad41b3)
+
+[Let's make a bikecomputer with Raspberry Pi Zero (W, WH)](https://qiita.com/hishi/items/46619b271daaa9ad41b3)
 
 ![image](https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F100741%2Fa6746d2f-bae0-a511-f6e7-972d4c6bc592.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=a8197e8537ebdd4fcd490776442855c7)
 
