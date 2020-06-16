@@ -403,6 +403,9 @@ class SensorI2C(Sensor):
     self.values['pitch'], self.values['roll'] = self.get_pitch_roll(self.values['acc_mod'])
     self.values['yaw'] = self.get_yaw(self.values['mag'], self.values['pitch'], self.values['roll'])
 
+    if np.isnan(self.values['yaw']):
+      return
+
     tilt_heading = self.values['yaw']
     if tilt_heading < 0:
       tilt_heading += 2*math.pi
