@@ -71,7 +71,8 @@ detail in Japanese
     - (bad) no backlight
     - (bad) 2 colors only
 - ANT+ USB dongle
-  - Micro USB OTG Adapter : like [adafruit adapter](https://www.adafruit.com/product/2910). 
+  - available in eBay or aliexpress
+  - also need micro USB OTG Adapter : like [adafruit adapter](https://www.adafruit.com/product/2910). 
 - GPS module
   - UART is recomended. I2C(Sparkfun qwiic or Adafruit STEMMA QT) is experimental.
   - [SparkFun ZOE-M8Q](https://www.sparkfun.com/products/15193)
@@ -93,6 +94,7 @@ detail in Japanese
 - Case
   - Some nice case if you can use 3D printer.
   - [Topeak SMARTPHONE DRYBAG 5"](https://www.topeak.com/global/en/products/weatherproof-ridecase-series/1092-smartphone-drybag-5%22) is easy to use.
+
 
 # License
 
