@@ -52,6 +52,7 @@ coming soon!
 
 # Parts List
 
+
 - [Raspberry Pi Zero W / WH](https://www.raspberrypi.org/products/raspberry-pi-zero-w/)
 - Display
   - [PiTFT 2.4](https://www.adafruit.com/product/2455) 
@@ -89,7 +90,7 @@ coming soon!
   - [Adafruit Ultimate GPS Breakout](https://www.adafruit.com/product/746)
     - UART
 - I2C sensors: 
-  - Adafuit circuitpython library is required except some sensors. Refer to learing page of each sensors.
+  - Adafuit circuitpython library is required except some sensors(\*1). Refer to learing page of each sensors.
   - pressure: need for altitude, grade, and total ascent/descent
     - [BMP280](https://shop.pimoroni.com/products/enviro-phat) (\*1)
     - [BMP38X](https://www.dfrobot.com/product-1928.html)
@@ -103,15 +104,17 @@ coming soon!
   - lux: need for auto backlight when using MIP Reflective color LCD
     - [TCS3472](https://shop.pimoroni.com/products/enviro-phat)
     - [VCNL4040](https://www.adafruit.com/product/4161)
-  - button: [Button SHIM](https://shop.pimoroni.com/products/button-shim)
-  - power: [PiJuice HAT](https://uk.pi-supply.com/products/pijuice-standard) / [PiJuice Zero](https://uk.pi-supply.com/products/pijuice-zero)
-  - \*1: original libraries are included
+  - button: need for displays which don't have buttons like MIP display.
+    - [Button SHIM](https://shop.pimoroni.com/products/button-shim)
+  - power: if you connected battery HAT.
+    - [PiJuice HAT](https://uk.pi-supply.com/products/pijuice-standard) / [PiJuice Zero](https://uk.pi-supply.com/products/pijuice-zero)
 - SD card
   - youw own (over 8GB)
   - [SanDisk® High Endurance microSD™ Card](https://shop.westerndigital.com/products/memory-cards/sandisk-high-endurance-uhs-i-microsd#SDSQQNR-032G-AN6IA) is recommended if you use several years.
 - Case
   - make a nice case if you can use 3D printer.
   - [Topeak SMARTPHONE DRYBAG 5"](https://www.topeak.com/global/en/products/weatherproof-ridecase-series/1092-smartphone-drybag-5%22) is easy to use. It is waterproof.
+
 
 
 # Assembly
