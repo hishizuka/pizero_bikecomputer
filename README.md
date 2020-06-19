@@ -36,7 +36,7 @@ detail in Japanese
 coming soon!
 
 
-# Comparison
+# Comparison with other bike computers
 
 - 200km ride with Garmin Edge 830 and Pizero Bikecomputer ([strava activity](https://www.strava.com/activities/2834588492))
 
@@ -74,25 +74,40 @@ coming soon!
   - available in eBay or aliexpress
   - also need micro USB OTG Adapter : like [adafruit adapter](https://www.adafruit.com/product/2910). 
 - GPS module
-  - UART is recomended. I2C(Sparkfun qwiic or Adafruit STEMMA QT) is experimental.
+  - UART with GPSd is recomended. I2C(Sparkfun qwiic or Adafruit STEMMA QT) is experimental.
   - [SparkFun ZOE-M8Q](https://www.sparkfun.com/products/15193)
+    - UART, I2C(Sparkfun qwiic) and SPI
     - an [antenna](https://www.sparkfun.com/products/15246) is also needed
     - stable and low power consumption
     - recommended as of 2020/6.
   - [Akizuki Denshi GPS module](http://akizukidenshi.com/catalog/g/gK-09991/)
+    - UART
+    - easy to get in Tokyo (buy at Akihabara)
+    - cheap and low power consumption
   - [Adafruit Mini GPS PA1010D](https://www.adafruit.com/product/4415)
+    - UART and I2C(Adafruit STEMMA QT)
   - [Adafruit Ultimate GPS Breakout](https://www.adafruit.com/product/746)
+    - UART
 - I2C sensors: 
   - Adafuit circuitpython library is required except some sensors. Refer to learing page of each sensors.
-  - pressure(need for altitude) : [BMP280](https://www.adafruit.com/product/2651)(\*1, \*2) / [BMP38X](https://www.dfrobot.com/product-1928.html) / [LPS33HW](https://www.adafruit.com/product/4414)(\*2) / LPS35HW
-  - IMU: LSM303(\*1, \*2) / [LSM6DS](https://www.adafruit.com/product/4485) / [LSM9DS1](https://www.adafruit.com/product/4634) / [LIS3MDL](https://www.adafruit.com/product/4485) / [BMX160](https://www.dfrobot.com/product-1928.html)
-  - lux: TCS3472(\*1) / [VCNL4040](https://www.adafruit.com/product/4161)
+  - pressure: need for altitude, grade, and total ascent/descent
+    - [BMP280](https://shop.pimoroni.com/products/enviro-phat) (\*1)
+    - [BMP38X](https://www.dfrobot.com/product-1928.html)
+    - [LPS33HW](https://www.adafruit.com/product/4414) (\*1)
+  - IMU: need for start and stop detection when using GPS.
+    - [LSM303](https://shop.pimoroni.com/products/enviro-phat) (\*1); 
+    - [LSM6DS](https://www.adafruit.com/product/4485): Accel / Gyro
+    - [LSM9DS1](https://www.sparkfun.com/products/13944): Accel / Gyro / Mag 
+    - [LIS3MDL](https://www.adafruit.com/product/4485): Mag 
+    - [BMX160](https://www.dfrobot.com/product-1928.html): Accel / Gyro / Mag
+  - lux: need for auto backlight when using MIP Reflective color LCD
+    - [TCS3472](https://shop.pimoroni.com/products/enviro-phat)
+    - [VCNL4040](https://www.adafruit.com/product/4161)
   - button: [Button SHIM](https://shop.pimoroni.com/products/button-shim)
   - power: [PiJuice HAT](https://uk.pi-supply.com/products/pijuice-standard) / [PiJuice Zero](https://uk.pi-supply.com/products/pijuice-zero)
-  - \*1: [Enviro pHAT](https://shop.pimoroni.com/products/enviro-phat).
-  - \*2: original libraries are included
+  - \*1: original libraries are included
 - SD card
-  - youw own　(over 8GB)
+  - youw own (over 8GB)
   - [SanDisk® High Endurance microSD™ Card](https://shop.westerndigital.com/products/memory-cards/sandisk-high-endurance-uhs-i-microsd#SDSQQNR-032G-AN6IA) is recommended if you use several years.
 - Case
   - make a nice case if you can use 3D printer.
