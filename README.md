@@ -7,19 +7,13 @@ a GPS and ANT+ bike computer based on Raspberry Pi Zero (W, WH)
 
 - [Abstract](#abstract)
 - [Features](#features)
-- [Parts List](#parts_list)
+- [Comparison with other bike computers](#comparison)
+- [Parts List](#parts-list)
 - [Assembly](#assembly)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Usage](#usage)
-- [Comparison with other bike computers](#comparison)
-  - [Overview](#overview)
 - [Q&A](#qa)
-
-
-...
-
-comming soon!
 
 
 # Abstract
@@ -35,6 +29,12 @@ detail in Japanese
 [Let's make a bikecomputer with Raspberry Pi Zero (W, WH)](https://qiita.com/hishi/items/46619b271daaa9ad41b3)
 
 ![image](https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F100741%2Fa6746d2f-bae0-a511-f6e7-972d4c6bc592.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=a8197e8537ebdd4fcd490776442855c7)
+
+
+# Features
+
+coming soon!
+
 
 # Comparison
 
@@ -77,23 +77,41 @@ detail in Japanese
   - UART is recomended. I2C(Sparkfun qwiic or Adafruit STEMMA QT) is experimental.
   - [SparkFun ZOE-M8Q](https://www.sparkfun.com/products/15193)
     - an [antenna](https://www.sparkfun.com/products/15246) is also needed
-    - recommended (2020/6)
+    - stable and low power consumption
+    - recommended as of 2020/6.
   - [Akizuki Denshi GPS module](http://akizukidenshi.com/catalog/g/gK-09991/)
   - [Adafruit Mini GPS PA1010D](https://www.adafruit.com/product/4415)
   - [Adafruit Ultimate GPS Breakout](https://www.adafruit.com/product/746)
 - I2C sensors: 
-  - pressure(need for altitude) : BMP280(*) / [BMP38X](https://www.dfrobot.com/product-1928.html) / [LPS33HW](https://www.adafruit.com/product/4414) / LPS35HW
-  - IMU: LSM303(*) / [LSM6DS](https://www.adafruit.com/product/4485) / [LSM9DS1](https://www.adafruit.com/product/4634) / [LIS3MDL](https://www.adafruit.com/product/4485) / [BMX160](https://www.dfrobot.com/product-1928.html)
-  - lux: TCS3472(*) / [VCNL4040](https://www.adafruit.com/product/4161)
+  - Adafuit circuitpython library is required except some sensors. Refer to learing page of each sensors.
+  - pressure(need for altitude) : [BMP280](https://www.adafruit.com/product/2651)(\*1, \*2) / [BMP38X](https://www.dfrobot.com/product-1928.html) / [LPS33HW](https://www.adafruit.com/product/4414)(\*2) / LPS35HW
+  - IMU: LSM303(\*1, \*2) / [LSM6DS](https://www.adafruit.com/product/4485) / [LSM9DS1](https://www.adafruit.com/product/4634) / [LIS3MDL](https://www.adafruit.com/product/4485) / [BMX160](https://www.dfrobot.com/product-1928.html)
+  - lux: TCS3472(\*1) / [VCNL4040](https://www.adafruit.com/product/4161)
   - button: [Button SHIM](https://shop.pimoroni.com/products/button-shim)
   - power: [PiJuice HAT](https://uk.pi-supply.com/products/pijuice-standard) / [PiJuice Zero](https://uk.pi-supply.com/products/pijuice-zero)
-  - *: [Enviro pHAT](https://shop.pimoroni.com/products/enviro-phat)
+  - \*1: [Enviro pHAT](https://shop.pimoroni.com/products/enviro-phat).
+  - \*2: original libraries are included
 - SD card
-  - some SD card (over 8GB)
-  - recommended : [SanDisk® High Endurance microSD™ Card](https://shop.westerndigital.com/products/memory-cards/sandisk-high-endurance-uhs-i-microsd#SDSQQNR-032G-AN6IA)
+  - youw own　(over 8GB)
+  - [SanDisk® High Endurance microSD™ Card](https://shop.westerndigital.com/products/memory-cards/sandisk-high-endurance-uhs-i-microsd#SDSQQNR-032G-AN6IA) is recommended if you use several years.
 - Case
-  - Some nice case if you can use 3D printer.
-  - [Topeak SMARTPHONE DRYBAG 5"](https://www.topeak.com/global/en/products/weatherproof-ridecase-series/1092-smartphone-drybag-5%22) is easy to use.
+  - make a nice case if you can use 3D printer.
+  - [Topeak SMARTPHONE DRYBAG 5"](https://www.topeak.com/global/en/products/weatherproof-ridecase-series/1092-smartphone-drybag-5%22) is easy to use. It is waterproof.
+
+
+# Assembly
+
+
+# Installation
+
+
+# Quick Start
+
+
+# Usage
+
+
+# Q&A
 
 
 # License
