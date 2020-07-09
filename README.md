@@ -18,11 +18,13 @@ a GPS and ANT+ bike computer based on Raspberry Pi Zero (W, WH)
 
 # Abstract
 
-Pi Zero Bikecomputer is a GPS and ANT+ bike computer based on Raspberry Pi Zero (W, WH). It measures and records position(GPS), ANT+ speed/cadence/power and I2C sensor values (pressure/temperature/altitude, etc). It displays these values, even maps and courses. 
+Pi Zero Bikecomputer is a GPS and ANT+ bike computer based on Raspberry Pi Zero(W, WH). This is the first DIY project in the world integrated with necesarry hardwares and softwares for modern bike computer. It measures and records position(GPS), ANT+ sensor(speed/cadence/power) and I2C sensor(pressure/temperature/altitude, etc). It also displays these values, even maps and courses in real-time. In addition, it write out log into .fit format file.
 
-In this project, Pi Zero Bikecomputer got some basic functions. Next target is to add new functions which existing products do not have!
+In this project, Pi Zero Bikecomputer got basic functions needed for bike computers. Next target is to add new functions which existing products do not have!
 
-detail in Japanese
+You will enjoy both cycling and the maker movement with Pi Zero Bikecomputer!
+
+Here is detail articles in Japanese.
 
 [I tried to make a bikecomputer, the result was pretty good](https://qiita.com/hishi/items/46619b271daaa9ad41b3)
 
@@ -33,8 +35,16 @@ detail in Japanese
 
 # Features
 
-coming soon!
+- Easy to make
+  - use modules available at famous Maker stores.
+  - assemble in Raspberry Pi ecosystems.
+  - install with basic commands such as `apt-get install`, `pip` and `git` command.
 
+- customization
+  - only need modules you want to use. Pi Zero Bikecomputer detects your modules.
+
+- Supports cross platform develop environments
+  - Pi Zero Bikecomputer uses [PyQt5](https://pypi.org/project/PyQt5/) GUI library. So, you can run on Raspberry Pi OS, some Linux, macOS and Windows.
 
 # Comparison with other bike computers
 
@@ -51,7 +61,6 @@ coming soon!
 
 
 # Parts List
-
 
 - [Raspberry Pi Zero W / WH](https://www.raspberrypi.org/products/raspberry-pi-zero-w/)
 - Display
@@ -116,15 +125,36 @@ coming soon!
   - [Topeak SMARTPHONE DRYBAG 5"](https://www.topeak.com/global/en/products/weatherproof-ridecase-series/1092-smartphone-drybag-5%22) is easy to use. It is waterproof.
 
 
-
 # Assembly
 
 
 # Installation
 
+Assume python3 environment.
+
+Also, Raspberry Pi is connected to internet and updated with `apt-get update & apt-get upgrade`.
+
+```
+$ git clone https://github.com/hishizuka/pizero_bikecomputer.git
+$ pip3 install PyQt5 numpy oyaml pillow
+$ pip3 install git+https://github.com/hishizuka/pyqtgraph.git
+```
 
 # Quick Start
 
+## normal mode
+
+```
+$ python3 pizero_bikecomputer.py
+```
+
+## demo mode
+
+```
+$ python3 pizero_bikecomputer.py --demo
+```
+
+Temporarily use with map downloading. Course file is required(see [Usage](Usage)). After launching the program, go to the map screen.
 
 # Usage
 
