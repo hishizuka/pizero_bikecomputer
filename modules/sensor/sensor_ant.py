@@ -180,19 +180,19 @@ class SensorANT(Sensor):
    
     #newly connect
     self.values[antIDType] = {}
-    if antType is 0x78:
+    if antType == 0x78:
       self.device[antIDType] \
         = ANT_Device_HeartRate(self.node, self.config, self.values[antIDType], antName)
-    elif antType is 0x79:
+    elif antType == 0x79:
       self.device[antIDType] \
         = ANT_Device_Speed_Cadence(self.node, self.config ,self.values[antIDType], antName)
-    elif antType is 0x7A:
+    elif antType == 0x7A:
       self.device[antIDType] \
         = ANT_Device_Cadence(self.node, self.config ,self.values[antIDType], antName)
-    elif antType is 0x7B:
+    elif antType == 0x7B:
       self.device[antIDType] \
         = ANT_Device_Speed(self.node, self.config ,self.values[antIDType], antName)
-    elif antType is 0x0B:
+    elif antType == 0x0B:
       self.device[antIDType] \
         = ANT_Device_Power(self.node, self.config ,self.values[antIDType], antName)
     self.node.ant.set_wait_period()

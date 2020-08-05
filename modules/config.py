@@ -115,6 +115,14 @@ class Config():
   #external input of G_MAP_CONFIG
   G_MAP_LIST = "map.yaml"
 
+  G_DEM_MAP = 'jpn_kokudo_chiri_in_DEM10B'
+  G_DEM_MAP_CONFIG = {
+    'jpn_kokudo_chiri_in_DEM10B': {
+      'url': "https://cyberjapandata.gsi.go.jp/xyz/dem_png/{z}/{x}/{y}.png",
+      'attribution': '国土地理院'
+    }, 
+  }
+
   #config file (use in config only)
   config_file = "setting.conf"
   config_parser = None
@@ -227,6 +235,7 @@ class Config():
   G_AVAILABLE_DISPLAY = {
     'PiTFT': {'size':(320, 240),'touch':True},
     'MIP': {'size':(400, 240),'touch':False},
+    #'MIP': {'size':(640, 480),'touch':False},
     'Papirus': {'size':(264, 176),'touch':False},
     'DFRobot_RPi_Display': {'size':(250, 122),'touch':False}
   }
@@ -279,12 +288,17 @@ class Config():
   G_GPS_SEARCH_RANGE = 5 #[km] #100km/h -> 27.7m/s
 
   #STRAVA token (need to write setting.conf manually)
-  G_STRAVA = {
+  G_STRAVA_API = {
     "CLIENT_ID": "",
     "CLIENT_SECRET": "",
     "CODE": "",
     "ACCESS_TOKEN": "",
     "REFRESH_TOKEN": "",
+  }
+  G_STRAVA_COOKIE = {
+    "KEY_PAIR_ID": "",
+    "POLICY": "",
+    "SIGNATURE": "",
   }
   G_STRAVA_UPLOAD_FILE = ""
 
@@ -470,6 +484,8 @@ class Config():
       os.mkdir("maptile/.tmp/")
     if not os.path.exists("maptile/.tmp/"+self.G_MAP):
       os.mkdir("maptile/.tmp/"+self.G_MAP)
+    if not os.path.exists("maptile/"+self.G_DEM_MAP):
+      os.mkdir("maptile/"+self.G_DEM_MAP)
 
     #get serial number
     self.get_serial()
@@ -584,11 +600,11 @@ class Config():
     except:
       traceback.print_exc()
   
-  def get_maptile_filename(self, z, x, y):
-    return "maptile/"+self.G_MAP+"/{0}-{1}-{2}.png".format(z, x, y)
+  def get_maptile_filename(self, map, z, x, y):
+    return "maptile/"+map+"/{0}-{1}-{2}.png".format(z, x, y)
 
-  def get_maptile_filename_tmp(self, z, x, y):
-    return "maptile/.tmp/"+self.G_MAP+"/{0}-{1}-{2}.png".format(z, x, y)
+  def get_maptile_filename_tmp(self, map, z, x, y):
+    return "maptile/.tmp/"+map+"/{0}-{1}-{2}.png".format(z, x, y)
 
   def detect_network(self):
     try:
@@ -601,28 +617,37 @@ class Config():
   def download_maptile(self, z, x, y):
     if not self.detect_network():
       return False
-
+    
     try:
       _y = y
       _z = z
       if 'yahoo' in self.G_MAP:
         _z += 1
         _y = 2**(z-1)-y-1 
+      
+      url = self.G_MAP_CONFIG[self.G_MAP]['url'].format(z=_z, x=x, y=_y)
+      if 'strava_heatmap' in self.G_MAP:
+        url = self.G_MAP_CONFIG[self.G_MAP]['url'].format(z=_z, x=x, y=_y) \
+          + "&Key-Pair-Id=" + self.G_STRAVA_COOKIE['KEY_PAIR_ID'] \
+          + "&Policy=" + self.G_STRAVA_COOKIE['POLICY'] \
+          + "&Signature=" + self.G_STRAVA_COOKIE['SIGNATURE']
+      
       #throw cue if convert exists
-      map_dst = self.get_maptile_filename(z, x, y)
-      tmp_dst = self.get_maptile_filename_tmp(z, x, y)
+      map_dst = self.get_maptile_filename(self.G_MAP, z, x, y)
+      tmp_dst = self.get_maptile_filename_tmp(self.G_MAP, z, x, y)
       dl_dst = map_dst
       if self.G_DITHERING:
         dl_dst = tmp_dst
-      self.download_queue.put((
-        self.G_MAP_CONFIG[self.G_MAP]['url'].format(z=_z, x=x, y=_y), 
-        dl_dst
-        ))
+      self.download_queue.put((url, dl_dst))
+      #self.download_queue.put((
+      #  self.G_DEM_MAP_CONFIG[self.G_DEM_MAP]['url'].format(z=z, x=x, y=y), 
+      #  self.get_maptile_filename(self.G_DEM_MAP, z, x, y)
+      #  ))
       if self.G_DITHERING:
         self.convert_queue.put((dl_dst, map_dst))
       return True
     except:
-      #traceback.print_exc()
+      traceback.print_exc()
       return False
 
   def download_worker(self):
@@ -766,11 +791,11 @@ class Config():
   def strava_upload(self):
 
     #strava setting check
-    if self.G_STRAVA["CLIENT_ID"] == "" or \
-      self.G_STRAVA["CLIENT_SECRET"] == "" or\
-      self.G_STRAVA["CODE"] == "" or \
-      self.G_STRAVA["ACCESS_TOKEN"] == "" or \
-      self.G_STRAVA["REFRESH_TOKEN"] == "":
+    if self.G_STRAVA_API["CLIENT_ID"] == "" or \
+      self.G_STRAVA_API["CLIENT_SECRET"] == "" or\
+      self.G_STRAVA_API["CODE"] == "" or \
+      self.G_STRAVA_API["ACCESS_TOKEN"] == "" or \
+      self.G_STRAVA_API["REFRESH_TOKEN"] == "":
       print("set strava settings (token, client_id, etc)")
       return
 
@@ -790,20 +815,20 @@ class Config():
     #reflesh access token
     refresh_cmd = [
       "curl", "-L", "-X" "POST", "https://www.strava.com/oauth/token",
-      "-d", "client_id="+self.G_STRAVA["CLIENT_ID"],
-      "-d", "client_secret="+self.G_STRAVA["CLIENT_SECRET"],
-      "-d", "code="+self.G_STRAVA["CODE"],
+      "-d", "client_id="+self.G_STRAVA_API["CLIENT_ID"],
+      "-d", "client_secret="+self.G_STRAVA_API["CLIENT_SECRET"],
+      "-d", "code="+self.G_STRAVA_API["CODE"],
       "-d", "grant_type=refresh_token",
-      "-d", "refresh_token="+self.G_STRAVA["REFRESH_TOKEN"],
+      "-d", "refresh_token="+self.G_STRAVA_API["REFRESH_TOKEN"],
     ]
     reflesh_result = self.exec_cmd_return_value(refresh_cmd)
     tokens = json.loads(reflesh_result)
     print(tokens)
     if 'access_token' in tokens and 'refresh_token' in tokens and \
-      tokens['access_token'] != self.G_STRAVA["ACCESS_TOKEN"]:
+      tokens['access_token'] != self.G_STRAVA_API["ACCESS_TOKEN"]:
       print("update strava tokens")
-      self.G_STRAVA["ACCESS_TOKEN"] = tokens['access_token']
-      self.G_STRAVA["REFRESH_TOKEN"] = tokens['refresh_token']
+      self.G_STRAVA_API["ACCESS_TOKEN"] = tokens['access_token']
+      self.G_STRAVA_API["REFRESH_TOKEN"] = tokens['refresh_token']
     elif 'message' in tokens and tokens['message'].find('Error') > 0:
       print("error occurs at refreshing tokens")
       return
@@ -811,7 +836,7 @@ class Config():
     #upload
     upload_cmd = [
       "curl", "-X" "POST", "https://www.strava.com/api/v3/uploads",
-      "-H", "Authorization: Bearer "+self.G_STRAVA["ACCESS_TOKEN"],
+      "-H", "Authorization: Bearer "+self.G_STRAVA_API["ACCESS_TOKEN"],
       "-F", "data_type=fit",
       "-F", "file=@"+self.G_STRAVA_UPLOAD_FILE,
     ]
@@ -890,10 +915,15 @@ class Config():
           if np.sum((coef == 1) | (coef == -1)) == n:
             m['COEF'] = coef[0:n]
       
-    if 'STRAVA' in self.config_parser:
-      for k in self.G_STRAVA.keys():
-        if k in self.config_parser['STRAVA']:
-          self.G_STRAVA[k] = self.config_parser['STRAVA'][k]
+    if 'STRAVA_API' in self.config_parser:
+      for k in self.G_STRAVA_API.keys():
+        if k in self.config_parser['STRAVA_API']:
+          self.G_STRAVA_API[k] = self.config_parser['STRAVA_API'][k]
+    
+    if 'STRAVA_COOKIE' in self.config_parser:
+      for k in self.G_STRAVA_COOKIE.keys():
+        if k in self.config_parser['STRAVA_COOKIE']:
+          self.G_STRAVA_COOKIE[k] = self.config_parser['STRAVA_COOKIE'][k]
 
     if 'BT_ADDRESS' in self.config_parser:
       for k in self.config_parser['BT_ADDRESS']:
@@ -923,14 +953,17 @@ class Config():
     self.config_parser['SENSOR_IMU']['AXIS_SWAP_XY_STATUS'] = str(self.G_IMU_AXIS_SWAP_XY['STATUS'])
     self.config_parser['SENSOR_IMU']['AXIS_SWAP_XY_COEF'] = str(list(self.G_IMU_AXIS_SWAP_XY['COEF']))
 
-    self.config_parser['STRAVA'] = {}
-    for k in self.G_STRAVA.keys():
-      self.config_parser['STRAVA'][k] = self.G_STRAVA[k] 
+    self.config_parser['STRAVA_API'] = {}
+    for k in self.G_STRAVA_API.keys():
+      self.config_parser['STRAVA_API'][k] = self.G_STRAVA_API[k] 
 
+    self.config_parser['STRAVA_COOKIE'] = {}
+    for k in self.G_STRAVA_COOKIE.keys():
+      self.config_parser['STRAVA_COOKIE'][k] = self.G_STRAVA_COOKIE[k] 
+    
     self.config_parser['BT_ADDRESS'] = {}
     for k in self.G_BT_ADDRESS.keys():
       self.config_parser['BT_ADDRESS'][k] = self.G_BT_ADDRESS[k]
-
 
     with open(self.config_file, 'w') as file:
       self.config_parser.write(file)
