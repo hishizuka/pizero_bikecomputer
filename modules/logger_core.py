@@ -4,7 +4,9 @@ import signal
 import datetime
 import shutil
 import re
+import time
 import xml.etree.ElementTree as ET
+import traceback
 
 import numpy as np
 
@@ -13,7 +15,10 @@ from .logger import loader_tcx
 from .logger import logger_csv
 from .logger import logger_fit
 
-import sqlite3worker
+#import sqlite3worker
+#import logging
+#logging.basicConfig()
+#logging.getLogger("sqlite3worker").setLevel(level=logging.DEBUG)
 
 #ambient 
 # online uploading service in Japan
@@ -32,6 +37,10 @@ class LoggerCore():
   
   config = None
   sensor = None
+
+  #for db
+  con = None
+  cur = None
 
   #for timer
   count = 0
@@ -66,8 +75,17 @@ class LoggerCore():
   }
 
   #for update_track
-  pre_lon = None
   pre_lat = None
+  pre_lon = None
+  
+  #for store_short_log_for_update_track
+  short_log_dist = []
+  short_log_lat = []
+  short_log_lon = []
+  short_log_timestamp = []
+  short_log_limit = 120
+  short_log_available = True
+  short_log_lock = False
 
   #send online
   send_time = None
@@ -106,10 +124,15 @@ class LoggerCore():
       self.record_stats['entire_max'][k] = 0
 
     #sqlite3 
-    self.sql_worker = sqlite3worker.Sqlite3Worker(self.config.G_LOG_DB)
+    #self.sql_worker = sqlite3worker.Sqlite3Worker(self.config.G_LOG_DB)
+    self.con = sqlite3.connect(self.config.G_LOG_DB)
+    self.cur = self.con.cursor()
     self.init_db()
-    res = self.sql_worker.execute("SELECT timestamp FROM BIKECOMPUTER_LOG LIMIT 1")
-    if len(res) == 0:
+    #res = self.sql_worker.execute("SELECT timestamp FROM BIKECOMPUTER_LOG LIMIT 1")
+    self.cur.execute("SELECT timestamp FROM BIKECOMPUTER_LOG LIMIT 1")
+    first_row = self.cur.fetchone()
+    #if len(res) == 0:
+    if first_row == None:
       self.init_value() 
     else:
       self.resume()
@@ -119,15 +142,21 @@ class LoggerCore():
       signal.setitimer(signal.ITIMER_REAL, self.config.G_LOGGING_INTERVAL, self.config.G_LOGGING_INTERVAL)
     except:
       #for windows
-      pass
+      traceback.print_exc()
+      #pass
 
   def quit(self):
-    self.sql_worker.close()
+    #self.sql_worker.close()
+    self.cur.close()
+    self.con.close()
 
   def init_db(self):
-    res = self.sql_worker.execute("SELECT * FROM sqlite_master WHERE type='table' and name='BIKECOMPUTER_LOG'")
-    if len(res) == 0:
-      self.sql_worker.execute("""CREATE TABLE BIKECOMPUTER_LOG(
+    #res = self.sql_worker.execute("SELECT * FROM sqlite_master WHERE type='table' and name='BIKECOMPUTER_LOG'")
+    self.cur.execute("SELECT * FROM sqlite_master WHERE type='table' and name='BIKECOMPUTER_LOG'")
+    #if len(res) == 0:
+    if self.cur.fetchone() == None:
+      #self.sql_worker.execute("""CREATE TABLE BIKECOMPUTER_LOG(
+      self.con.execute("""CREATE TABLE BIKECOMPUTER_LOG(
         timestamp DATETIME,
         lap INTEGER, 
         timer INTEGER,
@@ -182,9 +211,13 @@ class LoggerCore():
         avg_power_count INTEGER,
         avg_power_sum INTEGER
       )""")
-      self.sql_worker.execute("CREATE INDEX lap_index ON BIKECOMPUTER_LOG(lap)")
-      self.sql_worker.execute("CREATE INDEX total_timer_time_index ON BIKECOMPUTER_LOG(total_timer_time)")
-      self.sql_worker.execute("CREATE INDEX timestamp_index ON BIKECOMPUTER_LOG(timestamp)")
+      #self.sql_worker.execute("CREATE INDEX lap_index ON BIKECOMPUTER_LOG(lap)")
+      self.cur.execute("CREATE INDEX lap_index ON BIKECOMPUTER_LOG(lap)")
+      #self.sql_worker.execute("CREATE INDEX total_timer_time_index ON BIKECOMPUTER_LOG(total_timer_time)")
+      self.cur.execute("CREATE INDEX total_timer_time_index ON BIKECOMPUTER_LOG(total_timer_time)")
+      #self.sql_worker.execute("CREATE INDEX timestamp_index ON BIKECOMPUTER_LOG(timestamp)")
+      self.cur.execute("CREATE INDEX timestamp_index ON BIKECOMPUTER_LOG(timestamp)")
+      self.con.commit()
       
   def do_countup(self, arg1, arg2):
     if self.config.G_STOPWATCH_STATUS != "START":
@@ -252,10 +285,15 @@ class LoggerCore():
     t = datetime.datetime.now()
     self.init_value()
     #close db connect
-    self.sql_worker.close()
+    #self.sql_worker.close()
+    self.cur.close()
+    self.con.close()
     shutil.move(self.config.G_LOG_DB, self.config.G_LOG_DB+"-"+self.config.G_LOG_START_DATE)
+    
     #restart db connect
-    self.sql_worker = sqlite3worker.Sqlite3Worker(self.config.G_LOG_DB)
+    #self.sql_worker = sqlite3worker.Sqlite3Worker(self.config.G_LOG_DB)
+    self.con = sqlite3.connect(self.config.G_LOG_DB)
+    self.cur = self.con.cursor()
     self.init_db()
     print("DELETE :", (datetime.datetime.now()-t).total_seconds(),"sec")
 
@@ -343,7 +381,8 @@ class LoggerCore():
    
     ## SQLite
     now_time = datetime.datetime.utcnow()
-    self.sql_worker.execute("""\
+    #self.sql_worker.execute("""\
+    self.cur.execute("""\
       INSERT INTO BIKECOMPUTER_LOG VALUES(\
         ?,?,?,?,\
         ?,?,?,?,?,?,?,?,\
@@ -414,16 +453,28 @@ class LoggerCore():
        self.average['entire']['power']['sum']
        )
     )
+    self.con.commit()
+
     t2 = (datetime.datetime.utcnow() - now_time).total_seconds()
+    self.store_short_log_for_update_track(
+      value['distance'],
+      self.sensor.values['GPS']['lat'],
+      self.sensor.values['GPS']['lon'],
+      now_time,
+      )
+
     if self.count % 1800 == 10:
       print("### DB insert ({}s) : {:.3f}s".format(self.count, t2))
 
     #send online
-    self.send_ambient()
+    #self.send_ambient()
 
   def resume(self):
-    res = self.sql_worker.execute("SELECT count(*) FROM BIKECOMPUTER_LOG")
-    if res[0][0] == 0:
+    #res = self.sql_worker.execute("SELECT count(*) FROM BIKECOMPUTER_LOG")
+    self.cur.execute("SELECT count(*) FROM BIKECOMPUTER_LOG")
+    res = self.cur.fetchone()
+    #if res[0][0] == 0:
+    if res[0] == 0:
       return
     
     print("resume existing rides...")
@@ -435,11 +486,13 @@ class LoggerCore():
       avg_heart_rate,avg_cadence,avg_speed,avg_power,\
       lap_cad_count,lap_cad_sum,lap_power_count,lap_power_sum,\
       avg_cad_count,avg_cad_sum,avg_power_count,avg_power_sum"
-    res = self.sql_worker.execute("\
+    #res = self.sql_worker.execute("\
+    self.cur.execute("\
       SELECT %s FROM BIKECOMPUTER_LOG\
       WHERE total_timer_time = (SELECT MAX(total_timer_time) FROM BIKECOMPUTER_LOG)" \
       % (row_all))
-    value = list(res[0])
+    #value = list(res[0])
+    value = list(self.cur.fetchone())
     (self.lap, self.count_lap,self.count) = value[0:3]
 
     sn = self.sensor.values['integrated']
@@ -461,22 +514,28 @@ class LoggerCore():
     #print(self.average)
     
     #get lap
-    res = self.sql_worker.execute("SELECT MAX(LAP) FROM BIKECOMPUTER_LOG")
-    max_lap = res[0][0]
+    #res = self.sql_worker.execute("SELECT MAX(LAP) FROM BIKECOMPUTER_LOG")
+    self.cur.execute("SELECT MAX(LAP) FROM BIKECOMPUTER_LOG")
+    #max_lap = res[0][0]
+    max_lap = (self.cur.fetchone())[0]
     
     #get max
     max_row = "MAX(heart_rate), MAX(cadence), MAX(speed), MAX(power)"
     main_item = ['heart_rate', 'cadence', 'speed', 'power']
-    res = self.sql_worker.execute("SELECT %s FROM BIKECOMPUTER_LOG" % (max_row))
-    max_value = list(res[0])
+    #res = self.sql_worker.execute("SELECT %s FROM BIKECOMPUTER_LOG" % (max_row))
+    self.cur.execute("SELECT %s FROM BIKECOMPUTER_LOG" % (max_row))
+    #max_value = list(res[0])
+    max_value = list(self.cur.fetchone())
     for i,k in enumerate(main_item):
       self.record_stats['entire_max'][k] = 0
       if max_value[i] != None:
         self.record_stats['entire_max'][k] = max_value[i]
     
     #get lap max
-    res = self.sql_worker.execute("SELECT %s FROM BIKECOMPUTER_LOG WHERE LAP = %s" % (max_row,max_lap))
-    max_value = list(res[0])
+    #res = self.sql_worker.execute("SELECT %s FROM BIKECOMPUTER_LOG WHERE LAP = %s" % (max_row,max_lap))
+    self.cur.execute("SELECT %s FROM BIKECOMPUTER_LOG WHERE LAP = %s" % (max_row,max_lap))
+    #max_value = list(res[0])
+    max_value = list(self.cur.fetchone())
     for i,k in enumerate(main_item):
       self.record_stats['lap_max'][k] = 0
       if max_value[i] != None:
@@ -484,13 +543,15 @@ class LoggerCore():
     
     #get pre lap
     if max_lap >= 1:
-      res = self.sql_worker.execute("\
+      #res = self.sql_worker.execute("\
+      self.cur.execute("\
         SELECT %s FROM BIKECOMPUTER_LOG\
         WHERE LAP = %s AND total_timer_time = (\
           SELECT MAX(total_timer_time) FROM BIKECOMPUTER_LOG\
           WHERE LAP = %s)" \
         % (row_all,max_lap-1,max_lap-1))
-      value = list(res[0])
+      #value = list(res[0])
+      value = list(self.cur.fetchone())
       
       index = 3
       for k in ['distance', 'accumulated_power', 'total_ascent', 'total_descent']:
@@ -501,57 +562,115 @@ class LoggerCore():
         index += 1
       
       #max
-      res = self.sql_worker.execute("SELECT %s FROM BIKECOMPUTER_LOG WHERE LAP = %s" % (max_row,max_lap-1))
-      max_value = list(res[0])
+      #res = self.sql_worker.execute("SELECT %s FROM BIKECOMPUTER_LOG WHERE LAP = %s" % (max_row,max_lap-1))
+      self.cur.execute("SELECT %s FROM BIKECOMPUTER_LOG WHERE LAP = %s" % (max_row,max_lap-1))
+      #max_value = list(res[0])
+      max_value = list(self.cur.fetchone())
       for i,k in enumerate(main_item):
         self.record_stats['pre_lap_max'][k] = max_value[i]
     #print(self.record_stats)
     #print(self.average)
 
-    if not self.config.G_IS_RASPI and self.config.G_DUMMY_OUTPUT:
+    #if not self.config.G_IS_RASPI and self.config.G_DUMMY_OUTPUT:
+    if self.config.G_DUMMY_OUTPUT:
       select = "SELECT position_lat,position_long FROM BIKECOMPUTER_LOG"
-      self.position_log = np.array(self.sql_worker.execute(select))
- 
+      #self.position_log = np.array(self.sql_worker.execute(select))
+      self.position_log = np.array(cur.fetchall())
+
+  def store_short_log_for_update_track(self, dist, lat, lon, timestamp):
+    if not self.short_log_available:
+      return
+    if lat == self.config.G_GPS_NULLVALUE or lon == self.config.G_GPS_NULLVALUE:
+      return
+    if len(self.short_log_dist) > 0 and self.short_log_dist[-1] == dist:
+      return
+    if (len(self.short_log_lat) > 0 and self.short_log_lat[-1] == lat) and \
+       (len(self.short_log_lon) > 0 and self.short_log_lon[-1] == lon):
+      return
+    if len(self.short_log_lat) > self.short_log_limit:
+      self.clear_short_log()
+      self.short_log_available = False
+      return
+  
+    self.short_log_lock = True
+    self.short_log_dist.append(dist)
+    self.short_log_lat.append(lat)
+    self.short_log_lon.append(lon)
+    self.short_log_timestamp.append(timestamp)
+    self.short_log_lock = False
+    self.short_log_available = True
+    #print("append", len(self.short_log_dist), len(self.short_log_lat), len(self.short_log_lon))
+  
+  def clear_short_log(self):
+    while self.short_log_lock:
+      print("locked: clear_short_log")
+      time.sleep(0.02)
+    self.short_log_dist = []
+    self.short_log_lat = []
+    self.short_log_lon = []
+    self.short_log_timestamp = []
+
   def update_track(self, timestamp):
     lon = np.array([])
     lat = np.array([])
     timestamp_new = timestamp
-    cond_base = \
-      "FROM BIKECOMPUTER_LOG " + \
-      "WHERE position_lat is not null AND position_long is not null "
-    select_base = "SELECT distance,position_lat,position_long " + cond_base
     #t = datetime.datetime.utcnow()
     
-    #copy db file if loading many records (avoiding for db locking with record_log)
-    db_file = self.config.G_LOG_DB
-    make_tmp_db = False
     timestamp_delta = None
     if timestamp != None:
-      timestamp_delta = (datetime.datetime.utcnow() - self.config.datetime_myparser(timestamp)).total_seconds()
-    if timestamp_delta != None and timestamp_delta > 120: #[s]
-      db_file = db_file+".tmp"
-      make_tmp_db = True
+      timestamp_delta = \
+        (datetime.datetime.utcnow() - timestamp).total_seconds()
+    
+    #make_tmp_db = False
+    lat_raw = np.array([])
+    lon_raw = np.array([])
+    dist_raw = np.array([])
+    
+    #get values from short_log to db in logging
+    if timestamp_delta != None and self.short_log_available:
+      while self.short_log_lock:
+        print("locked: get values")
+        time.sleep(0.02)
+      lat_raw = np.array(self.short_log_lat)
+      lon_raw = np.array(self.short_log_lon)
+      dist_raw = np.array(self.short_log_dist)
+      if len(self.short_log_lon) > 0:
+        timestamp_new = self.short_log_timestamp[-1]
+      self.clear_short_log()
+      self.short_log_available = True
+    #get values from copied db when initial execution or migration from short_log to db in logging
+    else:
+      db_file = self.config.G_LOG_DB+".tmp"
       shutil.copy(self.config.G_LOG_DB, db_file)
 
-    query = select_base
-    test = None
-    if timestamp != None:
-      query = query + "AND timestamp > '%s'" % timestamp
+      query = \
+        "SELECT distance,position_lat,position_long FROM BIKECOMPUTER_LOG " + \
+        "WHERE position_lat is not null AND position_long is not null "
+      if timestamp != None:
+        query = query + "AND timestamp > '%s'" % timestamp
 
-    test = np.array([])
-    con = cur = None
-    if db_file == self.config.G_LOG_DB:
-      test = np.array(self.sql_worker.execute(query))
-    else:
       con = sqlite3.connect(db_file)
       cur = con.cursor()
       cur.execute(query)
-      test = np.array(cur.fetchall())
+      res_array = np.array(cur.fetchall())
+      if(len(res_array.shape) > 0 and res_array.shape[0] > 0):
+        dist_raw = res_array[:,0].astype('float32') #[m]
+        lat_raw = res_array[:,1].astype('float32')
+        lon_raw = res_array[:,2].astype('float32')
+      
+      #timestamp
+      cur.execute("SELECT MAX(timestamp) FROM BIKECOMPUTER_LOG")
+      first_row = cur.fetchone()
+      if first_row[0] != None:
+        timestamp_new = self.config.datetime_myparser(first_row[0])
+      
+      cur.close()
+      con.close()
+      os.remove(db_file)
+      self.short_log_available = True
 
-    if(test.shape[0] > 0):
-      lat_raw = test[:,1].astype('float32')
-      lon_raw = test[:,2].astype('float32')
-      dist_raw = test[:,0].astype('float32') #[m]
+    #print("lat_raw", len(lat_raw))
+    if(len(lat_raw) > 0):
       #downsampling
       valid_points = np.insert(
         #close points are delete
@@ -571,21 +690,12 @@ class LoggerCore():
       dist_cond = np.where(dist_diff >= self.config.G_GPS_DISPLAY_INTERVAL_DISTANCE, True, False)
       cond = np.insert((dist_cond & azimuth_cond), 0, True)
       cond[-1] = True
+      #print(valid_points, cond)
       lat = lat_raw[cond]
       lon = lon_raw[cond]
 
-      #timestamp
-      res = self.sql_worker.execute("SELECT MAX(timestamp) FROM BIKECOMPUTER_LOG")
-      timestamp_new = res[0][0]
-
-    if db_file != self.config.G_LOG_DB:
-      cur.close()
-      con.close()
-
     if timestamp is None:
-      timestamp_new = str(datetime.datetime.utcnow())
-    if make_tmp_db:
-      os.remove(db_file)
+      timestamp_new = datetime.datetime.utcnow()
     
     #print("\tlogger_core : update_track(new) ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
 

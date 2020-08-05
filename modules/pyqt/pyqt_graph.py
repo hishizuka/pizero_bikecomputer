@@ -491,7 +491,7 @@ class SimpleMapWidget(BaseMapWidget):
     #self.plot.showGrid(x=True, y=True, alpha=1)
     self.track_plot = self.plot.plot(self.tracks_lon, self.tracks_lat)
     #self.track_plot.setPen(pg.mkPen(color=(0,192,255,128), width=7))
-    self.track_plot.setPen(pg.mkPen(color=(0,128,255), width=12))
+    self.track_plot.setPen(pg.mkPen(color=(0,128,255), width=6))
 
     self.scale_plot = self.plot.plot()
     self.scale_plot.setPen(pg.mkPen(color=(0,0,0), width=3))
@@ -700,6 +700,9 @@ class SimpleMapWidget(BaseMapWidget):
       #set dummy
       self.point['brush'] = self.point_color['lost']
 
+    #experimental
+    #print("#### {:.2f}".format(self.get_altitude_from_tile(self.point['pos'])))
+
     #center position
     if self.lock_status:
       self.map_pos['x'] = self.point['pos'][0]
@@ -745,7 +748,10 @@ class SimpleMapWidget(BaseMapWidget):
     self.move_pos['x'] = self.move_pos['y'] = 0
 
     self.map_area['w'], self.map_area['h'] = self.get_geo_area(self.map_pos['x'], self.map_pos['y'])
-
+    
+    #experimental
+    #print("#### {:.2f}".format(self.get_altitude_from_tile([self.map_pos['x'], self.map_pos['y']])))
+    
     ###########
     # drawing #
     ###########
@@ -851,7 +857,7 @@ class SimpleMapWidget(BaseMapWidget):
     for tile in tiles:
       i = tile[0]
       j = tile[1]
-      filename = self.config.get_maptile_filename(pixel_z, i, j)
+      filename = self.config.get_maptile_filename(self.config.G_MAP, pixel_z, i, j)
       key = "{0}-{1}".format(i,j)
 
       if os.path.exists(filename) and os.path.getsize(filename) > 0:
@@ -892,7 +898,7 @@ class SimpleMapWidget(BaseMapWidget):
       )
     for i in range(tile_x[0], tile_x[1]+1):
       for j in range(tile_y[0], tile_y[1]+1):
-        filename = self.config.get_maptile_filename(pixel_z, i, j)
+        filename = self.config.get_maptile_filename(self.config.G_MAP, pixel_z, i, j)
         I = i - tile_x[0]
         J = tile_y[1] - j
         if os.path.exists(filename) and os.path.getsize(filename) > 0:
@@ -959,6 +965,29 @@ class SimpleMapWidget(BaseMapWidget):
       scale_y2
       )
   
+  def get_altitude_from_tile(self, pos):
+    f_x, f_y = self.get_tile_xy(self.zoomlevel, pos[0], pos[1])
+    filename = self.config.get_maptile_filename(self.config.G_DEM_MAP, self.zoomlevel, f_x, f_y)
+    
+    p_x, p_y = self.get_xy_in_tile(self.zoomlevel, pos[0], pos[1])
+    #print(f_x, f_y, filename, p_x, p_y)
+    
+    if not os.path.exists(filename) or os.path.getsize(filename) == 0:
+      return np.nan
+    
+    imgarray = np.asarray(Image.open(filename))
+    rgb_pos = imgarray[p_x, p_y]
+    altitude = rgb_pos[0]*(2**16) + rgb_pos[1]*(2**8) + rgb_pos[2]
+    if altitude < 2**23:
+      altitude = altitude*0.01
+    elif altitude == 2**23:
+      altitude = np.nan
+    else:
+      altitude = (altitude - 2**24)*0.01
+      
+    #print("###altiude", altitude, rgb_pos)
+    return altitude
+
   def draw_map_attribution(self, x_start, y_start):
     #draw map attribution at right bottom
     self.map_attribution.setPos(
@@ -993,17 +1022,25 @@ class SimpleMapWidget(BaseMapWidget):
     return abs(pos_x1-pos_x0)/256*(self.width()*self.map_cuesheet_ratio), abs(pos_y1-pos_y0)/256*self.height()
   
   def get_tile_xy(self, z, x, y):
-    z = 2**(7+z)
-    l = 85.05112878
-    ret_x = z*(1+x/180)
-    ret_y = z/np.pi*(-np.arctanh(np.sin(np.pi/180*y)) + np.arctanh(np.sin(np.pi/180*l)))
+    ret_x, ret_y = self.get_tile(z, x, y)
     return int(ret_x/256), int(ret_y/256)
   
-  def get_xy_from_tile_xy(self, z, x, y):
-    z = 2**(7+z)
+  def get_xy_in_tile(self, z, x, y):
+    ret_x, ret_y = self.get_tile(z, x, y)
+    return int(ret_x%256), int(ret_y%256)
+  
+  def get_tile(self, z, x, y):
+    _z = 2**(7+z)
     l = 85.05112878
-    ret_x = 180 * (x*256/z-1)
-    ret_y = 180/np.pi * (np.arcsin(np.tanh(-1*np.pi*y*256/z+np.arctanh(np.sin(np.pi/180*l)))))
+    ret_x = _z*(1+x/180)
+    ret_y = _z/np.pi*(-np.arctanh(np.sin(np.pi/180*y)) + np.arctanh(np.sin(np.pi/180*l)))
+    return ret_x, ret_y
+  
+  def get_xy_from_tile_xy(self, z, x, y):
+    _z = 2**(7+z)
+    l = 85.05112878
+    ret_x = 180 * (x*256/_z-1)
+    ret_y = 180/np.pi * (np.arcsin(np.tanh(-1*np.pi*y*256/_z+np.arctanh(np.sin(np.pi/180*l)))))
     return ret_x, ret_y
 
   

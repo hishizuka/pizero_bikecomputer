@@ -115,10 +115,10 @@ class SensorANT(Sensor):
     cad_value = random.randint(0,80)
     power_value = random.randint(0,250)
     timestamp = datetime.datetime.now()
-    if 0 < timestamp.second%60 < 10:
-      hr_value = speed_value = cad_value = power_value = self.config.G_ANT_NULLVALUE
-    if 8 < timestamp.second%60 < 10:
-      speed_value = cad_value = power_value = 0
+    #if 0 < timestamp.second%60 < 10:
+    #  hr_value = speed_value = cad_value = power_value = self.config.G_ANT_NULLVALUE
+    #if 8 < timestamp.second%60 < 10:
+    #  speed_value = cad_value = power_value = 0
 
     ac = self.config.G_ANT['ID_TYPE']
     self.values[ac['HR']]['hr'] = hr_value

@@ -85,6 +85,8 @@ class SensorCore():
     self.sensor_gpio = SensorGPIO(config, None)
     time_profile.append(datetime.datetime.now()) #for time profile
     
+    #self.thread_keyboard = threading.Thread(target=self.keyboard_check, name="thread_keyboard", args=())
+    
     self.thread_integrate = threading.Thread(target=self.integrate, name="thread_integrate", args=())
     time_profile.append(datetime.datetime.now()) #for time profile
     self.start()
@@ -96,15 +98,21 @@ class SensorCore():
       sec_diff.append("{0:.6f}".format((time_profile[i]-time_profile[i-1]).total_seconds()))
     print("\tGPS/ANT+/I2C/GPIO/integrate/start:", sec_diff)
 
-  def test(self, arg1, arg2):
-    print("sensor_core_test", datetime.datetime.now())
-
   def start(self):
     self.thread_gps.start()
     self.thread_ant.start()
     self.sensor_gpio.update()
     self.thread_i2c.start()
     self.thread_integrate.start()
+    #self.thread_keyboard.start()
+
+  def keyboard_check(self):
+    while(not self.config.G_QUIT):
+      key = input()
+      if key == "n":
+        self.config.gui.scroll_next()
+      elif key == "p":
+        self.config.gui.scroll_prev()
 
   def integrate(self):
     pre_dst = {'ANT+':0, 'GPS': 0} 
@@ -381,11 +389,12 @@ class SensorCore():
 
       #cpu and memory
       if _IMPORT_PSUTIL:
-        self.values['CPU_MEM'] = "{0:^2.0f}% ({1}), ALL:{2:^2.0f}% / {3:^2.0f}%".format(
+        self.values['CPU_MEM'] = "{0:^2.0f}% ({1}) / ALL {2:^2.0f}%,  {3:^2.0f}%".format(
           self.process.cpu_percent(interval=None),
           self.process.num_threads(),
           psutil.cpu_percent(interval=None),
-          self.process.memory_percent())
+          self.process.memory_percent(),
+          )
        
       #adjust loop time
       time_profile.append(datetime.datetime.now())

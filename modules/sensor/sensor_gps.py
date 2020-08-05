@@ -119,7 +119,7 @@ class SensorGPS(Sensor):
         self.update()
       elif (_SENSOR_GPS_ADAFRUIT_UART or _SENSOR_GPS_ADAFRUIT_I2C):
         self.update_adafruit()
-    elif self.config.G_DUMMY_OUTPUT:
+    else:
       self.dummy_update()
   
   def dummy_update(self):
@@ -139,13 +139,13 @@ class SensorGPS(Sensor):
         #unit: m
         self.values['distance'] += self.values['speed']
 
-      #if self.config.logger != None and len(self.config.logger.course.latitude) > 0:
       lat = self.config.logger.course.latitude
       lon = self.config.logger.course.longitude
-      course_n = len(lat)
+      course_n = len(self.config.logger.course.latitude)
       
       self.pre_lat = self.values['lat']
       self.pre_lon = self.values['lon']
+      #generate dummy position from log
       if self.config.logger.position_log.shape[0] > 0:
         self.values['lat'] = self.config.logger.position_log[course_i][0]
         self.values['lon'] = self.config.logger.position_log[course_i][1]
@@ -153,11 +153,12 @@ class SensorGPS(Sensor):
           course_i += 1
           continue
         else:
+          pre_course_i = course_i
           course_i += 1
-          pre_course_i += 1
-          if course_i == len(self.config.logger.position_log)-1:
+          if course_i >= len(self.config.logger.position_log):
             course_i = pre_course_i = 0
             continue
+      #from course
       else:
         rand = 0.5 #np.random.randint(0,10)/10
         self.values['lat'] = lat[course_i]
@@ -171,16 +172,14 @@ class SensorGPS(Sensor):
           pre_course_i = 0
           course_i = course_i % course_n
       
-      #print("course lat:", self.pre_lat, self.values['lat'])
-      #print("course lon:", self.pre_lon, self.values['lon'])
       lat_points = np.array([self.pre_lat, self.values['lat']])
       lon_points = np.array([self.pre_lon, self.values['lon']])
       self.values['track'] = (self.config.calc_azimuth(lat_points, lon_points))[0]
 
       #calculate course_index separately
-      t2 = datetime.datetime.utcnow()
+      #t2 = datetime.datetime.utcnow()
       self.get_course_index()
-      print("get_course_index: ", (datetime.datetime.utcnow()-t2).total_seconds(), "sec")
+      #print("get_course_index: ", (datetime.datetime.utcnow()-t2).total_seconds(), "sec")
 
       self.values['timestamp'] = datetime.datetime.now()
       self.get_sleep_time(self.config.G_GPS_INTERVAL)
@@ -207,6 +206,7 @@ class SensorGPS(Sensor):
         self.get_utc_time(g['time'])
       self.get_sleep_time(self.config.G_GPS_INTERVAL)
 
+  #experimental code
   def update_adafruit(self):
     g = self.adafruit_gps
     #self.start_time = datetime.datetime.now()
@@ -227,7 +227,7 @@ class SensorGPS(Sensor):
       if g.has_fix:
         self.init_GPS_values()
         speed = 0
-        if g.speed_knots != None:
+        if g.speed_knots != self.config.G_GPS_NULLVALUE:
           speed = g.speed_knots * 1.852 / 3.6
         self.get_GPS_basic_values(
           g.latitude,
@@ -331,11 +331,11 @@ class SensorGPS(Sensor):
   def get_satellites_adafruit(self, gs):
     gnum = guse = 0
     
-    if gs == None or len(gs) == 0:
+    if gs == self.config.G_GPS_NULLVALUE or len(gs) == 0:
       return "0/0"
     for v in gs.values():
       gnum += 1
-      if v[3] != None:
+      if v[3] != self.config.G_GPS_NULLVALUE:
         guse += 1
     
     self.values['used_sats'] = guse

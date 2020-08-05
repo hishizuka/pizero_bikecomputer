@@ -74,10 +74,13 @@ class GUI_PyQt(QtCore.QObject):
   #for long press
   lap_button_count = 0
   start_button_count = 0
+
+  #signal
   signal_next_button = QtCore.pyqtSignal(int)
   signal_prev_button = QtCore.pyqtSignal(int)
   signal_menu_button = QtCore.pyqtSignal(int)
   signal_menu_back_button = QtCore.pyqtSignal()
+  signal_get_screenshot = QtCore.pyqtSignal()
 
   def __init__(self, config):
     super().__init__()
@@ -247,6 +250,8 @@ class GUI_PyQt(QtCore.QObject):
     self.signal_prev_button.connect(self.scroll)
     self.signal_menu_button.connect(self.change_menu_page)
     self.signal_menu_back_button.connect(self.change_menu_back)
+    #other
+    self.signal_get_screenshot.connect(self.screenshot)
    
     #integrate main_layout
     self.main_layout.addWidget(self.main_page)
@@ -332,7 +337,11 @@ class GUI_PyQt(QtCore.QObject):
     self.main_page.setCurrentIndex(mod_index)
 
   def get_screenshot(self):
+    self.signal_get_screenshot.emit()
+
+  def screenshot(self):
     date = datetime.now()
+    print("screenshot")
     filename = date.strftime('%Y-%m-%d_%H-%M-%S.jpg')
     p = self.stack_widget.grab()
     p.save(self.config.G_SCREENSHOT_DIR+filename, 'jpg')
