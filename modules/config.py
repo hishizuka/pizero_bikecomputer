@@ -461,6 +461,13 @@ class Config():
       self.G_LAYOUT_FILE = self.G_INSTALL_PATH + self.G_LAYOUT_FILE
       self.G_COURSE_FILE = self.G_INSTALL_PATH + self.G_COURSE_FILE
     
+    #layout file
+    if not os.path.exists(self.G_LAYOUT_FILE):
+      if self.G_IS_RASPI:
+        shutil.copy(self.G_INSTALL_PATH+"layouts/"+"layout-cycling.yaml", self.G_LAYOUT_FILE)
+      else:
+        shutil.copy("./layouts/layout-cycling.yaml", self.G_LAYOUT_FILE)
+    
     #font file
     if self.G_FONT_FILE != "" or self.G_FONT_FILE != None:
       if os.path.exists(self.G_FONT_FILE):
