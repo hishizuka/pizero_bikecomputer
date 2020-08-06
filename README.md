@@ -159,7 +159,10 @@ Here is [my setup guide in Japanese](https://qiita.com/hishi/items/8bdfd9d72fa8f
 
 ### Common
 
+Install in the home directory of default user "pi".
+
 ```
+$ cd
 $ git clone https://github.com/hishizuka/pizero_bikecomputer.git
 $ sudo apt-get install python3-pip cython3 cmake gawk python3-numpy python3-pyqt5
 $ sudo pip3 install oyaml
@@ -172,10 +175,10 @@ $ cd pizero_bikecomputer
 
 #### UART GPS
 
-Assume UART interface is on and login over serial is off in raspi-config.
+Assume Serial interface is on and login shell is off in raspi-config.
 
 ```
-$ sudo apt-get install python3-tz gpsd gpsd-clients python3-dateutil
+$ sudo apt-get install gpsd gpsd-clients python3-dateutil
 $ sudo pip3 install gps3 timezonefinder 
 $ sudo cp install/etc/default/gpsd /etc/default/gpsd
 $ sudo systemctl enable gpsd
@@ -186,7 +189,7 @@ $ sudo systemctl enable gpsd
 Assume I2C interface is on in raspi-config.
 
 ```
-$ sudo apt-get install python3-tz python3-dateutil
+$ sudo apt-get install python3-dateutil
 $ sudo pip3 install timezonefinder adafruit-circuitpython-gps
 ```
 
@@ -212,9 +215,7 @@ Additionally, install programs which to turn the PiTFT 2.4 backlight on and off.
 
 ```
 $ sudo cp install/usr/local/bin/disable-pitft /usr/local/bin/
-$ sudo chmod 755 /usr/local/bin/disable-pitft
 $ sudo cp install/usr/local/bin/enable-pitft /usr/local/bin/
-$ sudo chmod 755 /usr/local/bin/enable-pitft
 ```
 
 Install the program which turns off the backlight at shutdown.
