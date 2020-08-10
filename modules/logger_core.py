@@ -125,7 +125,8 @@ class LoggerCore():
 
     #sqlite3 
     #self.sql_worker = sqlite3worker.Sqlite3Worker(self.config.G_LOG_DB)
-    self.con = sqlite3.connect(self.config.G_LOG_DB)
+    #usage of sqlite3 is "insert" only, so check_same_thread=False
+    self.con = sqlite3.connect(self.config.G_LOG_DB, check_same_thread=False)
     self.cur = self.con.cursor()
     self.init_db()
     #res = self.sql_worker.execute("SELECT timestamp FROM BIKECOMPUTER_LOG LIMIT 1")
@@ -292,7 +293,8 @@ class LoggerCore():
     
     #restart db connect
     #self.sql_worker = sqlite3worker.Sqlite3Worker(self.config.G_LOG_DB)
-    self.con = sqlite3.connect(self.config.G_LOG_DB)
+    #usage of sqlite3 is "insert" only, so check_same_thread=False
+    self.con = sqlite3.connect(self.config.G_LOG_DB, check_same_thread=False)
     self.cur = self.con.cursor()
     self.init_db()
     print("DELETE :", (datetime.datetime.now()-t).total_seconds(),"sec")
@@ -575,7 +577,7 @@ class LoggerCore():
     if self.config.G_DUMMY_OUTPUT:
       select = "SELECT position_lat,position_long FROM BIKECOMPUTER_LOG"
       #self.position_log = np.array(self.sql_worker.execute(select))
-      self.position_log = np.array(cur.fetchall())
+      self.position_log = np.array(self.cur.fetchall())
 
   def store_short_log_for_update_track(self, dist, lat, lon, timestamp):
     if not self.short_log_available:
