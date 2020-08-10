@@ -3,7 +3,7 @@
 trap 'kill $sub_pid' 1 2 3 15
 trap 'kill $sub_pid' EXIT
 
-PGMDIR=/home/pi/pizero_bikecomputer_v1
+PGMDIR=/home/pi/pizero_bikecomputer
 
 export QT_QPA_PLATFORM=linuxfb:fb=/dev/fb1
 #export QT_QPA_PLATFORM=eglfs
