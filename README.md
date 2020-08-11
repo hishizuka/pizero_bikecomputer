@@ -11,7 +11,31 @@ a GPS and ANT+ bike computer based on Raspberry Pi Zero (W, WH)
 - [Parts List](#parts-list)
 - [Assembly](#assembly)
 - [Installation](#installation)
+  - [macOS or Linux](#macOS-or-Linux)
+  - [Raspberry Pi OS](#Raspberry-Pi-OS)
+    - [Common](#Common)
+    - [GPS module](#GPS-module)
+      - [UART GPS](#UART-GPS)
+      - [I2C GPS (experimental)](#I2C-GPS-(experimental))
+    - [USB ANT+ dongle](#USB-ANT+-dongle)
+    - [Display](#Display)
+      - [PiTFT 2.4](#PiTFT-2.4)
+         - [run on X Window](#run-on-X-Window)
+         - [run on console](#run-on-console)
+           - [Build Qt](#Build-Qt)
+           - [Build PyQt5](#Build-PyQt5)
+      - [MIP Reflective color LCD module](#MIP-Reflective-color-LCD-module)
+      - [E-ink Displays](#E-ink-Displays)
+        - [PaPiRus ePaper / eInk Screen HAT for Raspberry Pi](#PaPiRus-ePaper-/-eInk-Screen-HAT-for-Raspberry-Pi)
+        - [DFRobot e-ink Display Module for Raspberry Pi 4B/3B+/Zero W](#DFRobot-e-ink-Display-Module-for-Raspberry-Pi-4B/3B+/Zero-W)
+    - [I2C sensors](#I2C-sensors)
+      - [Main sensors (pressure, temperature, IMU and light)](#Main-sensors-(pressure,-temperature,-IMU-and-light))
+      - [Button SHIM](#Button-SHIM)
+      - [PiJuice HAT](#PiJuice-HAT)
 - [Quick Start](#quick-start)
+  - [normal mode](#normal-mode)
+  - [demo mode](#demo-mode)
+  - [run on service](#run-on-service)
 - [Usage](#usage)
 - [Q&A](#qa)
 
@@ -259,8 +283,12 @@ sudo apt-get install libudev-dev libinput-dev libts-dev libxcb-xinerama0-dev lib
 ##### Build PyQt5
 
 Follow [PyQt Reference Guide](https://www.riverbankcomputing.com/static/Docs/PyQt5/installation.html).
+The source is avaiable [here](https://pypi.org/project/PyQt5/#files)
 
 ```
+$ cd
+$ mkdir work; cd work
+$ wget NEWEST-PYQT5-PACKAGE-SOURCE-FILE
 $ sudo pip3 install PyQt-builder
 $ sip-build --no-make --qmake PATH-TO-YOUR-QMAKE
 $ cd build
@@ -290,27 +318,6 @@ Follow [official setup guide](https://github.com/PiSupply/PaPiRus)
 
 Follow [official setup guide](https://wiki.dfrobot.com/Raspberry_Pi_e-ink_Display_Module_SKU%3A_DFR0591) and install manually.
 
-### Common
-
-If you use displays in console environment not X Window, install auto-run service and shutdown service.
-
-#### auto-run service
-
-```
-$ sudo cp install/etc/systemd/system/pizero_bikecomputer.service /etc/systemd/system/
-$ sudo cp install/etc/systemd/system/pizero_bikecomputer_shutdown.service /etc/systemd/system/
-$ sudo systemctl daemon-reload
-$ sudo systemctl enable pizero_bikecomputer_shutdown.service
-```
-
-#### shutdown service
-
-```
-$ sudo cp install/usr/local/bin/pizero_bikecomputer_shutdown /usr/local/bin/
-$ sudo chmod 755 /usr/local/bin/pizero_bikecomputer_shutdown
-$ sudo cp install/etc/systemd/system/pizero_bikecomputer_shutdown.service /etc/systemd/system/
-$ sudo systemctl daemon-reload
-```
 
 ### I2C sensors
 
@@ -367,6 +374,26 @@ $ python3 pizero_bikecomputer.py --demo
 Temporarily use with map downloading. A course file is required(see [Usage](Usage)). After launching the program, go to the map screen.
 
 ## run on service
+
+If you use displays in console environment not X Window, install auto-run service and shutdown service.
+
+### auto-run service
+
+```
+$ sudo cp install/etc/systemd/system/pizero_bikecomputer.service /etc/systemd/system/
+$ sudo cp install/etc/systemd/system/pizero_bikecomputer_shutdown.service /etc/systemd/system/
+$ sudo systemctl daemon-reload
+$ sudo systemctl enable pizero_bikecomputer_shutdown.service
+```
+
+### shutdown service
+
+```
+$ sudo cp install/usr/local/bin/pizero_bikecomputer_shutdown /usr/local/bin/
+$ sudo chmod 755 /usr/local/bin/pizero_bikecomputer_shutdown
+$ sudo cp install/etc/systemd/system/pizero_bikecomputer_shutdown.service /etc/systemd/system/
+$ sudo systemctl daemon-reload
+```
 
 Comming soon
 
