@@ -271,12 +271,16 @@ $ sudo pip3 install PyQt5-sip
 
 #### MIP Reflective color LCD module
 
+You can use python3-pyqt5 package. Don't need building Qt.
+
 ```
 $ sudo apt-get install python3-spidev python3-pigpio
 $ sudo pip3 install spidev --upgrade
 ```
 
 #### E-ink Displays
+
+You can use python3-pyqt5 package too.
 
 ##### PaPiRus ePaper / eInk Screen HAT for Raspberry Pi
 
