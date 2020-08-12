@@ -26,8 +26,8 @@ a GPS and ANT+ bike computer based on Raspberry Pi Zero (W, WH)
            - [Build PyQt5](#Build-PyQt5)
       - [MIP Reflective color LCD module](#MIP-Reflective-color-LCD-module)
       - [E-ink Displays](#E-ink-Displays)
-        - [PaPiRus ePaper / eInk Screen HAT for Raspberry Pi](#PaPiRus-ePaper-/-eInk-Screen-HAT-for-Raspberry-Pi)
-        - [DFRobot e-ink Display Module for Raspberry Pi 4B/3B+/Zero W](#DFRobot-e-ink-Display-Module-for-Raspberry-Pi-4B/3B/Zero-W)
+        - [PaPiRus ePaper / eInk Screen HAT for Raspberry Pi](#papirus-epaper--eink-screen-hat-for-raspberry-pi)
+        - [DFRobot e-ink Display Module for Raspberry Pi 4B/3B+/Zero W](#dfrobot-e-ink-display-module-for-raspberry-pi-4b3bzero-w)
     - [I2C sensors](#I2C-sensors)
       - [Main sensors (pressure, temperature, IMU and light)](#Main-sensors-pressure-temperature-IMU-and-light)
       - [Button SHIM](#Button-SHIM)
@@ -84,67 +84,121 @@ Here is detail articles in Japanese.
 
 # Parts List
 
-- [Raspberry Pi Zero W / WH](https://www.raspberrypi.org/products/raspberry-pi-zero-w/)
-- Display
-  - [PiTFT 2.4](https://www.adafruit.com/product/2455) 
-    - (good) easy to assemble
-    - (bad) hard to see in direct sunshine
-  - [MIP Reflective color LCD module 2.7" w/ backlight](https://international.switch-science.com/catalog/5395/) 
-      - [Connection board for MIP Reflective color LCD to FRDM-K64F](https://international.switch-science.com/catalog/5393/) is also needed
-    - (good) very visible even in direct sunshine
-    - (good) ultra-low power consumption
-    - (bad) very expensive
-    - (bad) 8 colors only
-    - recomended if you don't think costs. Commercial products often uses a reflective LCD.
-  - [PaPiRus ePaper / eInk Screen HAT for Raspberry Pi](https://uk.pi-supply.com/products/papirus-epaper-eink-screen-hat-for-raspberry-pi) or [DFRobot e-ink Display Module for Raspberry Pi 4B/3B+/Zero W](https://www.dfrobot.com/product-1866.html)
-    - (good) very visible
-    - (good) ultra-low power consumption
-    - (bad) slow drawing
-    - (bad) no backlight
-    - (bad) 2 colors only
-- ANT+ USB dongle
-  - available in eBay or aliexpress
-  - also need micro USB OTG Adapter : like [adafruit adapter](https://www.adafruit.com/product/2910). 
-- GPS module
-  - UART with GPSd is recomended. I2C(Sparkfun qwiic or Adafruit STEMMA QT) is experimental.
-  - [SparkFun ZOE-M8Q](https://www.sparkfun.com/products/15193)
-    - UART, I2C(Sparkfun qwiic) and SPI
-    - an [antenna](https://www.sparkfun.com/products/15246) is also needed
-    - stable and low power consumption
-    - recommended as of 2020/6.
-  - [Akizuki Denshi GPS module](http://akizukidenshi.com/catalog/g/gK-09991/)
-    - UART
-    - easy to get in Tokyo (buy at Akihabara)
-    - cheap and low power consumption
-  - [Adafruit Mini GPS PA1010D](https://www.adafruit.com/product/4415)
-    - UART and I2C(Adafruit STEMMA QT)
-  - [Adafruit Ultimate GPS Breakout](https://www.adafruit.com/product/746)
-    - UART
-- I2C sensors: 
-  - Adafuit circuitpython library is required except some sensors(\*1). Refer to learing page of each sensors.
-  - pressure, temperature: for altitude, grade, and total ascent/descent
-    - [BMP280](https://shop.pimoroni.com/products/enviro-phat) (\*1)
-    - [BMP38X](https://www.dfrobot.com/product-1928.html)
-    - [LPS33HW](https://www.adafruit.com/product/4414) (\*1)
-  - IMU: Accelerometer is required for stop detection when using GPS. Magnetometer sensors are used in compasses. 
-    - [LSM303](https://shop.pimoroni.com/products/enviro-phat) (\*1); 
-    - [LSM6DS](https://www.adafruit.com/product/4485): Accel / Gyro
-    - [LSM9DS1](https://www.sparkfun.com/products/13944): Accel / Gyro / Mag 
-    - [LIS3MDL](https://www.adafruit.com/product/4485): Mag 
-    - [BMX160](https://www.dfrobot.com/product-1928.html): Accel / Gyro / Mag
-  - lux: for auto backlight when using MIP Reflective color LCD
-    - [TCS3472](https://shop.pimoroni.com/products/enviro-phat)
-    - [VCNL4040](https://www.adafruit.com/product/4161)
-  - button: must required for displays which don't have buttons like MIP display
-    - [Button SHIM](https://shop.pimoroni.com/products/button-shim)
-  - power: if you connected battery HAT.
-    - [PiJuice HAT](https://uk.pi-supply.com/products/pijuice-standard) / [PiJuice Zero](https://uk.pi-supply.com/products/pijuice-zero)
-- SD card
-  - youw own (over 8GB)
-  - [SanDisk® High Endurance microSD™ Card](https://shop.westerndigital.com/products/memory-cards/sandisk-high-endurance-uhs-i-microsd#SDSQQNR-032G-AN6IA) is recommended if you use several years.
-- Case
-  - make a nice case if you can use 3D printer.
-  - [Topeak SMARTPHONE DRYBAG 5"](https://www.topeak.com/global/en/products/weatherproof-ridecase-series/1092-smartphone-drybag-5%22) is easy to use. It is waterproof.
+## [Raspberry Pi Zero W / WH](https://www.raspberrypi.org/products/raspberry-pi-zero-w/)
+
+![Raspberry Pi Zero W](https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.amazonaws.com%2F0%2F100741%2F41773d64-fc33-cc2a-190a-ce14b7b6b24c.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=393a8049c6f10a90dc8cc1f6e2030426)
+
+## Display
+
+### [PiTFT 2.4](https://www.adafruit.com/product/2455) 
+
+- (good) easy to assemble
+- (bad) hard to see in direct sunshine
+
+![PiTFT 2.4](https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F100741%2Fe16fc94e-7449-80df-c044-b8705789345e.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=ca5f5dcbdbe33f473187a50c2b585b81)
+
+### [MIP Reflective color LCD module 2.7" w/ backlight](https://international.switch-science.com/catalog/5395/) 
+
+[Connection board for MIP Reflective color LCD to FRDM-K64F](https://international.switch-science.com/catalog/5393/) is also needed
+
+- (good) very visible even in direct sunshine
+- (good) ultra-low power consumption
+- (bad) very expensive
+- (bad) 8 colors only
+- recomended if you don't think costs. Commercial products often uses a reflective LCD.
+
+![MIP Reflective color LCD](https://qiita-user-contents.imgix.net/https%3A%2F%2Fpbs.twimg.com%2Fmedia%2FEV8NXnaVAAEjoFS%3Fformat%3Dpng%26name%3Dsmall?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=3b5218cc2e1d11c88eec77bbebadbaef)
+
+### [PaPiRus ePaper / eInk Screen HAT for Raspberry Pi](https://uk.pi-supply.com/products/papirus-epaper-eink-screen-hat-for-raspberry-pi) or [DFRobot e-ink Display Module for Raspberry Pi 4B/3B+/Zero W](https://www.dfrobot.com/product-1866.html)
+
+- (good) very visible
+- (good) ultra-low power consumption
+- (bad) slow drawing
+- (bad) no backlight
+- (bad) 2 colors only
+
+![PaPiRus ePaper](https://qiita-user-contents.imgix.net/https%3A%2F%2Fpbs.twimg.com%2Fmedia%2FEWcpqIRVcAECnhm%3Fformat%3Dpng%26name%3Dmedium?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=e63859ff88d76213591bfaab25111aca)
+PaPiRus ePaper / eInk Screen HAT for Raspberry Pi
+
+![DFRobot e-ink Display Module](https://qiita-user-contents.imgix.net/https%3A%2F%2Fpbs.twimg.com%2Fmedia%2FEWvezNTXgAATZuN%3Fformat%3Dpng%26name%3Dmedium?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=5c0e572fce9492179d347bfb58e312fc)
+DFRobot e-ink Display Module for Raspberry Pi 4B/3B+/Zero W
+
+## ANT+ USB dongle
+- available in eBay or aliexpress
+- also need micro USB OTG Adapter : like [adafruit adapter](https://www.adafruit.com/product/2910). 
+
+![ANT+ USB dongle + USB OTG Adapter](https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F100741%2F2a2639eb-7515-4dff-33d1-864a274a4919.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=348720e6c0bc82111195ac699fdc04b6)
+
+## GPS module
+
+UART with GPSd is recomended. I2C(Sparkfun qwiic or Adafruit STEMMA QT) is experimental.
+
+### [SparkFun ZOE-M8Q](https://www.sparkfun.com/products/15193)
+
+- UART, I2C(Sparkfun qwiic) and SPI
+- an [antenna](https://www.sparkfun.com/products/15246) is also needed
+- stable and low power consumption
+- recommended as of 2020/6.
+
+### [Akizuki Denshi GPS module](http://akizukidenshi.com/catalog/g/gK-09991/)
+
+- UART
+- easy to get in Tokyo (buy at Akihabara)
+- cheap and low power consumption
+
+### [Adafruit Mini GPS PA1010D](https://www.adafruit.com/product/4415)
+
+- UART and I2C(Adafruit STEMMA QT)
+
+### [Adafruit Ultimate GPS Breakout](https://www.adafruit.com/product/746)
+- UART
+
+## I2C sensors: 
+
+Adafuit circuitpython library is required except some sensors(\*1). Refer to learing page of each sensors.
+
+### pressure, temperature
+
+for altitude, grade, and total ascent/descent
+
+- [BMP280](https://shop.pimoroni.com/products/enviro-phat) (\*1)
+- [BMP38X](https://www.dfrobot.com/product-1928.html)
+- [LPS33HW](https://www.adafruit.com/product/4414) (\*1)
+
+### IMU
+
+Accelerometer is required for stop detection when using GPS. Magnetometer sensors are used in compasses. 
+
+- [LSM303](https://shop.pimoroni.com/products/enviro-phat) (\*1); 
+- [LSM6DS](https://www.adafruit.com/product/4485): Accel / Gyro
+- [LSM9DS1](https://www.sparkfun.com/products/13944): Accel / Gyro / Mag 
+- [LIS3MDL](https://www.adafruit.com/product/4485): Mag 
+- [BMX160](https://www.dfrobot.com/product-1928.html): Accel / Gyro / Mag
+
+### lux
+
+for auto backlight when using MIP Reflective color LCD
+
+- [TCS3472](https://shop.pimoroni.com/products/enviro-phat)
+- [VCNL4040](https://www.adafruit.com/product/4161)
+
+## button
+
+must required for displays which don't have buttons like MIP display
+
+- [Button SHIM](https://shop.pimoroni.com/products/button-shim)
+
+## power: if you connected battery HAT.
+- [PiJuice HAT](https://uk.pi-supply.com/products/pijuice-standard) / [PiJuice Zero](https://uk.pi-supply.com/products/pijuice-zero)
+
+## SD card
+- youw own (over 8GB)
+- [SanDisk® High Endurance microSD™ Card](https://shop.westerndigital.com/products/memory-cards/sandisk-high-endurance-uhs-i-microsd#SDSQQNR-032G-AN6IA) is recommended if you use several years.
+
+## Case
+
+- make a nice case if you can use 3D printer.
+- [Topeak SMARTPHONE DRYBAG 5"](https://www.topeak.com/global/en/products/weatherproof-ridecase-series/1092-smartphone-drybag-5%22) is easy to use. It is waterproof.
 
 
 # Assembly
@@ -280,7 +334,7 @@ You will need libts-dev package before configure of Qt. (from [RaspberryPi2EGLFS
 sudo apt-get install libudev-dev libinput-dev libts-dev libxcb-xinerama0-dev libxcb-xinerama0
 ```
 
-##### Build PyQt5
+###### Build PyQt5
 
 Follow [PyQt Reference Guide](https://www.riverbankcomputing.com/static/Docs/PyQt5/installation.html).
 The source is avaiable [here](https://pypi.org/project/PyQt5/#files)
