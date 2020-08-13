@@ -13,29 +13,9 @@ a GPS and ANT+ bike computer based on Raspberry Pi Zero (W, WH)
 - [Installation](#installation)
   - [macOS or Linux](#macOS-or-Linux)
   - [Raspberry Pi OS](#Raspberry-Pi-OS)
-    - [Common](#Common)
-    - [GPS module](#GPS-module)
-      - [UART GPS](#UART-GPS)
-      - [I2C GPS (experimental)](#I2C-GPS-experimental)
-    - [USB ANT+ dongle](#USB-ANT-dongle)
-    - [Display](#Display)
-      - [PiTFT 2.4](#PiTFT-2.4)
-         - [run on X Window](#run-on-X-Window)
-         - [run on console](#run-on-console)
-           - [Build Qt](#Build-Qt)
-           - [Build PyQt5](#Build-PyQt5)
-      - [MIP Reflective color LCD module](#MIP-Reflective-color-LCD-module)
-      - [E-ink Displays](#E-ink-Displays)
-        - [PaPiRus ePaper / eInk Screen HAT for Raspberry Pi](#papirus-epaper--eink-screen-hat-for-raspberry-pi)
-        - [DFRobot e-ink Display Module for Raspberry Pi 4B/3B+/Zero W](#dfrobot-e-ink-display-module-for-raspberry-pi-4b3bzero-w)
-    - [I2C sensors](#I2C-sensors)
-      - [Main sensors (pressure, temperature, IMU and light)](#Main-sensors-pressure-temperature-IMU-and-light)
-      - [Button SHIM](#Button-SHIM)
-      - [PiJuice HAT](#PiJuice-HAT)
 - [Quick Start](#quick-start)
-  - [normal mode](#normal-mode)
-  - [demo mode](#demo-mode)
-  - [run on service](#run-on-service)
+  - [Run on X Window](#Run-on-X-Window)
+  - [Run in a console](#Run-in-a-console)
 - [Usage](#usage)
 - [Q&A](#qa)
 
@@ -153,7 +133,7 @@ UART with GPSd is recomended. I2C(Sparkfun qwiic or Adafruit STEMMA QT) is exper
 ### [Adafruit Ultimate GPS Breakout](https://www.adafruit.com/product/746)
 - UART
 
-## I2C sensors: 
+## I2C sensors
 
 Adafuit circuitpython library is required except some sensors(\*1). Refer to learing page of each sensors.
 
@@ -167,7 +147,7 @@ for altitude, grade, and total ascent/descent
 
 ### IMU
 
-Accelerometer is required for stop detection when using GPS. Magnetometer sensors are used in compasses. 
+Accelerometer is used for stop detection when using GPS.Magnetometer sensors are used in compasses. 
 
 - [LSM303](https://shop.pimoroni.com/products/enviro-phat) (\*1); 
 - [LSM6DS](https://www.adafruit.com/product/4485): Accel / Gyro
@@ -175,20 +155,23 @@ Accelerometer is required for stop detection when using GPS. Magnetometer sensor
 - [LIS3MDL](https://www.adafruit.com/product/4485): Mag 
 - [BMX160](https://www.dfrobot.com/product-1928.html): Accel / Gyro / Mag
 
-### lux
+### Light
 
 for auto backlight when using MIP Reflective color LCD
 
 - [TCS3472](https://shop.pimoroni.com/products/enviro-phat)
 - [VCNL4040](https://www.adafruit.com/product/4161)
 
-## button
+### Button
 
 must required for displays which don't have buttons like MIP display
 
 - [Button SHIM](https://shop.pimoroni.com/products/button-shim)
 
-## power: if you connected battery HAT.
+### Battery
+
+get battery percent, etc.
+
 - [PiJuice HAT](https://uk.pi-supply.com/products/pijuice-standard) / [PiJuice Zero](https://uk.pi-supply.com/products/pijuice-zero)
 
 ## SD card
@@ -253,7 +236,7 @@ $ cd pizero_bikecomputer
 
 #### UART GPS
 
-Assume Serial interface is on and login shell is off in raspi-config.
+Assume Serial interface is on and login shell is off in raspi-config and GPS device is connected as /dev/ttyS0. If GPS device is /dev/ttyAMA0, modify gpsd config file(/etc/default/gpsd).
 
 ```
 $ sudo apt-get install gpsd gpsd-clients python3-dateutil
@@ -304,26 +287,14 @@ $ sudo systemctl daemon-reload
 $ sudo systemctl enable disable-pitft.service
 ```
 
-##### run on X Window
-
-Making launcher menu or desktop icon may be useful.
-
-![lancher menu](https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F100741%2Fc466c6f0-ede8-5de2-2061-fbbbcccb93fc.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=864176ddffe3895226a6fd8bf20fb4d0)
-
-Make "New Item" in Main Menu Editor, and set "/home/pi/pizero_bikecomputer/exec.sh" in "Command:" field.
-
-![short cut](https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F100741%2Fe318acf1-3c89-0537-956c-9e64738b8f81.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=fedb51b245af88bffc2e090031cf10a3)
-
-##### run on console
-
-You need to build Qt5 and PyQt5 because the package python3-pyqt5 provided with Raspbian OS does not include a touchscreen library(tslib).
+If you run the program in a console, you need to build Qt5 and PyQt5 because the package python3-pyqt5 provided with Raspbian OS does not include a touchscreen library(tslib).
 
 Note:
 
 The touchscreen does not work properly in Raspbian OS(Buster) + Qt　5.14(or higher) + PyQt 5.14(or higher) from some issues. So, if you use PiTFT, I recomand to run on X Window at present.
 In Raspbian OS(Stretch) + Qt　5.12.3 + PyQt 5.12.3, the touchscreen works.
 
-###### Build Qt
+##### Build Qt
 
 Follow ["Building Qt 5.12 LTS for Raspberry Pi on Raspbian"](https://www.tal.org/tutorials/building-qt-512-raspberry-pi) with Raspberry Pi 4 4GB or 8GB. Use the compile option "-platform linux-rpi-g++" for Raspberry Pi 1 or zero, not use options for Raspberry Pi 4 and so on.
 Use the same SD card on Raspberry Pi 4.
@@ -334,7 +305,7 @@ You will need libts-dev package before configure of Qt. (from [RaspberryPi2EGLFS
 sudo apt-get install libudev-dev libinput-dev libts-dev libxcb-xinerama0-dev libxcb-xinerama0
 ```
 
-###### Build PyQt5
+##### Build PyQt5
 
 Follow [PyQt Reference Guide](https://www.riverbankcomputing.com/static/Docs/PyQt5/installation.html).
 The source is avaiable [here](https://pypi.org/project/PyQt5/#files)
@@ -413,45 +384,106 @@ Follow [official setup guide](https://github.com/PiSupply/PiJuice/tree/master/So
 
 # Quick Start
 
-## normal mode
+## Run on X Window
+
+If you run the program from SSH login shell, add the following environment variable.
 
 ```
+export DISPLAY=:0.0
+```
+
+Then, run the program.
+
+```
+$ python3 pizero_bikecomputer.py -f
+```
+
+### Run from the lancher menu.
+
+Making launcher menu or desktop icon may be useful.
+
+![lancher menu](https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F100741%2Fc466c6f0-ede8-5de2-2061-fbbbcccb93fc.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=864176ddffe3895226a6fd8bf20fb4d0)
+
+Make "New Item" in Main Menu Editor, and set "/home/pi/pizero_bikecomputer/exec.sh" in "Command:" field.
+
+![short cut](https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F100741%2Fe318acf1-3c89-0537-956c-9e64738b8f81.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=fedb51b245af88bffc2e090031cf10a3)
+
+### Run with autostart
+
+If you are using the autologin option, you can run the program automatically using the following procedure。
+
+```
+$ mkdir -p ~/.config/lxsession/LXDE-pi
+$ cp /etc/xdg/lxsession/LXDE-pi/autostart ~/.config/lxsession/LXDE-pi/
+$ echo "@/home/pi/pizero_bikecomputer/exec.sh" >> ~/.config/lxsession/LXDE-pi/autostart
+```
+
+## Run in a console
+
+### manual execution
+
+#### PiTFT
+
+Before run the program, add the following environment variables.
+
+```
+$ export QT_QPA_PLATFORM=linuxfb:fb=/dev/fb1
+$ export QT_QPA_EVDEV_TOUCHSCREEN_PARAMETERS=/dev/input/event0:rotate=270
+$ export QT_QPA_FB_TSLIB=1
+$ export TSLIB_FBDEVICE=/dev/fb1
+$ export TSLIB_TSDEVICE=/dev/input/event0
 $ python3 pizero_bikecomputer.py
 ```
 
-## demo mode
+#### MIP Reflective color LCD module or E-Ink displays
+
+Before run the program, add the following environment variable.
+
+```
+$ export QT_QPA_PLATFORM=offscreen
+$ python3 pizero_bikecomputer.py
+```
+
+### run as a service
+
+If you use displays in console environment not X Window, install auto-run service and shutdown service.
+
+#### auto-run service
+
+If you use MIP Reflective color LCD module or E-Ink displays, modify install/etc/systemd/system/pizero_bikecomputer.service.
+
+```
+ExecStart=/home/pi/pizero_bikecomputer/exec-mip.sh
+```
+
+Install servece scripts.
+
+```
+$ sudo cp install/etc/systemd/system/pizero_bikecomputer.service /etc/systemd/system/
+$ sudo cp install/usr/local/bin/pizero_bikecomputer_shutdown /usr/local/bin/
+$ sudo cp install/etc/systemd/system/pizero_bikecomputer_shutdown.service /etc/systemd/system/
+$ sudo systemctl daemon-reload
+$ sudo systemctl enable pizero_bikecomputer.service
+$ sudo systemctl enable pizero_bikecomputer_shutdown.service
+```
+
+#### test
+
+The output of the log file will be in "./log/debug.txt".
+
+```
+$ sudo systemctl start pizero_bikecomputer.service
+```
+
+
+# Usage
+
 
 ```
 $ python3 pizero_bikecomputer.py --demo
 ```
 
 Temporarily use with map downloading. A course file is required(see [Usage](Usage)). After launching the program, go to the map screen.
-
-## run on service
-
-If you use displays in console environment not X Window, install auto-run service and shutdown service.
-
-### auto-run service
-
-```
-$ sudo cp install/etc/systemd/system/pizero_bikecomputer.service /etc/systemd/system/
-$ sudo cp install/etc/systemd/system/pizero_bikecomputer_shutdown.service /etc/systemd/system/
-$ sudo systemctl daemon-reload
-$ sudo systemctl enable pizero_bikecomputer_shutdown.service
-```
-
-### shutdown service
-
-```
-$ sudo cp install/usr/local/bin/pizero_bikecomputer_shutdown /usr/local/bin/
-$ sudo chmod 755 /usr/local/bin/pizero_bikecomputer_shutdown
-$ sudo cp install/etc/systemd/system/pizero_bikecomputer_shutdown.service /etc/systemd/system/
-$ sudo systemctl daemon-reload
-```
-
-Comming soon
-
-# Usage
 
 
 # Q&A
