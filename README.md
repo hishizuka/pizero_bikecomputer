@@ -7,6 +7,7 @@ a GPS and ANT+ bike computer based on Raspberry Pi Zero (W, WH)
 
 - [Abstract](#abstract)
 - [Features](#features)
+- [Specs](#Specs)
 - [Comparison with other bike computers](#comparison)
 - [Parts List](#parts-list)
 - [Assembly](#assembly)
@@ -22,7 +23,7 @@ a GPS and ANT+ bike computer based on Raspberry Pi Zero (W, WH)
 
 # Abstract
 
-Pi Zero Bikecomputer is a GPS and ANT+ bike computer based on Raspberry Pi Zero(W, WH). This is the first DIY project in the world integrated with necesarry hardwares and softwares for modern bike computer. It measures and records position(GPS), ANT+ sensor(speed/cadence/power) and I2C sensor(pressure/temperature/altitude, etc). It also displays these values, even maps and courses in real-time. In addition, it write out log into .fit format file.
+Pi Zero Bikecomputer is a GPS and ANT+ bike computer based on Raspberry Pi Zero(W, WH). This is the first DIY project in the world integrated with necesarry hardwares and softwares for modern bike computer. It measures and records position(GPS), ANT+ sensor(speed/cadence/power) and I2C sensor(pressure/temperature/accelerometer, etc). It also displays these values, even maps and courses in real-time. In addition, it write out log into .fit format file.
 
 In this project, Pi Zero Bikecomputer got basic functions needed for bike computers. Next target is to add new functions which existing products do not have!
 
@@ -47,6 +48,69 @@ Here is detail articles in Japanese.
 
 - Supports cross platform develop environments
   - Pi Zero Bikecomputer uses [PyQt5](https://pypi.org/project/PyQt5/) GUI library. So, you can run on Raspberry Pi OS, some Linux, macOS and Windows.
+
+# Specs
+
+Some functions depend on your parts.
+
+## General
+
+| Function | Yes or No | Note |
+|:-|:-|:-|
+| Sensors | Yes | See as below |
+| Logging | Yes | See as below |
+| Positioning | Yes | A GPS module is required. See as below. |
+| GUI | Yes | See as below |
+| Wifi | Yes | built-in wifi |
+| Battery life(Reference) | 18h | With 3000mAh battery and MIP Reflective color LCD |
+
+## Sensors
+
+| Function | Yes or No | Note |
+|:-|:-|:-|
+| ANT+ speed sensor |  Yes | ANT+ USB dongle is required. |
+| ANT+ cadence sensor |  Yes | ANT+ USB dongle is required. |
+| ANT+ speed&cadence sensor |  Yes | ANT+ USB dongle is required. |
+| ANT+ powermeter |  Yes | ANT+ USB dongle is required. Calibration is not supported. |
+| Bluetooth sensors |  No |  |
+| Barometric altimeter | Yes | An I2c sensor(pressure, temperature) is required. |
+| Accelerometer | Yes | An I2c sensor is required. |
+| Magnetometer | Yes | An I2c sensor is required. |
+| Light sensor | Yes | An I2c sensor is required. |
+
+## Logging
+
+| Function | Yes or No | Note |
+|:-|:-|:-|
+| Stopwatch |  Yes | raw data is stored by sqlite3 |
+| Lap |  Yes |  |
+| Auto stop |  Yes |  |
+| Recording insterval | 1s | Smart recording is not supported. |
+| Resume |  Yes |  |
+| Output .fit log file |  Yes |  |
+| Upload to STRAVA | Yes |  |
+| Live sending | Yes | but I can't find a good dashboard service like as GARMIN LiveTrack |
+
+## Positioning
+
+| Function | Yes or No | Note |
+|:-|:-|:-|
+| Map | Yes |  |
+| Course on the map| Yes | A course file(.tcx) is required. |
+| Course profile | Yes | A course file(.tcx) is required. |
+| Simple navigation | Yes | Use course points included in course files. |
+
+## GUI
+
+| Function | Yes or No | Note |
+|:-|:-|:-|
+| basic page(values only) | Yes |  |
+| Graph | Yes | Altitude and performance(HR, PWR) |
+| Customize data pages | Yes |  |
+| ANT+ pairing | Yes |  |
+| Adjust wheel size | Yes |  |
+| Adjust altitude | Yes |  |
+
 
 # Comparison with other bike computers
 
