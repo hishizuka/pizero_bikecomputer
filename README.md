@@ -62,7 +62,6 @@ Some functions depend on your parts.
 | Positioning | Yes | A GPS module is required. See as below. |
 | GUI | Yes | See as below |
 | Wifi | Yes | built-in wifi |
-| Battery life(Reference) | 18h | With 3000mAh battery and MIP Reflective color LCD |
 
 ## Sensors
 
@@ -89,7 +88,7 @@ Some functions depend on your parts.
 | Resume |  Yes |  |
 | Output .fit log file |  Yes |  |
 | Upload to STRAVA | Yes |  |
-| Live sending | Yes | but I can't find a good dashboard service like as GARMIN LiveTrack |
+| Live sending | Yes | but I can't find a good dashboard service like as Garmin LiveTrack |
 
 ## Positioning
 
@@ -111,6 +110,9 @@ Some functions depend on your parts.
 | Adjust wheel size | Yes |  |
 | Adjust altitude | Yes |  |
 
+## Misc
+
+- Battery life is 18h with 3000mAh mobile battery([Garmin Charge Power Pack](https://buy.garmin.com/en-US/US/p/571552)) and MIP Reflective color LCD.
 
 # Comparison with other bike computers
 
