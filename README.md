@@ -36,7 +36,7 @@ Here is detail articles in Japanese.
 [Let's make a bikecomputer with Raspberry Pi Zero (W, WH)](https://qiita.com/hishi/items/46619b271daaa9ad41b3)
 
 
-<img width="841" alt="system-01" src="https://user-images.githubusercontent.com/12926652/90346486-3c39e500-e064-11ea-8613-712296515288.png">
+<img width="836" alt="system-01" src="https://user-images.githubusercontent.com/12926652/90346847-52957000-e067-11ea-9af9-9e3654fb9391.png">
 
 <img width="836" alt="system-02" src="https://user-images.githubusercontent.com/12926652/90346812-1a8e2d00-e067-11ea-81cf-5fa8127dd907.png">
 
