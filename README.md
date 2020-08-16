@@ -55,17 +55,18 @@ Some functions depend on your parts.
 
 ## General
 
-| Function | Yes or No | Note |
+| Specs | Detail | Note |
 |:-|:-|:-|
 | Sensors | Yes | See as below |
 | Logging | Yes | See as below |
 | Positioning | Yes | A GPS module is required. See as below. |
 | GUI | Yes | See as below |
-| Wifi | Yes | built-in wifi |
+| Wifi | Yes | Built-in wifi |
+| Battery life(Reference) | 18h | with 3000mAh mobile battery([Garmin Charge Power Pack](https://buy.garmin.com/en-US/US/p/571552)) and MIP Reflective color LCD. |
 
 ## Sensors
 
-| Function | Yes or No | Note |
+| Specs | Detail | Note |
 |:-|:-|:-|
 | ANT+ speed sensor |  Yes | ANT+ USB dongle is required. |
 | ANT+ cadence sensor |  Yes | ANT+ USB dongle is required. |
@@ -79,40 +80,58 @@ Some functions depend on your parts.
 
 ## Logging
 
-| Function | Yes or No | Note |
+| Specs | Detail | Note |
 |:-|:-|:-|
-| Stopwatch |  Yes | raw data is stored by sqlite3 |
-| Lap |  Yes |  |
-| Auto stop |  Yes |  |
-| Recording insterval | 1s | Smart recording is not supported. |
-| Resume |  Yes |  |
-| Output .fit log file |  Yes |  |
+| Stopwatch | Yes | Raw data is stored by sqlite3 |
+| Lap | Yes | [Total, Lap, Pre lap] x [HR, Speed, Cadence, Power] |
+| Cumulative value | Yes | [Total, Lap, Pre lap] x [Distance, Works, Ascent, Descent] |
+| Auto stop | Yes |  |
+| Recording insterval | 1s |  Smart recording is not supported. |
+| Resume | Yes |  |
+| Output .fit log file | Yes |  |
 | Upload to STRAVA | Yes |  |
-| Live sending | Yes | but I can't find a good dashboard service like as Garmin LiveTrack |
+| Live sending | Yes | But I can't find a good dashboard service like as Garmin LiveTrack |
 
 ## Positioning
 
-| Function | Yes or No | Note |
+| Specs | Detail | Note |
 |:-|:-|:-|
-| Map | Yes |  |
+| Map | Yes | Support map tile format like OSM. So, offline map is available with local caches. |
 | Course on the map| Yes | A course file(.tcx) is required. |
 | Course profile | Yes | A course file(.tcx) is required. |
-| Simple navigation | Yes | Use course points included in course files. |
+| Cuesheet | Yes | Use course points included in course files. |
+
+- [Toner Map](http://maps.stamen.com/)
+![Toner map](https://camo.qiitausercontent.com/0c2cf8d528b613a4665aa62170e2e9ee4a8ab90a/68747470733a2f2f71696974612d696d6167652d73746f72652e73332e61702d6e6f727468656173742d312e616d617a6f6e6177732e636f6d2f302f3130303734312f38623335636566652d663836302d643662662d396366642d3963633336643561313863622e706e67)
+- Custimized [Mapbox](https://www.mapbox.com) (Use 8 colors suitable for MIP Reflective color LCD)
+![Custimized Mapbox](https://camo.qiitausercontent.com/3dde7fcb864f8226c23332a30c33ab743b0b2b06/68747470733a2f2f71696974612d696d6167652d73746f72652e73332e61702d6e6f727468656173742d312e616d617a6f6e6177732e636f6d2f302f3130303734312f66663366353439362d373266642d353831352d656533332d3437303862623364323565392e706e67)
+- Display on PiTFT2.4
+![simple navigasion](https://pbs.twimg.com/media/EW5TJ96UMAAIXJq?format=png&name=900x900)
+- Course profile
+![Course profile](https://camo.qiitausercontent.com/e2d197a1cb6fea4341a8bc7dfd89be86dab3d784/68747470733a2f2f71696974612d696d6167652d73746f72652e73332e61702d6e6f727468656173742d312e616d617a6f6e6177732e636f6d2f302f3130303734312f33393064333061652d653765632d623738652d346365322d3036303232313433663566612e706e67)
+
 
 ## GUI
 
-| Function | Yes or No | Note |
+| Specs | Detail | Note |
 |:-|:-|:-|
-| basic page(values only) | Yes |  |
+| Basic page(values only) | Yes |  |
 | Graph | Yes | Altitude and performance(HR, PWR) |
-| Customize data pages | Yes |  |
+| Customize data pages | Yes | With layout.yaml |
 | ANT+ pairing | Yes |  |
 | Adjust wheel size | Yes |  |
 | Adjust altitude | Yes |  |
 
-## Misc
+- Performance graph
+![Performance graph](https://camo.qiitausercontent.com/05c8c8facf076fbc3faf6abe848493ac0e82ffc1/68747470733a2f2f71696974612d696d6167652d73746f72652e73332e61702d6e6f727468656173742d312e616d617a6f6e6177732e636f6d2f302f3130303734312f39316336643837382d666436632d383262652d663638642d6533303531323832356631662e706e67)
 
-- Battery life is 18h with 3000mAh mobile battery([Garmin Charge Power Pack](https://buy.garmin.com/en-US/US/p/571552)) and MIP Reflective color LCD.
+## Experimental functions
+
+### ANT+ multiscan
+
+it displays three of the people around you in the order in which you caught sensors using ANT+ continuous scanning mode.
+
+![multiscan](https://camo.qiitausercontent.com/97904ae429c191677e9ece3cd113e07dfe8eefb2/68747470733a2f2f71696974612d696d6167652d73746f72652e73332e61702d6e6f727468656173742d312e616d617a6f6e6177732e636f6d2f302f3130303734312f33383765663432332d346631642d623332352d666235642d6638623434646332396564362e6a706567)
 
 # Comparison with other bike computers
 
@@ -140,8 +159,7 @@ Some functions depend on your parts.
 
 - (good) easy to assemble
 - (bad) hard to see in direct sunshine
-
-![PiTFT 2.4](https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F100741%2Fe16fc94e-7449-80df-c044-b8705789345e.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=ca5f5dcbdbe33f473187a50c2b585b81)
+- ![PiTFT 2.4](https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F100741%2Fe16fc94e-7449-80df-c044-b8705789345e.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=ca5f5dcbdbe33f473187a50c2b585b81)
 
 ### [MIP Reflective color LCD module 2.7" w/ backlight](https://international.switch-science.com/catalog/5395/) 
 
@@ -152,8 +170,7 @@ Some functions depend on your parts.
 - (bad) very expensive
 - (bad) 8 colors only
 - recomended if you don't think costs. Commercial products often uses a reflective LCD.
-
-![MIP Reflective color LCD](https://qiita-user-contents.imgix.net/https%3A%2F%2Fpbs.twimg.com%2Fmedia%2FEV8NXnaVAAEjoFS%3Fformat%3Dpng%26name%3Dsmall?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=3b5218cc2e1d11c88eec77bbebadbaef)
+- ![MIP Reflective color LCD](https://qiita-user-contents.imgix.net/https%3A%2F%2Fpbs.twimg.com%2Fmedia%2FEV8NXnaVAAEjoFS%3Fformat%3Dpng%26name%3Dsmall?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=3b5218cc2e1d11c88eec77bbebadbaef)
 
 ### [PaPiRus ePaper / eInk Screen HAT for Raspberry Pi](https://uk.pi-supply.com/products/papirus-epaper-eink-screen-hat-for-raspberry-pi) or [DFRobot e-ink Display Module for Raspberry Pi 4B/3B+/Zero W](https://www.dfrobot.com/product-1866.html)
 
@@ -162,18 +179,15 @@ Some functions depend on your parts.
 - (bad) slow drawing
 - (bad) no backlight
 - (bad) 2 colors only
-
-![PaPiRus ePaper](https://qiita-user-contents.imgix.net/https%3A%2F%2Fpbs.twimg.com%2Fmedia%2FEWcpqIRVcAECnhm%3Fformat%3Dpng%26name%3Dmedium?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=e63859ff88d76213591bfaab25111aca)
+- ![PaPiRus ePaper](https://qiita-user-contents.imgix.net/https%3A%2F%2Fpbs.twimg.com%2Fmedia%2FEWcpqIRVcAECnhm%3Fformat%3Dpng%26name%3Dmedium?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=e63859ff88d76213591bfaab25111aca)
 PaPiRus ePaper / eInk Screen HAT for Raspberry Pi
-
-![DFRobot e-ink Display Module](https://qiita-user-contents.imgix.net/https%3A%2F%2Fpbs.twimg.com%2Fmedia%2FEWvezNTXgAATZuN%3Fformat%3Dpng%26name%3Dmedium?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=5c0e572fce9492179d347bfb58e312fc)
+- ![DFRobot e-ink Display Module](https://qiita-user-contents.imgix.net/https%3A%2F%2Fpbs.twimg.com%2Fmedia%2FEWvezNTXgAATZuN%3Fformat%3Dpng%26name%3Dmedium?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=5c0e572fce9492179d347bfb58e312fc)
 DFRobot e-ink Display Module for Raspberry Pi 4B/3B+/Zero W
 
 ## ANT+ USB dongle
 - available in eBay or aliexpress
 - also need micro USB OTG Adapter : like [adafruit adapter](https://www.adafruit.com/product/2910). 
-
-![ANT+ USB dongle + USB OTG Adapter](https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F100741%2F2a2639eb-7515-4dff-33d1-864a274a4919.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=348720e6c0bc82111195ac699fdc04b6)
+- ![ANT+ USB dongle + USB OTG Adapter](https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F100741%2F2a2639eb-7515-4dff-33d1-864a274a4919.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=348720e6c0bc82111195ac699fdc04b6)
 
 ## GPS module
 
@@ -395,6 +409,8 @@ You can use python3-pyqt5 package. Don't need building Qt.
 ```
 $ sudo apt-get install python3-spidev python3-pigpio
 $ sudo pip3 install spidev --upgrade
+$ sudo systemctl enable pigpiod
+$ sudo systemctl start pigpiod
 ```
 
 #### E-ink Displays
