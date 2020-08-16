@@ -39,15 +39,15 @@ Here is detail articles in Japanese.
 # Features
 
 - Easy to make
-  - use modules available at famous Maker stores.
-  - assemble in Raspberry Pi ecosystems.
-  - install with basic commands such as `apt-get install`, `pip` and `git` command.
+  - Use modules available at famous Maker stores.
+  - Assemble in Raspberry Pi ecosystems.
+  - Install with basic commands such as `apt-get install`, `pip` and `git` command.
 
-- customization
-  - only need modules you want to use. Pi Zero Bikecomputer detects your modules.
+- Customization
+  - Only need modules you want to use. Pi Zero Bikecomputer detects your modules.
 
 - Supports cross platform develop environments
-  - Pi Zero Bikecomputer uses [PyQt5](https://pypi.org/project/PyQt5/) GUI library. So, you can run on Raspberry Pi OS, some Linux, macOS and Windows.
+  - Pi Zero Bikecomputer uses [Python](https://www.python.org) and [PyQt5](https://pypi.org/project/PyQt5/) GUI library. So, you can run on Raspberry Pi OS, some Linux, macOS and Windows.
 
 # Specs
 
