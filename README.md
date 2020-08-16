@@ -38,7 +38,7 @@ Here is detail articles in Japanese.
 
 <img width="841" alt="system-01" src="https://user-images.githubusercontent.com/12926652/90346486-3c39e500-e064-11ea-8613-712296515288.png">
 
-<img width="841" alt="system-02" src="https://user-images.githubusercontent.com/12926652/90346717-7f955300-e066-11ea-94c5-69adcdd5bc7c.png">
+<img width="839" alt="system-02" src="https://user-images.githubusercontent.com/12926652/90346762-cb47fc80-e066-11ea-995a-1c013999d295.png">
 
 
 # Features
