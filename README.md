@@ -101,9 +101,10 @@ Some functions depend on your parts.
 | Course profile | Yes | A course file(.tcx) is required. |
 | Cuesheet | Yes | Use course points included in course files. |
 
-- [Toner Map](http://maps.stamen.com/)
+- Map with [Toner Map](http://maps.stamen.com/)
+  - Very useful with 2 colors displays (black and white).
   - <img src ="https://camo.qiitausercontent.com/0c2cf8d528b613a4665aa62170e2e9ee4a8ab90a/68747470733a2f2f71696974612d696d6167652d73746f72652e73332e61702d6e6f727468656173742d312e616d617a6f6e6177732e636f6d2f302f3130303734312f38623335636566652d663836302d643662662d396366642d3963633336643561313863622e706e67" width=320 height=240 />
-- Custimized [Mapbox](https://www.mapbox.com) (Use 8 colors suitable for MIP Reflective color LCD)
+- Map with custimized [Mapbox](https://www.mapbox.com) (Use 8 colors suitable for MIP Reflective color LCD)
   - <img src ="https://camo.qiitausercontent.com/3dde7fcb864f8226c23332a30c33ab743b0b2b06/68747470733a2f2f71696974612d696d6167652d73746f72652e73332e61702d6e6f727468656173742d312e616d617a6f6e6177732e636f6d2f302f3130303734312f66663366353439362d373266642d353831352d656533332d3437303862623364323565392e706e67" width=320 height=240 />
 - Course profile
   -  <img src ="https://camo.qiitausercontent.com/e2d197a1cb6fea4341a8bc7dfd89be86dab3d784/68747470733a2f2f71696974612d696d6167652d73746f72652e73332e61702d6e6f727468656173742d312e616d617a6f6e6177732e636f6d2f302f3130303734312f33393064333061652d653765632d623738652d346365322d3036303232313433663566612e706e67" width=320 height=240 />
