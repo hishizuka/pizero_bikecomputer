@@ -36,6 +36,11 @@ Here is detail articles in Japanese.
 [Let's make a bikecomputer with Raspberry Pi Zero (W, WH)](https://qiita.com/hishi/items/46619b271daaa9ad41b3)
 
 
+<img width="841" alt="system-01" src="https://user-images.githubusercontent.com/12926652/90346486-3c39e500-e064-11ea-8613-712296515288.png">
+
+<img width="841" alt="system-02" src="https://user-images.githubusercontent.com/12926652/90346717-7f955300-e066-11ea-94c5-69adcdd5bc7c.png">
+
+
 # Features
 
 - Easy to make
@@ -49,6 +54,7 @@ Here is detail articles in Japanese.
 - Supports cross platform develop environments
   - Pi Zero Bikecomputer uses [Python](https://www.python.org) and [PyQt5](https://pypi.org/project/PyQt5/) GUI library. So, you can run on Raspberry Pi OS, some Linux, macOS and Windows.
 
+
 # Specs
 
 Some functions depend on your parts.
@@ -57,26 +63,12 @@ Some functions depend on your parts.
 
 | Specs | Detail | Note |
 |:-|:-|:-|
-| Sensors | Yes | See as below |
 | Logging | Yes | See as below |
+| Sensors | Yes | See as below |
 | Positioning | Yes | A GPS module is required. See as below. |
 | GUI | Yes | See as below |
 | Wifi | Yes | Built-in wifi |
 | Battery life(Reference) | 18h | with 3000mAh mobile battery([Garmin Charge Power Pack](https://buy.garmin.com/en-US/US/p/571552)) and MIP Reflective color LCD. |
-
-## Sensors
-
-| Specs | Detail | Note |
-|:-|:-|:-|
-| ANT+ speed sensor |  Yes | ANT+ USB dongle is required. |
-| ANT+ cadence sensor |  Yes | ANT+ USB dongle is required. |
-| ANT+ speed&cadence sensor |  Yes | ANT+ USB dongle is required. |
-| ANT+ powermeter |  Yes | ANT+ USB dongle is required. Calibration is not supported. |
-| Bluetooth sensors |  No |  |
-| Barometric altimeter | Yes | An I2c sensor(pressure, temperature) is required. |
-| Accelerometer | Yes | An I2c sensor is required. |
-| Magnetometer | Yes | An I2c sensor is required. |
-| Light sensor | Yes | An I2c sensor is required. |
 
 ## Logging
 
@@ -91,6 +83,21 @@ Some functions depend on your parts.
 | Output .fit log file | Yes |  |
 | Upload to STRAVA | Yes |  |
 | Live sending | Yes | But I can't find a good dashboard service like as Garmin LiveTrack |
+
+## Sensors
+
+| Specs | Detail | Note |
+|:-|:-|:-|
+| ANT+ heartrate sensor |  Yes | ANT+ USB dongle is required. |
+| ANT+ speed sensor |  Yes | ANT+ USB dongle is required. |
+| ANT+ cadence sensor |  Yes | ANT+ USB dongle is required. |
+| ANT+ speed&cadence sensor |  Yes | ANT+ USB dongle is required. |
+| ANT+ powermeter |  Yes | ANT+ USB dongle is required. Calibration is not supported. |
+| Bluetooth sensors |  No |  |
+| Barometric altimeter | Yes | An I2c sensor(pressure, temperature) is required. |
+| Accelerometer | Yes | An I2c sensor is required. |
+| Magnetometer | Yes | An I2c sensor is required. |
+| Light sensor | Yes | An I2c sensor is required. |
 
 ## Positioning
 
@@ -112,7 +119,6 @@ Some functions depend on your parts.
 - Display on PiTFT2.4
   - <img src ="https://pbs.twimg.com/media/EW5TJ96UMAAIXJq?format=png&name=900x900" width=500 height=375 />
 
-
 ## GUI
 
 | Specs | Detail | Note |
@@ -123,9 +129,13 @@ Some functions depend on your parts.
 | ANT+ pairing | Yes |  |
 | Adjust wheel size | Yes |  |
 | Adjust altitude | Yes |  |
+| Language localization | Yes | Font and translation file of items are required. |
 
 - Performance graph
   - <img src ="https://camo.qiitausercontent.com/05c8c8facf076fbc3faf6abe848493ac0e82ffc1/68747470733a2f2f71696974612d696d6167652d73746f72652e73332e61702d6e6f727468656173742d312e616d617a6f6e6177732e636f6d2f302f3130303734312f39316336643837382d666436632d383262652d663638642d6533303531323832356631662e706e67" width=320 height=240 />
+- Language localization
+  - <img src ="https://user-images.githubusercontent.com/12926652/90345269-3808ca00-e05a-11ea-91fe-42efbcd6040b.png" width=320 height=310 />
+
 
 ## Experimental functions
 
@@ -133,13 +143,14 @@ Some functions depend on your parts.
 
 it displays three of the people around you in the order in which you caught sensors using ANT+ continuous scanning mode.
 
-![multiscan](https://camo.qiitausercontent.com/97904ae429c191677e9ece3cd113e07dfe8eefb2/68747470733a2f2f71696974612d696d6167652d73746f72652e73332e61702d6e6f727468656173742d312e616d617a6f6e6177732e636f6d2f302f3130303734312f33383765663432332d346631642d623332352d666235642d6638623434646332396564362e6a706567)
+- ![multiscan](https://camo.qiitausercontent.com/97904ae429c191677e9ece3cd113e07dfe8eefb2/68747470733a2f2f71696974612d696d6167652d73746f72652e73332e61702d6e6f727468656173742d312e616d617a6f6e6177732e636f6d2f302f3130303734312f33383765663432332d346631642d623332352d666235642d6638623434646332396564362e6a706567)
+
 
 # Comparison with other bike computers
 
 - 200km ride with Garmin Edge 830 and Pizero Bikecomputer ([strava activity](https://www.strava.com/activities/2834588492))
 
-![title-03.png](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/100741/b355cb92-8e7f-6b3f-7cd0-98ba8803a56c.png)
+- ![title-03.png](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/100741/b355cb92-8e7f-6b3f-7cd0-98ba8803a56c.png)
 
 | Items | Edge830 | Pi Zero Bikecomputer |
 |:-:|:-:|:-:|
@@ -219,6 +230,8 @@ UART with GPSd is recomended. I2C(Sparkfun qwiic or Adafruit STEMMA QT) is exper
 
 Adafuit circuitpython library is required except some sensors(\*1). Refer to learing page of each sensors.
 
+If you use Sparkfun Qwiic or Adafruit STEMMA QT sensors, [SparkFun Qwiic SHIM for Raspberry Pi](https://www.sparkfun.com/products/15794) is very useful for connecting sensors.
+
 ### pressure, temperature
 
 for altitude, grade, and total ascent/descent
@@ -268,7 +281,9 @@ get battery percent, etc.
 
 # Assembly
 
-Coming soon!
+## Displays with headers (PiTFT or E-ink displays)
+
+## Displays with non headers ()
 
 
 # Installation
