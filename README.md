@@ -371,7 +371,7 @@ Note that the connection between Raspberry Pi and SHARP Memory Display is differ
 
 | Name | Raspberry Pi | SHARP Memory Display | MIP Interface Board |
 |:-|:-:|:-:|:-:|
-| GND      | IO25 | GND   | CN1-? |
+| GND      | IO25 | GND   | CN1-4 |
 | VCOMSEL  | IO11 | EXTIN | CN2-3 |
 | DISP     | IO13 | DISP  | CN1-9 |
 | CS       | IO15 | CS    | CN1-8 |
@@ -379,8 +379,9 @@ Note that the connection between Raspberry Pi and SHARP Memory Display is differ
 | SPI MOSI | IO19 | MOSI  | CN1-7 |
 | SPI SCLK | IO23 | SCLK  | CN1-5 |
 
-
-Reference: https://qiita.com/hishi/items/669ce474fcd76bdce1f1
+Reference:
+- https://docid81hrs3j1.cloudfront.net/medialibrary/2019/03/JDI_MIP_LCD.pdf
+- https://qiita.com/hishi/items/669ce474fcd76bdce1f1
 
 <img src="https://user-images.githubusercontent.com/12926652/91796771-f7b16a80-ec5b-11ea-9b24-113049fd5998.png" width=360 />
 
