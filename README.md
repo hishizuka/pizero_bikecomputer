@@ -49,10 +49,18 @@ Here is detail articles in Japanese.
   - Install with basic commands such as `apt-get install`, `pip` and `git` command.
 
 - Customization
-  - Only need modules you want to use. Pi Zero Bikecomputer detects your modules.
+  - Need only modules you want to use. Pi Zero Bikecomputer detects your modules.
 
-- Supports cross platform develop environments
-  - Pi Zero Bikecomputer uses [Python](https://www.python.org) and [PyQt5](https://pypi.org/project/PyQt5/) GUI library. So, you can run on Raspberry Pi OS, some Linux, macOS and Windows.
+- Easy to develop
+  - Pi Zero Bikecomputer uses same libraries as for standard Linux.
+    - [Python](https://www.python.org)
+    - [numpy](https://numpy.org)
+    - [PyQt5](https://pypi.org/project/PyQt5/) and [PyQtGraph](http://www.pyqtgraph.org)
+    - [GPSd](https://gpsd.gitlab.io/gpsd/index.html) for GPS modules.
+    - [CircuitPython](https://learn.adafruit.com/welcome-to-circuitpython/what-is-circuitpython) for some I2C sensors.
+  - So, you can run in cross platform environments such as Raspberry Pi OS, some Linux, macOS and Windows.
+
+- Good balance between battery life and performance
 
 
 # Specs
@@ -108,6 +116,7 @@ Some functions depend on your parts.
 | Course profile | Yes | A course file(.tcx) is required. |
 | Cuesheet | Yes | Use course points included in course files. |
 
+
 - Map with [Toner Map](http://maps.stamen.com/)
   - Very useful with 2 colors displays (black and white).
   - <img src ="https://camo.qiitausercontent.com/0c2cf8d528b613a4665aa62170e2e9ee4a8ab90a/68747470733a2f2f71696974612d696d6167652d73746f72652e73332e61702d6e6f727468656173742d312e616d617a6f6e6177732e636f6d2f302f3130303734312f38623335636566652d663836302d643662662d396366642d3963633336643561313863622e706e67" width=320 height=240 />
@@ -116,8 +125,7 @@ Some functions depend on your parts.
   - <img src ="https://camo.qiitausercontent.com/3dde7fcb864f8226c23332a30c33ab743b0b2b06/68747470733a2f2f71696974612d696d6167652d73746f72652e73332e61702d6e6f727468656173742d312e616d617a6f6e6177732e636f6d2f302f3130303734312f66663366353439362d373266642d353831352d656533332d3437303862623364323565392e706e67" width=320 height=240 />
 - Course profile
   -  <img src ="https://camo.qiitausercontent.com/e2d197a1cb6fea4341a8bc7dfd89be86dab3d784/68747470733a2f2f71696974612d696d6167652d73746f72652e73332e61702d6e6f727468656173742d312e616d617a6f6e6177732e636f6d2f302f3130303734312f33393064333061652d653765632d623738652d346365322d3036303232313433663566612e706e67" width=320 height=240 />
-- Display on PiTFT2.4
-  - <img src ="https://pbs.twimg.com/media/EW5TJ96UMAAIXJq?format=png&name=900x900" width=500 height=375 />
+
 
 ## GUI
 
@@ -127,13 +135,13 @@ Some functions depend on your parts.
 | Graph | Yes | Altitude and performance(HR, PWR) |
 | Customize data pages | Yes | With layout.yaml |
 | ANT+ pairing | Yes |  |
-| Adjust wheel size | Yes |  |
-| Adjust altitude | Yes |  |
+| Adjust wheel size | Yes | Set once, store values |
+| Adjust altitude | Yes | Auto adjustments can be made only once, if on the course. |
 | Language localization | Yes | Font and translation file of items are required. |
 
 - Performance graph
   - <img src ="https://camo.qiitausercontent.com/05c8c8facf076fbc3faf6abe848493ac0e82ffc1/68747470733a2f2f71696974612d696d6167652d73746f72652e73332e61702d6e6f727468656173742d312e616d617a6f6e6177732e636f6d2f302f3130303734312f39316336643837382d666436632d383262652d663638642d6533303531323832356631662e706e67" width=320 height=240 />
-- Language localization
+- Language localization（Japanese)
   - <img src ="https://user-images.githubusercontent.com/12926652/90345269-3808ca00-e05a-11ea-91fe-42efbcd6040b.png" width=320 height=310 />
 
 
@@ -143,7 +151,7 @@ Some functions depend on your parts.
 
 it displays three of the people around you in the order in which you caught sensors using ANT+ continuous scanning mode.
 
-- ![multiscan](https://camo.qiitausercontent.com/97904ae429c191677e9ece3cd113e07dfe8eefb2/68747470733a2f2f71696974612d696d6167652d73746f72652e73332e61702d6e6f727468656173742d312e616d617a6f6e6177732e636f6d2f302f3130303734312f33383765663432332d346631642d623332352d666235642d6638623434646332396564362e6a706567)
+- <img src="https://camo.qiitausercontent.com/97904ae429c191677e9ece3cd113e07dfe8eefb2/68747470733a2f2f71696974612d696d6167652d73746f72652e73332e61702d6e6f727468656173742d312e616d617a6f6e6177732e636f6d2f302f3130303734312f33383765663432332d346631642d623332352d666235642d6638623434646332396564362e6a706567" width=320 />
 
 
 # Comparison with other bike computers
@@ -164,26 +172,40 @@ it displays three of the people around you in the order in which you caught sens
 
 ## [Raspberry Pi Zero W / WH](https://www.raspberrypi.org/products/raspberry-pi-zero-w/)
 
-<img src ="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.amazonaws.com%2F0%2F100741%2F41773d64-fc33-cc2a-190a-ce14b7b6b24c.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=393a8049c6f10a90dc8cc1f6e2030426" width=384 height=480 />
+<img src ="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.amazonaws.com%2F0%2F100741%2F41773d64-fc33-cc2a-190a-ce14b7b6b24c.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=393a8049c6f10a90dc8cc1f6e2030426" height=360 />
 
 ## Display
 
 ### [PiTFT 2.4](https://www.adafruit.com/product/2455) 
 
-- (good) easy to assemble
+- (good) easy to assemble and test
 - (bad) hard to see in direct sunshine
-- <img src ="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F100741%2Fe16fc94e-7449-80df-c044-b8705789345e.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=ca5f5dcbdbe33f473187a50c2b585b81" width=480 height=360 />
+- <img src ="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F100741%2Fe16fc94e-7449-80df-c044-b8705789345e.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=ca5f5dcbdbe33f473187a50c2b585b81" width=240 height=180 />
 
 ### [MIP Reflective color LCD module 2.7" w/ backlight](https://international.switch-science.com/catalog/5395/) 
 
-[Connection board for MIP Reflective color LCD to FRDM-K64F](https://international.switch-science.com/catalog/5393/) is also needed
+[Connection board for MIP Reflective color LCD to FRDM-K64F](https://international.switch-science.com/catalog/5393/) (MIP Interface Board) is also needed
 
 - (good) very visible even in direct sunshine
 - (good) ultra-low power consumption
-- (bad) very expensive
+- (good) backlight
+- (bad) very expensive ($170)
 - (bad) 8 colors only
-- recomended if you don't think costs. Commercial products often uses a reflective LCD.
-- ![MIP Reflective color LCD](https://qiita-user-contents.imgix.net/https%3A%2F%2Fpbs.twimg.com%2Fmedia%2FEV8NXnaVAAEjoFS%3Fformat%3Dpng%26name%3Dsmall?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=3b5218cc2e1d11c88eec77bbebadbaef)
+- Recommend if you don't think costs. Commercial products often uses a reflective LCD.
+- <img src="https://qiita-user-contents.imgix.net/https%3A%2F%2Fpbs.twimg.com%2Fmedia%2FEV8NXnaVAAEjoFS%3Fformat%3Dpng%26name%3Dsmall?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=3b5218cc2e1d11c88eec77bbebadbaef" height=480 />
+
+
+### [Adafruit SHARP Memory Display Breakout](https://www.adafruit.com/product/4694)
+
+- (good) very visible
+- (good) ultra-low power consumption
+- (good) not expensive ($45)
+- (good) fast drawing
+- (bad) no backlight
+- (bad) 2 colors only
+- Recommend if you think costs. I think it's better than PiTFT and E-ink displays.
+- <img src="https://user-images.githubusercontent.com/12926652/91795951-fe3ee280-ec59-11ea-8fc1-b5ae35a7306f.png" width=360 />
+
 
 ### [PaPiRus ePaper / eInk Screen HAT for Raspberry Pi](https://uk.pi-supply.com/products/papirus-epaper-eink-screen-hat-for-raspberry-pi) or [DFRobot e-ink Display Module for Raspberry Pi 4B/3B+/Zero W](https://www.dfrobot.com/product-1866.html)
 
@@ -192,9 +214,10 @@ it displays three of the people around you in the order in which you caught sens
 - (bad) slow drawing
 - (bad) no backlight
 - (bad) 2 colors only
-- <img src="https://qiita-user-contents.imgix.net/https%3A%2F%2Fpbs.twimg.com%2Fmedia%2FEWcpqIRVcAECnhm%3Fformat%3Dpng%26name%3Dmedium?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=e63859ff88d76213591bfaab25111aca" width=480 height=360 />
+- <img src="https://qiita-user-contents.imgix.net/https%3A%2F%2Fpbs.twimg.com%2Fmedia%2FEWcpqIRVcAECnhm%3Fformat%3Dpng%26name%3Dmedium?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=e63859ff88d76213591bfaab25111aca" width=240 height=180 />
+
 PaPiRus ePaper / eInk Screen HAT for Raspberry Pi
-- <img src="https://qiita-user-contents.imgix.net/https%3A%2F%2Fpbs.twimg.com%2Fmedia%2FEWvezNTXgAATZuN%3Fformat%3Dpng%26name%3Dmedium?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=5c0e572fce9492179d347bfb58e312fc" width=480 height=360 />
+- <img src="https://qiita-user-contents.imgix.net/https%3A%2F%2Fpbs.twimg.com%2Fmedia%2FEWvezNTXgAATZuN%3Fformat%3Dpng%26name%3Dmedium?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=5c0e572fce9492179d347bfb58e312fc" width=240 height=180 />
 DFRobot e-ink Display Module for Raspberry Pi 4B/3B+/Zero W
 
 ## ANT+ USB dongle
@@ -232,6 +255,8 @@ Adafuit circuitpython library is required except some sensors(\*1). Refer to lea
 
 If you use Sparkfun Qwiic or Adafruit STEMMA QT sensors, [SparkFun Qwiic SHIM for Raspberry Pi](https://www.sparkfun.com/products/15794) is very useful for connecting sensors.
 
+<img src="https://user-images.githubusercontent.com/12926652/91799338-d2bff600-ec61-11ea-8c23-b1ed3a40277a.png" width=160 />
+
 ### pressure, temperature
 
 for altitude, grade, and total ascent/descent
@@ -259,15 +284,17 @@ for auto backlight when using MIP Reflective color LCD
 
 ### Button
 
-must required for displays which don't have buttons like MIP display
+This is essential for displays without buttons, like MIP displays.
 
 - [Button SHIM](https://shop.pimoroni.com/products/button-shim)
+- <img src="https://user-images.githubusercontent.com/12926652/91799330-cfc50580-ec61-11ea-9045-e1991aed205c.png" width=240 />
 
 ### Battery
 
 get battery percent, etc.
 
 - [PiJuice HAT](https://uk.pi-supply.com/products/pijuice-standard) / [PiJuice Zero](https://uk.pi-supply.com/products/pijuice-zero)
+- <img src="https://user-images.githubusercontent.com/12926652/91799334-d0f63280-ec61-11ea-9a96-429991011b08.png" width=240 />
 
 ## SD card
 - youw own (over 8GB)
@@ -281,9 +308,97 @@ get battery percent, etc.
 
 # Assembly
 
+Using many pHATs can be bulky, so it's best to use one pHat only. It's essential to make it compact.
+
+Here are two assembly examples.
+
 ## Displays with headers (PiTFT or E-ink displays)
 
-## Displays with non headers ()
+The PiTFT is easy to get and easy to run the pizero_bikecomputer program on X Window, so it's a good idea to start with this one.
+
+<img src="https://camo.qiitausercontent.com/2847993611146135559cd82c405bc25a7a27c789/68747470733a2f2f71696974612d696d6167652d73746f72652e73332e61702d6e6f727468656173742d312e616d617a6f6e6177732e636f6d2f302f3130303734312f37643739386365392d386237362d313862312d303963372d3835663036383930336638392e706e67" />
+
+- top left: PiTFT 2.4
+- central left: Raspberry Pi Zero WH
+- central right: GPS module
+- bottom left: Enviro pHAT
+- bottom right: ANT+ USB dongle and micro USB OTG Adapter
+
+First of all, connect the Enviro pHAT without the header(I2C SDA, I2C SCL, 3.3V and GND).
+
+<img src="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F100741%2Ff632a516-466c-3ee7-c217-aed050ece23f.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&s=2698e3f7326f9ff9f918b724cbcb43ed" />
+
+<img src="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F100741%2F427c55a8-9927-036f-5f4f-2ad5eb544720.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&s=3616e3461d34423220d117592d206ae7" />
+
+Next, connect the PiTFT.
+
+<img src="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F100741%2F82984a06-6b9d-8afb-3a58-4c5566dd8f3a.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&s=e691e95d858143339d966afe6f646c48" />
+
+Connect the GPS module in the same way as the Enviro pHAT.
+
+| Name | Raspberry Pi | GPS |
+|:-|:-:|:-:|
+| UART TX | IO8 | RX |
+| UART RX | IO10 | TX |
+| GND     | IO6  | GND |
+| VCC     | 5V or 3.3V  | VIN(5V or 3.3V) |
+
+
+Finally, fix each parts with screws.
+To prevent from being disconnected by vibration, fix the USB power cable and ANT+ USB dongle to the PiTFT board with the tape.
+
+<img src="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F100741%2F2f63cc6d-8e14-0320-3227-6e05fa8851cd.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&s=1999499f8315fd2656f9537bc7b6ed48" width=480 />
+
+It is more reliable to solder the PiTFT directly to the header of Raspberry Pi Zero.
+
+<img src="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F100741%2F5aa2428a-9252-4941-5599-a5a8038be925.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&s=92dba596bc8304adfeaab31528681bd8" width=480 />
+
+## Displays with non headers (MIP Reflective color LCD and SHARP Memory Display)
+
+It's quite difficult, but the hardware configuration is better than PiTFT.
+
+<img src="https://user-images.githubusercontent.com/12926652/91796767-f6803d80-ec5b-11ea-9bde-19940a951588.png" width=360 />
+
+- top left: Raspberry Pi Zero WH
+- central left: PiJuice Zero
+- center: GPS module
+- central right: DFRobot BMP160(IMU) and BMP388(pressure and temperature)
+- bottom left: Button SHIM
+- bottom right: SparkFun Qwiic SHIM for Raspberry Pi
+
+Connect the Raspberry Pi Zero to the display.
+Note that the connection between Raspberry Pi and SHARP Memory Display is different from the Adafruit tutorial.
+
+| Name | Raspberry Pi | SHARP Memory Display | MIP Interface Board |
+|:-|:-:|:-:|:-:|
+| GND      | IO25 | GND   | CN1-? |
+| VCOMSEL  | IO11 | EXTIN | CN2-3 |
+| DISP     | IO13 | DISP  | CN1-9 |
+| CS       | IO15 | CS    | CN1-8 |
+| 3.3V     | IO17 | VIN   | CN1-6 |
+| SPI MOSI | IO19 | MOSI  | CN1-7 |
+| SPI SCLK | IO23 | SCLK  | CN1-5 |
+
+
+Reference: https://qiita.com/hishi/items/669ce474fcd76bdce1f1
+
+<img src="https://user-images.githubusercontent.com/12926652/91796771-f7b16a80-ec5b-11ea-9b24-113049fd5998.png" width=360 />
+
+Every time you connect, it is good idea to check the module with the sample program to make sure it works.
+
+<img src="https://user-images.githubusercontent.com/12926652/91796772-f84a0100-ec5b-11ea-8610-508f64692c9e.png" width=360 />
+
+Connect the GPS module and Qwiic SHIM for Raspberry Pi.
+
+<img src="https://user-images.githubusercontent.com/12926652/91796775-f97b2e00-ec5b-11ea-8fea-52658208261f.png" width=360 />
+
+Fix the parts with screws.
+
+<img src="https://user-images.githubusercontent.com/12926652/91796778-fb44f180-ec5b-11ea-91a3-2d929107cfc2.png" width=360 />
+
+Finally, connect the battery for the PiJuice Zero.
+
+<img src="https://user-images.githubusercontent.com/12926652/91796781-fd0eb500-ec5b-11ea-8451-593858d32b17.png" width=360 />
 
 
 # Installation
@@ -419,7 +534,7 @@ $ sudo make install
 $ sudo pip3 install PyQt5-sip
 ```
 
-#### MIP Reflective color LCD module
+#### MIP Reflective color LCD module and Adafruit SHARP Memory Display Breakout
 
 You can use python3-pyqt5 package. Don't need building Qt.
 
@@ -473,7 +588,7 @@ $ sudo pip3 install adafruit-circuitpython-bmp280
 #### Button SHIM
 
 ```
-$ sudo apt-get install buttonshim
+$ sudo apt-get install python3-buttonshim
 ```
 
 #### PiJuice HAT
@@ -534,7 +649,7 @@ $ export TSLIB_TSDEVICE=/dev/input/event0
 $ python3 pizero_bikecomputer.py
 ```
 
-#### MIP Reflective color LCD module or E-Ink displays
+#### MIP Reflective color LCD module, SHARP Memory Display or E-Ink displays
 
 Before run the program, add the following environment variable.
 
@@ -549,7 +664,7 @@ If you use displays in console environment not X Window, install auto-run servic
 
 #### auto-run service
 
-If you use MIP Reflective color LCD module or E-Ink displays, modify install/etc/systemd/system/pizero_bikecomputer.service.
+If you use MIP Reflective color LCD module, SHARP Memory Display or E-Ink displays, modify install/etc/systemd/system/pizero_bikecomputer.service.
 
 ```
 ExecStart=/home/pi/pizero_bikecomputer/exec-mip.sh
@@ -576,6 +691,8 @@ $ sudo systemctl start pizero_bikecomputer.service
 
 
 # Usage
+
+Comming soon!
 
 
 ```
