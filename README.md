@@ -419,12 +419,7 @@ $ cd pizero_bikecomputer
 ```
 
 Note:
-Pyqt version 5.15.0 in macOS has [a qpushbutton issue](https://bugreports.qt.io/browse/QTBUG-84852), so installing version 5.14.2 is recommended.
-
-
-```
-$ pip3 install PyQt5==5.14.2
-```
+Pyqt version 5.15.0 in macOS has [a qpushbutton issue](https://bugreports.qt.io/browse/QTBUG-84852), so installing newest version(5.15.1~) is recommended.
 
 ## Raspberry Pi OS
 
@@ -588,6 +583,7 @@ $ sudo pip3 install adafruit-circuitpython-bmp280
 | [Adafruit](https://www.adafruit.com) | [VCNL4040](https://www.adafruit.com/product/4161) | adafruit-circuitpython-vcnl4040 |
 
 *1 Install manually https://github.com/spacecraft-design-lab-2019/CircuitPython_BMX160
+
 *2 You must enable i2c slowdown. Follow [the adafruit guide](https://learn.adafruit.com/circuitpython-on-raspberrypi-linux/i2c-clock-stretching).
 
 

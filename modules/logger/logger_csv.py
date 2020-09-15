@@ -44,7 +44,8 @@ class LoggerCsv(Logger):
     r = "\
 lap,timer,timestamp,heart_rate,speed,cadence,power,distance,accumulated_power,\
 position_lat,position_long,altitude,gps_altitude,gps_distance,gps_mode,gps_used_sats,gps_total_sats,\
-total_ascent,total_descent,pressure,temperature,heading,gps_track,motion,acc_x,acc_y,acc_z\
+total_ascent,total_descent,pressure,temperature,heading,gps_track,motion,acc_x,acc_y,acc_z,\
+voltage_battery,current_battery,voltage_out,current_out,battery_percentage\
 "
     f.write(r+"\n")
     for row in cur.execute("SELECT %s FROM BIKECOMPUTER_LOG" % r):

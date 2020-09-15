@@ -240,7 +240,6 @@ class SensorGPS(Sensor):
         )
         self.get_satellites_adafruit(g.sats)
         self.get_utc_time(time.strftime("%Y/%m/%d %H:%M:%S +0000", g.timestamp_utc))
-        
       self.get_sleep_time(self.config.G_GPS_INTERVAL)
 
   def init_GPS_values(self):
@@ -313,6 +312,22 @@ class SensorGPS(Sensor):
         self.values['error'] = np.sqrt(self.values['epx'] * self.values['epy'])
     else:
       self.values['error'] = np.nan
+
+    #timestamp
+    self.values['timestamp'] = datetime.datetime.now()
+
+    #course_index
+    #t2 = datetime.datetime.utcnow()
+    self.get_course_index()
+    #print("get_course_index: ", (datetime.datetime.utcnow()-t2).total_seconds(), "sec")
+
+    #modify altitude with course
+    if self.config.logger != None and not self.is_altitude_modified and self.values['on_course_status']:
+      self.config.logger.sensor.sensor_i2c.update_sealevel_pa(
+        self.config.logger.course.altitude[self.values['course_index']]
+        )
+      self.is_altitude_modified = True
+
     
   def get_satellites(self, gs):
     gnum = guse = 0
@@ -341,30 +356,7 @@ class SensorGPS(Sensor):
     self.values['used_sats'] = guse
     self.values['total_sats'] = gnum
     self.values['used_sats_str'] = str(guse) + "/" + str(gnum)
-   
-  def get_utc_time(self, gps_time):
-    #UTC time
-    if gps_time != self.config.G_GPS_NULLVALUE:
-      self.values['time'] = gps_time
-      self.values['utctime'] = self.values['time'][11:16] #[11:19] for HH:MM:SS
-      if not self.is_time_modified:
-        self.is_time_modified = self.set_time()
-    
-    #timestamp
-    self.values['timestamp'] = datetime.datetime.now()
-
-    #course_index
-    #t2 = datetime.datetime.utcnow()
-    self.get_course_index()
-    #print("get_course_index: ", (datetime.datetime.utcnow()-t2).total_seconds(), "sec")
-
-    #modify altitude with course
-    if self.config.logger != None and not self.is_altitude_modified and self.values['on_course_status']:
-      self.config.logger.sensor.sensor_i2c.update_sealevel_pa(
-        self.config.logger.course.altitude[self.values['course_index']]
-        )
-      self.is_altitude_modified = True
-
+  
   def set_timezone(self):
     print('try to modify timezone by gps...')
     lat = self.values['lat']
@@ -374,15 +366,26 @@ class SensorGPS(Sensor):
     tzcmd = ['python3', './scripts/set_timezone.py', str(lat), str(lon)]
     self.config.G_TIMEZONE = self.config.exec_cmd_return_value(tzcmd)
     return True
-
-  def set_time(self):
-    print('try to modify time by gps...')
-
+  
+  def get_utc_time(self, gps_time):
+    #UTC time
+    if gps_time == self.config.G_GPS_NULLVALUE:
+      return
+    
+    self.values['time'] = gps_time
+    self.values['utctime'] = self.values['time'][11:16] #[11:19] for HH:MM:SS
+    
     #for ublox error
     #ValueError: ('Unknown string format:', '1970-01-01T00:00:00(null')
-    if self.values['time'].find('1970-01-01') >= 0:
-      return False
-   
+    #if self.values['time'].find('1970-01-01') >= 0:
+    if self.values['time'][0:4].isdecimal() and int(self.values['time'][0:4]) < 2000:
+      return
+    
+    if not self.is_time_modified:
+      self.is_time_modified = self.set_time()
+  
+  def set_time(self):
+    print('try to modify time by gps...')
     l_time = parser.parse(self.values['time'])
     #kernel version date
     kernel_date = datetime.datetime(2019, 1, 1, 0, 0, 0, 0, tz.tzutc())

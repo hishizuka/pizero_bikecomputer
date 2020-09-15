@@ -399,6 +399,7 @@ class ANTListItemWidget(QtWidgets.QWidget):
 
   def keyPressEvent(self, e):
     if e.key() == QtCore.Qt.Key_Space:
+      self.parent.selected_ant_id = int(self.ant_id)
       self.parent.connect_ant_sensor()
 
   def set_ant_id(self, ant_id, ant_type):

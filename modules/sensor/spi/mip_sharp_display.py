@@ -10,7 +10,7 @@ try:
   _SENSOR_DISPLAY = True
 except:
   pass
-print('  MIP DISPLAY : ',_SENSOR_DISPLAY)
+print('  MIP SHARP DISPLAY : ',_SENSOR_DISPLAY)
 
 # https://qiita.com/hishi/items/669ce474fcd76bdce1f1
 
@@ -18,26 +18,17 @@ print('  MIP DISPLAY : ',_SENSOR_DISPLAY)
 GPIO_DISP = 27 #13 in GPIO.BOARD
 GPIO_SCS = 22 #15 in GPIO.BOARD
 GPIO_VCOMSEL = 17 #11 in GPIO.BOARD
-GPIO_BACKLIGHT = 18 #12 in GPIO.BOARD with hardware PWM in pigpio
 
 #update mode
-# https://www.j-display.com/product/pdf/Datasheet/3LPM027M128C_specification_ver02.pdf
-#0x90 4bit update mode
-#0x80 3bit update mode (fast)
-#0x88 1bit update mode (most fast, but 2-color)
 UPDATE_MODE = 0x80
 
-#BACKLIGHT frequency
-GPIO_BACKLIGHT_FREQ = 64
 
-class MipDisplay():
+class MipSharpDisplay():
 
   config = None
   pi = None
   spi = None
   interval = 0.25
-  brightness_index = 0
-  brightness_table = [0,10,100]
 
   def __init__(self, config):
     
@@ -48,7 +39,7 @@ class MipDisplay():
 
     self.pi = pigpio.pi()
     #self.spi = self.pi.spi_open(0, 2000000, 0)
-    self.spi = self.pi.spi_open(0, 5500000, 0) #overclocking
+    self.spi = self.pi.spi_open(0, 8000000, 0) #overclocking
     time.sleep(0.1)     #Wait
     
     self.pi.set_mode(GPIO_DISP, pigpio.OUTPUT)
@@ -60,19 +51,12 @@ class MipDisplay():
     self.pi.write(GPIO_VCOMSEL, 1)
     time.sleep(0.1)
 
-    self.pi.set_mode(GPIO_BACKLIGHT, pigpio.OUTPUT)
-    self.pi.hardware_PWM(GPIO_BACKLIGHT, GPIO_BACKLIGHT_FREQ, 0)
-
-    if self.config.G_USE_AUTO_BACKLIGHT:
-      self.brightness_index = len(self.brightness_table)
-    else:
-      self.brightness_index = 0
-
-    self.buff_width = int(self.config.G_WIDTH*3/8)+2 #for 3bit update mode
-    self.img_buff_rgb8 = np.empty((self.config.G_HEIGHT,int(self.config.G_WIDTH*3/8)+2), dtype='uint8')
-    self.pre_img = np.zeros((self.config.G_HEIGHT,int(self.config.G_WIDTH*3/8)+2), dtype='uint8')
+    self.buff_width = int(self.config.G_WIDTH/8)+2
+    self.img_buff_rgb8 = np.empty((self.config.G_HEIGHT,int(self.config.G_WIDTH/8)+2), dtype='uint8')
+    self.pre_img = np.zeros((self.config.G_HEIGHT,int(self.config.G_WIDTH/8)+2), dtype='uint8')
     self.img_buff_rgb8[:,0] = UPDATE_MODE
-    self.img_buff_rgb8[:,1] = np.arange(self.config.G_HEIGHT)
+    #address is set in reversed bits
+    self.img_buff_rgb8[:,1] = [int('{:08b}'.format(a)[::-1], 2) for a in range(self.config.G_HEIGHT)]
     if self.config.G_HEIGHT > 255: 
       #self.img_buff_rgb8[:,0] = self.img_buff_rgb8[:,0] + (img_buff_rgb8[:,1] >> 8)
       self.img_buff_rgb8[:,0] = self.img_buff_rgb8[:,0] + (np.arange(self.config.G_HEIGHT) >> 8)
@@ -85,7 +69,6 @@ class MipDisplay():
     self.pi.spi_write(self.spi, [0b00100000,0]) # ALL CLEAR MODE
     self.pi.write(GPIO_SCS, 0)
     time.sleep(0.000006)
-    self.set_brightness(0)
   
   def no_update(self):
     self.pi.write(GPIO_SCS, 1)
@@ -132,13 +115,13 @@ class MipDisplay():
 
   def update(self, image):
 
-    im_array = np.array(image)
+    im_array = np.array(image.convert("1"))
 
     #t = datetime.datetime.now()
     
-    #3bit mode update
+    #update
     self.img_buff_rgb8[:,2:] = np.packbits(
-      ((im_array > 128).astype('uint8')).reshape(self.config.G_HEIGHT, self.config.G_WIDTH*3),
+      im_array.astype('uint8').reshape(self.config.G_HEIGHT, self.config.G_WIDTH),
       axis=1
       )
     img_bytes = bytearray()
@@ -166,36 +149,7 @@ class MipDisplay():
       self.pi.write(GPIO_SCS, 0)
 
     #print("Drawing images... :", (datetime.datetime.now()-t).total_seconds(),"sec")
-
-  def change_brightness(self):
-    
-    #brightness is changing as followings,
-    # [self.brightness_table(0, b1, b2, ..., bmax), G_USE_AUTO_BACKLIGHT]
-    self.brightness_index = (self.brightness_index+1)%(len(self.brightness_table)+1)
-
-    if self.brightness_index == len(self.brightness_table):
-      self.config.G_USE_AUTO_BACKLIGHT = True
-    else:
-      self.config.G_USE_AUTO_BACKLIGHT = False
-      b = self.brightness_table[self.brightness_index]
-      self.set_brightness(b)
   
-  def set_brightness(self, b):
-    if not _SENSOR_DISPLAY:
-      return
-    self.pi.hardware_PWM(GPIO_BACKLIGHT, GPIO_BACKLIGHT_FREQ, b*10000)
-
-  def backlight_blink(self):
-    if not _SENSOR_DISPLAY:
-      return
-    for x in range(2):
-      for pw in range(0,100,1):
-        self.pi.hardware_PWM(GPIO_BACKLIGHT, GPIO_BACKLIGHT_FREQ, pw*10000)
-        time.sleep(0.05)
-      for pw in range(100,0,-1):
-        self.pi.hardware_PWM(GPIO_BACKLIGHT, GPIO_BACKLIGHT_FREQ, pw*10000)
-        time.sleep(0.05)
-
   def quit(self):
     if not _SENSOR_DISPLAY:
       return

@@ -114,11 +114,11 @@ class LoaderTcx():
       match_course = pattern["course_point"].search(tcx)
       if match_course:
         course_point = match_course.group('text')
-        self.point_name = np.array([m.group('text').strip() for m in pattern["course_name"].finditer(course_point)])
+        self.point_name = [m.group('text').strip() for m in pattern["course_name"].finditer(course_point)]
         self.point_latitude = np.array([float(m.group('text').strip()) for m in pattern["latitude"].finditer(course_point)])
         self.point_longitude = np.array([float(m.group('text').strip()) for m in pattern["longitude"].finditer(course_point)])
-        self.point_type = np.array([m.group('text').strip() for m in pattern["course_point_type"].finditer(course_point)])
-        self.point_notes = np.array([m.group('text').strip() for m in pattern["course_notes"].finditer(course_point)])
+        self.point_type = [m.group('text').strip() for m in pattern["course_point_type"].finditer(course_point)]
+        self.point_notes = [m.group('text').strip() for m in pattern["course_notes"].finditer(course_point)]
     
     print("\tlogger_core : load_course : read loop block(regex): ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
     
@@ -148,7 +148,7 @@ class LoaderTcx():
     self.longitude = self.longitude[valid_points]
     self.distance = self.distance[valid_points]/1000 #[km]
     self.altitude = self.altitude[valid_points] #[m]
-    print("VALID", np.sum(valid_points))
+    #print("VALID", np.sum(valid_points))
     self.azimuth = self.config.calc_azimuth(self.latitude, self.longitude)
     self.slope = 100*np.diff(self.altitude)/np.diff(1000*self.distance)
     
@@ -167,7 +167,7 @@ class LoaderTcx():
 
     #print(self.altitude[0:10])
     #print(self.distance[0:10], self.distance[-1])
-    print("azimuth :", np.sum(azimuth_cond), "alt:", np.sum(alt_cond), "total:", np.sum(cond))
+    #print("azimuth :", np.sum(azimuth_cond), "alt:", np.sum(alt_cond), "total:", np.sum(cond))
     #print("azimuth :", azimuth_diff[0:15])
     #print("alt df  :", alt_diff[0:15])
     #print("dist df :", np.round(1000*np.diff(self.distance),1)[0:15])
@@ -215,7 +215,7 @@ class LoaderTcx():
     if diff_dist_max > self.config.G_GPS_SEARCH_RANGE: #[km]
       self.config.G_GPS_SEARCH_RANGE = diff_dist_max
     #print("G_GPS_ON_ROUTE_CUTOFF[m]:", self.config.G_GPS_ON_ROUTE_CUTOFF)
-    print("G_GPS_SEARCH_RANGE[km]:", self.config.G_GPS_SEARCH_RANGE)
+    #print("G_GPS_SEARCH_RANGE[km]:", self.config.G_GPS_SEARCH_RANGE)
 
     print("\tlogger_core : load_course : read loop block(downsampling): ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
     t = datetime.datetime.utcnow()
@@ -329,20 +329,24 @@ class LoaderTcx():
 
     #add course point start and end
     if len(self.point_latitude) > 0 and self.point_distance[0] != 0.0:
-      self.point_name = np.insert(self.point_name, 0, "Start")
+      self.point_name.insert(0, "Start")
       self.point_latitude = np.insert(self.point_latitude, 0, self.latitude[0])
       self.point_longitude = np.insert(self.point_longitude, 0, self.longitude[0])
-      self.point_type = np.insert(self.point_type, 0, "")
+      self.point_type.insert(0, "")
       self.point_distance = np.insert(self.point_distance, 0, 0.0)
       self.point_altitude = np.insert(self.point_altitude, 0, self.altitude[0])
     if len(self.point_latitude) > 0 and self.point_distance[-1] != self.distance[-1]:
-      self.point_name = np.append(self.point_name, "End")
+      self.point_name.append("End")
       self.point_latitude = np.append(self.point_latitude, self.latitude[-1])
       self.point_longitude = np.append(self.point_longitude, self.longitude[-1])
-      self.point_type = np.append(self.point_type, "")
+      self.point_type.append("")
       self.point_distance = np.append(self.point_distance, self.distance[-1])
       self.point_altitude = np.append(self.point_altitude, self.altitude[-1])
     
+    self.point_name = np.array(self.point_name)
+    self.point_type = np.array(self.point_type)
+    self.point_name = np.array(self.point_name)
+
     print("\tlogger_core : load_course : slope and course distance: ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
    
   def read_from_xml(self):
@@ -374,43 +378,7 @@ class LoaderTcx():
 
     TCDv2_prefix = "{"+NS['TCDv2']+"}"
 
-    point_name = []
-    point_latitude = []
-    point_longitude = []
-    point_type = []
-    point_notes = []
-
-    for cp in course_points:
-      name = latitude = longitude = p_type = notes = None
-      #search
-      for child in cp:
-        if child.tag == TCDv2_prefix+"Name":
-          name = child.text
-        elif child.tag == TCDv2_prefix+"Position":
-          for position_child in child:
-            if position_child.tag == TCDv2_prefix+"LatitudeDegrees":
-              latitude = float(position_child.text)
-            elif position_child.tag == TCDv2_prefix+"LongitudeDegrees":
-              longitude = float(position_child.text)
-        elif child.tag == TCDv2_prefix+"PointType":
-          p_type = child.text
-        elif child.tag == TCDv2_prefix+"Notes":
-          notes = child.text
-
-      if name != None and latitude != None and longitude != None and p_type != None and notes != None:
-        point_name.append(name)
-        point_latitude.append(latitude)
-        point_longitude.append(longitude)
-        point_type.append(p_type)
-        point_notes.append(notes)
-
-    print("self.point_name.dtype:", self.point_name.dtype)
-    self.point_name = np.array(point_name)
-    self.point_latitude = np.array(point_latitude)
-    self.point_longitude = np.array(point_longitude)
-    self.point_type = np.array(point_type)
-    self.point_notes = np.array(point_notes)
-
+    #course data
     track_points_n = len(track_points)
     self.distance = np.empty(track_points_n)
     self.altitude = np.empty(track_points_n)
@@ -441,6 +409,43 @@ class LoaderTcx():
     self.longitude = self.longitude[0:tmp_i]
     self.distance = self.distance[0:tmp_i]
     self.altitude = self.altitude[0:tmp_i]
+    
+    #course points
+    point_name = []
+    point_latitude = []
+    point_longitude = []
+    point_type = []
+    point_notes = []
+
+    for cp in course_points:
+      name = latitude = longitude = p_type = notes = None
+      #search
+      for child in cp:
+        if child.tag == TCDv2_prefix+"Name":
+          name = child.text
+        elif child.tag == TCDv2_prefix+"Position":
+          for position_child in child:
+            if position_child.tag == TCDv2_prefix+"LatitudeDegrees":
+              latitude = float(position_child.text)
+            elif position_child.tag == TCDv2_prefix+"LongitudeDegrees":
+              longitude = float(position_child.text)
+        elif child.tag == TCDv2_prefix+"PointType":
+          p_type = child.text
+        elif child.tag == TCDv2_prefix+"Notes":
+          notes = child.text
+
+      if name != None and latitude != None and longitude != None and p_type != None and notes != None:
+        point_name.append(name)
+        point_latitude.append(latitude)
+        point_longitude.append(longitude)
+        point_type.append(p_type)
+        point_notes.append(notes)
+
+    self.point_name = np.array(point_name)
+    self.point_latitude = np.array(point_latitude)
+    self.point_longitude = np.array(point_longitude)
+    self.point_type = np.array(point_type)
+    self.point_notes = np.array(point_notes)
 
     print("\tlogger_core : read_from_xml : read values: ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
 

@@ -142,11 +142,11 @@ class AltitudeGraphWidget(ScreenWidget):
     self.pen1 = pg.mkPen(color=(0,0,0), width=2)
     self.pen2 = pg.mkPen(color=(255,0,0), width=3)
 
-    self.y_range = 5
-    self.y_shift = self.y_range * 0.25
+    self.y_range = 15
+    self.y_shift = 0 #self.y_ra  nge * 0.25
 
   def make_item_layout(self):
-    self.item_layout = {"Grade":(0, 0), "Grade(spd)":(0, 1), "GlideRatio":(0, 2), "Ascent":(0, 3)}
+    self.item_layout = {"Grade":(0, 0), "Grade(spd)":(0, 1), "Altitude":(0, 2), "Alt.(GPS)":(0, 3)}
 
   def add_extra(self):
     self.layout.addWidget(self.plot, 1, 0, 2, 4)

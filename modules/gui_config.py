@@ -123,8 +123,9 @@ class GUI_Config():
     "ACC_X":("{0:^1.1f}","self.sensor.values['I2C']['acc'][0]"),
     "ACC_Y":("{0:^1.1f}","self.sensor.values['I2C']['acc'][1]"),
     "ACC_Z":("{0:^1.1f}","self.sensor.values['I2C']['acc'][2]"),
-    #"Heading":("{0:^3.0f}","self.sensor.values['I2C']['heading']"),
+    "Battery":("{0:^1.0f}%","self.sensor.values['I2C']['battery_percentage']"),
     "Heading":("{0:^s}","self.sensor.values['I2C']['heading_str']"),
+    "Pitch":("{0:^1.0f}","self.sensor.values['I2C']['modified_pitch']"),
     #General
     "Timer":("timer","self.logger.count"),
     "LapTime":("timer","self.logger.count_lap"),

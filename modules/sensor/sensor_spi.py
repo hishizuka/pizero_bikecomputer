@@ -38,6 +38,13 @@ class SensorSPI(Sensor):
         self.send_display = True
       except:
         pass
+    elif self.config.G_DISPLAY == 'MIP_Sharp':
+      #try:
+      from .spi.mip_sharp_display import MipSharpDisplay
+      self.display = MipSharpDisplay(self.config)
+      self.send_display = True
+      #except:
+      #  pass
     elif self.config.G_DISPLAY == 'Papirus':
       try:
         from .spi.papirus_display import PapirusDisplay
@@ -58,7 +65,7 @@ class SensorSPI(Sensor):
       return
     if self.config.G_DISPLAY == 'PiTFT':
       pass
-    elif self.config.G_DISPLAY in ['MIP', 'Papirus', 'DFRobot_RPi_Display'] and self.send_display:
+    elif self.config.G_DISPLAY in ['MIP', 'MIP_Sharp', 'Papirus', 'DFRobot_RPi_Display'] and self.send_display:
       self.display.quit()
     
   def update(self, buf):
@@ -67,7 +74,7 @@ class SensorSPI(Sensor):
 
     if self.config.G_DISPLAY == 'PiTFT':
       pass
-    elif self.config.G_DISPLAY in ['MIP', 'Papirus',] and self.send_display:
+    elif self.config.G_DISPLAY in ['MIP', 'MIP_Sharp', 'Papirus',] and self.send_display:
       self.display.update(Image.open(buf))
     elif self.config.G_DISPLAY in ['DFRobot_RPi_Display'] and self.send_display:
       self.display.update(buf)

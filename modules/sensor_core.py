@@ -343,7 +343,8 @@ class SensorCore():
         self.values['integrated'][g][0:-1] = self.values['integrated'][g][1:]
       self.values['integrated']['hr_graph'][-1] = hr
       self.values['integrated']['power_graph'][-1] = pwr
-      self.values['integrated']['altitude_kf_graph'][-1] = v['I2C']['altitude_kalman']
+      #self.values['integrated']['altitude_kf_graph'][-1] = v['I2C']['altitude_kalman']
+      self.values['integrated']['altitude_kf_graph'][-1] = v['GPS']['alt']
       self.values['integrated']['altitude_graph'][-1] = v['I2C']['altitude']
 
       time_profile.append(datetime.datetime.now())

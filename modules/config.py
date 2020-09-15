@@ -230,11 +230,12 @@ class Config():
   #fullscreen switch (overwritten with setting.conf)
   G_FULLSCREEN = False
   #display type (overwritten with setting.conf)
-  G_DISPLAY = 'PiTFT' #PiTFT, MIP, Papirus
+  G_DISPLAY = 'PiTFT' #PiTFT, MIP, Papirus, MIP_Sharp
   #screen size (need to add when adding new device)
   G_AVAILABLE_DISPLAY = {
     'PiTFT': {'size':(320, 240),'touch':True},
     'MIP': {'size':(400, 240),'touch':False},
+    'MIP_Sharp': {'size':(400, 240),'touch':False},
     #'MIP': {'size':(640, 480),'touch':False},
     'Papirus': {'size':(264, 176),'touch':False},
     'DFRobot_RPi_Display': {'size':(250, 122),'touch':False}
@@ -310,7 +311,7 @@ class Config():
   #IMU axis conversion
   #  X: to North (up rotation is plus)
   #  Y: to West (up rotation is plus)
-  #  Z: to down (plus)
+  #  Z: to down (defualt is plus)
   G_IMU_AXIS_CONVERSION = {
     'STATUS': False,
     'COEF': np.ones(3) #X, Y, Z
@@ -451,7 +452,7 @@ class Config():
     self.config_parser = configparser.ConfigParser()
     if os.path.exists(self.config_file):
       self.read_config()
-    
+
     #set dir(for using from pitft desktop)
     if self.G_IS_RASPI:
       self.G_SCREENSHOT_DIR = self.G_INSTALL_PATH + self.G_SCREENSHOT_DIR 
