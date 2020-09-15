@@ -11,6 +11,8 @@ a GPS and ANT+ bike computer based on Raspberry Pi Zero (W, WH)
 - [Comparison with other bike computers](#comparison)
 - [Parts List](#parts-list)
 - [Assembly](#assembly)
+  - [Displays with headers](#displays-with-headers-pitft-or-e-ink-displays)
+  - [Displays with non headers](#displays-without-headers-mip-reflective-color-lcd-and-sharp-memory-display)
 - [Installation](#installation)
   - [macOS or Linux](#macOS-or-Linux)
   - [Raspberry Pi OS](#Raspberry-Pi-OS)
@@ -274,6 +276,7 @@ Accelerometer is used for stop detection when using GPS.Magnetometer sensors are
 - [LSM9DS1](https://www.sparkfun.com/products/13944): Accel / Gyro / Mag 
 - [LIS3MDL](https://www.adafruit.com/product/4485): Mag 
 - [BMX160](https://www.dfrobot.com/product-1928.html): Accel / Gyro / Mag
+- [BNO055](https://www.adafruit.com/product/4646): Accel / Gyro / Mag / Euler / Quatenrion
 
 ### Light
 
@@ -353,7 +356,7 @@ It is more reliable to solder the PiTFT directly to the header of Raspberry Pi Z
 
 <img src="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F100741%2F5aa2428a-9252-4941-5599-a5a8038be925.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&s=92dba596bc8304adfeaab31528681bd8" width=480 />
 
-## Displays with non headers (MIP Reflective color LCD and SHARP Memory Display)
+## Displays without headers (MIP Reflective color LCD and SHARP Memory Display)
 
 It's quite difficult, but the hardware configuration is better than PiTFT.
 
@@ -581,9 +584,11 @@ $ sudo pip3 install adafruit-circuitpython-bmp280
 | [DFRobot](https://www.dfrobot.com) | [BMX160+BMP388](https://www.dfrobot.com/product-1928.html) | adafruit-circuitpython-bmp3xx, BMX160(*1) | 
 | [Adafruit](https://www.adafruit.com) | [LSM6DS33 + LIS3MDL](https://www.adafruit.com/product/4485) | adafruit-circuitpython-lsm6ds adafruit-circuitpython-lis3mdl |
 | [Adafruit](https://www.adafruit.com) | [LSM9DS1](https://www.adafruit.com/product/4634) | adafruit-circuitpython-lsm9ds1 | 
+| [Adafruit](https://www.adafruit.com) | [BNO055](https://www.adafruit.com/product/4646) | adafruit-circuitpython-bno055 (*2) | 
 | [Adafruit](https://www.adafruit.com) | [VCNL4040](https://www.adafruit.com/product/4161) | adafruit-circuitpython-vcnl4040 |
 
 *1 Install manually https://github.com/spacecraft-design-lab-2019/CircuitPython_BMX160
+*2 You must enable i2c slowdown. Follow [the adafruit guide](https://learn.adafruit.com/circuitpython-on-raspberrypi-linux/i2c-clock-stretching).
 
 
 #### Button SHIM
