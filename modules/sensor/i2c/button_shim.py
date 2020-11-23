@@ -39,12 +39,14 @@ class ButtonShim():
 
   config = None
   pre_index = -1
+  mode = 'MAIN'
+  change = False
 
   def __init__(self, config):
     self.config = config
     buttonshim.set_pixel(0x00, 0x00, 0x00)
 
-  def set_func(self):
+  def set_func(self, mode=None):
     global FUNC_A, FUNC_B, FUNC_C, FUNC_D, FUNC_E, FUNC_A_LONG, FUNC_B_LONG, FUNC_C_LONG, FUNC_D_LONG, FUNC_E_LONG
     if self.config.gui == None:
       return
@@ -53,26 +55,34 @@ class ButtonShim():
     s = self.config.gui.stack_widget
     i = s.currentIndex()
     b = self.config.G_GPIO_BUTTON_DEF['Button_Shim']
+    b_m_g = self.config.G_BUTTON_MODE_GROUPS
+    b_m_i = self.config.G_BUTTON_MODE_INDEX
     
-    m = 'MAIN'
     if i == 1:
-      m = 'MAIN'
-    elif i >= 0:
-      m = 'MENU'
+      self.mode = 'MAIN'
+      if mode != None and mode in b_m_g.keys():
+        b_m_i[mode] = int(b_m_i[mode] + 1) % len(b_m_g[mode])
+        self.mode = b_m_g[mode][b_m_i[mode]]
+        self.change = True
+    elif i >= 2:
+      self.mode = 'MENU'
     
     if i != self.pre_index:
-      FUNC_A = eval('self.config.gui.'+b[m]['A'][0])
-      FUNC_B = eval('self.config.gui.'+b[m]['B'][0])
-      FUNC_C = eval('self.config.gui.'+b[m]['C'][0])
-      FUNC_D = eval('self.config.gui.'+b[m]['D'][0])
-      FUNC_E = eval('self.config.gui.'+b[m]['E'][0])
-      
-      FUNC_A_LONG = eval('self.config.gui.'+b[m]['A'][1])
-      FUNC_B_LONG = eval('self.config.gui.'+b[m]['B'][1])
-      FUNC_C_LONG = eval('self.config.gui.'+b[m]['C'][1])
-      FUNC_D_LONG = eval('self.config.gui.'+b[m]['D'][1])
-      FUNC_E_LONG = eval('self.config.gui.'+b[m]['E'][1])
-
+      self.change = True
+    
+    if self.change:
+      FUNC_A = eval('self.config.gui.'+b[self.mode]['A'][0])
+      FUNC_B = eval('self.config.gui.'+b[self.mode]['B'][0])
+      FUNC_C = eval('self.config.gui.'+b[self.mode]['C'][0])
+      FUNC_D = eval('self.config.gui.'+b[self.mode]['D'][0])
+      FUNC_E = eval('self.config.gui.'+b[self.mode]['E'][0])
+      FUNC_A_LONG = eval('self.config.gui.'+b[self.mode]['A'][1])
+      FUNC_B_LONG = eval('self.config.gui.'+b[self.mode]['B'][1])
+      FUNC_C_LONG = eval('self.config.gui.'+b[self.mode]['C'][1])
+      FUNC_D_LONG = eval('self.config.gui.'+b[self.mode]['D'][1])
+      FUNC_E_LONG = eval('self.config.gui.'+b[self.mode]['E'][1])
+      self.change = False
+    
     self.pre_index = i
 
   # Button A

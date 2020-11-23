@@ -125,9 +125,24 @@ class BaseMapWidget(ScreenWidget):
   #course points
   course_points_label = []
 
+  #signal for physical button
+  signal_move_x_plus = QtCore.pyqtSignal()
+  signal_move_x_minus = QtCore.pyqtSignal()
+  signal_move_y_plus = QtCore.pyqtSignal()
+  signal_move_y_minus = QtCore.pyqtSignal()
+  signal_zoom_plus = QtCore.pyqtSignal()
+  signal_zoom_minus = QtCore.pyqtSignal()
+
   def init_extra(self):
     self.gps_values = self.config.logger.sensor.values['GPS']
     self.gps_sensor = self.config.logger.sensor.sensor_gps
+    
+    self.signal_move_x_plus.connect(self.move_x_plus)
+    self.signal_move_x_minus.connect(self.move_x_minus)
+    self.signal_move_y_plus.connect(self.move_y_plus)
+    self.signal_move_y_minus.connect(self.move_y_minus)
+    self.signal_zoom_plus.connect(self.zoom_plus)
+    self.signal_zoom_minus.connect(self.zoom_minus)
   
   def setup_ui_extra(self):
     #main graph from pyqtgraph 
@@ -167,7 +182,7 @@ class BaseMapWidget(ScreenWidget):
 
     self.button['lock'].clicked.connect(self.switch_lock)
     self.button['right'].clicked.connect(self.move_x_plus)
-    self.button['left'].clicked.connect(self.move_x_minux)
+    self.button['left'].clicked.connect(self.move_x_minus)
     self.button['up'].clicked.connect(self.move_y_plus)
     self.button['down'].clicked.connect(self.move_y_minus)
     self.button['zoomdown'].clicked.connect(self.zoom_minus)
@@ -199,14 +214,19 @@ class BaseMapWidget(ScreenWidget):
   #def set_font_size(self):
   #  self.font_size = int(length / 8)
 
+  def lock_off(self):
+    self.lock_status = False
+  def lock_on(self):
+    self.lock_status = True
   def switch_lock(self):
     if self.lock_status:
-      self.lock_status = False
+      self.lock_off()
     else:
-      self.lock_status = True
+      self.lock_on()
+
   def move_x_plus(self):
     self.move_x(+self.zoom/2)
-  def move_x_minux(self):
+  def move_x_minus(self):
     self.move_x(-self.zoom/2)
   def move_y_plus(self):
     self.move_y(+self.zoom/2)
@@ -292,7 +312,7 @@ class CourseProfileGraphWidget(BaseMapWidget):
   #load course profile and display
   def load_course(self):
 
-    if len(self.config.logger.course.distance) == 0:
+    if len(self.config.logger.course.distance) == 0 or len(self.config.logger.course.altitude) == 0:
       return
     
     t = datetime.datetime.utcnow()
@@ -365,7 +385,7 @@ class CourseProfileGraphWidget(BaseMapWidget):
 
   def update_extra(self):
 
-    if len(self.config.logger.course.distance) == 0:
+    if len(self.config.logger.course.distance) == 0 or len(self.config.logger.course.altitude) == 0:
       return
 
     if not self.course_loaded:

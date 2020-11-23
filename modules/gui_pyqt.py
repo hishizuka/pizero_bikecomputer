@@ -239,8 +239,8 @@ class GUI_PyQt(QtCore.QObject):
 
     #button
     self.button_box_widget = ButtonBoxWidget(self.main_widget, self.config)
-    self.button_box_widget.start_button.clicked.connect(self.start_and_stop_quit)
-    self.button_box_widget.lap_button.clicked.connect(self.lap_reset)
+    self.button_box_widget.start_button.clicked.connect(self.gui_start_and_stop_quit)
+    self.button_box_widget.lap_button.clicked.connect(self.gui_lap_reset)
     self.button_box_widget.menu_button.clicked.connect(self.goto_menu)
     self.button_box_widget.scrollnext_button.clicked.connect(self.scroll_next)
     self.button_box_widget.scrollprev_button.clicked.connect(self.scroll_prev)
@@ -290,6 +290,15 @@ class GUI_PyQt(QtCore.QObject):
   #def send_key(self, e):
   #  if e.key() == QtCore.Qt.Key_N:
   #    self.scroll_next()
+
+  def start_and_stop_manual(self):
+    self.logger.start_and_stop_manual()
+
+  def count_laps(self):
+    self.logger.count_laps()
+  
+  def reset_count(self):
+    self.logger.reset_count()
  
   def press_key(self, key):
     e_press = QtGui.QKeyEvent(QtCore.QEvent.KeyPress, key, QtCore.Qt.NoModifier, None)
@@ -314,15 +323,61 @@ class GUI_PyQt(QtCore.QObject):
   def scroll_prev(self):
     self.signal_next_button.emit(-1)
   
-  def scroll_menu(self):
+  def enter_menu(self):
     i = self.stack_widget.currentIndex()
     if i == 1:
       #goto_menu:
       self.signal_menu_button.emit(2)
     elif i >= 2:
       #back
-      self.signal_menu_back_button.emit()
+      self.back_menu()
   
+  def back_menu(self):
+    self.signal_menu_back_button.emit()
+  
+  def change_mode(self):
+    #if displays MAP, change MAP_1, MAP_2, MAIN
+    #check MAIN
+    if self.stack_widget.currentIndex() != 1:
+      return
+    #check MAP
+    w = self.main_page.widget(self.main_page.currentIndex())
+    w_name = w.__class__.__name__
+    b_m_g = self.config.G_BUTTON_MODE_GROUPS
+    b_m_i = self.config.G_BUTTON_MODE_INDEX
+    if w_name == 'SimpleMapWidget':
+      #change_mode
+      m = 'MAP'
+      self.config.logger.sensor.sensor_i2c.change_button_mode(m)
+      if b_m_g[m][b_m_i[m]] == "MAIN":
+        w.lock_on()
+      else:
+        w.lock_off()
+  
+  def map_move_x_plus(self):
+    self.map_method("move_x_plus")
+
+  def map_move_x_minus(self):
+    self.map_method("move_x_minus")
+
+  def map_move_y_plus(self):
+    self.map_method("move_y_plus")
+
+  def map_move_y_minus(self):
+    self.map_method("move_y_minus")
+  
+  def map_zoom_plus(self):
+    self.map_method("zoom_plus")
+
+  def map_zoom_minus(self):
+    self.map_method("zoom_minus")
+
+  def map_method(self, mode):
+    w = self.main_page.widget(self.main_page.currentIndex())
+    widget_name = w.__class__.__name__
+    if widget_name == 'SimpleMapWidget':
+      eval('w.signal_'+mode+'.emit()')
+
   def dummy(self):
     pass
 
@@ -355,7 +410,7 @@ class GUI_PyQt(QtCore.QObject):
     self.config.logger.sensor.sensor_spi.update(io.BytesIO(self.display_buffer.data()))
     self.display_buffer.close()
   
-  def lap_reset(self):
+  def gui_lap_reset(self):
     if self.button_box_widget.lap_button.isDown():
       if self.button_box_widget.lap_button._state == 0:
         self.button_box_widget.lap_button._state = 1
@@ -373,7 +428,7 @@ class GUI_PyQt(QtCore.QObject):
     else:
       self.logger.count_laps()
 
-  def start_and_stop_quit(self):
+  def gui_start_and_stop_quit(self):
     if self.button_box_widget.start_button.isDown():
       if self.button_box_widget.start_button._state == 0:
         self.button_box_widget.start_button._state = 1
@@ -404,8 +459,7 @@ class GUI_PyQt(QtCore.QObject):
     self.stack_widget.setCurrentIndex(page)
     
   def change_menu_back(self):
-    w = self.stack_widget.currentWidget()
-    w.back()
+    self.stack_widget.currentWidget().back()
 
   def goto_menu(self):
     self.change_menu_page(self.gui_config.G_GUI_INDEX['menu'])
