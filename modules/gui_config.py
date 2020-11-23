@@ -127,10 +127,13 @@ class GUI_Config():
     "Heading":("{0:^s}","self.sensor.values['I2C']['heading_str']"),
     "Pitch":("{0:^1.0f}","self.sensor.values['I2C']['modified_pitch']"),
     #General
-    "Timer":("timer","self.logger.count"),
-    "LapTime":("timer","self.logger.count_lap"),
-    "Lap":("{0:^d}","self.logger.lap"),
+    "Timer":("timer","self.logger.values['count']"),
+    "LapTime":("timer","self.logger.values['count_lap']"),
+    "Lap":("{0:^d}","self.logger.values['lap']"),
     "Time":("time","0"),
+    "ElapsedTime":("timer","self.logger.values['elapsed_time']"),
+    "GrossAveSPD":(G_UNIT["Speed"],"self.logger.values['gross_ave_spd']"),
+    "GrossDiffTime":("{0:^s}","self.logger.values['gross_diff_time']"),
     "CPU_MEM":("{0:^s}","self.sensor.values['CPU_MEM']"),
     #Statistics
     #Pre Lap Average or total
