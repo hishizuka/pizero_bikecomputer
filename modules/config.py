@@ -11,8 +11,10 @@ import threading
 import queue
 import urllib.error
 import urllib.request
+import urllib.parse
 import traceback
 import json
+import pickle
 import socket
 from math import sin, cos, acos, radians, sqrt, tan, degrees
 
@@ -57,6 +59,9 @@ class Config():
 
   #calculate index on course
   G_COURSE_INDEXING = True
+
+  #gross average speed
+  G_GROSS_AVE_SPEED = 15 #[km/h]
 
   ###########################
   # fixed or pointer values #
@@ -123,9 +128,14 @@ class Config():
     }, 
   }
 
-  #config file (use in config only)
+  #config file (store user specified values. readable and editable.)
   config_file = "setting.conf"
   config_parser = None
+  #config file (store temporary values. unreadable and uneditable.)
+  config_pickle_file = "setting.pickle"
+  config_pickle = {}
+  config_pickle_write_time = datetime.datetime.utcnow()
+  config_pickle_interval = 10 #[s]
 
   #screenshot dir
   G_SCREENSHOT_DIR = 'screenshot/'
@@ -280,7 +290,7 @@ class Config():
   #max zoom
   G_MAX_ZOOM = 0
   #interval distance when mapping track
-  G_GPS_DISPLAY_INTERVAL_DISTANCE = 5 #m
+  G_GPS_DISPLAY_INTERVAL_DISTANCE = 5 # m
   #for map dummy center: Tokyo station in Japan
   G_DUMMY_POS_X = 139.767008
   G_DUMMY_POS_Y = 35.681929
@@ -289,6 +299,10 @@ class Config():
   G_GPS_SEARCH_RANGE = 5 #[km] #100km/h -> 27.7m/s
 
   #STRAVA token (need to write setting.conf manually)
+  G_STRAVA_API_URL = {
+    "OAUTH": "https://www.strava.com/oauth/token",
+    "UPLOAD": "https://www.strava.com/api/v3/uploads",
+  }
   G_STRAVA_API = {
     "CLIENT_ID": "",
     "CLIENT_SECRET": "",
@@ -303,6 +317,16 @@ class Config():
   }
   G_STRAVA_UPLOAD_FILE = ""
 
+  #GOOGLE DIRECTION API TOKEN
+  G_GOOGLE_DIRECTION_API = {
+    "TOKEN": "",
+  }
+  G_GOOGLE_DIRECTION_API_URL = "https://maps.googleapis.com/maps/api/directions/json?units=metric&language=ja"
+  G_GOOGLE_DIRECTION_API_MODE = {
+    "BICYCLING": "mode=bicycling",
+    "DRIVING": "mode=driving&avoid=tolls|highways",
+  }
+  
   #auto backlight with spi mip display
   #(PiTFT actually needs max brightness under sunlights, so there are no implementation with PiTFT)
   G_USE_AUTO_BACKLIGHT = True
@@ -328,20 +352,20 @@ class Config():
   #long press threshold of buttons [sec]
   G_BUTTON_LONG_PRESS = 2
 
-  #GPIO button action (short press / long press) from gui (or G_GUIKivy)
-  # use in SensorGPIO.my_callback(self, channel)
+  #GPIO button action (short press / long press) from gui_pyqt
+  # call from SensorGPIO.my_callback(self, channel)
   # number is from GPIO.setmode(GPIO.BCM)
   G_GPIO_BUTTON_DEF = {
     'PiTFT' : {
       'MAIN':{
         5:("scroll_prev()","dummy()"),
-        6:("logger.count_laps()","logger.reset_count()"),
+        6:("count_laps()","reset_count()"),
         12:("brightness_control()","dummy()"),
-        13:("logger.start_and_stop_manual()","quit()"),
-        16:("scroll_next()","scroll_menu()"),
+        13:("start_and_stop_manual()","quit()"),
+        16:("scroll_next()","enter_menu()"),
         },
       'MENU':{
-        5:("scroll_menu()","dummy()"),
+        5:("back_menu()","dummy()"),
         6:("dummy()","dummy()"),
         12:("press_space()","dummy()"),
         13:("press_tab()","dummy()"),
@@ -351,12 +375,12 @@ class Config():
     'Papirus' : {
       'MAIN':{
         16:("scroll_prev()","dummy()"),#SW1(left)
-        26:("logger.count_laps()","logger.reset_count()"),#SW2
-        20:("logger.start_and_stop_manual()","dummy()"),#SW3
-        21:("scroll_next()","scroll_menu()"),#SW4
+        26:("count_laps()","reset_count()"),#SW2
+        20:("start_and_stop_manual()","dummy()"),#SW3
+        21:("scroll_next()","enter_menu()"),#SW4
         },
       'MENU':{
-        16:("scroll_menu()","dummy()"),
+        16:("back_menu()","dummy()"),
         26:("press_space()","dummy()"),
         20:("press_tab()","dummy()"),
         21:("press_down()","dummy()"),
@@ -364,35 +388,54 @@ class Config():
       },
     'DFRobot_RPi_Display' : {
       'MAIN':{
-        21:("logger.start_and_stop_manual()","logger.reset_count()"),
-        20:("scroll_next()","scroll_menu()"),
+        21:("start_and_stop_manual()","reset_count()"),
+        20:("scroll_next()","enter_menu()"),
         },
       'MENU':{
         21:("press_space()","dummy()"),
-        20:("press_down()","scroll_menu()"),
+        20:("press_down()","back_menu()"),
         },
       },
+    # call from ButtonShim
     'Button_Shim' : {
       'MAIN':{
         'A':("scroll_prev","dummy"),
-        'B':("logger.count_laps","logger.reset_count"),
-        'C':("get_screenshot","dummy"),
-        'D':("logger.start_and_stop_manual","dummy"),
-        'E':("scroll_next","scroll_menu"),
+        'B':("count_laps","reset_count"),
+        #'C':("get_screenshot","dummy"), ###mode change
+        'C':("change_mode","dummy"), ###mode change
+        'D':("start_and_stop_manual","dummy"),
+        'E':("scroll_next","enter_menu"),
         },
       'MENU':{
-        'A':("scroll_menu","dummy"),
+        'A':("back_menu","dummy"), 
         'B':("brightness_control","dummy"),
-        'C':("press_space","dummy"),
+        'C':("press_space","dummy"), #enter
         'D':("press_tab","dummy"),
         'E':("press_down","dummy"),
         },
+      'MAP_1':{###
+        'A':("map_move_x_minus","dummy"), #left
+        'B':("map_move_y_minus","dummy"), #down
+        'C':("change_mode","dummy"), #mode change
+        'D':("map_move_y_plus","dummy"), #up
+        'E':("map_move_x_plus","dummy"), #right
+        },
+      'MAP_2':{###
+        'A':("map_zoom_minus","dummy"), #zoom down
+        'B':("map_zoom_plus","dummy"), #zoom up
+        'C':("change_mode","dummy"), #mode change
+        'D':("dummy","dummy"), #cancel
+        'E':("dummy","dummy"), #apply
+        },
       },
   }
-  #[Todo] I2C button action (now it is implemented in ButtonShim directly)
-  G_I2C_BUTTON_DEF = {}
-  #[Todo] ANT+ Control button action (now it is implemented in ButtonShim directly)
-  G_ANT_CTRL_BUTTON_DEF = {}
+  #mode group setting changed by change_mode
+  G_BUTTON_MODE_GROUPS = {
+    'MAP': ['MAIN', 'MAP_1', 'MAP_2'], 
+    }
+  G_BUTTON_MODE_INDEX = {
+    'MAP': 0,
+  }
   
   #for track
   TRACK_STR = [
@@ -452,6 +495,9 @@ class Config():
     self.config_parser = configparser.ConfigParser()
     if os.path.exists(self.config_file):
       self.read_config()
+
+    if os.path.exists(self.config_pickle_file):
+      self.read_config_pickle()
 
     #set dir(for using from pitft desktop)
     if self.G_IS_RASPI:
@@ -745,6 +791,7 @@ class Config():
     #time.sleep(self.G_LOGGING_INTERVAL)
     self.logger.quit()
     self.write_config()
+    self.delete_config_pickle()
 
   def poweroff(self):
     if self.G_IS_RASPI:
@@ -796,6 +843,25 @@ class Config():
       else:
         self.exec_cmd(bton_cmd)
 
+  def get_google_routes(self):
+    if not self.detect_network() or self.G_GOOGLE_DIRECTION_API["TOKEN"] == "":
+      return None
+    if np.isnan(self.logger.sensor.values['GPS']['lat']) or \
+      np.isnan(self.logger.sensor.values['GPS']['lon']):
+      return None
+      
+    origin = "origin={},{}".format(self.logger.sensor.values['GPS']['lat'],self.logger.sensor.values['GPS']['lon'])
+    destination = "destination={},{}".format("35.905488", "139.548334")
+    request = "{}&{}&key={}&{}&{}".format(
+      self.G_GOOGLE_DIRECTION_API_URL,
+      self.G_GOOGLE_DIRECTION_API_MODE["BICYCLING"],
+      self.G_GOOGLE_DIRECTION_API["TOKEN"],
+      origin,
+      destination
+    )
+    response = urllib.request.urlopen(request).read()
+    return json.loads(response)
+
   def strava_upload(self):
 
     #strava setting check
@@ -822,7 +888,7 @@ class Config():
 
     #reflesh access token
     refresh_cmd = [
-      "curl", "-L", "-X" "POST", "https://www.strava.com/oauth/token",
+      "curl", "-L", "-X" "POST", self.G_STRAVA_API_URL["OAUTH"],
       "-d", "client_id="+self.G_STRAVA_API["CLIENT_ID"],
       "-d", "client_secret="+self.G_STRAVA_API["CLIENT_SECRET"],
       "-d", "code="+self.G_STRAVA_API["CODE"],
@@ -843,7 +909,7 @@ class Config():
   
     #upload
     upload_cmd = [
-      "curl", "-X" "POST", "https://www.strava.com/api/v3/uploads",
+      "curl", "-X" "POST", self.G_STRAVA_API_URL["UPLOAD"],
       "-H", "Authorization: Bearer "+self.G_STRAVA_API["ACCESS_TOKEN"],
       "-F", "data_type=fit",
       "-F", "file=@"+self.G_STRAVA_UPLOAD_FILE,
@@ -866,6 +932,8 @@ class Config():
         self.G_GPS_SPEED_CUTOFF = self.G_AUTOSTOP_CUTOFF
       if 'WHEEL_CIRCUMFERENCE' in self.config_parser['GENERAL']:
         self.G_WHEEL_CIRCUMFERENCE = int(self.config_parser['GENERAL']['WHEEL_CIRCUMFERENCE'])/1000
+      if 'GROSS_AVE_SPEED' in self.config_parser['GENERAL']:
+        self.G_GROSS_AVE_SPEED = int(self.config_parser['GENERAL']['GROSS_AVE_SPEED'])
       if 'LANG' in self.config_parser['GENERAL']:
         self.G_LANG = self.config_parser['GENERAL']['LANG'].upper()
       if 'FONT_FILE' in self.config_parser['GENERAL']:
@@ -932,6 +1000,11 @@ class Config():
       for k in self.G_STRAVA_COOKIE.keys():
         if k in self.config_parser['STRAVA_COOKIE']:
           self.G_STRAVA_COOKIE[k] = self.config_parser['STRAVA_COOKIE'][k]
+    
+    if 'GOOGLE_DIRECTION_API' in self.config_parser:
+      for k in self.G_GOOGLE_DIRECTION_API.keys():
+        if k in self.config_parser['GOOGLE_DIRECTION_API']:
+          self.G_GOOGLE_DIRECTION_API[k] = self.config_parser['GOOGLE_DIRECTION_API'][k]
 
     if 'BT_ADDRESS' in self.config_parser:
       for k in self.config_parser['BT_ADDRESS']:
@@ -943,6 +1016,7 @@ class Config():
     self.config_parser['GENERAL']['DISPLAY'] = self.G_DISPLAY
     self.config_parser['GENERAL']['AUTOSTOP_CUTOFF'] = str(int(self.G_AUTOSTOP_CUTOFF*3.6))
     self.config_parser['GENERAL']['WHEEL_CIRCUMFERENCE'] = str(int(self.G_WHEEL_CIRCUMFERENCE*1000))
+    self.config_parser['GENERAL']['GROSS_AVE_SPEED'] = str(int(self.G_GROSS_AVE_SPEED))
     self.config_parser['GENERAL']['LANG'] = self.G_LANG
     self.config_parser['GENERAL']['FONT_FILE'] = self.G_FONT_FILE
     self.config_parser['GENERAL']['MAP'] = self.G_MAP
@@ -967,7 +1041,11 @@ class Config():
 
     self.config_parser['STRAVA_COOKIE'] = {}
     for k in self.G_STRAVA_COOKIE.keys():
-      self.config_parser['STRAVA_COOKIE'][k] = self.G_STRAVA_COOKIE[k] 
+      self.config_parser['STRAVA_COOKIE'][k] = self.G_STRAVA_COOKIE[k]
+
+    self.config_parser['GOOGLE_DIRECTION_API'] = {}
+    for k in self.G_GOOGLE_DIRECTION_API.keys():
+      self.config_parser['GOOGLE_DIRECTION_API'][k] = self.G_GOOGLE_DIRECTION_API[k] 
     
     self.config_parser['BT_ADDRESS'] = {}
     for k in self.G_BT_ADDRESS.keys():
@@ -976,6 +1054,38 @@ class Config():
     with open(self.config_file, 'w') as file:
       self.config_parser.write(file)
   
+  def read_config_pickle(self):
+    with open(self.config_pickle_file, 'rb') as f:
+      self.config_pickle = pickle.load(f)
+
+  def set_config_pickle(self, key, value, immediately_apply=False):
+    self.config_pickle[key] = value
+    #write with config_pickle_interval
+    t = (datetime.datetime.utcnow()-self.config_pickle_write_time).total_seconds()
+    if not immediately_apply and t < self.config_pickle_interval:
+      return
+    with open(self.config_pickle_file, 'wb') as f:
+      pickle.dump(self.config_pickle, f)
+    self.config_pickle_write_time = datetime.datetime.utcnow()
+  
+  def get_config_pickle(self, key, default_value):
+    if key in self.config_pickle:
+      return self.config_pickle[key]
+    else:
+      return default_value
+  
+  def reset_config_pickle(self):
+    self.config_pickle = {}
+    with open(self.config_pickle_file, 'wb') as f:
+      pickle.dump(self.config_pickle, f)
+
+  def delete_config_pickle(self):
+    for k, v in list(self.config_pickle.items()):
+      if "ant+" in k:
+        del(self.config_pickle[k])
+    with open(self.config_pickle_file, 'wb') as f:
+      pickle.dump(self.config_pickle, f)
+
   def read_map_list(self):
     text = None
     with open(self.G_MAP_LIST) as file:
@@ -998,17 +1108,35 @@ class Config():
       return 0
     (r0_lon, r0_lat, r1_lon, r1_lat) = map(radians, [p0_lon, p0_lat, p1_lon, p1_lat])
     delta_x = r1_lon-r0_lon
-    cos_d = \
-      sin(r0_lat)*sin(r1_lat) \
-      + cos(r0_lat) * cos(r1_lat) * cos(delta_x)
+    cos_d = sin(r0_lat)*sin(r1_lat) + cos(r0_lat)*cos(r1_lat)*cos(delta_x)
     try:
       res = 1000*acos(cos_d)*self.GEO_R1
       return res
     except:
-      traceback.print_exc()
-      print("cos_d =", cos_d)
-      print("paramater:", p0_lon, p0_lat, p1_lon, p1_lat)
+      #traceback.print_exc()
+      #print("cos_d =", cos_d)
+      #print("paramater:", p0_lon, p0_lat, p1_lon, p1_lat)
       return 0
+  
+  #return [m]
+  def get_dist_on_earth_array(self, p0_lon, p0_lat, p1_lon, p1_lat):
+    #if p0_lon == p1_lon and p0_lat == p1_lat:
+    #  return 0
+    r0_lon = np.radians(p0_lon)
+    r0_lat = np.radians(p0_lat)
+    r1_lon = np.radians(p1_lon)
+    r1_lat = np.radians(p1_lat)
+    #(r0_lon, r0_lat, r1_lon, r1_lat) = map(radians, [p0_lon, p0_lat, p1_lon, p1_lat])
+    delta_x = r1_lon-r0_lon
+    cos_d = np.sin(r0_lat)*np.sin(r1_lat) + np.cos(r0_lat)*np.cos(r1_lat)*np.cos(delta_x)
+    try:
+      res = 1000*np.arccos(cos_d)*self.GEO_R1
+      return res
+    except:
+      traceback.print_exc()
+    #  #print("cos_d =", cos_d)
+    #  #print("paramater:", p0_lon, p0_lat, p1_lon, p1_lat)
+      return np.array([])
   
   #return [m]
   def get_dist_on_earth_hubeny(self, p0_lon, p0_lat, p1_lon, p1_lat):
