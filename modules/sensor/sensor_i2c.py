@@ -1,6 +1,5 @@
 import datetime
 import math
-import traceback
 
 import numpy as np
 
@@ -56,10 +55,12 @@ class SensorI2C(Sensor):
     'gyro_raw', 'gyro_mod','gyro', 
     'mag_raw', 'mag_mod', 'mag',
     'quaternion',
+    'acc_variance',
     )
 
   values_mod = {}
-  elements_vec_mod = ('mag_min', 'mag_max', 'mag_ave')
+  elements_vec_mod = ('mag_min', 'mag_max', 'gyro_ave')
+  sensor_label = {'MAG':"",}
   
   #for graph
   graph_values = {}
@@ -75,7 +76,8 @@ class SensorI2C(Sensor):
 
   #constants
   #for moving detection
-  moving_threshold = 0.001
+  moving_threshold = 0
+  moving_threshold_min = 0
   #for altitude
   sealevel_pa = 1013.25
   sealevel_temp_offset = 20 # change the direction of sensor and weather(sunny or cloudly)
@@ -135,6 +137,11 @@ class SensorI2C(Sensor):
 
     self.reset()
 
+    #store temporary values
+    self.sealevel_pa = self.config.get_config_pickle("sealevel_pa", self.sealevel_pa)
+    self.values_mod['mag_min'] = self.config.get_config_pickle("mag_min"+"_"+self.sensor_label['MAG'], self.values_mod['mag_min'])
+    self.values_mod['mag_max'] = self.config.get_config_pickle("mag_max"+"_"+self.sensor_label['MAG'], self.values_mod['mag_max'])
+
   def detect_sensors(self):
     
     #pressure sensors
@@ -157,8 +164,10 @@ class SensorI2C(Sensor):
     if self.available_sensors['MOTION']['LSM303_ORIG']:
       self.motion_sensor['ACC'] = True
       self.motion_sensor['MAG'] = True
+      self.sensor_label['MAG'] = 'LSM303'
     if self.available_sensors['MOTION']['LIS3MDL']:
       self.motion_sensor['MAG'] = True
+      self.sensor_label['MAG'] = 'LIS3MDL'
     if self.available_sensors['MOTION']['LSM6DS']:
       self.motion_sensor['ACC'] = True
       self.motion_sensor['GYRO'] = True
@@ -166,16 +175,19 @@ class SensorI2C(Sensor):
       self.motion_sensor['ACC'] = True
       self.motion_sensor['GYRO'] = True
       self.motion_sensor['MAG'] = True
+      self.sensor_label['MAG'] = 'LSM9DS1'
     if self.available_sensors['MOTION']['BMX160']:
       self.motion_sensor['ACC'] = True
       self.motion_sensor['GYRO'] = True
       self.motion_sensor['MAG'] = True
+      self.sensor_label['MAG'] = 'BMX160'
     if self.available_sensors['MOTION']['BNO055']:
       self.motion_sensor['ACC'] = True
       #self.motion_sensor['GYRO'] = True
       self.motion_sensor['MAG'] = True
       #self.motion_sensor['EULER'] = True
       self.motion_sensor['QUATERNION'] = True
+      self.sensor_label['MAG'] = 'BNO055'
 
     #light sensors
     self.available_sensors['LIGHT']['TCS3472'] = self.detect_light_tcs3472()
@@ -216,7 +228,7 @@ class SensorI2C(Sensor):
       self.values_mod[key] = np.zeros(3)
     self.values_mod['mag_min'] = np.full(3, np.inf)
     self.values_mod['mag_max'] = np.full(3, -np.inf)
-    self.mag_average_array = np.zeros((3, int(2/self.config.G_I2C_INTERVAL)+1))
+    self.gyro_average_array = np.zeros((3, int(2/self.config.G_I2C_INTERVAL)+1))
 
     self.values['total_ascent'] = 0
     self.values['total_descent'] = 0
@@ -231,7 +243,8 @@ class SensorI2C(Sensor):
    
     #for moving status
     self.mov_window_size = int(2/self.config.G_I2C_INTERVAL)+1
-    self.acc_variance_array = np.zeros((3, self.mov_window_size))
+    self.acc_raw_hist = np.zeros((3, self.mov_window_size))
+    self.acc_hist = np.zeros((3, self.mov_window_size))
     self.euler_array = np.zeros((2, self.mov_window_size))
     self.acc_variance = np.zeros(3)
     self.moving = np.ones(self.mov_window_size)
@@ -260,7 +273,7 @@ class SensorI2C(Sensor):
       self.sleep()
       self.update()
       self.get_sleep_time(self.config.G_I2C_INTERVAL)
-    
+  
   def update(self):
     #timestamp
     self.values['timestamp'] = datetime.datetime.now()
@@ -307,10 +320,11 @@ class SensorI2C(Sensor):
     except:
       return
 
-  #X: to North (up rotation is plus)
-  #Y: to West (up rotation is plus)
-  #Z: to down (plus)
   def change_axis(self, a):
+    #X: to North (up rotation is plus)
+    #Y: to West (up rotation is plus)
+    #Z: to down (plus)
+    
     #X, Y, Zinversion
     if self.config.G_IMU_AXIS_CONVERSION['STATUS']:
       a = a * self.config.G_IMU_AXIS_CONVERSION['COEF']
@@ -343,7 +357,7 @@ class SensorI2C(Sensor):
 
     self.values['acc_mod'] = self.values['acc_raw']
     #LP filter
-    self.lp_filter('acc_mod', 4)
+    #self.lp_filter('acc_mod', 4)
 
   def read_gyro(self):
     if not self.motion_sensor['GYRO']:
@@ -356,19 +370,28 @@ class SensorI2C(Sensor):
     except:
       return
     self.values['gyro_raw'] = self.change_axis(self.values['gyro_raw'])
+    self.values['gyro_raw'] = np.radians(self.values['gyro_raw'])
     
     #calibration
-    self.mag_average_array[:, 0:-1] = self.mag_average_array[:, 1:]
-    self.mag_average_array[:, -1] = self.values['gyro_raw']
+    self.gyro_average_array[:, 0:-1] = self.gyro_average_array[:, 1:]
+    self.gyro_average_array[:, -1] = self.values['gyro_raw']
     if self.do_position_calibration:
-      self.values_mod['mag_ave'] = np.nanmean(self.mag_average_array, axis=1)
-    self.values['gyro_mod'] = self.values['gyro_raw'] - self.values_mod['mag_ave']
+      self.values_mod['gyro_ave'] = np.nanmean(self.gyro_average_array, axis=1)
+    self.values['gyro_mod'] = self.values['gyro_raw'] - self.values_mod['gyro_ave']
 
     #LP filter
-    self.lp_filter('gyro_mod', 4)
+    #self.lp_filter('gyro_mod', 4)
 
     #finalize gyro
-    self.values['gyro'] = self.values['gyro_mod']
+    #angle from fixed_roll and fixed_pitch
+    acc_angle = np.zeros(3)
+    ratio = 0.9
+    if not np.isnan(self.values['pitch']) and not np.isnan(self.values['roll']):
+      acc_angle[0] = self.values['roll'] - self.values['fixed_roll']
+      acc_angle[1] = self.values['pitch'] - self.values['fixed_pitch']
+    self.values['gyro'] = \
+      ratio*(self.values['gyro'] + self.values['gyro_mod']*self.config.G_I2C_INTERVAL) + \
+      (1-ratio)*acc_angle
 
   def read_mag(self):
     if not self.motion_sensor['MAG']:
@@ -392,8 +415,15 @@ class SensorI2C(Sensor):
     
     self.values['mag_mod'] = self.values['mag_raw']
     #calibration(hard/soft iron distortion)
+    pre_min = self.values_mod['mag_min'].copy()
+    pre_max = self.values_mod['mag_max'].copy()
     self.values_mod['mag_min'] = np.minimum(self.values['mag_mod'], self.values_mod['mag_min'])
     self.values_mod['mag_max'] = np.maximum(self.values['mag_mod'], self.values_mod['mag_max'])
+    #store
+    if np.any(pre_min != self.values_mod['mag_min']):
+      self.config.set_config_pickle("mag_min"+"_"+self.sensor_label['MAG'], self.values_mod['mag_min'])
+    if np.any(pre_max != self.values_mod['mag_max']):
+      self.config.set_config_pickle("mag_max"+"_"+self.sensor_label['MAG'], self.values_mod['mag_max'])
     #hard iron distortion
     self.values['mag_mod'] = self.values['mag_mod'] - (self.values_mod['mag_min'] + self.values_mod['mag_max'])/2
     #soft iron distortion
@@ -404,7 +434,7 @@ class SensorI2C(Sensor):
       self.values['mag_mod'] = self.values['mag_mod']*scale
     
     #LP filter
-    self.lp_filter('mag_mod', 4)
+    #self.lp_filter('mag_mod', 4)
       
     #finalize mag
     self.values['mag'] = self.values['mag_mod']
@@ -463,7 +493,8 @@ class SensorI2C(Sensor):
     self.calc_heading(self.values['yaw'])
 
   def calc_pitch_roll_yaw_from_acc_mag(self):
-    if np.any(np.isnan(self.motion_sensor['ACC'])) or np.any(np.isnan(self.motion_sensor['MAG'])):
+    #if np.any(np.isnan(self.motion_sensor['ACC'])) or np.any(np.isnan(self.motion_sensor['MAG'])):
+    if not self.motion_sensor['ACC'] or not self.motion_sensor['MAG']:
       return
 
     self.values['pitch'], self.values['roll'] = self.get_pitch_roll(self.values['acc_mod'])
@@ -505,17 +536,20 @@ class SensorI2C(Sensor):
     #require acc
     if not self.motion_sensor['ACC']:
       return
-    self.acc_variance_array[:, 0:-1] = self.acc_variance_array[:, 1:]
-    self.acc_variance_array[:, -1] = self.values['acc_raw']
-    self.acc_variance = np.var(self.acc_variance_array, axis=1)
-    #print(self.acc_variance)
+    self.acc_raw_hist[:, 0:-1] = self.acc_raw_hist[:, 1:]
+    self.acc_raw_hist[:, -1] = self.values['acc_raw']
+    self.acc_hist[:, 0:-1] = self.acc_hist[:, 1:]
+    self.acc_hist[:, -1] = self.values['acc']
+    self.acc_variance = np.var(self.acc_hist, axis=1)
+    self.update_moving_threshold()
     if self.motion_sensor['QUATERNION']:
       self.euler_array[:, 0:-1] = self.euler_array[:, 1:]
       self.euler_array[:, -1] = [self.values['pitch'], self.values['roll']]
     
-    moving = 0
-    if np.all(self.acc_variance > self.moving_threshold):
-      moving = 1
+    moving = 1
+    #if np.all(self.acc_variance < self.moving_threshold):
+    if self.acc_variance[Z] < self.moving_threshold:
+      moving = 0
     self.moving[0:-1] = self.moving[1:]
     self.moving[-1] = moving
     #moving status (0:off=stop, 1:on=running)
@@ -530,13 +564,14 @@ class SensorI2C(Sensor):
       roll = np.average(self.euler_array[1])
     elif self.motion_sensor['ACC']:
       pitch, roll = self.get_pitch_roll([
-        np.average(self.acc_variance_array[0]),
-        np.average(self.acc_variance_array[1]),
-        np.average(self.acc_variance_array[2])
+        np.average(self.acc_raw_hist[0]),
+        np.average(self.acc_raw_hist[1]),
+        np.average(self.acc_raw_hist[2])
         ])
     if not np.isnan(pitch) and not np.isnan(roll):
       self.values['fixed_pitch'] = pitch
       self.values['fixed_roll'] = roll
+      self.values['gyro'] = np.zeros(3)
       self.do_position_calibration = False
       print("calibrated position: pitch:{}, roll:{}".format(
         int(math.degrees(pitch)), 
@@ -547,12 +582,13 @@ class SensorI2C(Sensor):
     #require acc
     if not self.motion_sensor['ACC']:
       return
-    cos_p = math.cos(self.values['fixed_pitch'])
-    sin_p = math.sin(self.values['fixed_pitch'])
-    cos_r = math.cos(self.values['fixed_roll'])
-    sin_r = math.sin(self.values['fixed_roll'])
-    #cos_y = math.cos(self.values['yaw_fixed'])
-    #sin_y = math.sin(self.values['yaw_fixed'])
+    #conver absolute coordinates
+    cos_p = math.cos(self.values['pitch'])
+    sin_p = math.sin(self.values['pitch'])
+    cos_r = math.cos(self.values['roll'])
+    sin_r = math.sin(self.values['roll'])
+    #cos_y = math.cos(self.values['yaw'])
+    #sin_y = math.sin(self.values['yaw'])
     m_pitch = np.array([[cos_p,0,sin_p],[0,1,0],[-sin_p,0,cos_p]])
     m_roll  = np.array([[1,0,0],[0,cos_r,-sin_r],[0,sin_r,cos_r]])
     #m_yaw   = np.array([[cos_y,-sin_y,0],[sin_y,cos_y,0],[0,0,1]])
@@ -585,23 +621,35 @@ class SensorI2C(Sensor):
     #self.values['acc'][Z] = 2*(q1*q3-q0*q2)*ax + 2*(q0*q1+q2*q3)*ay + (q0**2-q1**2-q2**2+q3**2)*az
 
     #motion
-    self.values['motion'] = math.sqrt(sum(list(map(lambda x: x**2, self.values['acc']))))
+    self.values['motion'] = math.sqrt(sum(list(map(lambda x: x**2, self.values['acc_mod']))))
 
     #modified_pitch
-    #self.values['modified_pitch'] = 100*math.tan(-self.values['pitch']+self.values['fixed_pitch'])
-    self.values['modified_pitch'] = -math.degrees(self.values['pitch']-self.values['fixed_pitch'])
+    self.values['modified_pitch'] = -100*math.tan(self.values['gyro'][Y])
     #LP filter
-    self.lp_filter('modified_pitch', 2)
+    self.lp_filter('modified_pitch', 4)
     
     #put into graph
     for g in self.graph_keys:
       if g not in self.graph_values:
         continue
       self.graph_values[g][:, 0:-1] = self.graph_values[g][:, 1:]
-      self.graph_values[g][:, -1] = self.values['acc']
+      #self.graph_values[g][:, -1] = self.values['acc']
+      self.graph_values[g][:, -1] = self.values['acc_variance']
     
   def recalibrate_position(self):
     self.do_position_calibration = True
+  
+  def update_moving_threshold(self):
+    if np.any(self.acc_variance == 0):
+      return
+    variance_order = np.floor(np.log10(self.acc_variance))
+    self.values['acc_variance'] = variance_order
+    o = variance_order[Z]
+    #if np.sum(variance_order == o) >= 2 and o < self.moving_threshold_min:
+    if o < self.moving_threshold_min:
+      self.moving_threshold_min = o
+      self.moving_threshold = pow(10, 0.57*o)
+      #print(self.moving_threshold, self.moving_threshold_min)
 
   def read_baro_temp(self):
     if not any(self.available_sensors['PRESSURE'].values()):
@@ -635,7 +683,7 @@ class SensorI2C(Sensor):
   def calc_altitude(self):
     if np.isnan(self.values['pressure']):
       return
-    
+   
     self.values['altitude'] = \
       (pow(self.sealevel_pa / self.values['pressure'], (1.0/5.257)) - 1) * self.sealevel_temp / 0.0065
     #self.values['altitude'] = self.sealevel_temp/0.0065 * (1 - pow(self.values['pressure']/self.sealevel_pa, 0.1907))
@@ -658,7 +706,8 @@ class SensorI2C(Sensor):
 
       #vertical speed (m/s)
       self.vspeed_array[0:-1] = self.vspeed_array[1:]
-      self.vspeed_array[-1] = self.values['altitude']
+      #self.vspeed_array[-1] = self.values['altitude']
+      self.vspeed_array[-1] = self.values['pre_altitude']
       if self.timestamp_array[0] != None and self.timestamp_array[-1] != None:
         i = 0
         time_delta = (self.timestamp_array[-1] - self.timestamp_array[i]).total_seconds()
@@ -672,6 +721,7 @@ class SensorI2C(Sensor):
       return
     temp = 273.15 + self.values['temperature'] - self.sealevel_temp_offset
     self.sealevel_pa = self.values['pressure'] * pow(temp / (temp + 0.0065*alt), (-5.257))
+    self.config.set_config_pickle("sealevel_pa", self.sealevel_pa, immediately_apply=True)
     
     #if not np.isnan(self.values['temperature']):
     #  self.sealevel_temp = 0.0065*alt + 273.15+self.values['temperature']-self.sealevel_temp_offset
@@ -712,7 +762,7 @@ class SensorI2C(Sensor):
           np.abs(self.values[key] - self.median_val[key]), 
           self.median_val[key]
           ),
-        datetime.datetime.utcnow()
+        datetime.datetime.now()
         )
       self.values[key] = self.median_val[key]
 
@@ -720,6 +770,10 @@ class SensorI2C(Sensor):
     self.kf.predict()
     self.kf.update(self.values['altitude'])
     self.values['altitude_kalman'] = self.kf.x[0][0]
+
+  def change_button_mode(self, mode):
+    if self.available_sensors['BUTTON']['BUTTON_SHIM']:
+      self.sensor_button_shim.set_func(mode)
 
   def detect_pressure_bmp280(self):
     try:
@@ -755,7 +809,8 @@ class SensorI2C(Sensor):
       import adafruit_lps35hw
       #device test
       self.sensor_lps35hw = adafruit_lps35hw.LPS35HW(board.I2C())
-      #self.sensor_lps35hw.low_pass_enabled = True
+      self.sensor_lps35hw.low_pass_enabled = True
+      #self.sensor_lps35hw.data_rate = adafruit_lps35hw.DataRate.RATE_1_HZ
       return True
     except:
       return False
@@ -836,6 +891,7 @@ class SensorI2C(Sensor):
       self.sensor_bmx160 = BMX160.BMX160_I2C(busio.I2C(board.SCL, board.SDA))
       self.sensor_bmx160.accel_range = BMX160.BMX160_ACCEL_RANGE_2G
       self.sensor_bmx160.accel_odr = 50
+      self.sensor_bmx160.gyro_range = BMX160.BMX160_GYRO_RANGE_250_DPS
       return True
     except:
       return False
