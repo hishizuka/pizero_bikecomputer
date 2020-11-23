@@ -1,3 +1,4 @@
+/extlib/
 /log/
 /screenshot/
 /maptile/*/*.png*
@@ -15,7 +16,7 @@ __pycache__/
 *.o
 *.so
 a.out
-setting.conf
+setting*
 layout.yaml
 map.yaml
 nohup.out
