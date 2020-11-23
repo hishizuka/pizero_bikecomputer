@@ -38,8 +38,8 @@ class MipSharpDisplay():
       return
 
     self.pi = pigpio.pi()
-    #self.spi = self.pi.spi_open(0, 2000000, 0)
-    self.spi = self.pi.spi_open(0, 8000000, 0) #overclocking
+    self.spi = self.pi.spi_open(0, 2000000, 0)
+    #self.spi = self.pi.spi_open(0, 8000000, 0) #overclocking
     time.sleep(0.1)     #Wait
     
     self.pi.set_mode(GPIO_DISP, pigpio.OUTPUT)
@@ -52,8 +52,8 @@ class MipSharpDisplay():
     time.sleep(0.1)
 
     self.buff_width = int(self.config.G_WIDTH/8)+2
-    self.img_buff_rgb8 = np.empty((self.config.G_HEIGHT,int(self.config.G_WIDTH/8)+2), dtype='uint8')
-    self.pre_img = np.zeros((self.config.G_HEIGHT,int(self.config.G_WIDTH/8)+2), dtype='uint8')
+    self.img_buff_rgb8 = np.zeros((self.config.G_HEIGHT,self.buff_width), dtype='uint8')
+    self.pre_img = np.zeros((self.config.G_HEIGHT,self.buff_width), dtype='uint8')
     self.img_buff_rgb8[:,0] = UPDATE_MODE
     #address is set in reversed bits
     self.img_buff_rgb8[:,1] = [int('{:08b}'.format(a)[::-1], 2) for a in range(self.config.G_HEIGHT)]
@@ -70,31 +70,6 @@ class MipSharpDisplay():
     self.pi.write(GPIO_SCS, 0)
     time.sleep(0.000006)
   
-  def no_update(self):
-    self.pi.write(GPIO_SCS, 1)
-    time.sleep(0.000006)
-    self.pi.spi_write(self.spi, [0b00000000,0]) # NO UPDATE MODE
-    self.pi.write(GPIO_SCS, 0)
-    time.sleep(0.000006)
-
-  def blink(self, sec):
-    if not _SENSOR_DISPLAY:
-      return
-    s = sec
-    state = True
-    while s > 0:
-      self.pi.write(GPIO_SCS, 1)
-      time.sleep(0.000006)
-      if state:
-        self.pi.spi_write(self.spi, [0b00010000,0]) # BLINK(BLACK) MODE
-      else:
-        self.pi.spi_write(self.spi, [0b00011000,0]) # BLINK(WHITE) MODE
-      self.pi.write(GPIO_SCS, 0)
-      time.sleep(self.interval)
-      s -= self.interval
-      state = not state
-    self.no_update()
-
   def inversion(self, sec):
     if not _SENSOR_DISPLAY:
       return
@@ -103,15 +78,21 @@ class MipSharpDisplay():
     while s > 0:
       self.pi.write(GPIO_SCS, 1)
       time.sleep(0.000006)
+      img_buff = self.img_buff_rgb8.copy()
       if state:
-        self.pi.spi_write(self.spi, [0b00010100,0]) # INVERSION MODE
-      else:
-        self.no_update()
+        img_buff[:,2:] = np.invert(img_buff[:,2:])
+      self.pi.spi_write(self.spi, img_buff.tobytes())
+      self.pi.spi_write(self.spi, [0x00000000,0])
       self.pi.write(GPIO_SCS, 0)
       time.sleep(self.interval)
       s -= self.interval
       state = not state
-    self.no_update()
+    
+    time.sleep(0.000006)
+    self.pi.write(GPIO_SCS, 1)
+    self.pi.spi_write(self.spi, self.img_buff_rgb8.tobytes())
+    self.pi.spi_write(self.spi, [0x00000000,0])
+    self.pi.write(GPIO_SCS, 0)
 
   def update(self, image):
 
@@ -124,7 +105,6 @@ class MipSharpDisplay():
       im_array.astype('uint8').reshape(self.config.G_HEIGHT, self.config.G_WIDTH),
       axis=1
       )
-    img_bytes = bytearray()
 
     #differential update
     rewrite_flag = True

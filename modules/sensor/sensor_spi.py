@@ -1,15 +1,6 @@
 from .sensor import Sensor
 import numpy as np
-
-
-#SPI
-_SENSOR_SPI = False
-try:
-  from PIL import Image
-  _SENSOR_SPI = True
-except:
-  pass
-print('  SPI : ',_SENSOR_SPI)
+from PIL import Image
 
 
 class SensorSPI(Sensor):
@@ -80,12 +71,12 @@ class SensorSPI(Sensor):
       self.display.update(buf)
 
   def screen_flash_long(self):
-    if self.config.G_DISPLAY == 'MIP' and self.send_display:
+    if self.config.G_DISPLAY in ['MIP','MIP_Sharp'] and self.send_display:
       self.display.inversion(0.8)
       #self.display.blink(1.0)
 
   def screen_flash_short(self):
-    if self.config.G_DISPLAY == 'MIP' and self.send_display:
+    if self.config.G_DISPLAY in ['MIP','MIP_Sharp'] and self.send_display:
       self.display.inversion(0.3)
 
   def brightness_control(self):
