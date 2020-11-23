@@ -2,9 +2,7 @@ import time
 import datetime
 import threading
 import math
-import random
 import os
-import signal
 
 import numpy as np
 
@@ -32,6 +30,11 @@ class SensorCore():
   sensor_i2c = None
   sensor_gpio = None
   values = {}
+  integrated_value_keys =  [
+    'hr','speed','cadence','power',
+    'distance','accumulated_power',
+    'grade','grade_spd','glide_ratio',
+    ]
   process = None
   thread_ant = None
   thread_gps = None
@@ -61,8 +64,10 @@ class SensorCore():
     self.values['I2C'] = {}
     self.values['SPI'] = {}
     self.values['integrated'] = {}
-    for key in ['hr','speed','cadence','power','distance','accumulated_power','grade', 'grade_spd','glide_ratio']:
+    for key in self.integrated_value_keys:
       self.values['integrated'][key] = np.nan
+    self.values['integrated']['distance'] = 0
+    self.values['integrated']['accumulated_power'] = 0
     for g in self.graph_keys:
       self.values['integrated'][g] = [np.nan] * self.config.G_GUI_HR_POWER_DISPLAY_RANGE
     for d in self.diff_keys:
@@ -261,7 +266,8 @@ class SensorCore():
             break
      
       #altitude
-      if not np.isnan(v['I2C']['altitude_kalman']):
+      #if not np.isnan(v['I2C']['altitude_kalman']):
+      if not np.isnan(v['I2C']['pre_altitude']):
         #alt = v['I2C']['altitude_kalman']
         alt = round(v['I2C']['altitude_kalman'], 1)
         #for grade (distance base)
@@ -292,15 +298,13 @@ class SensorCore():
         x = self.config.G_ANT_NULLVALUE
         y = diff_sum['alt_diff']
         if grade_use['ANT+']:
-          x = diff_sum['dst_diff']**2 - diff_sum['alt_diff']**2
-          if x > 0:
-            x =  math.sqrt(x)
+          x = math.sqrt(abs(diff_sum['dst_diff']**2 - diff_sum['alt_diff']**2))
         elif grade_use['GPS']:
           x = diff_sum['dst_diff'] 
         if x > 0:
-          gr = 100 * y / x
+          gr = round(100 * y / x, 0)
         if y != 0.0:
-          gl = -1 * x / y
+          gl = round(-1 * x / y, 0)
         grade, pre_grade = self.get_lp_filterd_value(gr, pre_grade)
         glide, pre_glide = self.get_lp_filterd_value(gl, pre_glide)
       #for sometimes ANT+ distance is 0 although status is running
@@ -323,7 +327,7 @@ class SensorCore():
         gr = self.config.G_ANT_NULLVALUE
         if x > 0:
           x = math.sqrt(x)
-          gr = 100 * y / x
+          gr = round(100 * y / x, 0)
         grade_spd, pre_grade_spd = self.get_lp_filterd_value(gr, pre_grade_spd)
       #for sometimes speed sensor value is missing in running
       elif dst_diff_spd['ANT+'] == 0 and self.config.G_STOPWATCH_STATUS == "START":
@@ -373,6 +377,7 @@ class SensorCore():
           self.config.logger.start_and_stop()
         elif self.config.G_STOPWATCH_STATUS == "START" and (not flag_spd or not flag_moving):
           self.config.logger.start_and_stop()
+          
       #ANT+ or GPS speed is not avaiable
       elif np.isnan(spd) and self.config.G_MANUAL_STATUS == "START":
         #stop recording if speed is broken
@@ -406,12 +411,17 @@ class SensorCore():
         sec_diff.append("{0:.6f}".format((time_profile[i]-time_profile[i-1]).total_seconds()))
         time_progile_sec += (time_profile[i]-time_profile[i-1]).total_seconds()
       if time_progile_sec > 1.5 * self.config.G_SENSOR_INTERVAL:
-        print("sec_diff:", datetime.datetime.now().strftime("%Y%m%d %H:%M:%S"), sec_diff)
+        print(
+          "too long loop time: ",
+          datetime.datetime.now().strftime("%Y%m%d %H:%M:%S"),
+          ", sec_diff:",
+          sec_diff
+          )
    
       loop_time = (datetime.datetime.now() - start_time).total_seconds()
       d1, d2 = divmod(loop_time, self.config.G_SENSOR_INTERVAL)
       if d1 > self.config.G_SENSOR_INTERVAL * 10: #[s]
-        print(loop_time, d1, d2)
+        print("too long loop_time:{:.2f}, d1:{:.0f}, d2:{:.2f}".format(loop_time, d1, d2))
         d1 = d2 = 0
       self.wait_time = self.config.G_SENSOR_INTERVAL - d2
       self.actual_loop_interval = (d1 + 1)*self.config.G_SENSOR_INTERVAL
@@ -431,7 +441,6 @@ class SensorCore():
     self.sensor_gps.reset()
     self.sensor_ant.reset()
     self.sensor_i2c.reset()
-    self.sensor_gpio.reset()
     self.values['integrated']['distance'] = 0
     self.values['integrated']['accumulated_power'] = 0
 

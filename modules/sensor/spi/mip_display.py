@@ -47,8 +47,8 @@ class MipDisplay():
       return
 
     self.pi = pigpio.pi()
-    #self.spi = self.pi.spi_open(0, 2000000, 0)
-    self.spi = self.pi.spi_open(0, 5500000, 0) #overclocking
+    self.spi = self.pi.spi_open(0, 2000000, 0)
+    #self.spi = self.pi.spi_open(0, 5500000, 0) #overclocking
     time.sleep(0.1)     #Wait
     
     self.pi.set_mode(GPIO_DISP, pigpio.OUTPUT)
@@ -69,8 +69,8 @@ class MipDisplay():
       self.brightness_index = 0
 
     self.buff_width = int(self.config.G_WIDTH*3/8)+2 #for 3bit update mode
-    self.img_buff_rgb8 = np.empty((self.config.G_HEIGHT,int(self.config.G_WIDTH*3/8)+2), dtype='uint8')
-    self.pre_img = np.zeros((self.config.G_HEIGHT,int(self.config.G_WIDTH*3/8)+2), dtype='uint8')
+    self.img_buff_rgb8 = np.empty((self.config.G_HEIGHT,self.buff_width), dtype='uint8')
+    self.pre_img = np.zeros((self.config.G_HEIGHT,self.buff_width), dtype='uint8')
     self.img_buff_rgb8[:,0] = UPDATE_MODE
     self.img_buff_rgb8[:,1] = np.arange(self.config.G_HEIGHT)
     if self.config.G_HEIGHT > 255: 
@@ -141,7 +141,6 @@ class MipDisplay():
       ((im_array > 128).astype('uint8')).reshape(self.config.G_HEIGHT, self.config.G_WIDTH*3),
       axis=1
       )
-    img_bytes = bytearray()
 
     #differential update
     rewrite_flag = True

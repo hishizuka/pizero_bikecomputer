@@ -35,7 +35,7 @@ class Sensor():
     loop_time = (datetime.datetime.now() - self.start_time).total_seconds()
     d1, d2 = divmod(loop_time, interval)
     if d1 > interval * 10: #[s]
-      print(loop_time, d1, d2)
+      print("too long loop_time:{:.2f}, d1:{:.0f}, d2:{:.2f}".format(loop_time, d1, d2))
       d1 = d2 = 0
     self.wait_time = interval - d2
     self.actual_loop_interval = (d1 + 1)*interval

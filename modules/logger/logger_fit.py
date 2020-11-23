@@ -7,11 +7,14 @@ import traceback
 from .logger import Logger
 
 #cython
+MODE = ""
 try:
   import pyximport; pyximport.install()
   from .cython.crc16_c import crc16
+  MODE = "Cython"
 except:
   from .cython.crc16_p import crc16
+  MODE = "Python"
 
 
 class config_local():
@@ -223,8 +226,8 @@ class LoggerFit(Logger):
    
     #get start_date 
     start_date = None
-    cur.execute("SELECT timestamp,MAX(timestamp) FROM BIKECOMPUTER_LOG LIMIT 1")
-    #cur.execute("SELECT timestamp FROM BIKECOMPUTER_LOG LIMIT 1")
+    #get datetime object (timestamp)
+    cur.execute("SELECT timestamp, MIN(timestamp) FROM BIKECOMPUTER_LOG")
     first_row = cur.fetchone()
     if first_row != None:
       start_date = first_row[0]

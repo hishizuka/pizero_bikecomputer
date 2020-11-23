@@ -59,7 +59,7 @@ Here is detail articles in Japanese.
     - [numpy](https://numpy.org)
     - [PyQt5](https://pypi.org/project/PyQt5/) and [PyQtGraph](http://www.pyqtgraph.org)
     - [GPSd](https://gpsd.gitlab.io/gpsd/index.html) for GPS modules.
-    - [CircuitPython](https://learn.adafruit.com/welcome-to-circuitpython/what-is-circuitpython) for some I2C sensors.
+    - [CircuitPython](https://learn.adafruit.com/welcome-to-circuitpython/what-is-circuitpython) libraries for some I2C sensors. 
   - So, you can run in cross platform environments such as Raspberry Pi OS, some Linux, macOS and Windows.
 
 - Good balance between battery life and performance
@@ -363,7 +363,8 @@ It's quite difficult, but the hardware configuration is better than PiTFT.
 <img src="https://user-images.githubusercontent.com/12926652/91796767-f6803d80-ec5b-11ea-9bde-19940a951588.png" width=360 />
 
 - top left: Raspberry Pi Zero WH
-- central left: PiJuice Zero
+- top right: PiJuice Zero
+- central left: adafruit SHARP Memory Display
 - center: GPS module
 - central right: DFRobot BMP160(IMU) and BMP388(pressure and temperature)
 - bottom left: Button SHIM
@@ -602,7 +603,7 @@ Follow [official setup guide](https://github.com/PiSupply/PiJuice/tree/master/So
 
 ## Run on X Window
 
-If you run the program from SSH login shell, add the following environment variable.
+If you run the program from the SSH login shell, add the following environment variable.
 
 ```
 export DISPLAY=:0.0
@@ -651,13 +652,14 @@ $ export TSLIB_TSDEVICE=/dev/input/event0
 $ python3 pizero_bikecomputer.py
 ```
 
+Note: Works with Raspbian Stretch. No further versions have been confirmed to work. It seems that the touch screen axis is not set.
+
 #### MIP Reflective color LCD module, SHARP Memory Display or E-Ink displays
 
 Before run the program, add the following environment variable.
 
 ```
-$ export QT_QPA_PLATFORM=offscreen
-$ python3 pizero_bikecomputer.py
+$ QT_QPA_PLATFORM=offscreen python3 pizero_bikecomputer.py
 ```
 
 ### run as a service
@@ -694,8 +696,73 @@ $ sudo systemctl start pizero_bikecomputer.service
 
 # Usage
 
-Comming soon!
+## menu
 
+## main settings with setting.conf
+
+[ANT]
+status = True
+use_hr = False
+use_spd = False
+use_cdc = False
+use_pwr = False
+id_hr = 0
+id_spd = 0
+id_cdc = 0
+id_pwr = 0
+type_hr = 0
+type_spd = 0
+type_cdc = 0
+type_pwr = 0
+
+[GENERAL]
+display = PiTFT
+autostop_cutoff = 4
+wheel_circumference = 2105
+lang = EN
+font_file = 
+map = toner
+
+[STRAVA]
+client_id = 
+client_secret = 
+code = 
+access_token = 
+refresh_token = 
+
+[BT_ADDRESS]
+
+[SENSOR_IMU]
+axis_conversion_status = False
+axis_conversion_coef = [1.0, 1.0, 1.0]
+axis_swap_xy_status = False
+axis_swap_xy_coef = [1.0, 1.0]
+
+[STRAVA_API]
+client_id = 
+client_secret = 
+code = 
+access_token = 
+refresh_token = 
+
+[STRAVA_COOKIE]
+key_pair_id = 
+policy = 
+signature = 
+
+## modify screen layouts with layput.yaml
+
+normal
+
+merge cells
+
+## set course
+
+## prepare map
+
+## get log
+
+## other settings in module/config.py
 
 ```
 $ python3 pizero_bikecomputer.py --demo
