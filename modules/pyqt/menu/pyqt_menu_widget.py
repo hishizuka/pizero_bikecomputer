@@ -321,6 +321,7 @@ class ANTDetailWidget(MenuWidget):
 
     index = self.config.gui.gui_config.G_GUI_INDEX['ANT+Top']
     self.parent.widget(index).update_button_label()
+    self.config.write_config()
     self.config.gui.change_menu_page(index)
 
   def on_back_menu(self):

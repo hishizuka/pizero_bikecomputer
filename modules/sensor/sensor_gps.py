@@ -63,11 +63,9 @@ class SensorGPS(Sensor):
 
   gps_socket = None
   gps_datastream = None
-  pre_lat = np.nan
-  pre_lon = np.nan
-  pre_alt = np.nan
   elements = [
     'lat','lon','alt',
+    'pre_lat','pre_lon','pre_alt',
     'speed','track', 'track_str',
     'used_sats','total_sats','used_sats_str',
     'epx', 'epy', 'epv','error',
@@ -143,8 +141,8 @@ class SensorGPS(Sensor):
       lon = self.config.logger.course.longitude
       course_n = len(self.config.logger.course.latitude)
       
-      self.pre_lat = self.values['lat']
-      self.pre_lon = self.values['lon']
+      self.values['pre_lat'] = self.values['lat']
+      self.values['pre_lon'] = self.values['lon']
       #generate dummy position from log
       if self.config.logger.position_log.shape[0] > 0:
         self.values['lat'] = self.config.logger.position_log[course_i][0]
@@ -172,8 +170,8 @@ class SensorGPS(Sensor):
           pre_course_i = 0
           course_i = course_i % course_n
       
-      lat_points = np.array([self.pre_lat, self.values['lat']])
-      lon_points = np.array([self.pre_lon, self.values['lon']])
+      lat_points = np.array([self.values['pre_lat'], self.values['lat']])
+      lon_points = np.array([self.values['pre_lon'], self.values['lon']])
       self.values['track'] = (self.config.calc_azimuth(lat_points, lon_points))[0]
 
       #calculate course_index separately
@@ -245,11 +243,13 @@ class SensorGPS(Sensor):
   def init_GPS_values(self):
     #backup values
     if not np.isnan(self.values['lat']) and not np.isnan(self.values['lon']):
-      self.pre_lat = self.values['lat']
-      self.pre_lon = self.values['lon']
-      self.pre_alt = self.values['alt']
+      self.values['pre_lat'] = self.values['lat']
+      self.values['pre_lon'] = self.values['lon']
+      self.values['pre_alt'] = self.values['alt']
     #initialize
     for element in self.elements:
+      if element in ['pre_lat', 'pre_lon', 'pre_alt']:
+        continue
       self.values[element] = np.nan
 
   def get_GPS_basic_values(self, lat, lon, alt, speed, track, mode, error):
@@ -260,8 +260,8 @@ class SensorGPS(Sensor):
         self.values['lat'] = lat
         self.values['lon'] = lon
     else: #copy from pre value
-      self.values['lat'] = self.pre_lat
-      self.values['lon'] = self.pre_lon
+      self.values['lat'] = self.values['pre_lat']
+      self.values['lon'] = self.values['pre_lon']
     
     #altitude
     if alt != self.config.G_GPS_NULLVALUE:
@@ -270,18 +270,21 @@ class SensorGPS(Sensor):
       if self.values['alt'] < -500:
         self.values['alt'] = -500
     else: #copy from pre value
-      self.values['alt'] = self.pre_alt
+      self.values['alt'] = self.values['pre_alt']
 
     #GPS distance
-    if not np.isnan(self.values['lat']) and not np.isnan(self.values['lon']):
-      if not np.isnan(self.pre_lon) and not np.isnan (self.pre_lat):
-        #2D distance : (x1, y1), (x2, y2)
-        dist = self.config.get_dist_on_earth(self.pre_lon,self.pre_lat,self.values['lon'],self.values['lat'])
-        #need 3D distance? : (x1, y1, z1), (x2, y2, z2)
+    if not np.any(np.isnan([
+      self.values['pre_lon'],self.values['pre_lat'],self.values['lon'],self.values['lat']
+      ])):
+      #2D distance : (x1, y1), (x2, y2)
+      dist = self.config.get_dist_on_earth(
+        self.values['pre_lon'],self.values['pre_lat'],self.values['lon'],self.values['lat']
+        )
+      #need 3D distance? : (x1, y1, z1), (x2, y2, z2)
 
-        if self.config.G_STOPWATCH_STATUS == "START":
-          #unit: m
-          self.values['distance'] += dist
+      if self.config.G_STOPWATCH_STATUS == "START":
+        #unit: m
+        self.values['distance'] += dist
           
     #speed
     if speed != self.config.G_GPS_NULLVALUE:

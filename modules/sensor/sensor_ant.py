@@ -102,6 +102,8 @@ class SensorANT(Sensor):
       for key in [0x10,0x11,0x12]:
         self.values[ac['PWR']][key] = {'accumulated_power':0}
 
+    self.reset()
+
   def start(self):
     if _SENSOR_ANT:
       self.node.start()
@@ -417,6 +419,8 @@ class ANT_Device_Speed_Cadence(ANT_Device):
   pre_values = [] #cad_time, cad, speed_time, speed
   elements = ('speed','cadence','distance')
 
+  pickle_key = "ant+_sc_values"
+
   def addStructPattern(self):
     self.structPattern[self.name] = struct.Struct('<HHHH')
 
@@ -436,6 +440,16 @@ class ANT_Device_Speed_Cadence(ANT_Device):
       self.values['speed'] = 0
       self.values['cadence'] = 0
       self.values['on_data_timestamp'] = t
+      
+      pre_speed_value = self.config.get_config_pickle(self.pickle_key, self.pre_values[3])
+      diff = self.pre_values[3] - pre_speed_value
+      if -65535 <= diff < 0:
+        diff += 65536
+      if diff > 0:
+        self.values['distance'] += self.config.G_WHEEL_CIRCUMFERENCE * diff
+        print("### resume spd ", self.pre_values[3], pre_speed_value, diff, "###")
+        print("### resume spd ", self.values['distance'], self.config.G_WHEEL_CIRCUMFERENCE * diff, "[m] ###")
+
       return
 
     #cad_time, cad, speed_time, speed
@@ -462,6 +476,8 @@ class ANT_Device_Speed_Cadence(ANT_Device):
       self.values['speed'] = 0
     else:
       print("ANT+ S&C(speed) err: ", datetime.datetime.now().strftime("%Y%m%d %H:%M:%S"), self.delta)
+    #store raw speed
+    self.config.set_config_pickle(self.pickle_key, self.sc_values[3])
     
     #cadence
     if self.delta[0] > 0 and 0 <= self.delta[1] < 6553: #for spike
@@ -492,6 +508,8 @@ class ANT_Device_Cadence(ANT_Device):
   elements = ('cadence',)
   const = 60
   fit_max = 255
+  
+  pickle_key = "ant+_sc_values"
 
   def addStructPattern(self):
     self.structPattern[self.name] = struct.Struct('<xxxxHH')
@@ -516,7 +534,8 @@ class ANT_Device_Cadence(ANT_Device):
     if self.pre_values[0] == -1:
       self.pre_values = list(self.sc_values)
       self.values[self.elements[0]] = 0
-      self.values['on_data_timestamp']= t
+      self.values['on_data_timestamp'] = t
+      self.resumeAccumulatedValue()
       return
 
     #time, value
@@ -561,6 +580,9 @@ class ANT_Device_Cadence(ANT_Device):
     elif page == 4:
       self.setCommonPage82(data[2:4], self.values)
 
+  def resumeAccumulatedValue(self):
+    pass
+
   def accumulateValue(self):
     pass
 
@@ -574,15 +596,27 @@ class ANT_Device_Speed(ANT_Device_Cadence):
   elements = ('speed','distance')
   const = None
   fit_max = 65
+  
+  pickle_key = "ant+_spd_values"
 
   def resetExtra(self):
     self.values['distance'] = 0.0
     self.const = self.config.G_WHEEL_CIRCUMFERENCE
+  
+  def resumeAccumulatedValue(self):
+    pre_speed_value = self.config.get_config_pickle(self.pickle_key, self.pre_values[1])
+    diff = self.pre_values[1] - pre_speed_value
+    if -65535 <= diff < 0:
+      diff += 65536
+    if diff > 0:
+      self.values['distance'] += self.config.G_WHEEL_CIRCUMFERENCE * diff
  
   def accumulateValue(self):
     if self.config.G_MANUAL_STATUS == "START":
       #unit: m
       self.values['distance'] += self.config.G_WHEEL_CIRCUMFERENCE * self.delta[1]
+    #store raw speed
+    self.config.set_config_pickle(self.pickle_key, self.sc_values[1])
 
 
 class ANT_Device_Power(ANT_Device):
@@ -723,6 +757,8 @@ class ANT_Device_Power(ANT_Device):
     pre_values[0:2] = power_values[0:2]
     #on_data timestamp
     values['on_data_timestamp'] = t
+    #store raw power
+    self.config.set_config_pickle("ant+_power_values_16", power_values[1])
 
   def on_data_power_0x11(self, data, power_values, pre_values, values):
     #(page), evt_count, wheel_ticks, x, wheel period(2byte), accumulatd power(2byte)
@@ -734,6 +770,18 @@ class ANT_Device_Power(ANT_Device):
       pre_values = power_values
       values['on_data_timestamp'] = t
       values['power'] = 0
+      
+      pre_pwr_value = self.config.get_config_pickle("ant+_power_values_17", pre_values)
+      pwr_diff = pre_values[1] - pre_pwr_value[1]
+      spd_diff = pre_values[3] - pre_pwr_value[3]
+      if -65535 <= pwr_diff < 0:
+        pwr_diff += 65536
+      if -255 <= spd_diff < 0:
+        spd_diff += 256
+      if pwr_diff > 0:
+        values['accumulated_power'] += 128*MATH_PI*pwr_diff /2048
+      if spd_diff > 0:
+        values['distance'] += self.config.G_WHEEL_CIRCUMFERENCE*spd_diff
       return
 
     delta = [a - b for(a, b) in zip(power_values, pre_values)]
@@ -779,6 +827,9 @@ class ANT_Device_Power(ANT_Device):
     #on_data timestamp
     values['on_data_timestamp'] = t
 
+    #store raw power
+    self.config.set_config_pickle("ant+_power_values_17", power_values)
+
   def on_data_power_0x12(self, data, power_values, pre_values, values):
     #(page), x, x, cadence, period(2byte), accumulatd power(2byte)
     (cadence, power_values[0], power_values[1]) = self.structPattern[self.name][0x12].unpack(data[0:8])
@@ -787,6 +838,15 @@ class ANT_Device_Power(ANT_Device):
       pre_values[0:2] = power_values[0:2]
       values['on_data_timestamp'] = t
       values['power'] = 0
+      
+      pre_pwr_value = self.config.get_config_pickle("ant+_power_values_18", pre_values[1])
+      diff = pre_values[1] - pre_pwr_value
+      if -65535 <= diff < 0:
+        diff += 65536
+      if diff > 0:
+        values['accumulated_power'] += 128*MATH_PI*diff /2048
+        print("### resume pwr ", diff, pre_values[1], pre_pwr_value, "###")
+        print("### resume pwr ", int(values['accumulated_power']), int(128*MATH_PI*diff /2048), "[j] ###")
       return
 
     delta = [a - b for(a, b) in zip(power_values, pre_values)]
@@ -825,6 +885,9 @@ class ANT_Device_Power(ANT_Device):
     pre_values[0:2] = power_values[0:2]
     #on_data timestamp
     values['on_data_timestamp'] = t
+
+    #store raw power
+    self.config.set_config_pickle("ant+_power_values_18", power_values[1])
     
 class ANT_Device_MultiScan(ANT_Device):
 
