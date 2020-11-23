@@ -74,8 +74,8 @@ class AccelerationGraphWidget(ScreenWidget):
    
     if not all_nan[X]:
       self.p1.clear()
-      if median != None:
-        self.p1.setYRange(-self.g_range, self.g_range)
+      #if median != None:
+     #   self.p1.setYRange(-self.g_range, self.g_range)
 
       self.p1.addItem(
         pg.PlotCurveItem(
@@ -88,8 +88,8 @@ class AccelerationGraphWidget(ScreenWidget):
     if not all_nan[Y]:
       self.p2.clear()
       
-      if median != None:
-        self.p2.setYRange(-self.g_range, self.g_range)
+      #if median != None:
+      #  self.p2.setYRange(-self.g_range, self.g_range)
       
       self.p2.setGeometry(self.p1.vb.sceneBoundingRect())
       self.p2.linkedViewChanged(self.p1.vb, self.p2.XAxis)
@@ -103,8 +103,8 @@ class AccelerationGraphWidget(ScreenWidget):
     if not all_nan[Z]:
       self.p3.clear()
       
-      if median != None:
-        self.p3.setYRange(-self.g_range, self.g_range)
+      #if median != None:
+      #  self.p3.setYRange(-self.g_range, self.g_range)
       
       self.p3.setGeometry(self.p1.vb.sceneBoundingRect())
       self.p3.linkedViewChanged(self.p1.vb, self.p3.XAxis)
