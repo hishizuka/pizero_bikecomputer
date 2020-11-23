@@ -19,6 +19,7 @@ class SensorGPIO(Sensor):
   oldButtonState = {}
   interval = 0.01
   interval_inv = int(1/interval)
+  mode = 'MAIN'
 
   def sensor_init(self):
     if _SENSOR_RPiGPIO and self.config.G_DISPLAY in ['PiTFT', 'Papirus', 'DFRobot_RPi_Display']:
@@ -40,19 +41,18 @@ class SensorGPIO(Sensor):
       sw_status = GPIO.input(channel)
 
       i = s.currentIndex()
-      m = 'MAIN'
       if i == 1:
-        m = 'MAIN'
-      elif i >= 0:
-        m = 'MENU'
+        self.mode = 'MAIN'
+      elif i >= 2:
+        self.mode = 'MENU'
 
       if sw_status == 0:
         sw_counter = sw_counter + 1
         if sw_counter >= self.config.G_BUTTON_LONG_PRESS * self.interval_inv:
-          eval('self.config.gui.'+b[m][channel][1])
+          eval('self.config.gui.'+b[self.mode][channel][1])
           break
       else:
-        eval('self.config.gui.'+b[m][channel][0])
+        eval('self.config.gui.'+b[self.mode][channel][0])
         break
       time.sleep(self.interval)
 
