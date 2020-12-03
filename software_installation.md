@@ -18,6 +18,17 @@
     - [Manual execution](#manual-execution)
     - [Run as a service](#run-as-a-service)
 - [Usage](#usage)
+  - [Button](#button)
+    - [Software button](#Software-button)
+    - [Hardware button](#Hardware-button)
+  - [Menu screen](#menu-screen)
+  - [Settings](#settings)
+    - [setting.conf](#setting_conf)
+    - [setting.pickle](#setting_pickle)
+    - [layout.yaml](#layout_yaml)
+    - [map.yaml](#map_yaml)
+    - [config.py](#config_py)
+  - [Prepare course files and maps](#prepare-course-files-and-maps)
 
 # Installation
 
@@ -184,7 +195,7 @@ Here is an example.
 $ sudo pip3 install adafruit-circuitpython-bmp280
 ```
 
-| Maker | Sensor | additional pip package |
+| Manufacturer | Sensor | additional pip package |
 |:-|:-|:-|
 | [Pimoroni](https://shop.pimoroni.com) | [Enviro pHAT](https://shop.pimoroni.com/products/enviro-phat) | None |
 | [Adafruit](https://www.adafruit.com) | [BMP280](https://www.adafruit.com/product/2651) | adafruit-circuitpython-bmp280 |
@@ -300,7 +311,7 @@ $ sudo systemctl enable pizero_bikecomputer_shutdown.service
 
 #### start the service
 
-The output of the log file will be in "./log/debug.txt".
+The output of the log file will be in "/home/pi/pizero_bikecomputer/log/debug.txt".
 
 ```
 $ sudo systemctl start pizero_bikecomputer.service
@@ -309,13 +320,271 @@ $ sudo systemctl start pizero_bikecomputer.service
 
 # Usage
 
-Comming soon!
+## Button
+
+### Software button
+
+![app-01.png](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/100741/f8eeed99-878d-817e-21e7-543c985f0009.png)
+
+The buttons at the bottom of the screen are assigned the following functions from left to right. 
+
+| Button | Short press | Long press |
+|:-|:-|:-|
+| Left (<-) | Screen switching(Back) | None |
+| LAP | LAP | Reset |
+| MENU | Enter the menu | None |
+| Start/Stop  | Start/Stop | Quit the program |
+| Right (->) | Screen switching(Forward) | None |
+
+### Hardware button
+
+The hardware buttons are designed to roughly match the software screen.
+You can change both short and long presses in "modules/config.py".
+
+#### PiTFT 2.4
+
+<img width="300" alt="pitft_button" src="https://user-images.githubusercontent.com/12926652/100878687-da579b00-34ed-11eb-987f-e15bf488f1f3.png">
+
+From left to right, the button assignments are as follows.
+
+| GPIO NUM | Short press | Long press |
+|:-|:-|:-|
+| 5 | Screen switching(Back) | None |
+| 6 | LAP | Reset |
+| 12 | Screen brightness On/Off | None |
+| 13 | Start/Stop | Quit the program |
+| 16 | Screen switching(Forward) | Entering the menu |
+
+In the menu, the button has different assignments. From left to right, the button assignments are as follows.
+
+| GPIO NUM | Short press | Long press |
+|:-|:-|:-|
+| 5 | Back | None |
+| 6 | None | None |
+| 12 | Enter | None |
+| 13 | Select items (Back) | None |
+| 16 | Select items (Forward) | None |
+
+Both short press and long press can be changed. And only the GPIO number of PiTFT 2.4 is supported. For other models, you need to change it in modules/config.py.
+
+### Button shim
+
+<img src="https://user-images.githubusercontent.com/12926652/91799330-cfc50580-ec61-11ea-9045-e1991aed205c.png" width=240 />
+
+From left to right, the button assignments are as follows.
+
+| GPIO NUM | Short press | Long press |
+|:-|:-|:-|
+| A | Screen switching(Back) | None |
+| B | LAP | Reset |
+| C | Change buttons(*) | None |
+| D | Start/Stop | None |
+| E | Screen switching(Forward) | Entering the menu |
+
+(*)In the map, change button assignments.
+- A: left, B: down, D: up, E: right
+- A: zoom down, B: zoom up, C: none, D: none
+
+In the menu, the button has different assignments. From left to right, the button assignments are as follows.
+
+| GPIO NUM | Short press | Long press |
+|:-|:-|:-|
+| A | Back | None |
+| B | brightness control(*) | None |
+| C | Enter | None |
+| D | Select items (Back) | None |
+| E | Select items (Forward) | None |
+
+(*) If you use the MIP Reflective color LCD with backlight model.
+
+## Menu screen
+
+![app-02.png](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/100741/43df2bd6-2af9-16cd-f356-a30ede21d63a.png)
+
+- ANT+ Sensors
+  - Pairing with ANT+ sensors. 
+  - You need to install the ANT+ library and to set [ANT section](#ant-section) of [setting.conf](#settingconf) with `status = True`.
+  - The pairing setting is saved in setting.conf when a sensor is connected, so it will be automatically connected next time you start the program.
+- Wifi BT
+  - Wifi and BT are switched on and off.
+- Update
+  - Update the program.
+  - It just does a `git pull origin master` in update.sh.
+- Strava Upload
+  - Upload the log file(.fit) to Strava.
+  - You need to set the Strava Token in [Strava API section](#strava_api-section) of [setting.conf](#settingconf).
+- Wheel Size
+  - Enter the wheel circumference in mm when the ANT+ speed sensor is available.
+  - It is used to calculate the distance.
+  - The default value is 2,105mm, which is the circumference of 700x25c tire.
+  - The value is saved in setting.conf.
+- Adjust Altitude
+  - Enter the current altitude to correct the sea level and increase the accuracy when an I2C pressure sensor is connected.
+- Power Off
+  - Power off the raspberry pi zero when the program is started with the service.
+- Debug log
+  - View "log/debug.log". But The viewer is created temporarily and not properly implemented. So, this will be removed in the future.
+
+## Settings
+
+There are five different configuration files. You need to edit at the first "setting.conf" and don't need to care about the other files.
+
+### setting.conf
+
+The settings are dependent on the user environment.
+GENERAL -> display must be set.
+
+#### ANT+ section
+
+- Enable ANT+ with `status = True`.
+- Additional setting is not necessary because the settings are written when pairing ANT+ sensors.
+- If there are some settings, the program will connect at startup.
+
+#### GENERAL section
+
+- `display`
+  - Set the type of display.
+  - There are definitions in `modules/config.py` for the resolution and availability of the touchscreen.
+  - `PiTFT`: PiTFT2.4 (or a PiTFT2.8 with the same resolution)
+  - `MIP`: MIP color reflective LCD module 2.7 inch.
+  - `MIP_Sharp`: SHARP Memory Display Breakout
+  - `Papirus`: PaPiRus ePaper / eInk Screen HAT
+  - `DFRobot_RPi_Display`: e-ink Display Module
+- `autostop_cutoff`
+  - Set the threshold for the speed at which the stopwatch will automatically stop/start after it is activated.
+  - The default value is `4` [km/h].
+- `wheel_circumference`
+  - Set the wheel circumference required for ANT+ speed sensor use.
+  - It can also be set on the screen.
+  - The default value is `2105` (unit is mm) for 700x25c.
+- `gross_ave_speed`
+  - Set the gross average speed, which is used in the brevet and the like.
+  - It is used for cycling long distances with a set time limit.
+  - The screen shows the actual gross average and the gained time from this gross average speed.
+  - The default value is `15` [km/h].
+- `lang`
+  - The language setting of the label of items.
+  - The default is `EN`.
+  - You can set other languages with `G_LANG` in modules/gui_config.py. Samples of `JA` are available.
+- `font_file`
+  - Set the the full path of the font which you want to use.
+  - Place the fonts in `fonts/` folder.
+- `map`
+  - Set the map.
+  - The `G_MAP_CONFIG` in modules/config.py provides some preset definitions.
+  - `toner`: A map for monochrome colors. [http://maps.stamen.com/toner/](http://maps.stamen.com/toner/)
+  - `wikimedia`: An example map of a full-color map. [https://maps.wikimedia.org/](https://maps.wikimedia.org/)
+  - `jpn_kokudo_chiri_in`: A map from Japan GSI. [https://cyberjapandata.gsi.go.jp](https://cyberjapandata.gsi.go.jp)
+  - You can add a map URL to map.yaml. Specify the URL in tile format (tile coordinates by [x, y] and zoom level by [z]). And The map name is set to this setting `map`.
+
+#### STRAVA_API section
+
+Set up for uploading your .fit file to Strava in the "Strava Upload" of the menu. The upload is limited to the most recently reset and exported .fit file.
+
+To get the Strava token, see "[Trying the Authorization Method (OAuth2) of the Strava V3 API (In Japanese)](https://hhhhhskw.hatenablog.com/entry/2018/11/06/014206)".
+Set the `client_id`, `client_secret`, `code`, `access_token` and `refresh_token` as described in the article. Once set, they will be updated automatically.
+
+#### STRAVA_COOKIE section
+
+Set the variables of Strava cookie if you want to use Strava HeatMap.
+Log in to Strava, get the `key_pair_id`, `policy` and `signature` from the cookie from Strava and set these variables. 
+After that, set the URL of Strava heatmap in map.yaml.
+
+#### SENSOR_IMU section
+In modules/sensor_i2c.py, use the change_axis method to change the axis direction of the IMU (accelerometer/magnetometer/gyroscope) according to its mounting direction.
+The settings are common, so if you use individual sensors, make sure they are all pointing in the same direction.
+
+X, Y, and Z printed on the board are set to the following orientations by default.
+
+- X: Forward is positive.
+- Y: Left is positive.
+- Z: Downward is positive.
+
+Axis conversion is performed with the following variables.
+
+- `axis_conversion_status`: Inverts the signs of X, Y and Z.
+  - Change to `False` by default, or `True` if you want to apply it.
+  - `axis_conversion_coef`: Fill in [X, Y, Z] with ±1.
+- `axis_swap_xy_status`: Swaps the X and Y axes.
+  - The default is `False`, or `True` if you want to apply it.
+  - `axis_swap_xy_coef`: Insert the sign of the new [X, Y] by ±1.
+
+#### GOOGLE_DIRECTION_API section
+
+Get an API Key from the Google Directions API. A function to retrieve routes from this API will be implemented.
+
+#### BT_ADDRESS section
+
+Unused.
+
+### setting.pickle
+
+It stores temporary variables such as values for quick recovery in the event of a power failure and sensor calibration results.
+
+Most of them are deleted on reset.
+
+### layout.yaml
+
+Set up the placement of each item on the display of a screen consisting only of numerical values.
+(Maps and graphs cannot be edited with this setting.)
+
+The following is an example of a top screen.
 
 ```
+MAIN:
+  STATUS: true
+  LAYOUT:
+    Power: [0, 0, 1, 2]
+    HR: [0, 2]
+    Speed: [1, 0]
+    Cad.: [1, 1]
+    Timer: [1, 2]
+    Dist.: [2, 0]
+    Work: [2, 1]
+    Ascent: [2, 2]
+```
+
+- `MAIN`: The name is optional. It is not used in the program, but the following `STATUS` and `LAYOUT` are displayed on one screen. The number of screens can be increased or decreased.
+- `STATUS`: Show this screen or not.
+  - Set the boolean value of `true` or `false` of yaml format.
+- `LAYOUT`: Specify the position of each element.
+  - Each element is defined in modules/gui_congig.py under `G_ITEM_DEF`. You can also add your own variables to the modules/gui_congig.py file.
+  - The position is set up in the form of [Y, X], with the top left as the origin [0, 0], the right as the positive direction of the X axis, and the bottom as the positive direction of the Y axis. The implementation is the coordinate system of QGridLayout.
+  - If you want to merge multiple cells, the third argument should be the bottom Y coordinate + 1, and the fourth argument should be the right X coordinate + 1. For example, `Power: [0, 0, 1, 2]` merges the [0, 0] cell with the right next [0, 1] cell.
+
+### map.yaml
+
+Register the map name, tile URL and copyright in this file.
+An example of Strava HeatMap is shown below.
+
+```
+strava_heatmap_hot:
+  url: https://heatmap-external-b.strava.com/tiles-auth/ride/hot/{z}/{x}/{y}.png?px=256
+  attribution: strava
+```
+
+- Line 1: Map name
+  - This is the string to be set to [GENERAL](#general-section) -> map in setting.conf.
+- Second line: tile URL
+  - Set the tile URL. Tile coordinates X, Y, and zoom Z should be listed with `{x}`, `{y}`, and `{z}`.
+- Line 3: Copyright.
+  - Set the copyright required for the map.
+
+### config.py
+
+There are some settings which the user doesn't need to care about and some variables defined in the above configuration file.
+
+## Prepare course files and maps
+
+Put course.tcx file in course folder. The file name is fixed for now. If the file exists, it will be loaded when it starts up.
+
+To download the map in advance, run the program manually with the --demo option. It will start in demo mode.
+
+```console
 $ python3 pizero_bikecomputer.py --demo
 ```
 
-Temporarily use with map downloading. A course file is required. After launching the program, go to the map screen.
+Press the left button to move to the map screen and leave it for a while. The current position will move along the course and download the required area of the map. 
 
 
 [Back to README.md](/README.md)

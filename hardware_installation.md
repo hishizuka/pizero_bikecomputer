@@ -12,6 +12,7 @@
 - [Assembly](#assembly)
   - [Displays with headers](#displays-with-headers-pitft-or-e-ink-displays)
   - [Displays with non headers](#displays-without-headers-mip-reflective-color-lcd-and-sharp-memory-display)
+- [Bicycle mounting](#bicycle-mounting)
 
 
 # Parts List
@@ -106,7 +107,7 @@ for altitude, grade, and total ascent/descent
 
 ### IMU
 
-Accelerometer is used for stop detection when using GPS.Magnetometer sensors are used in compasses. 
+The accelerometer is used for stop detection when using GPS. The magnetometer is used in compasses. 
 
 - [LSM303](https://shop.pimoroni.com/products/enviro-phat) (\*1); 
 - [LSM6DS](https://www.adafruit.com/product/4485): Accel / Gyro
@@ -149,6 +150,8 @@ get battery percent, etc.
 
 - make a nice case if you can use 3D printer.
 - [Topeak SMARTPHONE DRYBAG 5"](https://www.topeak.com/global/en/products/weatherproof-ridecase-series/1092-smartphone-drybag-5%22) is easy to use. It is waterproof.
+  - If you attach the PiTFT directly to the Raspberry Pi Zero, you can use Topeak SMARTPHONE DRYBAG for iPhone 5 which is smaller than Topeak SMARTPHONE DRYBAG 5".
+  - On the other hand, if you want to put some sensors in, Topeak SMARTPHONE DRYBAG 6" is better.
 
 
 # Assembly
@@ -246,6 +249,14 @@ Fix the parts with screws.
 Finally, connect the battery for the PiJuice Zero.
 
 <img src="https://user-images.githubusercontent.com/12926652/91796781-fd0eb500-ec5b-11ea-8451-593858d32b17.png" width=360 />
+
+
+# Bicycle mounting
+
+Attach the case to the handlebar and connect it to a battery in a top tube bag. There is no switch, so the pizero_bikecomputer will start the moment you connect the battery.
+
+![bike-01.png](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/100741/5157c02c-0fe2-c6bb-ab7b-d1e1965f10c2.png)
+
 
 
 [Back to README.md](/README.md)

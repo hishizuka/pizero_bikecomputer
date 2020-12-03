@@ -26,9 +26,8 @@ You will enjoy both cycling and the maker movement with Pi Zero Bikecomputer!
 
 Here is detail articles in Japanese.
 
-[I tried to make a bikecomputer, the result was pretty good](https://qiita.com/hishi/items/46619b271daaa9ad41b3)
-
-[Let's make a bikecomputer with Raspberry Pi Zero (W, WH)](https://qiita.com/hishi/items/46619b271daaa9ad41b3)
+- [I tried to make a bikecomputer, the result was pretty good](https://qiita.com/hishi/items/46619b271daaa9ad41b3)
+- [Let's make a bikecomputer with Raspberry Pi Zero (W, WH)](https://qiita.com/hishi/items/46619b271daaa9ad41b3)
 
 Daily update [at twitter (@pi0bikecomputer)](https://twitter.com/pi0bikecomputer), and [my cycling activity at STRAVA](https://www.strava.com/athletes/40248693).
 
