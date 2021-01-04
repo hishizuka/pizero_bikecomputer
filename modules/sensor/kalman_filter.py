@@ -5,7 +5,7 @@ import sys
 from math import log
 from copy import deepcopy
 
-from numpy import dot, zeros, eye, isscalar, linalg, array, atleast_2d, loadtxt
+from numpy import dot, zeros, eye, isscalar, linalg, array, atleast_2d, loadtxt, matrix
 #from scipy.linalg import block_diag
 
 
@@ -359,4 +359,73 @@ class KalmanFilter(object):
         self.z = deepcopy(z)
         self.x_post = self.x.copy()
         self.P_post = self.P.copy()
+
+class KalmanFilter_pitch():
+
+  import numpy as np
+
+  theta_variance = 0
+  theta_dot_variance = 0
+  theta_update_interval = 0.1
+
+  #State vector
+  theta_data_predict = np.matrix([[0],[0]], dtype = 'float')
+  theta_data = np.matrix([[0],[0]], dtype = 'float')
+  #Covariance matrix
+  P_theta_predict = np.matrix([[1,0],[0,0]], dtype = 'float')
+  P_theta = np.matrix([[0,0],[0,0]], dtype = 'float')
+  #A of the state equition
+  A_theta = np.matrix([[1,-theta_update_interval],[0,1]], dtype = 'float')
+  #B of the state equition
+  B_theta = np.matrix([[theta_update_interval],[0]], dtype = 'float')
+  #C of the state equition
+  C_theta = np.matrix([[1,0]], dtype = 'float')
+
+  I = np.array([[1,0],[0,1]])
+
+  def __init__(self,tm,tv,tdm,tdv,interval):
+    #Kalman filter initialization
+    self.theta_means = tm
+    self.theta_variance = tv
+    self.theta_dot_means = tdm
+    self.theta_dot_variance = tdv
+    self.theta_update_interval = interval
+
+    self.A_theta[0,1] = -self.theta_update_interval
+    self.B_theta[0,0] = self.theta_update_interval
+    self.theta_data_predict[1,0] = self.theta_dot_means
+    self.P_theta_predict[1,1] = self.theta_dot_variance
+
+    #print(tm,tv,tdm,tdv,interval)
+  
+  def update(self, y, theta_dot_gyro):
+  
+    #calculate Kalman gain: G = P'@C^T(W+C@P'@C^T)^-1
+    P_CT = self.P_theta_predict@self.C_theta.T #P'@C^T
+    G_temp1 = self.C_theta@P_CT #C@(P'@C^T)
+    G = P_CT * (1 / (G_temp1[0,0]+self.theta_variance)) #(P'@C^T)@(W+C@P'@C^T)^-1
+    #print("G:\n",G)
+
+    #theta_data estimation: theta = theta'+G(y-Ctheta')
+    delta_theta = G * (y-(self.C_theta@self.theta_data_predict)[0,0])
+    self.theta_data = self.theta_data_predict + delta_theta
+    #print("theta_data:\n", self.theta_data)
+
+    #calculate covariance matrix: P=(I-GC)P'
+    I2_GC = self.I - (G@self.C_theta) #I-GC
+    self.P_theta = I2_GC@self.P_theta_predict
+    #print("P_theta:\n", self.P_theta)
+
+    #predict the next step data: theta' = Atheta+Bu
+    self.theta_data_predict = (self.A_theta@self.theta_data) + self.B_theta*theta_dot_gyro
+    #print("theta_data_predict:\n", self.theta_data_predict)
+
+    #predict covariance matrix: P'=A@P@A^T + B@U@B^T
+    self.P_theta_predict = \
+      self.A_theta@self.P_theta@self.A_theta.T + (self.B_theta@self.B_theta.T)*self.theta_dot_variance
+    #print("P_theta_predict:\n", self.P_theta_predict)
+
+
+
+
 
