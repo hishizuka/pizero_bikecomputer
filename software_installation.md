@@ -81,6 +81,8 @@ $ sudo cp install/etc/default/gpsd /etc/default/gpsd
 $ sudo systemctl enable gpsd
 ```
 
+Check with `cgps` or `gpsmon` command.
+
 #### I2C GPS
 
 Assume I2C interface is on in raspi-config.
@@ -89,6 +91,8 @@ Assume I2C interface is on in raspi-config.
 $ sudo apt-get install python3-dateutil
 $ sudo pip3 install timezonefinder pa1010d
 ```
+
+Check with [pa1010d example program](https://github.com/pimoroni/pa1010d-python/blob/master/examples/latlon.py)
 
 
 ### ANT+ USB dongle
