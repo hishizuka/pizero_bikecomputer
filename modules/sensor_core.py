@@ -41,7 +41,7 @@ class SensorCore():
   thread_integrate = None
   threshold = {'HR':15, 'SPD':5, 'CDC':3, 'PWR':3}
   grade_range = 9
-  grade_window_size = 3
+  grade_window_size = 7
   graph_keys = [
     'hr_graph', 
     'power_graph', 
@@ -54,7 +54,7 @@ class SensorCore():
     'alt_diff_spd', 
     'dst_diff_spd',
     ]
-  lp = 3
+  lp = 4
 
   def __init__(self, config):
     self.config = config
@@ -90,8 +90,6 @@ class SensorCore():
     self.sensor_gpio = SensorGPIO(config, None)
     time_profile.append(datetime.datetime.now()) #for time profile
     
-    #self.thread_keyboard = threading.Thread(target=self.keyboard_check, name="thread_keyboard", args=())
-    
     self.thread_integrate = threading.Thread(target=self.integrate, name="thread_integrate", args=())
     time_profile.append(datetime.datetime.now()) #for time profile
     self.start()
@@ -109,15 +107,6 @@ class SensorCore():
     self.sensor_gpio.update()
     self.thread_i2c.start()
     self.thread_integrate.start()
-    #self.thread_keyboard.start()
-
-  def keyboard_check(self):
-    while(not self.config.G_QUIT):
-      key = input()
-      if key == "n":
-        self.config.gui.scroll_next()
-      elif key == "p":
-        self.config.gui.scroll_prev()
 
   def integrate(self):
     pre_dst = {'ANT+':0, 'GPS': 0} 
@@ -269,7 +258,8 @@ class SensorCore():
       #if not np.isnan(v['I2C']['altitude_kalman']):
       if not np.isnan(v['I2C']['pre_altitude']):
         #alt = v['I2C']['altitude_kalman']
-        alt = round(v['I2C']['altitude_kalman'], 1)
+        #alt = round(v['I2C']['altitude_kalman'], 1)
+        alt = v['I2C']['altitude']
         #for grade (distance base)
         for key in ['ANT+', 'GPS']:
           if dst_diff[key] > 0:
@@ -287,11 +277,10 @@ class SensorCore():
       #grade (distance base)
       if dst_diff['USE'] > 0:
         for key in ['alt_diff', 'dst_diff']:
-          #del(self.values['integrated'][key][0])
-          #self.values['integrated'][key].append(eval(key+"['USE']"))
           self.values['integrated'][key][0:-1] = self.values['integrated'][key][1:]
           self.values['integrated'][key][-1] = eval(key+"['USE']")
-          diff_sum[key] = sum(self.values['integrated'][key][-self.grade_window_size:])
+          #diff_sum[key] = np.mean(self.values['integrated'][key][-self.grade_window_size:])
+          diff_sum[key] = np.nansum(self.values['integrated'][key][-self.grade_window_size:])
         #set grade
         gr = gl = self.config.G_ANT_NULLVALUE
         gr = self.config.G_ANT_NULLVALUE
@@ -302,11 +291,12 @@ class SensorCore():
         elif grade_use['GPS']:
           x = diff_sum['dst_diff'] 
         if x > 0:
-          gr = round(100 * y / x, 0)
+          #gr = int(round(100 * y / x))
+          gr = self.conv_grade(100 * y / x)
         if y != 0.0:
-          gl = round(-1 * x / y, 0)
-        grade, pre_grade = self.get_lp_filterd_value(gr, pre_grade)
-        glide, pre_glide = self.get_lp_filterd_value(gl, pre_glide)
+          gl = int(round(-1 * x / y))
+        grade = pre_grade = gr
+        glide = pre_glide = gl
       #for sometimes ANT+ distance is 0 although status is running
       elif dst_diff['USE'] == 0 and self.config.G_STOPWATCH_STATUS == "START":
         grade = pre_grade
@@ -316,19 +306,18 @@ class SensorCore():
       if self.config.G_ANT['USE']['SPD']:
         dst_diff_spd['ANT+'] = spd * self.actual_loop_interval
         for key in ['alt_diff_spd', 'dst_diff_spd']:
-          #del(self.values['integrated'][key][0])
-          #self.values['integrated'][key].append(eval(key+"['ANT+']"))
           self.values['integrated'][key][0:-1] = self.values['integrated'][key][1:]
           self.values['integrated'][key][-1] = eval(key+"['ANT+']")
-          diff_sum[key] = sum(self.values['integrated'][key][-self.grade_window_size:])
+          diff_sum[key] = np.mean(self.values['integrated'][key][-self.grade_window_size:])
+          #diff_sum[key] = np.nansum(self.values['integrated'][key][-self.grade_window_size:])
         #set grade
         x = diff_sum['dst_diff_spd']**2 - diff_sum['alt_diff_spd']**2
         y = diff_sum['alt_diff_spd']
         gr = self.config.G_ANT_NULLVALUE
         if x > 0:
           x = math.sqrt(x)
-          gr = round(100 * y / x, 0)
-        grade_spd, pre_grade_spd = self.get_lp_filterd_value(gr, pre_grade_spd)
+          gr = self.conv_grade(100 * y / x)
+        grade_spd = pre_grade_spd = gr
       #for sometimes speed sensor value is missing in running
       elif dst_diff_spd['ANT+'] == 0 and self.config.G_STOPWATCH_STATUS == "START":
         grade_spd = pre_grade_spd
@@ -373,16 +362,21 @@ class SensorCore():
         if np.isnan(v['I2C']['m_stat']) or self.config.G_ANT['USE']['SPD']:
           flag_moving = True
   
-        if self.config.G_STOPWATCH_STATUS == "STOP" and flag_spd and flag_moving:
+        if self.config.G_STOPWATCH_STATUS == "STOP" \
+          and flag_spd and flag_moving \
+          and self.config.logger != None:
           self.config.logger.start_and_stop()
-        elif self.config.G_STOPWATCH_STATUS == "START" and (not flag_spd or not flag_moving):
+        elif self.config.G_STOPWATCH_STATUS == "START" \
+          and (not flag_spd or not flag_moving) \
+          and self.config.logger != None:
           self.config.logger.start_and_stop()
           
       #ANT+ or GPS speed is not avaiable
       elif np.isnan(spd) and self.config.G_MANUAL_STATUS == "START":
         #stop recording if speed is broken
         if (self.config.G_ANT['USE']['SPD'] or 'timestamp' in v['GPS']) \
-          and self.config.G_STOPWATCH_STATUS == "START":
+          and self.config.G_STOPWATCH_STATUS == "START"  \
+          and self.config.logger != None:
           self.config.logger.start_and_stop()
      
       #auto backlight
@@ -421,10 +415,22 @@ class SensorCore():
       loop_time = (datetime.datetime.now() - start_time).total_seconds()
       d1, d2 = divmod(loop_time, self.config.G_SENSOR_INTERVAL)
       if d1 > self.config.G_SENSOR_INTERVAL * 10: #[s]
-        print("too long loop_time:{:.2f}, d1:{:.0f}, d2:{:.2f}".format(loop_time, d1, d2))
+        print(
+          "too long loop_time({}):{:.2f}, d1:{:.0f}, d2:{:.2f}".format(
+           self.__class__.__name__,
+           loop_time,
+           d1,
+           d2
+           ))
         d1 = d2 = 0
       self.wait_time = self.config.G_SENSOR_INTERVAL - d2
       self.actual_loop_interval = (d1 + 1)*self.config.G_SENSOR_INTERVAL
+
+  def conv_grade(self, gr):
+    g = gr
+    if -1.5 < g < 1.5:
+      g = 0
+    return int(g)
 
   def get_lp_filterd_value(self, value, pre):
     o = p = self.config.G_ANT_NULLVALUE
