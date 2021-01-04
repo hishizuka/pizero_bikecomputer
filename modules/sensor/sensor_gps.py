@@ -15,20 +15,19 @@ try:
 except:
   pass
 
-_SENSOR_GPS_ADAFRUIT_I2C = False
+_SENSOR_GPS_I2C = False
 try:
   if _SENSOR_GPS_BASIC:
-    import board
-    import busio
-    import adafruit_gps
-    _sensor_adafruit_gps = adafruit_gps.GPS_GtopI2C(busio.I2C(board.SCL, board.SDA), debug=False)
-    _SENSOR_GPS_ADAFRUIT_I2C = True
+    import pa1010d
+    _sensor_i2c_gps = pa1010d.PA1010D()
+    _sensor_i2c_gps.read_sentence(timeout=1)
+    _SENSOR_GPS_I2C = True
 except:
   pass
 
 _SENSOR_GPS_GPSD = False
 try:
-  if _SENSOR_GPS_BASIC and not _SENSOR_GPS_ADAFRUIT_I2C:
+  if _SENSOR_GPS_BASIC and not _SENSOR_GPS_I2C:
     from gps3 import gps3
     #device test
     _gps_socket = gps3.GPSDSocket()
@@ -43,7 +42,7 @@ except:
 
 _SENSOR_GPS_ADAFRUIT_UART = False
 try:
-  if _SENSOR_GPS_BASIC and not _SENSOR_GPS_ADAFRUIT_I2C and not _SENSOR_GPS_GPSD:
+  if _SENSOR_GPS_BASIC and not _SENSOR_GPS_I2C and not _SENSOR_GPS_GPSD:
     import serial
     import adafruit_gps
     _uart = serial.Serial("/dev/ttyS0", baudrate=9600, timeout=10)
@@ -57,7 +56,7 @@ except:
 
 print('  GPS : ', _SENSOR_GPS_GPSD)
 print('  GPS_ADAFRUIT_UART : ', _SENSOR_GPS_ADAFRUIT_UART)
-print('  GPS_ADAFRUIT_I2C : ', _SENSOR_GPS_ADAFRUIT_I2C)
+print('  GPS_I2C : ', _SENSOR_GPS_I2C)
 
 class SensorGPS(Sensor):
 
@@ -84,12 +83,16 @@ class SensorGPS(Sensor):
       self.gps_socket.connect()
       self.gps_socket.watch()
       self.config.G_GPS_NULLVALUE = "n/a"
-    elif _SENSOR_GPS_ADAFRUIT_I2C or _SENSOR_GPS_ADAFRUIT_UART:
+    elif _SENSOR_GPS_ADAFRUIT_UART:
       self.adafruit_gps = _sensor_adafruit_gps
       self.config.G_GPS_NULLVALUE = None
       #(GPGLL), GPRMC, (GPVTG), GPGGA, GPGSA, GPGSV, (GPGSR), (GPGST)
       self.adafruit_gps.send_command(b'PMTK314,0,1,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0')
       self.adafruit_gps.send_command(b"PMTK220,1000")
+    elif _SENSOR_GPS_I2C:
+      self.i2c_gps = _sensor_i2c_gps
+      self.config.G_GPS_NULLVALUE = None
+
     self.reset()
     for element in self.elements:
       self.values[element] = np.nan
@@ -115,8 +118,10 @@ class SensorGPS(Sensor):
     if not self.config.G_DUMMY_OUTPUT:
       if _SENSOR_GPS_GPSD:
         self.update()
-      elif (_SENSOR_GPS_ADAFRUIT_UART or _SENSOR_GPS_ADAFRUIT_I2C):
+      elif _SENSOR_GPS_ADAFRUIT_UART:
         self.update_adafruit()
+      elif _SENSOR_GPS_I2C:
+        self.update_i2c()
     else:
       self.dummy_update()
   
@@ -240,6 +245,41 @@ class SensorGPS(Sensor):
         self.get_utc_time(time.strftime("%Y/%m/%d %H:%M:%S +0000", g.timestamp_utc))
       self.get_sleep_time(self.config.G_GPS_INTERVAL)
 
+  def update_i2c(self):
+    g = self.i2c_gps
+
+    while not self.config.G_QUIT:
+      self.sleep()
+    
+      result = g.update()
+      if result:
+        self.init_GPS_values()
+        speed = 0
+        lat = self.config.G_GPS_NULLVALUE
+        lon = self.config.G_GPS_NULLVALUE
+        timestamp = self.config.G_GPS_NULLVALUE
+        if g.data['mode_fix_type'] != None and int(g.data['mode_fix_type']) > 1:
+          lat = g.data['latitude']
+          lon = g.data['longitude']
+        if g.data['timestamp'] != self.config.G_GPS_NULLVALUE:
+          timestamp = g.data['timestamp'].strftime("%H:%M:%S +0000") 
+        if g.data['speed_over_ground'] != self.config.G_GPS_NULLVALUE:
+          speed = g.data['speed_over_ground'] * 1.852 / 3.6
+        self.get_GPS_basic_values(
+          lat,
+          lon,
+          g.data['altitude'],
+          speed,
+          self.config.G_GPS_NULLVALUE,
+          g.data['mode_fix_type'],
+          [self.config.G_GPS_NULLVALUE]*3,
+          )
+        if g.data['num_sats'] != self.config.G_GPS_NULLVALUE:
+          self.values['used_sats_str'] = str(g.data['num_sats'])
+          self.values['used_sats'] = g.data['num_sats']
+        self.get_utc_time(timestamp)
+      self.get_sleep_time(self.config.G_GPS_INTERVAL)
+
   def init_GPS_values(self):
     #backup values
     if not np.isnan(self.values['lat']) and not np.isnan(self.values['lon']):
@@ -325,7 +365,10 @@ class SensorGPS(Sensor):
     #print("get_course_index: ", (datetime.datetime.utcnow()-t2).total_seconds(), "sec")
 
     #modify altitude with course
-    if self.config.logger != None and not self.is_altitude_modified and self.values['on_course_status']:
+    if not self.is_altitude_modified \
+      and self.values['on_course_status'] \
+      and self.config.logger != None \
+      and len(self.config.logger.course.altitude) > 0:
       self.config.logger.sensor.sensor_i2c.update_sealevel_pa(
         self.config.logger.course.altitude[self.values['course_index']]
         )
@@ -596,5 +639,5 @@ class SensorGPS(Sensor):
     return min_index
 
   def hasGPS(self):
-    return _SENSOR_GPS_GPSD or _SENSOR_GPS_ADAFRUIT_I2C or _SENSOR_GPS_ADAFRUIT_UART
+    return _SENSOR_GPS_GPSD or _SENSOR_GPS_I2C or _SENSOR_GPS_ADAFRUIT_UART
 
