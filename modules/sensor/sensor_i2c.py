@@ -1,5 +1,6 @@
 import datetime
 import math
+import time
 
 import numpy as np
 
@@ -22,7 +23,7 @@ Z = 2
 G = 9.80665
 
 #kalman filter
-from .kalman_filter import KalmanFilter
+from .kalman_filter import KalmanFilter, KalmanFilter_pitch
 
 
 class SensorI2C(Sensor):
@@ -73,6 +74,10 @@ class SensorI2C(Sensor):
   pre_values_array = {}
   median_val = {}
   pre_value_window_size = 10
+  #for average
+  average_keys = ['altitude']
+  average_val = {}
+  ave_window_size = 7
 
   #constants
   #for moving detection
@@ -135,12 +140,54 @@ class SensorI2C(Sensor):
     elif self.available_sensors['LIGHT']['VCNL4040']:
       self.sensor['lux'] = self.sensor_vcnl4040
 
+    self.init_kalman(0.01)
     self.reset()
 
     #store temporary values
     self.sealevel_pa = self.config.get_config_pickle("sealevel_pa", self.sealevel_pa)
     self.values_mod['mag_min'] = self.config.get_config_pickle("mag_min"+"_"+self.sensor_label['MAG'], self.values_mod['mag_min'])
     self.values_mod['mag_max'] = self.config.get_config_pickle("mag_max"+"_"+self.sensor_label['MAG'], self.values_mod['mag_max'])
+
+  def init_kalman(self, interval):
+    sampling_num = 100
+    
+    #kalman filter for altitude
+    self.dt = self.config.G_I2C_INTERVAL
+    
+    self.kf = KalmanFilter(dim_x=3, dim_z=2)
+    self.kf.H = np.array([[1, 0, 0], [0, 0, 1]])
+    self.kf.F = np.array([[1, self.dt, 0.5*(self.dt**2)], [0, 1, self.dt], [0, 0, 1]])
+    var_a = pow(10,-1.5) #noise when running
+    var_h = 0.04
+    self.kf.P = np.array([[var_h, 0, 0], [0, 1, 0], [0, 0, var_a]])
+    self.kf.R *= np.array([[var_h, 0], [0, var_a]])
+    std = 0.004
+    var = std * std
+    self.kf.Q = np.array(
+      [[.25*self.dt**4, .5*self.dt**3, .5*self.dt**2],
+       [ .5*self.dt**3,    self.dt**2,       self.dt],
+       [ .5*self.dt**2,       self.dt,            1]]) * var
+
+    #kalman filter for pitch
+    if self.motion_sensor['ACC'] and self.motion_sensor['GYRO']:
+      count = 0
+      acc_list = []
+      gyro_list = []
+      while count < sampling_num:
+        self.read_acc(return_raw=True)
+        self.read_gyro(return_raw=True)
+        acc_list.append(math.atan2(self.values['acc_raw'][X], self.values['acc_raw'][Z]))
+        gyro_list.append(self.values['gyro_raw'][Y])
+        count += 1
+        time.sleep(interval)
+
+      self.kfp = KalmanFilter_pitch(
+        np.mean(acc_list), #theta_means
+        np.var(acc_list), #theta_variance
+        np.mean(gyro_list), #theta_dot_means
+        np.var(gyro_list), #theta_dot_variance
+        self.config.G_I2C_INTERVAL
+        )
 
   def detect_sensors(self):
     
@@ -219,6 +266,9 @@ class SensorI2C(Sensor):
     #for median filter
     for key in self.median_keys:
       self.pre_values_array[key] = np.full(self.pre_value_window_size, np.nan)
+    #for average filter
+    for key in self.average_keys:
+      self.average_val[key] = np.full(self.ave_window_size, np.nan)
     #for quaternions (4 elements)
     self.values['quaternion'] = np.zeros(4)
     self.pre_value['quaternion'] = np.zeros(4)
@@ -255,19 +305,6 @@ class SensorI2C(Sensor):
     self.timestamp_array = [None] * self.timestamp_size
     self.vspeed_array = [np.nan] * self.vspeed_window_size
 
-    #kalman filter for altitude
-    self.dt = self.config.G_I2C_INTERVAL
-    self.kf = KalmanFilter(dim_x=2, dim_z=1)
-    self.kf.x = np.array([[0], [0]]) 
-    self.kf.H = np.array([[1, 0]])
-    self.kf.F = np.array([[1, self.dt], [0 ,1]])
-    self.kf.P *= 1000.
-    self.kf.R = 5
-    #self.kf.Q = Q_discrete_white_noise(2, self.dt, .1)
-    self.kf.Q = np.array(
-      [[.25*self.dt**4, .5*self.dt**3],
-       [ .5*self.dt**3,    self.dt**2]])
-
   def start(self):
     while(not self.config.G_QUIT):
       self.sleep()
@@ -299,7 +336,7 @@ class SensorI2C(Sensor):
         self.values['current_out'] = ic['data']/1000
       if bl['error'] == 'NO_ERROR':
         self.values['battery_percentage'] = bl['data']
-
+    
     self.read_lux()
 
     self.read_acc()
@@ -325,16 +362,15 @@ class SensorI2C(Sensor):
     #Y: to West (up rotation is plus)
     #Z: to down (plus)
     
+    #X-Y swap
+    if self.config.G_IMU_AXIS_SWAP_XY['STATUS']:
+      a[0:2] = a[1::-1]
     #X, Y, Zinversion
     if self.config.G_IMU_AXIS_CONVERSION['STATUS']:
       a = a * self.config.G_IMU_AXIS_CONVERSION['COEF']
-    #X-Y swap
-    if self.config.G_IMU_AXIS_SWAP_XY['STATUS']:
-      #a[1::-1] = a[0:2] * self.config.G_IMU_AXIS_SWAP_XY['COEF']
-      a[0:2] = a[1::-1] * self.config.G_IMU_AXIS_SWAP_XY['COEF']
     return a
 
-  def read_acc(self):
+  def read_acc(self, return_raw=False):
     if not self.motion_sensor['ACC']:
       return
     try:
@@ -355,11 +391,14 @@ class SensorI2C(Sensor):
       return
     self.values['acc_raw'] = self.change_axis(self.values['acc_raw'])
 
+    if return_raw:
+      return
+
     self.values['acc_mod'] = self.values['acc_raw']
     #LP filter
     #self.lp_filter('acc_mod', 4)
 
-  def read_gyro(self):
+  def read_gyro(self, return_raw=False):
     if not self.motion_sensor['GYRO']:
       return
     try:
@@ -370,7 +409,12 @@ class SensorI2C(Sensor):
     except:
       return
     self.values['gyro_raw'] = self.change_axis(self.values['gyro_raw'])
-    self.values['gyro_raw'] = np.radians(self.values['gyro_raw'])
+
+    if not self.available_sensors['MOTION']['LSM6DS']: #already radians
+      self.values['gyro_raw'] = np.radians(self.values['gyro_raw'])
+    
+    if return_raw:
+      return
     
     #calibration
     self.gyro_average_array[:, 0:-1] = self.gyro_average_array[:, 1:]
@@ -438,7 +482,7 @@ class SensorI2C(Sensor):
       
     #finalize mag
     self.values['mag'] = self.values['mag_mod']
-  
+
   def read_quaternion(self):
     if not self.motion_sensor['QUATERNION']:
       return
@@ -448,7 +492,7 @@ class SensorI2C(Sensor):
         self.values['quaternion'] = np.array(self.sensor['i2c_imu'].quaternion)/1.0
     except:
       return
-    
+
   def calc_motion(self):
     
     #get pitch, roll and yaw into self.values
@@ -515,8 +559,8 @@ class SensorI2C(Sensor):
     self.values['heading_str'] = self.config.get_track_str(self.values['heading'])
 
   def get_pitch_roll(self, acc):
-    roll = math.atan2(acc[1], acc[2])
-    pitch = math.atan2(-acc[0], (math.sqrt(acc[1]**2+acc[2]**2)))
+    roll = math.atan2(acc[Y], acc[Z])
+    pitch = math.atan2(-acc[X], (math.sqrt(acc[Y]**2+acc[Z]**2)))
     
     return pitch, roll
 
@@ -624,17 +668,31 @@ class SensorI2C(Sensor):
     self.values['motion'] = math.sqrt(sum(list(map(lambda x: x**2, self.values['acc_mod']))))
 
     #modified_pitch
-    self.values['modified_pitch'] = -100*math.tan(self.values['gyro'][Y])
-    #LP filter
-    self.lp_filter('modified_pitch', 4)
+    if self.motion_sensor['ACC'] and self.motion_sensor['GYRO']:
+      self.kfp.update(
+        math.atan2(-self.values['acc_raw'][X], self.values['acc_raw'][Z]),
+        self.values['gyro_raw'][Y],
+        )
+      self.values['modified_pitch'] = \
+        -100*math.tan(self.kfp.theta_data[0,0] - self.values['fixed_pitch'])
+      #print(
+      #  "modified_pitch:{}%, kfp:{}, acc:{}, fixed_pitch:{}".format( 
+      #  int(self.values['modified_pitch']),
+      #  int(math.degrees(self.kfp.theta_data[0,0])),
+      #  int(math.degrees(math.atan2(-self.values['acc_raw'][X], self.values['acc_raw'][Z]))),
+      #  int(math.degrees(self.values['fixed_pitch'])),
+      #  ))
+
+      #LP filter
+      self.lp_filter('modified_pitch', 6)
     
     #put into graph
     for g in self.graph_keys:
       if g not in self.graph_values:
         continue
       self.graph_values[g][:, 0:-1] = self.graph_values[g][:, 1:]
-      #self.graph_values[g][:, -1] = self.values['acc']
-      self.graph_values[g][:, -1] = self.values['acc_variance']
+      self.graph_values[g][:, -1] = self.values['acc']
+      #self.graph_values[g][:, -1] = self.values['acc_variance']
     
   def recalibrate_position(self):
     self.do_position_calibration = True
@@ -656,13 +714,17 @@ class SensorI2C(Sensor):
       return
 
     sp = self.available_sensors['PRESSURE']
-
+    
     try:
+      #t = datetime.datetime.now()
       if ('LPS3XHW_ORIG' in sp and sp['LPS3XHW_ORIG']) \
-        or ('BMP280_ORIG' in sp and sp['BMP280_ORIG']):
+        or ('BMP280_ORIG' in sp and sp['BMP280_ORIG']) \
+        or ('BMP3XX' in sp and sp['BMP3XX']):
         self.sensor['i2c_baro_temp'].read()
       self.values['temperature'] = int(self.sensor['i2c_baro_temp'].temperature)
       self.values['pressure_raw'] = self.sensor['i2c_baro_temp'].pressure
+      #print("\t\tread value: {:.3f} sec".format((datetime.datetime.now()-t).total_seconds()))
+      #print("\t\tpressure:{:.2f}, temperature:{}".format(self.values['pressure_raw'],self.values['temperature']))
     except:
       return
   
@@ -684,13 +746,19 @@ class SensorI2C(Sensor):
     if np.isnan(self.values['pressure']):
       return
    
-    self.values['altitude'] = \
-      (pow(self.sealevel_pa / self.values['pressure'], (1.0/5.257)) - 1) * self.sealevel_temp / 0.0065
+    altitude_raw = \
+        (pow(self.sealevel_pa / self.values['pressure'], (1.0/5.257)) - 1) * self.sealevel_temp / 0.0065
     #self.values['altitude'] = self.sealevel_temp/0.0065 * (1 - pow(self.values['pressure']/self.sealevel_pa, 0.1907))
 
     #filterd altitude
-    self.update_kf()
+    self.update_kf(altitude_raw)
     
+    #average filter
+    self.average_val['altitude'][0:-1] = self.average_val['altitude'][1:]
+    self.average_val['altitude'][-1] = altitude_raw
+    self.values['altitude'] = round(np.nanmean(self.average_val['altitude']),1)
+    #self.values['altitude_kalman'] = round(np.nanmean(self.average_val['altitude'][-(self.ave_window_size-2)]),1)
+
     if self.config.G_STOPWATCH_STATUS == "START":
       #total ascent/descent
       v = self.values['altitude']
@@ -721,7 +789,7 @@ class SensorI2C(Sensor):
       return
     temp = 273.15 + self.values['temperature'] - self.sealevel_temp_offset
     self.sealevel_pa = self.values['pressure'] * pow(temp / (temp + 0.0065*alt), (-5.257))
-    self.config.set_config_pickle("sealevel_pa", self.sealevel_pa, immediately_apply=True)
+    self.config.set_config_pickle("sealevel_pa", self.sealevel_pa, quick_apply=True)
     
     #if not np.isnan(self.values['temperature']):
     #  self.sealevel_temp = 0.0065*alt + 273.15+self.values['temperature']-self.sealevel_temp_offset
@@ -766,10 +834,18 @@ class SensorI2C(Sensor):
         )
       self.values[key] = self.median_val[key]
 
-  def update_kf(self):
+  def update_kf(self, alt):
+    if not self.motion_sensor['ACC']:
+      self.values['altitude_kalman'] = alt
+      return
     self.kf.predict()
-    self.kf.update(self.values['altitude'])
+    self.kf.update(np.array([[alt], [self.values['acc'][Z]*G]]))
     self.values['altitude_kalman'] = self.kf.x[0][0]
+    #print(
+    #  round(self.values['altitude_kalman'],1),"m, ", 
+    #  round(self.values['altitude'],1),"m, ",
+    #  round(self.values['acc'][Z]*G,1),"m/s^2"
+    #  )
 
   def change_button_mode(self, mode):
     if self.available_sensors['BUTTON']['BUTTON_SHIM']:
@@ -784,9 +860,13 @@ class SensorI2C(Sensor):
       #device test
       self.sensor_bmp280 = adafruit_bmp280.Adafruit_BMP280_I2C(i2c)
       self.sensor_bmp280.mode = adafruit_bmp280.MODE_NORMAL
+      #STANDBY_TC_0_5, STANDBY_TC_10, STANDBY_TC_20, STANDBY_TC_62_5,
+      #STANDBY_TC_125, STANDBY_TC_250, STANDBY_TC_500, STANDBY_TC_1000,
       self.sensor_bmp280.standby_period = adafruit_bmp280.STANDBY_TC_250
-      self.sensor_bmp280.iir_filter = adafruit_bmp280.IIR_FILTER_X16
-      self.sensor_bmp280.overscan_pressure = adafruit_bmp280.OVERSCAN_X16
+      #IIR_FILTER_DISABLE, IIR_FILTER_X2, IIR_FILTER_X4, IIR_FILTER_X8, IIR_FILTER_X16,
+      self.sensor_bmp280.iir_filter = adafruit_bmp280.IIR_FILTER_X2
+      #OVERSCAN_DISABLE, OVERSCAN_X1, OVERSCAN_X2, OVERSCAN_X4, OVERSCAN_X8, OVERSCAN_X16
+      self.sensor_bmp280.overscan_pressure = adafruit_bmp280.OVERSCAN_X8
       self.sensor_bmp280.overscan_temperature = adafruit_bmp280.OVERSCAN_X1
       return True
     except:
@@ -827,15 +907,11 @@ class SensorI2C(Sensor):
  
   def detect_pressure_bmp3xx(self):
     try:
-      import board
-      import busio
-      import adafruit_bmp3xx
-      i2c = busio.I2C(board.SCL, board.SDA)
+      from .i2c.BMP3XX import BMP3XX
       #device test
-      self.sensor_bmp3xx = adafruit_bmp3xx.BMP3XX_I2C(i2c, address=0x76)
-      self.sensor_bmp3xx.filter_coefficient = 16
-      self.sensor_bmp3xx.pressure_oversampling = 16
-      self.sensor_bmp3xx.temperature_oversampling = 1
+      if not BMP3XX.test():
+        return False
+      self.sensor_bmp3xx = BMP3XX()
       return True
     except:
       return False
@@ -844,10 +920,17 @@ class SensorI2C(Sensor):
     try:
       import board
       import busio
-      import adafruit_lsm6ds
-      self.sensor_lsm6ds = adafruit_lsm6ds.LSM6DS33(busio.I2C(board.SCL, board.SDA))
+      import adafruit_lsm6ds.lsm6ds33
+      try:
+        self.sensor_lsm6ds = adafruit_lsm6ds.lsm6ds33.LSM6DS33(busio.I2C(board.SCL, board.SDA))
+      except:
+        #For BerryGPS-IMU v4
+        adafruit_lsm6ds.lsm6ds33.LSM6DS33.CHIP_ID = 0x6A
+        self.sensor_lsm6ds = adafruit_lsm6ds.lsm6ds33.LSM6DS33(busio.I2C(board.SCL, board.SDA))
       self.sensor_lsm6ds.accelerometer_range = adafruit_lsm6ds.AccelRange.RANGE_2G
-      self.sensor_lsm6ds.accelerometer_data_rate = adafruit_lsm6ds.Rate.RATE_52_HZ
+      self.sensor_lsm6ds.gyro_range = adafruit_lsm6ds.GyroRange.RANGE_125_DPS
+      self.sensor_lsm6ds.accelerometer_data_rate = adafruit_lsm6ds.Rate.RATE_12_5_HZ
+      self.sensor_lsm6ds.gyro_data_rate = adafruit_lsm6ds.Rate.RATE_12_5_HZ
       return True
     except:
       return False
@@ -878,6 +961,7 @@ class SensorI2C(Sensor):
       import board
       import busio
       import adafruit_lsm9ds1
+      #self.sensor_lsm9ds1 = adafruit_lsm9ds1.LSM9DS1_I2C(busio.I2C(board.SCL, board.SDA),mag_address=0x1C, xg_address=0x6A)
       self.sensor_lsm9ds1 = adafruit_lsm9ds1.LSM9DS1_I2C(busio.I2C(board.SCL, board.SDA))
       return True
     except:
