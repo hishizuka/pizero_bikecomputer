@@ -378,13 +378,13 @@ From left to right, the button assignments are as follows.
 |:-|:-|:-|
 | A | Screen switching(Back) | None |
 | B | LAP | Reset |
-| C | Change buttons(*) | None |
+| C | Change mode(*) | None |
 | D | Start/Stop | None |
 | E | Screen switching(Forward) | Entering the menu |
 
 (*)In the map, change button assignments.
-- A: left, B: down, D: up, E: right
-- A: zoom down, B: zoom up, C: none, D: none
+- A: left / zoom out(long press), B: down / zoom in(long press), C:Change mode, D: up, E: right
+- A: zoom down, B: zoom up, C: Change mode, D: none, E: Search route by Google DIrections API
 
 In the menu, the button has different assignments. From left to right, the button assignments are as follows.
 
@@ -511,7 +511,7 @@ Axis conversion is performed with the following variables.
 
 #### GOOGLE_DIRECTION_API section
 
-Get an API Key from the Google Directions API. A function to retrieve routes from this API will be implemented.
+Set your token of the Google Directions API. 
 
 #### BT_ADDRESS section
 
