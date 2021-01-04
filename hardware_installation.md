@@ -76,6 +76,12 @@ UART modules with GPSd are recomended. I2C(Sparkfun qwiic or Adafruit STEMMA QT)
 - stable and low power consumption
 - recommended as of 2020/6.
 
+### [Berry GPS IMU v4](https://ozzmaker.com/product/berrygps-imu/)
+- UART
+- an [antenna](https://www.sparkfun.com/products/15246) is also needed
+- BMP390 and IMU(LSM6DS/LIS3MDL) are included
+- best replacement for Enviro pHAT
+
 ### [Akizuki Denshi GPS module](http://akizukidenshi.com/catalog/g/gK-09991/)
 
 - UART
@@ -105,7 +111,7 @@ If you use Sparkfun Qwiic or Adafruit STEMMA QT sensors, [SparkFun Qwiic SHIM fo
 for altitude, grade, and total ascent/descent
 
 - [BMP280](https://shop.pimoroni.com/products/enviro-phat) (\*1)
-- [BMP38X](https://www.dfrobot.com/product-1928.html)
+- [BMP388](https://www.dfrobot.com/product-1928.html)
 - [BMP390](https://www.adafruit.com/product/4816)
 - [LPS33HW](https://www.adafruit.com/product/4414) (\*1)
 
