@@ -112,7 +112,7 @@ Some functions depend on your parts.
 | Course on the map| Yes | A course file(.tcx) is required. |
 | Course profile | Yes | A course file(.tcx) is required. |
 | Cuesheet | Yes | Use course points included in course files. |
-
+| Search Route | Yes | Google Directions API |
 
 - Map with [Toner Map](http://maps.stamen.com/)
   - Very useful with 2 colors displays (black and white).
@@ -135,6 +135,8 @@ Some functions depend on your parts.
 | Adjust wheel size | Yes | Set once, store values |
 | Adjust altitude | Yes | Auto adjustments can be made only once, if on the course. |
 | Language localization | Yes | Font and translation file of items are required. |
+| No GUI option | Yes | headless mode |
+
 
 - Performance graph
   - <img src ="https://camo.qiitausercontent.com/05c8c8facf076fbc3faf6abe848493ac0e82ffc1/68747470733a2f2f71696974612d696d6167652d73746f72652e73332e61702d6e6f727468656173742d312e616d617a6f6e6177732e636f6d2f302f3130303734312f39316336643837382d666436632d383262652d663638642d6533303531323832356631662e706e67" width=320 height=240 />
