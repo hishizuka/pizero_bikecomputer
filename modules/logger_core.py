@@ -242,7 +242,7 @@ class LoggerCore():
       self.config.G_MANUAL_STATUS = "STOP"
       if self.config.gui != None:
         self.config.gui.change_start_stop_button(self.config.G_MANUAL_STATUS)
-    self.config.set_config_pickle("G_MANUAL_STATUS", self.config.G_MANUAL_STATUS, immediately_apply=True)
+    self.config.set_config_pickle("G_MANUAL_STATUS", self.config.G_MANUAL_STATUS, quick_apply=True)
  
   def start_and_stop(self, status=None):
     if status != None:

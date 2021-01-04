@@ -105,10 +105,11 @@ class LSM303D(i2c.i2c):
 
   #for test
   TEST_ADDRESS = 0x0F
-  TEST_VALUE = 0x49
+  TEST_VALUE = (0x49,)
   
   elements = ()
   elements_vec = ('acc', 'mag')
+  acc_factor = ACCEL_SCALE/math.pow(2, 15)
 
   def reset_value(self):
     for key in self.elements:
@@ -118,15 +119,15 @@ class LSM303D(i2c.i2c):
   
   def init_sensor(self):
 
-    # ODR=50hz, all accel axes on ## maybe 0x27 is Low Res?
-    self.bus.write_byte_data(self.SENSOR_ADDRESS, CTRL_REG1, 0x57)
+    # ODR=3Hz, all accel axes on ## maybe 0x27 is Low Res?
+    self.bus.write_byte_data(self.SENSOR_ADDRESS, CTRL_REG1, 0x17) #0x57: 50Hz, 0x17: 3.125Hz
     # set full scale +/- 2g
     self.bus.write_byte_data(self.SENSOR_ADDRESS, CTRL_REG2, (3<<6)|(0<<3))
     # no interrupt
     self.bus.write_byte_data(self.SENSOR_ADDRESS, CTRL_REG3, 0x00) 
     self.bus.write_byte_data(self.SENSOR_ADDRESS, CTRL_REG4, 0x00)
     # 0x10 = mag 50Hz output rate
-    self.bus.write_byte_data(self.SENSOR_ADDRESS, CTRL_REG5, 0x80|(4<<2))
+    self.bus.write_byte_data(self.SENSOR_ADDRESS, CTRL_REG5, 0x80) # 0x80|(4<<2): 50Hz
     # Magnetic Scale +/1 1.3 Guass
     self.bus.write_byte_data(self.SENSOR_ADDRESS, CTRL_REG6, MAG_SCALE_2)
     # 0x00 continuous conversion mode
@@ -139,7 +140,7 @@ class LSM303D(i2c.i2c):
   def read_acc(self):
     #Read the accelerometer and return the x, y and z acceleration as a vector in Gs.
     acc_raw = self.bus.read_i2c_block_data(self.SENSOR_ADDRESS, OUT_X_L_A|0x80, 6)
-    self.values['acc'] = list(map(lambda x: x/math.pow(2, 15)*ACCEL_SCALE, list(struct.unpack("<hhh", bytearray(acc_raw)))))
+    self.values['acc'] = list(map(lambda x: x*self.acc_factor, list(struct.unpack("<hhh", bytearray(acc_raw)))))
     
   def read_mag(self):
     #Read the magnetomter and return the raw x, y and z magnetic readings as a vector.

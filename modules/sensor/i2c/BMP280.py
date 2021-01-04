@@ -30,23 +30,23 @@ OSRS_T = 1 # 16 Bit
 # OSRS_P = 0 # pressure measurement skipped
 # OSRS_P = 1 # 16 Bit ultra low power
 # OSRS_P = 2 # 17 Bit low power
-# OSRS_P = 3 # 18 Bit standard resolution
+OSRS_P = 3 # 18 Bit standard resolution
 # OSRS_P = 4 # 19 Bit high resolution
-OSRS_P = 5 # 20 Bit ultra high resolution
+# OSRS_P = 5 # 20 Bit ultra high resolution
 
 # filter settings
 # value = (value_n-1 * (FILTER - 1) + raw_data) / FILTER
 # FILTER = 0 # OFF
 # FILTER = 1 # 2
-# FILTER = 2 # 4
+FILTER = 2 # 4
 # FILTER = 3 # 8
-FILTER = 4 # 16
+# FILTER = 4 # 16
 
 # standby settings
 # T_SB = 0 # 000 0.5ms
-#T_SB = 1 # 001 62.5 ms
-# T_SB = 2 # 010 125 ms
-T_SB = 3 # 011 250ms
+# T_SB = 1 # 001 62.5 ms
+T_SB = 2 # 010 125 ms
+# T_SB = 3 # 011 250ms
 # T_SB = 4 # 100 500ms
 # T_SB = 5 # 101 1000ms
 # T_SB = 6 # 110 2000ms
@@ -71,7 +71,7 @@ class BMP280(i2c.i2c):
 
   #for test
   TEST_ADDRESS = 0xD0 #chip_id
-  TEST_VALUE = 0x58
+  TEST_VALUE = (0x58,)
 
   elements = ('temperature', 'pressure')
   temperature = None

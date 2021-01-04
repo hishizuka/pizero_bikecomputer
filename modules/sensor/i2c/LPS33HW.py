@@ -46,7 +46,7 @@ class LPS33HW(i2c.i2c):
 
   #for test
   TEST_ADDRESS = 0x0F #who_am_i
-  TEST_VALUE = 0xB1
+  TEST_VALUE = (0xB1,)
 
   elements = ('temperature', 'pressure')
   temperature = None

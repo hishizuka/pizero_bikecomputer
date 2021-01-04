@@ -19,7 +19,7 @@ class i2c():
 
   #for test
   TEST_ADDRESS = None
-  TEST_VALUE = None
+  TEST_VALUE = (None,)
 
   elements = ('value')
   values = {}
@@ -35,10 +35,10 @@ class i2c():
   def test(self):
     try:
       bus = smbus.SMBus(1)
-      if bus.read_byte_data(self.SENSOR_ADDRESS, self.TEST_ADDRESS) == self.TEST_VALUE:
-       return True
-      else:
-        return False
+      for v in self.TEST_VALUE:
+        if bus.read_byte_data(self.SENSOR_ADDRESS, self.TEST_ADDRESS) == v:
+          return True
+      return False
     except:
       return False
 

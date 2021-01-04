@@ -45,9 +45,14 @@ class ButtonShim():
   def __init__(self, config):
     self.config = config
     buttonshim.set_pixel(0x00, 0x00, 0x00)
+    #update hold_time of buttons
+    for b in buttonshim._handlers:
+      b.hold_time = self.config.G_BUTTON_LONG_PRESS
 
   def set_func(self, mode=None):
-    global FUNC_A, FUNC_B, FUNC_C, FUNC_D, FUNC_E, FUNC_A_LONG, FUNC_B_LONG, FUNC_C_LONG, FUNC_D_LONG, FUNC_E_LONG
+    global FUNC_A, FUNC_B, FUNC_C, FUNC_D, FUNC_E, \
+      FUNC_A_LONG, FUNC_B_LONG, FUNC_C_LONG, FUNC_D_LONG, FUNC_E_LONG
+
     if self.config.gui == None:
       return
     if self.config.gui.stack_widget == None:
@@ -60,6 +65,7 @@ class ButtonShim():
     
     if i == 1:
       self.mode = 'MAIN'
+      #additional control(map etc)
       if mode != None and mode in b_m_g.keys():
         b_m_i[mode] = int(b_m_i[mode] + 1) % len(b_m_g[mode])
         self.mode = b_m_g[mode][b_m_i[mode]]
@@ -97,7 +103,7 @@ class ButtonShim():
     if not _HOLD_STATUS['A']:
       FUNC_A()
 
-  @buttonshim.on_hold(buttonshim.BUTTON_A, hold_time=2)
+  @buttonshim.on_hold(buttonshim.BUTTON_A)
   def hold_handler_a(button):
     global _HOLD_STATUS, FUNC_A_LONG
     _HOLD_STATUS['A'] = True
@@ -115,7 +121,7 @@ class ButtonShim():
     if not _HOLD_STATUS['B']:
       FUNC_B()
 
-  @buttonshim.on_hold(buttonshim.BUTTON_B, hold_time=2)
+  @buttonshim.on_hold(buttonshim.BUTTON_B)
   def hold_handler_b(button):
     global _HOLD_STATUS, FUNC_B_LONG
     _HOLD_STATUS['B'] = True
@@ -133,7 +139,7 @@ class ButtonShim():
     if not _HOLD_STATUS['C']:
       FUNC_C()
 
-  @buttonshim.on_hold(buttonshim.BUTTON_C, hold_time=2)
+  @buttonshim.on_hold(buttonshim.BUTTON_C)
   def hold_handler_c(button):
     global _HOLD_STATUS, FUNC_C_LONG
     _HOLD_STATUS['C'] = True
@@ -151,7 +157,7 @@ class ButtonShim():
     if not _HOLD_STATUS['D']:
       FUNC_D()
 
-  @buttonshim.on_hold(buttonshim.BUTTON_D, hold_time=2)
+  @buttonshim.on_hold(buttonshim.BUTTON_D)
   def hold_handler_d(button):
     global _HOLD_STATUS, FUNC_D_LONG
     _HOLD_STATUS['D'] = True
@@ -169,7 +175,7 @@ class ButtonShim():
     if not _HOLD_STATUS['E']:
       FUNC_E()
 
-  @buttonshim.on_hold(buttonshim.BUTTON_E, hold_time=2)
+  @buttonshim.on_hold(buttonshim.BUTTON_E)
   def hold_handler_e(button):
     global _HOLD_STATUS, FUNC_E_LONG
     _HOLD_STATUS['E'] = True

@@ -36,13 +36,13 @@ class AccelerationGraphWidget(ScreenWidget):
     self.pen2 = pg.mkPen(color=(255,0,0), width=3)
     self.pen3 = pg.mkPen(color=(0,0,0), width=2)
     
-    self.g_range = 0.6
+    self.g_range = 0.5
   
   def start(self):
     self.timer.start(self.config.G_REALTIME_GRAPH_INTERVAL)
 
   def make_item_layout(self):
-    self.item_layout = {"ACC_Y":(0, 0), "ACC_Z":(0, 1), "Motion":(0, 2), "M_Stat":(0, 3)}
+    self.item_layout = {"ACC_X":(0, 0), "ACC_Y":(0, 1), "ACC_Z":(0, 2), "M_Stat":(0, 3)}
 
   def add_extra(self):
     self.layout.addWidget(self.plot, 1, 0, 2, 4)
@@ -74,8 +74,8 @@ class AccelerationGraphWidget(ScreenWidget):
    
     if not all_nan[X]:
       self.p1.clear()
-      #if median != None:
-     #   self.p1.setYRange(-self.g_range, self.g_range)
+      if median != None:
+        self.p1.setYRange(-self.g_range, self.g_range)
 
       self.p1.addItem(
         pg.PlotCurveItem(
@@ -88,8 +88,8 @@ class AccelerationGraphWidget(ScreenWidget):
     if not all_nan[Y]:
       self.p2.clear()
       
-      #if median != None:
-      #  self.p2.setYRange(-self.g_range, self.g_range)
+      if median != None:
+        self.p2.setYRange(-self.g_range, self.g_range)
       
       self.p2.setGeometry(self.p1.vb.sceneBoundingRect())
       self.p2.linkedViewChanged(self.p1.vb, self.p2.XAxis)
@@ -103,8 +103,8 @@ class AccelerationGraphWidget(ScreenWidget):
     if not all_nan[Z]:
       self.p3.clear()
       
-      #if median != None:
-      #  self.p3.setYRange(-self.g_range, self.g_range)
+      if median != None:
+        self.p3.setYRange(-self.g_range, self.g_range)
       
       self.p3.setGeometry(self.p1.vb.sceneBoundingRect())
       self.p3.linkedViewChanged(self.p1.vb, self.p3.XAxis)
@@ -173,6 +173,13 @@ class AltitudeGraphWidget(ScreenWidget):
       median = m[-1]
    
     if not all_nan['altitude_graph']:
+      self.y_range = max(abs(min(v['altitude_graph'])-median),abs(max(v['altitude_graph'])-median))
+
+      if np.isnan(self.y_range) or self.y_range < 15:
+        self.y_range = 15
+      else:
+        self.y_range = 10*(int(self.y_range/10)+1)
+
       self.p1.clear()
       if median != None:
         self.p1.setYRange(median-self.y_range, median+self.y_range)
