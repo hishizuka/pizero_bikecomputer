@@ -75,7 +75,7 @@ class Config():
   G_UNIT_ID_HEX = 0 #initialized in get_serial
 
   #install_dir 
-  G_INSTALL_PATH = os.path.expanduser('~') + "/pizero_bikecomputer/"
+  G_INSTALL_PATH = os.path.expanduser('~') + "/pizero_bikecomputer_v1/"
   
   #layout def
   G_LAYOUT_FILE = "layout.yaml"
@@ -145,6 +145,9 @@ class Config():
 
   #dummy sampling value output (change with --demo option)
   G_DUMMY_OUTPUT = False
+  
+  #enable headless mode (keyboard operation)
+  G_HEADLESS = False
 
   #Raspberry Pi detection (detect in __init__())
   G_IS_RASPI = False
@@ -292,8 +295,8 @@ class Config():
   #interval distance when mapping track
   G_GPS_DISPLAY_INTERVAL_DISTANCE = 5 # m
   #for map dummy center: Tokyo station in Japan
-  G_DUMMY_POS_X = 139.767008
-  G_DUMMY_POS_Y = 35.681929
+  G_DUMMY_POS_X = 139.764710814819 
+  G_DUMMY_POS_Y = 35.68188106919333 
   #for search point on course
   G_GPS_ON_ROUTE_CUTOFF = 50 #[m] #generate from course
   G_GPS_SEARCH_RANGE = 5 #[km] #100km/h -> 27.7m/s
@@ -321,6 +324,7 @@ class Config():
   G_GOOGLE_DIRECTION_API = {
     "TOKEN": "",
   }
+  G_HAVE_GOOGLE_DIRECTION_API_TOKEN = False
   G_GOOGLE_DIRECTION_API_URL = "https://maps.googleapis.com/maps/api/directions/json?units=metric&language=ja"
   G_GOOGLE_DIRECTION_API_MODE = {
     "BICYCLING": "mode=bicycling",
@@ -336,13 +340,12 @@ class Config():
   #  X: to North (up rotation is plus)
   #  Y: to West (up rotation is plus)
   #  Z: to down (defualt is plus)
+  G_IMU_AXIS_SWAP_XY = {
+    'STATUS': False, #Y->X, X->Y
+  }
   G_IMU_AXIS_CONVERSION = {
     'STATUS': False,
     'COEF': np.ones(3) #X, Y, Z
-  }
-  G_IMU_AXIS_SWAP_XY = {
-    'STATUS': False,
-    'COEF': np.ones(2) #Y->X, X->Y
   }
 
   #blue tooth setting
@@ -350,7 +353,7 @@ class Config():
   G_BT_CMD_BASE = ["/usr/local/bin/bt-pan","client"]
 
   #long press threshold of buttons [sec]
-  G_BUTTON_LONG_PRESS = 2
+  G_BUTTON_LONG_PRESS = 1
 
   #GPIO button action (short press / long press) from gui_pyqt
   # call from SensorGPIO.my_callback(self, channel)
@@ -401,8 +404,7 @@ class Config():
       'MAIN':{
         'A':("scroll_prev","dummy"),
         'B':("count_laps","reset_count"),
-        #'C':("get_screenshot","dummy"), ###mode change
-        'C':("change_mode","dummy"), ###mode change
+        'C':("change_mode","get_screenshot"),
         'D':("start_and_stop_manual","dummy"),
         'E':("scroll_next","enter_menu"),
         },
@@ -413,19 +415,19 @@ class Config():
         'D':("press_tab","dummy"),
         'E':("press_down","dummy"),
         },
-      'MAP_1':{###
-        'A':("map_move_x_minus","dummy"), #left
-        'B':("map_move_y_minus","dummy"), #down
-        'C':("change_mode","dummy"), #mode change
+      'MAP_1':{
+        'A':("map_move_x_minus","map_zoom_minus"), #left
+        'B':("map_move_y_minus","map_zoom_plus"), #down
+        'C':("change_mode","map_change_move"), #mode change
         'D':("map_move_y_plus","dummy"), #up
         'E':("map_move_x_plus","dummy"), #right
         },
-      'MAP_2':{###
+      'MAP_2':{
         'A':("map_zoom_minus","dummy"), #zoom down
         'B':("map_zoom_plus","dummy"), #zoom up
         'C':("change_mode","dummy"), #mode change
         'D':("dummy","dummy"), #cancel
-        'E':("dummy","dummy"), #apply
+        'E':("map_search_route","dummy"), #apply
         },
       },
   }
@@ -476,6 +478,8 @@ class Config():
     parser.add_argument("--demo", action="store_true", default=False)
     parser.add_argument('--version', action='version', version='%(prog)s 0.1')
     parser.add_argument("--layout")
+    parser.add_argument("--headless", action="store_true", default=False)
+
     args = parser.parse_args()
     
     if args.debug:
@@ -487,6 +491,8 @@ class Config():
     if args.layout:
       if os.path.exists(args.layout):
         self.G_LAYOUT_FILE = args.layout
+    if args.headless:
+      self.G_HEADLESS = True
     #show options
     if self.G_IS_DEBUG:
       print(args)
@@ -568,6 +574,27 @@ class Config():
       self.convert_thread.start()
     else:
       self.G_DITHERING = False
+
+    self.keyboard_control_thread = None
+    if self.G_HEADLESS:
+      self.keyboard_control_thread = threading.Thread(target=self.keyboard_check, name="keyboard_check", args=())
+      self.keyboard_control_thread.start()
+  
+  def keyboard_check(self):
+    while(not self.G_QUIT):
+      print("s:start/stop, l: lap, r:reset, p: previous screen, n: next screen")
+      key = input()
+
+      if key == "s":
+        self.logger.start_and_stop_manual()
+      elif key == "l":
+        self.logger.count_laps()
+      elif key == "r":
+        self.logger.reset_count()
+      elif key == "n" and self.gui != None:
+        self.gui.scroll_next()
+      elif key == "p" and self.gui != None:
+        self.gui.scroll_prev()
 
   def set_logger(self, logger):
     self.logger = logger
@@ -843,15 +870,15 @@ class Config():
       else:
         self.exec_cmd(bton_cmd)
 
-  def get_google_routes(self):
+  def get_google_routes(self, x1, y1, x2, y2):
+
     if not self.detect_network() or self.G_GOOGLE_DIRECTION_API["TOKEN"] == "":
       return None
-    if np.isnan(self.logger.sensor.values['GPS']['lat']) or \
-      np.isnan(self.logger.sensor.values['GPS']['lon']):
+    if np.any(np.isnan([x1, y1, x2, y2])):
       return None
       
-    origin = "origin={},{}".format(self.logger.sensor.values['GPS']['lat'],self.logger.sensor.values['GPS']['lon'])
-    destination = "destination={},{}".format("35.905488", "139.548334")
+    origin = "origin={},{}".format(y1,x1)
+    destination = "destination={},{}".format(y2,x2)
     request = "{}&{}&key={}&{}&{}".format(
       self.G_GOOGLE_DIRECTION_API_URL,
       self.G_GOOGLE_DIRECTION_API_MODE["BICYCLING"],
@@ -860,6 +887,8 @@ class Config():
       destination
     )
     response = urllib.request.urlopen(request).read()
+    print(request)
+    #print(response)
     return json.loads(response)
 
   def strava_upload(self):
@@ -982,10 +1011,10 @@ class Config():
     if 'SENSOR_IMU' in self.config_parser:
       for s, c, m in [
         ['AXIS_CONVERSION_STATUS', 'AXIS_CONVERSION_COEF', self.G_IMU_AXIS_CONVERSION], 
-        ['AXIS_SWAP_XY_STATUS', 'AXIS_SWAP_XY_COEF', self.G_IMU_AXIS_SWAP_XY]]:
+        ['AXIS_SWAP_XY_STATUS', '', self.G_IMU_AXIS_SWAP_XY]]:
         if s.lower() in self.config_parser['SENSOR_IMU']:
           m['STATUS'] = self.config_parser['SENSOR_IMU'].getboolean(s)
-        if c.lower() in self.config_parser['SENSOR_IMU']:
+        if c != '' and c.lower() in self.config_parser['SENSOR_IMU']:
           coef = np.array(json.loads(self.config_parser['SENSOR_IMU'][c]))
           n = m['COEF'].shape[0]
           if np.sum((coef == 1) | (coef == -1)) == n:
@@ -1005,6 +1034,8 @@ class Config():
       for k in self.G_GOOGLE_DIRECTION_API.keys():
         if k in self.config_parser['GOOGLE_DIRECTION_API']:
           self.G_GOOGLE_DIRECTION_API[k] = self.config_parser['GOOGLE_DIRECTION_API'][k]
+      if self.G_GOOGLE_DIRECTION_API["TOKEN"] != "":
+        self.G_HAVE_GOOGLE_DIRECTION_API_TOKEN = True
 
     if 'BT_ADDRESS' in self.config_parser:
       for k in self.config_parser['BT_ADDRESS']:
@@ -1030,10 +1061,9 @@ class Config():
             self.config_parser['ANT'][key1+"_"+key2] = str(self.G_ANT[key1][key2])
     
     self.config_parser['SENSOR_IMU'] = {}
+    self.config_parser['SENSOR_IMU']['AXIS_SWAP_XY_STATUS'] = str(self.G_IMU_AXIS_SWAP_XY['STATUS'])
     self.config_parser['SENSOR_IMU']['AXIS_CONVERSION_STATUS'] = str(self.G_IMU_AXIS_CONVERSION['STATUS'])
     self.config_parser['SENSOR_IMU']['AXIS_CONVERSION_COEF'] = str(list(self.G_IMU_AXIS_CONVERSION['COEF']))
-    self.config_parser['SENSOR_IMU']['AXIS_SWAP_XY_STATUS'] = str(self.G_IMU_AXIS_SWAP_XY['STATUS'])
-    self.config_parser['SENSOR_IMU']['AXIS_SWAP_XY_COEF'] = str(list(self.G_IMU_AXIS_SWAP_XY['COEF']))
 
     self.config_parser['STRAVA_API'] = {}
     for k in self.G_STRAVA_API.keys():
@@ -1058,11 +1088,11 @@ class Config():
     with open(self.config_pickle_file, 'rb') as f:
       self.config_pickle = pickle.load(f)
 
-  def set_config_pickle(self, key, value, immediately_apply=False):
+  def set_config_pickle(self, key, value, quick_apply=False):
     self.config_pickle[key] = value
     #write with config_pickle_interval
     t = (datetime.datetime.utcnow()-self.config_pickle_write_time).total_seconds()
-    if not immediately_apply and t < self.config_pickle_interval:
+    if not quick_apply and t < self.config_pickle_interval:
       return
     with open(self.config_pickle_file, 'wb') as f:
       pickle.dump(self.config_pickle, f)
