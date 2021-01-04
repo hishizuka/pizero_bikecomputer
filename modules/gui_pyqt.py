@@ -365,12 +365,18 @@ class GUI_PyQt(QtCore.QObject):
 
   def map_move_y_minus(self):
     self.map_method("move_y_minus")
+
+  def map_change_move(self):
+    self.map_method("change_move")
   
   def map_zoom_plus(self):
     self.map_method("zoom_plus")
 
   def map_zoom_minus(self):
     self.map_method("zoom_minus")
+  
+  def map_search_route(self):
+    self.map_method("search_route")
 
   def map_method(self, mode):
     w = self.main_page.widget(self.main_page.currentIndex())

@@ -83,6 +83,15 @@ class LoaderTcx():
     self.downsample()
     self.calc_slope_smoothing()
     self.modify_course_points()
+  
+  def search_route(self, x1, y1, x2, y2):
+    if np.any(np.isnan([x1, y1, x2, y2])):
+      return
+    self.reset()
+    self.get_google_route(x1, y1, x2, y2)
+    self.downsample()
+    self.calc_slope_smoothing()
+    self.modify_course_points()
 
   def read_tcx(self):
     if not os.path.exists(self.config.G_COURSE_FILE):
@@ -146,8 +155,8 @@ class LoaderTcx():
     if check_course:
       self.read_from_xml()
   
-  def get_google_route(self):
-    json_routes = self.config.get_google_routes()
+  def get_google_route(self, x1, y1, x2, y2):
+    json_routes = self.config.get_google_routes(x1, y1, x2, y2)
     if EXTLIB_POLYLINE_DECODER == None or json_routes == None or json_routes["status"] != "OK":
       return
     
@@ -164,25 +173,28 @@ class LoaderTcx():
     self.point_notes = []
 
     dist = 0
+    pre_dist = 0
     pattern = {
       "html_remove_1": re.compile(r'\/?\</?\w+\/?\>'),
       "html_remove_2":re.compile(r'\<\S+\>'),
     }
     for step in json_routes["routes"][0]["legs"][0]["steps"]:
       points_detail.extend(EXTLIB_POLYLINE_DECODER.decode_polyline(step["polyline"]["points"]))
+      dist += pre_dist
+      pre_dist = step["distance"]["value"]/1000
+
+      if "maneuver" not in step or any(map(step["maneuver"].__contains__, ('straight', 'slight'))):
+        continue
+      self.point_type.append(step["maneuver"])
       self.point_latitude.append(step["start_location"]["lat"])
       self.point_longitude.append(step["start_location"]["lng"])
-      dist += step["distance"]["value"]/1000
       self.point_distance.append(dist)
-      if "maneuver" in step:
-        self.point_type.append(step["maneuver"])
-      else:
-        self.point_type.append("")
       text = (re.subn(pattern["html_remove_1"],"", step["html_instructions"])[0]).replace(" ","").replace("&nbsp;", "")
       text = re.subn(pattern["html_remove_2"],"",text)[0]
-      self.point_name.append(text)
+      #self.point_name.append(text)
+      self.point_name.append(step["maneuver"])
     points_detail = np.array(points_detail)
-    #print(self.point_name)
+    #print(self.point_type)
 
     self.latitude = np.array(points_detail)[:,0]
     self.longitude = np.array(points_detail)[:,1]
@@ -265,6 +277,7 @@ class LoaderTcx():
         self.latitude[1:],
       )/1000
       self.distance = np.insert(self.distance, 0, 0)
+      self.distance = np.cumsum(self.distance)
     dist_diff = 1000 * np.diff(self.distance) #[m]
 
     if len_alt > 0:
@@ -436,7 +449,16 @@ class LoaderTcx():
       if len_pnt_alt > 0 and len_alt > 0:
         self.point_altitude = np.insert(self.point_altitude, 0, self.altitude[0])
     #add end course point
-    if len_lat > 0 and len_pnt_dist > 0 and len_dist > 0 and self.point_distance[-1] != self.distance[-1]:
+    #print(self.point_latitude, self.latitude, self.point_longitude, self.longitude)
+    end_distance = None
+    if len(self.latitude) > 0 and len(self.point_longitude) > 0:
+      end_distance = self.config.get_dist_on_earth_array(
+        self.longitude[-1],
+        self.latitude[-1],
+        self.point_longitude[-1], 
+        self.point_latitude[-1],
+        )
+    if len_lat > 0 and len_pnt_dist > 0 and len_dist > 0 and end_distance != None and end_distance > 5:
       self.point_name.append("End")
       self.point_latitude = np.append(self.point_latitude, self.latitude[-1])
       self.point_longitude = np.append(self.point_longitude, self.longitude[-1])
