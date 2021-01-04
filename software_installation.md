@@ -81,13 +81,13 @@ $ sudo cp install/etc/default/gpsd /etc/default/gpsd
 $ sudo systemctl enable gpsd
 ```
 
-#### I2C GPS (experimental)
+#### I2C GPS
 
 Assume I2C interface is on in raspi-config.
 
 ```
 $ sudo apt-get install python3-dateutil
-$ sudo pip3 install timezonefinder adafruit-circuitpython-gps
+$ sudo pip3 install timezonefinder pa1010d
 ```
 
 
@@ -198,10 +198,11 @@ $ sudo pip3 install adafruit-circuitpython-bmp280
 | Manufacturer | Sensor | additional pip package |
 |:-|:-|:-|
 | [Pimoroni](https://shop.pimoroni.com) | [Enviro pHAT](https://shop.pimoroni.com/products/enviro-phat) | None |
-| [Adafruit](https://www.adafruit.com) | [BMP280](https://www.adafruit.com/product/2651) | adafruit-circuitpython-bmp280 |
+| [Adafruit](https://www.adafruit.com) | [BMP280](https://www.adafruit.com/product/2651) | None |
+| [Adafruit](https://www.adafruit.com) | [BMP390](https://www.adafruit.com/product/4816) | None |
 | [Adafruit](https://www.adafruit.com) | [LPS33HW](https://www.adafruit.com/product/4414) | adafruit-circuitpython-lps35hw |
 | [Strawberry Linux](https://strawberry-linux.com) | [LPS33HW](https://strawberry-linux.com/catalog/items?code=12133) | None |
-| [DFRobot](https://www.dfrobot.com) | [BMX160+BMP388](https://www.dfrobot.com/product-1928.html) | adafruit-circuitpython-bmp3xx, BMX160(*1) | 
+| [DFRobot](https://www.dfrobot.com) | [BMX160+BMP388](https://www.dfrobot.com/product-1928.html) | BMX160(*1) | 
 | [Adafruit](https://www.adafruit.com) | [LSM6DS33 + LIS3MDL](https://www.adafruit.com/product/4485) | adafruit-circuitpython-lsm6ds adafruit-circuitpython-lis3mdl |
 | [Adafruit](https://www.adafruit.com) | [LSM9DS1](https://www.adafruit.com/product/4634) | adafruit-circuitpython-lsm9ds1 | 
 | [Adafruit](https://www.adafruit.com) | [BNO055](https://www.adafruit.com/product/4646) | adafruit-circuitpython-bno055 (*2) | 
@@ -502,12 +503,11 @@ X, Y, and Z printed on the board are set to the following orientations by defaul
 
 Axis conversion is performed with the following variables.
 
+- `axis_swap_xy_status`: Swaps the X and Y axes.
+  - The default is `False`, or `True` if you want to apply it.
 - `axis_conversion_status`: Inverts the signs of X, Y and Z.
   - Change to `False` by default, or `True` if you want to apply it.
   - `axis_conversion_coef`: Fill in [X, Y, Z] with ±1.
-- `axis_swap_xy_status`: Swaps the X and Y axes.
-  - The default is `False`, or `True` if you want to apply it.
-  - `axis_swap_xy_coef`: Insert the sign of the new [X, Y] by ±1.
 
 #### GOOGLE_DIRECTION_API section
 

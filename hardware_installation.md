@@ -82,9 +82,12 @@ UART modules with GPSd are recomended. I2C(Sparkfun qwiic or Adafruit STEMMA QT)
 - easy to get in Tokyo (buy at Akihabara)
 - cheap and low power consumption
 
-### [Adafruit Mini GPS PA1010D](https://www.adafruit.com/product/4415)
+### PA1010D GPS
 
-- UART and I2C(Adafruit STEMMA QT)
+- [Adafruit Mini GPS PA1010D](https://www.adafruit.com/product/4415)
+  - UART and I2C(Adafruit STEMMA QT)
+- [PIMORONI PA1010D GPS Breakout](https://shop.pimoroni.com/products/pa1010d-gps-breakout)
+  - UART and I2C
 
 ### [Adafruit Ultimate GPS Breakout](https://www.adafruit.com/product/746)
 - UART
@@ -103,6 +106,7 @@ for altitude, grade, and total ascent/descent
 
 - [BMP280](https://shop.pimoroni.com/products/enviro-phat) (\*1)
 - [BMP38X](https://www.dfrobot.com/product-1928.html)
+- [BMP390](https://www.adafruit.com/product/4816)
 - [LPS33HW](https://www.adafruit.com/product/4414) (\*1)
 
 ### IMU
