@@ -1,5 +1,7 @@
 import time
 #import datetime
+import threading
+import queue
 
 import numpy as np
 
@@ -38,6 +40,7 @@ class MipDisplay():
   interval = 0.25
   brightness_index = 0
   brightness_table = [0,10,100]
+  brightness = 0
 
   def __init__(self, config):
     
@@ -48,8 +51,15 @@ class MipDisplay():
 
     self.pi = pigpio.pi()
     self.spi = self.pi.spi_open(0, 2000000, 0)
+    #self.spi = self.pi.spi_open(0, 4000000, 0) #overclocking
     #self.spi = self.pi.spi_open(0, 5500000, 0) #overclocking
-    time.sleep(0.1)     #Wait
+    
+    self.draw_queue = queue.Queue()
+    self.draw_thread = threading.Thread(target=self.draw_worker, name="draw_worker", args=())
+    self.draw_thread.setDaemon(True)
+    self.draw_thread.start()
+    
+    time.sleep(0.01)     #Wait
     
     self.pi.set_mode(GPIO_DISP, pigpio.OUTPUT)
     self.pi.set_mode(GPIO_SCS, pigpio.OUTPUT)
@@ -130,6 +140,16 @@ class MipDisplay():
       state = not state
     self.no_update()
 
+  def draw_worker(self):
+    for img_bytes in iter(self.draw_queue.get, None):
+      self.pi.write(GPIO_SCS, 1)
+      time.sleep(0.000006)
+      if len(img_bytes) > 0:
+        self.pi.spi_write(self.spi, img_bytes)
+      #dummy output for ghost line
+      self.pi.spi_write(self.spi, [0x00000000,0])
+      self.pi.write(GPIO_SCS, 0)
+
   def update(self, image):
 
     im_array = np.array(image)
@@ -156,13 +176,15 @@ class MipDisplay():
     #t = datetime.datetime.now()
     
     if _SENSOR_DISPLAY and rewrite_flag and not self.config.G_QUIT:
-      self.pi.write(GPIO_SCS, 1)
-      time.sleep(0.000006)
-      if len(img_bytes) > 0:
-        self.pi.spi_write(self.spi, img_bytes)
-      #dummy output for ghost line
-      self.pi.spi_write(self.spi, [0x00000000,0])
-      self.pi.write(GPIO_SCS, 0)
+      #put queue
+      #self.draw_queue.put((img_bytes))
+      if len(diff_lines) < 270:
+        self.draw_queue.put((img_bytes))
+      else:
+        #for MIP 640x480
+        self.draw_queue.put((self.img_buff_rgb8[diff_lines[0:int(len(diff_lines)/2)]].tobytes()))
+        self.draw_queue.put((self.img_buff_rgb8[diff_lines[int(len(diff_lines)/2):]].tobytes()))
+
 
     #print("Drawing images... :", (datetime.datetime.now()-t).total_seconds(),"sec")
 
@@ -180,9 +202,10 @@ class MipDisplay():
       self.set_brightness(b)
   
   def set_brightness(self, b):
-    if not _SENSOR_DISPLAY:
+    if not _SENSOR_DISPLAY or b == self.brightness:
       return
     self.pi.hardware_PWM(GPIO_BACKLIGHT, GPIO_BACKLIGHT_FREQ, b*10000)
+    self.brightness = b
 
   def backlight_blink(self):
     if not _SENSOR_DISPLAY:
