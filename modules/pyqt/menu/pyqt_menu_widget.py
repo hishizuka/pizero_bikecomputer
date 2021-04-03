@@ -1,8 +1,15 @@
 import time
 
-import PyQt5.QtCore as QtCore
-import PyQt5.QtWidgets as QtWidgets
-import PyQt5.QtGui as QtGui
+USE_PYQT6 = False
+try:
+  import PyQt6.QtCore as QtCore
+  import PyQt6.QtWidgets as QtWidgets
+  import PyQt6.QtGui as QtGui
+  USE_PYQT6 = True
+except:
+  import PyQt5.QtCore as QtCore
+  import PyQt5.QtWidgets as QtWidgets
+  import PyQt5.QtGui as QtGui
 
 #################################
 # Menu
@@ -39,7 +46,8 @@ class MenuWidget(QtWidgets.QWidget):
     self.back_button.setStyleSheet(self.config.gui.style.G_GUI_PYQT_buttonStyle_navi)
     self.back_button.setFixedSize(self.icon_x, self.icon_y)
     self.title_label = QtWidgets.QLabel(self.title)
-    self.title_label.setAlignment(QtCore.Qt.AlignCenter)
+    self.title_label.setAlignment(QtCore.Qt.Alignment.AlignCenter) if USE_PYQT6 \
+    else self.title_label.setAlignment(QtCore.Qt.AlignCenter)
     self.title_label.setStyleSheet("color: #FFFFFF;")
     spacer = QtWidgets.QWidget()
     spacer.setFixedSize(self.icon_x, self.icon_y)
@@ -99,15 +107,17 @@ class MenuWidget(QtWidgets.QWidget):
     def __init__(self, text, config):
       super().__init__(text=text)
       self.config = config
-      self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+      self.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding) if USE_PYQT6 \
+      else self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
       self.setStyleSheet(self.config.gui.style.G_GUI_PYQT_buttonStyle_menu)
 
     def resizeEvent(self, event):
       #w = self.size().width()
       h = self.size().height()
+      psize = int(h/2.5) if int(h/2.5) > 0 else 1
       
       q = self.font()
-      q.setPixelSize(int(h/2.5))
+      q.setPixelSize(psize)
       self.setFont(q)
     
     def setToggle(self):
@@ -215,21 +225,25 @@ class ANTMenuWidget(MenuWidget):
     self.menu = QtWidgets.QWidget()
     self.back_index_key = 'menu'
     
-    self.menu_layout = QtWidgets.QVBoxLayout()
+    self.menu_layout = QtWidgets.QGridLayout()
     self.menu_layout.setContentsMargins(0,0,0,0)
     self.menu_layout.setSpacing(0)
     self.button = {}
-    #for order,antName in sorted(self.config.G_ANT['ORDER'].items()):
+    # 4raws x 2columns layout
+    n = 4
+    i = 0
     for antName in self.config.G_ANT['ORDER']:
       self.button[antName] = self.MenuButton(self.getButtonState(antName), self.config)
-      self.menu_layout.addWidget(self.button[antName])
+      self.menu_layout.addWidget(self.button[antName], i%n, i//n)
+      i = i+1
 
     self.menu.setLayout(self.menu_layout)
 
   def getButtonState(self, antName):
     status = "OFF"
-    if self.config.G_ANT['USE'][antName]:
-      status = "ON ("+'{0:05d}'.format(self.config.G_ANT['ID'][antName])+")"
+    if antName in self.config.G_ANT['USE'] and self.config.G_ANT['USE'][antName]:
+      #status = "ON ("+'{0:05d}'.format(self.config.G_ANT['ID'][antName])+")"
+      status = '{0:05d}'.format(self.config.G_ANT['ID'][antName])
     return self.config.G_ANT['NAME'][antName] + ": " + status
 
   def connect_buttons(self):
@@ -237,14 +251,27 @@ class ANTMenuWidget(MenuWidget):
     self.button['SPD'].clicked.connect(self.settingAntSpeed)
     self.button['CDC'].clicked.connect(self.settingAntCadence)
     self.button['PWR'].clicked.connect(self.settingAntPower)
+    self.button['LGT'].clicked.connect(self.settingAntLight)
+    self.button['CTRL'].clicked.connect(self.settingAntCtrl)
+    
   def settingAntHR(self):
     self.settingAnt('HR')
+  
   def settingAntSpeed(self):
     self.settingAnt('SPD')
+  
   def settingAntCadence(self):
     self.settingAnt('CDC')
+  
   def settingAntPower(self):
     self.settingAnt('PWR')
+  
+  def settingAntLight(self):
+    self.settingAnt('LGT')
+  
+  def settingAntCtrl(self):
+    self.settingAnt('CTRL')
+  
   def settingAnt(self, antName):
     if self.config.G_ANT['USE'][antName]:
       #disable ANT+ sensor
