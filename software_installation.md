@@ -230,6 +230,8 @@ Follow [official setup guide](https://github.com/PiSupply/PiJuice/tree/master/So
 
 # Quick Start
 
+If cython is available, it will take a few minutes to run for the first time to compile the program.
+
 ## Run on X Window
 
 If you run the program from the SSH login shell, add the following environment variable.
@@ -378,7 +380,7 @@ Both short press and long press can be changed. And only the GPIO number of PiTF
 
 From left to right, the button assignments are as follows.
 
-| GPIO NUM | Short press | Long press |
+| Button | Short press | Long press |
 |:-|:-|:-|
 | A | Screen switching(Back) | None |
 | B | LAP | Reset |
@@ -392,7 +394,7 @@ From left to right, the button assignments are as follows.
 
 In the menu, the button has different assignments. From left to right, the button assignments are as follows.
 
-| GPIO NUM | Short press | Long press |
+| Button | Short press | Long press |
 |:-|:-|:-|
 | A | Back | None |
 | B | brightness control(*) | None |
