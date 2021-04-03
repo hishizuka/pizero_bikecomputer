@@ -79,7 +79,6 @@ class LoaderTcx():
   def load(self):
     self.reset()
     self.read_tcx()
-    #self.get_google_route()
     self.downsample()
     self.calc_slope_smoothing()
     self.modify_course_points()
@@ -143,7 +142,7 @@ class LoaderTcx():
         self.point_type = [m.group('text').strip() for m in pattern["course_point_type"].finditer(course_point)]
         self.point_notes = [m.group('text').strip() for m in pattern["course_notes"].finditer(course_point)]
     
-    print("\tlogger_core : load_course : read loop block(regex): ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
+    print("\tlogger_core : load_course : read tcx(regex): ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
 
     check_course = False
     if not (len(self.latitude) == len(self.longitude) == len(self.altitude) == len(self.distance)):
@@ -154,6 +153,20 @@ class LoaderTcx():
       check_course = True
     if check_course:
       self.read_from_xml()
+    
+    #delete 'Straight' of course points
+    if len(self.point_type) > 0:
+      ptype = np.array(self.point_type)
+      not_straight_cond = np.where(ptype != 'Straight', True, False)
+      self.point_type = list(ptype[not_straight_cond])
+      if len(self.point_name) > 0:
+        self.point_name = list(np.array(self.point_name)[not_straight_cond])
+      if len(self.point_latitude) > 0:
+        self.point_latitude = np.array(self.point_latitude)[not_straight_cond]
+      if len(self.point_longitude) > 0:
+        self.point_longitude = np.array(self.point_longitude)[not_straight_cond]
+      if len(self.point_notes) > 0:
+        self.point_notes = list(np.array(self.point_notes)[not_straight_cond])
   
   def get_google_route(self, x1, y1, x2, y2):
     json_routes = self.config.get_google_routes(x1, y1, x2, y2)
@@ -220,7 +233,7 @@ class LoaderTcx():
       points_cond = np.where(np.diff(self.latitude) != 0, True, False) | np.where(np.diff(self.longitude) != 0, True, False)
       if len_lat == len_dist:
         #close points are delete
-        dist_cond = np.where(np.diff(self.distance) >= 1, True, False)
+        dist_cond = np.where(np.diff(self.distance) >= self.config.G_ROUTE_DISTANCE_CUTOFF, True, False)
         cond = np.insert(dist_cond & points_cond, 0, True)
       else:
         cond = np.insert(points_cond, 0, True)
@@ -238,7 +251,7 @@ class LoaderTcx():
     
     #diffs(temporary)
     azimuth_diff = np.diff(self.azimuth)
-    cond = np.insert(np.where(abs(azimuth_diff) <= 3, False, True), 0, True)
+    cond = np.insert(np.where(abs(azimuth_diff) <= self.config.G_ROUTE_AZIMUTH_CUTOFF, False, True), 0, True)
     if len_alt > 0:
       alt_diff = np.diff(self.altitude)
       alt_cond = np.where(abs(alt_diff) < 1.0, False, True)
@@ -282,9 +295,11 @@ class LoaderTcx():
 
     if len_alt > 0:
       self.altitude = self.savitzky_golay(self.altitude, 53, 3)
-      self.slope = np.insert(100*np.diff(self.altitude)/dist_diff, 0, 0)
+      self.slope = np.array([])
+      #self.slope = np.insert(100*np.diff(self.altitude)/dist_diff, 0, 0)
+
       #experimental code
-      #np.savetxt('log/course_altitude.csv', self.altitude, fmt='%.7f')
+      #np.savetxt('log/course_altitude.csv', self.altitude, fmt='%.3f')
       #alt_d1 =  self.savitzky_golay(np.gradient(self.altitude, self.distance*1000)*100, 53, 3)
       #alt_d2 =  np.gradient(alt_d1, self.distance*1000)
       #alt_d3 =  np.gradient(alt_d2, self.distance*1000)
@@ -303,7 +318,7 @@ class LoaderTcx():
 
     #print("downsampling(2nd):{}".format(len(self.latitude)))
 
-    print("\tlogger_core : load_course : read loop block(downsampling): ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
+    print("\tlogger_core : load_course : downsampling: ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
 
   def calc_slope_smoothing(self):
     #make slope_smoothing by distance (self.config.G_SLOPE_WINDOW_DISTANCE)
@@ -315,54 +330,38 @@ class LoaderTcx():
     t = datetime.datetime.utcnow()
     course_n = len(self.distance)
 
-    ##### obsolete #####
-    #print(np.round(alt_diff[0:40], 1))
-    #print(np.round(1000*np.diff(self.distance)[0:40]))
-    #print(self.distance[0:40])
-    #print(np.round(self.slope[0:40], 1))
-    self.slope_smoothing = np.empty(course_n)
-    alt_start = alt_end = pre_dist_slope = pre_slope_smoothing = np.nan
-    first_track = True
-    for i in range(course_n):
-      distance = self.distance[i]*1000 #[m]
-      altitude = self.altitude[i]
-      
-      if not first_track and distance - pre_dist_slope >= self.config.G_SLOPE_WINDOW_DISTANCE:
-        alt_end = altitude
-        slope_smoothing = 100*(alt_end - alt_start)/ (distance - pre_dist_slope)
-        
-        #reset
-        pre_dist_slope = distance
-        alt_start = alt_end
-        #last one is first value of filling slope_smoothing
-        pre_slope_smoothing = slope_smoothing
-      else:
-        slope_smoothing = np.nan
-      
-      if first_track:
-        first_track = False
-        alt_start = altitude
-        alt_end = altitude
-        pre_dist_slope = distance
+    alt_d1 = (self.altitude[1:]-self.altitude[0:-1])/((self.distance[1:]-self.distance[0:-1])*1000)*100
+    alt_d1 = np.insert(alt_d1,0,0)
+    alt_d1_sign = np.where((alt_d1 > 0), alt_d1, 0)
+    alt_d1_plus_to_minus_index = np.where((alt_d1_sign[0:-1] > 0) & (alt_d1_sign[1:] == 0))[0] + 1
+    alt_d1_cumsum = np.cumsum(alt_d1_sign)
+    for i in alt_d1_plus_to_minus_index:
+      alt_d1_cumsum[i+1:] = np.cumsum(alt_d1_sign[i+1:])
+    peak = np.where(alt_d1_cumsum > 100, 1, 0)
 
-      self.slope_smoothing[i] = slope_smoothing
+    peak_end_index = np.where((peak[0:-1] > 0) & (peak[1:] == 0))[0]+1
+    cumsum_zero_to_plus_index = np.where((alt_d1_cumsum[0:-1] == 0) & (alt_d1_cumsum[1:] > 0))[0]+1
+    peak_start_index = np.zeros(len(peak_end_index)).astype("uint16")
 
-    if len(self.slope_smoothing) > 0 and np.isnan(self.slope_smoothing[-1]):
-      self.slope_smoothing[-1] = 100*(self.altitude[-1] - alt_start) / (self.distance[-1]*1000 - pre_dist_slope)
+    j = 0
+    self.slope_smoothing = np.zeros(course_n)
+    for i in peak_end_index:
+      k = np.argmin(np.where(i-cumsum_zero_to_plus_index < 0, np.inf, i-cumsum_zero_to_plus_index))
+      peak_start_index[j] = cumsum_zero_to_plus_index[k]
+
+      self.slope_smoothing[peak_start_index[j]:i] = \
+        100*(self.altitude[i] - self.altitude[peak_start_index[j]])/ ((self.distance[i] - self.distance[peak_start_index[j]])*1000)
+      j += 1
+    
     print("\tlogger_core : load_course : slope_smoothing: ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
-    #t = datetime.datetime.utcnow()
+    
+    #np.savetxt('log/course_distance.csv', self.distance*1000, fmt='%d')
+    #np.savetxt('log/course_altitude_d1.csv', alt_d1, fmt='%.5f')
+    #np.savetxt('log/course_altitude_alt_d1_cumsum.csv', alt_d1_cumsum, fmt='%.5f')
+    #np.savetxt('log/course_altitude_peak.csv', peak, fmt='%d')
+        
+    t = datetime.datetime.utcnow()
 
-    #Backward fill
-    #https://stackoverflow.com/questions/41190852/most-efficient-way-to-forward-fill-nan-values-in-numpy-array
-    self.slope_smoothing = self.slope_smoothing.reshape([1, course_n])
-    slope_mask = np.isnan(self.slope_smoothing)
-    idx = np.where(~slope_mask, np.arange(slope_mask.shape[1]), slope_mask.shape[1] - 1)
-    idx = np.minimum.accumulate(idx[:, ::-1], axis=1)[:, ::-1]
-    self.slope_smoothing = self.slope_smoothing[np.arange(idx.shape[0])[:,None], idx]
-    self.slope_smoothing = self.slope_smoothing.flatten()
-    
-    #print("\tlogger_core : load_course : backward fill: ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
-    
     self.colored_altitude = np.full((len(self.altitude), 3),self.config.G_SLOPE_COLOR[0])
     for i in range(len(self.config.G_SLOPE_CUTOFF)):
       cond = None
@@ -375,12 +374,11 @@ class LoaderTcx():
         cond = np.where((x1 < self.slope_smoothing) & (self.slope_smoothing <= x2), True, False)
       self.colored_altitude[cond] = self.config.G_SLOPE_COLOR[i]
       
-    #print("\tlogger_core : load_course : fill slope: ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
+    print("\tlogger_core : load_course : fill slope: ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
     #t = datetime.datetime.utcnow()
   
   def modify_course_points(self):
     #make route colors by slope for SimpleMapWidget, CourseProfileWidget
-
     t = datetime.datetime.utcnow()
 
     len_pnt_name = len(self.point_name)
@@ -472,7 +470,7 @@ class LoaderTcx():
     self.point_type = np.array(self.point_type)
     self.point_name = np.array(self.point_name)
 
-    print("\tlogger_core : load_course : slope and course distance: ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
+    print("\tlogger_core : load_course : modify course points: ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
    
   def read_from_xml(self):
     if not os.path.exists(self.config.G_COURSE_FILE):
@@ -484,7 +482,7 @@ class LoaderTcx():
     tree = ET.parse(self.config.G_COURSE_FILE)
     tcx_root = tree.getroot()
     
-    print("\tlogger_core : read_from_xml : ET parse", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
+    print("\tlogger_core : load_course: (read_from_xml) ET parse", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
     t = datetime.datetime.utcnow()
     
     # namespace 
@@ -501,7 +499,7 @@ class LoaderTcx():
     #coursepoint
     course_points = course.findall('TCDv2:CoursePoint', NS)
     
-    print("\tlogger_core : read_from_xml : initialize", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
+    print("\tlogger_core : load_course : (read_from_xml) initialize", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
     t = datetime.datetime.utcnow()
 
     TCDv2_prefix = "{"+NS['TCDv2']+"}"
@@ -569,13 +567,13 @@ class LoaderTcx():
         point_type.append(p_type)
         point_notes.append(notes)
 
-    self.point_name = np.array(point_name)
+    self.point_name = point_name
     self.point_latitude = np.array(point_latitude)
     self.point_longitude = np.array(point_longitude)
-    self.point_type = np.array(point_type)
-    self.point_notes = np.array(point_notes)
+    self.point_type = point_type
+    self.point_notes = point_notes
 
-    print("\tlogger_core : read_from_xml : read values: ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
+    print("\tlogger_core : load_course : (read_from_xml) read values: ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
 
   def savitzky_golay(self, y, window_size, order, deriv=0, rate=1):
     try:
