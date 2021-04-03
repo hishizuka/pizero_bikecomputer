@@ -22,7 +22,7 @@ class SensorSPI(Sensor):
         self.display = PiTFT28r(self.config)
       except:
         pass
-    elif self.config.G_DISPLAY == 'MIP':
+    elif self.config.G_DISPLAY in ('MIP', 'MIP_640'):
       try:
         from .spi.mip_display import MipDisplay
         self.display = MipDisplay(self.config)
@@ -56,7 +56,7 @@ class SensorSPI(Sensor):
       return
     if self.config.G_DISPLAY == 'PiTFT':
       pass
-    elif self.config.G_DISPLAY in ['MIP', 'MIP_Sharp', 'Papirus', 'DFRobot_RPi_Display'] and self.send_display:
+    elif self.config.G_DISPLAY in ['MIP', 'MIP_640', 'MIP_Sharp', 'Papirus', 'DFRobot_RPi_Display'] and self.send_display:
       self.display.quit()
     
   def update(self, buf):
@@ -65,18 +65,18 @@ class SensorSPI(Sensor):
 
     if self.config.G_DISPLAY == 'PiTFT':
       pass
-    elif self.config.G_DISPLAY in ['MIP', 'MIP_Sharp', 'Papirus',] and self.send_display:
+    elif self.config.G_DISPLAY in ['MIP', 'MIP_640', 'MIP_Sharp', 'Papirus',] and self.send_display:
       self.display.update(Image.open(buf))
     elif self.config.G_DISPLAY in ['DFRobot_RPi_Display'] and self.send_display:
       self.display.update(buf)
 
   def screen_flash_long(self):
-    if self.config.G_DISPLAY in ['MIP','MIP_Sharp'] and self.send_display:
+    if self.config.G_DISPLAY in ['MIP', 'MIP_640', 'MIP_Sharp'] and self.send_display:
       self.display.inversion(0.8)
       #self.display.blink(1.0)
 
   def screen_flash_short(self):
-    if self.config.G_DISPLAY in ['MIP','MIP_Sharp'] and self.send_display:
+    if self.config.G_DISPLAY in ['MIP', 'MIP_640', 'MIP_Sharp'] and self.send_display:
       self.display.inversion(0.3)
 
   def brightness_control(self):
@@ -84,7 +84,7 @@ class SensorSPI(Sensor):
       return
     if self.config.G_DISPLAY == 'PiTFT':
       self.display.change_brightness()
-    elif self.config.G_DISPLAY == 'MIP' and self.send_display:
+    elif self.config.G_DISPLAY in ('MIP', 'MIP_640') and self.send_display:
       self.display.change_brightness()
 
 
