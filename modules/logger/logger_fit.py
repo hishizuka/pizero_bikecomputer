@@ -10,7 +10,7 @@ from .logger import Logger
 MODE = ""
 try:
   import pyximport; pyximport.install()
-  from .cython.crc16_c import crc16
+  from .cython.logger_fit import write_log_cython, set_config, get_upload_file_name, get_start_date_str
   MODE = "Cython"
 except:
   from .cython.crc16_p import crc16
@@ -171,9 +171,11 @@ class LoggerFit(Logger):
       }
     }
 
-  def __init__(self,config):
+  def __init__(self, config):
     self.config = config
     self.reset()
+    if MODE == "Cython":
+      set_config(config)
 
   def reset(self):
     self.fit_data=[]
@@ -217,7 +219,14 @@ class LoggerFit(Logger):
 
   #referenced by https://opensource.quarq.us/fit_json/
   def write_log(self):
-
+    if MODE == "Cython":
+      if write_log_cython(self.config.G_LOG_DB):
+        self.config.G_STRAVA_UPLOAD_FILE = get_upload_file_name()
+        self.config.G_LOG_START_DATE = get_start_date_str()
+        return True
+    return self.write_log_python()
+  
+  def write_log_python(self):
     ## SQLite
     #con = sqlite3.connect(self.config.G_LOG_DB)
     con = sqlite3.connect(self.config.G_LOG_DB, detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
@@ -233,6 +242,14 @@ class LoggerFit(Logger):
       start_date = first_row[0]
     else:
       return False
+    #get end_date
+    end_date = None
+    cur.execute("SELECT timestamp, MAX(timestamp) FROM BIKECOMPUTER_LOG")
+    first_row = cur.fetchone()
+    if first_row != None:
+      end_date = first_row[0]
+    else:
+      return False
     
     local_message_num = 0
     
@@ -241,7 +258,7 @@ class LoggerFit(Logger):
     self.write_definition(local_message_num)
     struct_def = self.get_struct_def(local_message_num)
     self.write(struct.pack(struct_def,
-      self.config.G_UNIT_ID_HEX, #serial_number: 3930453781
+      self.config.G_UNIT_ID_HEX, #serial_number: XXXXXXXXXX
       self.get_epoch_time(start_date), #timestamp
       255,          #manufacturer (255: development)
       #2530,       #garmin product (Edge 820)
@@ -256,10 +273,11 @@ class LoggerFit(Logger):
 
     #record
     if self.config.G_IS_DEBUG: print("record")
-    #get Max Laps
+    #get Max Lap
     cur.execute("SELECT MAX(lap) FROM BIKECOMPUTER_LOG")
     max_lap = (cur.fetchone())[0]
-    end_date = None
+
+    #get log by laps
     message_num = 20
     record_row = []
     record_index = []
@@ -268,49 +286,28 @@ class LoggerFit(Logger):
       record_index.append(k)
     record_row = ",".join(record_row)
     
-    #temp_num = 0
-    #stored_time = [0,0,0,0]
     for lap_num in range(max_lap+1):
-      #t = datetime.datetime.now()
-      #t2 = datetime.datetime.now()
       for row in cur.execute("SELECT %s FROM BIKECOMPUTER_LOG WHERE lap = %s" % (record_row,lap_num)):
-        #stored_time[0] += (datetime.datetime.now()-t).total_seconds()
-        #t = datetime.datetime.now()
-        #update_index = [(i, j) for i, j in zip(row, record_index) if i != None]
-        #n_row = len(update_index)
-        #if len(row) != n_row:
-        #  print(record_row)
-        #  print(row)
-        #  print(update_index)
-        #  break
 
         #search definition in localNum
         available_fields = []
         available_data = []
-        #available_fields = [None] * n_row
-        #available_data = [None] * n_row
-        #for i, v in enumerate(update_index):
-        for i, v in enumerate(row):
-          if v == None: continue
-          j = record_index[i] ###
-          #big cost code
-          available_fields.append(j)
-          available_data.append(int(self.convertValue((v,),message_num,j)))
-          if j == 253: end_date = v
+        if None in row:
+          for i, v in enumerate(row):
+            if v == None: continue
+            available_fields.append(record_index[i])
+            available_data.append(self.convertValue((v,),message_num,record_index[i]))
           
-          #available_fields[i] = v[3]
-          #available_data[i] = int(self.convertValue((v[0],),message_num,v[1]))
-          #available_data[i] = int(self.convertValue2(v[0],message_num,v[1]))
-          #if v[1] == 253: end_date = v
-       
-        #if len(row) != n_row:
-        #  print(available_fields)
-        #  print(available_data)
-        #  exit()
-        #stored_time[1] += (datetime.datetime.now()-t).total_seconds()
-        #t = datetime.datetime.now()
+          #available_fields = [j for i, j in zip(row, record_index) if i != None]
+          #available_data = list(map(self.convertValue, [(i,) for i in row if i != None], [message_num]*len(available_fields), available_fields))
+          
+          #available_data_gen = [(self.convertValue((i,),message_num,j), j) for i, j in zip(row, record_index) if i != None]
+          #available_fields = [row[1] for row in available_data_gen]
+          #available_data = [row[0] for row in available_data_gen]
+        else:
+          available_fields = record_index
+          available_data = list(map(self.convertValue, [(i,) for i in row], [message_num]*len(available_fields), available_fields))
         
-        #available_fields = tuple(available_fields)
         #if self.config.G_IS_DEBUG: print(available_fields, available_data)
         l_num = self.get_local_message_num(message_num, available_fields)
         l_num_used = True
@@ -323,9 +320,6 @@ class LoggerFit(Logger):
           l_num = local_message_num
         #write data
         struct_def = self.get_struct_def(l_num, l_num_used)
-        
-        #stored_time[2] += (datetime.datetime.now()-t).total_seconds()
-        #t = datetime.datetime.now()
 
         try:
           self.write(struct.pack(struct_def,*available_data))
@@ -339,18 +333,11 @@ class LoggerFit(Logger):
           cur.close()
           con.close()
           return False
-        
-        #stored_time[3] += (datetime.datetime.now()-t).total_seconds()
-        #t = datetime.datetime.now()
-        #temp_num += 1
       
       #lap: 19
       if self.config.G_IS_DEBUG: print("lap")
       local_message_num = self.get_summary(19, local_message_num, lap_num, cur)
-      #print("[FIT] lap({}), {}loop, {:.3f}".format(lap_num, temp_num, (datetime.datetime.now()-t2).total_seconds()))
 
-    #print("stored_time", stored_time)
-    
     #session: 18
     if self.config.G_IS_DEBUG: print("session")
     local_message_num = self.get_summary(18, local_message_num, 0, cur)
@@ -378,7 +365,6 @@ class LoggerFit(Logger):
     ################ 
     #write fit file 
     ################
-    #t = datetime.datetime.now()
 
     startdate_local = start_date + datetime.timedelta(seconds=offset)
     self.config.G_LOG_START_DATE = startdate_local.strftime("%Y%m%d%H%M%S")
@@ -398,7 +384,6 @@ class LoggerFit(Logger):
       b'.',b'F',b'I',b'T')
     
     #make crc
-    crc = b'\0\0'
     crc = struct.pack('<H',crc16(file_header))
     fd.write(file_header)
     #if self.config.G_IS_DEBUG: print("write crc", crc)
@@ -408,8 +393,6 @@ class LoggerFit(Logger):
     #if self.config.G_IS_DEBUG: print("write crc", crc)
     fd.write(crc)
     fd.close()
-
-    #print("[FIT] write file:", (datetime.datetime.now()-t).total_seconds(),"sec")
     
     #success
     self.reset()
@@ -427,7 +410,6 @@ class LoggerFit(Logger):
       f_type = self.profile[m_num]["field"][f_id][1]
       base_type_id = self.base_type_id_from_string(f_type)
       base_type_size = self.base_type_size_from_id(base_type_id)
-      #base_type_format = self.base_type_format_from_id(base_type_id)
       self.write(struct.pack('<BBB',f_id,base_type_size,base_type_id))
  
   def get_struct_def(self, local_message_num, l_num_used=False):
@@ -469,7 +451,7 @@ class LoggerFit(Logger):
       value = field[2] * (v[0] + field[3])
     elif len(field) == 3: # with scale
       value = field[2] * v[0]
-    return value
+    return int(value)
  
   def get_summary(self, message_num, local_message_num, lap_num, cur):
     #get statistics
@@ -498,7 +480,7 @@ class LoggerFit(Logger):
       v = list((cur.fetchone()))
       if len(v) == 0 or v[0] == None: continue
       lap_fields.append(k)
-      lap_data.append(int(self.convertValue(v,message_num,k)))
+      lap_data.append(self.convertValue(v,message_num,k))
     #add sport = 2(cycling)
     if message_num == 18:
       lap_fields.append(5)
@@ -525,28 +507,6 @@ class LoggerFit(Logger):
       print(lap_data)
       return -1
     return local_message_num
-  
-  #def crc(self, data):
-  #  #if self.config.G_IS_DEBUG: print(data)
-  #  crc=0
-  #  crc_table=[0x0000, 0xCC01, 0xD801, 0x1400, 
-  #             0xF001, 0x3C00, 0x2800, 0xE401,
-  #             0xA001, 0x6C00, 0x7800, 0xB401, 
-  #             0x5000, 0x9C01, 0x8801, 0x4400]
-
-  #  for d in data:
-  #    #byte=ord(d)
-  #    byte=d
-  #    # compute checksum of lower four bits of byte
-  #    tmp = crc_table[crc & 0xF]
-  #    crc = (crc >> 4) & 0x0FFF
-  #    crc = crc ^ tmp ^ crc_table[byte & 0xF]
-  #    # now compute checksum of upper four bits of byte
-  #    tmp = crc_table[crc & 0xF]
-  #    crc = (crc >> 4) & 0x0FFF
-  #    crc = crc ^ tmp ^ crc_table[(byte >> 4) & 0xF]
-  #  if self.config.G_IS_DEBUG: print("crc:", type(crc),crc)
-  #  return crc
 
   def get_epoch_time(self, nowdate):
     seconds = int((nowdate - self.epoch_datetime).total_seconds())
