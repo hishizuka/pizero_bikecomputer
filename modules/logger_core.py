@@ -14,7 +14,7 @@ from .logger import loader_tcx
 from .logger import logger_csv
 from .logger import logger_fit
 
-#ambient 
+#ambient
 # online uploading service in Japan
 # https://ambidata.io
 _IMPORT_AMBIENT = False
@@ -162,7 +162,7 @@ class LoggerCore():
         timestamp DATETIME,
         lap INTEGER, 
         timer INTEGER,
-        total_timer_time,
+        total_timer_time INTEGER,
         position_lat FLOAT,
         position_long FLOAT,
         gps_altitude FLOAT,
@@ -273,9 +273,14 @@ class LoggerCore():
   def reset_count(self):
     if self.config.G_MANUAL_STATUS == "START" or self.values['count'] == 0:
       return
-
+      
     #reset
     self.sensor.sensor_spi.screen_flash_long()
+
+    #close db connect
+    self.cur.close()
+    self.con.close()
+
     if self.config.G_LOG_WRITE_CSV:
       t = datetime.datetime.now()
       if not self.logger_csv.write_log():
@@ -289,12 +294,10 @@ class LoggerCore():
     
     # backup and reset database
     t = datetime.datetime.now()
-    self.reset()
-    #close db connect
-    self.cur.close()
-    self.con.close()
     shutil.move(self.config.G_LOG_DB, self.config.G_LOG_DB+"-"+self.config.G_LOG_START_DATE)
     
+    self.reset()
+
     #restart db connect
     #usage of sqlite3 is "insert" only, so check_same_thread=False
     self.con = sqlite3.connect(self.config.G_LOG_DB, check_same_thread=False)
@@ -724,29 +727,30 @@ class LoggerCore():
       self.short_log_available = True
 
     #print("lat_raw", len(lat_raw))
-    if(len(lat_raw) > 0):
+    if len(lat_raw) > 0 and (len(lat_raw) == len(lon_raw) == len(dist_raw)):
       #downsampling
       valid_points = np.insert(
         #close points are delete
-        np.where(np.diff(dist_raw) >= 1, True, False) & \
+        np.where(np.diff(dist_raw) >= self.config.G_ROUTE_DISTANCE_CUTOFF, True, False) & \
         (
           #same points are delete
           np.where(np.diff(lat_raw) != 0, True, False) | \
           np.where(np.diff(lon_raw) != 0, True, False)
         ),
         0, True)
-      lat_raw = lat_raw[valid_points]
-      lon_raw = lon_raw[valid_points]
-      dist_raw = dist_raw[valid_points]
-      azimuth_diff = np.diff(self.config.calc_azimuth(lat_raw, lon_raw))
-      azimuth_cond = np.insert(np.where(abs(azimuth_diff) <= 3, False, True), 0, True)
-      dist_diff = np.diff(dist_raw)
-      dist_cond = np.where(dist_diff >= self.config.G_GPS_DISPLAY_INTERVAL_DISTANCE, True, False)
-      cond = np.insert((dist_cond & azimuth_cond), 0, True)
-      cond[-1] = True
-      #print(valid_points, cond)
-      lat = lat_raw[cond]
-      lon = lon_raw[cond]
+      if len(lat_raw) == len(valid_points):
+        lat_raw = lat_raw[valid_points]
+        lon_raw = lon_raw[valid_points]
+        dist_raw = dist_raw[valid_points]
+        azimuth_diff = np.diff(self.config.calc_azimuth(lat_raw, lon_raw))
+        azimuth_cond = np.insert(np.where(abs(azimuth_diff) <= self.config.G_ROUTE_AZIMUTH_CUTOFF, False, True), 0, True)
+        dist_diff = np.diff(dist_raw)
+        dist_cond = np.where(dist_diff >= self.config.G_GPS_DISPLAY_INTERVAL_DISTANCE, True, False)
+        cond = np.insert((dist_cond & azimuth_cond), 0, True)
+        cond[-1] = True
+        #print(valid_points, cond)
+        lat = lat_raw[cond]
+        lon = lon_raw[cond]
 
     if timestamp is None:
       timestamp_new = datetime.datetime.utcnow()
