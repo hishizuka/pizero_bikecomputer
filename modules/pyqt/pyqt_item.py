@@ -1,8 +1,15 @@
 import time
 
-import PyQt5.QtCore as QtCore
-import PyQt5.QtGui as QtGui
-import PyQt5.QtWidgets as QtWidgets
+USE_PYQT6 = False
+try:
+  import PyQt6.QtCore as QtCore
+  import PyQt6.QtGui as QtGui
+  import PyQt6.QtWidgets as QtWidgets
+  USE_PYQT6 = True
+except:
+  import PyQt5.QtCore as QtCore
+  import PyQt5.QtGui as QtGui
+  import PyQt5.QtWidgets as QtWidgets
 
 import numpy as np
 
@@ -24,9 +31,9 @@ class Item(QtWidgets.QVBoxLayout):
     self.setSpacing(0)
 
     self.label = QtWidgets.QLabel()
-    self.label.setAlignment(QtCore.Qt.AlignCenter)
+    self.label.setAlignment(QtCore.Qt.Alignment.AlignCenter) if USE_PYQT6 else self.label.setAlignment(QtCore.Qt.AlignCenter)
     self.value = QtWidgets.QLabel()
-    self.value.setAlignment(QtCore.Qt.AlignCenter)
+    self.value.setAlignment(QtCore.Qt.Alignment.AlignCenter) if USE_PYQT6 else self.value.setAlignment(QtCore.Qt.AlignCenter)
     self.itemformat = self.config.gui.gui_config.G_ITEM_DEF[name][0]
     if self.config.G_LANG in self.config.gui.gui_config.G_LANG and \
       name in self.config.gui.gui_config.G_LANG[self.config.G_LANG]:

@@ -1,6 +1,11 @@
-import PyQt5.QtCore as QtCore
-import PyQt5.QtWidgets as QtWidgets
-import PyQt5.QtGui as QtGui
+try:
+  import PyQt6.QtCore as QtCore
+  import PyQt6.QtWidgets as QtWidgets
+  import PyQt6.QtGui as QtGui
+except:
+  import PyQt5.QtCore as QtCore
+  import PyQt5.QtWidgets as QtWidgets
+  import PyQt5.QtGui as QtGui
 
 from .pyqt_screen_widget import ScreenWidget
 
@@ -23,7 +28,7 @@ class MarqueeLabel(QtWidgets.QLabel):
 
   def setText(self, text):
     super().setText(text)
-    self.textLength = self.fontMetrics().width(text)
+    self.textLength = self.fontMetrics().horizontalAdvance(text)
     if self.textLength > self.width() and self.config.G_CUESHEET_SCROLL:
       self.timer.start(self.timer_interval)
 
@@ -34,7 +39,7 @@ class MarqueeLabel(QtWidgets.QLabel):
       painter.drawText(self.px+5, self.py, self.text())
       return
     
-    if self.px <= -self.fontMetrics().width(self.text()):
+    if self.px <= -self.fontMetrics().horizontalAdvance(self.text()):
       self.px = self.width()
     painter.drawText(self.px, self.py, self.text())
     painter.translate(self.px, 0)
