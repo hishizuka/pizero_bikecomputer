@@ -2,9 +2,15 @@ import os
 import numpy as np
 import datetime
 
-import PyQt5.QtCore as QtCore
-import PyQt5.QtWidgets as QtWidgets
-import PyQt5.QtGui as QtGui
+try:
+  import PyQt6.QtCore as QtCore
+  import PyQt6.QtWidgets as QtWidgets
+  import PyQt6.QtGui as QtGui
+except:
+  import PyQt5.QtCore as QtCore
+  import PyQt5.QtWidgets as QtWidgets
+  import PyQt5.QtGui as QtGui
+
 import pyqtgraph as pg
 
 from PIL import Image
@@ -305,21 +311,6 @@ class BaseMapWidget(ScreenWidget):
   def update_extra(self):
     pass
 
-  def update_course_points(self):
-    if len(self.config.logger.course.point_distance) > 0 and self.config.G_CUESHEET_DISPLAY_NUM > 0 and self.config.G_COURSE_INDEXING :
-      cp_i = self.gps_values['course_point_index']  
-      #hide and show course_points
-      if cp_i > 0 and self.course_points_label[-cp_i].isVisible():
-        print("\t", "hide markers:", -cp_i, self.config.logger.course.point_name[cp_i-1])
-        for i in range(1, cp_i+1):
-          self.course_points_label[-i].hide()
-      if 0 < cp_i < len(self.course_points_label) and not self.course_points_label[-(cp_i+1)].isVisible():
-        for i in range(cp_i+1, len(self.course_points_label)+1):
-          self.course_points_label[-i].show()
-      return True
-
-    return False
-
 
 class CourseProfileGraphWidget(BaseMapWidget):
 
@@ -374,45 +365,6 @@ class CourseProfileGraphWidget(BaseMapWidget):
       brushes=self.config.logger.course.colored_altitude, 
       pen=pg.mkPen(color=(255,255,255,0), width=0.01)) #transparent(alpha=0) and thin line
     self.plot.addItem(bg)
-
-    self.course_points_plot = pg.ScatterPlotItem(pxMode=True, symbol="t")
-    self.course_points = []
-
-    for i in reversed(range(len(self.config.logger.course.point_distance))):
-      cp = {
-        'pos': [
-          self.config.logger.course.point_distance[i],
-          self.config.logger.course.point_altitude[i]
-          ],
-        'size': 10,
-        'pen': {'color': 'r', 'width': 1},
-        'brush': pg.mkBrush(color=(255,0,0))
-      }
-      self.course_points.append(cp)
-    self.course_points_plot.setData(self.course_points)
-    self.plot.addItem(self.course_points_plot)
-
-    self.course_points_label = []
-    if self.config.G_FONT_NAME != "":
-      self.font = QtGui.QFont(self.config.G_FONT_NAME)
-    for i in reversed(range(len(self.config.logger.course.point_distance))):
-      text = pg.TextItem(
-        text = self.config.logger.course.point_name[i],
-        anchor = (-0.1, 1.2), 
-        angle = 0, 
-        border = (255, 0, 0),
-        fill = (255, 255, 255),
-        color = (0, 0, 0),
-        )
-      #text.setTextWidth(int(self.config.G_WIDTH/2.5))
-      if self.config.G_FONT_NAME != "":
-        text.setFont(self.font)
-      self.plot.addItem(text)
-      text.setPos(
-        self.config.logger.course.point_distance[i],
-        self.config.logger.course.point_altitude[i]
-        )
-      self.course_points_label.append(text)
 
     print("\tpyqt_graph : plot course profile : ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
 
@@ -515,9 +467,6 @@ class CourseProfileGraphWidget(BaseMapWidget):
     #reset move_pos
     self.move_pos['x'] = self.move_pos['y'] = 0
 
-    #course_points and cuesheet
-    self.update_course_points()
-
 
 class SimpleMapWidget(BaseMapWidget):
   
@@ -532,6 +481,8 @@ class SimpleMapWidget(BaseMapWidget):
   plot_verification = None
   course_points_plot = None
   course_point_text = None
+
+  cuesheet_widget = None
 
   #misc
   y_mod = 1.22 #31/25 at Tokyo(N35)
@@ -550,12 +501,10 @@ class SimpleMapWidget(BaseMapWidget):
     super().setup_ui_extra()
     
     #self.plot.showGrid(x=True, y=True, alpha=1)
-    self.track_plot = self.plot.plot(self.tracks_lon, self.tracks_lat)
-    #self.track_plot.setPen(pg.mkPen(color=(0,192,255,128), width=7))
-    self.track_plot.setPen(pg.mkPen(color=(0,128,255), width=6))
+    self.track_plot = self.plot.plot(pen=pg.mkPen(color=(0,128,255), width=8))
+    #self.track_plot = self.plot.plot(pen=pg.mkPen(color=(0,192,255,128), width=8))
 
-    self.scale_plot = self.plot.plot()
-    self.scale_plot.setPen(pg.mkPen(color=(0,0,0), width=3))
+    self.scale_plot = self.plot.plot(pen=pg.mkPen(color=(0,0,0), width=3))
     self.scale_text = pg.TextItem(
       text = "",
       anchor = (0.5, 1), 
@@ -690,14 +639,13 @@ class SimpleMapWidget(BaseMapWidget):
         test_points.append(p)
       self.plot_verification.setData(test_points)
       self.plot.addItem(self.plot_verification)
-    print("\tpyqt_graph : course_plot : ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
+    print("\tpyqt_graph : course plot : ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
       
     #course point
     if len(self.config.logger.course.point_longitude) == 0:
       return
     
     t = datetime.datetime.utcnow()
-
 
     if self.course_points_plot != None:
       self.plot.removeItem(self.course_points_plot)
@@ -720,57 +668,7 @@ class SimpleMapWidget(BaseMapWidget):
     self.course_points_plot.setData(self.course_points)
     self.plot.addItem(self.course_points_plot)
 
-    print("\tpyqt_graph : load course_points_plot : ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
-    t = datetime.datetime.utcnow()
-    
-    if self.course_point_text != None:
-      for cp in self.course_points_label:
-        self.plot.removeItem(cp)
-    self.course_points_label = []
-    if self.config.G_FONT_NAME != "":
-      self.font = QtGui.QFont(self.config.G_FONT_NAME)
-    for i in reversed(range(len(self.config.logger.course.point_longitude))):
-      #if self.config.logger.course.point_type[i] == "Straight":
-      #  continue
-
-      #CoursePointType from TCX schema
-      # https://www8.garmin.com/xmlschemas/TrainingCenterDatabasev2.xsd
-      #  Generic, Summit, Valley, Water, Food, Danger,
-      #  Left, Right, Straight, First Aid,
-      #  4th Category, 3rd Category, 2nd Category, 1st Category,
-      #  Hors Category, Sprint,
-
-      #arrow = ""
-      #if self.config.logger.course.point_type[i] == "Left":
-      #  arrow ="backarrow_black.png"
-      #elif self.config.logger.course.point_type[i] == "Right":
-      #  arrow ="nextarrow_black.png"
-      #else:
-      #  continue
-
-      # Create text object, use HTML tags to specify color/size
-      #  http://www.pyqtgraph.org/documentation/graphicsItems/textitem.html
-      self.course_point_text = pg.TextItem(
-        #html = '<div style="text-align: center">' + '<img src="img/' + arrow + '" /></div>',
-        #html = '<div style="text-align: center">' + self.config.logger.course.point_name[i] + '</div>',
-        text = self.config.logger.course.point_name[i],
-        anchor = (-0.1, 1.2), 
-        angle = 0, 
-        border = (255, 0, 0),
-        fill = (255, 255, 255),
-        color = (0, 0, 0),
-        )
-      #text.setTextWidth(int(self.config.G_WIDTH/2.5))
-      if self.config.G_FONT_NAME != "":
-        self.course_point_text.setFont(self.font)
-      self.plot.addItem(self.course_point_text)
-      self.course_point_text.setPos(
-        self.config.logger.course.point_longitude[i],
-        self.get_mod_lat(self.config.logger.course.point_latitude[i])
-        )
-      self.course_points_label.append(self.course_point_text)
-    
-    print("\tpyqt_graph : display course_points_plot : ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
+    print("\tpyqt_graph : load course points plot : ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
 
   def update_extra(self):
 
@@ -971,8 +869,6 @@ class SimpleMapWidget(BaseMapWidget):
       "y": max(y_start, y_end)
     }
     #tile range
-    #t0 = self.get_tile_xy(pixel_z, p0["x"], p0["y"])
-    #t1 = self.get_tile_xy(pixel_z, p1["x"], p1["y"])
     t0 = self.get_tilexy_and_xy_in_tile(pixel_z, p0["x"], p0["y"])
     t1 = self.get_tilexy_and_xy_in_tile(pixel_z, p1["x"], p1["y"])
     tile_x = sorted([t0[0], t1[0]])
@@ -1108,13 +1004,9 @@ class SimpleMapWidget(BaseMapWidget):
       )
   
   def get_altitude_from_tile(self, pos):
-    #f_x, f_y = self.get_tile_xy(self.zoomlevel, pos[0], pos[1])
     f_x, f_y, p_x, p_y = self.get_tilexy_and_xy_in_tile(self.zoomlevel, pos[0], pos[1])
     filename = self.config.get_maptile_filename(self.config.G_DEM_MAP, self.zoomlevel, f_x, f_y)
-    
-    #p_x, p_y = self.get_xy_in_tile(self.zoomlevel, pos[0], pos[1])
-    #print(f_x, f_y, filename, p_x, p_y)
-    
+
     if not os.path.exists(filename) or os.path.getsize(filename) == 0:
       return np.nan
     
@@ -1139,14 +1031,12 @@ class SimpleMapWidget(BaseMapWidget):
       )
 
   def draw_cuesheet(self):
-    if self.update_course_points():
-      #update cuesheet
+    if self.cuesheet_widget != None:
       self.cuesheet_widget.update_extra()
 
   def calc_y_mod(self, lat):
     if np.isnan(lat):
       return np.nan
-    # (6356752 * 2*np.pi/360/60/60) / (6378137 * 2*np.pi*math.cos(lat/180*np.pi)/360/60/60)
     return self.config.GEO_R2 / (self.config.GEO_R1 * math.cos(lat/180*np.pi))
   
   def get_width_distance(self, lat, w):
@@ -1159,39 +1049,20 @@ class SimpleMapWidget(BaseMapWidget):
     return lat * self.config.GEO_R2 / (self.config.GEO_R1 * np.cos(lat/180*np.pi))
 
   def get_geo_area(self, x, y):
-    #tile_x, tile_y = self.get_tile_xy(self.zoomlevel, x, y)
     tile_x, tile_y, _, _ = self.get_tilexy_and_xy_in_tile(self.zoomlevel, x, y)
     pos_x0, pos_y0 = self.get_lon_lat_from_tile_xy(self.zoomlevel, tile_x, tile_y)
     pos_x1, pos_y1 = self.get_lon_lat_from_tile_xy(self.zoomlevel, tile_x+1, tile_y+1)
     return abs(pos_x1-pos_x0)/256*(self.width()*self.map_cuesheet_ratio), abs(pos_y1-pos_y0)/256*self.height()
   
-  #def get_tile_xy(self, z, x, y):
-  #  ret_x, ret_y = self.get_tile(z, x, y)
-  #  #return int(ret_x/256), int(ret_y/256)
-  #  return ret_x, ret_y
-  
-  #def get_xy_in_tile(self, z, x, y):
-  #  ret_x, ret_y = self.get_tile(z, x, y)
-  #  return int(ret_x%256), int(ret_y%256)
-  
   def get_tilexy_and_xy_in_tile(self, z, x, y):
-    #_z = 2**(7+z)
-    #l = 85.05112878
-    #tile_x = _z*(1+x/180)
-    #tile_y = _z/np.pi*(-np.arctanh(np.sin(np.pi/180*y)) + np.arctanh(np.sin(np.pi/180*l)))
-
     n = 2.0 ** z
+    _y = math.radians(y)
     x_in_tile, tile_x = math.modf((x + 180.0) / 360.0 * n)
-    y_in_tile, tile_y = math.modf((1.0 - math.asinh(math.tan(math.radians(y))) / math.pi) / 2.0 * n)
+    y_in_tile, tile_y = math.modf((1.0 - math.log(math.tan(_y) + (1.0/math.cos(_y))) / math.pi) / 2.0 * n)
 
     return int(tile_x), int(tile_y), int(x_in_tile*256), int(y_in_tile*256)
   
   def get_lon_lat_from_tile_xy(self, z, x, y):
-    #_z = 2**(7+z)
-    #l = 85.05112878
-    #lon = 180 * (x*256/_z-1)
-    #lat = 180/np.pi * (np.arcsin(np.tanh(-1*np.pi*y*256/_z+np.arctanh(np.sin(np.pi/180*l)))))
-
     n = 2.0 ** z
     lon = x / n * 360.0 - 180.0
     lat = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * y / n))))
