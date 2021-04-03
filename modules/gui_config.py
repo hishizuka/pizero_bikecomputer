@@ -102,6 +102,8 @@ class GUI_Config():
       "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x13]['torque_eff']"),
     "Pedal Sm.(ANT+)":("{0:^s}",\
       "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x13]['pedal_sm']"),
+    "Light(ANT+)":("{0:^s}",\
+      "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['LGT']]['lgt_state_display']"),
     #ANT+ multi
     "PWR1":(G_UNIT["Power"],"None"),
     "PWR2":(G_UNIT["Power"],"None"),
