@@ -14,8 +14,8 @@ except:
 # https://ae-bst.resource.bosch.com/media/_tech/media/datasheets/BST-BMP280-DS001.pdf
 
 # temperature resolution
-OSRS_T = 0 # no oversampling
-# OSRS_T = 1 # x2 oversampling
+# OSRS_T = 0 # no oversampling
+OSRS_T = 1 # x2 oversampling
 # OSRS_T = 2 # x4 oversampling
 # OSRS_T = 3 # x8 oversampling
 # OSRS_T = 4 # x16 oversampling
