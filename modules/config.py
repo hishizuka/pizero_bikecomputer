@@ -72,7 +72,7 @@ class Config():
   G_VERSION_MAJOR = 0 #need to be initialized
   G_VERSION_MINOR = 1 #need to be initialized
   G_UNIT_ID = "0000000000000000" #initialized in get_serial
-  G_UNIT_ID_HEX = 0 #initialized in get_serial
+  G_UNIT_ID_HEX = 0x1A2B3C4D #initialized in get_serial
 
   #install_dir 
   G_INSTALL_PATH = os.path.expanduser('~') + "/pizero_bikecomputer/"
@@ -183,42 +183,48 @@ class Config():
       'SPD':False,
       'CDC':False,
       'PWR':False,
-      #'CTRL':False,
+      'LGT':False,
+      'CTRL':False,
       },
     'NAME':{
       'HR':'HeartRate',
       'SPD':'Speed',
       'CDC':'Cadence',
       'PWR':'Power',
-      #'CTRL':'control',
+      'LGT':'Light',
+      'CTRL':'Control',
       },
     'ID':{
       'HR':0,
       'SPD':0,
       'CDC':0,
       'PWR':0,
-      #'CTRL':0,
+      'LGT':0,
+      'CTRL':0,
       },
     'TYPE':{
       'HR':0,
       'SPD':0,
       'CDC':0,
       'PWR':0,
-      #'CTRL':0,
+      'LGT':0,
+      'CTRL':0,
       },
     'ID_TYPE':{
       'HR':0,
       'SPD':0,
       'CDC':0,
       'PWR':0,
-      #'CTRL':0,
+      'LGT':0,
+      'CTRL':0,
       },
     'TYPES':{
       'HR':(0x78,),
       'SPD':(0x79,0x7B),
       'CDC':(0x79,0x7A,0x0B),
       'PWR':(0x0B,),
-      #'CTRL':(0x10,),
+      'LGT':(0x23,),
+      'CTRL':(0x10,),
       },
     'TYPE_NAME':{
       0x78:'HeartRate',
@@ -226,11 +232,11 @@ class Config():
       0x7A:'Cadence',
       0x7B:'Speed',
       0x0B:'Power',
-      #0x10:'Control',
+      0x23:'Light',
+      0x10:'Control',
       },
     #for display order in ANT+ menu (antMenuWidget)
-    'ORDER':['HR','SPD','CDC','PWR'],
-    #'ORDER':['HR','SPD','CDC','PWR','CTRL'],
+    'ORDER':['HR','SPD','CDC','PWR','LGT','CTRL'],
    }
   
   #GPS Null value
@@ -247,9 +253,9 @@ class Config():
   #screen size (need to add when adding new device)
   G_AVAILABLE_DISPLAY = {
     'PiTFT': {'size':(320, 240),'touch':True},
-    'MIP': {'size':(400, 240),'touch':False},
+    'MIP': {'size':(400, 240),'touch':False}, #LPM027M128C, LPM027M128B
+    'MIP_640': {'size':(640, 480),'touch':False}, #LPM044M141A
     'MIP_Sharp': {'size':(400, 240),'touch':False},
-    #'MIP': {'size':(640, 480),'touch':False},
     'Papirus': {'size':(264, 176),'touch':False},
     'DFRobot_RPi_Display': {'size':(250, 122),'touch':False}
   }
@@ -258,7 +264,7 @@ class Config():
   #GUI mode
   G_GUI_MODE = "PyQt"
   #G_GUI_MODE = "QML" #not valid
-  G_BUF_IMAGE = "/tmp/buf.bmp"
+  #G_BUF_IMAGE = "/tmp/buf.bmp"
 
   #hr and power graph (PerformanceGraphWidget)
   G_GUI_HR_POWER_DISPLAY_RANGE = int(1*180/G_SENSOR_INTERVAL) # num (no unit)
@@ -267,7 +273,7 @@ class Config():
   G_GUI_MIN_POWER = 30
   G_GUI_MAX_POWER = 320
   #acceleration graph (AccelerationGraphWidget)
-  G_GUI_REALTIME_GRAPH_RANGE = int(1*60/(G_REALTIME_GRAPH_INTERVAL/1000)) # num (no unit)
+  G_GUI_ACC_TIME_RANGE = int(1*60/(G_REALTIME_GRAPH_INTERVAL/1000)) # num (no unit)
 
   #Graph color by slope
   G_SLOPE_WINDOW_DISTANCE = 500 #m
@@ -300,6 +306,9 @@ class Config():
   #for search point on course
   G_GPS_ON_ROUTE_CUTOFF = 50 #[m] #generate from course
   G_GPS_SEARCH_RANGE = 5 #[km] #100km/h -> 27.7m/s
+  #for route downsampling cutoff
+  G_ROUTE_DISTANCE_CUTOFF = 1.0
+  G_ROUTE_AZIMUTH_CUTOFF = 3.0
 
   #STRAVA token (need to write setting.conf manually)
   G_STRAVA_API_URL = {
@@ -636,7 +645,7 @@ class Config():
         if line[0:6]=='Serial':
           #include char, not number only
           self.G_UNIT_ID = (line.split(':')[1]).replace(' ','').strip()
-          self.G_UNIT_ID_HEX = eval("0x"+self.G_UNIT_ID[-8:])
+          self.G_UNIT_ID_HEX = int(self.G_UNIT_ID[-8:])
       f.close()
     except:
       pass
@@ -988,17 +997,17 @@ class Config():
           k2 = key2.upper()
         except:
           continue
-        if k1 == 'USE' and k2 in ['HR','SPD','CDC','PWR']:
+        if k1 == 'USE' and k2 in self.G_ANT['ID'].keys(): #['HR','SPD','CDC','PWR']:
           try:
             self.G_ANT[k1][k2] = self.config_parser['ANT'].getboolean(key)
           except:
             pass
-        elif k1 in ['ID','TYPE'] and k2 in ['HR','SPD','CDC','PWR']:
+        elif k1 in ['ID','TYPE'] and k2 in self.G_ANT['ID'].keys(): #['HR','SPD','CDC','PWR']:
           try:
             self.G_ANT[k1][k2] = self.config_parser['ANT'].getint(key)
           except:
             pass
-      for key in ['HR','SPD','CDC','PWR']:
+      for key in self.G_ANT['ID'].keys(): #['HR','SPD','CDC','PWR']:
         if not (0 <= self.G_ANT['ID'][key] <= 0xFFFF) or\
            not self.G_ANT['TYPE'][key] in self.G_ANT['TYPES'][key]:
           self.G_ANT['USE'][key] = False
@@ -1057,7 +1066,7 @@ class Config():
       self.config_parser['ANT']['STATUS'] = str(self.G_ANT['STATUS'])
       for key1 in ['USE','ID','TYPE']:
         for key2 in self.G_ANT[key1]:
-          if key2 in ['HR','SPD','CDC','PWR']:
+          if key2 in self.G_ANT['ID'].keys(): #['HR','SPD','CDC','PWR']:
             self.config_parser['ANT'][key1+"_"+key2] = str(self.G_ANT[key1][key2])
     
     self.config_parser['SENSOR_IMU'] = {}
