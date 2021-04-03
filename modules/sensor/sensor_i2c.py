@@ -289,7 +289,7 @@ class SensorI2C(Sensor):
 
     self.graph_values = {}
     for g in self.graph_keys:
-      self.graph_values[g] = np.full((3, self.config.G_GUI_REALTIME_GRAPH_RANGE), np.nan)
+      self.graph_values[g] = np.full((3, self.config.G_GUI_ACC_TIME_RANGE), np.nan)
    
     #for moving status
     self.mov_window_size = int(2/self.config.G_I2C_INTERVAL)+1
