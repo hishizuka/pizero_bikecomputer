@@ -61,8 +61,8 @@ Install in the home directory of default user "pi".
 ```
 $ cd
 $ git clone https://github.com/hishizuka/pizero_bikecomputer.git
-$ sudo apt-get install python3-pip cython3 cmake gawk python3-numpy python3-pyqt5
-$ sudo pip3 install oyaml
+$ sudo apt-get install python3-pip cython3 cmake gawk python3-numpy python3-pyqt5 libsqlite3-dev
+$ sudo pip3 install oyaml sip
 $ sudo apt-get install wiringpi python3-smbus python3-rpi.gpio python3-psutil python3-pil
 $ sudo pip3 install git+https://github.com/hishizuka/pyqtgraph.git
 $ cd pizero_bikecomputer
@@ -230,6 +230,8 @@ Follow [official setup guide](https://github.com/PiSupply/PiJuice/tree/master/So
 
 # Quick Start
 
+If cython is available, it will take a few minutes to run for the first time to compile the program.
+
 ## Run on X Window
 
 If you run the program from the SSH login shell, add the following environment variable.
@@ -378,7 +380,7 @@ Both short press and long press can be changed. And only the GPIO number of PiTF
 
 From left to right, the button assignments are as follows.
 
-| GPIO NUM | Short press | Long press |
+| Button | Short press | Long press |
 |:-|:-|:-|
 | A | Screen switching(Back) | None |
 | B | LAP | Reset |
@@ -392,7 +394,7 @@ From left to right, the button assignments are as follows.
 
 In the menu, the button has different assignments. From left to right, the button assignments are as follows.
 
-| GPIO NUM | Short press | Long press |
+| Button | Short press | Long press |
 |:-|:-|:-|
 | A | Back | None |
 | B | brightness control(*) | None |
