@@ -1,7 +1,13 @@
 import traceback
 
-import PyQt5.QtCore as QtCore
-import PyQt5.QtWidgets as QtWidgets
+USE_PYQT6 = False
+try:
+  import PyQt6.QtCore as QtCore
+  import PyQt6.QtWidgets as QtWidgets
+  USE_PYQT6 = True
+except:
+  import PyQt5.QtCore as QtCore
+  import PyQt5.QtWidgets as QtWidgets
 
 from .pyqt_item import Item
 
@@ -44,7 +50,8 @@ class ScreenWidget(QtWidgets.QWidget):
     pass
 
   def setup_ui(self):
-    self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+    self.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding) if USE_PYQT6 \
+    else self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
 
     # update panel setting
     self.timer = QtCore.QTimer(parent=self)

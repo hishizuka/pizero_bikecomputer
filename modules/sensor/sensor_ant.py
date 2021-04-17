@@ -61,7 +61,7 @@ class SensorANT(Sensor):
    
     #auto connect ANT+ sensor from setting.conf
     if _SENSOR_ANT and not self.config.G_DUMMY_OUTPUT:
-      for key in ['HR','SPD','CDC','PWR']:
+      for key in self.config.G_ANT['ID'].keys():
         if self.config.G_ANT['USE'][key]:
           antID = self.config.G_ANT['ID'][key]
           antType = self.config.G_ANT['TYPE'][key]
@@ -69,7 +69,7 @@ class SensorANT(Sensor):
       return
     #otherwise, initialize
     else:
-      for key in ['HR','SPD','CDC','PWR']:
+      for key in self.config.G_ANT['ID'].keys():
         self.config.G_ANT['USE'][key] = False
         self.config.G_ANT['ID'][key] = 0
         self.config.G_ANT['TYPE'][key] = 0
@@ -150,10 +150,11 @@ class SensorANT(Sensor):
   def quit(self):
     if not _SENSOR_ANT:
       return
-    self.node.ant.set_wait_action()
+    self.searcher.set_wait_quick_mode()
     #stop scanner and searcher
     if not self.scanner.stop():
       for dv in self.device.values():
+        dv.ant_state = 'quit'
         dv.disconnect(isCheck=True, isChange=False, wait=0) #USE: True -> True
       self.searcher.stopSearch(resetWait=False)
     self.node.stop()
@@ -169,15 +170,16 @@ class SensorANT(Sensor):
     
     self.config.G_ANT['USE'][antName] = True
 
+    self.searcher.set_wait_normal_mode()
+
     #existing connection 
     if connectStatus:
-      self.node.ant.set_wait_period()
       return
 
     #recconect
     if antIDType in self.device:
       self.device[antIDType].connect(isCheck=False, isChange=False) #USE: True -> True)
-      self.node.ant.set_wait_period()
+      self.device[antIDType].ant_state = 'connectAntSensor'
       return
    
     #newly connect
@@ -187,17 +189,23 @@ class SensorANT(Sensor):
         = ANT_Device_HeartRate(self.node, self.config, self.values[antIDType], antName)
     elif antType == 0x79:
       self.device[antIDType] \
-        = ANT_Device_Speed_Cadence(self.node, self.config ,self.values[antIDType], antName)
+        = ANT_Device_Speed_Cadence(self.node, self.config, self.values[antIDType], antName)
     elif antType == 0x7A:
       self.device[antIDType] \
-        = ANT_Device_Cadence(self.node, self.config ,self.values[antIDType], antName)
+        = ANT_Device_Cadence(self.node, self.config, self.values[antIDType], antName)
     elif antType == 0x7B:
       self.device[antIDType] \
-        = ANT_Device_Speed(self.node, self.config ,self.values[antIDType], antName)
+        = ANT_Device_Speed(self.node, self.config, self.values[antIDType], antName)
     elif antType == 0x0B:
       self.device[antIDType] \
-        = ANT_Device_Power(self.node, self.config ,self.values[antIDType], antName)
-    self.node.ant.set_wait_period()
+        = ANT_Device_Power(self.node, self.config, self.values[antIDType], antName)
+    elif antType == 0x23:
+      self.device[antIDType] \
+        = ANT_Device_Light(self.node, self.config, self.values[antIDType], antName)
+    elif antType == 0x10:
+      self.device[antIDType] \
+        = ANT_Device_CTRL(self.node, self.config, self.values[antIDType], antName)
+    self.device[antIDType].ant_state = 'connectAntSensor'
 
   def disconnectAntSensor(self, antName):
     antIDType = self.config.G_ANT['ID_TYPE'][antName]
@@ -208,6 +216,7 @@ class SensorANT(Sensor):
           antNames.append(k)
     for k in antNames:
       #USE: True -> False
+      self.device[self.config.G_ANT['ID_TYPE'][k]].ant_state = 'disconnectAntSensor'
       self.device[self.config.G_ANT['ID_TYPE'][k]].disconnect(isCheck=True, isChange=True)
       self.config.G_ANT['ID_TYPE'][k] = 0
       self.config.G_ANT['ID'][k] = 0
@@ -217,15 +226,16 @@ class SensorANT(Sensor):
   def continuousScan(self):
     if not _SENSOR_ANT:
       return
-    self.node.ant.set_wait_action()
+    self.scanner.set_wait_quick_mode()
     for dv in self.device.values():
+      dv.ant_state = 'continuousScan'
       dv.disconnect(isCheck=True, isChange=False, wait=0.5) #USE: True -> True
     time.sleep(0.5)
+    self.scanner.set_wait_scan_mode()
     self.scanner.scan()
-    self.node.ant.set_wait_scan()
 
   def stopContinuousScan(self):
-    self.node.ant.set_wait_action()
+    self.scanner.set_wait_quick_mode()
     self.scanner.stopScan()
     antIDTypes = []
     for k,v in self.config.G_ANT['USE'].items():
@@ -233,8 +243,23 @@ class SensorANT(Sensor):
         antIDTypes.append(self.config.G_ANT['ID_TYPE'][k])
     for antIDType in antIDTypes:
       self.device[antIDType].connect(isCheck=True, isChange=False) #USE: True -> True
-    self.node.ant.set_wait_period()
-    
+    self.scanner.set_wait_normal_mode()
+  
+  def set_light_mode(self, mode, auto=False):
+    if not self.config.G_ANT['USE']['LGT']: return
+    if mode == "OFF":
+      self.device[self.config.G_ANT['ID_TYPE']['LGT']].send_light_setting_light_off(auto)
+    elif mode == "FLASH_LOW":
+      self.device[self.config.G_ANT['ID_TYPE']['LGT']].send_light_setting_flash_low(auto)
+    elif mode == "FLASH_HIGH":
+      self.device[self.config.G_ANT['ID_TYPE']['LGT']].send_light_setting_flash_high(auto)
+    elif mode == "STEADY_HIGH":
+      self.device[self.config.G_ANT['ID_TYPE']['LGT']].send_light_setting_steady_high(auto)
+    elif mode == "STEADY_MID":
+      self.device[self.config.G_ANT['ID_TYPE']['LGT']].send_light_setting_steady_mid(auto)
+    elif mode == "ON_OFF_FLASH_LOW":
+      self.device[self.config.G_ANT['ID_TYPE']['LGT']].send_light_setting_light_off_flash_low(auto)
+
 
 ################################################
 
@@ -243,9 +268,9 @@ class ANT_Device():
   config = None
   node = None
   channel = None
-  channel_type = None
-  timeout = 0xFF
+  timeout = 0xFF #0xFF #0: disable high priority search mode, 0xFF: infinite search timeout
   values = None
+  ant_state = None
   name = ""
   elements = ()
   stop_cutoff = 60
@@ -265,6 +290,8 @@ class ANT_Device():
     'power': 500, #w
     'cadence': 255, #rpm
   }
+  stored_page = {0x50: False, 0x51: False}
+  ant_idle_interval = {'NORMAL':0.20, 'QUICK':0.01, 'SCAN': 0.20}
 
   def __init__(self, node=None, config=None, values={}, name=''):
     self.node = node
@@ -274,8 +301,9 @@ class ANT_Device():
     self.addStructPattern()
     self.initValue()
     
-    if node == None: return #for dummy device 
-    self.makeChannel(Channel.Type.BIDIRECTIONAL_RECEIVE)
+    if node == None: return #for dummy device
+    self.makeChannel(self.ant_config['channel_type'])
+    self.init_extra()
     self.readyConnect()
     self.connect(isCheck=True, isChange=False) #USE: True -> True
 
@@ -288,6 +316,9 @@ class ANT_Device():
   def initValue(self):
     self.setNullValue()
     self.resetValue()
+  
+  def init_extra(self):
+    pass
 
   def setNullValue(self):
     for element in self.elements:
@@ -297,23 +328,36 @@ class ANT_Device():
   def resetValue(self):
     pass
 
-  def makeChannel(self, c_type, search=False):
+  def makeChannel(self, c_type, ext_assign=None):
     if _SENSOR_ANT and self.channel == None:
-      if search == True:
-        self.channel = self.node.new_channel_for_search(c_type)
-      else:
-        self.channel = self.node.new_channel(c_type)
+      self.channel = self.node.new_channel(c_type, ext_assign=ext_assign)
       print(self.name, ': channel_num: ', self.channel.id)
       self.channel.on_broadcast_data = self.on_data
       self.channel.on_burst_data = self.on_data
+      self.channel.on_acknowledge_data = self.on_data
+
+  def channel_set_id(self): #for slave
+    self.channel.set_id(self.config.G_ANT['ID'][self.name], self.ant_config['type'], self.ant_config['transmission_type'])
 
   def readyConnect(self):
     if _SENSOR_ANT:
-      self.channel.set_id(self.config.G_ANT['ID'][self.name], self.ant_config['type'], 0)
+      self.channel_set_id()
       self.channel.set_period(self.ant_config['interval'][self.config.G_ANT['INTERVAL']])
-      self.channel.set_search_timeout(self.timeout)
+      self.set_timeout()
       self.channel.set_rf_freq(57)
+      self.setup_channel_extra()
+  
+  def set_timeout(self):
+    #for sending acknowledged messages (e.g.: LIGHT)
+    # high priority search is off
+    # and low priority search is on 
+    self.channel.set_search_timeout(0x00)
+    self.channel.set_low_priority_search_timeout(self.timeout)
       
+  def setup_channel_extra(self):
+    #set_channel_tx_power, etc
+    pass
+
   def connect(self, isCheck=True, isChange=False):
     if not _SENSOR_ANT: return
     if isCheck:
@@ -335,20 +379,29 @@ class ANT_Device():
       if isChange: self.config.G_ANT['USE'][self.name] = False
       return
     try:
+      self.close_extra()
       self.channel.close()
       time.sleep(wait)
       if isChange: self.config.G_ANT['USE'][self.name] = False
     except:
       pass
+  
+  def delete(self):
+    self.node.delete_channel()
 
   def stateCheck(self, mode):
     result = self.channel.get_channel_status()
-    channelState = result[2][0]
+    #Bits 4~7: Channel type, Bits 2~3: Network number, Bits 0~1: Channel State
+    #  Channel State: Un-Assigned = 0, Assigned = 1, Searching = 2, Tracking = 3
+    channelState = result[2][0] & 0b00000011
     state = False
     if mode == 'OPEN' and channelState != 1: state = True
     elif mode == 'CLOSE' and (channelState == 0 or channelState == 1): state = True
     return state
-
+  
+  def close_extra(self):
+    pass
+  
   def stop(self):
     self.disconnect(self, isCheck=True, isChange=False, wait=0)
 
@@ -382,12 +435,26 @@ class ANT_Device():
       "delta_t:", delta_t,
       )
 
+  def set_wait(self, interval):
+    self.node.ant.set_wait(interval)
+  
+  #ant_idle_interval = {'NORMAL':0.20, 'QUICK':0.01, 'SCAN': 0.20}
+  def set_wait_normal_mode(self):
+    self.set_wait(self.ant_idle_interval['NORMAL'])
+
+  def set_wait_quick_mode(self):
+    self.set_wait(self.ant_idle_interval['QUICK'])
+
+  def set_wait_scan_mode(self):
+    self.set_wait(self.ant_idle_interval['SCAN'])
 
 class ANT_Device_HeartRate(ANT_Device):
   
   ant_config = {
     'interval':(8070, 16140, 32280),
     'type':0x78,
+    'transmission_type':0x00,
+    'channel_type':Channel.Type.BIDIRECTIONAL_RECEIVE,
     } 
   elements = ('hr',)
 
@@ -412,6 +479,8 @@ class ANT_Device_Speed_Cadence(ANT_Device):
   ant_config = {
     'interval':(8086, 16172, 32344),
     'type':0x79,
+    'transmission_type':0x00,
+    'channel_type':Channel.Type.BIDIRECTIONAL_RECEIVE,
     }
   sc_values  = [] #cad_time, cad, speed_time, speed
   pre_values = [] #cad_time, cad, speed_time, speed
@@ -501,6 +570,8 @@ class ANT_Device_Cadence(ANT_Device):
   ant_config = {
     'interval':(8102, 16204, 32408),
     'type':0x7A,
+    'transmission_type':0x00,
+    'channel_type':Channel.Type.BIDIRECTIONAL_RECEIVE,
     }
   sc_values  = [] #time, value
   pre_values = []
@@ -592,6 +663,8 @@ class ANT_Device_Speed(ANT_Device_Cadence):
   ant_config = {
     'interval':(8118, 16236, 32472),
     'type':0x7B,
+    'transmission_type':0x00,
+    'channel_type':Channel.Type.BIDIRECTIONAL_RECEIVE,
     }
   elements = ('speed','distance')
   const = None
@@ -624,6 +697,8 @@ class ANT_Device_Power(ANT_Device):
   ant_config = {
     'interval':(8182, 16364, 32728),
     'type':0x0B,
+    'transmission_type':0x00,
+    'channel_type':Channel.Type.BIDIRECTIONAL_RECEIVE,
     }
   pre_values = {0x10:[], 0x11:[], 0x12:[], 0x13:[]}
   power_values = {0x10:[], 0x11:[], 0x12:[], 0x13:[]}
@@ -693,11 +768,13 @@ class ANT_Device_Power(ANT_Device):
       setValue(data, 'torque_eff', 2)
       setValue(data, 'pedal_sm', 4)
     #Common Data Page 80 (0x50): Manufacturer’s Information
-    elif data[0] == 0x50:
+    elif data[0] == 0x50 and not self.stored_page[0x50]:
       self.setCommonPage80(data, self.values)
+      self.stored_page[0x50] = True
     #Common Data Page 81 (0x51): Product Information
-    elif data[0] == 0x51:
+    elif data[0] == 0x51 and not self.stored_page[0x51]:
       self.setCommonPage81(data, self.values)
+      self.stored_page[0x51] = True
     #Common Data Page 82 (0x52): Battery Status 
     elif data[0] == 0x52:
       #self.setCommonPage82(data, self.values)
@@ -888,13 +965,224 @@ class ANT_Device_Power(ANT_Device):
 
     #store raw power
     self.config.set_config_pickle("ant+_power_values_18", power_values[1])
+
+
+class ANT_Device_Light(ANT_Device):
+  
+  ant_config = {
+    'interval':(4084, 16336, 4084), #4084/8168/16336/32672
+    'type':0x23,
+    'transmission_type':0x00,
+    'channel_type':Channel.Type.BIDIRECTIONAL_RECEIVE,
+    } 
+  elements = (
+    'lgt_state','pre_lgt_state',
+    'lgt_state_display',
+    'button_state', 'auto_state',
+    'last_changed_timestamp')
+  page_34_count = 0
+  light_retry_timeout = 180
+  light_state_bontrager_flare_rt = {
+    0x00:"-",
+    0x01:"OFF",
+    0x16:"ON_MID",
+    0x06:"ON_MAX",
+    0x1E:"FLASH_H",
+    0xFE:"FLASH_L",
+  }
+
+  def set_timeout(self):
+    self.channel.set_search_timeout(self.timeout)
+
+  def setup_channel_extra(self):
+    self.channel.set_channel_tx_power(0)
+
+  def resetValue(self):
+    self.values['pre_lgt_state'] = 0
+    self.values['lgt_state'] = 0
+    self.values['lgt_state_display'] = "-"
+    self.values['button_state'] = False
+    self.values['auto_state'] = False
+    self.values['last_changed_timestamp'] = datetime.datetime.now()
+
+  def close_extra(self):
+    if self.ant_state in ['quit', 'disconnectAntSensor']:
+      self.send_disconnect_light()
+      self.resetValue()
+      time.sleep(0.5)
+
+  def on_data(self, data):
     
+    #open or close
+    if self.values['pre_lgt_state'] == 0 and self.values['lgt_state'] == 0 and \
+      self.ant_state in ['connectAntSensor']:
+      self.send_connect_light()
+      self.send_light_setting_light_off()
+    
+    #mode change
+    if self.values['lgt_state'] > 0 and self.values['lgt_state'] != self.values['pre_lgt_state']:
+      print(
+        "ANT+ LGT mode change: ", 
+        self.light_state_bontrager_flare_rt[self.values['pre_lgt_state']],
+        "-> ", 
+        self.light_state_bontrager_flare_rt[self.values['lgt_state']], 
+        )
+      self.values['pre_lgt_state'] = self.values['lgt_state']
+      self.values['lgt_state_display'] = self.light_state_bontrager_flare_rt[self.values['lgt_state']]
+      self.send_light_setting(self.values['lgt_state'])
+      self.values['last_changed_timestamp'] = datetime.datetime.now()
+
+    #self.values['timestamp'] = datetime.datetime.now()
+
+    if data[0] == 0x01:
+      mode = (data[6] & 0b11111100) | 0b10
+      if mode == 0b00000010:
+        mode = 0x01
+      if mode != self.values['lgt_state'] and (self.values['last_changed_timestamp'] - datetime.datetime.now()).total_seconds() > self.light_retry_timeout:
+        self.send_light_setting(self.values['lgt_state'])
+      
+    elif data[0] == 0x02:
+      pass
+    #Common Data Page 80 (0x50): Manufacturer’s Information
+    elif data[0] == 0x50 and not self.stored_page[0x50]:
+      self.setCommonPage80(data, self.values)
+      self.stored_page[0x50] = True
+    #Common Data Page 81 (0x51): Product Information
+    elif data[0] == 0x51 and not self.stored_page[0x51]:
+      self.setCommonPage81(data, self.values)
+      self.stored_page[0x51] = True
+
+  def send_acknowledged_data(self, data):
+    try:
+      self.channel.send_acknowledged_data(data)
+    except:
+      print("send_acknowledged_data failed: ", data)
+
+  def send_connect_light(self):
+    self.send_acknowledged_data(
+      #OFF: 0b01001000, ON: 0b01010000,0b01011000
+      array.array('B', struct.pack("<BBBBBHB",0x21,0x01,0xFF,0x5A,0x58,self.config.G_ANT['ID'][self.name],0x00))
+    )
+
+  def send_disconnect_light(self):
+    self.send_acknowledged_data(
+      array.array('B',[0x20,0x01,0x5A,0x02,0x00,0x00,0x00,0x00])
+    )
+  
+  def send_light_setting(self, mode):
+    self.send_acknowledged_data(
+      array.array('B',[0x22,0x01,0x28,self.page_34_count,0x5A,0x10,mode,0x00])
+    )
+    self.page_34_count = (self.page_34_count+1)%256
+
+  def send_light_setting_flash_low(self, auto=False):
+    #mode 63
+    self.send_light_setting_templete(0xFE, auto)
+
+  def send_light_setting_flash_high(self, auto=False):
+    #mode 7
+    self.send_light_setting_templete(0x1E, auto)
+
+  def send_light_setting_flash_mid(self, auto=False):
+    #mode 8
+    self.send_light_setting_templete(0x22, auto)
+
+  def send_light_setting_steady_high(self, auto=False):
+    #mode 1
+    self.send_light_setting_templete(0x06, auto)
+
+  def send_light_setting_steady_mid(self, auto=False):
+    #mode 5
+    self.send_light_setting_templete(0x16, auto)
+
+  def send_light_setting_templete(self, mode, auto=False):
+    if not auto:
+      self.values['button_state'] = True
+    else:
+      self.values['auto_state'] = True
+
+    if self.values['lgt_state'] != mode and (not auto or (auto and not self.values['button_state'])):
+      self.values['lgt_state'] = mode
+    #print("[ON] button:", self.values['button_state'], "lgt_state:", self.values['lgt_state'], "pre_lgt_state:", self.values['pre_lgt_state'])
+
+  def send_light_setting_light_off(self, auto=False):
+    if not auto and self.values['auto_state'] and self.values['lgt_state'] != 0x01 and self.values['button_state']:
+      self.values['button_state'] = False
+      #print("button OFF only")
+      return
+
+    if not auto:
+      self.values['button_state'] = False
+    else:
+      self.values['auto_state'] = False
+
+    if self.values['lgt_state'] != 0x01 and (not auto or (auto and not self.values['button_state'])):
+      self.values['lgt_state'] = 0x01
+    #print("[OFF] button:", self.values['button_state'], "lgt_state:", self.values['lgt_state'], "pre_lgt_state:", self.values['pre_lgt_state'])
+
+  #button on/off only
+  def send_light_setting_light_off_flash_low(self, auto=False):
+    if not auto and not self.values['button_state']:
+      self.send_light_setting_flash_low()
+    elif not auto and self.values['button_state']:
+      self.send_light_setting_light_off()
+
+
+class ANT_Device_CTRL(ANT_Device):
+  
+  ant_config = {
+    'interval':(8192, 16384, 16384), #8192, 16384, 32768
+    'type':0x10,
+    'transmission_type':0x05,
+    'channel_type':Channel.Type.BIDIRECTIONAL_TRANSMIT,
+    'master_id': 123,
+    }
+  elements = ('ctrl_cmd','slave_id')
+  send_data = False
+  data_page_02 = array.array("B", [0x02,0x00,0x00,0x00,0x00,0x00,0x00,0x10])
+
+  def channel_set_id(self): #for master
+    self.channel.set_id(self.ant_config['master_id'], self.ant_config['type'], self.ant_config['transmission_type'])
+
+  def init_extra(self):
+    self.channel.on_broadcast_tx_data = self.on_tx_data
+    self.channel.send_broadcast_data(self.data_page_02)
+  
+  def on_tx_data(self, data):
+    if self.send_data:
+      self.channel.send_broadcast_data(self.data_page_02)
+
+  def addStructPattern(self):
+    self.structPattern[self.name] = struct.Struct('<xxxxxxH')
+
+  def on_data(self, data):
+    (self.values['ctrl_cmd'],) = self.structPattern[self.name].unpack(data[0:8])
+    if self.values['ctrl_cmd'] == 0x0024:
+      #print("lap")
+      self.config.gui.scroll_next()
+    elif self.values['ctrl_cmd'] == 0x0001:
+      #print("menu up")
+      self.config.gui.scroll_prev()
+    elif self.values['ctrl_cmd'] == 0x0000:
+      #print("menu down")
+      pass
+    elif self.values['ctrl_cmd'] == 0x8000:
+      #print("custom1")
+      self.config.logger.sensor.sensor_ant.set_light_mode("ON_OFF_FLASH_LOW")
+    elif self.values['ctrl_cmd'] == 0x8001:
+      #print("custom2")
+      pass
+    #self.values['timestamp'] = datetime.datetime.now()
+
+
 class ANT_Device_MultiScan(ANT_Device):
 
   name = 'SCAN'
   ant_config = {
     'interval':(), #Not use
     'type':0, #ANY
+    'transmission_type':0x00,
+    'channel_type':Channel.Type.UNIDIRECTIONAL_RECEIVE_ONLY,
     }
   isUse = False
   mainAntDevice = None
@@ -906,12 +1194,9 @@ class ANT_Device_MultiScan(ANT_Device):
     self.node = node
     self.config = config
     self.resetValue()
-    if _SENSOR_ANT:
-      self.channel_type = Channel.Type.UNIDIRECTIONAL_RECEIVE_ONLY
-    self.makeChannel(self.channel_type)
+    self.makeChannel(self.ant_config['channel_type'])
     self.readyScan()
-    self.dummyPowerDevice \
-      = ANT_Device_Power(node=None, config=config, values={}, name='PWR')
+    self.dummyPowerDevice = ANT_Device_Power(node=None, config=config, values={}, name='PWR')
 
   def setNullValue(self):
     pass
@@ -925,13 +1210,13 @@ class ANT_Device_MultiScan(ANT_Device):
   def readyScan(self):
     if _SENSOR_ANT:
       self.channel.set_rf_freq(57)
-      self.channel.set_id(0, self.ant_config['type'], 0)
+      self.channel.set_id(0, self.ant_config['type'], self.ant_config['transmission_type'])
   
   def scan(self):
     if _SENSOR_ANT:
-      self.node.set_extended_message(1)
+      self.channel.enable_extended_messages(1)
       try:
-        self.node.continuous_scan()
+        self.channel.open_rx_scan_mode() 
         self.isUse = True
       except:
         pass
@@ -953,7 +1238,7 @@ class ANT_Device_MultiScan(ANT_Device):
       time.sleep(wait)
       self.setNullValue() 
       self.isUse = False
-      self.node.set_extended_message(0)
+      self.channel.enable_extended_messages(0)
       return True
     except:
       return False
@@ -1046,6 +1331,7 @@ class ANT_Device_Search(ANT_Device):
   ant_config = {
     'interval':(), #Not use
     'type':0, #ANY
+    'channel_type':Channel.Type.BIDIRECTIONAL_RECEIVE,
     }
   isUse = False
   searchList = None
@@ -1054,10 +1340,8 @@ class ANT_Device_Search(ANT_Device):
   def __init__(self, node, config, values=None):
     self.node = node
     self.config = config
-    if _SENSOR_ANT:
-      self.channel_type = Channel.Type.BIDIRECTIONAL_RECEIVE
     #special use of makeChannel(c_type, search=False)
-    self.makeChannel(self.channel_type, True)
+    self.makeChannel(self.ant_config['channel_type'], ext_assign=0x01)
 
   def on_data(self, data):
     if not self.searchState: return
@@ -1067,6 +1351,15 @@ class ANT_Device_Search(ANT_Device):
         #new ANT+ sensor
         self.searchList[antID] = (antType, False)
 
+  def on_data_ctrl(self, data):
+    if not self.searchState: return
+    if len(data) == 8:
+      (antID,) = struct.Struct('<H').unpack(data[1:3])
+      antType = 0x10
+      if antType in self.config.G_ANT['TYPES'][self.antName]:
+        #new ANT+ sensor
+        self.searchList[antID] = (antType, False)
+ 
   def search(self, antName):
     self.searchList = {}
     for k,v in self.config.G_ANT['USE'].items():
@@ -1080,30 +1373,44 @@ class ANT_Device_Search(ANT_Device):
     if _SENSOR_ANT and not self.searchState:
       self.antName = antName
       
-      self.node.ant.set_wait_action()
-      
-      self.channel.set_search_timeout(0)
-      self.channel.set_rf_freq(57)
-      self.channel.set_id(0, 0, 0)
+      if self.antName not in ['CTRL']:
+        self.set_wait_quick_mode()
+        self.channel.set_search_timeout(0)
+        self.channel.set_rf_freq(57)
+        self.channel.set_id(0, 0, 0)
 
-      self.node.set_extended_message(1)
-      self.channel.set_low_priority_search_timeout(0xFF)
-      self.node.set_lib_config(0x80)
-      
-      self.connect(isCheck=False, isChange=True) #USE: False -> True
+        self.channel.enable_extended_messages(1)
+        self.channel.set_low_priority_search_timeout(0xFF)
+        self.node.set_lib_config(0x80)   
+
+        self.connect(isCheck=False, isChange=False) #USE: False -> True
+
+      elif self.antName == 'CTRL':
+        self.ctrl_searcher = ANT_Device_CTRL(self.node, self.config, {}, antName)
+        self.ctrl_searcher.channel.on_acknowledge_data = self.on_data_ctrl
+        self.ctrl_searcher.send_data = True
+        self.ctrl_searcher.connect(isCheck=False, isChange=False)
+        
       self.searchState = True
       
   def stopSearch(self, resetWait=True):
     if _SENSOR_ANT and self.searchState:
-      self.disconnect(isCheck=True, isChange=True, wait=0.5) #USE: True -> False
+      if self.antName not in ['CTRL']:
+        self.disconnect(isCheck=False, isChange=False, wait=0.5) #USE: True -> False
+        
+        #for background scan
+        self.channel.enable_extended_messages(0)
+        self.node.set_lib_config(0x00)
+        self.channel.set_low_priority_search_timeout(0x00)
       
-      #for background scan
-      self.node.set_extended_message(0)
-      self.node.set_lib_config(0x00)
-      self.channel.set_low_priority_search_timeout(0x00)
-     
-      if resetWait:
-        self.node.ant.set_wait_period()
+        if resetWait:
+          self.set_wait_normal_mode()
+
+      elif self.antName == 'CTRL':
+        self.ctrl_searcher.disconnect(isCheck=False, isChange=False, wait=0.5)
+        self.ctrl_searcher.delete()
+        del self.ctrl_searcher
+
       self.searchState = False
 
   def getSearchList(self):

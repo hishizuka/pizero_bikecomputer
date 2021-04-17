@@ -3,6 +3,18 @@
 # Pi Zero Bikecomputer
 An open-source bike computer based on  Raspberry Pi Zero (W, WH) with GPS and ANT+
 
+# News
+
+- 2021/4/3 Please reinstall openant and pyqtgraph because both libraries are re-forked.
+
+```
+$ sudo pip3 uninstall pyqtgraph
+$ sudo pip3 install git+https://github.com/hishizuka/pyqtgraph.git
+$ sudo pip3 uninstall openant
+$ sudo pip3 install git+https://github.com/hishizuka/openant.git
+```
+ 
+
 # Table of Contents
 
 - [Abstract](#abstract)
@@ -91,13 +103,17 @@ Some functions depend on your parts.
 
 ## Sensors
 
+USB dongle is required if using ANT+ sensors.
+
 | Specs | Detail | Note |
 |:-|:-|:-|
-| ANT+ heartrate sensor |  Yes | ANT+ USB dongle is required. |
-| ANT+ speed sensor |  Yes | ANT+ USB dongle is required. |
-| ANT+ cadence sensor |  Yes | ANT+ USB dongle is required. |
-| ANT+ speed&cadence sensor |  Yes | ANT+ USB dongle is required. |
-| ANT+ powermeter |  Yes | ANT+ USB dongle is required. Calibration is not supported. |
+| ANT+ heartrate sensor |  Yes | |
+| ANT+ speed sensor |  Yes | |
+| ANT+ cadence sensor |  Yes | |
+| ANT+ speed&cadence sensor |  Yes | |
+| ANT+ powermeter |  Yes | Calibration is not supported. |
+| ANT+ LIGHT |  Yes | Bontrager Flare RT only. |
+| ANT+ Control |  Yes | Garmin Edge Remote only. |
 | Bluetooth sensors |  No |  |
 | Barometric altimeter | Yes | An I2c sensor(pressure, temperature) is required. |
 | Accelerometer | Yes | An I2c sensor is required. |

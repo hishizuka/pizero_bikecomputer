@@ -27,7 +27,7 @@ class AccelerationGraphWidget(ScreenWidget):
     self.p1.scene().addItem(self.p3)
     self.p3.setXLink(self.p1)
 
-    self.plot.setXRange(0, self.config.G_GUI_REALTIME_GRAPH_RANGE)
+    self.plot.setXRange(0, self.config.G_GUI_ACC_TIME_RANGE)
     self.plot.setMouseEnabled(x=False, y=False)
     #pg.setConfigOptions(antialias=True)
   

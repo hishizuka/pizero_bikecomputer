@@ -1,5 +1,7 @@
 import time
 #import datetime
+import threading
+import queue
 
 import numpy as np
 
@@ -40,7 +42,13 @@ class MipSharpDisplay():
     self.pi = pigpio.pi()
     self.spi = self.pi.spi_open(0, 2000000, 0)
     #self.spi = self.pi.spi_open(0, 8000000, 0) #overclocking
-    time.sleep(0.1)     #Wait
+    
+    self.draw_queue = queue.Queue()
+    self.draw_thread = threading.Thread(target=self.draw_worker, name="draw_worker", args=())
+    self.draw_thread.setDaemon(True)
+    self.draw_thread.start()
+    
+    time.sleep(0.01)     #Wait
     
     self.pi.set_mode(GPIO_DISP, pigpio.OUTPUT)
     self.pi.set_mode(GPIO_SCS, pigpio.OUTPUT)
@@ -94,6 +102,16 @@ class MipSharpDisplay():
     self.pi.spi_write(self.spi, [0x00000000,0])
     self.pi.write(GPIO_SCS, 0)
 
+  def draw_worker(self):
+    for img_bytes in iter(self.draw_queue.get, None):
+      self.pi.write(GPIO_SCS, 1)
+      time.sleep(0.000006)
+      if len(img_bytes) > 0:
+        self.pi.spi_write(self.spi, img_bytes)
+      #dummy output for ghost line
+      self.pi.spi_write(self.spi, [0x00000000,0])
+      self.pi.write(GPIO_SCS, 0)
+
   def update(self, image):
 
     im_array = np.array(image.convert("1"))
@@ -120,13 +138,16 @@ class MipSharpDisplay():
     #t = datetime.datetime.now()
     
     if _SENSOR_DISPLAY and rewrite_flag and not self.config.G_QUIT:
-      self.pi.write(GPIO_SCS, 1)
-      time.sleep(0.000006)
-      if len(img_bytes) > 0:
-        self.pi.spi_write(self.spi, img_bytes)
-      #dummy output for ghost line
-      self.pi.spi_write(self.spi, [0x00000000,0])
-      self.pi.write(GPIO_SCS, 0)
+      #put queue
+      self.draw_queue.put((img_bytes))
+      
+      #self.pi.write(GPIO_SCS, 1)
+      #time.sleep(0.000006)
+      #if len(img_bytes) > 0:
+      #  self.pi.spi_write(self.spi, img_bytes)
+      ##dummy output for ghost line
+      #self.pi.spi_write(self.spi, [0x00000000,0])
+      #self.pi.write(GPIO_SCS, 0)
 
     #print("Drawing images... :", (datetime.datetime.now()-t).total_seconds(),"sec")
   

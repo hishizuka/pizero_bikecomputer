@@ -4,9 +4,14 @@ from datetime import datetime
 import signal
 import io
 
-import PyQt5.QtCore as QtCore
-import PyQt5.QtWidgets as QtWidgets
-import PyQt5.QtGui as QtGui
+try:
+  import PyQt6.QtCore as QtCore
+  import PyQt6.QtWidgets as QtWidgets
+  import PyQt6.QtGui as QtGui
+except:
+  import PyQt5.QtCore as QtCore
+  import PyQt5.QtWidgets as QtWidgets
+  import PyQt5.QtGui as QtGui
 
 from modules.gui_config import GUI_Config
 from modules.pyqt.pyqt_style import PyQtStyle

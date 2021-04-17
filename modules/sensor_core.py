@@ -41,7 +41,7 @@ class SensorCore():
   thread_integrate = None
   threshold = {'HR':15, 'SPD':5, 'CDC':3, 'PWR':3}
   grade_range = 9
-  grade_window_size = 7
+  grade_window_size = 5
   graph_keys = [
     'hr_graph', 
     'power_graph', 
@@ -378,14 +378,18 @@ class SensorCore():
           and self.config.G_STOPWATCH_STATUS == "START"  \
           and self.config.logger != None:
           self.config.logger.start_and_stop()
-     
+      #self.sensor_ant.device[self.config.G_ANT['ID_TYPE']['LGT']].send_light_setting_flash_low()
+      #time.sleep(1)
+      
       #auto backlight
       if self.config.G_USE_AUTO_BACKLIGHT:
         if self.config.G_DISPLAY == 'MIP' and self.sensor_spi.send_display and not np.isnan(v['I2C']['light']):
           if v['I2C']['light'] <= self.config.G_USE_AUTO_CUTOFF:
             self.sensor_spi.display.set_brightness(10)
+            self.sensor_ant.set_light_mode("FLASH_LOW", auto=True)
           else:
             self.sensor_spi.display.set_brightness(0)
+            self.sensor_ant.set_light_mode("OFF", auto=True)
 
       #cpu and memory
       if _IMPORT_PSUTIL:

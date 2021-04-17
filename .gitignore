@@ -21,4 +21,5 @@ layout.yaml
 map.yaml
 nohup.out
 !.gitkeep
-
+screenlog.*
+gmon.out
