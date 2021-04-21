@@ -454,8 +454,8 @@ class ANT_Device_HeartRate(ANT_Device):
     'interval':(8070, 16140, 32280),
     'type':0x78,
     'transmission_type':0x00,
-    'channel_type':Channel.Type.BIDIRECTIONAL_RECEIVE,
-    } 
+    'channel_type':0x00, #Channel.Type.BIDIRECTIONAL_RECEIVE,
+    }
   elements = ('hr',)
 
   def on_data(self, data):
@@ -480,7 +480,7 @@ class ANT_Device_Speed_Cadence(ANT_Device):
     'interval':(8086, 16172, 32344),
     'type':0x79,
     'transmission_type':0x00,
-    'channel_type':Channel.Type.BIDIRECTIONAL_RECEIVE,
+    'channel_type':0x00, #Channel.Type.BIDIRECTIONAL_RECEIVE,
     }
   sc_values  = [] #cad_time, cad, speed_time, speed
   pre_values = [] #cad_time, cad, speed_time, speed
@@ -571,7 +571,7 @@ class ANT_Device_Cadence(ANT_Device):
     'interval':(8102, 16204, 32408),
     'type':0x7A,
     'transmission_type':0x00,
-    'channel_type':Channel.Type.BIDIRECTIONAL_RECEIVE,
+    'channel_type':0x00, #Channel.Type.BIDIRECTIONAL_RECEIVE,
     }
   sc_values  = [] #time, value
   pre_values = []
@@ -664,7 +664,7 @@ class ANT_Device_Speed(ANT_Device_Cadence):
     'interval':(8118, 16236, 32472),
     'type':0x7B,
     'transmission_type':0x00,
-    'channel_type':Channel.Type.BIDIRECTIONAL_RECEIVE,
+    'channel_type':0x00, #Channel.Type.BIDIRECTIONAL_RECEIVE,
     }
   elements = ('speed','distance')
   const = None
@@ -698,7 +698,7 @@ class ANT_Device_Power(ANT_Device):
     'interval':(8182, 16364, 32728),
     'type':0x0B,
     'transmission_type':0x00,
-    'channel_type':Channel.Type.BIDIRECTIONAL_RECEIVE,
+    'channel_type':0x00, #Channel.Type.BIDIRECTIONAL_RECEIVE,
     }
   pre_values = {0x10:[], 0x11:[], 0x12:[], 0x13:[]}
   power_values = {0x10:[], 0x11:[], 0x12:[], 0x13:[]}
@@ -973,7 +973,7 @@ class ANT_Device_Light(ANT_Device):
     'interval':(4084, 16336, 4084), #4084/8168/16336/32672
     'type':0x23,
     'transmission_type':0x00,
-    'channel_type':Channel.Type.BIDIRECTIONAL_RECEIVE,
+    'channel_type':0x00, #Channel.Type.BIDIRECTIONAL_RECEIVE,
     } 
   elements = (
     'lgt_state','pre_lgt_state',
@@ -1134,7 +1134,7 @@ class ANT_Device_CTRL(ANT_Device):
     'interval':(8192, 16384, 16384), #8192, 16384, 32768
     'type':0x10,
     'transmission_type':0x05,
-    'channel_type':Channel.Type.BIDIRECTIONAL_TRANSMIT,
+    'channel_type':0x10, #Channel.Type.BIDIRECTIONAL_TRANSMIT,
     'master_id': 123,
     }
   elements = ('ctrl_cmd','slave_id')
@@ -1182,7 +1182,7 @@ class ANT_Device_MultiScan(ANT_Device):
     'interval':(), #Not use
     'type':0, #ANY
     'transmission_type':0x00,
-    'channel_type':Channel.Type.UNIDIRECTIONAL_RECEIVE_ONLY,
+    'channel_type':0x40, #Channel.Type.UNIDIRECTIONAL_RECEIVE_ONLY,
     }
   isUse = False
   mainAntDevice = None
@@ -1331,7 +1331,7 @@ class ANT_Device_Search(ANT_Device):
   ant_config = {
     'interval':(), #Not use
     'type':0, #ANY
-    'channel_type':Channel.Type.BIDIRECTIONAL_RECEIVE,
+    'channel_type':0x00, #Channel.Type.BIDIRECTIONAL_RECEIVE,
     }
   isUse = False
   searchList = None
@@ -1340,8 +1340,9 @@ class ANT_Device_Search(ANT_Device):
   def __init__(self, node, config, values=None):
     self.node = node
     self.config = config
-    #special use of makeChannel(c_type, search=False)
-    self.makeChannel(self.ant_config['channel_type'], ext_assign=0x01)
+    if _SENSOR_ANT:
+      #special use of makeChannel(c_type, search=False)
+      self.makeChannel(self.ant_config['channel_type'], ext_assign=0x01)
 
   def on_data(self, data):
     if not self.searchState: return
