@@ -504,9 +504,9 @@ The settings are common, so if you use individual sensors, make sure they are al
 
 X, Y, and Z printed on the board are set to the following orientations by default.
 
-- X: Forward is positive.
-- Y: Left is positive.
-- Z: Downward is positive.
+- X: Forward. Positive value for upward rotation with accelerometer.
+- Y: Left. Positive value for upward rotation with accelerometer.
+- Z: Downward. Positive value at rest with accelerometer.
 
 Axis conversion is performed with the following variables.
 
