@@ -33,10 +33,12 @@
 
 [Connection board for MIP Reflective color LCD to FRDM-K64F](https://international.switch-science.com/catalog/5393/) (MIP Interface Board) is also needed
 
+Alternatives: [LPM027M128B](https://www.digikey.com/en/products/detail/azumo/12380-06-T2/9602620) (2.7" color LCD) or [LPM044M141](https://www.digikey.com/en/products/detail/azumo/12567-06-T3/10492348) (4.4" color LCD), [Adafruit SHARP Memory Display Breakout](https://www.adafruit.com/product/4694) (remove monochrome LCD panel and connect reflective color LCD panel)
+
 - (good) very visible even in direct sunshine
 - (good) ultra-low power consumption
 - (good) backlight
-- (bad) very expensive ($170)
+- (bad) very expensive ($170, Alternatives: $100)
 - (bad) 8 colors only
 - Recommend if you don't think costs. Commercial products often uses a reflective LCD.
 - <img src="https://qiita-user-contents.imgix.net/https%3A%2F%2Fpbs.twimg.com%2Fmedia%2FEV8NXnaVAAEjoFS%3Fformat%3Dpng%26name%3Dsmall?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=3b5218cc2e1d11c88eec77bbebadbaef" height=480 />
@@ -228,7 +230,7 @@ It's quite difficult, but the hardware configuration is better than PiTFT.
 Connect the Raspberry Pi Zero to the display.
 Note that the connection between Raspberry Pi and SHARP Memory Display is different from the Adafruit tutorial.
 
-| Name | Raspberry Pi | SHARP Memory Display | MIP Interface Board |
+| Name | Raspberry Pi | SHARP Memory Display Breakout | MIP Interface Board |
 |:-|:-:|:-:|:-:|
 | GND      | IO25 | GND   | CN1-4 |
 | VCOMSEL  | IO11 | EXTIN | CN2-3 |
