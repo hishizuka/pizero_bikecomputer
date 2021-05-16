@@ -240,7 +240,18 @@ Note that the connection between Raspberry Pi and SHARP Memory Display is differ
 | SPI MOSI | IO19 | MOSI  | CN1-7 |
 | SPI SCLK | IO23 | SCLK  | CN1-5 |
 
+
+for backlight (MIP Interface Board)
+
+| Name | Raspberry Pi | MIP Interface Board |
+|:-|:-:|:-:|
+| LEDPWM   | IO12 | CN2-1 |
+| VBUS-5V  | IO02/04 | CN3-5 |
+| BL2-CTRL | IO06/09/14/20/25/34/39 | CN4-3 |
+
+
 Reference:
+- https://pinout.xyz/pinout/io_pi_zero
 - https://docid81hrs3j1.cloudfront.net/medialibrary/2019/03/JDI_MIP_LCD.pdf
 - https://qiita.com/hishi/items/669ce474fcd76bdce1f1
 
