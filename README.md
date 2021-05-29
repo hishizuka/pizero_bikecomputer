@@ -119,7 +119,7 @@ USB dongle is required if using ANT+ sensors.
 | Barometric altimeter | Yes | An I2c sensor(pressure, temperature) is required. |
 | Accelerometer | Yes | An I2c sensor is required. |
 | Magnetometer | Yes | An I2c sensor is required. |
-| Light sensor | Yes | An I2c sensor is required. |
+| Light sensor | Yes | An I2c sensor is required. For auto backlight and lighting. |
 
 ## Positioning
 
@@ -185,11 +185,11 @@ it displays three of the people around you in the order in which you caught sens
 
 # Hardware Installation
 
-See [hardware_installation.md](/hardware_installation.md).
+See [hardware_installation.md](/doc/hardware_installation.md).
 
 # Software Installation
 
-See [software_installation.md](/software_installation.md).
+See [software_installation.md](/doc/software_installation.md).
 
 # Q&A
 
