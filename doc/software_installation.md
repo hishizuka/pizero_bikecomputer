@@ -61,7 +61,7 @@ Install in the home directory of default user "pi".
 ```
 $ cd
 $ git clone https://github.com/hishizuka/pizero_bikecomputer.git
-$ sudo apt-get install python3-pip cython3 cmake gawk python3-numpy python3-pyqt5 libsqlite3-dev
+$ sudo apt-get install python3-pip cython3 cmake gawk python3-numpy python3-pyqt5 sqlite3 libsqlite3-dev libatlas-base-dev
 $ sudo pip3 install oyaml sip
 $ sudo apt-get install wiringpi python3-smbus python3-rpi.gpio python3-psutil python3-pil
 $ sudo pip3 install git+https://github.com/hishizuka/pyqtgraph.git
@@ -100,7 +100,6 @@ Check with [pa1010d example program](https://github.com/pimoroni/pa1010d-python/
 ```
 $ sudo apt-get install libusb-1.0-0 python3-usb
 $ sudo pip3 install git+https://github.com/hishizuka/openant.git
-$ sudo systemctl enable pigpiod
 ```
  
 
@@ -306,7 +305,7 @@ If you use MIP Reflective color LCD module, SHARP Memory Display or E-Ink displa
 ExecStart=/home/pi/pizero_bikecomputer/exec-mip.sh
 ```
 
-Install servece scripts.
+Install service scripts.
 
 ```
 $ sudo cp install/etc/systemd/system/pizero_bikecomputer.service /etc/systemd/system/
@@ -391,7 +390,11 @@ From left to right, the button assignments are as follows.
 
 (*)In the map, change button assignments.
 - A: left / zoom out(long press), B: down / zoom in(long press), C:Change mode, D: up, E: right
-- A: zoom down, B: zoom up, C: Change mode, D: none, E: Search route by Google DIrections API
+- A: zoom out, B: zoom in, C: Change mode, D: none, E: Search route by Google DIrections API. Install following library and set your API key in setting.conf.
+
+```
+$ git clone https://github.com/geodav-tech/decode-google-maps-polyline extlib/decode-google-maps-polyline
+```
 
 In the menu, the button has different assignments. From left to right, the button assignments are as follows.
 

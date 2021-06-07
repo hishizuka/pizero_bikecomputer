@@ -3,6 +3,8 @@
 # Pi Zero Bikecomputer
 An open-source bike computer based on  Raspberry Pi Zero (W, WH) with GPS and ANT+
 
+https://github.com/hishizuka/pizero_bikecomputer
+
 # News
 
 - 2021/4/18 Please reinstall pyqtgraph when using python3-pyqt5 in Raspberry Pi OS (skip check if using).
