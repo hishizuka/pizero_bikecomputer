@@ -47,7 +47,8 @@ Here is detail articles in Japanese.
 Daily update [at twitter (@pi0bikecomputer)](https://twitter.com/pi0bikecomputer), and [my cycling activity at STRAVA](https://www.strava.com/athletes/40248693).
 
 
-<img width="836" alt="system-01" src="https://user-images.githubusercontent.com/12926652/97240630-1d10be00-1832-11eb-9ce2-762d23419152.png">
+<img width="836" alt="system-01-202106" src="https://user-images.githubusercontent.com/12926652/120964687-a6ac4500-c79e-11eb-8598-98ab2e612cd6.png">
+
 
 <img width="836" alt="system-02" src="https://user-images.githubusercontent.com/12926652/97240633-23069f00-1832-11eb-8e8b-8312997b4710.png">
 
