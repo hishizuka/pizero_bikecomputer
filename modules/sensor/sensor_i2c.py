@@ -746,9 +746,7 @@ class SensorI2C(Sensor):
     if np.isnan(self.values['pressure']):
       return
    
-    altitude_raw = \
-        (pow(self.sealevel_pa / self.values['pressure'], (1.0/5.257)) - 1) * self.sealevel_temp / 0.0065
-    #self.values['altitude'] = self.sealevel_temp/0.0065 * (1 - pow(self.values['pressure']/self.sealevel_pa, 0.1907))
+    altitude_raw = self.sealevel_temp / 0.0065 * (1 - pow(self.values['pressure']/self.sealevel_pa, 1.0/5.257))
 
     #filterd altitude
     self.update_kf(altitude_raw)
@@ -787,14 +785,8 @@ class SensorI2C(Sensor):
 
     if np.isnan(self.values['pressure']) or np.isnan(self.values['temperature']):
       return
-    temp = 273.15 + self.values['temperature'] - self.sealevel_temp_offset
-    self.sealevel_pa = self.values['pressure'] * pow(temp / (temp + 0.0065*alt), (-5.257))
+    self.sealevel_pa = self.values['pressure'] * pow((self.sealevel_temp-0.0065*alt)/self.sealevel_temp, -5.257)
     self.config.set_config_pickle("sealevel_pa", self.sealevel_pa, quick_apply=True)
-    
-    #if not np.isnan(self.values['temperature']):
-    #  self.sealevel_temp = 0.0065*alt + 273.15+self.values['temperature']-self.sealevel_temp_offset
-    #if not np.isnan(self.values['pressure']):
-    #  self.sealevel_pa = self.values['pressure'] * pow(self.sealevel_temp/(self.sealevel_temp-0.0065*alt), 5.244)
 
     print('update sealevel pressure')
     print('    altitude:', alt, 'm')
