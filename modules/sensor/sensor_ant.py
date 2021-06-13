@@ -279,6 +279,7 @@ class ANT_Device():
     0x50:struct.Struct('<xxxBHH'),
     0x51:struct.Struct('<xxBBL'),
   }
+  common_page_elements = ('hw_ver','manu_id','manu_name','model_num','sw_ver', 'serial_num','battery_status','battery_voltage')
   battery_status = {
     0:"None", 1:"New", 2:"Good", 3:"Ok", 4:"Low", 5:"Critical", 6:"None", 7:"Invalid"
   }
@@ -290,7 +291,6 @@ class ANT_Device():
     'power': 500, #w
     'cadence': 255, #rpm
   }
-  stored_page = {0x50: False, 0x51: False}
   ant_idle_interval = {'NORMAL':0.20, 'QUICK':0.01, 'SCAN': 0.20}
 
   def __init__(self, node=None, config=None, values={}, name=''):
@@ -323,6 +323,14 @@ class ANT_Device():
   def setNullValue(self):
     for element in self.elements:
       self.values[element] = self.config.G_ANT_NULLVALUE
+    self.init_common_page_status()
+  
+  def init_common_page_status(self):
+    for element in self.common_page_elements:
+      self.values[element] = self.config.G_ANT_NULLVALUE
+    self.values["stored_page"] = {}
+    for key in (0x50, 0x51):
+      self.values["stored_page"][key] = False
 
   #reset total value with reset button 
   def resetValue(self):
@@ -413,6 +421,7 @@ class ANT_Device():
       = self.structPattern[0x50].unpack(data[0:8])
     if values['manu_id'] in ant_code.AntCode.MANUFACTURER:
       values['manu_name'] = ant_code.AntCode.MANUFACTURER[values['manu_id']]
+    values["stored_page"][0x50] = True
 
   def setCommonPage81(self, data, values):
     (sw1, sw2, values['serial_num']) = self.structPattern[0x51].unpack(data[0:8])
@@ -420,6 +429,7 @@ class ANT_Device():
       values['sw_ver'] = float((sw2 * 100 + sw1) / 1000)
     else:
       values['sw_ver'] = float(sw2 / 10)
+    values["stored_page"][0x51] = True
 
   #data is 2byte only (trim from common page 82 and page 4 of speed or cadence only sensor)
   def setCommonPage82(self, data, values):
@@ -457,6 +467,7 @@ class ANT_Device_HeartRate(ANT_Device):
     'channel_type':0x00, #Channel.Type.BIDIRECTIONAL_RECEIVE,
     }
   elements = ('hr',)
+  pickle_key = "ant+_hr_values"
 
   def on_data(self, data):
     self.values['hr'] = data[7]
@@ -580,7 +591,7 @@ class ANT_Device_Cadence(ANT_Device):
   const = 60
   fit_max = 255
   
-  pickle_key = "ant+_sc_values"
+  pickle_key = "ant+_cdc_values"
 
   def addStructPattern(self):
     self.structPattern[self.name] = struct.Struct('<xxxxHH')
@@ -590,9 +601,6 @@ class ANT_Device_Cadence(ANT_Device):
     self.pre_values = [-1,-1]
     self.delta = [-1,-1]
     self.values['on_data_timestamp'] = None
-    for key in ['hw_ver','manu_id','manu_name','model_num','sw_ver', \
-                'serial_num','battery_status','battery_voltage']:
-      self.values[key] = self.config.G_ANT_NULLVALUE
     self.resetExtra()
 
   def resetExtra(self):
@@ -708,6 +716,7 @@ class ANT_Device_Power(ANT_Device):
     0x12:('power','cadence','accumulated_power'),
     0x13:('torque_eff','pedal_sm'),
   }
+  pickle_key = "ant+_pwr_values"
 
   def addStructPattern(self):
     self.structPattern[self.name] = {
@@ -727,6 +736,7 @@ class ANT_Device_Power(ANT_Device):
     for page in self.elements:
       for element in self.elements[page]:
         self.values[page][element] = self.config.G_ANT_NULLVALUE
+    self.init_common_page_status()
   
   def resetValue(self):
     self.interval = self.ant_config['interval'][self.config.G_ANT['INTERVAL']]/self.ant_config['interval'][-1]
@@ -738,10 +748,6 @@ class ANT_Device_Power(ANT_Device):
       self.pre_values[page] = [-1,-1,-1,-1]
       self.power_values[page] = [-1,-1,-1,-1]
       self.values[page]['on_data_timestamp'] = None
-
-    for key in ['hw_ver','manu_id','manu_name','model_num','sw_ver', \
-                'serial_num','battery_status','battery_voltage']:
-      self.values[key] = self.config.G_ANT_NULLVALUE
 
   def on_data(self, data):
     #standard power-only main data page (0x10)
@@ -768,13 +774,11 @@ class ANT_Device_Power(ANT_Device):
       setValue(data, 'torque_eff', 2)
       setValue(data, 'pedal_sm', 4)
     #Common Data Page 80 (0x50): Manufacturer’s Information
-    elif data[0] == 0x50 and not self.stored_page[0x50]:
+    elif data[0] == 0x50 and not self.values["stored_page"][0x50]:
       self.setCommonPage80(data, self.values)
-      self.stored_page[0x50] = True
     #Common Data Page 81 (0x51): Product Information
-    elif data[0] == 0x51 and not self.stored_page[0x51]:
+    elif data[0] == 0x51 and not self.values["stored_page"][0x51]:
       self.setCommonPage81(data, self.values)
-      self.stored_page[0x51] = True
     #Common Data Page 82 (0x52): Battery Status 
     elif data[0] == 0x52:
       #self.setCommonPage82(data, self.values)
@@ -970,7 +974,7 @@ class ANT_Device_Power(ANT_Device):
 class ANT_Device_Light(ANT_Device):
   
   ant_config = {
-    'interval':(4084, 16336, 4084), #4084/8168/16336/32672
+    'interval':(4084, 8168, 16336), #4084/8168/16336/32672
     'type':0x23,
     'transmission_type':0x00,
     'channel_type':0x00, #Channel.Type.BIDIRECTIONAL_RECEIVE,
@@ -990,6 +994,7 @@ class ANT_Device_Light(ANT_Device):
     0x1E:"FLASH_H",
     0xFE:"FLASH_L",
   }
+  pickle_key = "ant+_lgt_values"
 
   def set_timeout(self):
     self.channel.set_search_timeout(self.timeout)
@@ -1032,25 +1037,20 @@ class ANT_Device_Light(ANT_Device):
       self.send_light_setting(self.values['lgt_state'])
       self.values['last_changed_timestamp'] = datetime.datetime.now()
 
-    #self.values['timestamp'] = datetime.datetime.now()
-
     if data[0] == 0x01:
       mode = (data[6] & 0b11111100) | 0b10
       if mode == 0b00000010:
         mode = 0x01
       if mode != self.values['lgt_state'] and (self.values['last_changed_timestamp'] - datetime.datetime.now()).total_seconds() > self.light_retry_timeout:
         self.send_light_setting(self.values['lgt_state'])
-      
     elif data[0] == 0x02:
       pass
     #Common Data Page 80 (0x50): Manufacturer’s Information
-    elif data[0] == 0x50 and not self.stored_page[0x50]:
+    elif data[0] == 0x50 and not self.values["stored_page"][0x50]:
       self.setCommonPage80(data, self.values)
-      self.stored_page[0x50] = True
     #Common Data Page 81 (0x51): Product Information
-    elif data[0] == 0x51 and not self.stored_page[0x51]:
+    elif data[0] == 0x51 and not self.values["stored_page"][0x51]:
       self.setCommonPage81(data, self.values)
-      self.stored_page[0x51] = True
 
   def send_acknowledged_data(self, data):
     try:
@@ -1076,23 +1076,23 @@ class ANT_Device_Light(ANT_Device):
     self.page_34_count = (self.page_34_count+1)%256
 
   def send_light_setting_flash_low(self, auto=False):
-    #mode 63
+    #mode 63, 15 hours
     self.send_light_setting_templete(0xFE, auto)
 
   def send_light_setting_flash_high(self, auto=False):
-    #mode 7
+    #mode 7, 6 hours
     self.send_light_setting_templete(0x1E, auto)
 
   def send_light_setting_flash_mid(self, auto=False):
-    #mode 8
+    #mode 8, 12 hours
     self.send_light_setting_templete(0x22, auto)
 
   def send_light_setting_steady_high(self, auto=False):
-    #mode 1
+    #mode 1, 4.5 hours
     self.send_light_setting_templete(0x06, auto)
 
   def send_light_setting_steady_mid(self, auto=False):
-    #mode 5
+    #mode 5, 13.5 hours
     self.send_light_setting_templete(0x16, auto)
 
   def send_light_setting_templete(self, mode, auto=False):
@@ -1140,6 +1140,7 @@ class ANT_Device_CTRL(ANT_Device):
   elements = ('ctrl_cmd','slave_id')
   send_data = False
   data_page_02 = array.array("B", [0x02,0x00,0x00,0x00,0x00,0x00,0x00,0x10])
+  pickle_key = "ant+_ctrl_values"
 
   def channel_set_id(self): #for master
     self.channel.set_id(self.ant_config['master_id'], self.ant_config['type'], self.ant_config['transmission_type'])
@@ -1157,22 +1158,17 @@ class ANT_Device_CTRL(ANT_Device):
 
   def on_data(self, data):
     (self.values['ctrl_cmd'],) = self.structPattern[self.name].unpack(data[0:8])
-    if self.values['ctrl_cmd'] == 0x0024:
-      #print("lap")
+    if self.values['ctrl_cmd'] == 0x0024: #lap
       self.config.gui.scroll_next()
-    elif self.values['ctrl_cmd'] == 0x0001:
-      #print("menu up")
+    elif self.values['ctrl_cmd'] == 0x0001: #menu scroll
       self.config.gui.scroll_prev()
-    elif self.values['ctrl_cmd'] == 0x0000:
-      #print("menu down")
+    elif self.values['ctrl_cmd'] == 0x0000: #menu down (long press)
       pass
-    elif self.values['ctrl_cmd'] == 0x8000:
-      #print("custom1")
+    elif self.values['ctrl_cmd'] == 0x8000: #custom1
       self.config.logger.sensor.sensor_ant.set_light_mode("ON_OFF_FLASH_LOW")
-    elif self.values['ctrl_cmd'] == 0x8001:
-      #print("custom2")
+      print("done")
+    elif self.values['ctrl_cmd'] == 0x8001: #custom2 (long press)
       pass
-    #self.values['timestamp'] = datetime.datetime.now()
 
 
 class ANT_Device_MultiScan(ANT_Device):
