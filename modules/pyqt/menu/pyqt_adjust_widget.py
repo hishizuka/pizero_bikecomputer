@@ -29,8 +29,7 @@ class AdjustWidget(MenuWidget):
 
     self.display = QtWidgets.QLineEdit('')
     self.display.setReadOnly(True)
-    self.display.setAlignment(QtCore.Qt.Alignment.AlignRight) if USE_PYQT6 \
-    else self.display.setAlignment(QtCore.Qt.AlignRight)
+    self.display.setAlignment(QtCore.Qt.AlignRight)
     self.display.setMaxLength(6) #need to specify init_extra in each class
     self.display.setStyleSheet(self.config.gui.style.G_GUI_PYQT_texteditStyle_adjustwidget)
     self.display.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus) if USE_PYQT6 \
@@ -39,8 +38,7 @@ class AdjustWidget(MenuWidget):
 
     self.unitLabel = QtWidgets.QLabel(self.unit)
     self.unitLabel.setStyleSheet(self.config.gui.style.G_GUI_PYQT_labelStyle_adjustwidget)
-    self.unitLabel.setAlignment(QtCore.Qt.Alignment.AlignCenter) if USE_PYQT6 \
-    else self.unitLabel.setAlignment(QtCore.Qt.AlignCenter)
+    self.unitLabel.setAlignment(QtCore.Qt.AlignCenter)
     self.menu_layout.addWidget(self.unitLabel,0,5)
 
     self.num_button = {}

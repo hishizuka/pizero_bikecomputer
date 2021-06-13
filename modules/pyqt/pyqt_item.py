@@ -31,9 +31,9 @@ class Item(QtWidgets.QVBoxLayout):
     self.setSpacing(0)
 
     self.label = QtWidgets.QLabel()
-    self.label.setAlignment(QtCore.Qt.Alignment.AlignCenter) if USE_PYQT6 else self.label.setAlignment(QtCore.Qt.AlignCenter)
+    self.label.setAlignment(QtCore.Qt.AlignCenter)
     self.value = QtWidgets.QLabel()
-    self.value.setAlignment(QtCore.Qt.Alignment.AlignCenter) if USE_PYQT6 else self.value.setAlignment(QtCore.Qt.AlignCenter)
+    self.value.setAlignment(QtCore.Qt.AlignCenter)
     self.itemformat = self.config.gui.gui_config.G_ITEM_DEF[name][0]
     if self.config.G_LANG in self.config.gui.gui_config.G_LANG and \
       name in self.config.gui.gui_config.G_LANG[self.config.G_LANG]:
