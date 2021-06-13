@@ -15,6 +15,7 @@ except:
 print('  MIP DISPLAY : ',_SENSOR_DISPLAY)
 
 # https://qiita.com/hishi/items/669ce474fcd76bdce1f1
+# LPM027M128C, LPM027M128B, 
 
 #GPIO.BCM
 GPIO_DISP = 27 #13 in GPIO.BOARD
@@ -84,10 +85,7 @@ class MipDisplay():
     self.img_buff_rgb8[:,0] = UPDATE_MODE
     self.img_buff_rgb8[:,1] = np.arange(self.config.G_HEIGHT)
     if self.config.G_HEIGHT > 255: 
-      #self.img_buff_rgb8[:,0] = self.img_buff_rgb8[:,0] + (img_buff_rgb8[:,1] >> 8)
       self.img_buff_rgb8[:,0] = self.img_buff_rgb8[:,0] + (np.arange(self.config.G_HEIGHT) >> 8)
-    
-    #self.clear()
   
   def clear(self):
     self.pi.write(GPIO_SCS, 1)
@@ -177,16 +175,12 @@ class MipDisplay():
     
     if _SENSOR_DISPLAY and rewrite_flag and not self.config.G_QUIT:
       #put queue
-      #self.draw_queue.put((img_bytes))
       if len(diff_lines) < 270:
         self.draw_queue.put((img_bytes))
       else:
         #for MIP 640x480
         self.draw_queue.put((self.img_buff_rgb8[diff_lines[0:int(len(diff_lines)/2)]].tobytes()))
         self.draw_queue.put((self.img_buff_rgb8[diff_lines[int(len(diff_lines)/2):]].tobytes()))
-
-
-    #print("Drawing images... :", (datetime.datetime.now()-t).total_seconds(),"sec")
 
   def change_brightness(self):
     
