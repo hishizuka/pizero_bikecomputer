@@ -15,6 +15,7 @@ except:
 print('  MIP SHARP DISPLAY : ',_SENSOR_DISPLAY)
 
 # https://qiita.com/hishi/items/669ce474fcd76bdce1f1
+# LS027B7DH01
 
 #GPIO.BCM
 GPIO_DISP = 27 #13 in GPIO.BOARD
@@ -65,11 +66,6 @@ class MipSharpDisplay():
     self.img_buff_rgb8[:,0] = UPDATE_MODE
     #address is set in reversed bits
     self.img_buff_rgb8[:,1] = [int('{:08b}'.format(a)[::-1], 2) for a in range(self.config.G_HEIGHT)]
-    if self.config.G_HEIGHT > 255: 
-      #self.img_buff_rgb8[:,0] = self.img_buff_rgb8[:,0] + (img_buff_rgb8[:,1] >> 8)
-      self.img_buff_rgb8[:,0] = self.img_buff_rgb8[:,0] + (np.arange(self.config.G_HEIGHT) >> 8)
-    
-    #self.clear()
   
   def clear(self):
     self.pi.write(GPIO_SCS, 1)
@@ -140,16 +136,6 @@ class MipSharpDisplay():
     if _SENSOR_DISPLAY and rewrite_flag and not self.config.G_QUIT:
       #put queue
       self.draw_queue.put((img_bytes))
-      
-      #self.pi.write(GPIO_SCS, 1)
-      #time.sleep(0.000006)
-      #if len(img_bytes) > 0:
-      #  self.pi.spi_write(self.spi, img_bytes)
-      ##dummy output for ghost line
-      #self.pi.spi_write(self.spi, [0x00000000,0])
-      #self.pi.write(GPIO_SCS, 0)
-
-    #print("Drawing images... :", (datetime.datetime.now()-t).total_seconds(),"sec")
   
   def quit(self):
     if not _SENSOR_DISPLAY:
