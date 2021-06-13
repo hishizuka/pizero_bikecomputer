@@ -489,7 +489,7 @@ class SimpleMapWidget(BaseMapWidget):
   pre_zoomlevel = np.nan
 
   drawn_tile = {}
-  tile_exists = {}
+  existing_tiless = {}
   map_cuesheet_ratio = 1 #map:cuesheet = 1:0
 
   font = ""
@@ -709,9 +709,6 @@ class SimpleMapWidget(BaseMapWidget):
       #set dummy
       self.point['brush'] = self.point_color['lost']
 
-    #experimental
-    #print("#### {:.2f}".format(self.get_altitude_from_tile(self.point['pos'])))
-
     #center position
     if self.lock_status:
       self.map_pos['x'] = self.point['pos'][0]
@@ -759,8 +756,9 @@ class SimpleMapWidget(BaseMapWidget):
     self.map_area['w'], self.map_area['h'] = self.get_geo_area(self.map_pos['x'], self.map_pos['y'])
     
     #experimental
-    #print("#### {:.2f}".format(self.get_altitude_from_tile([self.map_pos['x'], self.map_pos['y']])))
-    
+    #self.config.logger.sensor.values['integrated']['dem_altitude'] = self.get_altitude_from_tile([self.point['pos'][0], self.point['pos'][1]])
+    #print(self.config.logger.sensor.values['integrated']['dem_altitude'], self.map_pos) #################### bug
+
     ###########
     # drawing #
     ###########
@@ -869,14 +867,14 @@ class SimpleMapWidget(BaseMapWidget):
       "y": max(y_start, y_end)
     }
     #tile range
-    t0 = self.get_tilexy_and_xy_in_tile(pixel_z, p0["x"], p0["y"])
-    t1 = self.get_tilexy_and_xy_in_tile(pixel_z, p1["x"], p1["y"])
+    t0 = self.config.get_tilexy_and_xy_in_tile(pixel_z, p0["x"], p0["y"], self.config.G_MAP_CONFIG[self.config.G_MAP]['tile_size'])
+    t1 = self.config.get_tilexy_and_xy_in_tile(pixel_z, p1["x"], p1["y"], self.config.G_MAP_CONFIG[self.config.G_MAP]['tile_size'])
     tile_x = sorted([t0[0], t1[0]])
     tile_y = sorted([t0[1], t1[1]])
 
     #tile download check
-    if self.zoomlevel not in self.tile_exists:
-      self.tile_exists[self.zoomlevel] = {}
+    if self.zoomlevel not in self.existing_tiless:
+      self.existing_tiless[self.zoomlevel] = {}
     
     tiles = []
 
@@ -893,81 +891,63 @@ class SimpleMapWidget(BaseMapWidget):
         tiles.append((i,j))
 
     for tile in tiles:
-      i = tile[0]
-      j = tile[1]
-      filename = self.config.get_maptile_filename(self.config.G_MAP, pixel_z, i, j)
-      key = "{0}-{1}".format(i,j)
+      filename = self.config.get_maptile_filename(self.config.G_MAP, pixel_z, *tile)
+      key = "{0}-{1}".format(*tile)
 
       if os.path.exists(filename) and os.path.getsize(filename) > 0:
-        self.tile_exists[self.zoomlevel][key] = True
+        self.existing_tiless[self.zoomlevel][key] = True
         continue
       
       #download is in progress
-      if key in self.tile_exists[self.zoomlevel]:
+      if key in self.existing_tiless[self.zoomlevel]:
         continue
 
       #start downloading
-      self.tile_exists[self.zoomlevel][key] = False
-      if not self.config.download_maptile(pixel_z, i, j):
-        if self.tile_exists[self.zoomlevel] == None:
-          self.tile_exists[self.zoomlevel].discard(key)
+      self.existing_tiless[self.zoomlevel][key] = False
+      if not self.config.download_maptile(pixel_z, *tile):
+        self.existing_tiless[self.zoomlevel].pop(key)
 
     draw_flag = False
-    if self.zoomlevel not in self.drawn_tile:
-      self.drawn_tile[self.zoomlevel] = set()
-      draw_flag = True
-    if self.pre_zoomlevel != self.zoomlevel:
-      self.drawn_tile[self.zoomlevel] = set()
-      draw_flag = True
+    add_key = {}
+    if self.zoomlevel not in self.drawn_tile or self.pre_zoomlevel != self.zoomlevel:
+      self.drawn_tile[self.zoomlevel] = {}
     for i in range(tile_x[0], tile_x[1]+1):
       for j in range(tile_y[0], tile_y[1]+1):
         key = "{0}-{1}".format(i,j)
-        if self.tile_exists[self.zoomlevel][key] and key not in self.drawn_tile[self.zoomlevel]:
-          self.drawn_tile[self.zoomlevel].add(key)
+        if (key, True) in self.existing_tiless[self.zoomlevel].items() and key not in self.drawn_tile[self.zoomlevel]:
+          self.drawn_tile[self.zoomlevel][key] = True
+          add_key[(i,j)] = True
           draw_flag = True
     self.pre_zoomlevel = self.zoomlevel
 
     if not draw_flag:
       return
     
-    imgarray = np.empty(
-      ((tile_x[1]-tile_x[0]+1)*256, (tile_y[1]-tile_y[0]+1)*256, 3), 
-      dtype='uint8'
-      )
-    for i in range(tile_x[0], tile_x[1]+1):
-      for j in range(tile_y[0], tile_y[1]+1):
-        filename = self.config.get_maptile_filename(self.config.G_MAP, pixel_z, i, j)
-        I = i - tile_x[0]
-        J = tile_y[1] - j
-        if os.path.exists(filename) and os.path.getsize(filename) > 0:
-          imgarray[I*256:(I+1)*256, J*256:(J+1)*256] = \
-            np.rot90(np.asarray(Image.open(filename).convert('RGB')).astype('uint8'), -1)
-        else:
-          #finally blank area
-          imgarray[I*256:(I+1)*256, J*256:(J+1)*256] = 255
-    imgitem = pg.ImageItem(imgarray)
-    saveimg = pg.ImageItem(np.fliplr(imgarray))
-    #saveimg.save("maptile/out.png")
-
-    imgarray_min_x, imgarray_max_y = \
-      self.get_lon_lat_from_tile_xy(pixel_z, tile_x[0], tile_y[0])
-    imgarray_max_x, imgarray_min_y = \
-      self.get_lon_lat_from_tile_xy(pixel_z, tile_x[1]+1, tile_y[1]+1)
-
-    self.plot.addItem(imgitem)
-    imgitem.setZValue(-100)
-    imgitem.setRect(
-      pg.QtCore.QRectF(
-        imgarray_min_x,
-        self.get_mod_lat(imgarray_min_y),
-        imgarray_max_x-imgarray_min_x,
-        self.get_mod_lat(imgarray_max_y)-self.get_mod_lat(imgarray_min_y),
+    #draw only the necessary tiles 
+    for keys in add_key:
+      imgarray = np.empty((self.config.G_MAP_CONFIG[self.config.G_MAP]['tile_size'],self.config.G_MAP_CONFIG[self.config.G_MAP]['tile_size'],3),dtype='uint8')
+      filename = self.config.get_maptile_filename(self.config.G_MAP, pixel_z, keys[0], keys[1])
+      if os.path.exists(filename) and os.path.getsize(filename) > 0:
+        imgarray = np.rot90(np.asarray(Image.open(filename).convert('RGB')).astype('uint8'), -1)
+      else:
+        imgarray = 255
+      
+      imgitem = pg.ImageItem(imgarray)
+      imgarray_min_x, imgarray_max_y = \
+        self.config.get_lon_lat_from_tile_xy(pixel_z, keys[0], keys[1])
+      imgarray_max_x, imgarray_min_y = \
+        self.config.get_lon_lat_from_tile_xy(pixel_z, keys[0]+1, keys[1]+1)
+      
+      self.plot.addItem(imgitem)
+      imgitem.setZValue(-100)
+      imgitem.setRect(
+        pg.QtCore.QRectF(
+          imgarray_min_x,
+          self.get_mod_lat(imgarray_min_y),
+          imgarray_max_x-imgarray_min_x,
+          self.get_mod_lat(imgarray_max_y)-self.get_mod_lat(imgarray_min_y),
+          )
         )
-      )
-    x = imgarray_min_x
-    y = self.get_mod_lat(imgarray_min_y)
-    w = imgarray_max_x-imgarray_min_x
-    h = self.get_mod_lat(imgarray_max_y)-self.get_mod_lat(imgarray_min_y)
   
   def draw_scale(self, x_start, y_start):
     #draw scale at left bottom
@@ -1002,26 +982,6 @@ class SimpleMapWidget(BaseMapWidget):
       (scale_x1+scale_x2)/2,
       scale_y2
       )
-  
-  def get_altitude_from_tile(self, pos):
-    f_x, f_y, p_x, p_y = self.get_tilexy_and_xy_in_tile(self.zoomlevel, pos[0], pos[1])
-    filename = self.config.get_maptile_filename(self.config.G_DEM_MAP, self.zoomlevel, f_x, f_y)
-
-    if not os.path.exists(filename) or os.path.getsize(filename) == 0:
-      return np.nan
-    
-    imgarray = np.asarray(Image.open(filename))
-    rgb_pos = imgarray[p_x, p_y]
-    altitude = rgb_pos[0]*(2**16) + rgb_pos[1]*(2**8) + rgb_pos[2]
-    if altitude < 2**23:
-      altitude = altitude*0.01
-    elif altitude == 2**23:
-      altitude = np.nan
-    else:
-      altitude = (altitude - 2**24)*0.01
-      
-    #print("###altiude", altitude, rgb_pos)
-    return altitude
 
   def draw_map_attribution(self, x_start, y_start):
     #draw map attribution at right bottom
@@ -1049,24 +1009,10 @@ class SimpleMapWidget(BaseMapWidget):
     return lat * self.config.GEO_R2 / (self.config.GEO_R1 * np.cos(lat/180*np.pi))
 
   def get_geo_area(self, x, y):
-    tile_x, tile_y, _, _ = self.get_tilexy_and_xy_in_tile(self.zoomlevel, x, y)
-    pos_x0, pos_y0 = self.get_lon_lat_from_tile_xy(self.zoomlevel, tile_x, tile_y)
-    pos_x1, pos_y1 = self.get_lon_lat_from_tile_xy(self.zoomlevel, tile_x+1, tile_y+1)
-    return abs(pos_x1-pos_x0)/256*(self.width()*self.map_cuesheet_ratio), abs(pos_y1-pos_y0)/256*self.height()
+    tile_x, tile_y, _, _ = self.config.get_tilexy_and_xy_in_tile(self.zoomlevel, x, y, self.config.G_MAP_CONFIG[self.config.G_MAP]['tile_size'])
+    pos_x0, pos_y0 = self.config.get_lon_lat_from_tile_xy(self.zoomlevel, tile_x, tile_y)
+    pos_x1, pos_y1 = self.config.get_lon_lat_from_tile_xy(self.zoomlevel, tile_x+1, tile_y+1)
+    return abs(pos_x1-pos_x0)/self.config.G_MAP_CONFIG[self.config.G_MAP]['tile_size']*(self.width()*self.map_cuesheet_ratio), abs(pos_y1-pos_y0)/self.config.G_MAP_CONFIG[self.config.G_MAP]['tile_size']*self.height()
   
-  def get_tilexy_and_xy_in_tile(self, z, x, y):
-    n = 2.0 ** z
-    _y = math.radians(y)
-    x_in_tile, tile_x = math.modf((x + 180.0) / 360.0 * n)
-    y_in_tile, tile_y = math.modf((1.0 - math.log(math.tan(_y) + (1.0/math.cos(_y))) / math.pi) / 2.0 * n)
-
-    return int(tile_x), int(tile_y), int(x_in_tile*256), int(y_in_tile*256)
-  
-  def get_lon_lat_from_tile_xy(self, z, x, y):
-    n = 2.0 ** z
-    lon = x / n * 360.0 - 180.0
-    lat = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * y / n))))
-
-    return lon, lat
 
   

@@ -16,9 +16,10 @@ import traceback
 import json
 import pickle
 import socket
-from math import sin, cos, acos, radians, sqrt, tan, degrees
+import math
 
 import numpy as np
+from PIL import Image
 import oyaml as yaml
 
 _IS_RASPI = False
@@ -107,24 +108,49 @@ class Config():
       # 0:z(zoom), 1:tile_x, 2:tile_y
       'url': "http://a.tile.stamen.com/toner/{z}/{x}/{y}.png",
       'attribution': 'Map tiles by Stamen Design, under CC BY 3.0.<br />Data by OpenStreetMap, under ODbL',
+      'tile_size': 256,
+    },
+    'toner_2x': {
+      # 0:z(zoom), 1:tile_x, 2:tile_y
+      'url': "http://a.tile.stamen.com/toner/{z}/{x}/{y}@2x.png",
+      'attribution': 'Map tiles by Stamen Design, under CC BY 3.0.<br />Data by OpenStreetMap, under ODbL',
+      'tile_size': 512,
     },
     'wikimedia': {
       'url': "https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png",
       'attribution': '© OpenStreetMap contributors',
+      'tile_size': 256,
     },
     'jpn_kokudo_chiri_in': {
       'url': "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
-      'attribution': '国土地理院'
+      'attribution': '国土地理院',
+      'tile_size': 256,
     },
   }
   #external input of G_MAP_CONFIG
   G_MAP_LIST = "map.yaml"
 
-  G_DEM_MAP = 'jpn_kokudo_chiri_in_DEM10B'
+  G_DEM_MAP = 'jpn_kokudo_chiri_in_DEM5A'
   G_DEM_MAP_CONFIG = {
+    'jpn_kokudo_chiri_in_DEM5A': {
+      'url': "https://cyberjapandata.gsi.go.jp/xyz/dem5a_png/{z}/{x}/{y}.png", #DEM5A
+      'attribution': '国土地理院',
+      'zoom':15
+    }, 
+    'jpn_kokudo_chiri_in_DEM5B': {
+      'url': "https://cyberjapandata.gsi.go.jp/xyz/dem5b_png/{z}/{x}/{y}.png", #DEM5B
+      'attribution': '国土地理院',
+      'zoom':15
+    }, 
+    'jpn_kokudo_chiri_in_DEM5C': {
+      'url': "https://cyberjapandata.gsi.go.jp/xyz/dem5c_png/{z}/{x}/{y}.png", #DEM5C
+      'attribution': '国土地理院',
+      'zoom':15
+    }, 
     'jpn_kokudo_chiri_in_DEM10B': {
-      'url': "https://cyberjapandata.gsi.go.jp/xyz/dem_png/{z}/{x}/{y}.png",
-      'attribution': '国土地理院'
+      'url': "https://cyberjapandata.gsi.go.jp/xyz/dem_png/{z}/{x}/{y}.png", #DEM10B
+      'attribution': '国土地理院',
+      'zoom':14
     }, 
   }
 
@@ -256,6 +282,7 @@ class Config():
     'MIP': {'size':(400, 240),'touch':False}, #LPM027M128C, LPM027M128B
     'MIP_640': {'size':(640, 480),'touch':False}, #LPM044M141A
     'MIP_Sharp': {'size':(400, 240),'touch':False},
+    'MIP_Sharp_320': {'size':(320, 240),'touch':False},
     'Papirus': {'size':(264, 176),'touch':False},
     'DFRobot_RPi_Display': {'size':(250, 122),'touch':False}
   }
@@ -343,7 +370,7 @@ class Config():
   #auto backlight with spi mip display
   #(PiTFT actually needs max brightness under sunlights, so there are no implementation with PiTFT)
   G_USE_AUTO_BACKLIGHT = True
-  G_USE_AUTO_CUTOFF = 0
+  G_USE_AUTO_CUTOFF = 2
 
   #IMU axis conversion
   #  X: to North (up rotation is plus)
@@ -538,9 +565,16 @@ class Config():
     #map list
     if os.path.exists(self.G_MAP_LIST):
       self.read_map_list()
+    #set default values
+    for key in self.G_MAP_CONFIG:
+      if 'tile_size' not in self.G_MAP_CONFIG[key]:
+        self.G_MAP_CONFIG[key]['tile_size'] = 256
+      if 'referer' not in self.G_MAP_CONFIG[key]:
+        self.G_MAP_CONFIG[key]['referer'] = None
     if self.G_MAP not in self.G_MAP_CONFIG:
       print("don't exist map \"{}\" in {}".format(self.G_MAP, self.G_MAP_LIST), file=sys.stderr)
       self.G_MAP = "toner"
+    self.loaded_dem = None
 
     #mkdir
     if not os.path.exists(self.G_SCREENSHOT_DIR):
@@ -711,11 +745,14 @@ class Config():
     try:
       _y = y
       _z = z
-      if 'yahoo' in self.G_MAP:
-        _z += 1
-        _y = 2**(z-1)-y-1 
+      #if 'yahoo' in self.G_MAP: #OBSOLUTE
+      #  _z += 1
+      #  _y = 2**(z-1)-y-1 
       
       url = self.G_MAP_CONFIG[self.G_MAP]['url'].format(z=_z, x=x, y=_y)
+      if 'referer' not in self.G_MAP_CONFIG[self.G_MAP]:
+        self.G_MAP_CONFIG[self.G_MAP]['referer'] = None
+      ref = self.G_MAP_CONFIG[self.G_MAP]['referer']
       if 'strava_heatmap' in self.G_MAP:
         url = self.G_MAP_CONFIG[self.G_MAP]['url'].format(z=_z, x=x, y=_y) \
           + "&Key-Pair-Id=" + self.G_STRAVA_COOKIE['KEY_PAIR_ID'] \
@@ -728,13 +765,26 @@ class Config():
       dl_dst = map_dst
       if self.G_DITHERING:
         dl_dst = tmp_dst
-      self.download_queue.put((url, dl_dst))
-      #self.download_queue.put((
-      #  self.G_DEM_MAP_CONFIG[self.G_DEM_MAP]['url'].format(z=z, x=x, y=y), 
-      #  self.get_maptile_filename(self.G_DEM_MAP, z, x, y)
-      #  ))
+      self.download_queue.put((url, dl_dst, ref))
+      
       if self.G_DITHERING:
         self.convert_queue.put((dl_dst, map_dst))
+      return True
+    except:
+      traceback.print_exc()
+      return False
+  
+  def download_demtile(self, z, x, y):
+    if not self.detect_network():
+      return False
+    
+    try:
+      #DEM
+      self.download_queue.put((
+        self.G_DEM_MAP_CONFIG[self.G_DEM_MAP]['url'].format(z=z, x=x, y=y), 
+        self.get_maptile_filename(self.G_DEM_MAP, z, x, y),
+        self.G_MAP_CONFIG[self.G_MAP]['referer'],
+        ))
       return True
     except:
       traceback.print_exc()
@@ -745,16 +795,21 @@ class Config():
     online = True
 
     #while True:
-    for url, dst_path in iter(self.download_queue.get, None):
+    for url, dst_path, ref in iter(self.download_queue.get, None):
       #url, dst_path = self.download_queue.get()
-      if self.download_file(url, dst_path):
+      if self.download_file(url, dst_path, ref):
         self.download_queue.task_done()
       else:
-        self.download_queue.put((url, dst_path))
+        self.download_queue.put((url, dst_path, ref))
       
-  def download_file(self, url, dst_path):
+  def download_file(self, url, dst_path, ref=None):
     try:
-      with urllib.request.urlopen(url, timeout=5) as web_file:
+      req = urllib.request.Request(url)
+      if ref != None:
+        req.add_header('Referer', ref)
+      
+      with urllib.request.urlopen(req, timeout=5) as web_file:
+      #with urllib.request.urlopen(url, timeout=5) as web_file:
         data = web_file.read()
         with open(dst_path, mode='wb') as local_file:
           local_file.write(data)
@@ -770,7 +825,7 @@ class Config():
     timeout = 5
 
     #while True:
-    for dl_dst, map_dst in iter(self.convert_queue.get, None):
+    for dl_dst, map_dst, ref in iter(self.convert_queue.get, None):
       #dl_dst, map_dst = self.convert_queue.get()
       
       #wait until file appears
@@ -781,14 +836,14 @@ class Config():
         elapsed_time = (datetime.datetime.utcnow()-start_time).total_seconds()
       
       if elapsed_time >= timeout:
-        self.download_queue.put((dl_dst, map_dst))
+        self.download_queue.put((dl_dst, map_dst, ref))
         continue
 
       if self.convert(dl_dst, map_dst):
         self.convert_queue.task_done()
         dl_dst = map_dst = None
       else:
-        self.download_queue.put((dl_dst, map_dst))
+        self.download_queue.put((dl_dst, map_dst. ref))
   
   def convert(self, dl_dst, map_dst):
     try:
@@ -1145,11 +1200,11 @@ class Config():
   def get_dist_on_earth(self, p0_lon, p0_lat, p1_lon, p1_lat):
     if p0_lon == p1_lon and p0_lat == p1_lat:
       return 0
-    (r0_lon, r0_lat, r1_lon, r1_lat) = map(radians, [p0_lon, p0_lat, p1_lon, p1_lat])
+    (r0_lon, r0_lat, r1_lon, r1_lat) = map(math.radians, [p0_lon, p0_lat, p1_lon, p1_lat])
     delta_x = r1_lon-r0_lon
-    cos_d = sin(r0_lat)*sin(r1_lat) + cos(r0_lat)*cos(r1_lat)*cos(delta_x)
+    cos_d = math.sin(r0_lat)*math.sin(r1_lat) + math.cos(r0_lat)*math.cos(r1_lat)*math.cos(delta_x)
     try:
-      res = 1000*acos(cos_d)*self.GEO_R1
+      res = 1000*math.acos(cos_d)*self.GEO_R1
       return res
     except:
       #traceback.print_exc()
@@ -1181,11 +1236,11 @@ class Config():
   def get_dist_on_earth_hubeny(self, p0_lon, p0_lat, p1_lon, p1_lat):
     if p0_lon == p1_lon and p0_lat == p1_lat:
       return 0
-    (r0_lon, r0_lat, r1_lon, r1_lat) = map(radians, [p0_lon, p0_lat, p1_lon, p1_lat])
+    (r0_lon, r0_lat, r1_lon, r1_lat) = map(math.radians, [p0_lon, p0_lat, p1_lon, p1_lat])
     lat_t = (r0_lat + r1_lat) / 2
-    w = 1 - self.GEO_E2 * sin(lat_t) ** 2
-    c2 = cos(lat_t) ** 2
-    return sqrt((self.GEO_R2_2 / w ** 3) * (r0_lat - r1_lat) ** 2 + (self.GEO_R1_2 / w) * c2 * (r0_lon - r1_lon) ** 2)
+    w = 1 - self.GEO_E2 * math.sin(lat_t) ** 2
+    c2 = math.cos(lat_t) ** 2
+    return math.sqrt((self.GEO_R2_2 / w ** 3) * (r0_lat - r1_lat) ** 2 + (self.GEO_R1_2 / w) * c2 * (r0_lon - r1_lon) ** 2)
 
   def calc_azimuth(self, lat, lon):
     rad_latitude = np.radians(lat)
@@ -1196,6 +1251,49 @@ class Config():
       np.cos(rad_latitude[0:-1])*np.tan(rad_latitude[1:])-np.sin(rad_latitude[0:-1])*np.cos(rad_longitude_delta)
       )), 360).astype(dtype='int16')
     return azimuth
+  
+  def get_altitude_from_tile(self, pos):
+    if np.isnan(pos[0]) or np.isnan(pos[1]):
+      return np.nan
+    z = self.G_DEM_MAP_CONFIG[self.G_DEM_MAP]['zoom']
+    f_x, f_y, p_x, p_y = self.get_tilexy_and_xy_in_tile(z, pos[0], pos[1], 256)
+    filename = self.get_maptile_filename(self.G_DEM_MAP, z, f_x, f_y)
+    
+    if not os.path.exists(filename):
+      self.download_demtile(z, f_x, f_y)
+      return np.nan
+    if os.path.getsize(filename) == 0:
+      return np.nan
+
+    if self.loaded_dem != (f_x, f_y):
+      self.dem_array = np.asarray(Image.open(filename))
+      self.loaded_dem = (f_x, f_y)
+    rgb_pos = self.dem_array[p_y, p_x]
+    altitude = rgb_pos[0]*(2**16) + rgb_pos[1]*(2**8) + rgb_pos[2]
+    if altitude < 2**23:
+      altitude = altitude*0.01
+    elif altitude == 2**23:
+      altitude = np.nan
+    else:
+      altitude = (altitude - 2**24)*0.01
+
+    #print(altitude, filename, p_x, p_y, pos[1], pos[0])
+    return altitude
+
+  def get_tilexy_and_xy_in_tile(self, z, x, y, tile_size):
+    n = 2.0 ** z
+    _y = math.radians(y)
+    x_in_tile, tile_x = math.modf((x + 180.0) / 360.0 * n)
+    y_in_tile, tile_y = math.modf((1.0 - math.log(math.tan(_y) + (1.0/math.cos(_y))) / math.pi) / 2.0 * n)
+
+    return int(tile_x), int(tile_y), int(x_in_tile*tile_size), int(y_in_tile*tile_size)
+  
+  def get_lon_lat_from_tile_xy(self, z, x, y):
+    n = 2.0 ** z
+    lon = x / n * 360.0 - 180.0
+    lat = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * y / n))))
+
+    return lon, lat
 
   #replacement of dateutil.parser.parse
   def datetime_myparser(self, ts):
