@@ -1000,7 +1000,8 @@ class ANT_Device_Light(ANT_Device):
     self.channel.set_search_timeout(self.timeout)
 
   def setup_channel_extra(self):
-    self.channel.set_channel_tx_power(0)
+    #0:-18 dBm, 1:-12 dBm, 2:-6 dBm, 3:0 dBm, 4:N/A
+    self.channel.set_channel_tx_power(2)
 
   def resetValue(self):
     self.values['pre_lgt_state'] = 0
@@ -1166,7 +1167,6 @@ class ANT_Device_CTRL(ANT_Device):
       pass
     elif self.values['ctrl_cmd'] == 0x8000: #custom1
       self.config.logger.sensor.sensor_ant.set_light_mode("ON_OFF_FLASH_LOW")
-      print("done")
     elif self.values['ctrl_cmd'] == 0x8001: #custom2 (long press)
       pass
 
