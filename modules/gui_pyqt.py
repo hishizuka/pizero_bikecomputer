@@ -413,7 +413,7 @@ class GUI_PyQt(QtCore.QObject):
     p.save(self.config.G_SCREENSHOT_DIR+filename, 'jpg')
  
   def draw_display(self):
-    if not self.config.logger.sensor.sensor_spi.send_display:
+    if not self.config.logger.sensor.sensor_spi.send_display or self.stack_widget == None:
       return
     p = self.stack_widget.grab()
     self.display_buffer.open(QtCore.QBuffer.ReadWrite)
@@ -460,8 +460,6 @@ class GUI_PyQt(QtCore.QObject):
     if status == "START":
       icon = QtGui.QIcon(self.icon_dir+'img/next_white.png')
     self.button_box_widget.start_button.setIcon(icon)
-    #in mip display, setIcon seems not to occur paint event
-    self.draw_display()
 
   def brightness_control(self):
     self.config.logger.sensor.sensor_spi.brightness_control()
