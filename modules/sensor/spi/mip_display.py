@@ -155,8 +155,28 @@ class MipDisplay():
     #t = datetime.datetime.now()
     
     #3bit mode update
+
+    #2bit color
+    #self.img_buff_rgb8[:,2:] = np.packbits(
+    #  ((im_array > 128).astype('uint8')).reshape(self.config.G_HEIGHT, self.config.G_WIDTH*3),
+    #  axis=1
+    #  )
+    
+    #pseudo 3bit color (128~216: simple dithering)
+    im_array_bin = (im_array >= 128).astype('uint8')
+    im_array_bin[0::2, 0::2] = np.where(
+      (im_array[0::2, 0::2] >= 128) & (im_array[0::2, 0::2] <= 216), 
+      0, 
+      im_array_bin[0::2, 0::2]
+      )
+    im_array_bin[1::2, 1::2] = np.where(
+      (im_array[1::2, 1::2] >= 128) & (im_array[1::2, 1::2] <= 216), 
+      0, 
+      im_array_bin[1::2, 1::2]
+      )
+    
     self.img_buff_rgb8[:,2:] = np.packbits(
-      ((im_array > 128).astype('uint8')).reshape(self.config.G_HEIGHT, self.config.G_WIDTH*3),
+      (im_array_bin).reshape(self.config.G_HEIGHT, self.config.G_WIDTH*3),
       axis=1
       )
 
