@@ -46,7 +46,8 @@ class MenuWidget(QtWidgets.QWidget):
     self.back_button.setStyleSheet(self.config.gui.style.G_GUI_PYQT_buttonStyle_navi)
     self.back_button.setFixedSize(self.icon_x, self.icon_y)
     self.title_label = QtWidgets.QLabel(self.title)
-    self.title_label.setAlignment(QtCore.Qt.AlignCenter)
+    self.title_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter) if USE_PYQT6 \
+    else self.title_label.setAlignment(QtCore.Qt.AlignCenter)
     self.title_label.setStyleSheet("color: #FFFFFF;")
     spacer = QtWidgets.QWidget()
     spacer.setFixedSize(self.icon_x, self.icon_y)

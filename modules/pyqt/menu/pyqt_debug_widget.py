@@ -4,7 +4,6 @@ USE_PYQT6 = False
 try:
   import PyQt6.QtCore as QtCore
   import PyQt6.QtWidgets as QtWidgets
-  import PyQt6.QtGui as QtGui
   USE_PYQT6 = True
 except:
   import PyQt5.QtCore as QtCore
@@ -29,7 +28,11 @@ class DebugLogViewerWidget(MenuWidget):
 
     #self.scroll_area = QtWidgets.QScrollArea()
     #self.scroll_area.setWidgetResizable(True)
-    self.editor = QtWidgets.QTextEdit() if USE_PYQT6 else QtGui.QTextEdit()
+    try:
+      self.editor = QtWidgets.QTextEdit()
+    except:
+      #for old Qt (5.11.3 buster PyQt5 Package)
+      QtGui.QTextEdit()
     self.editor.setReadOnly(True)
     self.editor.setLineWrapMode(QtWidgets.QTextEdit.LineWrapMode.NoWrap) if USE_PYQT6 else self.editor.setLineWrapMode(0)
     #self.editor.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
