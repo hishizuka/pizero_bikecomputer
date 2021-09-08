@@ -18,7 +18,6 @@ __pycache__/
 a.out
 setting*
 layout.yaml
-map.yaml
 nohup.out
 !.gitkeep
 screenlog.*
