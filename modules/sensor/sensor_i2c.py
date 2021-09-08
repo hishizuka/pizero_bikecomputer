@@ -15,6 +15,13 @@ except:
   pass
 print('  I2C : ',_SENSOR_I2C)
 
+_SENSOR_MAG_DECLINATION = False
+try:
+  from magnetic_field_calculator import MagneticFieldCalculator
+  _SENSOR_MAG_DECLINATION = True
+except:
+  pass
+
 #acc
 X = 0
 Y = 1
@@ -52,8 +59,8 @@ class SensorI2C(Sensor):
     'voltage_battery', 'current_battery', 'voltage_out', 'current_out', 'battery_percentage',
   )
   elements_vec = (
-    'acc_raw', 'acc_mod','acc', 
-    'gyro_raw', 'gyro_mod','gyro', 
+    'acc_raw', 'acc_mod', 'acc', 'acc_graph',
+    'gyro_raw', 'gyro_mod', 'gyro', 
     'mag_raw', 'mag_mod', 'mag',
     'quaternion',
     'acc_variance',
@@ -69,6 +76,8 @@ class SensorI2C(Sensor):
 
   #for LP filter
   pre_value = {}
+  #for modify magnetic north
+  is_mag_declination_modified = False
   #for median filter and hampel filter(outlier=spike detection)
   median_keys = ['pressure_mod']
   pre_values_array = {}
@@ -85,7 +94,6 @@ class SensorI2C(Sensor):
   moving_threshold_min = 0
   #for altitude
   sealevel_pa = 1013.25
-  sealevel_temp_offset = 20 # change the direction of sensor and weather(sunny or cloudly)
   sealevel_temp = 273.15 + 20 # The temperature is fixed at 20 degrees Celsius.
   total_ascent_threshold = 2 #[m]
 
@@ -145,6 +153,7 @@ class SensorI2C(Sensor):
 
     #store temporary values
     self.sealevel_pa = self.config.get_config_pickle("sealevel_pa", self.sealevel_pa)
+    self.sealevel_temp = self.config.get_config_pickle("sealevel_temp", self.sealevel_temp)
     self.values_mod['mag_min'] = self.config.get_config_pickle("mag_min"+"_"+self.sensor_label['MAG'], self.values_mod['mag_min'])
     self.values_mod['mag_max'] = self.config.get_config_pickle("mag_max"+"_"+self.sensor_label['MAG'], self.values_mod['mag_max'])
 
@@ -424,7 +433,7 @@ class SensorI2C(Sensor):
     self.values['gyro_mod'] = self.values['gyro_raw'] - self.values_mod['gyro_ave']
 
     #LP filter
-    #self.lp_filter('gyro_mod', 4)
+    self.lp_filter('gyro_mod', 5)
 
     #finalize gyro
     #angle from fixed_roll and fixed_pitch
@@ -555,7 +564,24 @@ class SensorI2C(Sensor):
     #set heading with yaw
     if np.isnan(tilt_heading):
       return
-    self.values['heading'] = int(math.degrees(tilt_heading))
+    
+    #true north modification
+    if _SENSOR_MAG_DECLINATION and \
+      not self.is_mag_declination_modified and \
+      self.config.logger != None and \
+      self.config.detect_network():
+      v = self.config.logger.sensor.values['GPS']
+      if not np.any(np.isnan([v['lat'], v['lon']])):
+        calculator = MagneticFieldCalculator()
+        try:
+          result = calculator.calculate(latitude=v['lat'], longitude=v['lon'])
+          self.config.G_IMU_MAG_DECLINATION = int(result['field-value']['declination']['value'])
+          print("_SENSOR_MAG_DECLINATION:", self.config.G_IMU_MAG_DECLINATION)
+          self.is_mag_declination_modified = True
+        except:
+          pass
+    
+    self.values['heading'] = int(math.degrees(tilt_heading)) - self.config.G_IMU_MAG_DECLINATION
     self.values['heading_str'] = self.config.get_track_str(self.values['heading'])
 
   def get_pitch_roll(self, acc):
@@ -643,9 +669,21 @@ class SensorI2C(Sensor):
     #m_acc_mod = m_yaw@m_roll@m_pitch@m_acc
 
     #finalize acc
-    self.values['acc'] = m_acc_mod.reshape(3).tolist()
+    self.values['acc'] = m_acc_mod.reshape(3)
     #remove gravity (converted acceleration - gravity)
     self.values['acc'][Z] -= 1.0
+
+    #test
+    cos_p = math.cos(self.values['fixed_pitch'])
+    sin_p = math.sin(self.values['fixed_pitch'])
+    cos_r = math.cos(self.values['fixed_roll'])
+    sin_r = math.sin(self.values['fixed_roll'])
+    m_pitch = np.array([[cos_p,0,sin_p],[0,1,0],[-sin_p,0,cos_p]])
+    m_roll  = np.array([[1,0,0],[0,cos_r,-sin_r],[0,sin_r,cos_r]])
+    m_acc   = np.array(self.values['acc_mod']).reshape(3,1)
+    m_acc_mod = m_roll@m_pitch@m_acc
+    self.values['acc_graph'] = m_acc_mod.reshape(3)
+    self.lp_filter('acc_graph', 10)
 
     #position quaternion
     #cosRoll = math.cos(roll*0.5)
@@ -691,8 +729,12 @@ class SensorI2C(Sensor):
       if g not in self.graph_values:
         continue
       self.graph_values[g][:, 0:-1] = self.graph_values[g][:, 1:]
-      self.graph_values[g][:, -1] = self.values['acc']
-      #self.graph_values[g][:, -1] = self.values['acc_variance']
+      #self.graph_values[g][:, -1] = self.values['acc_graph']
+      self.graph_values[g][:, -1] = np.array([
+        self.values['acc_graph'][X],
+        self.values['acc_graph'][Y],
+        self.values['gyro_mod'][Y],
+        ])
     
   def recalibrate_position(self):
     self.do_position_calibration = True
@@ -785,15 +827,30 @@ class SensorI2C(Sensor):
 
     if np.isnan(self.values['pressure']) or np.isnan(self.values['temperature']):
       return
+    #get temperature of current point from API and update sealevel_temp
+    api_data = None
+    if self.config.logger != None:
+      v = self.config.logger.sensor.values['GPS']
+      if not np.any(np.isnan([v['lat'], v['lon']])):
+        try:
+          api_data = self.config.get_openweathermap_data(v['lon'], v['lat'])
+          if "temp" in api_data["main"]:
+            self.sealevel_temp = api_data["main"]["temp"] + 0.0065*alt
+          if "grnd_level" in api_data["main"] and "sea_level" in api_data["main"] and "pressure" in api_data["main"]:
+            h = api_data["main"]["temp"]/0.0065*(pow(api_data["main"]["sea_level"]/api_data["main"]["grnd_level"], 1/5.257)-1)
+            print(api_data["main"]["temp"], api_data["main"]["grnd_level"], api_data["main"]["pressure"], api_data["main"]["sea_level"], h)
+        except:
+          pass
     self.sealevel_pa = self.values['pressure'] * pow((self.sealevel_temp-0.0065*alt)/self.sealevel_temp, -5.257)
-    self.config.set_config_pickle("sealevel_pa", self.sealevel_pa, quick_apply=True)
+    self.config.set_config_pickle("sealevel_pa", self.sealevel_pa, quick_apply=False)
+    self.config.set_config_pickle("sealevel_temp", self.sealevel_temp, quick_apply=True)
 
     print('update sealevel pressure')
     print('    altitude:', alt, 'm')
-    print('    pressure:', self.values['pressure'], 'hPa')
-    print('    temp:', self.values['temperature'], 'C')
-    #print('    sealevel temperature:', self.sealevel_temp, 'C')
-    print('    sealevel pressure:', self.sealevel_pa, 'hPa')
+    print('    pressure:', round(self.values['pressure'], 3), 'hPa')
+    print('    temp:', round(self.values['temperature'],1), 'C')
+    print('    sealevel temperature:', round(self.sealevel_temp - 273.15,1), 'C')
+    print('    sealevel pressure:', round(self.sealevel_pa,3), 'hPa')
  
   def lp_filter(self, key, filter_val):
     if key not in self.values:
