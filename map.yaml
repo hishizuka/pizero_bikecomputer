@@ -1,0 +1,36 @@
+# map list example (z:zoom, x:tile_x, y:tile_y)
+# original map(example is "toner") is called from setting.conf -> GENERAL -> map
+
+# toner: 
+#   url: http://a.tile.stamen.com/toner/{z}/{x}/{y}.png
+#   attribution: Map tiles by Stamen Design, under CC BY 3.0.<br />Data by OpenStreetMap, under ODbL
+
+#toner_2x: 
+#  url: http://a.tile.stamen.com/toner/{z}/{x}/{y}@2x.png
+#  attribution: Map tiles by Stamen Design, under CC BY 3.0.<br />Data by OpenStreetMap, under ODbL
+#  tile_size: 512
+
+#wikimedia:
+#  url: https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png
+#  attribution: © OpenStreetMap contributors
+
+wikimedia_2x:
+  url: https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}@2x.png
+  attribution: © OpenStreetMap contributors
+  tile_size: 512
+
+openstreetmap:
+  url: https://tile.openstreetmap.org/{z}/{x}/{y}.png
+  attribution: © OpenStreetMap contributors
+  user_agent: true
+
+# need API key
+opencyclemap:
+  url: http://tile.thunderforest.com/cycle/{z}/{x}/{y}.png
+  attribution: © OpenStreetMap contributors
+
+# need API key
+cycleosm:
+  url: https://a.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png
+  attribution: © OpenStreetMap contributors
+
