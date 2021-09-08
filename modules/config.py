@@ -101,8 +101,6 @@ class Config():
   #map setting
   #default map (can overwrite in settings.conf)
   G_MAP = 'toner'
-  #use dithering (convert command feom imagemagick)
-  G_DITHERING = False
   G_MAP_CONFIG = {
     'toner': {
       # 0:z(zoom), 1:tile_x, 2:tile_y
@@ -318,8 +316,8 @@ class Config():
    (0,255,255),    #light blue
    (0,255,0),      #green
    (255,255,0),    #yellow
+   (255,128,0),    #orange
    (255,0,0),      #red
-   (255,0,255),    #purple
   )
 
   #map widgets
@@ -366,6 +364,12 @@ class Config():
     "BICYCLING": "mode=bicycling",
     "DRIVING": "mode=driving&avoid=tolls|highways",
   }
+
+  G_OPENWEATHERMAP_API = {
+    "TOKEN": "",
+  }
+  G_HAVE_OPENWEATHERMAP_API_TOKEN = False
+  G_OPENWEATHERMAP_API_URL = "http://api.openweathermap.org/data/2.5/weather"
   
   #auto backlight with spi mip display
   #(PiTFT actually needs max brightness under sunlights, so there are no implementation with PiTFT)
@@ -383,6 +387,7 @@ class Config():
     'STATUS': False,
     'COEF': np.ones(3) #X, Y, Z
   }
+  G_IMU_MAG_DECLINATION = 0.0
 
   #blue tooth setting
   G_BT_ADDRESS = {}
@@ -569,8 +574,14 @@ class Config():
     for key in self.G_MAP_CONFIG:
       if 'tile_size' not in self.G_MAP_CONFIG[key]:
         self.G_MAP_CONFIG[key]['tile_size'] = 256
-      if 'referer' not in self.G_MAP_CONFIG[key]:
+      elif 'referer' not in self.G_MAP_CONFIG[key]:
         self.G_MAP_CONFIG[key]['referer'] = None
+      
+      if 'user_agent' in self.G_MAP_CONFIG[key] and self.G_MAP_CONFIG[key]['user_agent']:
+        self.G_MAP_CONFIG[key]['user_agent'] = self.G_PRODUCT
+      else:
+        self.G_MAP_CONFIG[key]['user_agent'] = None
+      
     if self.G_MAP not in self.G_MAP_CONFIG:
       print("don't exist map \"{}\" in {}".format(self.G_MAP, self.G_MAP_LIST), file=sys.stderr)
       self.G_MAP = "toner"
@@ -583,10 +594,6 @@ class Config():
       os.mkdir(self.G_LOG_DIR)
     if not os.path.exists("maptile/"+self.G_MAP):
       os.mkdir("maptile/"+self.G_MAP)
-    if not os.path.exists("maptile/.tmp/"):
-      os.mkdir("maptile/.tmp/")
-    if not os.path.exists("maptile/.tmp/"+self.G_MAP):
-      os.mkdir("maptile/.tmp/"+self.G_MAP)
     if not os.path.exists("maptile/"+self.G_DEM_MAP):
       os.mkdir("maptile/"+self.G_DEM_MAP)
 
@@ -609,14 +616,6 @@ class Config():
     self.download_thread = threading.Thread(target=self.download_worker, name="download_worker", args=())
     self.download_thread.setDaemon(True)
     self.download_thread.start()
-    self.convert_cmd = shutil.which('convert')
-    if self.G_DITHERING and self.convert_cmd != None:
-      self.convert_queue = queue.Queue()
-      self.convert_thread = threading.Thread(target=self.convert_worker, name="convert_worker", args=())
-      self.convert_thread.setDaemon(True)
-      self.convert_thread.start()
-    else:
-      self.G_DITHERING = False
 
     self.keyboard_control_thread = None
     if self.G_HEADLESS:
@@ -726,10 +725,7 @@ class Config():
   
   def get_maptile_filename(self, map, z, x, y):
     return "maptile/"+map+"/{0}-{1}-{2}.png".format(z, x, y)
-
-  def get_maptile_filename_tmp(self, map, z, x, y):
-    return "maptile/.tmp/"+map+"/{0}-{1}-{2}.png".format(z, x, y)
-
+  
   def detect_network(self):
     try:
       socket.setdefaulttimeout(3)
@@ -745,30 +741,27 @@ class Config():
     try:
       _y = y
       _z = z
-      #if 'yahoo' in self.G_MAP: #OBSOLUTE
-      #  _z += 1
-      #  _y = 2**(z-1)-y-1 
       
       url = self.G_MAP_CONFIG[self.G_MAP]['url'].format(z=_z, x=x, y=_y)
-      if 'referer' not in self.G_MAP_CONFIG[self.G_MAP]:
-        self.G_MAP_CONFIG[self.G_MAP]['referer'] = None
-      ref = self.G_MAP_CONFIG[self.G_MAP]['referer']
       if 'strava_heatmap' in self.G_MAP:
         url = self.G_MAP_CONFIG[self.G_MAP]['url'].format(z=_z, x=x, y=_y) \
           + "&Key-Pair-Id=" + self.G_STRAVA_COOKIE['KEY_PAIR_ID'] \
           + "&Policy=" + self.G_STRAVA_COOKIE['POLICY'] \
           + "&Signature=" + self.G_STRAVA_COOKIE['SIGNATURE']
       
+      if 'referer' not in self.G_MAP_CONFIG[self.G_MAP]:
+        self.G_MAP_CONFIG[self.G_MAP]['referer'] = None
+      ref = self.G_MAP_CONFIG[self.G_MAP]['referer']
+      
+      if 'user_agent' not in self.G_MAP_CONFIG[self.G_MAP]:
+        self.G_MAP_CONFIG[self.G_MAP]['user_agent'] = None
+      user_agent = self.G_MAP_CONFIG[self.G_MAP]['user_agent']
+      
       #throw cue if convert exists
       map_dst = self.get_maptile_filename(self.G_MAP, z, x, y)
-      tmp_dst = self.get_maptile_filename_tmp(self.G_MAP, z, x, y)
       dl_dst = map_dst
-      if self.G_DITHERING:
-        dl_dst = tmp_dst
-      self.download_queue.put((url, dl_dst, ref))
+      self.download_queue.put((url, dl_dst, ref, user_agent))
       
-      if self.G_DITHERING:
-        self.convert_queue.put((dl_dst, map_dst))
       return True
     except:
       traceback.print_exc()
@@ -784,6 +777,7 @@ class Config():
         self.G_DEM_MAP_CONFIG[self.G_DEM_MAP]['url'].format(z=z, x=x, y=y), 
         self.get_maptile_filename(self.G_DEM_MAP, z, x, y),
         self.G_MAP_CONFIG[self.G_MAP]['referer'],
+        None,
         ))
       return True
     except:
@@ -795,21 +789,21 @@ class Config():
     online = True
 
     #while True:
-    for url, dst_path, ref in iter(self.download_queue.get, None):
-      #url, dst_path = self.download_queue.get()
-      if self.download_file(url, dst_path, ref):
+    for url, dst_path, ref, user_agent in iter(self.download_queue.get, None):
+      if self.download_file(url, dst_path, ref, user_agent):
         self.download_queue.task_done()
       else:
-        self.download_queue.put((url, dst_path, ref))
+        self.download_queue.put((url, dst_path, ref, user_agent))
       
-  def download_file(self, url, dst_path, ref=None):
+  def download_file(self, url, dst_path, ref=None, user_agent=None):
     try:
       req = urllib.request.Request(url)
       if ref != None:
         req.add_header('Referer', ref)
+      if user_agent != None:
+        req.add_header('User-Agent', user_agent)
       
       with urllib.request.urlopen(req, timeout=5) as web_file:
-      #with urllib.request.urlopen(url, timeout=5) as web_file:
         data = web_file.read()
         with open(dst_path, mode='wb') as local_file:
           local_file.write(data)
@@ -817,47 +811,6 @@ class Config():
     except urllib.error.URLError as e:
       return False
   
-  def convert_worker(self):
-    if not self.G_DITHERING:
-      return
-
-    dl_dst = map_dst = None
-    timeout = 5
-
-    #while True:
-    for dl_dst, map_dst, ref in iter(self.convert_queue.get, None):
-      #dl_dst, map_dst = self.convert_queue.get()
-      
-      #wait until file appears
-      start_time = datetime.datetime.utcnow()
-      elapsed_time = 0
-      while not os.path.exists(dl_dst) and elapsed_time < timeout:
-        time.sleep(0.5)
-        elapsed_time = (datetime.datetime.utcnow()-start_time).total_seconds()
-      
-      if elapsed_time >= timeout:
-        self.download_queue.put((dl_dst, map_dst, ref))
-        continue
-
-      if self.convert(dl_dst, map_dst):
-        self.convert_queue.task_done()
-        dl_dst = map_dst = None
-      else:
-        self.download_queue.put((dl_dst, map_dst. ref))
-  
-  def convert(self, dl_dst, map_dst):
-    try:
-      #convert xc:red xc:lime xc:blue xc:cyan xc:magenta xc:yellow xc:white xc:black -append 3bit_rgb.png
-      #convert in.png -dither FloydSteinberg -remap mymap.png out.png
-      convert_cmd = [self.convert_cmd, dl_dst, "-dither", "FloydSteinberg", "-remap", "img/3bit_rgb.png", dl_dst+".conv"]
-      self.exec_cmd(convert_cmd, cmd_print=False)
-      shutil.move(dl_dst+".conv", map_dst)
-      os.remove(dl_dst)
-      return True
-    except:
-      traceback.print_exc()
-      return False
-    
   def quit(self):
     print("quit")
     if self.G_MANUAL_STATUS == "START":
@@ -874,11 +827,7 @@ class Config():
     
     #self.download_queue.join()
     #self.download_thread.join(timeout=0.5)
-    if self.G_DITHERING:
-      #self.self.convert_queue.join()
-      #self.self.convert_thread.join(timeout=0.5)
-      pass
-    
+
     #time.sleep(self.G_LOGGING_INTERVAL)
     self.logger.quit()
     self.write_config()
@@ -950,8 +899,26 @@ class Config():
       origin,
       destination
     )
-    response = urllib.request.urlopen(request).read()
     print(request)
+    response = urllib.request.urlopen(request).read()
+    #print(response)
+    return json.loads(response)
+  
+  def get_openweathermap_data(self, x, y):
+
+    if not self.detect_network() or self.G_OPENWEATHERMAP_API["TOKEN"] == "":
+      return None
+    if np.any(np.isnan([x, y])):
+      return None
+      
+    request = "{}?lat={}&lon={}&appid={}".format(
+      self.G_OPENWEATHERMAP_API_URL,
+      y,
+      x,
+      self.G_OPENWEATHERMAP_API["TOKEN"],
+    )
+    print(request)
+    response = urllib.request.urlopen(request).read()
     #print(response)
     return json.loads(response)
 
@@ -1083,6 +1050,8 @@ class Config():
           n = m['COEF'].shape[0]
           if np.sum((coef == 1) | (coef == -1)) == n:
             m['COEF'] = coef[0:n]
+        if 'MAG_DECLINATION' in self.config_parser['SENSOR_IMU']:
+          self.G_IMU_MAG_DECLINATION = int(self.config_parser['SENSOR_IMU']['MAG_DECLINATION'])
       
     if 'STRAVA_API' in self.config_parser:
       for k in self.G_STRAVA_API.keys():
@@ -1100,6 +1069,13 @@ class Config():
           self.G_GOOGLE_DIRECTION_API[k] = self.config_parser['GOOGLE_DIRECTION_API'][k]
       if self.G_GOOGLE_DIRECTION_API["TOKEN"] != "":
         self.G_HAVE_GOOGLE_DIRECTION_API_TOKEN = True
+    
+    if 'OPENWEATHERMAP_API' in self.config_parser:
+      for k in self.G_OPENWEATHERMAP_API.keys():
+        if k in self.config_parser['OPENWEATHERMAP_API']:
+          self.G_OPENWEATHERMAP_API[k] = self.config_parser['OPENWEATHERMAP_API'][k]
+      if self.G_OPENWEATHERMAP_API["TOKEN"] != "":
+        self.G_HAVE_OPENWEATHERMAP_API_TOKEN = True
 
     if 'BT_ADDRESS' in self.config_parser:
       for k in self.config_parser['BT_ADDRESS']:
@@ -1128,6 +1104,7 @@ class Config():
     self.config_parser['SENSOR_IMU']['AXIS_SWAP_XY_STATUS'] = str(self.G_IMU_AXIS_SWAP_XY['STATUS'])
     self.config_parser['SENSOR_IMU']['AXIS_CONVERSION_STATUS'] = str(self.G_IMU_AXIS_CONVERSION['STATUS'])
     self.config_parser['SENSOR_IMU']['AXIS_CONVERSION_COEF'] = str(list(self.G_IMU_AXIS_CONVERSION['COEF']))
+    self.config_parser['SENSOR_IMU']['MAG_DECLINATION'] = str(int(self.G_IMU_MAG_DECLINATION))
 
     self.config_parser['STRAVA_API'] = {}
     for k in self.G_STRAVA_API.keys():
@@ -1140,6 +1117,10 @@ class Config():
     self.config_parser['GOOGLE_DIRECTION_API'] = {}
     for k in self.G_GOOGLE_DIRECTION_API.keys():
       self.config_parser['GOOGLE_DIRECTION_API'][k] = self.G_GOOGLE_DIRECTION_API[k] 
+
+    self.config_parser['OPENWEATHERMAP_API'] = {}
+    for k in self.G_OPENWEATHERMAP_API.keys():
+      self.config_parser['OPENWEATHERMAP_API'][k] = self.G_OPENWEATHERMAP_API[k] 
     
     self.config_parser['BT_ADDRESS'] = {}
     for k in self.G_BT_ADDRESS.keys():
