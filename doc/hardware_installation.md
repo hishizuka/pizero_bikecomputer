@@ -98,6 +98,7 @@ UART modules with GPSd are recomended. I2C(Sparkfun qwiic or Adafruit STEMMA QT)
 - an [antenna](https://www.sparkfun.com/products/15246) is also needed
 - BMP390 and IMU(LSM6DS/LIS3MDL) are included
 - best replacement for Enviro pHAT
+- magnetic sensor is broken...? (All the two modules I have are not working properly.)
 
 ### [Akizuki Denshi GPS module](http://akizukidenshi.com/catalog/g/gK-09991/)
 

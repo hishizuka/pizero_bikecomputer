@@ -38,7 +38,7 @@ Assume Python version 3 environment. Version 2 is not supported.
 
 ```
 $ git clone https://github.com/hishizuka/pizero_bikecomputer.git
-$ pip3 install PyQt5 numpy oyaml pillow
+$ pip3 install PyQt5 numpy oyaml pillow polyline
 $ pip3 install git+https://github.com/hishizuka/pyqtgraph.git
 $ cd pizero_bikecomputer
 ```
@@ -62,7 +62,7 @@ Install in the home directory of default user "pi".
 $ cd
 $ git clone https://github.com/hishizuka/pizero_bikecomputer.git
 $ sudo apt-get install python3-pip cython3 cmake gawk python3-numpy python3-pyqt5 sqlite3 libsqlite3-dev libatlas-base-dev
-$ sudo pip3 install oyaml sip
+$ sudo pip3 install oyaml sip polyline
 $ sudo apt-get install wiringpi python3-smbus python3-rpi.gpio python3-psutil python3-pil
 $ sudo pip3 install git+https://github.com/hishizuka/pyqtgraph.git
 $ cd pizero_bikecomputer
@@ -216,6 +216,12 @@ $ sudo pip3 install adafruit-circuitpython-bmp280
 
 *2 You must enable i2c slowdown. Follow [the adafruit guide](https://learn.adafruit.com/circuitpython-on-raspberrypi-linux/i2c-clock-stretching).
 
+
+If you want to get a more accurate direction with the geomagnetic sensor, install a package that corrects the geomagnetic declination.
+
+```
+$ sudo pip3 install magnetic-field-calculator
+```
 
 #### Button SHIM
 
@@ -390,11 +396,7 @@ From left to right, the button assignments are as follows.
 
 (*)In the map, change button assignments.
 - A: left / zoom out(long press), B: down / zoom in(long press), C:Change mode, D: up, E: right
-- A: zoom out, B: zoom in, C: Change mode, D: none, E: Search route by Google DIrections API. Install following library and set your API key in setting.conf.
-
-```
-$ git clone https://github.com/geodav-tech/decode-google-maps-polyline extlib/decode-google-maps-polyline
-```
+- A: zoom out, B: zoom in, C: Change mode, D: none, E: Search route by Google DIrections API. Set your API key in setting.conf.
 
 In the menu, the button has different assignments. From left to right, the button assignments are as follows.
 
