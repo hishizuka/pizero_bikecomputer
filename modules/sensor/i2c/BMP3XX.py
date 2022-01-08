@@ -10,9 +10,6 @@ except:
   import i2c
 
 
-#for BMP280
-# https://ae-bst.resource.bosch.com/media/_tech/media/datasheets/BST-BMP280-DS001.pdf
-
 # temperature resolution
 # OSRS_T = 0 # no oversampling
 OSRS_T = 1 # x2 oversampling
