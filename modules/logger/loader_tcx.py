@@ -5,16 +5,17 @@ import shutil
 import re
 import xml.etree.ElementTree as ET
 from math import factorial
+from crdp import rdp
 
 import numpy as np
 
 import importlib
-EXTLIB_POLYLINE_DECODER = None
+POLYLINE_DECODER = False
 try:
-  EXTLIB_POLYLINE_DECODER = importlib.import_module("extlib.decode-google-maps-polyline.polyline_decoder")
+  import polyline
+  POLYLINE_DECODER = True
 except:
   pass
-
 
 class LoaderTcx():
   
@@ -152,7 +153,15 @@ class LoaderTcx():
       print("ERROR parse course point")
       check_course = True
     if check_course:
-      self.read_from_xml()
+      self.distance = np.array([])
+      self.altitude = np.array([])
+      self.latitude = np.array([])
+      self.longitude = np.array([])
+      self.point_name = np.array([])
+      self.point_latitude = np.array([])
+      self.point_longitude = np.array([])
+      self.point_type = np.array([])
+      return
     
     #delete 'Straight' of course points
     if len(self.point_type) > 0:
@@ -170,13 +179,13 @@ class LoaderTcx():
   
   def get_google_route(self, x1, y1, x2, y2):
     json_routes = self.config.get_google_routes(x1, y1, x2, y2)
-    if EXTLIB_POLYLINE_DECODER == None or json_routes == None or json_routes["status"] != "OK":
+    if not POLYLINE_DECODER or json_routes == None or json_routes["status"] != "OK":
       return
     
     self.info['Name'] = "Google routes"
     self.info['DistanceMeters'] = round(json_routes["routes"][0]["legs"][0]["distance"]["value"]/1000,1)
 
-    points = np.array(EXTLIB_POLYLINE_DECODER.decode_polyline(json_routes["routes"][0]["overview_polyline"]["points"]))
+    points = np.array(polyline.decode(json_routes["routes"][0]["overview_polyline"]["points"]))
     points_detail = []
     self.point_name = []
     self.point_latitude = []
@@ -192,20 +201,35 @@ class LoaderTcx():
       "html_remove_2":re.compile(r'\<\S+\>'),
     }
     for step in json_routes["routes"][0]["legs"][0]["steps"]:
-      points_detail.extend(EXTLIB_POLYLINE_DECODER.decode_polyline(step["polyline"]["points"]))
+      points_detail.extend(polyline.decode(step["polyline"]["points"]))
       dist += pre_dist
       pre_dist = step["distance"]["value"]/1000
 
-      if "maneuver" not in step or any(map(step["maneuver"].__contains__, ('straight', 'slight'))):
+      if "maneuver" not in step or any(map(step["maneuver"].__contains__, ('straight', 'merge', 'keep'))):
         continue
-      self.point_type.append(step["maneuver"])
+        #https://developers.google.com/maps/documentation/directions/get-directions
+        #turn-slight-left, turn-sharp-left, turn-left, 
+        #turn-slight-right, turn-sharp-right, keep-right, 
+        #keep-left, uturn-left, uturn-right, turn-right,
+        #straight,
+        #ramp-left, ramp-right, 
+        #merge,
+        #fork-left, fork-right,
+        #ferry, ferry-train, 
+        #roundabout-left, and roundabout-right
+      turn_str = step["maneuver"]
+      if turn_str[-4:] == "left":
+        turn_str = "Left"
+      elif turn_str[-5:] == "right":
+        turn_str = "Right"
+      self.point_type.append(turn_str)
       self.point_latitude.append(step["start_location"]["lat"])
       self.point_longitude.append(step["start_location"]["lng"])
       self.point_distance.append(dist)
       text = (re.subn(pattern["html_remove_1"],"", step["html_instructions"])[0]).replace(" ","").replace("&nbsp;", "")
       text = re.subn(pattern["html_remove_2"],"",text)[0]
       #self.point_name.append(text)
-      self.point_name.append(step["maneuver"])
+      self.point_name.append(turn_str)
     points_detail = np.array(points_detail)
     #print(self.point_type)
 
@@ -227,60 +251,24 @@ class LoaderTcx():
 
     t = datetime.datetime.utcnow()
 
-    cond = np.array([])
-    if len_lat == len_lon:
-      #ame points are delete
-      points_cond = np.where(np.diff(self.latitude) != 0, True, False) | np.where(np.diff(self.longitude) != 0, True, False)
-      if len_lat == len_dist:
-        #close points are delete
-        dist_cond = np.where(np.diff(self.distance) >= self.config.G_ROUTE_DISTANCE_CUTOFF, True, False)
-        cond = np.insert(dist_cond & points_cond, 0, True)
-      else:
-        cond = np.insert(points_cond, 0, True)
-
-    self.latitude = self.latitude[cond]
-    self.longitude = self.longitude[cond]
-    if len_dist > 0:
-      self.distance = self.distance[cond]/1000 #[km]
-    if len_alt > 0:
-      self.altitude = self.altitude[cond] #[m]
-    #print("all: {}, downsampling(1st):{}".format(len_lat, np.sum(cond)))
-    self.azimuth = self.config.calc_azimuth(self.latitude, self.longitude)
-    if len_dist > 0 and len_alt > 0:
-      self.slope = 100*np.diff(self.altitude)/np.diff(1000*self.distance)
-    
-    #diffs(temporary)
-    azimuth_diff = np.diff(self.azimuth)
-    cond = np.insert(np.where(abs(azimuth_diff) <= self.config.G_ROUTE_AZIMUTH_CUTOFF, False, True), 0, True)
-    if len_alt > 0:
-      alt_diff = np.diff(self.altitude)
-      alt_cond = np.where(abs(alt_diff) < 1.0, False, True)
-      if len_dist > 0:
-        slope_diff = np.diff(self.slope)
-        slope_cond = np.insert(np.where(abs(slope_diff) <= 2, False, True), 0, True)
-        cond = cond | (alt_cond & slope_cond)
-      else:
-        cond = cond | alt_cond
-    cond = np.insert(cond, 0, True)
-    cond[-1] = True
-
-    while np.sum(cond) != len(cond):
+    try:
+      cond = np.array(rdp(np.column_stack([self.longitude, self.latitude]), epsilon=0.0001, return_mask=True))
+      if len_alt > 0 and len_dist > 0:
+        cond = cond | np.array(rdp(np.column_stack([self.distance, self.altitude]), epsilon=10, return_mask=True))
       self.latitude = self.latitude[cond]
       self.longitude = self.longitude[cond]
-      self.points_diff = np.array([np.diff(self.longitude), np.diff(self.latitude)])
-      self.points_diff_sum_of_squares = self.points_diff[0]**2 + self.points_diff[1]**2
-      points_cond = np.where(self.points_diff_sum_of_squares == 0.0, False, True)
       if len_alt > 0:
-        self.altitude = self.altitude[cond]
+        self.altitude = self.altitude[cond] #[m]
       if len_dist > 0:
-        self.distance = self.distance[cond]
-        dist_cond = np.where(np.diff(self.distance) == 0.0, False, True)
-        cond = np.insert(dist_cond & points_cond, 0, True)
-      else:
-        cond = np.insert(points_cond, 0, True)
+        self.distance = self.distance[cond]/1000 #[km]
+    except:
+      self.distance = self.distance/1000 #[km]
 
+    #for sensor_gps
     self.azimuth = np.insert(self.config.calc_azimuth(self.latitude, self.longitude), 0, 0)
-    self.points_diff_dist = np.sqrt(self.points_diff_sum_of_squares) #for sensor_gps
+    self.points_diff = np.array([np.diff(self.longitude), np.diff(self.latitude)]) 
+    self.points_diff_sum_of_squares = self.points_diff[0]**2 + self.points_diff[1]**2
+    self.points_diff_dist = np.sqrt(self.points_diff_sum_of_squares)
 
     if len_dist == 0:
       self.distance = self.config.get_dist_on_earth_array(
@@ -295,8 +283,9 @@ class LoaderTcx():
 
     if len_alt > 0:
       self.altitude = self.savitzky_golay(self.altitude, 53, 3)
-      self.slope = np.array([])
-      #self.slope = np.insert(100*np.diff(self.altitude)/dist_diff, 0, 0)
+      #if len_dist > 0:
+      #  self.slope = np.array([])
+      #  self.slope = np.insert(100*np.diff(self.altitude)/dist_diff, 0, 0)
 
       #experimental code
       #np.savetxt('log/course_altitude.csv', self.altitude, fmt='%.3f')
@@ -306,6 +295,13 @@ class LoaderTcx():
       #np.savetxt('log/course_altitude_d1.csv', alt_d1, fmt='%.7f')
       #np.savetxt('log/course_altitude_d2.csv', alt_d2, fmt='%.7f')
       #np.savetxt('log/course_altitude_d3.csv', alt_d3, fmt='%.7f')
+      #np.savetxt('log/course_distance.csv', self.distance, fmt='%.3f')
+
+      #test
+      #alt_dem = np.zeros(len(self.altitude))
+      #for i in range(len(self.altitude)):
+      #  alt_dem[i] = self.config.get_altitude_from_tile([self.longitude[i], self.latitude[i]])
+      #np.savetxt('log/course_altitude_dem.csv', alt_dem, fmt='%.3f')
     
     #update G_GPS_ON_ROUTE_CUTOFF from course
 
@@ -316,7 +312,7 @@ class LoaderTcx():
     #print("G_GPS_ON_ROUTE_CUTOFF[m]:", self.config.G_GPS_ON_ROUTE_CUTOFF)
     #print("G_GPS_SEARCH_RANGE[km]:", self.config.G_GPS_SEARCH_RANGE)
 
-    #print("downsampling(2nd):{}".format(len(self.latitude)))
+    print("downsampling:{} -> {}".format(len_lat, len(self.latitude)))
 
     print("\tlogger_core : load_course : downsampling: ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
 
@@ -471,110 +467,7 @@ class LoaderTcx():
     self.point_name = np.array(self.point_name)
 
     print("\tlogger_core : load_course : modify course points: ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
-   
-  def read_from_xml(self):
-    if not os.path.exists(self.config.G_COURSE_FILE):
-      return
-    
-    t = datetime.datetime.utcnow()
-    
-    self.reset()
-    tree = ET.parse(self.config.G_COURSE_FILE)
-    tcx_root = tree.getroot()
-    
-    print("\tlogger_core : load_course: (read_from_xml) ET parse", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
-    t = datetime.datetime.utcnow()
-    
-    # namespace 
-    NS = {'TCDv2': 'http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2'}
-    courses = tcx_root.find('TCDv2:Courses', NS)
-    course = courses.find('TCDv2:Course', NS)
-    #summary
-    self.info['Name'] = course.find('TCDv2:Name', NS).text
-    Lap = course.find('TCDv2:Lap', NS)
-    self.info['DistanceMeters'] = float(Lap.find('TCDv2:DistanceMeters', NS).text)
-    #track
-    track = course.find('TCDv2:Track', NS)
-    track_points = track.findall('TCDv2:Trackpoint', NS)
-    #coursepoint
-    course_points = course.findall('TCDv2:CoursePoint', NS)
-    
-    print("\tlogger_core : load_course : (read_from_xml) initialize", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
-    t = datetime.datetime.utcnow()
-
-    TCDv2_prefix = "{"+NS['TCDv2']+"}"
-
-    #course data
-    track_points_n = len(track_points)
-    self.distance = np.empty(track_points_n)
-    self.altitude = np.empty(track_points_n)
-    self.latitude = np.empty(track_points_n)
-    self.longitude = np.empty(track_points_n)
-    tmp_i = 0
-    
-    for tp in track_points:
-      latitude = longitude = distance = altitude = None
-      values = {}
-      for child in tp.iter():
-        values[child.tag] = child.text
-      try:
-        latitude = float(values[TCDv2_prefix+"LatitudeDegrees"])
-        longitude = float(values[TCDv2_prefix+"LongitudeDegrees"])
-        distance = float(values[TCDv2_prefix+"DistanceMeters"])
-        altitude = float(values[TCDv2_prefix+"AltitudeMeters"])
-      except:
-        continue
-      
-      self.latitude[tmp_i] = latitude
-      self.longitude[tmp_i] = longitude
-      self.distance[tmp_i] = distance
-      self.altitude[tmp_i] = altitude
-      tmp_i += 1
-    
-    self.latitude = self.latitude[0:tmp_i]
-    self.longitude = self.longitude[0:tmp_i]
-    self.distance = self.distance[0:tmp_i]
-    self.altitude = self.altitude[0:tmp_i]
-    
-    #course points
-    point_name = []
-    point_latitude = []
-    point_longitude = []
-    point_type = []
-    point_notes = []
-
-    for cp in course_points:
-      name = latitude = longitude = p_type = notes = None
-      #search
-      for child in cp:
-        if child.tag == TCDv2_prefix+"Name":
-          name = child.text
-        elif child.tag == TCDv2_prefix+"Position":
-          for position_child in child:
-            if position_child.tag == TCDv2_prefix+"LatitudeDegrees":
-              latitude = float(position_child.text)
-            elif position_child.tag == TCDv2_prefix+"LongitudeDegrees":
-              longitude = float(position_child.text)
-        elif child.tag == TCDv2_prefix+"PointType":
-          p_type = child.text
-        elif child.tag == TCDv2_prefix+"Notes":
-          notes = child.text
-
-      if name != None and latitude != None and longitude != None and p_type != None and notes != None:
-        point_name.append(name)
-        point_latitude.append(latitude)
-        point_longitude.append(longitude)
-        point_type.append(p_type)
-        point_notes.append(notes)
-
-    self.point_name = point_name
-    self.point_latitude = np.array(point_latitude)
-    self.point_longitude = np.array(point_longitude)
-    self.point_type = point_type
-    self.point_notes = point_notes
-
-    print("\tlogger_core : load_course : (read_from_xml) read values: ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
-
+  
   def savitzky_golay(self, y, window_size, order, deriv=0, rate=1):
     try:
         window_size = np.abs(np.int(window_size))
