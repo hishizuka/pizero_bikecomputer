@@ -87,7 +87,7 @@ class CueSheetWidget(ScreenWidget):
 
   def setup_ui(self):
     
-    self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+    self.setSizePolicy(self.config.gui.gui_config.expanding, self.config.gui.gui_config.expanding)
     
     # update panel setting
     self.timer = QtCore.QTimer(parent=self)
@@ -119,7 +119,8 @@ class CueSheetWidget(ScreenWidget):
     h = self.size().height()
     self.set_font_size(h)
     for i in self.cuesheet:
-      i.update_font_size(int(self.font_size*0.66))
+      #i.update_font_size(int(self.font_size*0.66))
+      i.update_font_size(int(self.font_size)) #for 3 rows
 
   def set_font_size(self, length):
     self.font_size = int(length / 7)
@@ -143,6 +144,7 @@ class CueSheetWidget(ScreenWidget):
       if dist > 1000:
         text = "{0:4.1f}km ".format(dist/1000)
       self.cuesheet[j].dist.setText(text)
-      text = self.config.logger.course.point_name[cp_i+j]
+      #text = self.config.logger.course.point_name[cp_i+j]
+      text = self.config.logger.course.point_type[cp_i+j]
       self.cuesheet[j].name.setText(text)
 
