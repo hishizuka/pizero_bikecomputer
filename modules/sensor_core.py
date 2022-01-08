@@ -33,7 +33,8 @@ class SensorCore():
   integrated_value_keys =  [
     'hr','speed','cadence','power',
     'distance','accumulated_power',
-    'grade','grade_spd','glide_ratio',
+    'grade','grade_spd','glide_ratio','dem_altitude',
+    'cpu_percent',
     ]
   process = None
   thread_ant = None
@@ -72,7 +73,7 @@ class SensorCore():
       self.values['integrated'][g] = [np.nan] * self.config.G_GUI_HR_POWER_DISPLAY_RANGE
     for d in self.diff_keys:
       self.values['integrated'][d] = [np.nan] * self.grade_range
-    self.values['CPU_MEM'] = ""
+    self.values['integrated']['CPU_MEM'] = ""
     if _IMPORT_PSUTIL:
       self.process = psutil.Process(self.config.G_PID)
 
@@ -273,7 +274,10 @@ class SensorCore():
         if self.config.G_ANT['USE']['SPD']:
           alt_diff_spd['ANT+'] = alt - pre_alt_spd['ANT+']
           pre_alt_spd['ANT+'] = alt
-      
+      #dem_altitude
+      if self.config.G_LOG_ALTITUDE_FROM_DATA_SOUCE:
+        self.values['integrated']['dem_altitude'] = self.config.get_altitude_from_tile([v['GPS']['lon'], v['GPS']['lat']])
+
       #grade (distance base)
       if dst_diff['USE'] > 0:
         for key in ['alt_diff', 'dst_diff']:
@@ -378,23 +382,26 @@ class SensorCore():
           and self.config.G_STOPWATCH_STATUS == "START"  \
           and self.config.logger != None:
           self.config.logger.start_and_stop()
-      #self.sensor_ant.device[self.config.G_ANT['ID_TYPE']['LGT']].send_light_setting_flash_low()
       #time.sleep(1)
       
       #auto backlight
       if self.config.G_USE_AUTO_BACKLIGHT:
-        if self.config.G_DISPLAY == 'MIP' and self.sensor_spi.send_display and not np.isnan(v['I2C']['light']):
-          if v['I2C']['light'] <= self.config.G_USE_AUTO_CUTOFF:
-            self.sensor_spi.display.set_brightness(10)
-            self.sensor_ant.set_light_mode("FLASH_LOW", auto=True)
+        if self.config.G_DISPLAY in ('MIP', 'MIP_640') and self.sensor_spi.send_display and not np.isnan(v['I2C']['light']):
+          if v['I2C']['light'] <= self.config.G_AUTO_BACKLIGHT_CUTOFF:
+            self.sensor_spi.display.set_brightness(3)
           else:
             self.sensor_spi.display.set_brightness(0)
+        if self.config.G_MANUAL_STATUS == "START":
+          if v['I2C']['light'] <= self.config.G_AUTO_BACKLIGHT_CUTOFF:
+            self.sensor_ant.set_light_mode("FLASH_LOW", auto=True)
+          else:
             self.sensor_ant.set_light_mode("OFF", auto=True)
 
       #cpu and memory
       if _IMPORT_PSUTIL:
-        self.values['CPU_MEM'] = "{0:^2.0f}% ({1}) / ALL {2:^2.0f}%,  {3:^2.0f}%".format(
-          self.process.cpu_percent(interval=None),
+        self.values['integrated']['cpu_percent'] = int(self.process.cpu_percent(interval=None))
+        self.values['integrated']['CPU_MEM'] = "{0:^2.0f}% ({1}) / ALL {2:^2.0f}%,  {3:^2.0f}%".format(
+          self.values['integrated']['cpu_percent'], #self.process.cpu_percent(interval=None),
           self.process.num_threads(),
           psutil.cpu_percent(interval=None),
           self.process.memory_percent(),
