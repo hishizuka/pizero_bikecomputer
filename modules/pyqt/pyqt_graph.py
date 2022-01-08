@@ -168,7 +168,7 @@ class BaseMapWidget(ScreenWidget):
     self.current_point = pg.ScatterPlotItem(pxMode=True)
     self.point_color = {
       #'fix':pg.mkBrush(color=(0,0,160,128)), 
-      'fix':pg.mkBrush(color=(0,0,255)), 
+      'fix':pg.mkBrush(color=(0,128,255)), 
       #'lost':pg.mkBrush(color=(96,96,96,128))
       'lost':pg.mkBrush(color=(128,128,128))
       }
@@ -486,10 +486,10 @@ class SimpleMapWidget(BaseMapWidget):
 
   #misc
   y_mod = 1.22 #31/25 at Tokyo(N35)
-  pre_zoomlevel = np.nan
+  pre_zoomlevel = {}
 
   drawn_tile = {}
-  existing_tiless = {}
+  existing_tiles = {}
   map_cuesheet_ratio = 1 #map:cuesheet = 1:0
 
   font = ""
@@ -502,6 +502,7 @@ class SimpleMapWidget(BaseMapWidget):
     
     #self.plot.showGrid(x=True, y=True, alpha=1)
     self.track_plot = self.plot.plot(pen=pg.mkPen(color=(0,128,255), width=8))
+    self.track_plot.setZValue(30)
     #self.track_plot = self.plot.plot(pen=pg.mkPen(color=(0,192,255,128), width=8))
 
     self.scale_plot = self.plot.plot(pen=pg.mkPen(color=(0,0,0), width=3))
@@ -527,6 +528,16 @@ class SimpleMapWidget(BaseMapWidget):
       )
     self.map_attribution.setZValue(100)
     self.plot.addItem(self.map_attribution)
+    
+    #adjust zoom level for large tiles
+    self.zoomlevel -= int(self.config.G_MAP_CONFIG[self.config.G_MAP]['tile_size'] / 256) - 1
+    if self.zoomlevel < 1:
+      self.zoomlevel = 1
+    
+    for key in [self.config.G_MAP, self.config.G_STRAVA_OVERLAY_MAP, self.config.G_RAIN_OVERLAY_MAP]:
+      self.drawn_tile[key] = {}
+      self.existing_tiles[key] = {}
+      self.pre_zoomlevel[key] = np.nan
 
     #self.load_course()
     t = datetime.datetime.utcnow()
@@ -621,6 +632,7 @@ class SimpleMapWidget(BaseMapWidget):
       y=self.get_mod_lat_np(self.config.logger.course.latitude),
       brushes=self.config.logger.course.colored_altitude, 
       width=6)
+    self.course_plot.setZValue(20)
     self.plot.addItem(self.course_plot)
 
     #test
@@ -650,6 +662,7 @@ class SimpleMapWidget(BaseMapWidget):
     if self.course_points_plot != None:
       self.plot.removeItem(self.course_points_plot)
     self.course_points_plot = pg.ScatterPlotItem(pxMode=True, symbol="t")
+    self.course_points_plot.setZValue(40)
     self.course_points = []
 
     for i in reversed(range(len(self.config.logger.course.point_longitude))):
@@ -798,7 +811,7 @@ class SimpleMapWidget(BaseMapWidget):
     if not np.isnan(y_start) and not np.isnan(y_end):
       self.plot.setYRange(self.get_mod_lat(y_start), self.get_mod_lat(y_end), padding=0)
 
-    self.draw_map_tile(self.zoomlevel, x_start, x_end, y_start, y_end)
+    self.draw_map_tile(x_start, x_end, y_start, y_end)
     #print("\tpyqt_graph : update_extra map : ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
     #t = datetime.datetime.utcnow()
 
@@ -855,7 +868,7 @@ class SimpleMapWidget(BaseMapWidget):
     self.course_loaded = False
     self.resizeEvent(None)
 
-  def draw_map_tile(self, pixel_z, x_start, x_end, y_start, y_end):
+  def draw_map_tile(self, x_start, x_end, y_start, y_end):
     
     #get tile coordinates of display border points
     p0 = {
@@ -866,77 +879,132 @@ class SimpleMapWidget(BaseMapWidget):
       "x": max(x_start, x_end),
       "y": max(y_start, y_end)
     }
+
+    #map
+    self.draw_map_tile_by_overlay(self.config.G_MAP, self.zoomlevel, p0, p1, overley=False)
+    
+    #heatmap (need ON/OFF switch)
+    if False:
+      z_h = self.zoomlevel + int(self.config.G_MAP_CONFIG[self.config.G_MAP]['tile_size']/self.config.G_MAP_CONFIG[self.config.G_STRAVA_OVERLAY_MAP]['tile_size'])-1
+      if self.config.G_MAP_CONFIG[self.config.G_STRAVA_OVERLAY_MAP]['min_zoomlevel'] <= z_h <= self.config.G_MAP_CONFIG[self.config.G_STRAVA_OVERLAY_MAP]['max_zoomlevel']:
+        self.draw_map_tile_by_overlay(self.config.G_STRAVA_OVERLAY_MAP, z_h, p0, p1, overley=True)
+      else:
+        self.pre_zoomlevel[self.config.G_STRAVA_OVERLAY_MAP] = z_h
+
+    #rain map with expanding rain tiles when the zoomlevel is larger than max zoomlevel of rain tiles (need ON/OFF switch)
+    if False:
+      z_r = self.zoomlevel + int(self.config.G_MAP_CONFIG[self.config.G_MAP]['tile_size']/self.config.G_MAP_CONFIG[self.config.G_RAIN_OVERLAY_MAP]['tile_size'])-1  
+      if z_r > self.config.G_MAP_CONFIG[self.config.G_RAIN_OVERLAY_MAP]['max_zoomlevel']:
+        self.draw_map_tile_by_overlay(self.config.G_RAIN_OVERLAY_MAP, self.zoomlevel, p0, p1, overley=True, expand=True)
+      elif self.config.G_MAP_CONFIG[self.config.G_RAIN_OVERLAY_MAP]['min_zoomlevel'] <= z_r <= self.config.G_MAP_CONFIG[self.config.G_RAIN_OVERLAY_MAP]['max_zoomlevel']:
+        self.draw_map_tile_by_overlay(self.config.G_RAIN_OVERLAY_MAP, self.zoomlevel, p0, p1, overley=True)
+      else:
+        self.pre_zoomlevel[self.config.G_RAIN_OVERLAY_MAP] = z_h
+
+  def draw_map_tile_by_overlay(self, map_name, z, p0, p1, overley=False, expand=False):
+    tile_size = self.config.G_MAP_CONFIG[map_name]['tile_size']
+    z_draw = z
+    z_conv_factor = 1
+    if expand:
+      z_draw = min(z, self.config.G_MAP_CONFIG[map_name]['max_zoomlevel'])
+      z_conv_factor = 2**(z-z_draw)
+
     #tile range
-    t0 = self.config.get_tilexy_and_xy_in_tile(pixel_z, p0["x"], p0["y"], self.config.G_MAP_CONFIG[self.config.G_MAP]['tile_size'])
-    t1 = self.config.get_tilexy_and_xy_in_tile(pixel_z, p1["x"], p1["y"], self.config.G_MAP_CONFIG[self.config.G_MAP]['tile_size'])
+    t0 = self.config.get_tilexy_and_xy_in_tile(z, p0["x"], p0["y"], tile_size)
+    t1 = self.config.get_tilexy_and_xy_in_tile(z, p1["x"], p1["y"], tile_size)
     tile_x = sorted([t0[0], t1[0]])
     tile_y = sorted([t0[1], t1[1]])
-
+    
     #tile download check
-    if self.zoomlevel not in self.existing_tiless:
-      self.existing_tiless[self.zoomlevel] = {}
+    if z not in self.existing_tiles[map_name]:
+      self.existing_tiles[map_name][z_draw] = {}
     
     tiles = []
-
     for i in range(tile_x[0], tile_x[1]+1):
       for j in range(tile_y[0], tile_y[1]+1):
-        tiles.append((i,j))
-    
+        tiles.append((i, j))
+        #tiles.append((int(i/z_conv_factor), int(j/z_conv_factor)))
     for i in [tile_x[0]-1, tile_x[1]+1]:
       for j in range(tile_y[0]-1, tile_y[1]+2):
-        tiles.append((i,j))
-
+        tiles.append((i, j))
+        #tiles.append((int(i/z_conv_factor), int(j/z_conv_factor)))
     for i in range(tile_x[0], tile_x[1]+1):
       for j in [tile_y[0]-1, tile_y[1]+1]:
-        tiles.append((i,j))
+        tiles.append((i, j))
+        #tiles.append((int(i/z_conv_factor), int(j/z_conv_factor)))
+
+    if expand:
+      tiles = list(map(lambda x: tuple(map(lambda y: int(y/z_conv_factor), x)), tiles))
 
     for tile in tiles:
-      filename = self.config.get_maptile_filename(self.config.G_MAP, pixel_z, *tile)
+      filename = self.config.get_maptile_filename(map_name, z_draw, *tile)
       key = "{0}-{1}".format(*tile)
 
       if os.path.exists(filename) and os.path.getsize(filename) > 0:
-        self.existing_tiless[self.zoomlevel][key] = True
+        self.existing_tiles[map_name][z_draw][key] = True
         continue
       
       #download is in progress
-      if key in self.existing_tiless[self.zoomlevel]:
+      if key in self.existing_tiles[map_name][z_draw]:
         continue
 
       #start downloading
-      self.existing_tiless[self.zoomlevel][key] = False
-      if not self.config.download_maptile(pixel_z, *tile):
-        self.existing_tiless[self.zoomlevel].pop(key)
+      self.existing_tiles[map_name][z_draw][key] = False
+      if not self.config.download_maptile(map_name, z_draw, *tile):
+        #failed to put queue, then retry
+        self.existing_tiles[map_name][z_draw].pop(key)
 
     draw_flag = False
     add_key = {}
-    if self.zoomlevel not in self.drawn_tile or self.pre_zoomlevel != self.zoomlevel:
-      self.drawn_tile[self.zoomlevel] = {}
+    expand_keys = {}
+    
+    if z not in self.drawn_tile[map_name] or self.pre_zoomlevel[map_name] != z:
+      self.drawn_tile[map_name][z] = {}
+    
     for i in range(tile_x[0], tile_x[1]+1):
       for j in range(tile_y[0], tile_y[1]+1):
-        key = "{0}-{1}".format(i,j)
-        if (key, True) in self.existing_tiless[self.zoomlevel].items() and key not in self.drawn_tile[self.zoomlevel]:
-          self.drawn_tile[self.zoomlevel][key] = True
+        drawn_tile_key = "{0}-{1}".format(i,j)
+        exist_tile_key = drawn_tile_key
+        pixel_x = x_start = pixel_y = y_start = 0
+        if expand:
+          pixel_x, x_start = divmod(i, z_conv_factor)
+          pixel_y ,y_start = divmod(j, z_conv_factor)
+          exist_tile_key = "{0}-{1}".format(pixel_x, pixel_y)
+
+        if (exist_tile_key, True) in self.existing_tiles[map_name][z_draw].items() and drawn_tile_key not in self.drawn_tile[map_name][z]:
+          self.drawn_tile[map_name][z][drawn_tile_key] = True
           add_key[(i,j)] = True
           draw_flag = True
-    self.pre_zoomlevel = self.zoomlevel
+          if expand:
+            expand_keys[(i,j)] = (pixel_x, pixel_y, x_start, y_start)
+    self.pre_zoomlevel[map_name] = z
 
     if not draw_flag:
       return
     
     #draw only the necessary tiles 
+    w_h = int(tile_size/z_conv_factor) if expand else 0
     for keys in add_key:
-      imgarray = np.empty((self.config.G_MAP_CONFIG[self.config.G_MAP]['tile_size'],self.config.G_MAP_CONFIG[self.config.G_MAP]['tile_size'],3),dtype='uint8')
-      filename = self.config.get_maptile_filename(self.config.G_MAP, pixel_z, keys[0], keys[1])
+      imgarray = np.full((tile_size, tile_size, 3), 255, dtype='uint8')
+      
+      x, y = keys[0:2] if not expand else expand_keys[keys][0:2]
+      filename = self.config.get_maptile_filename(map_name, z_draw, x, y)
+
       if os.path.exists(filename) and os.path.getsize(filename) > 0:
-        imgarray = np.rot90(np.asarray(Image.open(filename).convert('RGB')).astype('uint8'), -1)
-      else:
-        imgarray = 255
+        if not expand:
+          imgarray = np.rot90(np.asarray(Image.open(filename).convert('RGBA')), -1)
+        else:
+          x_start, y_start = int(w_h * expand_keys[keys][2]), int(w_h * expand_keys[keys][3])
+          #imgarray = np.rot90(np.asarray(Image.open(filename).convert('RGBA'))[y_start:y_start+w_h, x_start:x_start+w_h], -1)
+          imgarray = np.rot90(np.asarray(Image.open(filename).crop((x_start, y_start, x_start+w_h, y_start+w_h)).convert('RGBA')), -1)
       
       imgitem = pg.ImageItem(imgarray)
+      if overley:
+        imgitem.setCompositionMode(QtGui.QPainter.CompositionMode_Darken)
       imgarray_min_x, imgarray_max_y = \
-        self.config.get_lon_lat_from_tile_xy(pixel_z, keys[0], keys[1])
+        self.config.get_lon_lat_from_tile_xy(z, keys[0], keys[1])
       imgarray_max_x, imgarray_min_y = \
-        self.config.get_lon_lat_from_tile_xy(pixel_z, keys[0]+1, keys[1]+1)
+        self.config.get_lon_lat_from_tile_xy(z, keys[0]+1, keys[1]+1)
       
       self.plot.addItem(imgitem)
       imgitem.setZValue(-100)
@@ -951,7 +1019,7 @@ class SimpleMapWidget(BaseMapWidget):
   
   def draw_scale(self, x_start, y_start):
     #draw scale at left bottom
-    scale_factor = 8
+    scale_factor = 6
     scale_dist = self.get_width_distance(y_start, self.map_area['w'])/scale_factor
     num = scale_dist/(10**int(np.log10(scale_dist)))
     modify = 1
@@ -977,7 +1045,7 @@ class SimpleMapWidget(BaseMapWidget):
     if scale_label >= 1000:
       scale_label = int(scale_label/1000)
       scale_unit = "km"
-    self.scale_text.setPlainText("{0}{1}".format(scale_label, scale_unit))
+    self.scale_text.setPlainText("{0}{1}\n(z{2})".format(scale_label, scale_unit, self.zoomlevel))
     self.scale_text.setPos(
       (scale_x1+scale_x2)/2,
       scale_y2
@@ -1013,6 +1081,3 @@ class SimpleMapWidget(BaseMapWidget):
     pos_x0, pos_y0 = self.config.get_lon_lat_from_tile_xy(self.zoomlevel, tile_x, tile_y)
     pos_x1, pos_y1 = self.config.get_lon_lat_from_tile_xy(self.zoomlevel, tile_x+1, tile_y+1)
     return abs(pos_x1-pos_x0)/self.config.G_MAP_CONFIG[self.config.G_MAP]['tile_size']*(self.width()*self.map_cuesheet_ratio), abs(pos_y1-pos_y0)/self.config.G_MAP_CONFIG[self.config.G_MAP]['tile_size']*self.height()
-  
-
-  
