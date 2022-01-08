@@ -26,17 +26,16 @@ except:
   pass
 
 _SENSOR_GPS_GPSD = False
+
 try:
   if _SENSOR_GPS_BASIC and not _SENSOR_GPS_I2C:
-    from gps3 import gps3
+    from gps3 import agps3threaded
     #device test
-    _gps_socket = gps3.GPSDSocket()
-    _gps_socket.connect()
-    _gps_socket.close()
+    _gps3_thread = agps3threaded.AGPS3mechanism()
     _SENSOR_GPS_GPSD = True
 except:
   try:
-    _gps_socket.close()
+    _gps3_thread.stop()
   except:
     pass
 
@@ -60,28 +59,27 @@ print('  GPS_I2C : ', _SENSOR_GPS_I2C)
 
 class SensorGPS(Sensor):
 
-  gps_socket = None
-  gps_datastream = None
+  gps_thread = None
   elements = [
-    'lat','lon','alt',
+    'lat','lon','alt','course_altitude',
     'pre_lat','pre_lon','pre_alt',
     'speed','track', 'track_str',
     'used_sats','total_sats','used_sats_str',
     'epx', 'epy', 'epv','error',
     'time','utctime','mode',
+    'skip_count',
     ]
   is_time_modified = False
   is_fixed = False
   is_altitude_modified = False
   course_index_check = []
-  course_index_check_window_size = 5 #number of loop by self.config.G_GPS_INTERVAL
 
   def sensor_init(self):
     if _SENSOR_GPS_GPSD:
-      self.gps_socket = gps3.GPSDSocket()
-      self.gps_datastream = gps3.DataStream()
-      self.gps_socket.connect()
-      self.gps_socket.watch()
+      self.gps_thread = _gps3_thread
+      self.gps_thread.stream_data()
+      self.gps_thread.run_thread()
+      
       self.config.G_GPS_NULLVALUE = "n/a"
     elif _SENSOR_GPS_ADAFRUIT_UART:
       self.adafruit_gps = _sensor_adafruit_gps
@@ -106,11 +104,11 @@ class SensorGPS(Sensor):
     self.values['course_point_index'] = 0
     self.values['course_distance'] = 0
     self.values['on_course_status'] = False
-    self.course_index_check = [True]*self.course_index_check_window_size
+    self.course_index_check = [True]*self.config.G_GPS_KEEP_ON_COURSE_CUTOFF
 
   def quit(self):
     if _SENSOR_GPS_GPSD:
-      self.gps_socket.close()
+      self.gps_thread.stop()
     elif _SENSOR_GPS_ADAFRUIT_UART:
       _uart.close()
 
@@ -124,7 +122,7 @@ class SensorGPS(Sensor):
         self.update_i2c()
     else:
       self.dummy_update()
-  
+
   def dummy_update(self):
     course_i = pre_course_i = 0
 
@@ -138,12 +136,10 @@ class SensorGPS(Sensor):
       #unit: m/s
       #self.values['speed'] = random.randint(1,6) * 3.6
       self.values['speed'] = (np.random.randint(13,83)/10) #5 - 30km/h
-      if self.config.G_STOPWATCH_STATUS == "START":
-        #unit: m
-        self.values['distance'] += self.values['speed']
 
       lat = self.config.logger.course.latitude
       lon = self.config.logger.course.longitude
+      dist = self.config.logger.course.distance*1000
       course_n = len(self.config.logger.course.latitude)
       
       self.values['pre_lat'] = self.values['lat']
@@ -152,6 +148,7 @@ class SensorGPS(Sensor):
       if self.config.logger.position_log.shape[0] > 0:
         self.values['lat'] = self.config.logger.position_log[course_i][0]
         self.values['lon'] = self.config.logger.position_log[course_i][1]
+        self.values['distance'] = self.config.logger.position_log[course_i][2]
         if course_i == pre_course_i:
           course_i += 1
           continue
@@ -166,9 +163,11 @@ class SensorGPS(Sensor):
         rand = 0.5 #np.random.randint(0,10)/10
         self.values['lat'] = lat[course_i]
         self.values['lon'] = lon[course_i]
+        self.values['distance'] = dist[course_i]
         if course_i+1 < len(lat):
           self.values['lat'] += (lat[course_i+1] - lat[course_i])*rand
           self.values['lon'] += (lon[course_i+1] - lon[course_i])*rand
+          self.values['distance'] += (dist[course_i+1] - dist[course_i])*rand
         pre_course_i = course_i
         course_i += int(course_n/200)+1
         if course_i >= course_n:
@@ -177,7 +176,7 @@ class SensorGPS(Sensor):
       
       lat_points = np.array([self.values['pre_lat'], self.values['lat']])
       lon_points = np.array([self.values['pre_lon'], self.values['lon']])
-      self.values['track'] = (self.config.calc_azimuth(lat_points, lon_points))[0]
+      self.values['track'] = int((self.config.calc_azimuth(lat_points, lon_points))[0])
 
       #calculate course_index separately
       #t2 = datetime.datetime.utcnow()
@@ -188,25 +187,21 @@ class SensorGPS(Sensor):
       self.get_sleep_time(self.config.G_GPS_INTERVAL)
 
   def update(self):
-    for new_data in self.gps_socket:
-      if self.config.G_QUIT:
-        break
+    g = self.gps_thread.data_stream
+    while not self.config.G_QUIT:
       self.sleep()
-      if new_data:
-        self.gps_datastream.unpack(new_data)
-        self.init_GPS_values()
-        g = self.gps_datastream.TPV
-        self.get_GPS_basic_values(
-          g['lat'],
-          g['lon'],
-          g['alt'],
-          g['speed'],
-          g['track'],
-          g['mode'],
-          [g['epx'], g['epy'], g['epv']],
-          )
-        self.get_satellites(self.gps_datastream.SKY['satellites'])
-        self.get_utc_time(g['time'])
+      self.init_GPS_values()
+      self.get_GPS_basic_values(
+        g.lat,
+        g.lon,
+        g.alt,
+        g.speed,
+        g.track,
+        g.mode,
+        [g.epx, g.epy, g.epv],
+      )
+      self.get_satellites(g.satellites)
+      self.get_utc_time(g.time)
       self.get_sleep_time(self.config.G_GPS_INTERVAL)
 
   #experimental code
@@ -288,18 +283,19 @@ class SensorGPS(Sensor):
       self.values['pre_alt'] = self.values['alt']
     #initialize
     for element in self.elements:
-      if element in ['pre_lat', 'pre_lon', 'pre_alt']:
+      if element in ['pre_lat', 'pre_lon', 'pre_alt', 'skip_count']:
         continue
       self.values[element] = np.nan
 
   def get_GPS_basic_values(self, lat, lon, alt, speed, track, mode, error):
-
     #coordinate
-    if lat != self.config.G_GPS_NULLVALUE and lon != self.config.G_GPS_NULLVALUE:
-      if (-90 <= lat <= 90) and (-180 <= lon <= 180):
-        self.values['lat'] = lat
-        self.values['lon'] = lon
+    if lat != self.config.G_GPS_NULLVALUE and lon != self.config.G_GPS_NULLVALUE \
+      and  (-90 <= lat <= 90) and (-180 <= lon <= 180) and np.isnan(self.values['skip_count']):
+      self.values['lat'] = lat
+      self.values['lon'] = lon
     else: #copy from pre value
+      if self.config.G_MANUAL_STATUS == "START":
+        print("GPS position is null: N{0}, E{1}, mode:{2}, count:{3}".format(self.values['pre_lat'], self.values['pre_lon'], self.values['mode'], self.values['skip_count']), datetime.datetime.now())
       self.values['lat'] = self.values['pre_lat']
       self.values['lon'] = self.values['pre_lon']
     
@@ -344,6 +340,13 @@ class SensorGPS(Sensor):
       self.values['mode'] = mode
       if not self.is_fixed and self.values['mode'] == 3: #3D Fix
         self.is_fixed = self.set_timezone()
+    #exclude outlier when passed through the tunnel
+    if mode in [self.config.G_GPS_NULLVALUE, 1]:
+      self.values['skip_count'] = 0
+    elif not np.isnan(self.values['skip_count']):
+      self.values['skip_count'] += 1
+    if self.values['skip_count'] > self.config.G_GPS_SKIP_CUTOFF:
+      self.values['skip_count'] = np.nan
 
     #err
     error_key = ['epx', 'epy', 'epv']
@@ -373,7 +376,6 @@ class SensorGPS(Sensor):
         self.config.logger.course.altitude[self.values['course_index']]
         )
       self.is_altitude_modified = True
-
     
   def get_satellites(self, gs):
     gnum = guse = 0
@@ -382,7 +384,7 @@ class SensorGPS(Sensor):
       return "0/0"
     for satellites in gs:
       gnum += 1
-      if satellites['used'] is True:
+      if satellites['used']:
         guse += 1
     
     self.values['used_sats'] = guse
@@ -571,7 +573,7 @@ class SensorGPS(Sensor):
       #print("  dist_diff_h:", dist_diff_h, " /", self.config.G_GPS_ON_ROUTE_CUTOFF, "[m]")
       if dist_diff_h < self.config.G_GPS_ON_ROUTE_CUTOFF:
 
-        #stay forward while self.course_index_check_window_size if search_indexes is except forward
+        #stay forward while self.config.G_GPS_KEEP_ON_COURSE_CUTOFF if search_indexes is except forward
         #prevent from changing course index quickly
         self.course_index_check[:-1] = self.course_index_check[1:]
         if i == 0:
@@ -594,6 +596,8 @@ class SensorGPS(Sensor):
         #print("search: ", (datetime.datetime.utcnow()-t).total_seconds(), "sec, index:", m)
         
         self.values['course_index'] =  m
+        if self.config.G_LOG_ALTITUDE_FROM_DATA_SOUCE and len(self.config.logger.course.altitude) > 0:
+          self.values['course_altitude'] = self.config.logger.course.altitude[m]
 
         if len(self.config.logger.course.point_distance) > 0:
           cp_m = np.abs(self.config.logger.course.point_distance - self.values['course_distance']/1000).argmin()
