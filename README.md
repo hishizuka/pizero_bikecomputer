@@ -7,6 +7,20 @@ https://github.com/hishizuka/pizero_bikecomputer
 
 # News
 
+- 2022/1/8 Please install crdp (Ramer–Douglas–Peucker algorithm) to decimate a route composed of line segments to a similar route with fewer points.
+
+```
+$ sudo pip3 install git+https://github.com/hishizuka/crdp.git
+```
+
+- 2022/1/8 Please install polyline and set Google API token in setting.conf if you want to use routing with Google Directions API. This is an experimental function.
+
+```
+$ sudo pip3 install polyline
+```
+
+- 2022/1/8 Please delete log/log.db because format(column layout) is changed. In the future, this will be changed automatically.
+
 - 2021/4/18 Please reinstall pyqtgraph when using python3-pyqt5 in Raspberry Pi OS (skip check if using).
 - 2021/4/3 Please reinstall openant and pyqtgraph because both libraries are re-forked.
 
