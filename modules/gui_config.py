@@ -1,5 +1,14 @@
 import os
 
+try:
+  import PyQt6.QtCore as QtCore
+  import PyQt6.QtWidgets as QtWidgets
+  import PyQt6.QtGui as QtGui
+except:
+  import PyQt5.QtCore as QtCore
+  import PyQt5.QtWidgets as QtWidgets
+  import PyQt5.QtGui as QtGui
+
 import oyaml as yaml
 
 class GUI_Config():
@@ -53,9 +62,10 @@ class GUI_Config():
     "Dist.(GPS)":(G_UNIT["Distance"],"self.sensor.values['GPS']['distance']"),
     "Heading(GPS)":("{0:^s}","self.sensor.values['GPS']['track_str']"),
     "Satellites":("{0:^s}","self.sensor.values['GPS']['used_sats_str']"),
-    "Error":(G_UNIT["GPS_error"],"self.sensor.values['GPS']['error']"),
     "Error(x)":(G_UNIT["GPS_error"],"self.sensor.values['GPS']['epx']"),
     "Error(y)":(G_UNIT["GPS_error"],"self.sensor.values['GPS']['epy']"),
+    "Error(pos)":(G_UNIT["GPS_error"],"self.sensor.values['GPS']['error']"),
+    "Error(alt)":(G_UNIT["GPS_error"],"self.sensor.values['GPS']['epv']"),
     "GPSTime":("{0:^s}","self.sensor.values['GPS']['utctime']"),
     "GPS Fix":("{0:^d}","self.sensor.values['GPS']['mode']"),
     "Course Dist.":(G_UNIT["Distance"],"self.sensor.values['GPS']['course_distance']"),
@@ -115,11 +125,16 @@ class GUI_Config():
     "Temp":("{0:^3.0f}C","self.sensor.values['I2C']['temperature']"),
     "Pressure":("{0:^4.0f}hPa","self.sensor.values['I2C']['pressure']"),
     "Altitude":(G_UNIT["Altitude"],"self.sensor.values['I2C']['altitude']"),
+    "Humidity":("{0:^3.0f}%","self.sensor.values['I2C']['humidity']"),
     "Accum.Alt.":(G_UNIT["Altitude"],"self.sensor.values['I2C']['accumulated_altitude']"),
     "Vert.Spd":("{0:^3.1f}m/s","self.sensor.values['I2C']['vertical_speed']"),
     "Ascent":(G_UNIT["Altitude"],"self.sensor.values['I2C']['total_ascent']"),
     "Descent":(G_UNIT["Altitude"],"self.sensor.values['I2C']['total_descent']"),
-    "Light":("{0:^5.0f}","self.sensor.values['I2C']['light']"),
+    "Light":("{0:^.0f}","self.sensor.values['I2C']['light']"),
+    "Infrared":("{0:^.0f}","self.sensor.values['I2C']['infrared']"),
+    "UVI":("{0:^.0f}","self.sensor.values['I2C']['uvi']"),
+    "VOC_Index":("{0:^.0f}","self.sensor.values['I2C']['voc_index']"),
+    "Raw_Gas":("{0:^.0f}","self.sensor.values['I2C']['raw_gas']"),
     "Motion":("{0:^1.1f}","self.sensor.values['I2C']['motion']"),
     "M_Stat":("{0:^1.1f}","self.sensor.values['I2C']['m_stat']"),
     "ACC_X":("{0:^1.1f}","self.sensor.values['I2C']['acc'][0]"),
@@ -136,7 +151,7 @@ class GUI_Config():
     "ElapsedTime":("timer","self.logger.values['elapsed_time']"),
     "GrossAveSPD":(G_UNIT["Speed"],"self.logger.values['gross_ave_spd']"),
     "GrossDiffTime":("{0:^s}","self.logger.values['gross_diff_time']"),
-    "CPU_MEM":("{0:^s}","self.sensor.values['CPU_MEM']"),
+    "CPU_MEM":("{0:^s}","self.sensor.values['integrated']['CPU_MEM']"),
     #Statistics
     #Pre Lap Average or total
     "PLap HR":(G_UNIT["HeartRate"],"self.logger.record_stats['pre_lap_avg']['heart_rate']"),
@@ -196,6 +211,21 @@ class GUI_Config():
     #read layout
     if os.path.exists(self.config.G_LAYOUT_FILE):
       self.read_layout()
+
+  def set_qt5_or_qt6_constants(self, USE_PYQT6):
+    self.key_space = QtCore.Qt.Key.Key_Space if USE_PYQT6 else QtCore.Qt.Key_Space
+    self.key_press = QtCore.QEvent.Type.KeyPress if USE_PYQT6 else QtCore.QEvent.KeyPress
+    self.key_release = QtCore.QEvent.Type.KeyRelease if USE_PYQT6 else QtCore.QEvent.KeyRelease
+    self.no_modifier = QtCore.Qt.KeyboardModifier.NoModifier if USE_PYQT6 else QtCore.Qt.NoModifier
+    self.align_left = QtCore.Qt.AlignmentFlag.AlignLeft if USE_PYQT6 else QtCore.Qt.AlignLeft
+    self.align_center = QtCore.Qt.AlignmentFlag.AlignCenter if USE_PYQT6 else QtCore.Qt.AlignCenter
+    self.align_right = QtCore.Qt.AlignmentFlag.AlignRight if USE_PYQT6 else QtCore.Qt.AlignRight
+    self.expanding = QtWidgets.QSizePolicy.Policy.Expanding if USE_PYQT6 else QtWidgets.QSizePolicy.Expanding
+    self.no_focus = QtCore.Qt.FocusPolicy.NoFocus if USE_PYQT6 else QtCore.Qt.NoFocus
+    self.strong_focus = QtCore.Qt.FocusPolicy.StrongFocus if USE_PYQT6 else QtCore.Qt.StrongFocus
+
+    self.display_buffer_opnemode = QtCore.QIODeviceBase.OpenModeFlag.ReadWrite if USE_PYQT6 \
+    else QtCore.QBuffer.ReadWrite
 
   def read_layout(self):
     text = None
