@@ -20,6 +20,13 @@ $ sudo pip3 install polyline
 ```
 
 - 2022/1/8 Please delete log/log.db because format(column layout) is changed. In the future, this will be changed automatically.
+- 2022/1/8 Please replace layout.yaml because item names of GPS error is changed.
+
+```
+$ rm log/log.db
+$ cp layouts/layout-cycling.yaml ./
+```
+
 
 - 2021/4/18 Please reinstall pyqtgraph when using python3-pyqt5 in Raspberry Pi OS (skip check if using).
 - 2021/4/3 Please reinstall openant and pyqtgraph because both libraries are re-forked.
