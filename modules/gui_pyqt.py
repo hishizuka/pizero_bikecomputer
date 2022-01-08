@@ -4,10 +4,12 @@ from datetime import datetime
 import signal
 import io
 
+USE_PYQT6 = False
 try:
   import PyQt6.QtCore as QtCore
   import PyQt6.QtWidgets as QtWidgets
   import PyQt6.QtGui as QtGui
+  USE_PYQT6 = True
 except:
   import PyQt5.QtCore as QtCore
   import PyQt5.QtWidgets as QtWidgets
@@ -92,6 +94,7 @@ class GUI_PyQt(QtCore.QObject):
     self.config = config
     self.config.gui = self
     self.gui_config = GUI_Config(config)
+    self.gui_config.set_qt5_or_qt6_constants(USE_PYQT6)
     #from other program, call self.config.gui.style
     self.style = PyQtStyle()
     self.logger = self.config.logger
@@ -217,13 +220,13 @@ class GUI_PyQt(QtCore.QObject):
           ValuesWidget(self.main_page, self.config, self.gui_config.G_LAYOUT[k]["LAYOUT"])
           )
       else:
-        if k == "ALTITUDE_GRAPH":
+        if k == "ALTITUDE_GRAPH" and 'i2c_baro_temp' in self.config.logger.sensor.sensor_i2c.sensor:
           self.altitude_graph_widget = pyqt_graph_debug.AltitudeGraphWidget(self.main_page, self.config)
           self.main_page.addWidget(self.altitude_graph_widget)
-        elif k == "ACC_GRAPH":
+        elif k == "ACC_GRAPH" and self.config.logger.sensor.sensor_i2c.motion_sensor['ACC']:
           self.acc_graph_widget = pyqt_graph_debug.AccelerationGraphWidget(self.main_page, self.config)
           self.main_page.addWidget(self.acc_graph_widget)
-        elif k == "PERFORMANCE_GRAPH":
+        elif k == "PERFORMANCE_GRAPH" and self.config.G_ANT['STATUS']:
           self.performance_graph_widget = pyqt_graph.PerformanceGraphWidget(self.main_page, self.config)
           self.main_page.addWidget(self.performance_graph_widget)
         elif k == "COURSE_PROFILE_GRAPH" and os.path.exists(self.config.G_COURSE_FILE) and self.config.G_COURSE_INDEXING:
@@ -236,7 +239,7 @@ class GUI_PyQt(QtCore.QObject):
           self.config.G_CUESHEET_DISPLAY_NUM > 0:
           self.cuesheet_widget = pyqt_graph.CueSheetWidget(self.main_page, self.config)
           self.main_page.addWidget(self.cuesheet_widget)
-        elif k == "MULTI_SCAN":
+        elif k == "MULTI_SCAN" and self.config.G_ANT['STATUS']:
           self.multi_scan_widget = pyqt_multiscan.MultiScanWidget(self.main_page, self.config)
           self.main_page.addWidget(self.multi_scan_widget)
 
@@ -306,8 +309,8 @@ class GUI_PyQt(QtCore.QObject):
     self.logger.reset_count()
  
   def press_key(self, key):
-    e_press = QtGui.QKeyEvent(QtCore.QEvent.KeyPress, key, QtCore.Qt.NoModifier, None)
-    e_release = QtGui.QKeyEvent(QtCore.QEvent.KeyRelease, key, QtCore.Qt.NoModifier, None)
+    e_press = QtGui.QKeyEvent(self.gui_config.key_press, key, self.gui_config.no_modifier, None)
+    e_release = QtGui.QKeyEvent(self.gui_config.key_release, key, self.gui_config.no_modifier, None)
     QtCore.QCoreApplication.postEvent(QtWidgets.QApplication.focusWidget(), e_press)
     QtCore.QCoreApplication.postEvent(QtWidgets.QApplication.focusWidget(), e_release)
 
@@ -320,7 +323,7 @@ class GUI_PyQt(QtCore.QObject):
     self.main_page.widget(self.main_page_index).focusNextChild()
 
   def press_space(self):
-    self.press_key(QtCore.Qt.Key_Space)
+    self.press_key(self.gui_config.key_space)
   
   def scroll_next(self):
     self.signal_next_button.emit(1)
@@ -416,7 +419,7 @@ class GUI_PyQt(QtCore.QObject):
     if not self.config.logger.sensor.sensor_spi.send_display or self.stack_widget == None:
       return
     p = self.stack_widget.grab()
-    self.display_buffer.open(QtCore.QBuffer.ReadWrite)
+    self.display_buffer.open(self.gui_config.display_buffer_opnemode)
     p.save(self.display_buffer, 'BMP')
     self.config.logger.sensor.sensor_spi.update(io.BytesIO(self.display_buffer.data()))
     self.display_buffer.close()
