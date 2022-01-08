@@ -84,8 +84,8 @@ class MipDisplay():
     self.pre_img = np.zeros((self.config.G_HEIGHT,self.buff_width), dtype='uint8')
     self.img_buff_rgb8[:,0] = UPDATE_MODE
     self.img_buff_rgb8[:,1] = np.arange(self.config.G_HEIGHT)
-    if self.config.G_HEIGHT > 255: 
-      self.img_buff_rgb8[:,0] = self.img_buff_rgb8[:,0] + (np.arange(self.config.G_HEIGHT) >> 8)
+    #for MIP_640
+    self.img_buff_rgb8[:,0] = self.img_buff_rgb8[:,0] + (np.arange(self.config.G_HEIGHT) >> 8)
   
   def clear(self):
     self.pi.write(GPIO_SCS, 1)
