@@ -1,11 +1,9 @@
 import time
 
-USE_PYQT6 = False
 try:
   import PyQt6.QtCore as QtCore
   import PyQt6.QtWidgets as QtWidgets
   import PyQt6.QtGui as QtGui
-  USE_PYQT6 = True
 except:
   import PyQt5.QtCore as QtCore
   import PyQt5.QtWidgets as QtWidgets
@@ -46,8 +44,7 @@ class MenuWidget(QtWidgets.QWidget):
     self.back_button.setStyleSheet(self.config.gui.style.G_GUI_PYQT_buttonStyle_navi)
     self.back_button.setFixedSize(self.icon_x, self.icon_y)
     self.title_label = QtWidgets.QLabel(self.title)
-    self.title_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter) if USE_PYQT6 \
-    else self.title_label.setAlignment(QtCore.Qt.AlignCenter)
+    self.title_label.setAlignment(self.config.gui.gui_config.align_center)
     self.title_label.setStyleSheet("color: #FFFFFF;")
     spacer = QtWidgets.QWidget()
     spacer.setFixedSize(self.icon_x, self.icon_y)
@@ -107,8 +104,8 @@ class MenuWidget(QtWidgets.QWidget):
     def __init__(self, text, config):
       super().__init__(text=text)
       self.config = config
-      self.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding) if USE_PYQT6 \
-      else self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+
+      self.setSizePolicy(self.config.gui.gui_config.expanding, self.config.gui.gui_config.expanding)
       self.setStyleSheet(self.config.gui.style.G_GUI_PYQT_buttonStyle_menu)
 
     def resizeEvent(self, event):
@@ -376,7 +373,7 @@ class ANTDetailWidget(MenuWidget):
           add = False
       if add: 
         self.type[ant_id] = ant_type_array
-        ant_item = ANTListItemWidget(self)
+        ant_item = ANTListItemWidget(self, self.config)
         status = ''
         if ant_type_array[1]: status = ' (connected)'
         ant_item.set_ant_id(ant_id_str, self.config.G_ANT['TYPE_NAME'][ant_type_array[0]]+status)
@@ -389,13 +386,16 @@ class ANTDetailWidget(MenuWidget):
 
 
 class ANTListItemWidget(QtWidgets.QWidget):
+
+  config = None
   
-  def __init__ (self, parent):
+  def __init__ (self, parent, config):
     super(ANTListItemWidget, self).__init__(parent)
     self.parent = parent
+    self.config = config
 
     self.setContentsMargins(0,0,0,0)
-    self.setFocusPolicy(QtCore.Qt.StrongFocus)
+    self.setFocusPolicy(self.config.gui.gui_config.strong_focus) #####
 
     self.dummy_px = QtGui.QPixmap(20,20)
     self.dummy_px.fill(QtGui.QColor("#006600"))
@@ -421,12 +421,12 @@ class ANTListItemWidget(QtWidgets.QWidget):
     #self.outer_layout.setContentsMargins(0,0,0,0)
     #self.outer_layout.setSpacing(0)
     self.outer_layout.addWidget(self.icon)
-    self.outer_layout.addLayout(self.inner_layout, QtCore.Qt.AlignLeft)
+    self.outer_layout.addLayout(self.inner_layout, self.config.gui.gui_config.align_left)
 
     self.setLayout(self.outer_layout)
 
   def keyPressEvent(self, e):
-    if e.key() == QtCore.Qt.Key_Space:
+    if e.key() == self.config.gui.gui_config.key_space:
       self.parent.selected_ant_id = int(self.ant_id)
       self.parent.connect_ant_sensor()
 

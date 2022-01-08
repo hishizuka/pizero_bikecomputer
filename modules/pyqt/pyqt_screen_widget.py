@@ -1,10 +1,8 @@
 import traceback
 
-USE_PYQT6 = False
 try:
   import PyQt6.QtCore as QtCore
   import PyQt6.QtWidgets as QtWidgets
-  USE_PYQT6 = True
 except:
   import PyQt5.QtCore as QtCore
   import PyQt5.QtWidgets as QtWidgets
@@ -32,7 +30,8 @@ class ScreenWidget(QtWidgets.QWidget):
     self.sensor = self.logger.sensor
 
     QtWidgets.QWidget.__init__(self, parent=parent)
-    self.init_extra() 
+
+    self.init_extra()
     self.setup_ui()
   
   def resizeEvent(self, event):
@@ -50,8 +49,7 @@ class ScreenWidget(QtWidgets.QWidget):
     pass
 
   def setup_ui(self):
-    self.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding) if USE_PYQT6 \
-    else self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+    self.setSizePolicy(self.config.gui.gui_config.expanding, self.config.gui.gui_config.expanding)
 
     # update panel setting
     self.timer = QtCore.QTimer(parent=self)
