@@ -58,6 +58,9 @@ class Config():
     "power":True
   }
 
+  #log several altitudes (from DEM and course file)
+  G_LOG_ALTITUDE_FROM_DATA_SOUCE = False
+
   #calculate index on course
   G_COURSE_INDEXING = True
 
@@ -90,7 +93,7 @@ class Config():
   #course file
   G_COURSE_FILE = "course/course.tcx"
   #G_CUESHEET_FILE = "course/cue_sheet.csv"
-  G_CUESHEET_DISPLAY_NUM = 5 #max: 5
+  G_CUESHEET_DISPLAY_NUM = 3 #max: 5
   G_CUESHEET_SCROLL = False
 
   #log setting
@@ -102,6 +105,7 @@ class Config():
   #default map (can overwrite in settings.conf)
   G_MAP = 'toner'
   G_MAP_CONFIG = {
+    #basic map
     'toner': {
       # 0:z(zoom), 1:tile_x, 2:tile_y
       'url': "http://a.tile.stamen.com/toner/{z}/{x}/{y}.png",
@@ -119,14 +123,49 @@ class Config():
       'attribution': '© OpenStreetMap contributors',
       'tile_size': 256,
     },
+    #japanese tile
     'jpn_kokudo_chiri_in': {
       'url': "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
       'attribution': '国土地理院',
       'tile_size': 256,
     },
+
+    #heatmap
+    'strava_heatmap_bluered': {
+      'url': "https://heatmap-external-b.strava.com/tiles-auth/ride/bluered/{z}/{x}/{y}.png?px=256",
+      'attribution': 'strava',
+      'tile_size': 256,
+      'max_zoomlevel': 16,
+      'min_zoomlevel': 10,
+    },
+    'rwg_heatmap': {
+      #start_color: low, white(FFFFFF) is recommended.
+      #end_color: high, any color you like.
+      'url': "https://heatmap.ridewithgps.com/normalized/{z}/{x}/{y}.png?start_color=%23FFFFFF&end_color=%23FF8800",
+      'attribution': 'ride with gps',
+      'tile_size': 256,
+      'max_zoomlevel': 16,
+      'min_zoomlevel': 10,
+    },
+
+    #worldwide rain tile
+
+    #japanese rain tile
+
+    #worldwide wind tile
+
+    #japanese wind tile
+    
+    #worldwide dem tile
+
   }
   #external input of G_MAP_CONFIG
   G_MAP_LIST = "map.yaml"
+
+  #overlay map
+  G_STRAVA_OVERLAY_MAP = "strava_heatmap_bluered"
+  G_RAIN_OVERLAY_MAP = ""
+  G_WIND_OVERLAY_MAP =""
 
   G_DEM_MAP = 'jpn_kokudo_chiri_in_DEM5A'
   G_DEM_MAP_CONFIG = {
@@ -269,6 +308,8 @@ class Config():
   G_GPS_SPEED_CUTOFF = G_AUTOSTOP_CUTOFF #m/s
   #timezone (not use, get from GPS position)
   G_TIMEZONE = None
+  #exclude outlier cutoff when passed through the tunnel
+  G_GPS_SKIP_CUTOFF = 5
 
   #fullscreen switch (overwritten with setting.conf)
   G_FULLSCREEN = False
@@ -323,8 +364,6 @@ class Config():
   #map widgets
   #max zoom
   G_MAX_ZOOM = 0
-  #interval distance when mapping track
-  G_GPS_DISPLAY_INTERVAL_DISTANCE = 5 # m
   #for map dummy center: Tokyo station in Japan
   G_DUMMY_POS_X = 139.764710814819 
   G_DUMMY_POS_Y = 35.68188106919333 
@@ -332,8 +371,12 @@ class Config():
   G_GPS_ON_ROUTE_CUTOFF = 50 #[m] #generate from course
   G_GPS_SEARCH_RANGE = 5 #[km] #100km/h -> 27.7m/s
   #for route downsampling cutoff
-  G_ROUTE_DISTANCE_CUTOFF = 1.0
-  G_ROUTE_AZIMUTH_CUTOFF = 3.0
+  G_ROUTE_DISTANCE_CUTOFF = 1.0 #1.0
+  G_ROUTE_AZIMUTH_CUTOFF = 3.0 #3.0
+  G_ROUTE_ALTITUDE_CUTOFF = 1.0
+  G_ROUTE_SLOPE_CUTOFF = 2.0
+  #for keeping on course seconds
+  G_GPS_KEEP_ON_COURSE_CUTOFF = int(60/G_GPS_INTERVAL) # [s]
 
   #STRAVA token (need to write setting.conf manually)
   G_STRAVA_API_URL = {
@@ -374,7 +417,7 @@ class Config():
   #auto backlight with spi mip display
   #(PiTFT actually needs max brightness under sunlights, so there are no implementation with PiTFT)
   G_USE_AUTO_BACKLIGHT = True
-  G_USE_AUTO_CUTOFF = 2
+  G_AUTO_BACKLIGHT_CUTOFF = 30
 
   #IMU axis conversion
   #  X: to North (up rotation is plus)
@@ -594,7 +637,15 @@ class Config():
       os.mkdir(self.G_LOG_DIR)
     if not os.path.exists("maptile/"+self.G_MAP):
       os.mkdir("maptile/"+self.G_MAP)
-    if not os.path.exists("maptile/"+self.G_DEM_MAP):
+    
+    #optional
+    if not os.path.exists("maptile/"+self.G_STRAVA_OVERLAY_MAP):
+      os.mkdir("maptile/"+self.G_STRAVA_OVERLAY_MAP)
+    #if not os.path.exists("maptile/"+self.G_RAIN_OVERLAY_MAP):
+    #  os.mkdir("maptile/"+self.G_RAIN_OVERLAY_MAP)
+    #if not os.path.exists("maptile/"+self.G_WIND_OVERLAY_MAP):
+    #  os.mkdir("maptile/"+self.G_WIND_OVERLAY_MAP)
+    if self.G_LOG_ALTITUDE_FROM_DATA_SOUCE and not os.path.exists("maptile/"+self.G_DEM_MAP):
       os.mkdir("maptile/"+self.G_DEM_MAP)
 
     #get serial number
@@ -734,7 +785,7 @@ class Config():
     except socket.error as ex:
       return False
 
-  def download_maptile(self, z, x, y):
+  def download_maptile(self, map_name, z, x, y):
     if not self.detect_network():
       return False
     
@@ -742,23 +793,23 @@ class Config():
       _y = y
       _z = z
       
-      url = self.G_MAP_CONFIG[self.G_MAP]['url'].format(z=_z, x=x, y=_y)
-      if 'strava_heatmap' in self.G_MAP:
-        url = self.G_MAP_CONFIG[self.G_MAP]['url'].format(z=_z, x=x, y=_y) \
+      url = self.G_MAP_CONFIG[map_name]['url'].format(z=_z, x=x, y=_y)
+      if 'strava_heatmap' in map_name:
+        url = self.G_MAP_CONFIG[map_name]['url'].format(z=_z, x=x, y=_y) \
           + "&Key-Pair-Id=" + self.G_STRAVA_COOKIE['KEY_PAIR_ID'] \
           + "&Policy=" + self.G_STRAVA_COOKIE['POLICY'] \
           + "&Signature=" + self.G_STRAVA_COOKIE['SIGNATURE']
       
-      if 'referer' not in self.G_MAP_CONFIG[self.G_MAP]:
-        self.G_MAP_CONFIG[self.G_MAP]['referer'] = None
-      ref = self.G_MAP_CONFIG[self.G_MAP]['referer']
+      if 'referer' not in self.G_MAP_CONFIG[map_name]:
+        self.G_MAP_CONFIG[map_name]['referer'] = None
+      ref = self.G_MAP_CONFIG[map_name]['referer']
       
-      if 'user_agent' not in self.G_MAP_CONFIG[self.G_MAP]:
-        self.G_MAP_CONFIG[self.G_MAP]['user_agent'] = None
-      user_agent = self.G_MAP_CONFIG[self.G_MAP]['user_agent']
+      if 'user_agent' not in self.G_MAP_CONFIG[map_name]:
+        self.G_MAP_CONFIG[map_name]['user_agent'] = None
+      user_agent = self.G_MAP_CONFIG[map_name]['user_agent']
       
       #throw cue if convert exists
-      map_dst = self.get_maptile_filename(self.G_MAP, z, x, y)
+      map_dst = self.get_maptile_filename(map_name, z, x, y)
       dl_dst = map_dst
       self.download_queue.put((url, dl_dst, ref, user_agent))
       
@@ -994,6 +1045,8 @@ class Config():
         self.G_WHEEL_CIRCUMFERENCE = int(self.config_parser['GENERAL']['WHEEL_CIRCUMFERENCE'])/1000
       if 'GROSS_AVE_SPEED' in self.config_parser['GENERAL']:
         self.G_GROSS_AVE_SPEED = int(self.config_parser['GENERAL']['GROSS_AVE_SPEED'])
+      if 'AUTO_BACKLIGHT_CUTOFF' in self.config_parser['GENERAL']:
+        self.G_AUTO_BACKLIGHT_CUTOFF = int(self.config_parser['GENERAL']['AUTO_BACKLIGHT_CUTOFF'])
       if 'LANG' in self.config_parser['GENERAL']:
         self.G_LANG = self.config_parser['GENERAL']['LANG'].upper()
       if 'FONT_FILE' in self.config_parser['GENERAL']:
@@ -1088,6 +1141,7 @@ class Config():
     self.config_parser['GENERAL']['AUTOSTOP_CUTOFF'] = str(int(self.G_AUTOSTOP_CUTOFF*3.6))
     self.config_parser['GENERAL']['WHEEL_CIRCUMFERENCE'] = str(int(self.G_WHEEL_CIRCUMFERENCE*1000))
     self.config_parser['GENERAL']['GROSS_AVE_SPEED'] = str(int(self.G_GROSS_AVE_SPEED))
+    self.config_parser['GENERAL']['AUTO_BACKLIGHT_CUTOFF'] = str(int(self.G_AUTO_BACKLIGHT_CUTOFF))
     self.config_parser['GENERAL']['LANG'] = self.G_LANG
     self.config_parser['GENERAL']['FONT_FILE'] = self.G_FONT_FILE
     self.config_parser['GENERAL']['MAP'] = self.G_MAP
@@ -1150,7 +1204,9 @@ class Config():
       return default_value
   
   def reset_config_pickle(self):
-    self.config_pickle = {}
+    for k, v in list(self.config_pickle.items()):
+      if "mag" not in k:
+        del(self.config_pickle[k])
     with open(self.config_pickle_file, 'wb') as f:
       pickle.dump(self.config_pickle, f)
 
