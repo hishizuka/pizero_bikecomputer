@@ -1061,10 +1061,12 @@ class ANT_Device_Light(ANT_Device):
 
   def send_connect_light(self):
     self.send_acknowledged_data(
-      #OFF: 0b01001000, ON: 0b01010000,0b01011000
-      array.array('B', struct.pack("<BBBBBHB",0x21,0x01,0xFF,0x5A,0x58,self.config.G_ANT['ID'][self.name],0x00))
+      #ON: 0b01010000,0b01011000
+      #array.array('B', struct.pack("<BBBBBHB",0x21,0x01,0xFF,0x5A,0x58,self.config.G_ANT['ID'][self.name],0x00))
+      #OFF: 0b01001000
+      array.array('B', struct.pack("<BBBBBHB",0x21,0x01,0xFF,0x5A,0x48,self.config.G_ANT['ID'][self.name],0x00))
     )
-
+    
   def send_disconnect_light(self):
     self.send_acknowledged_data(
       array.array('B',[0x20,0x01,0x5A,0x02,0x00,0x00,0x00,0x00])
@@ -1160,11 +1162,12 @@ class ANT_Device_CTRL(ANT_Device):
   def on_data(self, data):
     (self.values['ctrl_cmd'],) = self.structPattern[self.name].unpack(data[0:8])
     if self.values['ctrl_cmd'] == 0x0024: #lap
-      self.config.gui.scroll_next()
+      self.config.gui.count_laps()
+      #self.config.gui.start_and_stop_manual()
     elif self.values['ctrl_cmd'] == 0x0001: #menu scroll
       self.config.gui.scroll_prev()
     elif self.values['ctrl_cmd'] == 0x0000: #menu down (long press)
-      pass
+      self.config.gui.scroll_next()
     elif self.values['ctrl_cmd'] == 0x8000: #custom1
       self.config.logger.sensor.sensor_ant.set_light_mode("ON_OFF_FLASH_LOW")
     elif self.values['ctrl_cmd'] == 0x8001: #custom2 (long press)
