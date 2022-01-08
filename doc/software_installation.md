@@ -23,11 +23,11 @@
     - [Hardware button](#Hardware-button)
   - [Menu screen](#menu-screen)
   - [Settings](#settings)
-    - [setting.conf](#setting_conf)
-    - [setting.pickle](#setting_pickle)
-    - [layout.yaml](#layout_yaml)
-    - [map.yaml](#map_yaml)
-    - [config.py](#config_py)
+    - [setting.conf](#settingconf)
+    - [setting.pickle](#settingpickle)
+    - [layout.yaml](#layoutyaml)
+    - [map.yaml](#mapyaml)
+    - [config.py](#configpy)
   - [Prepare course files and maps](#prepare-course-files-and-maps)
 
 # Installation
@@ -65,6 +65,7 @@ $ sudo apt-get install python3-pip cython3 cmake gawk python3-numpy python3-pyqt
 $ sudo pip3 install oyaml sip polyline
 $ sudo apt-get install wiringpi python3-smbus python3-rpi.gpio python3-psutil python3-pil
 $ sudo pip3 install git+https://github.com/hishizuka/pyqtgraph.git
+$ sudo pip3 install git+https://github.com/hishizuka/crdp.git
 $ cd pizero_bikecomputer
 ```
 
@@ -211,6 +212,8 @@ $ sudo pip3 install adafruit-circuitpython-bmp280
 | [Adafruit](https://www.adafruit.com) | [BNO055](https://www.adafruit.com/product/4646) | adafruit-circuitpython-bno055 (*2) | 
 | [Adafruit](https://www.adafruit.com) | [VCNL4040](https://www.adafruit.com/product/4161) | adafruit-circuitpython-vcnl4040 |
 | [ozzmaker](https://ozzmaker.com) | [Berry GPS IMU v4](https://ozzmaker.com/product/berrygps-imu/) | adafruit-circuitpython-lsm6ds adafruit-circuitpython-lis3mdl |
+| [waveshare](https://www.waveshare.com/) | [Environment Sensor HAT](https://www.waveshare.com/environment-sensor-hat.htm) | adafruit-circuitpython-bme280 adafruit-circuitpython-icm20x adafruit-circuitpython-tsl2591 adafruit-circuitpython-ltr390 adafruit-circuitpython-sgp40 |
+
 
 *1 Install manually https://github.com/spacecraft-design-lab-2019/CircuitPython_BMX160
 

@@ -94,11 +94,18 @@ UART modules with GPSd are recomended. I2C(Sparkfun qwiic or Adafruit STEMMA QT)
 - recommended as of 2020/6.
 
 ### [Berry GPS IMU v4](https://ozzmaker.com/product/berrygps-imu/)
-- UART
+
+- UART and I2C
 - an [antenna](https://www.sparkfun.com/products/15246) is also needed
 - BMP390 and IMU(LSM6DS/LIS3MDL) are included
 - best replacement for Enviro pHAT
 - magnetic sensor is broken...? (All the two modules I have are not working properly.)
+
+### [GPS-PIE](https://gps-pie.com)
+
+- UART and I2C
+- an [antenna](https://www.sparkfun.com/products/15246) is also needed with Gmm slice model. L80 slice model can use an internal or external antenna.
+- MS5637(pressure) and IMU(BNO055) are included
 
 ### [Akizuki Denshi GPS module](http://akizukidenshi.com/catalog/g/gK-09991/)
 
@@ -124,7 +131,7 @@ If you use Sparkfun Qwiic or Adafruit STEMMA QT sensors, [SparkFun Qwiic SHIM fo
 
 <img src="https://user-images.githubusercontent.com/12926652/91799338-d2bff600-ec61-11ea-8c23-b1ed3a40277a.png" width=160 />
 
-### pressure, temperature
+### Pressure, temperature
 
 for altitude, grade, and total ascent/descent
 
@@ -150,6 +157,15 @@ for auto backlight when using MIP Reflective color LCD
 
 - [TCS3472](https://shop.pimoroni.com/products/enviro-phat)
 - [VCNL4040](https://www.adafruit.com/product/4161)
+
+### Multi sensors
+
+- [Environment Sensor HAT](https://www.waveshare.com/environment-sensor-hat.htm)
+  - BME280 (Pressure, temperature and humidity)
+  - ICM20948 (Accel / Gyro / Mag)
+  - TSL25911FN (Light)
+  - LTR390 (UV)
+  - SGP40 (VOC:volatile organic compounds)
 
 ### Button
 
