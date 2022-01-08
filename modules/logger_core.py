@@ -8,6 +8,7 @@ import time
 import traceback
 
 import numpy as np
+from crdp import rdp
 
 from . import sensor_core
 from .logger import loader_tcx
@@ -166,11 +167,15 @@ class LoggerCore():
         position_lat FLOAT,
         position_long FLOAT,
         gps_altitude FLOAT,
+        gps_speed FLOAT,
         gps_distance FLOAT,
         gps_mode INTEGER,
         gps_used_sats INTEGER,
         gps_total_sats INTEGER,
         gps_track INTEGER,
+        gps_epx FLOAT,
+        gps_epy FLOAT,
+        gps_epv FLOAT,
         heart_rate INTEGER,
         cadence INTEGER,
         distance FLOAT,
@@ -179,17 +184,20 @@ class LoggerCore():
         accumulated_power INTEGER,
         temperature FLOAT,
         pressure FLOAT,
+        humidity INTEGER,
         altitude FLOAT,
+        course_altitude FLOAT,
+        dem_altitude FLOAT,
         heading INTEGER,
         motion INTEGER,
         acc_x FLOAT,
         acc_y FLOAT,
         acc_z FLOAT,
-        voltage_battery FLOAT,
-        current_battery FLOAT,
-        voltage_out FLOAT,
-        current_out FLOAT,
-        battery_percentage FLOAT,
+        gyro_x FLOAT,
+        gyro_y FLOAT,
+        gyro_z FLOAT,
+        light INTEGER,
+        cpu_percent INTEGER,
         total_ascent FLOAT,
         total_descent FLOAT,
         lap_heart_rate INTEGER,
@@ -345,7 +353,9 @@ class LoggerCore():
       "power":self.sensor.values['integrated']['power'],
       "accumulated_power":self.sensor.values['integrated']['accumulated_power'],
       "total_ascent":self.sensor.values['I2C']['total_ascent'],
-      "total_descent":self.sensor.values['I2C']['total_descent']
+      "total_descent":self.sensor.values['I2C']['total_descent'],
+      "dem_altitude":self.sensor.values['integrated']['dem_altitude'],
+      "cpu_percent":self.sensor.values['integrated']['cpu_percent'],
     }
      
     #update lap stats if value is not Null
@@ -409,9 +419,9 @@ class LoggerCore():
     self.cur.execute("""\
       INSERT INTO BIKECOMPUTER_LOG VALUES(\
         ?,?,?,?,\
-        ?,?,?,?,?,?,?,?,\
+        ?,?,?,?,?,?,?,?,?,?,?,?,\
         ?,?,?,?,?,?,\
-        ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,\
+        ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,\
         ?,?,?,?,?,?,?,?,\
         ?,?,?,?,\
         ?,?,?,?,?,?,?,?\
@@ -424,11 +434,15 @@ class LoggerCore():
        self.sensor.values['GPS']['lat'],
        self.sensor.values['GPS']['lon'],
        self.sensor.values['GPS']['alt'],
+       self.sensor.values['GPS']['speed'],
        self.sensor.values['GPS']['distance'],
        self.sensor.values['GPS']['mode'],
        self.sensor.values['GPS']['used_sats'],
        self.sensor.values['GPS']['total_sats'],
        self.sensor.values['GPS']['track'],
+       self.sensor.values['GPS']['epx'],
+       self.sensor.values['GPS']['epy'],
+       self.sensor.values['GPS']['epv'],
        ###
        value['heart_rate'],
        value['cadence'],
@@ -439,20 +453,23 @@ class LoggerCore():
        ###
        self.sensor.values['I2C']['temperature'],
        self.sensor.values['I2C']['pressure'],
+       self.sensor.values['I2C']['humidity'], #
        self.sensor.values['I2C']['altitude'],
+       self.sensor.values['GPS']['course_altitude'],
+       value['dem_altitude'],
        self.sensor.values['I2C']['heading'],
        self.sensor.values['I2C']['m_stat'],
        #self.sensor.values['I2C']['acc'][0],
        #self.sensor.values['I2C']['acc'][1],
        #self.sensor.values['I2C']['acc'][2],
-       self.sensor.values['I2C']['acc_variance'][0],
-       self.sensor.values['I2C']['acc_variance'][1],
-       self.sensor.values['I2C']['acc_variance'][2],
-       self.sensor.values['I2C']['voltage_battery'],
-       self.sensor.values['I2C']['current_battery'],
-       self.sensor.values['I2C']['voltage_out'],
-       self.sensor.values['I2C']['current_out'],
-       self.sensor.values['I2C']['battery_percentage'],
+       self.sensor.values['I2C']['acc_graph'][0],
+       self.sensor.values['I2C']['acc_graph'][1],
+       self.sensor.values['I2C']['acc_graph'][2],
+       self.sensor.values['I2C']['gyro_mod'][0],
+       self.sensor.values['I2C']['gyro_mod'][1],
+       self.sensor.values['I2C']['gyro_mod'][2],
+       self.sensor.values['I2C']['light'],
+       value['cpu_percent'],
        value['total_ascent'],
        value['total_descent'],
        ###
@@ -631,7 +648,7 @@ class LoggerCore():
 
     #if not self.config.G_IS_RASPI and self.config.G_DUMMY_OUTPUT:
     if self.config.G_DUMMY_OUTPUT:
-      select = "SELECT position_lat,position_long FROM BIKECOMPUTER_LOG"
+      select = "SELECT position_lat,position_long distance FROM BIKECOMPUTER_LOG"
       self.position_log = np.array(self.cur.fetchall())
 
   def store_short_log_for_update_track(self, dist, lat, lon, timestamp):
@@ -729,28 +746,13 @@ class LoggerCore():
     #print("lat_raw", len(lat_raw))
     if len(lat_raw) > 0 and (len(lat_raw) == len(lon_raw) == len(dist_raw)):
       #downsampling
-      valid_points = np.insert(
-        #close points are delete
-        np.where(np.diff(dist_raw) >= self.config.G_ROUTE_DISTANCE_CUTOFF, True, False) & \
-        (
-          #same points are delete
-          np.where(np.diff(lat_raw) != 0, True, False) | \
-          np.where(np.diff(lon_raw) != 0, True, False)
-        ),
-        0, True)
-      if len(lat_raw) == len(valid_points):
-        lat_raw = lat_raw[valid_points]
-        lon_raw = lon_raw[valid_points]
-        dist_raw = dist_raw[valid_points]
-        azimuth_diff = np.diff(self.config.calc_azimuth(lat_raw, lon_raw))
-        azimuth_cond = np.insert(np.where(abs(azimuth_diff) <= self.config.G_ROUTE_AZIMUTH_CUTOFF, False, True), 0, True)
-        dist_diff = np.diff(dist_raw)
-        dist_cond = np.where(dist_diff >= self.config.G_GPS_DISPLAY_INTERVAL_DISTANCE, True, False)
-        cond = np.insert((dist_cond & azimuth_cond), 0, True)
-        cond[-1] = True
-        #print(valid_points, cond)
+      try:
+        cond = np.array(rdp(np.column_stack([lon_raw, lat_raw]), epsilon=0.0001, return_mask=True))
         lat = lat_raw[cond]
         lon = lon_raw[cond]
+      except:
+        lat = lat_raw
+        lon = lon_raw
 
     if timestamp is None:
       timestamp_new = datetime.datetime.utcnow()
