@@ -14,7 +14,7 @@ export TSLIB_FBDEVICE=/dev/fb1
 export TSLIB_TSDEVICE=/dev/input/event0
 
 if [ -e $PGMDIR/log/debug.txt ]; then
-/bin/cp $PGMDIR/log/debug.txt $PGMDIR/log/debug.txt-`date "+%Y%m%d_%H%M%S"`
+/bin/cp $PGMDIR/log/debug.txt $PGMDIR/log/debug.txt-`date "+%Y%m%d_%H%M%S" -r $PGMDIR/log/debug.txt`
 fi
 
 cd $PGMDIR

@@ -5,7 +5,7 @@ PGMDIR=/home/pi/pizero_bikecomputer
 cd /home/pi/pizero_bikecomputer/
 
 if [ -e ./log/debug.txt ]; then
-/bin/cp ./log/debug.txt ./log/debug.txt-`date "+%Y%m%d_%H%M%S"`
+/bin/cp ./log/debug.txt ./log/debug.txt-`date "+%Y%m%d_%H%M%S" -r ./log/debug.txt`
 else
 mkdir ./log
 fi

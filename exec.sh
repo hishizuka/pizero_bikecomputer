@@ -7,12 +7,12 @@ export QT_QPA_PLATFORM=xcb
 cd /home/pi/pizero_bikecomputer/
 
 if [ -e ./log/debug.txt ]; then
-/bin/cp ./log/debug.txt ./log/debug.txt-`date "+%Y%m%d_%H%M%S"`
+/bin/cp ./log/debug.txt ./log/debug.txt-`date "+%Y%m%d_%H%M%S" -r ./log/debug.txt`
 else
 mkdir ./log
 fi
 #if [ -e $PGMDIR/log/debug.txt ]; then
-#/bin/cp $PGMDIR/log/debug.txt $PGMDIR/log/debug.txt-`date "+%Y%m%d_%H%M%S"`
+#/bin/cp $PGMDIR/log/debug.txt $PGMDIR/log/debug.txt-`date "+%Y%m%d_%H%M%S" -r $PGMDIR/log/debug.txt`
 #fi
 
 # O: optimize
