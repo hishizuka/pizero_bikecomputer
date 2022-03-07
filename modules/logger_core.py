@@ -3,8 +3,8 @@ import sqlite3
 import signal
 import datetime
 import shutil
-import re
 import time
+import threading
 import traceback
 
 import numpy as np
@@ -36,6 +36,7 @@ class LoggerCore():
   #for db
   con = None
   cur = None
+  lock = None
 
   #for timer
   values = {
@@ -143,6 +144,8 @@ class LoggerCore():
       else:
         self.config.G_MANUAL_STATUS = "START"
       self.start_and_stop_manual()
+    
+    self.lock = threading.Lock()
 
     try:
       signal.signal(signal.SIGALRM, self.do_countup)
@@ -416,88 +419,94 @@ class LoggerCore():
    
     ## SQLite
     now_time = datetime.datetime.utcnow()
-    self.cur.execute("""\
-      INSERT INTO BIKECOMPUTER_LOG VALUES(\
-        ?,?,?,?,\
-        ?,?,?,?,?,?,?,?,?,?,?,?,\
-        ?,?,?,?,?,?,\
-        ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,\
-        ?,?,?,?,?,?,?,?,\
-        ?,?,?,?,\
-        ?,?,?,?,?,?,?,?\
-      )""",
-      (now_time,
-       self.values['lap'],
-       self.values['count_lap'],
-       self.values['count'],
-       ###
-       self.sensor.values['GPS']['lat'],
-       self.sensor.values['GPS']['lon'],
-       self.sensor.values['GPS']['alt'],
-       self.sensor.values['GPS']['speed'],
-       self.sensor.values['GPS']['distance'],
-       self.sensor.values['GPS']['mode'],
-       self.sensor.values['GPS']['used_sats'],
-       self.sensor.values['GPS']['total_sats'],
-       self.sensor.values['GPS']['track'],
-       self.sensor.values['GPS']['epx'],
-       self.sensor.values['GPS']['epy'],
-       self.sensor.values['GPS']['epv'],
-       ###
-       value['heart_rate'],
-       value['cadence'],
-       value['distance'],
-       value['speed'],
-       value['power'],
-       value['accumulated_power'],
-       ###
-       self.sensor.values['I2C']['temperature'],
-       self.sensor.values['I2C']['pressure'],
-       self.sensor.values['I2C']['humidity'], #
-       self.sensor.values['I2C']['altitude'],
-       self.sensor.values['GPS']['course_altitude'],
-       value['dem_altitude'],
-       self.sensor.values['I2C']['heading'],
-       self.sensor.values['I2C']['m_stat'],
-       #self.sensor.values['I2C']['acc'][0],
-       #self.sensor.values['I2C']['acc'][1],
-       #self.sensor.values['I2C']['acc'][2],
-       self.sensor.values['I2C']['acc_graph'][0],
-       self.sensor.values['I2C']['acc_graph'][1],
-       self.sensor.values['I2C']['acc_graph'][2],
-       self.sensor.values['I2C']['gyro_mod'][0],
-       self.sensor.values['I2C']['gyro_mod'][1],
-       self.sensor.values['I2C']['gyro_mod'][2],
-       self.sensor.values['I2C']['light'],
-       value['cpu_percent'],
-       value['total_ascent'],
-       value['total_descent'],
-       ###
-       self.record_stats['lap_avg']['heart_rate'],
-       self.record_stats['lap_avg']['cadence'],
-       self.record_stats['lap_avg']['distance'],
-       self.record_stats['lap_avg']['speed'],
-       self.record_stats['lap_avg']['power'],
-       self.record_stats['lap_avg']['accumulated_power'],
-       self.record_stats['lap_avg']['total_ascent'],
-       self.record_stats['lap_avg']['total_descent'],
-       ###
-       self.record_stats['entire_avg']['heart_rate'],
-       self.record_stats['entire_avg']['cadence'],
-       self.record_stats['entire_avg']['speed'],
-       self.record_stats['entire_avg']['power'],
-       ###
-       self.average['lap']['cadence']['count'],
-       self.average['lap']['cadence']['sum'],
-       self.average['entire']['cadence']['count'],
-       self.average['entire']['cadence']['sum'],
-       self.average['lap']['power']['count'],
-       self.average['lap']['power']['sum'],
-       self.average['entire']['power']['count'],
-       self.average['entire']['power']['sum']
-       )
-    )
-    self.con.commit()
+    try:
+      self.lock.acquire(True)
+      self.cur.execute("""\
+        INSERT INTO BIKECOMPUTER_LOG VALUES(\
+          ?,?,?,?,\
+          ?,?,?,?,?,?,?,?,?,?,?,?,\
+          ?,?,?,?,?,?,\
+          ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,\
+          ?,?,?,?,?,?,?,?,\
+          ?,?,?,?,\
+          ?,?,?,?,?,?,?,?\
+        )""",
+        (now_time,
+        self.values['lap'],
+        self.values['count_lap'],
+        self.values['count'],
+        ###
+        self.sensor.values['GPS']['lat'],
+        self.sensor.values['GPS']['lon'],
+        self.sensor.values['GPS']['alt'],
+        self.sensor.values['GPS']['speed'],
+        self.sensor.values['GPS']['distance'],
+        self.sensor.values['GPS']['mode'],
+        self.sensor.values['GPS']['used_sats'],
+        self.sensor.values['GPS']['total_sats'],
+        self.sensor.values['GPS']['track'],
+        self.sensor.values['GPS']['epx'],
+        self.sensor.values['GPS']['epy'],
+        self.sensor.values['GPS']['epv'],
+        ###
+        value['heart_rate'],
+        value['cadence'],
+        value['distance'],
+        value['speed'],
+        value['power'],
+        value['accumulated_power'],
+        ###
+        self.sensor.values['I2C']['temperature'],
+        self.sensor.values['I2C']['pressure'],
+        self.sensor.values['I2C']['humidity'], #
+        self.sensor.values['I2C']['altitude'],
+        self.sensor.values['GPS']['course_altitude'],
+        value['dem_altitude'],
+        self.sensor.values['I2C']['heading'],
+        self.sensor.values['I2C']['m_stat'],
+        #self.sensor.values['I2C']['acc'][0],
+        #self.sensor.values['I2C']['acc'][1],
+        #self.sensor.values['I2C']['acc'][2],
+        self.sensor.values['I2C']['acc_graph'][0],
+        self.sensor.values['I2C']['acc_graph'][1],
+        self.sensor.values['I2C']['acc_graph'][2],
+        self.sensor.values['I2C']['gyro_mod'][0],
+        self.sensor.values['I2C']['gyro_mod'][1],
+        self.sensor.values['I2C']['gyro_mod'][2],
+        self.sensor.values['I2C']['light'],
+        value['cpu_percent'],
+        value['total_ascent'],
+        value['total_descent'],
+        ###
+        self.record_stats['lap_avg']['heart_rate'],
+        self.record_stats['lap_avg']['cadence'],
+        self.record_stats['lap_avg']['distance'],
+        self.record_stats['lap_avg']['speed'],
+        self.record_stats['lap_avg']['power'],
+        self.record_stats['lap_avg']['accumulated_power'],
+        self.record_stats['lap_avg']['total_ascent'],
+        self.record_stats['lap_avg']['total_descent'],
+        ###
+        self.record_stats['entire_avg']['heart_rate'],
+        self.record_stats['entire_avg']['cadence'],
+        self.record_stats['entire_avg']['speed'],
+        self.record_stats['entire_avg']['power'],
+        ###
+        self.average['lap']['cadence']['count'],
+        self.average['lap']['cadence']['sum'],
+        self.average['entire']['cadence']['count'],
+        self.average['entire']['cadence']['sum'],
+        self.average['lap']['power']['count'],
+        self.average['lap']['power']['sum'],
+        self.average['entire']['power']['count'],
+        self.average['entire']['power']['sum']
+        )
+      )
+      self.con.commit()
+    except:
+      traceback.print_exc()
+    finally:
+      self.lock.release()
 
     t2 = (datetime.datetime.utcnow() - now_time).total_seconds()
     self.store_short_log_for_update_track(
@@ -725,7 +734,13 @@ class LoggerCore():
 
       con = sqlite3.connect(db_file)
       cur = con.cursor()
-      cur.execute(query)
+      try:
+        self.lock.acquire(True)
+        cur.execute(query)
+      except:
+        traceback.print_exc()
+      finally:
+        self.lock.release()
       res_array = np.array(cur.fetchall())
       if(len(res_array.shape) > 0 and res_array.shape[0] > 0):
         dist_raw = res_array[:,0].astype('float32') #[m]
@@ -733,7 +748,13 @@ class LoggerCore():
         lon_raw = res_array[:,2].astype('float32')
       
       #timestamp
-      cur.execute("SELECT MAX(timestamp) FROM BIKECOMPUTER_LOG")
+      try:
+        self.lock.acquire(True)
+        cur.execute("SELECT MAX(timestamp) FROM BIKECOMPUTER_LOG")
+      except:
+        traceback.print_exc()
+      finally:
+        self.lock.release()
       first_row = cur.fetchone()
       if first_row[0] != None:
         timestamp_new = self.config.datetime_myparser(first_row[0])
