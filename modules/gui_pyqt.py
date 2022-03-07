@@ -2,7 +2,7 @@ import sys
 import os
 from datetime import datetime
 import signal
-import io
+import numpy as np
 
 USE_PYQT6 = False
 try:
@@ -107,15 +107,16 @@ class GUI_PyQt(QtCore.QObject):
       pass
 
     self.display_buffer = QtCore.QBuffer()
-
+    
     self.init_window()
-
+  
   def quit_by_ctrl_c(self, signal, frame):
     self.quit()
-  
+
   def quit(self):
-    self.config.quit()
     self.app.quit()
+    if not USE_PYQT6:
+      self.config.quit()
 
   def init_window(self):
     self.app = QtWidgets.QApplication(sys.argv)
@@ -286,8 +287,6 @@ class GUI_PyQt(QtCore.QObject):
       print("   ",'{:<13}'.format(diff_label[i-1]), ":", t)
 
     self.app.exec()  
-    #exit this line
-    #sys.exit(self.app.exec_())
 
   #for stack_widget page transition
   def on_change_main_page(self,index):
@@ -344,24 +343,11 @@ class GUI_PyQt(QtCore.QObject):
     self.signal_menu_back_button.emit()
   
   def change_mode(self):
-    #if displays MAP, change MAP_1, MAP_2, MAIN
     #check MAIN
     if self.stack_widget.currentIndex() != 1:
       return
-    #check MAP
-    w = self.main_page.widget(self.main_page.currentIndex())
-    w_name = w.__class__.__name__
-    b_m_g = self.config.G_BUTTON_MODE_GROUPS
-    b_m_i = self.config.G_BUTTON_MODE_INDEX
-    if w_name == 'SimpleMapWidget':
-      #change_mode
-      m = 'MAP'
-      self.config.logger.sensor.sensor_i2c.change_button_mode(m)
-      if b_m_g[m][b_m_i[m]] == "MAIN":
-        w.lock_on()
-      else:
-        w.lock_off()
-  
+    self.config.change_mode()
+
   def map_move_x_plus(self):
     self.map_method("move_x_plus")
 
@@ -396,12 +382,7 @@ class GUI_PyQt(QtCore.QObject):
     pass
 
   def scroll(self, delta):
-    mod_index = self.main_page.currentIndex()
-    while True:
-      mod_index += delta
-      if mod_index == self.main_page.count(): mod_index = 0
-      elif mod_index == -1: mod_index = self.main_page.count() - 1
-      if self.main_page.widget(mod_index).onoff == True: break
+    mod_index = (self.main_page.currentIndex() + delta + self.main_page.count()) % self.main_page.count()
     self.on_change_main_page(mod_index)
     self.main_page.setCurrentIndex(mod_index)
 
@@ -410,19 +391,25 @@ class GUI_PyQt(QtCore.QObject):
 
   def screenshot(self):
     date = datetime.now()
-    print("screenshot")
-    filename = date.strftime('%Y-%m-%d_%H-%M-%S.jpg')
+    filename = date.strftime('%Y-%m-%d_%H-%M-%S.png')
+    print("screenshot:", filename)
     p = self.stack_widget.grab()
-    p.save(self.config.G_SCREENSHOT_DIR+filename, 'jpg')
+    p.save(self.config.G_SCREENSHOT_DIR+filename, 'png')
  
   def draw_display(self):
     if not self.config.logger.sensor.sensor_spi.send_display or self.stack_widget == None:
       return
-    p = self.stack_widget.grab()
-    self.display_buffer.open(self.gui_config.display_buffer_opnemode)
-    p.save(self.display_buffer, 'BMP')
-    self.config.logger.sensor.sensor_spi.update(io.BytesIO(self.display_buffer.data()))
-    self.display_buffer.close()
+
+    #self.config.check_time("draw_display start")
+    p = self.stack_widget.grab().toImage().convertToFormat(self.gui_config.format_rgb888)
+    #self.config.check_time("grab")
+    #Format_Mono, Format_MonoLSB
+    ptr = p.constBits()
+    ptr.setsize(p.sizeInBytes())
+    buf = np.frombuffer(ptr, dtype=np.uint8).reshape((p.height(), p.width(), 3))
+
+    self.config.logger.sensor.sensor_spi.update(buf)
+    #self.config.check_time("draw_display end")
   
   def gui_lap_reset(self):
     if self.button_box_widget.lap_button.isDown():
@@ -431,7 +418,7 @@ class GUI_PyQt(QtCore.QObject):
       else:
         self.lap_button_count += 1
         print('lap button pressing : ', self.lap_button_count)
-        if self.lap_button_count == self.config.G_BUTTON_LONG_PRESS:
+        if self.lap_button_count == self.config.button_config.G_BUTTON_LONG_PRESS:
           print('reset')
           self.logger.reset_count()
           self.simple_map_widget.reset_track()
@@ -449,7 +436,7 @@ class GUI_PyQt(QtCore.QObject):
       else:
         self.start_button_count += 1
         print('start button pressing : ', self.start_button_count)
-        if self.start_button_count == self.config.G_BUTTON_LONG_PRESS:
+        if self.start_button_count == self.config.button_config.G_BUTTON_LONG_PRESS:
           print('quit or poweroff')
           self.quit()
     elif self.button_box_widget.start_button._state == 1:
@@ -466,6 +453,9 @@ class GUI_PyQt(QtCore.QObject):
 
   def brightness_control(self):
     self.config.logger.sensor.sensor_spi.brightness_control()
+
+  def turn_on_off_light(self):
+    self.config.logger.sensor.sensor_ant.set_light_mode("ON_OFF_FLASH_LOW")
 
   def change_menu_page(self, page):
     self.stack_widget.setCurrentIndex(page)
