@@ -11,10 +11,6 @@ except:
   pass
 print('  DFRobot RPi Display : ',_SENSOR_DISPLAY)
 
-#SCREEN
-SCREEN_WIDTH = 255
-SCREEN_HEIGHT = 122 # or 128
-
 RASPBERRY_SPI_BUS = 0
 RASPBERRY_SPI_DEV = 0
 RASPBERRY_PIN_CS = 27
@@ -50,12 +46,13 @@ class DFRobotRPiDisplay():
     self.epaper.flush(self.epaper.FULL)
   
   #work in progress
-  def update(self, image):
+  def update(self, im_array):
     self.epaper.bitmap(
       0, 0, #start X and Y
-      np.packbits(np.array(Image.open(image).convert('1')), axis=1).flatten(),
+      im_array.flatten(),
+      #np.packbits(np.array(Image.open(image).convert('1')), axis=1).flatten(),
       #np.packbits(np.array(Image.open(image).convert('1', dither=Image.FLOYDSTEINBERG)), axis=1).flatten(),
-      SCREEN_WIDTH, SCREEN_HEIGHT, #screen size
+      self.config.G_WIDTH, self.config.G_HEIGHT, #screen size
       65535, 0, #background color(white), drawing color(black)
       )
     self.epaper.flush(self.epaper.PART)

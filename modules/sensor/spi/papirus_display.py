@@ -1,5 +1,4 @@
-import time
-import datetime
+from PIL import Image
 
 
 _SENSOR_DISPLAY = False
@@ -10,10 +9,6 @@ try:
 except:
   pass
 print('  PAPIRUS E-INK DISPLAY : ',_SENSOR_DISPLAY)
-
-#SCREEN
-SCREEN_WIDTH = 264
-SCREEN_HEIGHT = 176
 
 
 class PapirusDisplay():
@@ -32,8 +27,8 @@ class PapirusDisplay():
   def clear(self):
     self.papirus.clear()
   
-  def update(self, image):
-    self.papirus.display(image)
+  def update(self, im_array):
+    self.papirus.display(Image.frombytes("1", (im_array.shape[1]*8, im_array.shape[0]), im_array.tobytes()))
     self.papirus.fast_update()
 
   def quit(self):

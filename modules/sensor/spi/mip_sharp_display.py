@@ -36,6 +36,8 @@ class MipSharpDisplay():
   def __init__(self, config):
     
     self.config = config
+    self.init_buffer()
+    self.init_worker_thread()
 
     if not _SENSOR_DISPLAY:
       return
@@ -43,13 +45,6 @@ class MipSharpDisplay():
     self.pi = pigpio.pi()
     self.spi = self.pi.spi_open(0, 2000000, 0)
     #self.spi = self.pi.spi_open(0, 8000000, 0) #overclocking
-    
-    self.draw_queue = queue.Queue()
-    self.draw_thread = threading.Thread(target=self.draw_worker, name="draw_worker", args=())
-    self.draw_thread.setDaemon(True)
-    self.draw_thread.start()
-    
-    time.sleep(0.01)     #Wait
     
     self.pi.set_mode(GPIO_DISP, pigpio.OUTPUT)
     self.pi.set_mode(GPIO_SCS, pigpio.OUTPUT)
@@ -60,6 +55,14 @@ class MipSharpDisplay():
     self.pi.write(GPIO_VCOMSEL, 1)
     time.sleep(0.1)
 
+  def init_worker_thread(self): 
+    self.draw_queue = queue.Queue()
+    self.draw_thread = threading.Thread(target=self.draw_worker, name="draw_worker", args=())
+    self.draw_thread.setDaemon(True)
+    self.draw_thread.start()
+    time.sleep(0.01)     #Wait
+
+  def init_buffer(self):
     self.buff_width = int(self.config.G_WIDTH/8)+2
     self.img_buff_rgb8 = np.zeros((self.config.G_HEIGHT,self.buff_width), dtype='uint8')
     self.pre_img = np.zeros((self.config.G_HEIGHT,self.buff_width), dtype='uint8')
@@ -108,17 +111,10 @@ class MipSharpDisplay():
       self.pi.spi_write(self.spi, [0x00000000,0])
       self.pi.write(GPIO_SCS, 0)
 
-  def update(self, image):
-
-    im_array = np.array(image.convert("1"))
-
-    #t = datetime.datetime.now()
+  def update(self, im_array):
     
     #update
-    self.img_buff_rgb8[:,2:] = np.packbits(
-      im_array.astype('uint8').reshape(self.config.G_HEIGHT, self.config.G_WIDTH),
-      axis=1
-      )
+    self.img_buff_rgb8[:,2:] = im_array
 
     #differential update
     rewrite_flag = True
