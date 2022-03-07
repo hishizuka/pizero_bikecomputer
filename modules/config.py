@@ -9,9 +9,6 @@ import argparse
 import configparser
 import threading
 import queue
-import urllib.error
-import urllib.request
-import urllib.parse
 import traceback
 import json
 import pickle
@@ -22,6 +19,9 @@ import numpy as np
 from PIL import Image
 import oyaml as yaml
 
+import asyncio
+import aiohttp
+
 _IS_RASPI = False
 try:
   import RPi.GPIO as GPIO
@@ -30,6 +30,8 @@ try:
   _IS_RASPI = True
 except:
   pass
+
+from modules.button_config import Button_Config
 
 
 class Config():
@@ -66,6 +68,11 @@ class Config():
 
   #gross average speed
   G_GROSS_AVE_SPEED = 15 #[km/h]
+
+  #W'bal
+  G_POWER_CP = 100
+  G_POWER_W_PRIME = 10000
+  G_POWER_W_PRIME_ALGORITHM = "WATERWORTH" #WATERWORTH, DIFFERENTIAL
 
   ###########################
   # fixed or pointer values #
@@ -156,7 +163,29 @@ class Config():
 
     #japanese wind tile
     
-    #worldwide dem tile
+    #worldwide DEM(Digital Elevation Model) map
+
+    #japanese DEM(Digital Elevation Model) map
+    'jpn_kokudo_chiri_in_DEM5A': {
+      'url': "https://cyberjapandata.gsi.go.jp/xyz/dem5a_png/{z}/{x}/{y}.png", #DEM5A
+      'attribution': '国土地理院',
+      'fix_zoomlevel':15
+    }, 
+    'jpn_kokudo_chiri_in_DEM5B': {
+      'url': "https://cyberjapandata.gsi.go.jp/xyz/dem5b_png/{z}/{x}/{y}.png", #DEM5B
+      'attribution': '国土地理院',
+      'fix_zoomlevel':15
+    }, 
+    'jpn_kokudo_chiri_in_DEM5C': {
+      'url': "https://cyberjapandata.gsi.go.jp/xyz/dem5c_png/{z}/{x}/{y}.png", #DEM5C
+      'attribution': '国土地理院',
+      'fix_zoomlevel':15
+    }, 
+    'jpn_kokudo_chiri_in_DEM10B': {
+      'url': "https://cyberjapandata.gsi.go.jp/xyz/dem_png/{z}/{x}/{y}.png", #DEM10B
+      'attribution': '国土地理院',
+      'fix_zoomlevel':14
+    }, 
 
   }
   #external input of G_MAP_CONFIG
@@ -164,41 +193,11 @@ class Config():
 
   #overlay map
   G_STRAVA_OVERLAY_MAP = "strava_heatmap_bluered"
-  G_RAIN_OVERLAY_MAP = ""
+  G_RAIN_OVERLAY_MAP = "jpn_jma_bousai"
   G_WIND_OVERLAY_MAP =""
 
+  #DEM tile (Digital Elevation Model)
   G_DEM_MAP = 'jpn_kokudo_chiri_in_DEM5A'
-  G_DEM_MAP_CONFIG = {
-    'jpn_kokudo_chiri_in_DEM5A': {
-      'url': "https://cyberjapandata.gsi.go.jp/xyz/dem5a_png/{z}/{x}/{y}.png", #DEM5A
-      'attribution': '国土地理院',
-      'zoom':15
-    }, 
-    'jpn_kokudo_chiri_in_DEM5B': {
-      'url': "https://cyberjapandata.gsi.go.jp/xyz/dem5b_png/{z}/{x}/{y}.png", #DEM5B
-      'attribution': '国土地理院',
-      'zoom':15
-    }, 
-    'jpn_kokudo_chiri_in_DEM5C': {
-      'url': "https://cyberjapandata.gsi.go.jp/xyz/dem5c_png/{z}/{x}/{y}.png", #DEM5C
-      'attribution': '国土地理院',
-      'zoom':15
-    }, 
-    'jpn_kokudo_chiri_in_DEM10B': {
-      'url': "https://cyberjapandata.gsi.go.jp/xyz/dem_png/{z}/{x}/{y}.png", #DEM10B
-      'attribution': '国土地理院',
-      'zoom':14
-    }, 
-  }
-
-  #config file (store user specified values. readable and editable.)
-  config_file = "setting.conf"
-  config_parser = None
-  #config file (store temporary values. unreadable and uneditable.)
-  config_pickle_file = "setting.pickle"
-  config_pickle = {}
-  config_pickle_write_time = datetime.datetime.utcnow()
-  config_pickle_interval = 10 #[s]
 
   #screenshot dir
   G_SCREENSHOT_DIR = 'screenshot/'
@@ -317,29 +316,35 @@ class Config():
   G_DISPLAY = 'PiTFT' #PiTFT, MIP, Papirus, MIP_Sharp
   #screen size (need to add when adding new device)
   G_AVAILABLE_DISPLAY = {
-    'PiTFT': {'size':(320, 240),'touch':True},
-    'MIP': {'size':(400, 240),'touch':False}, #LPM027M128C, LPM027M128B
-    'MIP_640': {'size':(640, 480),'touch':False}, #LPM044M141A
-    'MIP_Sharp': {'size':(400, 240),'touch':False},
-    'MIP_Sharp_320': {'size':(320, 240),'touch':False},
-    'Papirus': {'size':(264, 176),'touch':False},
-    'DFRobot_RPi_Display': {'size':(250, 122),'touch':False}
+    'PiTFT': {'size':(320, 240),'touch':True, 'color': True},
+    'MIP': {'size':(400, 240),'touch':False, 'color': True}, #LPM027M128C, LPM027M128B
+    'MIP_640': {'size':(640, 480),'touch':False, 'color': True}, #LPM044M141A
+    'MIP_Sharp': {'size':(400, 240),'touch':False, 'color': False},
+    'MIP_Sharp_320': {'size':(320, 240),'touch':False, 'color': False},
+    'Papirus': {'size':(264, 176),'touch':False, 'color': False},
+    'DFRobot_RPi_Display': {'size':(250, 122),'touch':False, 'color': False}
   }
   G_WIDTH = 320
   G_HEIGHT = 240
   #GUI mode
   G_GUI_MODE = "PyQt"
-  #G_GUI_MODE = "QML" #not valid
-  #G_BUF_IMAGE = "/tmp/buf.bmp"
+  #G_GUI_MODE = "QML"
+  #G_GUI_MODE = "Kivy"
 
-  #hr and power graph (PerformanceGraphWidget)
-  G_GUI_HR_POWER_DISPLAY_RANGE = int(1*180/G_SENSOR_INTERVAL) # num (no unit)
-  G_GUI_MIN_HR = 50
-  G_GUI_MAX_HR = 180
+  #PerformanceGraph: 
+  # 1st: POWER
+  # 2nd: HR or W_BAL_PLIME
+  #G_GUI_PERFORMANCE_GRAPH_DISPLAY_ITEM = ('POWER', 'HR')
+  G_GUI_PERFORMANCE_GRAPH_DISPLAY_ITEM = ('POWER', 'W_BAL')
+  G_GUI_PERFORMANCE_GRAPH_DISPLAY_RANGE = int(5*60/G_SENSOR_INTERVAL) # [s]
+  G_GUI_MIN_HR = 40
+  G_GUI_MAX_HR = 200
   G_GUI_MIN_POWER = 30
-  G_GUI_MAX_POWER = 320
+  G_GUI_MAX_POWER = 300
+  G_GUI_MIN_W_BAL = 0
+  G_GUI_MAX_W_BAL = 100
   #acceleration graph (AccelerationGraphWidget)
-  G_GUI_ACC_TIME_RANGE = int(1*60/(G_REALTIME_GRAPH_INTERVAL/1000)) # num (no unit)
+  G_GUI_ACC_TIME_RANGE = int(1*60/(G_REALTIME_GRAPH_INTERVAL/1000)) # [s]
 
   #Graph color by slope
   G_SLOPE_WINDOW_DISTANCE = 500 #m
@@ -436,93 +441,6 @@ class Config():
   G_BT_ADDRESS = {}
   G_BT_CMD_BASE = ["/usr/local/bin/bt-pan","client"]
 
-  #long press threshold of buttons [sec]
-  G_BUTTON_LONG_PRESS = 1
-
-  #GPIO button action (short press / long press) from gui_pyqt
-  # call from SensorGPIO.my_callback(self, channel)
-  # number is from GPIO.setmode(GPIO.BCM)
-  G_GPIO_BUTTON_DEF = {
-    'PiTFT' : {
-      'MAIN':{
-        5:("scroll_prev()","dummy()"),
-        6:("count_laps()","reset_count()"),
-        12:("brightness_control()","dummy()"),
-        13:("start_and_stop_manual()","quit()"),
-        16:("scroll_next()","enter_menu()"),
-        },
-      'MENU':{
-        5:("back_menu()","dummy()"),
-        6:("dummy()","dummy()"),
-        12:("press_space()","dummy()"),
-        13:("press_tab()","dummy()"),
-        16:("press_down()","dummy()"),
-        },
-      },
-    'Papirus' : {
-      'MAIN':{
-        16:("scroll_prev()","dummy()"),#SW1(left)
-        26:("count_laps()","reset_count()"),#SW2
-        20:("start_and_stop_manual()","dummy()"),#SW3
-        21:("scroll_next()","enter_menu()"),#SW4
-        },
-      'MENU':{
-        16:("back_menu()","dummy()"),
-        26:("press_space()","dummy()"),
-        20:("press_tab()","dummy()"),
-        21:("press_down()","dummy()"),
-        },
-      },
-    'DFRobot_RPi_Display' : {
-      'MAIN':{
-        21:("start_and_stop_manual()","reset_count()"),
-        20:("scroll_next()","enter_menu()"),
-        },
-      'MENU':{
-        21:("press_space()","dummy()"),
-        20:("press_down()","back_menu()"),
-        },
-      },
-    # call from ButtonShim
-    'Button_Shim' : {
-      'MAIN':{
-        'A':("scroll_prev","dummy"),
-        'B':("count_laps","reset_count"),
-        'C':("change_mode","get_screenshot"),
-        'D':("start_and_stop_manual","dummy"),
-        'E':("scroll_next","enter_menu"),
-        },
-      'MENU':{
-        'A':("back_menu","dummy"), 
-        'B':("brightness_control","dummy"),
-        'C':("press_space","dummy"), #enter
-        'D':("press_tab","dummy"),
-        'E':("press_down","dummy"),
-        },
-      'MAP_1':{
-        'A':("map_move_x_minus","map_zoom_minus"), #left
-        'B':("map_move_y_minus","map_zoom_plus"), #down
-        'C':("change_mode","map_change_move"), #mode change
-        'D':("map_move_y_plus","dummy"), #up
-        'E':("map_move_x_plus","dummy"), #right
-        },
-      'MAP_2':{
-        'A':("map_zoom_minus","dummy"), #zoom down
-        'B':("map_zoom_plus","dummy"), #zoom up
-        'C':("change_mode","dummy"), #mode change
-        'D':("dummy","dummy"), #cancel
-        'E':("map_search_route","dummy"), #apply
-        },
-      },
-  }
-  #mode group setting changed by change_mode
-  G_BUTTON_MODE_GROUPS = {
-    'MAP': ['MAIN', 'MAP_1', 'MAP_2'], 
-    }
-  G_BUTTON_MODE_INDEX = {
-    'MAP': 0,
-  }
-  
   #for track
   TRACK_STR = [
     'N','NE','E','SE',
@@ -548,6 +466,15 @@ class Config():
   #GUI (GUI_PyQt)
   gui = None
   gui_config = None
+
+  #config file (store user specified values. readable and editable.)
+  config_file = "setting.conf"
+  config_parser = None
+  #config file (store temporary values. unreadable and uneditable.)
+  config_pickle_file = "setting.pickle"
+  config_pickle = {}
+  config_pickle_write_time = datetime.datetime.utcnow()
+  config_pickle_interval = 10 #[s]
 
   def __init__(self):
 
@@ -654,6 +581,8 @@ class Config():
     self.detect_display()
     self.set_resolution()
 
+    self.button_config = Button_Config(self)
+
     #set ant interval. 0:4Hz(0.25s), 1:2Hz(0.5s), 2:1Hz(1.0s)
     if self.G_ANT_INTERVAL == 0.25:
       self.G_ANT['INTERVAL'] = 0
@@ -662,17 +591,22 @@ class Config():
     else:
       self.G_ANT['INTERVAL'] = 2
 
+    #coroutine loop
+    self.loop = asyncio.get_event_loop()
+    self.G_COROUTINE_SEM = 100
+
+    self.log_time = datetime.datetime.now()
+
     #thread for downloading map tiles
     self.download_queue = queue.Queue()
     self.download_thread = threading.Thread(target=self.download_worker, name="download_worker", args=())
-    self.download_thread.setDaemon(True)
     self.download_thread.start()
 
     self.keyboard_control_thread = None
     if self.G_HEADLESS:
       self.keyboard_control_thread = threading.Thread(target=self.keyboard_check, name="keyboard_check", args=())
       self.keyboard_control_thread.start()
-  
+
   def keyboard_check(self):
     while(not self.G_QUIT):
       print("s:start/stop, l: lap, r:reset, p: previous screen, n: next screen")
@@ -734,6 +668,12 @@ class Config():
     except:
       pass
   
+  def press_button(self, button_hard, press_button, index):
+    self.button_config.press_button(button_hard, press_button, index)
+
+  def change_mode(self):
+    self.button_config.change_mode()
+
   def exec_cmd(self, cmd, cmd_print=True):
     if cmd_print:
       print(cmd)
@@ -774,8 +714,8 @@ class Config():
     except:
       traceback.print_exc()
   
-  def get_maptile_filename(self, map, z, x, y):
-    return "maptile/"+map+"/{0}-{1}-{2}.png".format(z, x, y)
+  def get_maptile_filename(self, map_name, z, x, y):
+    return "maptile/"+map_name+"/{0}/{1}/{2}.png".format(z, x, y)
   
   def detect_network(self):
     try:
@@ -785,85 +725,122 @@ class Config():
     except socket.error as ex:
       return False
 
-  def download_maptile(self, map_name, z, x, y):
-    if not self.detect_network():
+  def download_maptile(self, map_name, z, tiles, additional_download=False):
+    if not self.detect_network() or self.G_MAP_CONFIG[map_name]['url'] == None:
       return False
-    
-    try:
-      _y = y
-      _z = z
-      
-      url = self.G_MAP_CONFIG[map_name]['url'].format(z=_z, x=x, y=_y)
+
+    urls = []
+    save_paths = []
+    request_header = {}
+
+    #make header
+    if 'referer' in self.G_MAP_CONFIG[map_name] and self.G_MAP_CONFIG[map_name]['referer'] != None:
+      request_header['Referer'] = self.G_MAP_CONFIG[map_name]['referer']
+    if 'user_agent' in self.G_MAP_CONFIG[map_name] and self.G_MAP_CONFIG[map_name]['user_agent'] != None:
+      request_header['User-Agent'] = self.G_MAP_CONFIG[map_name]['user_agent']
+
+    for tile in tiles:
+      os.makedirs("maptile/"+map_name+"/{0}/{1}/".format(z, tile[0]), exist_ok=True)
+      url = self.G_MAP_CONFIG[map_name]['url'].format(z=z, x=tile[0], y=tile[1])
       if 'strava_heatmap' in map_name:
-        url = self.G_MAP_CONFIG[map_name]['url'].format(z=_z, x=x, y=_y) \
+        url = url \
           + "&Key-Pair-Id=" + self.G_STRAVA_COOKIE['KEY_PAIR_ID'] \
           + "&Policy=" + self.G_STRAVA_COOKIE['POLICY'] \
           + "&Signature=" + self.G_STRAVA_COOKIE['SIGNATURE']
+      save_path = self.get_maptile_filename(map_name, z, *tile)
+      urls.append(url)
+      save_paths.append(save_path)
+
+    self.download_queue.put((urls, request_header, save_paths))
+
+    if additional_download:
+      additional_urls = []
+      additional_save_paths = []
+      for tile in tiles:
+        for i in range(2):
+          os.makedirs("maptile/"+map_name+"/{0}/{1}/".format(z+1, 2*tile[0]+i), exist_ok=True)
+          for j in range(2):
+            url = self.G_MAP_CONFIG[map_name]['url'].format(z=z+1, x=2*tile[0]+i, y=2*tile[1]+j)
+            save_path = self.get_maptile_filename(map_name, z+1, 2*tile[0]+i, 2*tile[1]+j)
+            additional_urls.append(url)
+            additional_save_paths.append(save_path)
       
-      if 'referer' not in self.G_MAP_CONFIG[map_name]:
-        self.G_MAP_CONFIG[map_name]['referer'] = None
-      ref = self.G_MAP_CONFIG[map_name]['referer']
-      
-      if 'user_agent' not in self.G_MAP_CONFIG[map_name]:
-        self.G_MAP_CONFIG[map_name]['user_agent'] = None
-      user_agent = self.G_MAP_CONFIG[map_name]['user_agent']
-      
-      #throw cue if convert exists
-      map_dst = self.get_maptile_filename(map_name, z, x, y)
-      dl_dst = map_dst
-      self.download_queue.put((url, dl_dst, ref, user_agent))
-      
-      return True
+        if z-1 <= 0:
+          continue
+        os.makedirs("maptile/"+map_name+"/{0}/{1}/".format(z-1, int(tile[0]/2)), exist_ok=True)
+        zoomout_url = self.G_MAP_CONFIG[map_name]['url'].format(z=z-1, x=int(tile[0]/2), y=int(tile[1]/2))
+        if zoomout_url not in additional_urls:
+          additional_urls.append(zoomout_url)
+          additional_save_paths.append(self.get_maptile_filename(map_name, z-1, int(tile[0]/2), int(tile[1]/2)))
+      self.download_queue.put((additional_urls, request_header, additional_save_paths))
+    
+    return True
+
+  def download_worker(self):
+    failed = []
+    for urls, header, save_paths in iter(self.download_queue.get, None):
+      res = self.loop.run_until_complete(self.download_files(urls, header, save_paths))
+      self.download_queue.task_done()
+
+      #all False -> give up
+      if not any(res) or res == None:
+        failed.append((datetime.datetime.now(), urls, header, save_paths))
+        print("failed download")
+        print(urls)
+      #retry
+      elif not all(res) and len(urls) > 0 and len(res) > 0 and len(urls) == len(res):
+        retry_urls = []
+        retry_save_paths = []
+        for url, save_path, status in zip(urls, save_paths, res):
+          if not status:
+            retry_urls.append(url)
+            retry_save_paths.append(save_path)
+        if len(retry_urls) > 0:
+          self.download_queue.put((retry_urls, header, retry_save_paths))
+
+  async def get_http_request(self, session, url, save_path, header):
+    try:
+      async with session.get(url, headers=header) as dl_file:
+        if dl_file.status == 200:
+          with open(save_path, mode='wb') as f:
+            f.write(await dl_file.read())
+            return True
+        else:
+          return False
     except:
       traceback.print_exc()
       return False
-  
+
+  async def download_files(self, urls, header, save_paths):
+    
+    tasks = []
+    res = None
+    async with asyncio.Semaphore(self.G_COROUTINE_SEM):
+      async with aiohttp.ClientSession() as session:
+        for url, save_path in zip(urls, save_paths):
+          tasks.append(self.get_http_request(session, url, save_path, header))
+        res = await asyncio.gather(*tasks)
+    return res
+
   def download_demtile(self, z, x, y):
     if not self.detect_network():
       return False
-    
+    header = {}
     try:
-      #DEM
+      os.makedirs("maptile/"+self.G_DEM_MAP+"/{0}/{1}/".format(z, x), exist_ok=True)
       self.download_queue.put((
-        self.G_DEM_MAP_CONFIG[self.G_DEM_MAP]['url'].format(z=z, x=x, y=y), 
-        self.get_maptile_filename(self.G_DEM_MAP, z, x, y),
-        self.G_MAP_CONFIG[self.G_MAP]['referer'],
-        None,
+        [self.G_MAP_CONFIG[self.G_DEM_MAP]['url'].format(z=z, x=x, y=y),],
+        header,
+        [self.get_maptile_filename(self.G_DEM_MAP, z, x, y),]
         ))
       return True
     except:
       traceback.print_exc()
       return False
 
-  def download_worker(self):
-    last_download_time = datetime.datetime.now()
-    online = True
-
-    #while True:
-    for url, dst_path, ref, user_agent in iter(self.download_queue.get, None):
-      if self.download_file(url, dst_path, ref, user_agent):
-        self.download_queue.task_done()
-      else:
-        self.download_queue.put((url, dst_path, ref, user_agent))
-      
-  def download_file(self, url, dst_path, ref=None, user_agent=None):
-    try:
-      req = urllib.request.Request(url)
-      if ref != None:
-        req.add_header('Referer', ref)
-      if user_agent != None:
-        req.add_header('User-Agent', user_agent)
-      
-      with urllib.request.urlopen(req, timeout=5) as web_file:
-        data = web_file.read()
-        with open(dst_path, mode='wb') as local_file:
-          local_file.write(data)
-          return True
-    except urllib.error.URLError as e:
-      return False
-  
   def quit(self):
     print("quit")
+    self.download_queue.put(None)
     if self.G_MANUAL_STATUS == "START":
       self.logger.start_and_stop_manual()
     self.G_QUIT = True
@@ -876,8 +853,8 @@ class Config():
     if self.G_IS_RASPI:
       GPIO.cleanup()
     
-    #self.download_queue.join()
-    #self.download_thread.join(timeout=0.5)
+    self.download_thread.join()
+    self.loop.close()
 
     #time.sleep(self.G_LOGGING_INTERVAL)
     self.logger.quit()
@@ -934,6 +911,17 @@ class Config():
       else:
         self.exec_cmd(bton_cmd)
 
+  async def get_json(self, url):
+     async with aiohttp.ClientSession() as session:
+       async with session.get(url) as res:
+         json = await res.json()
+         return json
+
+  def check_time(self, log_str):
+     t = datetime.datetime.now()
+     print("###", log_str, (t-self.log_time).total_seconds())
+     self.log_time = t
+
   def get_google_routes(self, x1, y1, x2, y2):
 
     if not self.detect_network() or self.G_GOOGLE_DIRECTION_API["TOKEN"] == "":
@@ -943,18 +931,18 @@ class Config():
       
     origin = "origin={},{}".format(y1,x1)
     destination = "destination={},{}".format(y2,x2)
-    request = "{}&{}&key={}&{}&{}".format(
+    url = "{}&{}&key={}&{}&{}".format(
       self.G_GOOGLE_DIRECTION_API_URL,
       self.G_GOOGLE_DIRECTION_API_MODE["BICYCLING"],
       self.G_GOOGLE_DIRECTION_API["TOKEN"],
       origin,
       destination
     )
-    print(request)
-    response = urllib.request.urlopen(request).read()
+    print(url)
+    response = self.loop.run_until_complete(self.get_json(url))
     #print(response)
-    return json.loads(response)
-  
+    return response
+
   def get_openweathermap_data(self, x, y):
 
     if not self.detect_network() or self.G_OPENWEATHERMAP_API["TOKEN"] == "":
@@ -962,16 +950,16 @@ class Config():
     if np.any(np.isnan([x, y])):
       return None
       
-    request = "{}?lat={}&lon={}&appid={}".format(
+    url = "{}?lat={}&lon={}&appid={}".format(
       self.G_OPENWEATHERMAP_API_URL,
       y,
       x,
       self.G_OPENWEATHERMAP_API["TOKEN"],
     )
-    print(request)
-    response = urllib.request.urlopen(request).read()
+    print(url)
+    response = self.loop.run_until_complete(self.get_json(url))
     #print(response)
-    return json.loads(response)
+    return response
 
   def strava_upload(self):
 
@@ -1053,6 +1041,12 @@ class Config():
         self.G_FONT_FILE = self.config_parser['GENERAL']['FONT_FILE']
       if 'MAP' in self.config_parser['GENERAL']:
         self.G_MAP = self.config_parser['GENERAL']['MAP'].lower()
+
+    if 'POWER' in self.config_parser:
+      if 'CP' in self.config_parser['POWER']:
+        self.G_POWER_CP = int(self.config_parser['POWER']['CP'])
+      if 'W_PRIME' in self.config_parser['POWER']:
+        self.G_POWER_W_PRIME = int(self.config_parser['POWER']['W_PRIME'])
 
     if 'ANT' in self.config_parser:
       for key in self.config_parser['ANT']:
@@ -1146,6 +1140,10 @@ class Config():
     self.config_parser['GENERAL']['FONT_FILE'] = self.G_FONT_FILE
     self.config_parser['GENERAL']['MAP'] = self.G_MAP
 
+    self.config_parser['POWER'] = {}
+    self.config_parser['POWER']['CP'] = str(int(self.G_POWER_CP))
+    self.config_parser['POWER']['W_PRIME'] = str(int(self.G_POWER_W_PRIME))
+
     if not self.G_DUMMY_OUTPUT:
       self.config_parser['ANT'] = {}
       self.config_parser['ANT']['STATUS'] = str(self.G_ANT['STATUS'])
@@ -1202,14 +1200,17 @@ class Config():
       return self.config_pickle[key]
     else:
       return default_value
-  
+
+  #reset 
   def reset_config_pickle(self):
     for k, v in list(self.config_pickle.items()):
-      if "mag" not in k:
-        del(self.config_pickle[k])
+      if "mag" in k:
+        continue
+      del(self.config_pickle[k])
     with open(self.config_pickle_file, 'wb') as f:
       pickle.dump(self.config_pickle, f)
 
+  #quit
   def delete_config_pickle(self):
     for k, v in list(self.config_pickle.items()):
       if "ant+" in k:
@@ -1292,7 +1293,7 @@ class Config():
   def get_altitude_from_tile(self, pos):
     if np.isnan(pos[0]) or np.isnan(pos[1]):
       return np.nan
-    z = self.G_DEM_MAP_CONFIG[self.G_DEM_MAP]['zoom']
+    z = self.G_MAP_CONFIG[self.G_DEM_MAP]['fix_zoomlevel']
     f_x, f_y, p_x, p_y = self.get_tilexy_and_xy_in_tile(z, pos[0], pos[1], 256)
     filename = self.get_maptile_filename(self.G_DEM_MAP, z, f_x, f_y)
     
