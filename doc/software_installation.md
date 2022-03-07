@@ -38,7 +38,7 @@ Assume Python version 3 environment. Version 2 is not supported.
 
 ```
 $ git clone https://github.com/hishizuka/pizero_bikecomputer.git
-$ pip3 install PyQt5 numpy oyaml pillow polyline
+$ pip3 install PyQt5 numpy oyaml pillow polyline aiohttp
 $ pip3 install git+https://github.com/hishizuka/pyqtgraph.git
 $ cd pizero_bikecomputer
 ```
@@ -61,7 +61,7 @@ Install in the home directory of default user "pi".
 ```
 $ cd
 $ git clone https://github.com/hishizuka/pizero_bikecomputer.git
-$ sudo apt-get install python3-pip cython3 cmake gawk python3-numpy python3-pyqt5 sqlite3 libsqlite3-dev libatlas-base-dev
+$ sudo apt-get install python3-pip cython3 cmake gawk python3-numpy python3-pyqt5 sqlite3 libsqlite3-dev libatlas-base-dev python3-aiohttp
 $ sudo pip3 install oyaml sip polyline
 $ sudo apt-get install wiringpi python3-smbus python3-rpi.gpio python3-psutil python3-pil
 $ sudo pip3 install git+https://github.com/hishizuka/pyqtgraph.git

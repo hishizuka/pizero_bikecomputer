@@ -7,6 +7,14 @@ https://github.com/hishizuka/pizero_bikecomputer
 
 # News
 
+- 2022/3/7 Please install aiohttp for faster downloading of map tiles.
+
+```
+$ sudo apt install python3-aiohttp
+or
+$ sudo pip3 install aiohttp
+```
+
 - 2022/1/8 Please install crdp (Ramer–Douglas–Peucker algorithm) to decimate a route composed of line segments to a similar route with fewer points.
 
 ```
@@ -27,17 +35,6 @@ $ rm log/log.db
 $ cp layouts/layout-cycling.yaml ./
 ```
 
-
-- 2021/4/18 Please reinstall pyqtgraph when using python3-pyqt5 in Raspberry Pi OS (skip check if using).
-- 2021/4/3 Please reinstall openant and pyqtgraph because both libraries are re-forked.
-
-```
-$ sudo pip3 uninstall pyqtgraph
-$ sudo pip3 install git+https://github.com/hishizuka/pyqtgraph.git
-$ sudo pip3 uninstall openant
-$ sudo pip3 install git+https://github.com/hishizuka/openant.git
-```
- 
 
 # Table of Contents
 

@@ -1,8 +1,7 @@
-/extlib/
+/extlib/*
 /log/
 /screenshot/
-/maptile/*/*.png*
-/maptile/*/*/*.png*
+/maptile/*
 /.idea/
 /.vscode/
 __pycache__/
@@ -18,6 +17,7 @@ __pycache__/
 a.out
 setting*
 layout.yaml
+map.yaml
 nohup.out
 !.gitkeep
 screenlog.*
