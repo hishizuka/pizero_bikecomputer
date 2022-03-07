@@ -1,6 +1,4 @@
 from .sensor import Sensor
-import numpy as np
-from PIL import Image
 
 
 class SensorSPI(Sensor):
@@ -65,9 +63,7 @@ class SensorSPI(Sensor):
 
     if self.config.G_DISPLAY == 'PiTFT':
       pass
-    elif self.config.G_DISPLAY in ('MIP', 'MIP_640', 'MIP_Sharp', 'MIP_Sharp_320', 'Papirus') and self.send_display:
-      self.display.update(Image.open(buf))
-    elif self.config.G_DISPLAY in ('DFRobot_RPi_Display') and self.send_display:
+    elif self.config.G_DISPLAY in ('MIP', 'MIP_640', 'MIP_Sharp', 'MIP_Sharp_320', 'Papirus', 'DFRobot_RPi_Display') and self.send_display:
       self.display.update(buf)
 
   def screen_flash_long(self):

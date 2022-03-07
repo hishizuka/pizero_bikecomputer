@@ -1,18 +1,21 @@
 import time
-#import datetime
 import threading
 import queue
-
 import numpy as np
-
+import datetime
 
 _SENSOR_DISPLAY = False
+MODE="Python"
 try:
   import pigpio
   _SENSOR_DISPLAY = True
+  import pyximport; pyximport.install()
+  from .cython.mip_helper import conv_3bit_color, MipDisplay_CPP
+  MODE = "Cython"
 except:
   pass
 print('  MIP DISPLAY : ',_SENSOR_DISPLAY)
+
 
 # https://qiita.com/hishi/items/669ce474fcd76bdce1f1
 # LPM027M128C, LPM027M128B, 
@@ -39,28 +42,43 @@ class MipDisplay():
   pi = None
   spi = None
   interval = 0.25
+  #spi_clock = 2000000 #normal
+  spi_clock = 5000000 #overclocking
   brightness_index = 0
   brightness_table = [0,10,100]
   brightness = 0
+  diff_count = 0
+  refresh_count = 1200
+  mip_display_cpp = None
 
   def __init__(self, config):
     
     self.config = config
+    if MODE == "Cython":
+      self.conv_color = conv_3bit_color
+      
+      self.mip_display_cpp = MipDisplay_CPP(self.spi_clock)
+      self.mip_display_cpp.set_screen_size(self.config.G_WIDTH, self.config.G_HEIGHT)
+      self.update = self.mip_display_cpp.update
+      self.set_brightness = self.mip_display_cpp.set_brightness
+      self.inversion = self.mip_display_cpp.inversion
+      self.quit = self.mip_display_cpp.quit
+      #self.mip_display_cpp.set_refresh_count(20)
+      return
+
+    else:
+      #self.conv_color = self.conv_3bit_color_py
+      self.conv_color = conv_3bit_color
+    
+    self.init_buffer()
+    self.init_worker_thread()
 
     if not _SENSOR_DISPLAY:
       return
 
+    #spi
     self.pi = pigpio.pi()
-    self.spi = self.pi.spi_open(0, 2000000, 0)
-    #self.spi = self.pi.spi_open(0, 4000000, 0) #overclocking
-    #self.spi = self.pi.spi_open(0, 5500000, 0) #overclocking
-    
-    self.draw_queue = queue.Queue()
-    self.draw_thread = threading.Thread(target=self.draw_worker, name="draw_worker", args=())
-    self.draw_thread.setDaemon(True)
-    self.draw_thread.start()
-    
-    time.sleep(0.01)     #Wait
+    self.spi = self.pi.spi_open(0, self.spi_clock, 0)
     
     self.pi.set_mode(GPIO_DISP, pigpio.OUTPUT)
     self.pi.set_mode(GPIO_SCS, pigpio.OUTPUT)
@@ -71,14 +89,15 @@ class MipDisplay():
     self.pi.write(GPIO_VCOMSEL, 1)
     time.sleep(0.1)
 
+    #backlight
     self.pi.set_mode(GPIO_BACKLIGHT, pigpio.OUTPUT)
     self.pi.hardware_PWM(GPIO_BACKLIGHT, GPIO_BACKLIGHT_FREQ, 0)
-
     if self.config.G_USE_AUTO_BACKLIGHT:
       self.brightness_index = len(self.brightness_table)
     else:
       self.brightness_index = 0
 
+  def init_buffer(self):
     self.buff_width = int(self.config.G_WIDTH*3/8)+2 #for 3bit update mode
     self.img_buff_rgb8 = np.empty((self.config.G_HEIGHT,self.buff_width), dtype='uint8')
     self.pre_img = np.zeros((self.config.G_HEIGHT,self.buff_width), dtype='uint8')
@@ -87,6 +106,12 @@ class MipDisplay():
     #for MIP_640
     self.img_buff_rgb8[:,0] = self.img_buff_rgb8[:,0] + (np.arange(self.config.G_HEIGHT) >> 8)
   
+  def init_worker_thread(self):
+    self.draw_queue = queue.Queue()
+    self.draw_thread = threading.Thread(target=self.draw_worker, name="draw_worker", args=())
+    self.draw_thread.setDaemon(True)
+    self.draw_thread.start()
+
   def clear(self):
     self.pi.write(GPIO_SCS, 1)
     time.sleep(0.000006)
@@ -140,60 +165,42 @@ class MipDisplay():
 
   def draw_worker(self):
     for img_bytes in iter(self.draw_queue.get, None):
+      #self.config.check_time("mip_draw_worker start")
+      #t = datetime.datetime.now()
       self.pi.write(GPIO_SCS, 1)
       time.sleep(0.000006)
-      if len(img_bytes) > 0:
-        self.pi.spi_write(self.spi, img_bytes)
+      self.pi.spi_write(self.spi, img_bytes)
       #dummy output for ghost line
       self.pi.spi_write(self.spi, [0x00000000,0])
+      time.sleep(0.000006)
       self.pi.write(GPIO_SCS, 0)
+      #self.config.check_time("mip_draw_worker end")
+      #print("####### draw(Py)", (datetime.datetime.now()-t).total_seconds())
 
-  def update(self, image):
+  def update(self, im_array):
 
-    im_array = np.array(image)
-
-    #t = datetime.datetime.now()
-    
-    #3bit mode update
-
-    #2bit color
-    #self.img_buff_rgb8[:,2:] = np.packbits(
-    #  ((im_array > 128).astype('uint8')).reshape(self.config.G_HEIGHT, self.config.G_WIDTH*3),
-    #  axis=1
-    #  )
-    
-    #pseudo 3bit color (128~216: simple dithering)
-    im_array_bin = (im_array >= 128).astype('uint8')
-    im_array_bin[0::2, 0::2] = np.where(
-      (im_array[0::2, 0::2] >= 128) & (im_array[0::2, 0::2] <= 216), 
-      0, 
-      im_array_bin[0::2, 0::2]
-      )
-    im_array_bin[1::2, 1::2] = np.where(
-      (im_array[1::2, 1::2] >= 128) & (im_array[1::2, 1::2] <= 216), 
-      0, 
-      im_array_bin[1::2, 1::2]
-      )
-    
-    self.img_buff_rgb8[:,2:] = np.packbits(
-      (im_array_bin).reshape(self.config.G_HEIGHT, self.config.G_WIDTH*3),
-      axis=1
-      )
-
+    #self.config.check_time("mip_update start")
+    self.img_buff_rgb8[:,2:] = self.conv_color(im_array)
+    #self.config.check_time("packbits")
+   
     #differential update
-    rewrite_flag = True
     diff_lines = np.where(np.sum((self.img_buff_rgb8 == self.pre_img), axis=1) != self.buff_width)[0] 
     #print("diff ", int(len(diff_lines)/self.config.G_HEIGHT*100), "%")
     #print(" ")
-    img_bytes = self.img_buff_rgb8[diff_lines].tobytes()
     if len(diff_lines) == 0:
-      rewrite_flag = False
-    self.pre_img[diff_lines] = self.img_buff_rgb8[diff_lines]
+      return
+    img_bytes = None
+    if self.diff_count <= self.refresh_count:
+      img_bytes = self.img_buff_rgb8[diff_lines].tobytes()
+      self.diff_count += 1
+    else:
+      img_bytes = self.img_buff_rgb8.tobytes()
+      self.diff_count = 0
 
-    #print("Loading images... :", (datetime.datetime.now()-t).total_seconds(),"sec")
-    #t = datetime.datetime.now()
+    self.pre_img[diff_lines] = self.img_buff_rgb8[diff_lines]
+    #self.config.check_time("diff_lines")
     
-    if _SENSOR_DISPLAY and rewrite_flag and not self.config.G_QUIT:
+    if _SENSOR_DISPLAY and not self.config.G_QUIT:
       #put queue
       if len(diff_lines) < 270:
         self.draw_queue.put((img_bytes))
@@ -201,6 +208,34 @@ class MipDisplay():
         #for MIP 640x480
         self.draw_queue.put((self.img_buff_rgb8[diff_lines[0:int(len(diff_lines)/2)]].tobytes()))
         self.draw_queue.put((self.img_buff_rgb8[diff_lines[int(len(diff_lines)/2):]].tobytes()))
+
+  def conv_2bit_color_py(self, im_array):
+    return np.packbits(
+      (im_array >= 128).reshape(self.config.G_HEIGHT, self.config.G_WIDTH*3),
+      axis=1
+    )
+
+  def conv_3bit_color_py(self, im_array):
+    #pseudo 3bit color (128~216: simple dithering)
+    #set even pixel and odd pixel to 0   
+    #1. convert 2bit color
+    im_array_bin = (im_array >= 128)
+    #2. set even pixel (2n, 2n) to 0
+    im_array_bin[0::2, 0::2] = np.where(
+      im_array[0::2, 0::2] <= 216, 
+      0, 
+      im_array_bin[0::2, 0::2]
+    )
+    #3. set odd pixel (2n+1, 2n+1) to 0
+    im_array_bin[1::2, 1::2] = np.where(
+      im_array[1::2, 1::2] <= 216, 
+      0, 
+      im_array_bin[1::2, 1::2]
+    )
+    return np.packbits(
+      (im_array_bin).reshape(self.config.G_HEIGHT, self.config.G_WIDTH*3),
+      axis=1
+    )
 
   def change_brightness(self):
     
@@ -235,10 +270,12 @@ class MipDisplay():
   def quit(self):
     if not _SENSOR_DISPLAY:
       return
+    
+    self.set_brightness(0)
     self.clear()
+
     self.pi.write(GPIO_DISP, 1)
     time.sleep(0.1)
-
     self.pi.spi_close(self.spi)
     self.pi.stop()
 
