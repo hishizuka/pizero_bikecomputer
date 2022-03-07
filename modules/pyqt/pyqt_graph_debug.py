@@ -121,7 +121,7 @@ class AltitudeGraphWidget(ScreenWidget):
   def init_extra(self):
     pass
     #self.plot_data_x1 = []
-    #for i in range(self.config.G_GUI_HR_POWER_DISPLAY_RANGE):
+    #for i in range(self.config.G_GUI_PERFORMANCE_GRAPH_DISPLAY_RANGE):
     #  self.plot_data_x1.append(i)
 
   def setup_ui_extra(self): 
@@ -134,7 +134,7 @@ class AltitudeGraphWidget(ScreenWidget):
     self.p1.scene().addItem(self.p2)
     self.p2.setXLink(self.p1)
 
-    self.plot.setXRange(0, self.config.G_GUI_HR_POWER_DISPLAY_RANGE)
+    self.plot.setXRange(0, self.config.G_GUI_PERFORMANCE_GRAPH_DISPLAY_RANGE)
     self.plot.setMouseEnabled(x=False, y=False)
     #pg.setConfigOptions(antialias=True)
   
@@ -162,7 +162,7 @@ class AltitudeGraphWidget(ScreenWidget):
   def update_extra(self):
    
     v = self.config.logger.sensor.values['integrated']
-    all_nan = {'altitude_graph': True, 'altitude_kf_graph': True}
+    all_nan = {'altitude_graph': True, 'altitude_gps_graph': True}
     for key in all_nan.keys():
       chk = np.isnan(v[key])
       if False in chk:
@@ -192,7 +192,7 @@ class AltitudeGraphWidget(ScreenWidget):
         )
       )
 
-    if not all_nan['altitude_kf_graph']:
+    if not all_nan['altitude_gps_graph']:
       self.p2.clear()
       
       if median != None:
@@ -201,7 +201,7 @@ class AltitudeGraphWidget(ScreenWidget):
       self.p2.setGeometry(self.p1.vb.sceneBoundingRect())
       self.p2.linkedViewChanged(self.p1.vb, self.p2.XAxis)
       p = pg.PlotCurveItem(
-        v['altitude_kf_graph'], 
+        v['altitude_gps_graph'], 
         pen=self.pen2,
         connect="finite"
         )

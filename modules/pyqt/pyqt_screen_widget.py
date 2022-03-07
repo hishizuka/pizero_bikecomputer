@@ -18,7 +18,6 @@ class ScreenWidget(QtWidgets.QWidget):
   config = None
   logger = None
   sensor = None
-  onoff = True
   items = None
   item_layout = None
   max_width = max_height = 0

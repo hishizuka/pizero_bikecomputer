@@ -129,9 +129,6 @@ class MenuWidget(QtWidgets.QWidget):
         self.setText('Not Checked')
         self.setStyleSheet(self.config.gui.style.G_GUI_PYQT_buttonStyle_menu)
     
-    def onOff(self):
-      pass
-    
     def setValue(self):
       pass
 
