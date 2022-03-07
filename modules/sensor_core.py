@@ -2,7 +2,6 @@ import time
 import datetime
 import threading
 import math
-import os
 
 import numpy as np
 
@@ -33,6 +32,8 @@ class SensorCore():
   integrated_value_keys =  [
     'hr','speed','cadence','power',
     'distance','accumulated_power',
+    'ave_power_3s','ave_power_30s',
+    'w_prime_balance','w_prime_balance_normalized','w_prime_power_sum','w_prime_power_count', 'w_prime_t','w_prime_sum',
     'grade','grade_spd','glide_ratio','dem_altitude',
     'cpu_percent',
     ]
@@ -40,13 +41,14 @@ class SensorCore():
   thread_ant = None
   thread_gps = None
   thread_integrate = None
-  threshold = {'HR':15, 'SPD':5, 'CDC':3, 'PWR':3}
+  time_threshold = {'HR':15, 'SPD':5, 'CDC':3, 'PWR':3} #valid period of sensor [sec]
   grade_range = 9
   grade_window_size = 5
   graph_keys = [
     'hr_graph', 
     'power_graph', 
-    'altitude_kf_graph', 
+    'w_bal_graph', 
+    'altitude_gps_graph', 
     'altitude_graph',
     ]
   diff_keys = [
@@ -65,12 +67,14 @@ class SensorCore():
     self.values['I2C'] = {}
     self.values['SPI'] = {}
     self.values['integrated'] = {}
+
+    #reset
     for key in self.integrated_value_keys:
       self.values['integrated'][key] = np.nan
-    self.values['integrated']['distance'] = 0
-    self.values['integrated']['accumulated_power'] = 0
+    self.reset_internal()
+
     for g in self.graph_keys:
-      self.values['integrated'][g] = [np.nan] * self.config.G_GUI_HR_POWER_DISPLAY_RANGE
+      self.values['integrated'][g] = [np.nan] * self.config.G_GUI_PERFORMANCE_GRAPH_DISPLAY_RANGE
     for d in self.diff_keys:
       self.values['integrated'][d] = [np.nan] * self.grade_range
     self.values['integrated']['CPU_MEM'] = ""
@@ -116,6 +120,15 @@ class SensorCore():
     pre_alt_spd = {'ANT+':np.nan}
     pre_grade = pre_grade_spd = pre_glide = self.config.G_ANT_NULLVALUE
     diff_sum = {'alt_diff':0, 'dst_diff':0, 'alt_diff_spd':0, 'dst_diff_spd':0}
+    average_value = {
+      'power': {
+        3: [],
+        30: []
+      },
+    }
+    #for w_prime_balance
+    pwr_mean_under_cp = 0
+    tau = tau = 546*np.exp(-0.01*(self.config.G_POWER_CP-pwr_mean_under_cp))+316
     #alias for self.values
     v = {'GPS':self.values['GPS'], 'I2C':self.values['I2C']}
     #loop control
@@ -181,7 +194,7 @@ class SensorCore():
       
       #HeartRate : ANT+
       if self.config.G_ANT['USE']['HR']:
-        if delta['HR'] < self.threshold['HR']:
+        if delta['HR'] < self.time_threshold['HR']:
           hr = v['HR']['hr']
         
       #Cadence : ANT+
@@ -189,13 +202,13 @@ class SensorCore():
         cdc = 0
         #get from cadence or speed&cadence sensor
         if self.config.G_ANT['TYPE']['CDC'] in [0x79, 0x7A]:
-          if delta['CDC'] < self.threshold['CDC']:
+          if delta['CDC'] < self.time_threshold['CDC']:
             cdc = v['CDC']['cadence']
         #get from powermeter
         elif self.config.G_ANT['TYPE']['CDC'] == 0x0B:
           for page in [0x12,0x10]:
             if not 'timestamp' in v[key][page]: continue
-            if delta['CDC'] < self.threshold['CDC']:
+            if delta['CDC'] < self.time_threshold['CDC']:
               cdc = v['CDC'][page]['cadence']
               break
 
@@ -204,22 +217,22 @@ class SensorCore():
         pwr = 0
         #page18 > 17 > 16, 16simple is not used
         for page in [0x12,0x11,0x10]:
-          if delta['PWR'][page] < self.threshold['PWR']:
+          if delta['PWR'][page] < self.time_threshold['PWR']:
             pwr = v['PWR'][page]['power']
             break
-     
+        
       #Speed : ANT+(SPD&CDC, (PWR)) > GPS
       if self.config.G_ANT['USE']['SPD']:
         spd = 0
         if self.config.G_ANT['TYPE']['SPD'] in [0x79, 0x7B]:
-          if delta['SPD'] < self.threshold['SPD']:
+          if delta['SPD'] < self.time_threshold['SPD']:
             spd = v['SPD']['speed']
         elif self.config.G_ANT['TYPE']['SPD'] == 0x0B:
-          if delta['SPD'] < self.threshold['SPD']:
+          if delta['SPD'] < self.time_threshold['SPD']:
             spd = v['SPD'][0x11]['speed']
       elif 'timestamp' in v['GPS']:
         spd = 0
-        if not np.isnan(v['GPS']['speed']) and delta['GPS'] < self.threshold['SPD']:
+        if not np.isnan(v['GPS']['speed']) and delta['GPS'] < self.time_threshold['SPD']:
           spd = v['GPS']['speed']
  
       #Distance: ANT+(SPD, (PWR)) > GPS
@@ -265,14 +278,15 @@ class SensorCore():
         for key in ['ANT+', 'GPS']:
           if dst_diff[key] > 0:
             alt_diff[key] = alt - pre_alt[key]
-            pre_alt[key] = alt
+          pre_alt[key] = alt
         if self.config.G_ANT['USE']['SPD']:
           alt_diff['USE'] = alt_diff['ANT+']
         elif not self.config.G_ANT['USE']['SPD'] and dst_diff['GPS'] > 0:
           alt_diff['USE'] = alt_diff['GPS']
         #for grade (speed base)
         if self.config.G_ANT['USE']['SPD']:
-          alt_diff_spd['ANT+'] = alt - pre_alt_spd['ANT+']
+          if dst_diff['ANT+'] > 0:
+            alt_diff_spd['ANT+'] = alt - pre_alt_spd['ANT+']
           pre_alt_spd['ANT+'] = alt
       #dem_altitude
       if self.config.G_LOG_ALTITUDE_FROM_DATA_SOUCE:
@@ -340,9 +354,48 @@ class SensorCore():
         self.values['integrated'][g][0:-1] = self.values['integrated'][g][1:]
       self.values['integrated']['hr_graph'][-1] = hr
       self.values['integrated']['power_graph'][-1] = pwr
-      #self.values['integrated']['altitude_kf_graph'][-1] = v['I2C']['altitude_kalman']
-      self.values['integrated']['altitude_kf_graph'][-1] = v['GPS']['alt']
+      self.values['integrated']['w_bal_graph'][-1] = self.values['integrated']['w_prime_balance_normalized']
+      self.values['integrated']['altitude_gps_graph'][-1] = v['GPS']['alt']
       self.values['integrated']['altitude_graph'][-1] = v['I2C']['altitude']
+
+      if self.config.G_ANT['USE']['PWR']:
+        #average power
+        for sec in [3, 30]:
+          if(len(average_value['power'][sec]) < sec):
+            average_value['power'][sec].append(pwr)
+          else:
+            average_value['power'][sec][0:-1] = average_value['power'][sec][1:]
+            average_value['power'][sec][-1] = pwr
+        self.values['integrated']['ave_power_3s'] = int(np.mean(average_value['power'][3]))
+        self.values['integrated']['ave_power_30s'] = int(np.mean(average_value['power'][30]))
+
+        #w_prime_balance
+        #https://medium.com/critical-powers/comparison-of-wbalance-algorithms-8838173e2c15
+        
+        #Waterworth algorighm
+        if self.config.G_POWER_W_PRIME_ALGORITHM == "WATERWORTH":
+          pwr_cp_diff = pwr - self.config.G_POWER_CP
+          if self.config.G_POWER_CP < 0:
+            self.values['integrated']['w_prime_power_sum'] = self.values['integrated']['w_prime_power_sum'] + pwr
+            self.values['integrated']['w_prime_power_count'] = self.values['integrated']['w_prime_power_count'] + 1
+            pwr_mean_under_cp = self.values['integrated']['w_prime_power_sum'] / self.values['integrated']['w_prime_power_count']
+            tau = 546*np.exp(-0.01*(self.config.G_POWER_CP-pwr_mean_under_cp))+316
+          self.values['integrated']['w_prime_sum'] = self.values['integrated']['w_prime_sum'] + max(0, pwr_cp_diff)*np.exp(self.values['integrated']['w_prime_t']/tau)
+          self.values['integrated']['w_prime_balance'] = self.config.G_POWER_W_PRIME - self.values['integrated']['w_prime_sum'] * np.exp(-1*self.values['integrated']['w_prime_t']/tau)
+          self.values['integrated']['w_prime_t'] = self.values['integrated']['w_prime_t'] + self.config.G_SENSOR_INTERVAL
+
+        #Differential algorithm
+        elif self.config.G_POWER_W_PRIME_ALGORITHM == "DIFFERENTIAL":
+          cp_pwr_diff = self.config.G_POWER_CP - pwr
+          w_bal_t = self.values['integrated']['w_prime_balance']
+          if cp_pwr_diff < 0:
+            #consume
+            self.values['integrated']['w_prime_balance'] = w_bal_t + cp_pwr_diff
+          else:
+            #recovery
+            self.values['integrated']['w_prime_balance'] = w_bal_t + cp_pwr_diff * (self.config.G_POWER_W_PRIME - w_bal_t) / self.config.G_POWER_W_PRIME
+        
+        self.values['integrated']['w_prime_balance_normalized'] = int(self.values['integrated']['w_prime_balance']/self.config.G_POWER_W_PRIME*100)
 
       time_profile.append(datetime.datetime.now())
 
@@ -458,7 +511,19 @@ class SensorCore():
     self.sensor_gps.reset()
     self.sensor_ant.reset()
     self.sensor_i2c.reset()
+    self.reset_internal()
+  
+  def reset_internal(self):
     self.values['integrated']['distance'] = 0
     self.values['integrated']['accumulated_power'] = 0
+    self.values['integrated']['w_prime_balance'] = self.config.G_POWER_W_PRIME
+    self.values['integrated']['w_prime_power_sum'] = 0
+    self.values['integrated']['w_prime_power_count'] = 0
+    self.values['integrated']['w_prime_t'] = 0
+    self.values['integrated']['w_prime_sum'] = 0
+    
+    
+
+    
 
 
