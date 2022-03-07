@@ -23,7 +23,7 @@ class SensorGPIO(Sensor):
 
   def sensor_init(self):
     if _SENSOR_RPiGPIO and self.config.G_DISPLAY in ['PiTFT', 'Papirus', 'DFRobot_RPi_Display']:
-      for key in self.config.G_GPIO_BUTTON_DEF[self.config.G_DISPLAY]['MAIN'].keys():
+      for key in self.config.button_config.G_BUTTON_DEF[self.config.G_DISPLAY]['MAIN'].keys():
         self.buttonState[key] = False
         self.oldButtonState[key] = True
         if self.config.G_DISPLAY in ['PiTFT', 'DFRobot_RPi_Display']:
@@ -33,33 +33,23 @@ class SensorGPIO(Sensor):
 
   def my_callback(self, channel):
     sw_counter = 0
-    s = self.config.gui.stack_widget
-    b = self.config.G_GPIO_BUTTON_DEF[self.config.G_DISPLAY]
-    t = self.config.G_BUTTON_LONG_PRESS * self.interval_inv
 
     while True:
       sw_status = GPIO.input(channel)
 
-      i = s.currentIndex()
-      if i == 1:
-        self.mode = 'MAIN'
-      elif i >= 2:
-        self.mode = 'MENU'
-
       if sw_status == 0:
         sw_counter = sw_counter + 1
-        if sw_counter >= self.config.G_BUTTON_LONG_PRESS * self.interval_inv:
-          eval('self.config.gui.'+b[self.mode][channel][1])
+        if sw_counter >= self.config.button_config.G_BUTTON_LONG_PRESS * self.interval_inv:
+          self.config.press_button(self.config.G_DISPLAY, channel, 1) #long press
           break
       else:
-        eval('self.config.gui.'+b[self.mode][channel][0])
+        self.config.press_button(self.config.G_DISPLAY, channel, 0)
         break
       time.sleep(self.interval)
 
   def update(self):
-    #if SENSOR_RPiGPIO:
     if _SENSOR_RPiGPIO and self.config.G_DISPLAY in ['PiTFT', 'Papirus', 'DFRobot_RPi_Display']:
-      for key in self.config.G_GPIO_BUTTON_DEF[self.config.G_DISPLAY]['MAIN'].keys():
+      for key in self.config.button_config.G_BUTTON_DEF[self.config.G_DISPLAY]['MAIN'].keys():
         GPIO.add_event_detect(key, GPIO.FALLING, callback=self.my_callback, bouncetime=500)
 
   def quit(self):

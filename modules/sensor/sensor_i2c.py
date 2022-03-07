@@ -360,9 +360,6 @@ class SensorI2C(Sensor):
     self.timestamp_array[0:-1] = self.timestamp_array[1:]
     self.timestamp_array[-1] = self.values['timestamp']
 
-    if self.available_sensors['BUTTON']['BUTTON_SHIM']:
-      self.sensor_button_shim.set_func()
-
     if self.available_sensors['BATTERY']['PIJUICE']:
       bv = self.sensor_pijuice.status.GetBatteryVoltage()
       bc = self.sensor_pijuice.status.GetBatteryCurrent()
@@ -958,10 +955,6 @@ class SensorI2C(Sensor):
     #  round(self.values['altitude'],1),"m, ",
     #  round(self.values['acc'][Z]*G,1),"m/s^2"
     #  )
-
-  def change_button_mode(self, mode):
-    if self.available_sensors['BUTTON']['BUTTON_SHIM']:
-      self.sensor_button_shim.set_func(mode)
 
   def detect_pressure_bmp280(self):
     try:
