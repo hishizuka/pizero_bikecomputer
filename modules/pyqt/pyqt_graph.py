@@ -27,40 +27,64 @@ pg.setConfigOption('foreground', 'k')
 class PerformanceGraphWidget(ScreenWidget):
 
   def init_extra(self):
+    self.display_item = self.config.G_GUI_PERFORMANCE_GRAPH_DISPLAY_ITEM
+    self.item = {
+      'POWER': {
+        'name':'POWER',
+        'graph_key': 'power_graph',
+        'yrange':[self.config.G_GUI_MIN_POWER, self.config.G_GUI_MAX_POWER],
+      },
+      'HR': {
+        'name':'HR',
+        'graph_key': 'hr_graph',
+        'yrange':[self.config.G_GUI_MIN_HR, self.config.G_GUI_MAX_HR],
+      },
+      'W_BAL': {
+        'name':'W_BAL',
+        'graph_key': 'w_bal_graph',
+        'yrange':[self.config.G_GUI_MIN_W_BAL, self.config.G_GUI_MAX_W_BAL],
+      },
+
+    }
     self.plot_data_x1 = []
-    for i in range(self.config.G_GUI_HR_POWER_DISPLAY_RANGE):
+    for i in range(self.config.G_GUI_PERFORMANCE_GRAPH_DISPLAY_RANGE):
       self.plot_data_x1.append(i)
 
   def setup_ui_extra(self): 
+    #1st graph: POWER
     self.plot = pg.PlotWidget()
     self.plot.setBackground(None)
-    #self.plot.setBackground((0,0,0)) #for debug
     self.p1 = self.plot.plotItem
-    #self.p1.setLabels(left='HR')
-    #2nd graph
+
+    #2nd graph: HR or W_BAL
     self.p2 = pg.ViewBox()
     self.p1.showAxis('right')
     self.p1.scene().addItem(self.p2)
     self.p1.getAxis('right').linkToView(self.p2)
     self.p2.setXLink(self.p1)
-    #self.p1.getAxis('right').setLabel('power', color='#FFFF00')
 
-    self.plot.setXRange(0, self.config.G_GUI_HR_POWER_DISPLAY_RANGE)
-    self.p1.setYRange(self.config.G_GUI_MIN_HR, self.config.G_GUI_MAX_HR)
-    self.p2.setYRange(self.config.G_GUI_MIN_POWER, self.config.G_GUI_MAX_POWER)
+    self.plot.setXRange(0, self.config.G_GUI_PERFORMANCE_GRAPH_DISPLAY_RANGE)
+    self.p1.setYRange(*self.item[self.display_item[0]]['yrange'])
+    self.p2.setYRange(*self.item[self.display_item[1]]['yrange'])
     self.plot.setMouseEnabled(x=False, y=False)
-    #pg.setConfigOptions(antialias=True)
+    
+    #self.p1.setLabels(left=self.item[self.display_item[0]]['name'])
+    #self.p1.getAxis('right').setLabel(self.display_item[self.item[1]]['name'])
+
+    #p2 on p1
+    self.p1.setZValue(-100)
   
-    #for HR
-    self.pen1 = pg.mkPen(color=(255,0,0), width=2)
     #for Power
     #self.brush = pg.mkBrush(color=(0,160,255,64))
     self.brush = pg.mkBrush(color=(0,255,255))
     #self.pen2 = pg.mkPen(color=(255,255,255,0), width=0.01) #transparent and thin line
-    self.pen2 = pg.mkPen(color=(255,255,255), width=0.01) #transparent and thin line
+    self.pen1 = pg.mkPen(color=(255,255,255), width=0.01) #transparent and thin line
+    #for HR, wbal
+    self.pen2 = pg.mkPen(color=(255,0,0), width=2)
 
   def make_item_layout(self):
-    self.item_layout = {"Power":(0, 0), "HR":(0, 1), "Lap PWR":(0, 2), "LapTime":(0, 3)}
+    #self.item_layout = {"Power":(0, 0), "HR":(0, 1), "Lap PWR":(0, 2), "LapTime":(0, 3)}
+    self.item_layout = {"Power":(0, 0), "HR":(0, 1), "W'bal(Norm)":(0, 2), "LapTime":(0, 3)}
 
   def add_extra(self):
     self.layout.addWidget(self.plot, 1, 0, 2, 4)
@@ -74,35 +98,46 @@ class PerformanceGraphWidget(ScreenWidget):
     self.set_minimum_size()
 
   def update_extra(self):
-    all_nan = {'hr_graph': True, 'power_graph': True}
+    #all_nan = {'hr_graph': True, 'power_graph': True}
+    all_nan = {self.item[self.display_item[0]]['graph_key']: True, self.item[self.display_item[1]]['graph_key']: True}
     for key in all_nan.keys():
       chk = np.isnan(self.config.logger.sensor.values['integrated'][key])
       if False in chk:
         all_nan[key] = False
    
-    if not all_nan['hr_graph']:
+    if not all_nan[self.item[self.display_item[0]]['graph_key']]:
       self.p1.clear()
-      #for HR
+
+      #change max for power
+      if self.display_item[0] == 'POWER':
+        power_max = 100 * (int(np.nanmax(self.config.logger.sensor.values['integrated'][self.item[self.display_item[0]]['graph_key']])/100) + 1)
+        if self.item[self.display_item[0]]['yrange'][1] != power_max:
+          self.item[self.display_item[0]]['yrange'][1] = power_max
+          self.p1.setYRange(*self.item[self.display_item[0]]['yrange'])
+
       self.p1.addItem(
-        pg.PlotCurveItem(
-          self.config.logger.sensor.values['integrated']['hr_graph'], 
-          pen=self.pen1
+        pg.BarGraphItem(
+          x0 = self.plot_data_x1[:-1],
+          x1 = self.plot_data_x1[1:],
+          height = self.config.logger.sensor.values['integrated'][self.item[self.display_item[0]]['graph_key']],
+          brush = self.brush,
+          pen = self.pen1
         )
       )
 
-    #for Power
-    if not all_nan['power_graph']:
+    #if not all_nan['hr_graph']:
+    if not all_nan[self.item[self.display_item[1]]['graph_key']]:
       self.p2.clear()
       self.p2.setGeometry(self.p1.vb.sceneBoundingRect())
       self.p2.linkedViewChanged(self.p1.vb, self.p2.XAxis)
-      bg = pg.BarGraphItem(
-        x0 = self.plot_data_x1[:-1],
-        x1 = self.plot_data_x1[1:],
-        height = self.config.logger.sensor.values['integrated']['power_graph'],
-        brush = self.brush,
-        pen = self.pen2
+      #for HR
+      self.p2.addItem(
+        pg.PlotCurveItem(
+          #self.config.logger.sensor.values['integrated']['hr_graph'], 
+          self.config.logger.sensor.values['integrated'][self.item[self.display_item[1]]['graph_key']], 
+          pen=self.pen2
+        )
       )
-      self.p2.addItem(bg)
 
 
 class BaseMapWidget(ScreenWidget):
@@ -250,7 +285,7 @@ class BaseMapWidget(ScreenWidget):
 
   def change_move(self):
     if not self.move_adjust_mode:
-      self.move_factor = 16
+      self.move_factor = 32
       self.move_adjust_mode = True
     else:
       self.move_factor = 1.0
@@ -499,6 +534,9 @@ class SimpleMapWidget(BaseMapWidget):
 
   def setup_ui_extra(self):
     super().setup_ui_extra()
+
+    self.map_pos['x'] = self.config.G_DUMMY_POS_X
+    self.map_pos['y'] = self.config.G_DUMMY_POS_Y
     
     #self.plot.showGrid(x=True, y=True, alpha=1)
     self.track_plot = self.plot.plot(pen=pg.mkPen(color=(0,128,255), width=8))
@@ -610,7 +648,7 @@ class SimpleMapWidget(BaseMapWidget):
       else:
         self.button_press_count['lock'] += 1
         #long press
-        if self.button_press_count['lock'] == self.config.G_BUTTON_LONG_PRESS:
+        if self.button_press_count['lock'] == self.config.button_config.G_BUTTON_LONG_PRESS:
           self.change_move()
     elif self.button['lock']._state == 1:
       self.button['lock']._state = 0
@@ -936,6 +974,7 @@ class SimpleMapWidget(BaseMapWidget):
     if expand:
       tiles = list(map(lambda x: tuple(map(lambda y: int(y/z_conv_factor), x)), tiles))
 
+    download_tile = []
     for tile in tiles:
       filename = self.config.get_maptile_filename(map_name, z_draw, *tile)
       key = "{0}-{1}".format(*tile)
@@ -948,12 +987,19 @@ class SimpleMapWidget(BaseMapWidget):
       if key in self.existing_tiles[map_name][z_draw]:
         continue
 
-      #start downloading
+      #entry to download tiles
       self.existing_tiles[map_name][z_draw][key] = False
-      if not self.config.download_maptile(map_name, z_draw, *tile):
-        #failed to put queue, then retry
-        self.existing_tiles[map_name][z_draw].pop(key)
+      download_tile.append(tile)
 
+    #start downloading
+    if len(download_tile) > 0:
+      if not self.config.download_maptile(map_name, z_draw, download_tile, additional_download=True):
+        #failed to put queue, then retry
+        for tile in download_tile:
+          key = "{0}-{1}".format(*tile)
+          if key in self.existing_tiles[map_name][z_draw]:
+            self.existing_tiles[map_name][z_draw].pop(key)
+    
     draw_flag = False
     add_key = {}
     expand_keys = {}
