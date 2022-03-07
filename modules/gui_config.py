@@ -40,7 +40,8 @@ class GUI_Config():
     "Position":"{0:^3.5f}",
     "Altitude":"{0:^5.0f}m",
     "Grade":"{0:^2.0f}%",
-    "GPS_error":"{0:^4.0f}m"
+    "GPS_error":"{0:^4.0f}m",
+    "String":"{0:^s}",
   }
 
   G_ITEM_DEF = {
@@ -51,22 +52,27 @@ class GUI_Config():
     "Cad.":(G_UNIT["Cadence"],"self.sensor.values['integrated']['cadence']"),
     "HR":(G_UNIT["HeartRate"],"self.sensor.values['integrated']['hr']"),
     "Work":(G_UNIT["Work"],"self.sensor.values['integrated']['accumulated_power']"),
+    "W'bal":("{0:^.0f}kJ","self.sensor.values['integrated']['w_prime_balance']"),
+    "W'bal(Norm)":("{0:^d}%","self.sensor.values['integrated']['w_prime_balance_normalized']"),
     "Grade":(G_UNIT["Grade"],"self.sensor.values['integrated']['grade']"),
     "Grade(spd)":(G_UNIT["Grade"],"self.sensor.values['integrated']['grade_spd']"),
     "GlideRatio":("{0:.0f}m","self.sensor.values['integrated']['glide_ratio']"),
+    #average_values
+    "Power(3s)":(G_UNIT["Power"],"self.sensor.values['integrated']['ave_power_3s']"),
+    "Power(30s)":(G_UNIT["Power"],"self.sensor.values['integrated']['ave_power_30s']"),
     #GPS raw
     "Latitude":(G_UNIT["Position"],"self.sensor.values['GPS']['lat']"),
     "Longitude":(G_UNIT["Position"],"self.sensor.values['GPS']['lon']"),
     "Alt.(GPS)":(G_UNIT["Altitude"],"self.sensor.values['GPS']['alt']"),
     "Speed(GPS)":(G_UNIT["Speed"],"self.sensor.values['GPS']['speed']"),
     "Dist.(GPS)":(G_UNIT["Distance"],"self.sensor.values['GPS']['distance']"),
-    "Heading(GPS)":("{0:^s}","self.sensor.values['GPS']['track_str']"),
-    "Satellites":("{0:^s}","self.sensor.values['GPS']['used_sats_str']"),
+    "Heading(GPS)":(G_UNIT["String"],"self.sensor.values['GPS']['track_str']"),
+    "Satellites":(G_UNIT["String"],"self.sensor.values['GPS']['used_sats_str']"),
     "Error(x)":(G_UNIT["GPS_error"],"self.sensor.values['GPS']['epx']"),
     "Error(y)":(G_UNIT["GPS_error"],"self.sensor.values['GPS']['epy']"),
     "Error(pos)":(G_UNIT["GPS_error"],"self.sensor.values['GPS']['error']"),
     "Error(alt)":(G_UNIT["GPS_error"],"self.sensor.values['GPS']['epv']"),
-    "GPSTime":("{0:^s}","self.sensor.values['GPS']['utctime']"),
+    "GPSTime":(G_UNIT["String"],"self.sensor.values['GPS']['utctime']"),
     "GPS Fix":("{0:^d}","self.sensor.values['GPS']['mode']"),
     "Course Dist.":(G_UNIT["Distance"],"self.sensor.values['GPS']['course_distance']"),
     #ANT+ raw
@@ -92,7 +98,7 @@ class GUI_Config():
       "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x10]['power_r']"),
     "Power L(ANT+)":(G_UNIT["Power"],\
       "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x10]['power_l']"),
-    "Balance(ANT+)":("{0:^s}",\
+    "Balance(ANT+)":(G_UNIT["String"],\
       "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x10]['lr_balance']"),
     "Power17(ANT+)":(G_UNIT["Power"],\
       "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x11]['power']"),
@@ -108,11 +114,11 @@ class GUI_Config():
       "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x12]['cadence']"),
     "Work18(ANT+)":(G_UNIT["Work"],\
       "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x12]['accumulated_power']"),
-    "Torque Ef.(ANT+)":("{0:^s}",\
+    "Torque Ef.(ANT+)":(G_UNIT["String"],\
       "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x13]['torque_eff']"),
-    "Pedal Sm.(ANT+)":("{0:^s}",\
+    "Pedal Sm.(ANT+)":(G_UNIT["String"],\
       "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x13]['pedal_sm']"),
-    "Light(ANT+)":("{0:^s}",\
+    "Light(ANT+)":(G_UNIT["String"],\
       "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['LGT']]['lgt_state_display']"),
     #ANT+ multi
     "PWR1":(G_UNIT["Power"],"None"),
@@ -141,7 +147,7 @@ class GUI_Config():
     "ACC_Y":("{0:^1.1f}","self.sensor.values['I2C']['acc'][1]"),
     "ACC_Z":("{0:^1.1f}","self.sensor.values['I2C']['acc'][2]"),
     "Battery":("{0:^1.0f}%","self.sensor.values['I2C']['battery_percentage']"),
-    "Heading":("{0:^s}","self.sensor.values['I2C']['heading_str']"),
+    "Heading":(G_UNIT["String"],"self.sensor.values['I2C']['heading_str']"),
     "Pitch":("{0:^1.0f}","self.sensor.values['I2C']['modified_pitch']"),
     #General
     "Timer":("timer","self.logger.values['count']"),
@@ -150,8 +156,8 @@ class GUI_Config():
     "Time":("time","0"),
     "ElapsedTime":("timer","self.logger.values['elapsed_time']"),
     "GrossAveSPD":(G_UNIT["Speed"],"self.logger.values['gross_ave_spd']"),
-    "GrossDiffTime":("{0:^s}","self.logger.values['gross_diff_time']"),
-    "CPU_MEM":("{0:^s}","self.sensor.values['integrated']['CPU_MEM']"),
+    "GrossDiffTime":(G_UNIT["String"],"self.logger.values['gross_diff_time']"),
+    "CPU_MEM":(G_UNIT["String"],"self.sensor.values['integrated']['CPU_MEM']"),
     #Statistics
     #Pre Lap Average or total
     "PLap HR":(G_UNIT["HeartRate"],"self.logger.record_stats['pre_lap_avg']['heart_rate']"),
@@ -224,8 +230,11 @@ class GUI_Config():
     self.no_focus = QtCore.Qt.FocusPolicy.NoFocus if USE_PYQT6 else QtCore.Qt.NoFocus
     self.strong_focus = QtCore.Qt.FocusPolicy.StrongFocus if USE_PYQT6 else QtCore.Qt.StrongFocus
 
-    self.display_buffer_opnemode = QtCore.QIODeviceBase.OpenModeFlag.ReadWrite if USE_PYQT6 \
+    self.display_buffer_openmode = QtCore.QIODeviceBase.OpenModeFlag.ReadWrite if USE_PYQT6 \
     else QtCore.QBuffer.ReadWrite
+    self.format_rgb888 = QtGui.QImage.Format.Format_RGB888 if USE_PYQT6 else QtGui.QImage.Format_RGB888
+    self.format_mono = QtGui.QImage.Format.Format_Mono if USE_PYQT6 else QtGui.QImage.Format_Mono
+    #or Format_MonoLSB
 
   def read_layout(self):
     text = None
