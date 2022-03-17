@@ -28,7 +28,13 @@ class PapirusDisplay():
     self.papirus.clear()
   
   def update(self, im_array):
-    self.papirus.display(Image.frombytes("1", (im_array.shape[1]*8, im_array.shape[0]), im_array.tobytes()))
+    self.papirus.display(
+      Image.frombytes(
+        "1", 
+        (im_array.shape[1]*8, im_array.shape[0]),
+        (~im_array).tobytes()
+      )
+    )
     self.papirus.fast_update()
 
   def quit(self):
