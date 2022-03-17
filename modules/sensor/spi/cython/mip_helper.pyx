@@ -26,10 +26,11 @@ cdef class MipDisplay_CPP:
     del self.m
 
   cpdef set_screen_size(self, w, h):
+    pass
     self.m.set_screen_size(w, h)
 
-  cpdef update(self, cnp.ndarray[cnp.uint8_t, ndim=3] im_array):
-    self.m.update(<unsigned char*> im_array.data)
+  cpdef update(self, const cnp.uint8_t[:,:,::1] im_array):
+    self.m.update(<unsigned char*> &im_array[0,0,0])
 
   cpdef set_brightness(self, b):
     self.m.set_brightness(b)

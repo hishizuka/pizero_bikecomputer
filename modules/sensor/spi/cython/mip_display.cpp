@@ -125,7 +125,7 @@ void MipDisplay::inversion(float sec) {
 
 void MipDisplay::draw_worker() {
   while (1) {
-    BufQueue *q = nullptr;
+    std::vector<char> q;
     {
       std::unique_lock<std::mutex> ul(mutex_);
       while (queue_.empty()) {
@@ -133,16 +133,10 @@ void MipDisplay::draw_worker() {
         //if (status_quit) { return; }
         cv_.wait(ul);
       }
-      if (!queue_.empty()) {
-        q = &(queue_.front());
-        queue_.pop();
-      }
+      q = queue_.front();
+      queue_.pop();
     } //release
-    if (q != nullptr) {
-      draw(q);
-      delete[] q->buf;
-      q->buf = nullptr;
-    }
+    draw(q);
   }
 }
 
@@ -196,27 +190,23 @@ void MipDisplay::update(unsigned char* image) {
 
   {
     std::unique_lock<std::mutex> ul(mutex_);
-    if(update_lines < 270) { 
-      queue_.emplace(new char[BUF_WIDTH*update_lines], BUF_WIDTH*update_lines);
-      memcpy(queue_.back().buf, buf_image, BUF_WIDTH*update_lines);
+    if(update_lines < MAX_HEIGHT_PER_ONCE) { 
+      queue_.emplace(buf_image, buf_image+BUF_WIDTH*update_lines);
     }
     else {
       int l = BUF_WIDTH*update_lines/2;
-      queue_.emplace(new char[l], l);
-      memcpy(queue_.back().buf, buf_image, l);
-      queue_.emplace(new char[l], l);
-      memcpy(queue_.back().buf, &buf_image[l], l);
+      queue_.emplace(buf_image, buf_image+l);
+      queue_.emplace(buf_image, &buf_image[l]+l);
     }
   } //release lock
   cv_.notify_all();
-  
 }
 
-void MipDisplay::draw(BufQueue* buf_queue) {
+void MipDisplay::draw(std::vector<char>& buf_queue) {
   //std::chrono::system_clock::time_point start = std::chrono::system_clock::now();
   usleep(10); //0.0001
   gpio_write(pigpio, GPIO_SCS, 1);
-  spi_write(pigpio, spi, buf_queue->buf, buf_queue->size);
+  spi_write(pigpio, spi, buf_queue.data(), buf_queue.size());
   spi_write(pigpio, spi, buf_no_update, 2);
   gpio_write(pigpio, GPIO_SCS, 0);
   usleep(10); //0.0001

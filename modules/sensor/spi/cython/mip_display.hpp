@@ -18,14 +18,6 @@
 #define GPIO_BACKLIGHT 18 //12 in GPIO.BOARD with hardware PWM in pigpio
 #define GPIO_BACKLIGHT_FREQ 64
 
-struct BufQueue {
-  char* buf;
-  int size;
-  BufQueue(char* buf, int size) 
-        : buf(buf)
-        , size(size)
-    {}
-};
 
 class MipDisplay {
 
@@ -47,8 +39,9 @@ class MipDisplay {
     char buf_inversion[2] = {0b00010100,0x00};
     int diff_count = 0;
     int refresh_count = 1200;
+    int MAX_HEIGHT_PER_ONCE = 270;
 
-    std::queue<BufQueue> queue_;
+    std::queue<std::vector<char> > queue_;
     std::mutex mutex_;
     std::condition_variable cv_;
     std::vector<std::thread> threads_;
@@ -60,7 +53,7 @@ class MipDisplay {
     void no_update();
 
     void draw_worker();
-    void draw(BufQueue* buf_queue);
+    void draw(std::vector<char>& buf_queue);
     bool get_status_quit();
 
   public:
