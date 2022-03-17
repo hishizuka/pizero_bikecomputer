@@ -6,7 +6,6 @@ def make_ext(modname, pyxfilename):
         extra_compile_args=['-std=c++17'],
         language='c++',
         include_dirs = ['modules/sensor/spi/cython', numpy.get_include()],
-        #include_dirs = ['modules/logger/cython'],
         extra_link_args = ['-lpigpiod_if2'],
     )
     return ext
