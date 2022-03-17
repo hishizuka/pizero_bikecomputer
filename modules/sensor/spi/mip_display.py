@@ -55,7 +55,7 @@ class MipDisplay():
     
     self.config = config
     if MODE == "Cython":
-      self.conv_color = conv_3bit_color
+      #self.conv_color = conv_3bit_color
       
       self.mip_display_cpp = MipDisplay_CPP(self.spi_clock)
       self.mip_display_cpp.set_screen_size(self.config.G_WIDTH, self.config.G_HEIGHT)
@@ -63,12 +63,10 @@ class MipDisplay():
       self.set_brightness = self.mip_display_cpp.set_brightness
       self.inversion = self.mip_display_cpp.inversion
       self.quit = self.mip_display_cpp.quit
-      #self.mip_display_cpp.set_refresh_count(20)
+      self.mip_display_cpp.set_refresh_count(20)
       return
-
     else:
-      #self.conv_color = self.conv_3bit_color_py
-      self.conv_color = conv_3bit_color
+      self.conv_color = self.conv_3bit_color_py
     
     self.init_buffer()
     self.init_worker_thread()
