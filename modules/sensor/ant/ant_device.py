@@ -40,29 +40,29 @@ class ANT_Device():
     self.config = config
     self.name = name
     self.values = values
-    self.addStructPattern()
-    self.initValue()
+    self.add_struct_pattern()
+    self.init_value()
     
     if node == None: return #for dummy device
-    self.makeChannel(self.ant_config['channel_type'])
+    self.make_channel(self.ant_config['channel_type'])
     self.init_extra()
-    self.readyConnect()
+    self.ready_connect()
     self.connect(isCheck=True, isChange=False) #USE: True -> True
 
   def on_data(self):
     pass
 
-  def addStructPattern(self):
+  def add_struct_pattern(self):
     pass
 
-  def initValue(self):
-    self.setNullValue()
-    self.resetValue()
+  def init_value(self):
+    self.set_null_value()
+    self.reset_value()
   
   def init_extra(self):
     pass
 
-  def setNullValue(self):
+  def set_null_value(self):
     for element in self.elements:
       self.values[element] = self.config.G_ANT_NULLVALUE
     self.init_common_page_status()
@@ -75,10 +75,10 @@ class ANT_Device():
       self.values["stored_page"][key] = False
 
   #reset total value with reset button 
-  def resetValue(self):
+  def reset_value(self):
     pass
 
-  def makeChannel(self, c_type, ext_assign=None):
+  def make_channel(self, c_type, ext_assign=None):
     if self.config.G_ANT['STATUS'] and self.channel == None:
       self.channel = self.node.new_channel(c_type, ext_assign=ext_assign)
       print(self.name, ': channel_num: ', self.channel.id)
@@ -89,7 +89,7 @@ class ANT_Device():
   def channel_set_id(self): #for slave
     self.channel.set_id(self.config.G_ANT['ID'][self.name], self.ant_config['type'], self.ant_config['transmission_type'])
 
-  def readyConnect(self):
+  def ready_connect(self):
     if self.config.G_ANT['STATUS']:
       self.channel_set_id()
       self.channel.set_period(self.ant_config['interval'][self.config.G_ANT['INTERVAL']])
@@ -120,6 +120,9 @@ class ANT_Device():
       if isChange: self.config.G_ANT['USE'][self.name] = True
     except:
       pass
+  
+  def init_after_connect(self):
+    pass
 
   def disconnect(self, isCheck=True, isChange=False, wait=0):
     if not self.config.G_ANT['STATUS']: return
