@@ -21,8 +21,8 @@ class ANT_Device_Search(ant_device.ANT_Device):
     self.node = node
     self.config = config
     if self.config.G_ANT['STATUS']:
-      #special use of makeChannel(c_type, search=False)
-      self.makeChannel(self.ant_config['channel_type'], ext_assign=0x01)
+      #special use of make_channel(c_type, search=False)
+      self.make_channel(self.ant_config['channel_type'], ext_assign=0x01)
 
   def on_data(self, data):
     if not self.searchState: return
@@ -74,7 +74,7 @@ class ANT_Device_Search(ant_device.ANT_Device):
         
       self.searchState = True
       
-  def stopSearch(self, resetWait=True):
+  def stop_search(self, resetWait=True):
     if self.config.G_ANT['STATUS'] and self.searchState:
       if self.antName not in ['CTRL']:
         self.disconnect(isCheck=False, isChange=False, wait=0.5) #USE: True -> False

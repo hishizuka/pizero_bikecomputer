@@ -23,7 +23,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
   }
   pickle_key = "ant+_pwr_values"
 
-  def addStructPattern(self):
+  def add_struct_pattern(self):
     self.structPattern[self.name] = {
       #(page), evt_count, lr_balance, cadence, accumlated power(2byte), instantaneous power(2byte)
       0x10:struct.Struct('<xBBBHH'),
@@ -35,7 +35,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
       0x13:struct.Struct('<xxBBBBxx'),
     }
   
-  def setNullValue(self):
+  def set_null_value(self):
     for page in self.elements:
       self.values[page] = {}
     for page in self.elements:
@@ -43,7 +43,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
         self.values[page][element] = self.config.G_ANT_NULLVALUE
     self.init_common_page_status()
   
-  def resetValue(self):
+  def reset_value(self):
     self.interval = self.ant_config['interval'][self.config.G_ANT['INTERVAL']]/self.ant_config['interval'][-1]
     self.values[0x10]['accumulated_power'] = 0.0
     self.values[0x11]['distance'] = 0.0

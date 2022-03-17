@@ -59,7 +59,7 @@ class SensorANT(Sensor):
     #initialize scan channel (reserve ch0)
     self.scanner = ant_device_multiscan.ANT_Device_MultiScan(self.node, self.config)
     self.searcher = ant_device_search.ANT_Device_Search(self.node, self.config, self.values)
-    self.scanner.setMainAntDevice(self.device)
+    self.scanner.set_main_ant_device(self.device)
    
     #auto connect ANT+ sensor from setting.conf
     if self.config.G_ANT['STATUS'] and not self.config.G_DUMMY_OUTPUT:
@@ -67,7 +67,7 @@ class SensorANT(Sensor):
         if self.config.G_ANT['USE'][key]:
           antID = self.config.G_ANT['ID'][key]
           antType = self.config.G_ANT['TYPE'][key]
-          self.connectAntSensor(key, antID, antType, False)
+          self.connect_ant_sensor(key, antID, antType, False)
       return
     #otherwise, initialize
     else:
@@ -143,7 +143,7 @@ class SensorANT(Sensor):
 
   def reset(self):
     for dv in self.device.values():
-      dv.resetValue()
+      dv.reset_value()
 
   def quit(self):
     if not self.config.G_ANT['STATUS']:
@@ -154,17 +154,17 @@ class SensorANT(Sensor):
       for dv in self.device.values():
         dv.ant_state = 'quit'
         dv.disconnect(isCheck=True, isChange=False, wait=0) #USE: True -> True
-      self.searcher.stopSearch(resetWait=False)
+      self.searcher.stop_search(resetWait=False)
     self.node.stop()
 
-  def connectAntSensor(self, antName, antID, antType, connectStatus):
+  def connect_ant_sensor(self, antName, antID, antType, connectStatus):
     if not self.config.G_ANT['STATUS']:
       return
     self.config.G_ANT['ID'][antName] = antID
     self.config.G_ANT['TYPE'][antName] = antType
     self.config.G_ANT['ID_TYPE'][antName] = struct.pack('<HB', antID, antType)
     antIDType = self.config.G_ANT['ID_TYPE'][antName]
-    self.searcher.stopSearch(resetWait=False)
+    self.searcher.stop_search(resetWait=False)
     
     self.config.G_ANT['USE'][antName] = True
 
@@ -177,7 +177,8 @@ class SensorANT(Sensor):
     #recconect
     if antIDType in self.device:
       self.device[antIDType].connect(isCheck=False, isChange=False) #USE: True -> True)
-      self.device[antIDType].ant_state = 'connectAntSensor'
+      self.device[antIDType].ant_state = 'connect_ant_sensor'
+      self.device[antIDType].init_after_connect()
       return
    
     #newly connect
@@ -203,9 +204,10 @@ class SensorANT(Sensor):
     elif antType == 0x10:
       self.device[antIDType] \
         = ant_device_ctrl.ANT_Device_CTRL(self.node, self.config, self.values[antIDType], antName)
-    self.device[antIDType].ant_state = 'connectAntSensor'
+    self.device[antIDType].ant_state = 'connect_ant_sensor'
+    self.device[antIDType].init_after_connect()
 
-  def disconnectAntSensor(self, antName):
+  def disconnect_ant_sensor(self, antName):
     antIDType = self.config.G_ANT['ID_TYPE'][antName]
     antNames = []
     for k,v in self.config.G_ANT['USE'].items():
@@ -214,27 +216,27 @@ class SensorANT(Sensor):
           antNames.append(k)
     for k in antNames:
       #USE: True -> False
-      self.device[self.config.G_ANT['ID_TYPE'][k]].ant_state = 'disconnectAntSensor'
+      self.device[self.config.G_ANT['ID_TYPE'][k]].ant_state = 'disconnect_ant_sensor'
       self.device[self.config.G_ANT['ID_TYPE'][k]].disconnect(isCheck=True, isChange=True)
       self.config.G_ANT['ID_TYPE'][k] = 0
       self.config.G_ANT['ID'][k] = 0
       self.config.G_ANT['TYPE'][k] = 0
       self.config.G_ANT['USE'][k] = False
 
-  def continuousScan(self):
+  def continuous_scan(self):
     if not self.config.G_ANT['STATUS']:
       return
     self.scanner.set_wait_quick_mode()
     for dv in self.device.values():
-      dv.ant_state = 'continuousScan'
+      dv.ant_state = 'continuous_scan'
       dv.disconnect(isCheck=True, isChange=False, wait=0.5) #USE: True -> True
     time.sleep(0.5)
     self.scanner.set_wait_scan_mode()
     self.scanner.scan()
 
-  def stopContinuousScan(self):
+  def stop_continuous_scan(self):
     self.scanner.set_wait_quick_mode()
-    self.scanner.stopScan()
+    self.scanner.stop_scan()
     antIDTypes = []
     for k,v in self.config.G_ANT['USE'].items():
       if v and not self.config.G_ANT['ID_TYPE'][k] in antIDTypes: 

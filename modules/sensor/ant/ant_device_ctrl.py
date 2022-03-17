@@ -29,7 +29,7 @@ class ANT_Device_CTRL(ant_device.ANT_Device):
     if self.send_data:
       self.channel.send_broadcast_data(self.data_page_02)
 
-  def addStructPattern(self):
+  def add_struct_pattern(self):
     self.structPattern[self.name] = struct.Struct('<xxxxxxH')
 
   def on_data(self, data):

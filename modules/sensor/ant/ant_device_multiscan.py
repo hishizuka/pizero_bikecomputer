@@ -24,21 +24,21 @@ class ANT_Device_MultiScan(ant_device.ANT_Device):
   def __init__(self, node, config):
     self.node = node
     self.config = config
-    self.resetValue()
-    self.makeChannel(self.ant_config['channel_type'])
-    self.readyScan()
+    self.reset_value()
+    self.make_channel(self.ant_config['channel_type'])
+    self.ready_scan()
     self.dummyPowerDevice = ant_device_power.ANT_Device_Power(node=None, config=config, values={}, name='PWR')
 
-  def setNullValue(self):
+  def set_null_value(self):
     pass
   
-  def resetValue(self):
+  def reset_value(self):
     self.values = {}
     self.power_values = {}
     self.power_meter_value = {}
     self.pre_power_meter_value = {}
   
-  def readyScan(self):
+  def ready_scan(self):
     if self.config.G_ANT['STATUS']:
       self.channel.set_rf_freq(57)
       self.channel.set_id(0, self.ant_config['type'], self.ant_config['transmission_type'])
@@ -52,7 +52,7 @@ class ANT_Device_MultiScan(ant_device.ANT_Device):
       except:
         pass
 
-  def stopScan(self):
+  def stop_scan(self):
     self.disconnect(0.5)
     
   def stop(self):
@@ -67,14 +67,14 @@ class ANT_Device_MultiScan(ant_device.ANT_Device):
     try:
       self.channel.close()
       time.sleep(wait)
-      self.setNullValue() 
+      self.set_null_value() 
       self.isUse = False
       self.channel.enable_extended_messages(0)
       return True
     except:
       return False
 
-  def setMainAntDevice(self, device):
+  def set_main_ant_device(self, device):
     self.mainAntDevice = device
 
   def on_data(self, data):
