@@ -209,11 +209,11 @@ $ sudo pip3 install adafruit-circuitpython-bmp280
 | [DFRobot](https://www.dfrobot.com) | [BMX160+BMP388](https://www.dfrobot.com/product-1928.html) | BMX160(*1) | 
 | [Adafruit](https://www.adafruit.com) | [LSM6DS33 + LIS3MDL](https://www.adafruit.com/product/4485) | adafruit-circuitpython-lsm6ds adafruit-circuitpython-lis3mdl |
 | [Adafruit](https://www.adafruit.com) | [LSM9DS1](https://www.adafruit.com/product/4634) | adafruit-circuitpython-lsm9ds1 | 
-| [Adafruit](https://www.adafruit.com) | [BNO055](https://www.adafruit.com/product/4646) | adafruit-circuitpython-bno055 (*2) | 
+| [Adafruit](https://www.adafruit.com) | [BNO055](https://www.adafruit.com/product/4646) | adafruit-circuitpython-bno055(*2) | 
 | [Adafruit](https://www.adafruit.com) | [VCNL4040](https://www.adafruit.com/product/4161) | adafruit-circuitpython-vcnl4040 |
 | [ozzmaker](https://ozzmaker.com) | [Berry GPS IMU v4](https://ozzmaker.com/product/berrygps-imu/) | adafruit-circuitpython-lsm6ds adafruit-circuitpython-lis3mdl |
+| [GPS PIE](https://gps-pie.com/) | [GPS PIE](https://gps-pie.com/) | adafruit-circuitpython-bno055(*2) |
 | [waveshare](https://www.waveshare.com/) | [Environment Sensor HAT](https://www.waveshare.com/environment-sensor-hat.htm) | adafruit-circuitpython-bme280 adafruit-circuitpython-icm20x adafruit-circuitpython-tsl2591 adafruit-circuitpython-ltr390 adafruit-circuitpython-sgp40 |
-
 
 *1 Install manually https://github.com/spacecraft-design-lab-2019/CircuitPython_BMX160
 
@@ -347,7 +347,7 @@ The buttons at the bottom of the screen are assigned the following functions fro
 | Button | Short press | Long press |
 |:-|:-|:-|
 | Left (<-) | Screen switching(Back) | None |
-| LAP | LAP | Reset |
+| LAP | Lap | Reset |
 | MENU | Enter the menu | None |
 | Start/Stop  | Start/Stop | Quit the program |
 | Right (->) | Screen switching(Forward) | None |
@@ -365,11 +365,11 @@ From left to right, the button assignments are as follows.
 
 | GPIO NUM | Short press | Long press |
 |:-|:-|:-|
-| 5 | Screen switching(Back) | None |
-| 6 | LAP | Reset |
+| 5 | Left (<-) | None |
+| 6 | Lap | Reset |
 | 12 | Screen brightness On/Off | None |
 | 13 | Start/Stop | Quit the program |
-| 16 | Screen switching(Forward) | Entering the menu |
+| 16 | Right (->) | Entering the menu |
 
 In the menu, the button has different assignments. From left to right, the button assignments are as follows.
 
@@ -391,27 +391,84 @@ From left to right, the button assignments are as follows.
 
 | Button | Short press | Long press |
 |:-|:-|:-|
-| A | Screen switching(Back) | None |
-| B | LAP | Reset |
-| C | Change mode(*) | None |
+| A | Left (<-) | None |
+| B | Lap | Reset |
+| C | Screenshot | None |
 | D | Start/Stop | None |
-| E | Screen switching(Forward) | Entering the menu |
+| E | Right (->) | Entering the menu |
 
-(*)In the map, change button assignments.
-- A: left / zoom out(long press), B: down / zoom in(long press), C:Change mode, D: up, E: right
-- A: zoom out, B: zoom in, C: Change mode, D: none, E: Search route by Google DIrections API. Set your API key in setting.conf.
+On the map screen, the button assignments are changed.
 
-In the menu, the button has different assignments. From left to right, the button assignments are as follows.
+| Button | Short press | Long press |
+|:-|:-|:-|
+| A | Left (<-) | None |
+| B | Zoom out | Reset |
+| C | Change mode(*) | None |
+| D | Zoom in | None |
+| E | Right (->) | Entering the menu |
+
+(*)Map(initial screen) -> Map mode1
+
+Map mode1
+
+| Button | Short press | Long press |
+|:-|:-|:-|
+| A | Move left | None |
+| B | Move down | Zoom out |
+| C | Change mode(*) | Change move amount |
+| D | Move up | Zoom in |
+| E | Move right | Search route(*) |
+
+(*)Search route by Google DIrections API. Set your API key in setting.conf.
+
+In the menu, the button assignments are changed.
 
 | Button | Short press | Long press |
 |:-|:-|:-|
 | A | Back | None |
-| B | brightness control(*) | None |
+| B | Brightness control(*) | None |
 | C | Enter | None |
 | D | Select items (Back) | None |
 | E | Select items (Forward) | None |
 
 (*) If you use the MIP Reflective color LCD with backlight model.
+
+### Garmin Edge Remote (ANT+)
+
+The button assignments are as follows.
+
+| Button | Short press | Long press |
+|:-|:-|:-|
+| PAGE | Left (<-) | Right (->) |
+| CUSTOM | Change mode(*) | Entering the menu |
+| LAP | Lap | None |
+
+(*)Mode1
+
+| Button | Short press | Long press |
+|:-|:-|:-|
+| PAGE | ANT+ Light ON/OFF | Brightness control |
+| CUSTOM | Change mode(*) | None |
+| LAP | Start/Stop | None |
+
+On the map screen, the button assignments are changed.
+
+| Button | Short press | Long press |
+|:-|:-|:-|
+| PAGE | Left (<-) | Right (->) |
+| CUSTOM | Change mode(*) | Zoom out |
+| LAP | Zoom in | None |
+
+(*)Not implemented.
+
+In the menu, the button assignments are changed.
+
+| Button | Short press | Long press |
+|:-|:-|:-|
+| PAGE | Select items (Forward) | None |
+| CUSTOM | Select items (Back) | None |
+| LAP | Enter | None |
+
 
 ## Menu screen
 

@@ -74,18 +74,11 @@ class Button_Config():
         'E':('scroll_next', 'enter_menu'),
       },
       'MAP_1':{
-        'A':('map_move_x_minus', 'map_zoom_minus'),
-        'B':('map_move_y_minus', 'map_zoom_plus'),
+        'A':('map_move_x_minus', ''),
+        'B':('map_move_y_minus', 'map_zoom_minus'),
         'C':('change_mode', 'map_change_move'),
-        'D':('map_move_y_plus', ''),
-        'E':('map_move_x_plus', ''),
-      },
-      'MAP_2':{
-        'A':('map_zoom_minus', ''),
-        'B':('map_zoom_plus', ''),
-        'C':('change_mode', ''),
-        'D':('', ''),
-        'E':('map_search_route', ''),
+        'D':('map_move_y_plus', 'map_zoom_plus'),
+        'E':('map_move_x_plus', 'map_search_route'),
       },
     },
     # call from sensor_ant
@@ -107,18 +100,13 @@ class Button_Config():
       },
       'MAP':{
         'PAGE':('scroll_prev', 'scroll_next'),
-        'CUSTOM':('map_zoom_plus', 'map_zoom_minus'), #plus along route / minus along route
-        'LAP':('change_mode', ),  
+        'CUSTOM':('change_mode', 'map_zoom_minus'), 
+        'LAP':('map_zoom_plus', ),
       },
       'MAP_1':{
-        'PAGE':('map_move_x_plus', 'map_move_x_minus'), #west / east
-        'CUSTOM':('map_move_y_plus', 'map_move_y_minus'), #north / south
-        'LAP':('change_mode', ),  
-      },
-      'MAP_2':{
-        'PAGE':('map_change_move', ''), #useless
-        'CUSTOM':('map_search_route', ''), 
-        'LAP':('change_mode', ),
+        'PAGE':('', ''), #go along the route / back along the route
+        'CUSTOM':('change_mode', 'map_zoom_minus'), 
+        'LAP':('map_zoom_plus', ),  
       },
     },
   }
@@ -129,7 +117,7 @@ class Button_Config():
   G_BUTTON_MODE_IS_CHANGE = False
   G_BUTTON_MODE_PAGES = {
     'MAIN': ['MAIN','MAIN_1'],
-    'MAP': ['MAP','MAP_1','MAP_2'],
+    'MAP': ['MAP','MAP_1'],
   }
   G_BUTTON_MODE_INDEX = {
     'MAIN': 0,
