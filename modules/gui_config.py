@@ -119,7 +119,7 @@ class GUI_Config():
     "Pedal Sm.(ANT+)":(G_UNIT["String"],\
       "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x13]['pedal_sm']"),
     "Light(ANT+)":(G_UNIT["String"],\
-      "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['LGT']]['lgt_state_display']"),
+      "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['LGT']]['lgt_state']"),
     #ANT+ multi
     "PWR1":(G_UNIT["Power"],"None"),
     "PWR2":(G_UNIT["Power"],"None"),
@@ -234,8 +234,23 @@ class GUI_Config():
     else QtCore.QBuffer.ReadWrite
     self.format_rgb888 = QtGui.QImage.Format.Format_RGB888 if USE_PYQT6 else QtGui.QImage.Format_RGB888
     self.format_mono = QtGui.QImage.Format.Format_Mono if USE_PYQT6 else QtGui.QImage.Format_Mono
-    #or Format_MonoLSB
 
+    #for draw_display
+    if self.config.G_AVAILABLE_DISPLAY[self.config.G_DISPLAY]['color']:
+      self.format = self.format_rgb888
+    else:
+      self.format = self.format_mono
+  
+  def get_screen_shape(self, p):
+    screen_shape = None
+    remove_bytes = 0
+    if self.config.G_AVAILABLE_DISPLAY[self.config.G_DISPLAY]['color']:
+      screen_shape = (p.height(), p.width(), 3)
+    else:
+      screen_shape = (p.height(), int(p.width()/8))
+      remove_bytes = p.bytesPerLine() - int(p.width()/8)
+    return screen_shape, remove_bytes
+  
   def read_layout(self):
     text = None
     with open(self.config.G_LAYOUT_FILE) as file:

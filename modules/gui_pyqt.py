@@ -76,8 +76,6 @@ class GUI_PyQt(QtCore.QObject):
   cuesheet_widget = None
   multi_scan_widget = None
 
-  display_buffer = None
-  
   #for long press
   lap_button_count = 0
   start_button_count = 0
@@ -88,6 +86,12 @@ class GUI_PyQt(QtCore.QObject):
   signal_menu_button = QtCore.pyqtSignal(int)
   signal_menu_back_button = QtCore.pyqtSignal()
   signal_get_screenshot = QtCore.pyqtSignal()
+
+  screen_shape = None
+  screen_image = None
+  remove_bytes = 0
+  old_pyqt = False
+  bufsize = 0
 
   def __init__(self, config):
     super().__init__()
@@ -106,8 +110,6 @@ class GUI_PyQt(QtCore.QObject):
     except:
       pass
 
-    self.display_buffer = QtCore.QBuffer()
-    
     self.init_window()
   
   def quit_by_ctrl_c(self, signal, frame):
@@ -286,8 +288,19 @@ class GUI_PyQt(QtCore.QObject):
       t = "{0:.4f}".format((time_profile[i]-time_profile[i-1]).total_seconds())
       print("   ",'{:<13}'.format(diff_label[i-1]), ":", t)
 
+    #for draw_display
+    p = self.stack_widget.grab().toImage().convertToFormat(self.gui_config.format)
+    #PyQt 5.11(Buster) or 5.15(Bullseye)
+    qt_version = (QtCore.QT_VERSION_STR).split(".")
+    if(qt_version[0] == '5' and qt_version[1] == '11'):
+      self.bufsize = p.bytesPerLine()*p.height() #PyQt 5.11(Buster)
+    else:  
+      self.bufsize = p.sizeInBytes() #PyQt 5.15 or lator (Bullseye)
+    
+    self.screen_shape, self.remove_bytes = self.gui_config.get_screen_shape(p)
+ 
     self.app.exec()  
-
+  
   #for stack_widget page transition
   def on_change_main_page(self,index):
     self.main_page.widget(self.main_page_index).stop()
@@ -401,12 +414,24 @@ class GUI_PyQt(QtCore.QObject):
       return
 
     #self.config.check_time("draw_display start")
-    p = self.stack_widget.grab().toImage().convertToFormat(self.gui_config.format_rgb888)
+    p = self.stack_widget.grab().toImage().convertToFormat(self.gui_config.format)
+    
     #self.config.check_time("grab")
-    #Format_Mono, Format_MonoLSB
     ptr = p.constBits()
-    ptr.setsize(p.sizeInBytes())
-    buf = np.frombuffer(ptr, dtype=np.uint8).reshape((p.height(), p.width(), 3))
+    if(ptr == None):
+      return
+  
+    if(self.screen_image != None and p == self.screen_image):
+      return
+    self.screen_image = p
+
+    ptr.setsize(self.bufsize)
+  
+    if(self.remove_bytes > 0):
+      buf = np.frombuffer(ptr, dtype=np.uint8).reshape((p.height(), self.remove_bytes+int(p.width()/8)))
+      buf = buf[:, :-self.remove_bytes]
+    else:
+      buf = np.frombuffer(ptr, dtype=np.uint8).reshape(self.screen_shape)
 
     self.config.logger.sensor.sensor_spi.update(buf)
     #self.config.check_time("draw_display end")
