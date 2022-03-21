@@ -269,7 +269,7 @@ class ANTMenuWidget(MenuWidget):
   def settingAnt(self, antName):
     if self.config.G_ANT['USE'][antName]:
       #disable ANT+ sensor
-      self.ant.disconnectAntSensor(antName)
+      self.ant.disconnect_ant_sensor(antName)
     else:
       #search ANT+ sensor
       index = self.config.gui.gui_config.G_GUI_INDEX['ANT+Detail']
@@ -332,7 +332,7 @@ class ANTDetailWidget(MenuWidget):
   def connect_ant_sensor(self):
     print('connect', self.selected_ant_id)
     if self.selected_ant_id == None: return
-    self.ant.connectAntSensor(\
+    self.ant.connect_ant_sensor(\
       self.ant_name, #name
       int(self.selected_ant_id), #ID
       self.type[int(self.selected_ant_id)][0], #type
@@ -347,7 +347,7 @@ class ANTDetailWidget(MenuWidget):
 
   def on_back_menu(self):
     self.timer.stop()
-    self.ant.searcher.stopSearch()
+    self.ant.searcher.stop_search()
     #button update
     index = self.config.gui.gui_config.G_GUI_INDEX['ANT+Top']
     self.parent.widget(index).update_button_label()
