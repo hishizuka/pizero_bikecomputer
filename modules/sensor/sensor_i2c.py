@@ -836,7 +836,7 @@ class SensorI2C(Sensor):
     self.median_filter('pressure_mod')
     #outlier(spike) detection
     #sigma is not 3 but 10 for detecting pressure diff 0.3hPa around 1000hPa
-    self.hampel_filter('pressure_mod', sigma=10)
+    self.hampel_filter('pressure_mod', sigma=10, diff_min=0.02)
     
     #LP filter
     #self.lp_filter('pressure_mod', 8)
@@ -926,21 +926,22 @@ class SensorI2C(Sensor):
     self.pre_values_array[key][-1] = self.values[key]
     self.median_val[key] = np.nanmedian(self.pre_values_array[key])
 
-  def hampel_filter(self, key, sigma=3):
+  def hampel_filter(self, key, sigma=3, diff_min=0):
     if key not in self.median_keys:
       return
     hampel_std = 1.4826 * np.nanmedian(np.abs(self.pre_values_array[key] - self.median_val[key]))
     if np.isnan(hampel_std):
       return
-    if (np.abs(self.values[key] - self.median_val[key]) > sigma * hampel_std):
+    hampel_value = np.abs(self.values[key] - self.median_val[key])
+    if (hampel_value > diff_min) and (hampel_value > sigma * hampel_std):
       print(
-        'detect pressure spike:{:.5f}, diff:{:.5f}, median:{:.5f} / '.format(
+        'pressure spike:{}, {:.3f}hPa, diff:{:.3f}, threshold:{:.3f}'.format(
+          datetime.datetime.now().strftime("%Y%m%d %H:%M:%S"),
           self.values[key], 
-          np.abs(self.values[key] - self.median_val[key]), 
-          self.median_val[key]
-          ),
-        datetime.datetime.now()
+          hampel_value, 
+          sigma * hampel_std
         )
+      )
       self.values[key] = self.median_val[key]
 
   def update_kf(self, alt):
