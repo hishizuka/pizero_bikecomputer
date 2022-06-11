@@ -230,6 +230,10 @@ class SensorCore():
         elif self.config.G_ANT['TYPE']['SPD'] == 0x0B:
           if delta['SPD'] < self.time_threshold['SPD']:
             spd = v['SPD'][0x11]['speed']
+        #complement from GPS speed when I2C acc sensor is avaiable (using moving status)
+        if delta['SPD'] > self.time_threshold['SPD'] and spd == 0 and v['I2C']['m_stat'] == 1 and v['GPS']['speed'] > 0:
+          spd = v['GPS']['speed']
+          #print("speed from GPS: delta {}s, {:.1f}km/h".format(delta['SPD'], v['GPS']['speed']*3.6))
       elif 'timestamp' in v['GPS']:
         spd = 0
         if not np.isnan(v['GPS']['speed']) and delta['GPS'] < self.time_threshold['SPD']:
@@ -255,7 +259,14 @@ class SensorCore():
         if not self.config.G_ANT['USE']['SPD'] and dst_diff['GPS'] > 0:
           dst_diff['USE'] = dst_diff['GPS']
           grade_use['GPS'] = True
-      
+        #complement from GPS speed when I2C acc sensor is avaiable (using moving status)
+        #ANT+ sensor is disconnected and GPS is available
+        elif self.config.G_ANT['USE']['SPD']:
+          if delta['SPD'] == np.inf and dst_diff['ANT+'] == 0 and dst_diff['GPS'] > 0:
+            dst_diff['USE'] = dst_diff['GPS']
+            grade_use['ANT+'] = False
+            grade_use['GPS'] = True
+        
       #Total Power: ANT+
       if self.config.G_ANT['USE']['PWR']:
         #both type are not exist in same ID(0x12:crank, 0x11:wheel)
