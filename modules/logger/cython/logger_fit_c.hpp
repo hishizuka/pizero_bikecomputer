@@ -42,7 +42,7 @@ struct lap_summary_data{
 };
 
 struct config {
- int G_UNIT_ID_HEX = 0;
+  unsigned int G_UNIT_ID_HEX = 0;
   char* G_LOG_START_DATE;
   char* G_LOG_DIR;
   char* G_STRAVA_UPLOAD_FILE;

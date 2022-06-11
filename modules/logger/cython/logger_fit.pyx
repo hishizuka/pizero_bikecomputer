@@ -2,7 +2,7 @@ cdef extern from "logger_fit_c.hpp":
   cdef bint write_log_c(const char* db_file) except +
   #cdef bint write_log_c(const char* db_file)
   cdef cppclass config:
-    int G_UNIT_ID_HEX
+    unsigned int G_UNIT_ID_HEX
     char* G_LOG_START_DATE
     char* G_LOG_DIR
     char* G_STRAVA_UPLOAD_FILE

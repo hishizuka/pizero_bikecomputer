@@ -299,7 +299,7 @@ static int parse_single_num(void *user_data, int argc, char **argv, char **azCol
   return 0;
 }
 
-void add_fit_data(std::vector<uint8_t>& _bytes, std::vector<int>& _data, std::vector<int>& _size) {
+void add_fit_data(std::vector<uint8_t>& _bytes, std::vector<unsigned int>& _data, std::vector<int>& _size) {
   for(int i = 0, n = _data.size(); i < n; ++i) {
     uint8_t *h = (uint8_t *)&_data[i];
     for(int j = 0; j < _size[i]; ++j) {
@@ -488,7 +488,7 @@ bool write_log_c(const char* db_file) {
   int rc, max_lap, rows;
   char start_date[30], end_date[30];
   std::vector<int> _size;
-  std::vector<int> _data;
+  std::vector<unsigned int> _data;
   reset();
 
   FILE* fp_db = fopen(db_file, "r");
@@ -515,7 +515,7 @@ bool write_log_c(const char* db_file) {
   get_struct_def(_size, local_message_num, true);
   _data = {
     cfg.G_UNIT_ID_HEX,     // serial_number: XXXXXXXXXX
-    (int)start_date_epoch, //timestamp()
+    (unsigned int)start_date_epoch, //timestamp()
     255,                   //manufacturer (255: development)
     4                      //type
   };
@@ -582,13 +582,13 @@ bool write_log_c(const char* db_file) {
   write_definition();
   get_struct_def(_size, local_message_num, false);
   _data = {
-    (int)end_date_epoch,
-    (int)(end_date_epoch-start_date_epoch)*1000,
+    (unsigned int)end_date_epoch,
+    (unsigned int)(end_date_epoch-start_date_epoch)*1000,
     1,  //num of sessions: 1(fix)
     0,  //activity_type: general
     26, //event: activity 
     1,  //event_type: stop
-    (int)(end_date_epoch + lt.tm_gmtoff)
+    (unsigned int)(end_date_epoch + lt.tm_gmtoff)
   };
   add_fit_data(fit_data, _data, _size);
   //printf("footer: %d\n", (int)crc16(fit_data));
@@ -608,14 +608,14 @@ bool write_log_c(const char* db_file) {
     14,       // size
     0x10,     //protocol ver
     2014,     //profile ver
-    (int)fit_data.size(),
+    (unsigned int)fit_data.size(),
     0x2E, 0x46, 0x49, 0x54 //b'.',b'F',b'I',b'T'
   };
   _size = {1,1,2,4,1,1,1,1};
   add_fit_data(file_header, _data, _size);
 
   //make header crc
-  _data = {(int)crc16(file_header)};
+  _data = {(unsigned int)crc16(file_header)};
   _size = {2};
   add_fit_data(header_crc, _data, _size);
 
@@ -628,7 +628,7 @@ bool write_log_c(const char* db_file) {
     //file_header+crc+write_data
     fit_data.insert(fit_data.begin(), header_crc.begin(), header_crc.end());
     fit_data.insert(fit_data.begin(), file_header.begin(), file_header.end());
-    _data = {(int)crc16(fit_data)};
+    _data = {(unsigned int)crc16(fit_data)};
     //printf("crc: %d\n", (int)crc16(fit_data));
 
     add_fit_data(total_crc, _data, _size);
