@@ -88,9 +88,10 @@ class PyQtStyle():
     border-style: outset; \
     border-width: 1px; \
     font-size: 25px; \
-    background: white; \
+    color: rgba(0, 0, 0, 192); \
+    background: rgba(255, 255, 255, 128); \
     }\
-    QPushButton:pressed{background-color: black;}"
+    QPushButton:pressed{background-color: rgba(0, 0, 0, 128);}"
   
   G_GUI_PYQT_buttonStyle_adjustwidget = "\
     QPushButton{ \
