@@ -191,6 +191,9 @@ class LoggerCore():
         gps_epx FLOAT,
         gps_epy FLOAT,
         gps_epv FLOAT,
+        gps_pdop FLOAT,
+        gps_hdop FLOAT,
+        gps_vdop FLOAT,
         heart_rate INTEGER,
         cadence INTEGER,
         distance FLOAT,
@@ -437,7 +440,7 @@ class LoggerCore():
     sql = ("""\
       INSERT INTO BIKECOMPUTER_LOG VALUES(\
         ?,?,?,?,\
-        ?,?,?,?,?,?,?,?,?,?,?,?,\
+        ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,\
         ?,?,?,?,?,?,\
         ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,\
         ?,?,?,?,?,?,?,?,\
@@ -462,6 +465,9 @@ class LoggerCore():
       self.sensor.values['GPS']['epx'],
       self.sensor.values['GPS']['epy'],
       self.sensor.values['GPS']['epv'],
+      self.sensor.values['GPS']['pdop'],
+      self.sensor.values['GPS']['hdop'],
+      self.sensor.values['GPS']['vdop'],
       ###
       value['heart_rate'],
       value['cadence'],
@@ -664,7 +670,7 @@ class LoggerCore():
 
     #if not self.config.G_IS_RASPI and self.config.G_DUMMY_OUTPUT:
     if self.config.G_DUMMY_OUTPUT:
-      select = "SELECT position_lat,position_long distance FROM BIKECOMPUTER_LOG"
+      self.cur.execute("SELECT position_lat,position_long,distance,gps_track FROM BIKECOMPUTER_LOG")
       self.position_log = np.array(self.cur.fetchall())
 
   def store_short_log_for_update_track(self, dist, lat, lon, timestamp):

@@ -41,7 +41,7 @@ class LoggerCsv(Logger):
 
     r = "\
 lap,timer,timestamp,total_timer_time,heart_rate,speed,cadence,power,distance,accumulated_power,\
-position_lat,position_long,altitude,gps_altitude,course_altitude,dem_altitude,gps_speed,gps_distance,gps_mode,gps_used_sats,gps_total_sats,gps_epx,gps_epy,gps_epv,\
+position_lat,position_long,altitude,gps_altitude,course_altitude,dem_altitude,gps_speed,gps_distance,gps_mode,gps_used_sats,gps_total_sats,gps_epx,gps_epy,gps_epv,gps_pdop,gps_hdop,gps_vdop,\
 total_ascent,total_descent,pressure,temperature,heading,gps_track,motion,acc_x,acc_y,acc_z,gyro_x,gyro_y,gyro_z,cpu_percent,light"
 #voltage_battery,current_battery,voltage_out,current_out,battery_percentage\
 #"

@@ -41,6 +41,7 @@ class GUI_Config():
     "Altitude":"{0:^5.0f}m",
     "Grade":"{0:^2.0f}%",
     "GPS_error":"{0:^4.0f}m",
+    "GPS_DOP":"{0:^1.1f}",
     "String":"{0:^s}",
   }
 
@@ -70,8 +71,10 @@ class GUI_Config():
     "Satellites":(G_UNIT["String"],"self.sensor.values['GPS']['used_sats_str']"),
     "Error(x)":(G_UNIT["GPS_error"],"self.sensor.values['GPS']['epx']"),
     "Error(y)":(G_UNIT["GPS_error"],"self.sensor.values['GPS']['epy']"),
-    "Error(pos)":(G_UNIT["GPS_error"],"self.sensor.values['GPS']['error']"),
     "Error(alt)":(G_UNIT["GPS_error"],"self.sensor.values['GPS']['epv']"),
+    "PDOP":(G_UNIT["GPS_DOP"],"self.sensor.values['GPS']['pdop']"),
+    "HDOP":(G_UNIT["GPS_DOP"],"self.sensor.values['GPS']['hdop']"),
+    "VDOP":(G_UNIT["GPS_DOP"],"self.sensor.values['GPS']['vdop']"),
     "GPSTime":(G_UNIT["String"],"self.sensor.values['GPS']['utctime']"),
     "GPS Fix":("{0:^d}","self.sensor.values['GPS']['mode']"),
     "Course Dist.":(G_UNIT["Distance"],"self.sensor.values['GPS']['course_distance']"),
@@ -230,17 +233,14 @@ class GUI_Config():
     self.no_focus = QtCore.Qt.FocusPolicy.NoFocus if USE_PYQT6 else QtCore.Qt.NoFocus
     self.strong_focus = QtCore.Qt.FocusPolicy.StrongFocus if USE_PYQT6 else QtCore.Qt.StrongFocus
 
-    self.display_buffer_openmode = QtCore.QIODeviceBase.OpenModeFlag.ReadWrite if USE_PYQT6 \
-    else QtCore.QBuffer.ReadWrite
+    #for draw_display
     self.format_rgb888 = QtGui.QImage.Format.Format_RGB888 if USE_PYQT6 else QtGui.QImage.Format_RGB888
     self.format_mono = QtGui.QImage.Format.Format_Mono if USE_PYQT6 else QtGui.QImage.Format_Mono
-
-    #for draw_display
     if self.config.G_AVAILABLE_DISPLAY[self.config.G_DISPLAY]['color']:
       self.format = self.format_rgb888
     else:
       self.format = self.format_mono
-  
+
   def get_screen_shape(self, p):
     screen_shape = None
     remove_bytes = 0
