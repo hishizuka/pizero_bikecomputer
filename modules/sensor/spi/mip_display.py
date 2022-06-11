@@ -11,7 +11,7 @@ try:
   _SENSOR_DISPLAY = True
   import pyximport; pyximport.install()
   from .cython.mip_helper import conv_3bit_color, MipDisplay_CPP
-  MODE = "Cython"
+  #MODE = "Cython"
 except:
   pass
 print('  MIP DISPLAY : ',_SENSOR_DISPLAY)
@@ -42,12 +42,12 @@ class MipDisplay():
   pi = None
   spi = None
   interval = 0.25
-  #spi_clock = 2000000 #normal
-  spi_clock = 5000000 #overclocking
+  spi_clock = 2000000 #normal
+  #spi_clock = 5000000 #overclocking
   brightness_index = 0
   brightness_table = [0,10,100]
   brightness = 0
-  diff_count = 0
+  #diff_count = 0
   refresh_count = 1200
   mip_display_cpp = None
 
@@ -85,7 +85,7 @@ class MipDisplay():
     self.pi.write(GPIO_SCS, 0)
     self.pi.write(GPIO_DISP, 1)
     self.pi.write(GPIO_VCOMSEL, 1)
-    time.sleep(0.1)
+    time.sleep(0.01)
 
     #backlight
     self.pi.set_mode(GPIO_BACKLIGHT, pigpio.OUTPUT)
@@ -187,13 +187,13 @@ class MipDisplay():
     #print(" ")
     if len(diff_lines) == 0:
       return
-    img_bytes = None
-    if self.diff_count <= self.refresh_count:
-      img_bytes = self.img_buff_rgb8[diff_lines].tobytes()
-      self.diff_count += 1
-    else:
-      img_bytes = self.img_buff_rgb8.tobytes()
-      self.diff_count = 0
+    #img_bytes = None
+    #if self.diff_count <= self.refresh_count:
+    img_bytes = self.img_buff_rgb8[diff_lines].tobytes()
+    #  self.diff_count += 1
+    #else:
+    #  img_bytes = self.img_buff_rgb8.tobytes()
+    #  self.diff_count = 0
 
     self.pre_img[diff_lines] = self.img_buff_rgb8[diff_lines]
     #self.config.check_time("diff_lines")
@@ -219,19 +219,12 @@ class MipDisplay():
     #1. convert 2bit color
     im_array_bin = (im_array >= 128)
     #2. set even pixel (2n, 2n) to 0
-    im_array_bin[0::2, 0::2] = np.where(
-      im_array[0::2, 0::2] <= 216, 
-      0, 
-      im_array_bin[0::2, 0::2]
-    )
+    im_array_bin[0::2, 0::2, :][im_array[0::2, 0::2, :] <= 216] = 0
     #3. set odd pixel (2n+1, 2n+1) to 0
-    im_array_bin[1::2, 1::2] = np.where(
-      im_array[1::2, 1::2] <= 216, 
-      0, 
-      im_array_bin[1::2, 1::2]
-    )
+    im_array_bin[1::2, 1::2, :][im_array[1::2, 1::2, :] <= 216] = 0
+
     return np.packbits(
-      (im_array_bin).reshape(self.config.G_HEIGHT, self.config.G_WIDTH*3),
+      im_array_bin.reshape(self.config.G_HEIGHT, self.config.G_WIDTH*3),
       axis=1
     )
 
@@ -273,7 +266,7 @@ class MipDisplay():
     self.clear()
 
     self.pi.write(GPIO_DISP, 1)
-    time.sleep(0.1)
+    time.sleep(0.01)
     self.pi.spi_close(self.spi)
     self.pi.stop()
 

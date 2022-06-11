@@ -49,8 +49,11 @@ cdef class MipDisplay_CPP:
 @cython.wraparound(False)
 @cython.nonecheck(False)
 cpdef conv_3bit_color(cnp.ndarray[cnp.uint8_t, ndim=3] im_array):
-  cdef Py_ssize_t i, j, k, h, w, d, bit_count
-  cdef bool bool_i, bool_j
+  cdef int i, j, k, h, w, d, bit_count
+  cdef int bit_index = 0
+  cdef int[2] thresholds = [216, 128]
+  cdef int[8] add_bit = [128, 64, 32, 16, 8, 4, 2, 1]
+  cdef bool t_index = True
   h = im_array.shape[0]
   w = im_array.shape[1]
   d = im_array.shape[2]
@@ -58,17 +61,33 @@ cpdef conv_3bit_color(cnp.ndarray[cnp.uint8_t, ndim=3] im_array):
   im_bits = np.zeros((h,w*d/8), dtype=np.uint8)
   cdef cnp.uint8_t[:,::1] im_bits_view = im_bits
 
-  bool_i = False
-  bool_j = False
   for i in range(h):
-    bool_i = not bool_i
     bit_count = 0
+    bit_index = 0
+
     for j in range(w):
-      bool_j = not bool_j
-      for k in range(d):
-        if((bool_i != bool_j and im_array[i,j,k] >= 128) or (bool_i == bool_j and im_array[i,j,k] >= 216)):
-          im_bits_view[i, (bit_count/8)] |= (1 << 7-(bit_count%8))
-        bit_count += 1
+      if(im_array[i,j,0] > thresholds[t_index]):
+        im_bits_view[i, bit_index] |= add_bit[bit_count]
+        pass
+      bit_count = (bit_count+1)&7
+      bit_index += 1 - <bool>bit_count
+
+      if(im_array[i,j,1] > thresholds[t_index]):
+        im_bits_view[i, bit_index] |= add_bit[bit_count]
+        pass
+      bit_count = (bit_count+1)&7
+      bit_index += 1 - <bool>bit_count
+
+      if(im_array[i,j,2] > thresholds[t_index]):
+        im_bits_view[i, bit_index] |= add_bit[bit_count]
+        pass
+      bit_count = (bit_count+1)&7
+      bit_index += 1 - <bool>bit_count
+      
+      t_index = not t_index
+
+    t_index = not t_index
+
   return im_bits
 
 

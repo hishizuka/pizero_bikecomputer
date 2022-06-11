@@ -145,48 +145,66 @@ bool MipDisplay::get_status_quit() {
 }
 
 void MipDisplay::update(unsigned char* image) {
-  int c_index;
-  unsigned int bit_count = 0;
-  unsigned char bit_color;
-  int update_lines = 0;
-  int buf_index = 0;
   clear_buf();
+  
+  int update_lines = 0;
+  bool t_index = true;
+  int bit_count = 0;
+  
+  unsigned char *image_index = image;
+  char *buf_image_index = buf_image;
+
+  char *buf_image_diff_index = buf_image;
+  char *pre_buf_image_diff_index = pre_buf_image;
+  char *buf_image_update_index = buf_image;
 
   for(int y = 0; y < HEIGHT; y++) {
+    buf_image_index += 2;
     bit_count = 0;
+    
+    //3bit color CPU code
     for(int x = 0; x < WIDTH; x++) {
-      for(int c = 0; c < 3; c++) {
-        c_index = (y*WIDTH + x)*BPP + c;
-        bit_color = image[c_index] / 128;
-        //pseudo 3bit color (128~216: simple dithering) 
-        if(bit_color and image[c_index] <= 216 and x%2 == y%2) {
-          bit_color = 0;
-        }
-
-        if(bit_color) {
-          buf_image[y*BUF_WIDTH+2+(bit_count/8)] |= (1 << (7-(bit_count%8)));
-          //buf_image[y*BUF_WIDTH+2+((bit_count%(WIDTH*3))/8)] |= (1 << 7-(bit_count%8));
-        }
-        bit_count++;
+      if(*image_index++ > thresholds[t_index]) {
+        *buf_image_index |= add_bit[bit_count];
       }
+      bit_count = (bit_count+1)&7;
+      buf_image_index += 1 - (bool)bit_count;
+
+      if(*image_index++ > thresholds[t_index]) {
+        *buf_image_index |= add_bit[bit_count];
+      }
+      bit_count = (bit_count+1)&7;
+      buf_image_index += 1 - (bool)bit_count;
+
+      if(*image_index++ > thresholds[t_index]) {
+        *buf_image_index |= add_bit[bit_count];
+      }
+      bit_count = (bit_count+1)&7;
+      buf_image_index += 1 - (bool)bit_count;
+
+      t_index = !t_index;
     }
-    buf_index = y*BUF_WIDTH;
-    if(memcmp(&buf_image[buf_index], &pre_buf_image[buf_index], BUF_WIDTH) != 0) {
-      memcpy(&pre_buf_image[buf_index], &buf_image[buf_index], BUF_WIDTH);
-      memcpy(&buf_image[update_lines*BUF_WIDTH], &pre_buf_image[buf_index], BUF_WIDTH);
-      update_lines++;  
+    t_index = !t_index;
+    
+    if(memcmp(buf_image_diff_index, pre_buf_image_diff_index, BUF_WIDTH) != 0) {
+      memcpy(pre_buf_image_diff_index, buf_image_diff_index, BUF_WIDTH);
+      memcpy(buf_image_update_index, pre_buf_image_diff_index, BUF_WIDTH);
+      update_lines++;
+      buf_image_update_index += BUF_WIDTH;
     }
+    buf_image_diff_index += BUF_WIDTH;
+    pre_buf_image_diff_index += BUF_WIDTH;
   }
 
   //std::cout << "    diff " << int(update_lines*100/HEIGHT) << "%, " << BUF_WIDTH << "*" << update_lines << "=" << BUF_WIDTH*update_lines << std::endl;
   if(update_lines == 0) {
     return;
   }
-  if(diff_count == refresh_count) {
-    update_lines = HEIGHT;
-    diff_count = 0;
-  }
-  diff_count++;
+  //if(diff_count == refresh_count) {
+  //  update_lines = HEIGHT;
+  //  diff_count = 0;
+  //}
+  //diff_count++;
 
   {
     std::unique_lock<std::mutex> ul(mutex_);

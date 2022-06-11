@@ -37,6 +37,10 @@ class MipDisplay {
     char buf_no_update[2] = {0x00,0x00};
     float inversion_interval = 0.25;
     char buf_inversion[2] = {0b00010100,0x00};
+    
+    const char thresholds[2] = {216, 128};
+    const char add_bit[8] = {0b10000000, 0b01000000, 0b00100000, 0b00010000, 0b00001000, 0b00000100, 0b00000010, 0b00000001};
+
     int diff_count = 0;
     int refresh_count = 1200;
     int MAX_HEIGHT_PER_ONCE = 270;
