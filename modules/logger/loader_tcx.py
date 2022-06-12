@@ -34,6 +34,7 @@ class LoaderTcx():
   slope = np.array([])
   slope_smoothing = np.array([])
   colored_altitude = np.array([])
+  climb_segment = []
 
   #for course points
   point_name = np.array([])
@@ -64,6 +65,7 @@ class LoaderTcx():
     self.slope_smoothing = np.array([])
     self.colored_altitude = np.array([])
     self.points_diff = np.array([])
+    self.climb_segment = []
 
     #for course points
     self.point_name = np.array([])
@@ -265,7 +267,7 @@ class LoaderTcx():
       self.distance = self.distance/1000 #[km]
 
     #for sensor_gps
-    self.azimuth = np.insert(self.config.calc_azimuth(self.latitude, self.longitude), 0, 0)
+    self.azimuth = self.config.calc_azimuth(self.latitude, self.longitude)
     self.points_diff = np.array([np.diff(self.longitude), np.diff(self.latitude)]) 
     self.points_diff_sum_of_squares = self.points_diff[0]**2 + self.points_diff[1]**2
     self.points_diff_dist = np.sqrt(self.points_diff_sum_of_squares)
@@ -282,107 +284,133 @@ class LoaderTcx():
     dist_diff = 1000 * np.diff(self.distance) #[m]
 
     if len_alt > 0:
-      self.altitude = self.savitzky_golay(self.altitude, 53, 3)
-      #if len_dist > 0:
-      #  self.slope = np.array([])
-      #  self.slope = np.insert(100*np.diff(self.altitude)/dist_diff, 0, 0)
+      modified_altitude = self.savitzky_golay(self.altitude, 53, 3)
+      #do not apply if length is differnet (occurs when too short course)
+      if(len(self.altitude) == len(modified_altitude)):
+        self.altitude = modified_altitude
 
       #experimental code
       #np.savetxt('log/course_altitude.csv', self.altitude, fmt='%.3f')
-      #alt_d1 =  self.savitzky_golay(np.gradient(self.altitude, self.distance*1000)*100, 53, 3)
-      #alt_d2 =  np.gradient(alt_d1, self.distance*1000)
-      #alt_d3 =  np.gradient(alt_d2, self.distance*1000)
-      #np.savetxt('log/course_altitude_d1.csv', alt_d1, fmt='%.7f')
-      #np.savetxt('log/course_altitude_d2.csv', alt_d2, fmt='%.7f')
-      #np.savetxt('log/course_altitude_d3.csv', alt_d3, fmt='%.7f')
       #np.savetxt('log/course_distance.csv', self.distance, fmt='%.3f')
 
-      #test
+      #output dem altitude
       #alt_dem = np.zeros(len(self.altitude))
       #for i in range(len(self.altitude)):
       #  alt_dem[i] = self.config.get_altitude_from_tile([self.longitude[i], self.latitude[i]])
       #np.savetxt('log/course_altitude_dem.csv', alt_dem, fmt='%.3f')
     
-    #update G_GPS_ON_ROUTE_CUTOFF from course
-
-    diff_dist_max = int(np.argmax(dist_diff))*5/1000 #[m->km]
-    #self.config.G_GPS_ON_ROUTE_CUTOFF = diff_dist_max #[m]
+    diff_dist_max = int(np.max(dist_diff))*2/1000 #[m->km]
     if diff_dist_max > self.config.G_GPS_SEARCH_RANGE: #[km]
       self.config.G_GPS_SEARCH_RANGE = diff_dist_max
-    #print("G_GPS_ON_ROUTE_CUTOFF[m]:", self.config.G_GPS_ON_ROUTE_CUTOFF)
-    #print("G_GPS_SEARCH_RANGE[km]:", self.config.G_GPS_SEARCH_RANGE)
+    #print("G_GPS_SEARCH_RANGE[km]:", self.config.G_GPS_SEARCH_RANGE, diff_dist_max)
 
     print("downsampling:{} -> {}".format(len_lat, len(self.latitude)))
 
     print("\tlogger_core : load_course : downsampling: ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
 
   def calc_slope_smoothing(self):
-    #make slope_smoothing by distance (self.config.G_SLOPE_WINDOW_DISTANCE)
-    self.colored_altitude = np.full((len(self.distance), 3),self.config.G_SLOPE_COLOR[0])
+    #parameters
+    course_n = len(self.distance)
+    diff_num = 4
+    LP_coefficient = 0.15
 
-    if len(self.distance) == 0 or len(self.altitude) == 0:
+    self.colored_altitude = np.full((course_n, 3), self.config.G_SLOPE_COLOR[0]) #3 is RGB
+
+    if course_n < 2*diff_num or len(self.altitude) < 2*diff_num:
       return
     
     t = datetime.datetime.utcnow()
-    course_n = len(self.distance)
 
-    alt_d1 = (self.altitude[1:]-self.altitude[0:-1])/((self.distance[1:]-self.distance[0:-1])*1000)*100
-    alt_d1 = np.insert(alt_d1,0,0)
-    alt_d1_sign = np.where((alt_d1 > 0), alt_d1, 0)
-    alt_d1_plus_to_minus_index = np.where((alt_d1_sign[0:-1] > 0) & (alt_d1_sign[1:] == 0))[0] + 1
-    alt_d1_cumsum = np.cumsum(alt_d1_sign)
-    for i in alt_d1_plus_to_minus_index:
-      alt_d1_cumsum[i+1:] = np.cumsum(alt_d1_sign[i+1:])
-    peak = np.where(alt_d1_cumsum > 100, 1, 0)
+    dist_diff = np.zeros((diff_num, course_n))
+    alt_diff = np.zeros((diff_num, course_n))
+    grade = np.zeros((diff_num, course_n))
+    dist_diff[0,1:] = self.distance[1:]-self.distance[0:-1]
+    alt_diff[0,1:] = self.altitude[1:]-self.altitude[0:-1]
+    grade[0,1:] = alt_diff[0, 1:]/(dist_diff[0, 1:]*1000)*100
+    for i in range(1, diff_num):
+      dist_diff[i, i:-i] = self.distance[2*i:]-self.distance[0:-2*i]
+      dist_diff[i, 0:i] = self.distance[i:2*i]-self.distance[0]
+      dist_diff[i, -i:] = self.distance[-1]-self.distance[-2*i:-i]
+      alt_diff[i, i:-i] = self.altitude[2*i:]-self.altitude[0:-2*i]
+      alt_diff[i, 0:i] = self.altitude[i:2*i]-self.altitude[0]
+      alt_diff[i, -i:] = self.altitude[-1]-self.altitude[-2*i:-i]
+      grade[i] = alt_diff[i]/(dist_diff[i]*1000)*100
+    
+    grade_mod = np.zeros(course_n)
+    cond_all = np.full(course_n, False)
+    for i in range(diff_num-1):
+      cond = (dist_diff[i] >= self.config.G_CLIMB_DISTANCE_CUTOFF)
+      cond_diff = cond ^ cond_all
+      grade_mod[cond_diff] = grade[i][cond_diff]
+      cond_all = cond
+    cond = np.full(course_n, True)
+    cond_diff = cond ^ cond_all
+    grade_mod[cond_diff] = grade[3][cond_diff]
 
-    peak_end_index = np.where((peak[0:-1] > 0) & (peak[1:] == 0))[0]+1
-    cumsum_zero_to_plus_index = np.where((alt_d1_cumsum[0:-1] == 0) & (alt_d1_cumsum[1:] > 0))[0]+1
-    peak_start_index = np.zeros(len(peak_end_index)).astype("uint16")
-
-    j = 0
+    #apply LP fileter (forward and backward)
     self.slope_smoothing = np.zeros(course_n)
-    for i in peak_end_index:
-      k = np.argmin(np.where(i-cumsum_zero_to_plus_index < 0, np.inf, i-cumsum_zero_to_plus_index))
-      peak_start_index[j] = cumsum_zero_to_plus_index[k]
+    self.slope_smoothing[0] = grade_mod[0]
+    self.slope_smoothing[-1] = grade_mod[-1]
+    #forward
+    for i in range(1, course_n-1):
+      self.slope_smoothing[i] = grade_mod[i]*LP_coefficient + self.slope_smoothing[i-1]*(1-LP_coefficient)
+    #backward
+    for i in reversed(range(course_n-1)):
+      self.slope_smoothing[i] = self.slope_smoothing[i]*LP_coefficient + self.slope_smoothing[i+1]*(1-LP_coefficient)
 
-      self.slope_smoothing[peak_start_index[j]:i] = \
-        100*(self.altitude[i] - self.altitude[peak_start_index[j]])/ ((self.distance[i] - self.distance[peak_start_index[j]])*1000)
-      j += 1
-    
+    #detect climbs
+    slope_smoothing_cat = np.zeros(course_n).astype('uint8')
+    for i in range(i, len(self.config.G_SLOPE_CUTOFF)-1):
+      slope_smoothing_cat = np.where((self.config.G_SLOPE_CUTOFF[i-1]<self.slope_smoothing)&(self.slope_smoothing<=self.config.G_SLOPE_CUTOFF[i]), i, slope_smoothing_cat)
+    slope_smoothing_cat = np.where((self.config.G_SLOPE_CUTOFF[-1]<self.slope_smoothing), len(self.config.G_SLOPE_CUTOFF)-1, slope_smoothing_cat)
+
+    #self.climb_segment = [] #[start_index, end_index, distance, average_grade, volume(=dist*average), cat]
+    climb_search_state = False
+    climb_start_cutoff = 2
+    climb_end_cutoff = 1
+    if slope_smoothing_cat[0] >= climb_start_cutoff:
+      self.climb_segment.append({'start':0, 'start_point':self.distance[0]})
+      climb_search_state = True
+    for i in range(1, course_n):
+      #search climb end (detect top of climb)
+      if climb_search_state and slope_smoothing_cat[i-1] >= climb_end_cutoff and (slope_smoothing_cat[i] < climb_end_cutoff or i == course_n-1):
+        end_index = i
+        self.climb_segment[-1]['end'] = end_index
+        self.climb_segment[-1]['distance'] = self.distance[end_index] - self.distance[self.climb_segment[-1]['start']]
+        alt = (self.altitude[end_index] - self.altitude[self.climb_segment[-1]['start']])
+        self.climb_segment[-1]['average_grade'] = alt/(self.climb_segment[-1]['distance']*1000)*100
+        self.climb_segment[-1]['volume'] = self.climb_segment[-1]['distance']*1000 * self.climb_segment[-1]['average_grade']
+        self.climb_segment[-1]['course_point_distance'] = self.distance[end_index]
+        self.climb_segment[-1]['course_point_altitude'] = self.altitude[end_index]
+        self.climb_segment[-1]['course_point_longitude'] = self.longitude[end_index]
+        self.climb_segment[-1]['course_point_latitude'] = self.latitude[end_index]
+        if self.climb_segment[-1]['distance'] < self.config.G_CLIMB_DISTANCE_CUTOFF or \
+          self.climb_segment[-1]['average_grade'] < self.config.G_CLIMB_GRADE_CUTOFF or \
+          self.climb_segment[-1]['volume'] < self.config.G_CLIMB_CATEGORY[0]['volume']:
+          #print(self.climb_segment[-1]['distance'], self.climb_segment[-1]['volume'], self.climb_segment[-1]['distance'], self.climb_segment[-1]['average_grade'])
+          self.climb_segment.pop()
+        else:
+          for j in reversed(range(len(self.config.G_CLIMB_CATEGORY))):
+            if self.climb_segment[-1]['volume'] > self.config.G_CLIMB_CATEGORY[j]['volume']:
+              self.climb_segment[-1]['cat'] = self.config.G_CLIMB_CATEGORY[j]['name']
+              break
+        climb_search_state = False
+      #detect climb start
+      elif not climb_search_state and slope_smoothing_cat[i-1] < climb_start_cutoff and slope_smoothing_cat[i] >= climb_start_cutoff:
+        self.climb_segment.append({'start':i, 'start_point':self.distance[i]})
+        climb_search_state = True
+
+    #print(self.climb_segment)
+    self.colored_altitude = np.array(self.config.G_SLOPE_COLOR)[slope_smoothing_cat]
+
     print("\tlogger_core : load_course : slope_smoothing: ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
-    
-    #np.savetxt('log/course_distance.csv', self.distance*1000, fmt='%d')
-    #np.savetxt('log/course_altitude_d1.csv', alt_d1, fmt='%.5f')
-    #np.savetxt('log/course_altitude_alt_d1_cumsum.csv', alt_d1_cumsum, fmt='%.5f')
-    #np.savetxt('log/course_altitude_peak.csv', peak, fmt='%d')
-        
-    t = datetime.datetime.utcnow()
 
-    self.colored_altitude = np.full((len(self.altitude), 3),self.config.G_SLOPE_COLOR[0])
-    for i in range(len(self.config.G_SLOPE_CUTOFF)):
-      cond = None
-      if i == 0:
-        x2 = self.config.G_SLOPE_CUTOFF[i]
-        cond = np.where(self.slope_smoothing <= x2, True, False)
-      else:
-        x1 = self.config.G_SLOPE_CUTOFF[i-1]
-        x2 = self.config.G_SLOPE_CUTOFF[i]
-        cond = np.where((x1 < self.slope_smoothing) & (self.slope_smoothing <= x2), True, False)
-      self.colored_altitude[cond] = self.config.G_SLOPE_COLOR[i]
-      
-    print("\tlogger_core : load_course : fill slope: ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
-    #t = datetime.datetime.utcnow()
-  
   def modify_course_points(self):
     #make route colors by slope for SimpleMapWidget, CourseProfileWidget
     t = datetime.datetime.utcnow()
 
-    len_pnt_name = len(self.point_name)
-    len_pnt_lat = len(self.point_latitude)
-    len_pnt_lon = len(self.point_longitude)
     len_pnt_dist = len(self.point_distance)
     len_pnt_alt = len(self.point_altitude)
-    len_pnt_type = len(self.point_type)
 
     #calculate course point distance
     if len_pnt_dist == 0 and len(self.distance) > 0:
@@ -398,33 +426,50 @@ class LoaderTcx():
       lat_diff = self.point_latitude[i] - self.latitude[min_index:]
       p_a_x = lon_diff[:-1]
       p_a_y = lat_diff[:-1]
-      p_b_x = lon_diff[1:]
-      p_b_y = lat_diff[1:]
       inner_p = (b_a_x*p_a_x + b_a_y*p_a_y)/self.points_diff_sum_of_squares[min_index:]
       inner_p_check = np.where((0.0 <= inner_p) & (inner_p <= 1.0), True, False)
 
-      for j in np.where(inner_p_check == True)[0]:
+      min_j = None
+      min_dist_diff_h = np.inf
+      min_dist_delta = 0
+      min_alt_delta = 0
+      for j in list(*np.where(inner_p_check == True)):
         h_lon = self.longitude[min_index+j] + \
           (self.longitude[min_index+j+1]-self.longitude[min_index+j]) * inner_p[j]
         h_lat = self.latitude[min_index+j] + \
           (self.latitude[min_index+j+1]-self.latitude[min_index+j]) * inner_p[j]
-        dist_diff_h = self.config.get_dist_on_earth(
-          h_lon, 
-          h_lat,
-          self.point_longitude[i], 
-          self.point_latitude[i]
-          )
+        dist_diff_h = self.config.get_dist_on_earth(h_lon, h_lat, self.point_longitude[i], self.point_latitude[i])
 
-        if dist_diff_h < self.config.G_GPS_ON_ROUTE_CUTOFF:
-          min_index = min_index+j
-          break
+        if dist_diff_h < self.config.G_GPS_ON_ROUTE_CUTOFF and dist_diff_h < min_dist_diff_h:
+          if min_j != None and j - min_j > 2:
+            continue
+          min_j = j
+          min_dist_diff_h = dist_diff_h
+          min_dist_delta = self.config.get_dist_on_earth(self.longitude[min_index+j], self.latitude[min_index+j], h_lon, h_lat)/1000
+          if len(self.altitude) > 0:
+            min_alt_delta = (self.altitude[min_index+j+1]-self.altitude[min_index+j]) / (self.distance[min_index+j+1]-self.distance[min_index+j]) * min_dist_delta
+
+      if min_j == None:
+        min_j = 0
+      min_index = min_index+min_j
       
       if len_pnt_dist == 0 and len(self.distance) > 0:
-        self.point_distance[i] = self.distance[min_index]
+        self.point_distance[i] = self.distance[min_index] + min_dist_delta
       if len_pnt_alt == 0 and len(self.altitude) > 0:
-        self.point_altitude[i] = self.altitude[min_index]
+        self.point_altitude[i] = self.altitude[min_index] + min_alt_delta
 
-    #print(len(self.point_distance), len(self.point_altitude))
+    #add climb tops
+    #if len(self.climb_segment) > 0:
+    #  min_index = 0
+    #  for i in range(len(self.climb_segment)):
+    #    diff_dist = np.abs(self.point_distance - self.climb_segment[i]['course_point_distance'])
+    #    min_index = np.where(diff_dist == np.min(diff_dist))[0][0]+1
+    #    self.point_name.insert(min_index, "Top of Climb")
+    #    self.point_latitude = np.insert(self.point_latitude, min_index, self.climb_segment[i]['course_point_latitude'])
+    #    self.point_longitude = np.insert(self.point_longitude, min_index, self.climb_segment[i]['course_point_longitude'])
+    #    self.point_type.insert(min_index, "Summit")
+    #    self.point_distance = np.insert(self.point_distance, min_index, self.climb_segment[i]['course_point_distance'])
+    #    self.point_altitude = np.insert(self.point_altitude, min_index, self.climb_segment[i]['course_point_altitude'])
 
     len_lat = len(self.point_latitude)
     len_dist = len(self.distance)
@@ -470,14 +515,14 @@ class LoaderTcx():
   
   def savitzky_golay(self, y, window_size, order, deriv=0, rate=1):
     try:
-        window_size = np.abs(np.int(window_size))
-        order = np.abs(np.int(order))
+      window_size = np.abs(np.int(window_size))
+      order = np.abs(np.int(order))
     except ValueError as msg:
-        raise ValueError("window_size and order have to be of type int")
+      raise ValueError("window_size and order have to be of type int")
     if window_size % 2 != 1 or window_size < 1:
-        raise TypeError("window_size size must be a positive odd number")
+      raise TypeError("window_size size must be a positive odd number")
     if window_size < order + 2:
-        raise TypeError("window_size is too small for the polynomials order")
+      raise TypeError("window_size is too small for the polynomials order")
     order_range = range(order+1)
     half_window = (window_size -1) // 2
     # precompute coefficients
