@@ -34,7 +34,6 @@ class MyWindow(QtWidgets.QMainWindow):
     #super(QtWidgets.QMainWindow, self).__init__(parent, flags=QtCore.Qt.FramelessWindowHint)
     super(QtWidgets.QMainWindow, self).__init__(parent)
     print("Qt version:", QtCore.QT_VERSION_STR)
-    #self.grabGesture(QtCore.Qt.SwipeGesture)
   
   def set_config(self, config):
     self.config = config
@@ -50,11 +49,6 @@ class MyWindow(QtWidgets.QMainWindow):
   def paintEvent(self, event):
     if self.gui != None:
       self.gui.draw_display()
-  
-  #override from QtWidget
-  #def keyPressEvent(self, e):
-  #  if self.gui != None:
-  #    self.gui.send_key(e)
 
 
 class GUI_PyQt(QtCore.QObject):
@@ -307,10 +301,6 @@ class GUI_PyQt(QtCore.QObject):
     self.main_page.widget(index).start()
     self.main_page_index = index
   
-  #def send_key(self, e):
-  #  if e.key() == QtCore.Qt.Key_N:
-  #    self.scroll_next()
-
   def start_and_stop_manual(self):
     self.logger.start_and_stop_manual()
 

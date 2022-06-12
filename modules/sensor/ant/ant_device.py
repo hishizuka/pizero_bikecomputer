@@ -183,12 +183,11 @@ class ANT_Device():
   
   def print_spike(self, device_str, val, pre_val, delta, delta_t):
     print(
-      "ANT+ {0} spike: ".format(device_str),
-      datetime.datetime.now().strftime("%Y%m%d %H:%M:%S"), 
-      "value:{0:.0f}, pre:{1:.0f}".format(val, pre_val),
+      "ANT+ {0} spike: {1},".format(device_str, datetime.datetime.now().strftime("%Y%m%d %H:%M:%S")), 
+      "value:{0:.0f}, pre:{1:.0f},".format(val, pre_val),
       "delta:", delta, 
       "delta_t:", delta_t,
-      )
+    )
 
   def set_wait(self, interval):
     self.node.ant.set_wait(interval)
