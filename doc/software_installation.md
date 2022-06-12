@@ -549,6 +549,16 @@ GENERAL -> display must be set.
   - `wikimedia`: An example map of a full-color map. [https://maps.wikimedia.org/](https://maps.wikimedia.org/)
   - `jpn_kokudo_chiri_in`: A map from Japan GSI. [https://cyberjapandata.gsi.go.jp](https://cyberjapandata.gsi.go.jp)
   - You can add a map URL to map.yaml. Specify the URL in tile format (tile coordinates by [x, y] and zoom level by [z]). And The map name is set to this setting `map`.
+  - Also, you can set raster mbtiles mapsets generated from [mb-util](https://github.com/mapbox/mbutil). It is sqlite3 db packed with raster maptile images. The definition in map.yaml is following with sample mbtile map placed at `maptile/mbtile_map.mbtiles`.
+
+```
+map.yaml entry
+
+  mbtile_map:
+  url: 
+  attribution: some attribution.
+  use_mbtiles: true
+```
 
 #### STRAVA_API section
 

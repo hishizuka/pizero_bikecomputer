@@ -1,12 +1,14 @@
 ![title](https://user-images.githubusercontent.com/12926652/89370669-47178000-d71c-11ea-896f-0d98f4cbd5da.jpg)
 
 # Pi Zero Bikecomputer
-An open-source bike computer based on  Raspberry Pi Zero (W, WH) with GPS and ANT+
+An open-source bike computer based on  Raspberry Pi Zero (W, WH) with GPS and ANT+.
 
 https://github.com/hishizuka/pizero_bikecomputer
 
 # News
 
+- 2022/6/12 Please delete log/log.db because column layouts is changed.
+- 2022/6/12 Please replace GPS section in layout.yaml from layouts/layout-cycling.yaml because the item "Error" is deleted.
 - 2022/3/7 Please install aiohttp for faster downloading of map tiles.
 
 ```
@@ -146,7 +148,7 @@ USB dongle is required if using ANT+ sensors.
 
 | Specs | Detail | Note |
 |:-|:-|:-|
-| Map | Yes | Support map tile format like OSM. So, offline map is available with local caches. |
+| Map | Yes | Support raster map tile format like OSM. So, offline map is available with local caches. Also, raster mbtile format is supported. |
 | Course on the map| Yes | A course file(.tcx) is required. |
 | Course profile | Yes | A course file(.tcx) is required. |
 | Cuesheet | Yes | Use course points included in course files. |
