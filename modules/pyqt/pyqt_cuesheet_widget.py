@@ -59,6 +59,7 @@ class CueSheetItem(QtWidgets.QVBoxLayout):
     
     self.dist = QtWidgets.QLabel()
     self.dist.setWordWrap(False)
+    self.dist_num = 0
     #self.name = QtWidgets.QLabel()
     self.name = MarqueeLabel(self.config)
     self.name.setWordWrap(False)
@@ -137,7 +138,7 @@ class CueSheetWidget(ScreenWidget):
         self.cuesheet[j].dist.setText("")
         self.cuesheet[j].name.setText("")
         continue
-      dist = self.config.logger.course.point_distance[cp_i+j]*1000 - self.gps_values['course_distance']
+      dist = self.cuesheet[j].dist_num = self.config.logger.course.point_distance[cp_i+j]*1000 - self.gps_values['course_distance']
       if dist < 0:
         continue
       text = "{0:6.0f}m  ".format(dist)
