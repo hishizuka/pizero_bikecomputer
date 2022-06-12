@@ -84,6 +84,8 @@ class Config():
   G_VERSION_MINOR = 1 #need to be initialized
   G_UNIT_ID = "0000000000000000" #initialized in get_serial
   G_UNIT_ID_HEX = 0x1A2B3C4D #initialized in get_serial
+  G_UNIT_MODEL = ""
+  G_UNIT_HARDWARE = ""
 
   #install_dir 
   G_INSTALL_PATH = os.path.expanduser('~') + "/pizero_bikecomputer/"
@@ -307,8 +309,9 @@ class Config():
   G_GPS_SPEED_CUTOFF = G_AUTOSTOP_CUTOFF #m/s
   #timezone (not use, get from GPS position)
   G_TIMEZONE = None
-  #exclude outlier cutoff when passed through the tunnel
-  G_GPS_SKIP_CUTOFF = 5
+  #GPSd error handling
+  G_GPS_GPSD_EPX_EPY_CUTOFF = 99#15
+  G_GPS_GPSD_EPV_CUTOFF = 99#20
 
   #fullscreen switch (overwritten with setting.conf)
   G_FULLSCREEN = False
@@ -347,24 +350,24 @@ class Config():
   G_GUI_ACC_TIME_RANGE = int(1*60/(G_REALTIME_GRAPH_INTERVAL/1000)) # [s]
 
   #Graph color by slope
-  G_SLOPE_WINDOW_DISTANCE = 500 #m
-  G_SLOPE_CUTOFF = (1,3,5,7,9,11,float("inf")) #by grade
+  G_CLIMB_DISTANCE_CUTOFF = 0.3 #[km]
+  G_CLIMB_GRADE_CUTOFF = 2 #[%]
+  G_SLOPE_CUTOFF = (1,3,6,9,12,float("inf")) #by grade
   G_SLOPE_COLOR = (
-   #(128,128,128,160),  #gray(base)
-   #(0,0,255,160),      #blue
-   #(0,255,255,160),    #light blue
-   #(0,255,0,160),      #green
-   #(255,255,0,160),    #yellow
-   #(255,128,0,160),    #orange
-   #(255,0,0,160),       #red
-   (128,128,128),  #gray(base) -> black in 8color(MIP)
-   (0,0,255),      #blue
-   (0,255,255),    #light blue
-   (0,255,0),      #green
-   (255,255,0),    #yellow
-   (255,128,0),    #orange
-   (255,0,0),      #red
+    (128,128,128),  #gray(base)
+    (0,255,0),      #green
+    (255,255,0),    #yellow
+    (255,128,0),    #orange
+    (255,0,0),      #red
+    (128,0,0),      #dark red
   )
+  G_CLIMB_CATEGORY = [
+    {'volume':8000,  'name':'Cat4'},
+    {'volume':16000, 'name':'Cat3'},
+    {'volume':32000, 'name':'Cat2'},
+    {'volume':64000, 'name':'Cat1'},
+    {'volume':80000, 'name':'HC'},
+  ]
 
   #map widgets
   #max zoom
@@ -374,7 +377,8 @@ class Config():
   G_DUMMY_POS_Y = 35.68188106919333 
   #for search point on course
   G_GPS_ON_ROUTE_CUTOFF = 50 #[m] #generate from course
-  G_GPS_SEARCH_RANGE = 5 #[km] #100km/h -> 27.7m/s
+  G_GPS_SEARCH_RANGE = 6 #[km] #100km/h -> 27.7m/s
+  G_GPS_AZIMUTH_CUTOFF = 60 #degree(30/45/90): 0~G_GPS_AZIMUTH_CUTOFF, (360-G_GPS_AZIMUTH_CUTOFF)~G_GPS_AZIMUTH_CUTOFF
   #for route downsampling cutoff
   G_ROUTE_DISTANCE_CUTOFF = 1.0 #1.0
   G_ROUTE_AZIMUTH_CUTOFF = 3.0 #3.0
@@ -544,8 +548,10 @@ class Config():
     for key in self.G_MAP_CONFIG:
       if 'tile_size' not in self.G_MAP_CONFIG[key]:
         self.G_MAP_CONFIG[key]['tile_size'] = 256
-      elif 'referer' not in self.G_MAP_CONFIG[key]:
+      if 'referer' not in self.G_MAP_CONFIG[key]:
         self.G_MAP_CONFIG[key]['referer'] = None
+      if 'use_mbtiles' not in self.G_MAP_CONFIG[key]:
+        self.G_MAP_CONFIG[key]['use_mbtiles'] = False
       
       if 'user_agent' in self.G_MAP_CONFIG[key] and self.G_MAP_CONFIG[key]['user_agent']:
         self.G_MAP_CONFIG[key]['user_agent'] = self.G_PRODUCT
@@ -555,6 +561,8 @@ class Config():
     if self.G_MAP not in self.G_MAP_CONFIG:
       print("don't exist map \"{}\" in {}".format(self.G_MAP, self.G_MAP_LIST), file=sys.stderr)
       self.G_MAP = "toner"
+    if self.G_MAP_CONFIG[self.G_MAP]['use_mbtiles'] and not os.path.exists("maptile/{}.mbtiles".format(self.G_MAP)):
+      self.G_MAP_CONFIG[self.G_MAP]['use_mbtiles'] = False
     self.loaded_dem = None
 
     #mkdir
@@ -562,15 +570,15 @@ class Config():
       os.mkdir(self.G_SCREENSHOT_DIR)
     if not os.path.exists(self.G_LOG_DIR):
       os.mkdir(self.G_LOG_DIR)
-    if not os.path.exists("maptile/"+self.G_MAP):
+    if not self.G_MAP_CONFIG[self.G_MAP]['use_mbtiles'] and not os.path.exists("maptile/"+self.G_MAP):
       os.mkdir("maptile/"+self.G_MAP)
     
     #optional
-    if not os.path.exists("maptile/"+self.G_STRAVA_OVERLAY_MAP):
+    if not self.G_MAP_CONFIG[self.G_MAP]['use_mbtiles'] and not os.path.exists("maptile/"+self.G_STRAVA_OVERLAY_MAP):
       os.mkdir("maptile/"+self.G_STRAVA_OVERLAY_MAP)
-    #if not os.path.exists("maptile/"+self.G_RAIN_OVERLAY_MAP):
+    #if not self.G_MAP_CONFIG[self.G_MAP]['use_mbtiles'] and not os.path.exists("maptile/"+self.G_RAIN_OVERLAY_MAP):
     #  os.mkdir("maptile/"+self.G_RAIN_OVERLAY_MAP)
-    #if not os.path.exists("maptile/"+self.G_WIND_OVERLAY_MAP):
+    #if not self.G_MAP_CONFIG[self.G_MAP]['use_mbtiles'] and not os.path.exists("maptile/"+self.G_WIND_OVERLAY_MAP):
     #  os.mkdir("maptile/"+self.G_WIND_OVERLAY_MAP)
     if self.G_LOG_ALTITUDE_FROM_DATA_SOUCE and not os.path.exists("maptile/"+self.G_DEM_MAP):
       os.mkdir("maptile/"+self.G_DEM_MAP)
@@ -609,7 +617,7 @@ class Config():
 
   def keyboard_check(self):
     while(not self.G_QUIT):
-      print("s:start/stop, l: lap, r:reset, p: previous screen, n: next screen")
+      print("s:start/stop, l: lap, r:reset, p: previous screen, n: next screen, q: quit")
       key = input()
 
       if key == "s":
@@ -622,6 +630,8 @@ class Config():
         self.gui.scroll_next()
       elif key == "p" and self.gui != None:
         self.gui.scroll_prev()
+      elif key == "q" and self.gui != None:
+        self.quit()
 
   def set_logger(self, logger):
     self.logger = logger
@@ -657,16 +667,23 @@ class Config():
       return
 
     # Extract serial from cpuinfo file
-    try:
-      f = open('/proc/cpuinfo','r')
+    with open('/proc/cpuinfo','r') as f:
       for line in f:
         if line[0:6]=='Serial':
           #include char, not number only
           self.G_UNIT_ID = (line.split(':')[1]).replace(' ','').strip()
-          self.G_UNIT_ID_HEX = int(self.G_UNIT_ID[-8:])
-      f.close()
-    except:
-      pass
+          self.G_UNIT_ID_HEX = int(self.G_UNIT_ID, 16)
+        if line[0:5]=='Model':
+          self.G_UNIT_MODEL = (line.split(':')[1]).strip()
+        if line[0:8]=='Hardware':
+          self.G_UNIT_HARDWARE = (line.split(':')[1]).replace(' ','').strip()
+
+    model_path = '/proc/device-tree/model'
+    if self.G_UNIT_MODEL == "" and os.path.exists(model_path):
+      with open(model_path, 'r') as f:
+        self.G_UNIT_MODEL = f.read().replace('\x00','').strip()
+
+    print("{}({}), serial:{}".format(self.G_UNIT_MODEL, self.G_UNIT_HARDWARE, hex(self.G_UNIT_ID_HEX)))
   
   def press_button(self, button_hard, press_button, index):
     self.button_config.press_button(button_hard, press_button, index)
@@ -962,6 +979,10 @@ class Config():
     return response
 
   def strava_upload(self):
+
+    if not self.detect_network():
+      print("No Internet connection")
+      return
 
     #strava setting check
     if self.G_STRAVA_API["CLIENT_ID"] == "" or \
