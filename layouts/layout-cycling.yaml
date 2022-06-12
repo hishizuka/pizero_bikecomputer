@@ -15,16 +15,16 @@ GPS:
   LAYOUT:
     Latitude: [0, 0]
     Longitude: [0, 1]
-    Alt.(GPS): [0, 2]
+    GPS Fix: [0, 2]
     Speed(GPS): [1, 0]
     Dist.(GPS): [1, 1]
     Satellites: [1, 2]
-    Error(pos): [2, 0]
-    Error(alt): [2, 1]
-    Course Dist.: [2, 2]
+    PDOP: [2, 0]
+    HDOP: [2, 1]
+    VDOP: [2, 2]
     Heading(GPS): [3, 0]
     Heading: [3, 1]
-    GPS Fix: [3,2]
+    Course Dist.: [3,2]
 
 I2C:
   STATUS: true
