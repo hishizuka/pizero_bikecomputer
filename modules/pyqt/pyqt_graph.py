@@ -410,13 +410,22 @@ class CourseProfileGraphWidget(BaseMapWidget):
     ) #transparent(alpha=0) and thin line
     self.plot.addItem(bg)
 
-    self.climb_top_plot = pg.ScatterPlotItem(pxMode=True, symbol='t1', size=15)
+    self.climb_top_plot = pg.ScatterPlotItem(pxMode=True, symbol='t', size=15)
     climb_points = []
-    for i in range(len(self.config.logger.course.climb_segment)):  
+    for i in range(len(self.config.logger.course.climb_segment)):
+      p = {
+        'pos': [
+          self.config.logger.course.climb_segment[i]['start_point_distance'], 
+          self.config.logger.course.climb_segment[i]['start_point_altitude']+10
+        ],
+        'pen': {'color': 'w', 'width': 1},
+        'brush':pg.mkBrush(color=(0,0,0))
+        }
+      climb_points.append(p)
       p = {
         'pos': [
           self.config.logger.course.climb_segment[i]['course_point_distance'], 
-          self.config.logger.course.climb_segment[i]['course_point_altitude']
+          self.config.logger.course.climb_segment[i]['course_point_altitude']+10
         ],
         'pen': {'color': 'w', 'width': 1},
         'brush':pg.mkBrush(color=(255,0,0))
@@ -447,7 +456,7 @@ class CourseProfileGraphWidget(BaseMapWidget):
 
     #initialize
     x_start = x_end = np.nan
-    x_width = self.zoom/1000 * 0.8
+    x_width = self.zoom/1000
     dist_end = self.config.logger.course.distance[-1]
     self.graph_index = self.gps_values['course_index']
     x_start = self.config.logger.course.distance[self.graph_index]
@@ -461,7 +470,6 @@ class CourseProfileGraphWidget(BaseMapWidget):
     #move x,y
     if self.lock_status:
       self.map_pos['x'] = x_start - x_width/10
-      #print(self.map_pos)
       if self.map_pos['x'] < 0:
         self.map_pos['x'] = 0
       self.map_pos['x_index'] = self.graph_index
@@ -471,16 +479,20 @@ class CourseProfileGraphWidget(BaseMapWidget):
         self.map_pos['x_index'] = 0
       elif self.map_pos['x'] >= dist_end:
         self.map_pos['x_index'] = len(self.config.logger.course.distance)-1
-      else:
+      elif self.move_pos['x'] != 0:
         self.map_pos['x_index'] = self.gps_sensor.get_index_with_distance_cutoff(
           self.map_pos['x_index'], 
           self.move_pos['x']/1000
-          )
+        )
 
     x_end = self.map_pos['x'] + x_width
     x_end_index = 0
     if x_end >= dist_end:
       x_end_index = len(self.config.logger.course.distance)-1
+      self.map_pos['x_index'] = self.gps_sensor.get_index_with_distance_cutoff(
+          x_end_index, 
+          -x_width
+        )
     else:
       x_end_index = self.gps_sensor.get_index_with_distance_cutoff(
         self.map_pos['x_index'], 
@@ -517,9 +529,9 @@ class CourseProfileGraphWidget(BaseMapWidget):
       y_max = np.max(self.config.logger.course.altitude[self.map_pos['x_index']:x_end_index])
    
     if y_min != float('inf') and y_max != -float('inf'):
-      y_max = (y_max - y_min) * 1.1 + y_min
-      y_max = (int(y_max/100)+1) * 100
-      y_min = int(y_min/100) * 100
+      y_range_space = (y_max - y_min)* 0.2
+      y_min = int((y_min - y_range_space)/50)*50
+      y_max = int((y_max + y_range_space)/50+2)*50
       self.plot.setYRange(min=y_min, max=y_max, padding=0)
 
     if self.climb_detail != None:
