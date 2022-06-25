@@ -80,6 +80,20 @@ class Button_Config():
         'D':('map_move_y_plus', 'map_zoom_plus'),
         'E':('map_move_x_plus', 'map_search_route'),
       },
+      'COURSE_PROFILE':{
+        'A':('scroll_prev', ''),
+        'B':('map_zoom_minus', ''),
+        'C':('change_mode', ''),
+        'D':('map_zoom_plus', ''),
+        'E':('scroll_next', 'enter_menu'),
+      },
+      'COURSE_PROFILE_1':{
+        'A':('map_move_x_minus', ''),
+        'B':('map_zoom_minus', ''),
+        'C':('change_mode', ''),
+        'D':('map_zoom_plus', ''),
+        'E':('map_move_x_plus', ''),
+      },
     },
     # call from sensor_ant
     'Edge_Remote':{
@@ -108,6 +122,16 @@ class Button_Config():
         'CUSTOM':('change_mode', 'map_zoom_minus'), 
         'LAP':('map_zoom_plus', ),  
       },
+      'COURSE_PROFILE':{
+        'PAGE':('scroll_prev', 'scroll_next'),
+        'CUSTOM':('change_mode', 'map_zoom_minus'), 
+        'LAP':('map_zoom_plus', ),
+      },
+      'COURSE_PROFILE_1':{
+        'PAGE':('', ''), #go along the route / back along the route
+        'CUSTOM':('change_mode', 'map_move_x_minus'), 
+        'LAP':('map_move_x_plus', ),  
+      },
     },
   }
 
@@ -118,10 +142,12 @@ class Button_Config():
   G_BUTTON_MODE_PAGES = {
     'MAIN': ['MAIN','MAIN_1'],
     'MAP': ['MAP','MAP_1'],
+    'COURSE_PROFILE': ['COURSE_PROFILE','COURSE_PROFILE_1'],
   }
   G_BUTTON_MODE_INDEX = {
     'MAIN': 0,
     'MAP': 0,
+    'COURSE_PROFILE': 0,
   }
 
   def __init__(self, config):
@@ -136,6 +162,9 @@ class Button_Config():
       if self.config.gui.main_page.widget(self.config.gui.main_page.currentIndex()).__class__.__name__ == 'SimpleMapWidget':
         if not self.G_BUTTON_MODE_IS_CHANGE:
           self.G_PAGE_MODE = 'MAP'
+      elif self.config.gui.main_page.widget(self.config.gui.main_page.currentIndex()).__class__.__name__ == 'CourseProfileGraphWidget':
+        if not self.G_BUTTON_MODE_IS_CHANGE:
+          self.G_PAGE_MODE = 'COURSE_PROFILE'
       else:
         if not self.G_BUTTON_MODE_IS_CHANGE:
           self.G_PAGE_MODE = 'MAIN'
@@ -160,6 +189,13 @@ class Button_Config():
     #if display is MAP: change MAP_1 -> MAP_2 -> MAP -> ...
     elif w.__class__.__name__ == 'SimpleMapWidget':
       self.change_mode_index("MAP")
+      #additional: lock current position when normal page
+      if not self.G_BUTTON_MODE_IS_CHANGE:
+        w.lock_on()
+      else:
+        w.lock_off()
+    elif w.__class__.__name__ == 'CourseProfileGraphWidget':
+      self.change_mode_index("COURSE_PROFILE")
       #additional: lock current position when normal page
       if not self.G_BUTTON_MODE_IS_CHANGE:
         w.lock_on()

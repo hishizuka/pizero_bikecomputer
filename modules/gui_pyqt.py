@@ -380,6 +380,8 @@ class GUI_PyQt(QtCore.QObject):
     widget_name = w.__class__.__name__
     if widget_name == 'SimpleMapWidget':
       eval('w.signal_'+mode+'.emit()')
+    if widget_name == 'CourseProfileGraphWidget':
+      eval('w.signal_'+mode+'.emit()')
 
   def dummy(self):
     pass
