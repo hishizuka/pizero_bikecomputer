@@ -369,7 +369,7 @@ class LoaderTcx():
     climb_start_cutoff = 2
     climb_end_cutoff = 1
     if slope_smoothing_cat[0] >= climb_start_cutoff:
-      self.climb_segment.append({'start':0, 'start_point':self.distance[0]})
+      self.climb_segment.append({'start':0, 'start_point_distance':self.distance[0], 'start_point_altitude':self.altitude[0]})
       climb_search_state = True
     for i in range(1, course_n):
       #search climb end (detect top of climb)
@@ -397,7 +397,7 @@ class LoaderTcx():
         climb_search_state = False
       #detect climb start
       elif not climb_search_state and slope_smoothing_cat[i-1] < climb_start_cutoff and slope_smoothing_cat[i] >= climb_start_cutoff:
-        self.climb_segment.append({'start':i, 'start_point':self.distance[i]})
+        self.climb_segment.append({'start':i, 'start_point_distance':self.distance[i], 'start_point_altitude':self.altitude[i]})
         climb_search_state = True
 
     #print(self.climb_segment)
