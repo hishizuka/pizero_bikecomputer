@@ -348,7 +348,7 @@ The buttons at the bottom of the screen are assigned the following functions fro
 |:-|:-|:-|
 | Left (<-) | Screen switching(Back) | None |
 | LAP | Lap | Reset |
-| MENU | Enter the menu | None |
+| MENU | Menu | None |
 | Start/Stop  | Start/Stop | Quit the program |
 | Right (->) | Screen switching(Forward) | None |
 
@@ -368,8 +368,8 @@ From left to right, the button assignments are as follows.
 | 5 | Left (<-) | None |
 | 6 | Lap | Reset |
 | 12 | Screen brightness On/Off | None |
-| 13 | Start/Stop | Quit the program |
-| 16 | Right (->) | Entering the menu |
+| 13 | Start/Stop | None |
+| 16 | Right (->) | Menu |
 
 In the menu, the button has different assignments. From left to right, the button assignments are as follows.
 
@@ -387,6 +387,8 @@ Both short press and long press can be changed. And only the GPIO number of PiTF
 
 <img src="https://user-images.githubusercontent.com/12926652/91799330-cfc50580-ec61-11ea-9045-e1991aed205c.png" width=240 />
 
+#### Main
+
 From left to right, the button assignments are as follows.
 
 | Button | Short press | Long press |
@@ -395,31 +397,43 @@ From left to right, the button assignments are as follows.
 | B | Lap | Reset |
 | C | Screenshot | None |
 | D | Start/Stop | None |
-| E | Right (->) | Entering the menu |
+| E | Right (->) | Menu |
 
-On the map screen, the button assignments are changed.
+#### Map and Course Profile
+
+On the map or course profile, the button assignments are changed.
 
 | Button | Short press | Long press |
 |:-|:-|:-|
 | A | Left (<-) | None |
 | B | Zoom out | Reset |
-| C | Change mode(*) | None |
+| C | Change button mode(*1, *2) | None |
 | D | Zoom in | None |
-| E | Right (->) | Entering the menu |
+| E | Right (->) | Menu |
 
-(*)Map(initial screen) -> Map mode1
-
-Map mode1
+(*1) In the map
 
 | Button | Short press | Long press |
 |:-|:-|:-|
 | A | Move left | None |
 | B | Move down | Zoom out |
-| C | Change mode(*) | Change move amount |
+| C | Restore button mode | Change move amount |
 | D | Move up | Zoom in |
 | E | Move right | Search route(*) |
 
-(*)Search route by Google DIrections API. Set your API key in setting.conf.
+(*)Search route by Google Directions API. Set your API key in setting.conf.
+
+(*2) In the course profile 
+
+| Button | Short press | Long press |
+|:-|:-|:-|
+| A | Move left | None |
+| B | Zoom out | None |
+| C | Restore button mode | None |
+| D | Zoom in | None |
+| E | Move right | None |
+
+#### Menu
 
 In the menu, the button assignments are changed.
 
@@ -435,31 +449,43 @@ In the menu, the button assignments are changed.
 
 ### Garmin Edge Remote (ANT+)
 
+#### MAIN
+
 The button assignments are as follows.
 
 | Button | Short press | Long press |
 |:-|:-|:-|
 | PAGE | Left (<-) | Right (->) |
-| CUSTOM | Change mode(*) | Entering the menu |
+| CUSTOM | Change button mode(*1) | Entering the menu |
 | LAP | Lap | None |
 
-(*)Mode1
+(*1) Mode1
 
 | Button | Short press | Long press |
 |:-|:-|:-|
 | PAGE | ANT+ Light ON/OFF | Brightness control |
-| CUSTOM | Change mode(*) | None |
+| CUSTOM | Restore button mode | None |
 | LAP | Start/Stop | None |
 
-On the map screen, the button assignments are changed.
+#### Map and Course Profile
+
+On the map or course profile, the button assignments are changed.
 
 | Button | Short press | Long press |
 |:-|:-|:-|
 | PAGE | Left (<-) | Right (->) |
-| CUSTOM | Change mode(*) | Zoom out |
+| CUSTOM | Change button mode(*1, *2) | Zoom out |
 | LAP | Zoom in | None |
 
-(*)Not implemented.
+(*1) In the map and course profile
+
+| Button | Short press | Long press |
+|:-|:-|:-|
+| PAGE | None(not implemented) | None(not implemented)  |
+| CUSTOM | Restore button mode| Zoom out |
+| LAP | Zoom in | None |
+
+#### MENU
 
 In the menu, the button assignments are changed.
 
@@ -549,15 +575,15 @@ GENERAL -> display must be set.
   - `wikimedia`: An example map of a full-color map. [https://maps.wikimedia.org/](https://maps.wikimedia.org/)
   - `jpn_kokudo_chiri_in`: A map from Japan GSI. [https://cyberjapandata.gsi.go.jp](https://cyberjapandata.gsi.go.jp)
   - You can add a map URL to map.yaml. Specify the URL in tile format (tile coordinates by [x, y] and zoom level by [z]). And The map name is set to this setting `map`.
-  - Also, you can set raster mbtiles mapsets generated from [mb-util](https://github.com/mapbox/mbutil). It is sqlite3 db packed with raster maptile images. The definition in map.yaml is following with sample mbtile map placed at `maptile/mbtile_map.mbtiles`.
+  - Also, you can set raster mbtiles mapsets generated from [mb-util](https://github.com/mapbox/mbutil). It is sqlite3 db packed with raster maptile images. The definition in map.yaml is following with sample mbtile map named `sample_mbtile` placed at `maptile/sample_mbtile.mbtiles`.
 
 ```
 map.yaml entry
 
-  mbtile_map:
-  url: 
-  attribution: some attribution.
-  use_mbtiles: true
+  sample_mbtile:
+    url: 
+    attribution: some attribution.
+    use_mbtiles: true
 ```
 
 #### STRAVA_API section
