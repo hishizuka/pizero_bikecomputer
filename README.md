@@ -1,13 +1,13 @@
 ![title](https://user-images.githubusercontent.com/12926652/89370669-47178000-d71c-11ea-896f-0d98f4cbd5da.jpg)
 
 # Pi Zero Bikecomputer
-An open-source bike computer based on  Raspberry Pi Zero (W, WH) with GPS and ANT+.
+An open-source bike computer based on  Raspberry Pi Zero (W, WH, 2 W) with GPS and ANT+.
 
 https://github.com/hishizuka/pizero_bikecomputer
 
 # News
 
-- 2022/6/12 Please delete log/log.db because column layouts is changed.
+- 2022/6/12 Please delete log/log.db (`rm log/log.db`) because column layouts is changed.
 - 2022/6/12 Please replace GPS section in layout.yaml from layouts/layout-cycling.yaml because the item "Error" is deleted.
 - 2022/3/7 Please install aiohttp for faster downloading of map tiles.
 
@@ -15,26 +15,6 @@ https://github.com/hishizuka/pizero_bikecomputer
 $ sudo apt install python3-aiohttp
 or
 $ sudo pip3 install aiohttp
-```
-
-- 2022/1/8 Please install crdp (Ramer–Douglas–Peucker algorithm) to decimate a route composed of line segments to a similar route with fewer points.
-
-```
-$ sudo pip3 install git+https://github.com/hishizuka/crdp.git
-```
-
-- 2022/1/8 Please install polyline and set Google API token in setting.conf if you want to use routing with Google Directions API. This is an experimental function.
-
-```
-$ sudo pip3 install polyline
-```
-
-- 2022/1/8 Please delete log/log.db because format(column layout) is changed. In the future, this will be changed automatically.
-- 2022/1/8 Please replace layout.yaml because item names of GPS error is changed.
-
-```
-$ rm log/log.db
-$ cp layouts/layout-cycling.yaml ./
 ```
 
 
@@ -53,7 +33,7 @@ $ cp layouts/layout-cycling.yaml ./
 
 # Abstract
 
-Pi Zero Bikecomputer is a GPS and ANT+ bike computer based on Raspberry Pi Zero(W, WH). This is the first DIY project in the world integrated with necesarry hardwares and softwares for modern bike computer. It measures and records position(GPS), ANT+ sensor(speed/cadence/power) and I2C sensor(pressure/temperature/accelerometer, etc). It also displays these values, even maps and courses in real-time. In addition, it write out log into .fit format file.
+Pi Zero Bikecomputer is a GPS and ANT+ bike computer based on Raspberry Pi Zero(W, WH, 2 W). This is the first DIY project in the world integrated with necesarry hardwares and softwares for modern bike computer. It measures and records position(GPS), ANT+ sensor(speed/cadence/power) and I2C sensor(pressure/temperature/accelerometer, etc). It also displays these values, even maps and courses in real-time. In addition, it write out log into .fit format file.
 
 In this project, Pi Zero Bikecomputer got basic functions needed for bike computers. Next target is to add new functions which existing products do not have!
 
@@ -99,14 +79,14 @@ Daily update [at twitter (@pi0bikecomputer)](https://twitter.com/pi0bikecomputer
 
 Some functions depend on your parts.
 
-## General
+## Summary
 
 | Specs | Detail | Note |
 |:-|:-|:-|
-| Logging | Yes | See as below |
-| Sensors | Yes | See as below |
-| Positioning | Yes | A GPS module is required. See as below. |
-| GUI | Yes | See as below |
+| Logging | Yes |  |
+| Sensors | Yes |  |
+| Positioning | Yes | A GPS module is required. |
+| GUI | Yes |  |
 | Wifi | Yes | Built-in wifi |
 | Battery life(Reference) | 18h | with 3100mAh mobile battery([Garmin Charge Power Pack](https://buy.garmin.com/en-US/US/p/571552)) and MIP Reflective color LCD. |
 
@@ -117,7 +97,7 @@ Some functions depend on your parts.
 | Stopwatch | Yes | Timer, Lap, Lap timer |
 | Lap | Yes | [Total, Lap ave, Pre lap ave] x [HR, Speed, Cadence, Power] |
 | Cumulative value | Yes | [Total, Lap, Pre lap] x [Distance, Works, Ascent, Descent] |
-| Elapsed time | Yes | Elapsed time, average speed(=distance/elapsed time), gained time from average speed 15km/h(for brevet) |
+| Gross | Yes | Elapsed time, gross average speed(=distance/elapsed time), gained time from average speed 15km/h(for brevet) |
 | Auto stop | Yes | Automatic stop at speeds below 4km/h(configurable), or in the state of the acceleration sensor when calculating the speed by GPS alone |
 | Recording insterval | 1s |  Smart recording is not supported. |
 | Resume | Yes |  |
