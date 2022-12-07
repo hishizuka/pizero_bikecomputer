@@ -56,7 +56,7 @@ class Config():
   }
 
   #log several altitudes (from DEM and course file)
-  G_LOG_ALTITUDE_FROM_DATA_SOUCE = True
+  G_LOG_ALTITUDE_FROM_DATA_SOUCE = False
 
   #calculate index on course
   G_COURSE_INDEXING = True
