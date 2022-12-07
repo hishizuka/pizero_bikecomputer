@@ -4,17 +4,11 @@ import signal
 import datetime
 import shutil
 import time
-import threading
-import queue
+import asyncio
 import traceback
 
 import numpy as np
 from crdp import rdp
-
-from . import sensor_core
-from .logger import loader_tcx
-from .logger import logger_csv
-from .logger import logger_fit
 
 #ambient
 # online uploading service in Japan
@@ -100,24 +94,36 @@ class LoggerCore():
   position_log = np.array([])
 
   def __init__(self, config):
-    print("\tlogger_core : init...")
     super().__init__()
     self.config = config
+  
+  def start_coroutine(self):
+    self.sql_queue = asyncio.Queue()
+    asyncio.create_task(self.sql_worker())
+    try:
+      self.count_up_lock = False
+      self.config.loop.add_signal_handler(signal.SIGALRM, self.count_up)
+      signal.setitimer(signal.ITIMER_REAL, self.config.G_LOGGING_INTERVAL, self.config.G_LOGGING_INTERVAL)
+    except:
+      #for windows
+      traceback.print_exc()
+    
+  def delay_init(self):
+    from . import sensor_core
+    from .logger import loader_tcx
+    from .logger import logger_csv
+    from .logger import logger_fit
+
     self.sensor = sensor_core.SensorCore(self.config)
-    self.course = loader_tcx.LoaderTcx(self.config, self.sensor)
+    self.course = loader_tcx.LoaderTcx(self.config)
     self.logger_csv = logger_csv.LoggerCsv(self.config)
     self.logger_fit = logger_fit.LoggerFit(self.config)
 
     #if _IMPORT_AMBIENT:
-    #  t = datetime.datetime.utcnow()
     #  self.am = ambient.Ambient()
     #  self.send_time = datetime.datetime.now()
-    #  print("\tlogger_core : setup ambient...: done", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
     
-    t = datetime.datetime.utcnow()
-    print("\tlogger_core : loading course...")
     self.course.load()
-    print("\tlogger_core : loading course...: done", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
     
     for k in self.lap_keys:
       self.record_stats['pre_lap_avg'][k] = 0
@@ -140,37 +146,33 @@ class LoggerCore():
       self.resume()
       #resume START/STOP status if temporary values exist
       self.config.G_MANUAL_STATUS = \
-        self.config.get_config_pickle("G_MANUAL_STATUS", self.config.G_MANUAL_STATUS)
+        self.config.setting.get_config_pickle("G_MANUAL_STATUS", self.config.G_MANUAL_STATUS)
       if self.config.G_MANUAL_STATUS == "START":
         self.config.G_MANUAL_STATUS = "STOP"
       else:
         self.config.G_MANUAL_STATUS = "START"
       self.start_and_stop_manual()
     
-    #thread for downloading map tiles
-    self.sql_queue = queue.Queue()
-    self.sql_thread = threading.Thread(target=self.sql_worker, name="sql_worker", args=())
-    self.sql_thread.start()
+    self.sensor.start_coroutine()
+  
+  async def quit(self):
+    await self.sensor.quit()
 
-    self.is_handler_on = False
-    try:
-      signal.signal(signal.SIGALRM, self.count_up)
-      signal.setitimer(signal.ITIMER_REAL, self.config.G_LOGGING_INTERVAL, self.config.G_LOGGING_INTERVAL)
-    except:
-      #for windows
-      traceback.print_exc()
-      #pass
-
-  def quit(self):
-    self.sql_queue.put(None)
+    self.config.loop.remove_signal_handler(signal.SIGALRM)
+    await self.sql_queue.put(None)
+    await asyncio.sleep(0.1)
     self.cur.close()
     self.con.close()
-  
-  def sql_worker(self):
-    for sql in iter(self.sql_queue.get, None):
+
+  async def sql_worker(self):
+    while True:
+      sql = await self.sql_queue.get()
+      if sql == None:
+        break
       self.cur.execute(*sql)
       self.con.commit()
-
+      self.sql_queue.task_done()
+  
   def init_db(self):
     self.cur.execute("SELECT * FROM sqlite_master WHERE type='table' and name='BIKECOMPUTER_LOG'")
     if self.cur.fetchone() == None:
@@ -244,20 +246,21 @@ class LoggerCore():
       self.cur.execute("CREATE INDEX timestamp_index ON BIKECOMPUTER_LOG(timestamp)")
       self.con.commit()
       
-  def count_up(self, arg1, arg2):  
+  def count_up(self):
     self.calc_gross()
-    if self.config.G_STOPWATCH_STATUS != "START" or self.is_handler_on:
+    if self.config.G_STOPWATCH_STATUS != "START" or self.count_up_lock:
       return
-    self.is_handler_on = True
+    self.count_up_lock = True
     self.values['count'] += 1
     self.values['count_lap'] += 1
-    self.record_log()
-    self.is_handler_on = False
+    asyncio.create_task(self.record_log())
+    self.count_up_lock = False
 
   def start_and_stop_manual(self):
-    self.sensor.sensor_spi.screen_flash_short()
+    self.config.display.screen_flash_short()
+    time_str = datetime.datetime.now().strftime("%Y%m%d %H:%M:%S")
     if self.config.G_MANUAL_STATUS != "START":
-      print("->M START\t", datetime.datetime.now())
+      print("->M START {}".format(time_str))
       self.start_and_stop("STOP")
       self.config.G_MANUAL_STATUS = "START"
       if self.config.gui != None:
@@ -265,26 +268,27 @@ class LoggerCore():
       if self.values['start_time'] == None:
         self.values['start_time'] = int(datetime.datetime.utcnow().timestamp())
     elif self.config.G_MANUAL_STATUS == "START":
-      print("->M STOP\t", datetime.datetime.now())
+      print("->M STOP  {}".format(time_str))
       self.start_and_stop("START")
       self.config.G_MANUAL_STATUS = "STOP"
       if self.config.gui != None:
         self.config.gui.change_start_stop_button(self.config.G_MANUAL_STATUS)
-    self.config.set_config_pickle("G_MANUAL_STATUS", self.config.G_MANUAL_STATUS, quick_apply=True)
+    self.config.setting.set_config_pickle("G_MANUAL_STATUS", self.config.G_MANUAL_STATUS, quick_apply=True)
  
   def start_and_stop(self, status=None):
     if status != None:
       self.config.G_STOPWATCH_STATUS = status
+    time_str = datetime.datetime.now().strftime("%Y%m%d %H:%M:%S")
     if self.config.G_STOPWATCH_STATUS != "START":
       self.config.G_STOPWATCH_STATUS = "START"
-      print("->START\t", datetime.datetime.now())
+      print("->START   {}".format(time_str))
     elif self.config.G_STOPWATCH_STATUS == "START":
       self.config.G_STOPWATCH_STATUS = "STOP"
-      print("->STOP\t", datetime.datetime.now())
+      print("->STOP    {}".format(time_str))
   
   def count_laps(self):
     if self.values['count'] == 0: return
-    self.sensor.sensor_spi.screen_flash_short()
+    self.config.display.screen_flash_short()
     self.values['lap'] += 1
     self.values['count_lap'] = 0
     for k in self.lap_keys:
@@ -295,15 +299,16 @@ class LoggerCore():
     for k2 in ["cadence","power"]:
       self.average["lap"][k2]["count"] = 0
       self.average["lap"][k2]["sum"] = 0
-    self.record_log()
-    print("->LAP:", self.values['lap'], "\t", datetime.datetime.now())
+    asyncio.create_task(self.record_log())
+    time_str = datetime.datetime.now().strftime("%Y%m%d %H:%M:%S")
+    print("->LAP:{}   {}".format(self.values['lap'], time_str))
 
   def reset_count(self):
     if self.config.G_MANUAL_STATUS == "START" or self.values['count'] == 0:
       return
       
     #reset
-    self.sensor.sensor_spi.screen_flash_long()
+    self.config.display.screen_flash_long()
 
     #close db connect
     self.cur.close()
@@ -318,7 +323,7 @@ class LoggerCore():
       t = datetime.datetime.now()
       if not self.logger_fit.write_log():
         return
-      print("Write Fit({}) : {} sec".format(logger_fit.MODE,(datetime.datetime.now()-t).total_seconds()))
+      print("Write Fit({}) : {} sec".format(self.logger_fit.mode,(datetime.datetime.now()-t).total_seconds()))
     
     # backup and reset database
     t = datetime.datetime.now()
@@ -334,7 +339,7 @@ class LoggerCore():
     print("DELETE :", (datetime.datetime.now()-t).total_seconds(),"sec")
 
     #reset temporary values
-    self.config.reset_config_pickle()
+    self.config.setting.reset_config_pickle()
     
     #reset accumulated values
     self.sensor.reset()
@@ -361,22 +366,15 @@ class LoggerCore():
         self.average[k1][k2]["count"] = 0
         self.average[k1][k2]["sum"] = 0
 
-  def record_log(self):
+  def reset_course(self, delete_course=False):
+    self.course.reset(delete_course=True)
+    self.sensor.sensor_gps.reset_course_index()
+
+  async def record_log(self):
     #need to detect location delta for smart recording
     
     #get present value
-    value = {
-      "heart_rate":self.sensor.values['integrated']['hr'],
-      "cadence":self.sensor.values['integrated']['cadence'],
-      "distance":self.sensor.values['integrated']['distance'],
-      "speed":self.sensor.values['integrated']['speed'],
-      "power":self.sensor.values['integrated']['power'],
-      "accumulated_power":self.sensor.values['integrated']['accumulated_power'],
-      "total_ascent":self.sensor.values['I2C']['total_ascent'],
-      "total_descent":self.sensor.values['I2C']['total_descent'],
-      "dem_altitude":self.sensor.values['integrated']['dem_altitude'],
-      "cpu_percent":self.sensor.values['integrated']['cpu_percent'],
-    }
+    value = self.sensor.values['integrated']
      
     #update lap stats if value is not Null
     for k,v in value.items():
@@ -476,9 +474,9 @@ class LoggerCore():
       value['power'],
       value['accumulated_power'],
       ###
-      self.sensor.values['I2C']['temperature'],
+      value['temperature'],
       self.sensor.values['I2C']['pressure'],
-      self.sensor.values['I2C']['humidity'], #
+      self.sensor.values['I2C']['humidity'],
       self.sensor.values['I2C']['altitude'],
       self.sensor.values['GPS']['course_altitude'],
       value['dem_altitude'],
@@ -495,8 +493,8 @@ class LoggerCore():
       self.sensor.values['I2C']['gyro_mod'][2],
       self.sensor.values['I2C']['light'],
       value['cpu_percent'],
-      value['total_ascent'],
-      value['total_descent'],
+      self.sensor.values['I2C']['total_ascent'], #value['total_ascent'],
+      self.sensor.values['I2C']['total_descent'], #value['total_descent'],
       ###
       self.record_stats['lap_avg']['heart_rate'],
       self.record_stats['lap_avg']['cadence'],
@@ -523,7 +521,7 @@ class LoggerCore():
       )
     )
     #self.con.commit()
-    self.sql_queue.put((sql))
+    await self.sql_queue.put((sql))
 
     self.store_short_log_for_update_track(
       value['distance'],
