@@ -22,8 +22,8 @@ class Button_Config():
         5:('back_menu', ''),
         6:('', ''),
         12:('press_space', ''),
-        13:('press_tab', ''),
-        16:('press_down', ''),
+        13:('press_shift_tab', ''),
+        16:('press_tab', ''),
       },
     },
     'Papirus':{
@@ -36,8 +36,8 @@ class Button_Config():
       'MENU':{
         16:('back_menu', ''),
         26:('press_space', ''),
-        20:('press_tab', ''),
-        21:('press_down', ''),
+        20:('press_shift_tab', ''),
+        21:('press_tab', ''),
       },
     },
     'DFRobot_RPi_Display':{
@@ -47,7 +47,7 @@ class Button_Config():
       },
       'MENU':{
         21:('press_space', ''),
-        20:('press_down', 'back_menu'),
+        20:('press_tab', 'back_menu'),
       },
     },
     # call from ButtonShim
@@ -63,8 +63,8 @@ class Button_Config():
         'A':('back_menu', ''),
         'B':('brightness_control', ''),
         'C':('press_space', ''),
-        'D':('press_tab', ''),
-        'E':('press_down', ''),
+        'D':('press_shift_tab', ''),
+        'E':('press_tab', ''),
       },
       'MAP':{
         'A':('scroll_prev', ''),
@@ -108,8 +108,8 @@ class Button_Config():
         'LAP':('start_and_stop_manual', ),
       },
       'MENU':{
-        'PAGE':('press_down', ''),
-        'CUSTOM':('press_tab', 'back_menu'),
+        'PAGE':('press_tab', ''),
+        'CUSTOM':('press_shift_tab', 'back_menu'),
         'LAP':('press_space', ),
       },
       'MAP':{
@@ -159,10 +159,10 @@ class Button_Config():
 
     w_index = self.config.gui.stack_widget.currentIndex()
     if w_index == 1:
-      if self.config.gui.main_page.widget(self.config.gui.main_page.currentIndex()).__class__.__name__ == 'SimpleMapWidget':
+      if self.config.gui.main_page.widget(self.config.gui.main_page.currentIndex()) == self.config.gui.map_widget:
         if not self.G_BUTTON_MODE_IS_CHANGE:
           self.G_PAGE_MODE = 'MAP'
-      elif self.config.gui.main_page.widget(self.config.gui.main_page.currentIndex()).__class__.__name__ == 'CourseProfileGraphWidget':
+      elif self.config.gui.main_page.widget(self.config.gui.main_page.currentIndex()) == self.config.gui.course_profile_graph_widget:
         if not self.G_BUTTON_MODE_IS_CHANGE:
           self.G_PAGE_MODE = 'COURSE_PROFILE'
       else:
@@ -187,14 +187,14 @@ class Button_Config():
     if 'MAIN' in self.G_PAGE_MODE:
       self.change_mode_index("MAIN")
     #if display is MAP: change MAP_1 -> MAP_2 -> MAP -> ...
-    elif w.__class__.__name__ == 'SimpleMapWidget':
+    elif w == self.config.gui.map_widget:
       self.change_mode_index("MAP")
       #additional: lock current position when normal page
       if not self.G_BUTTON_MODE_IS_CHANGE:
         w.lock_on()
       else:
         w.lock_off()
-    elif w.__class__.__name__ == 'CourseProfileGraphWidget':
+    elif w == self.config.gui.course_profile_graph_widget:
       self.change_mode_index("COURSE_PROFILE")
       #additional: lock current position when normal page
       if not self.G_BUTTON_MODE_IS_CHANGE:
