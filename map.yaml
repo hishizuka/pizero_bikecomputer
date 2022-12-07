@@ -2,11 +2,11 @@
 # original map(example is "toner") is called from setting.conf -> GENERAL -> map
 
 # toner: 
-#   url: http://a.tile.stamen.com/toner/{z}/{x}/{y}.png
+#   url: https://stamen-tiles.a.ssl.fastly.net/toner/{z}/{x}/{y}.png
 #   attribution: Map tiles by Stamen Design, under CC BY 3.0.<br />Data by OpenStreetMap, under ODbL
 
 #toner_2x: 
-#  url: http://a.tile.stamen.com/toner/{z}/{x}/{y}@2x.png
+#  url: https://stamen-tiles.a.ssl.fastly.net/toner/{z}/{x}/{y}@2x.png
 #  attribution: Map tiles by Stamen Design, under CC BY 3.0.<br />Data by OpenStreetMap, under ODbL
 #  tile_size: 512
 
@@ -33,26 +33,3 @@ opencyclemap:
 cycleosm:
   url: https://a.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png
   attribution: © OpenStreetMap contributors
-
-#https://wiki.openstreetmap.org/wiki/Strava
-
-#strava_heatmap_bluered:
-#  url: https://heatmap-external-b.strava.com/tiles-auth/ride/bluered/{z}/{x}/{y}.png?px=256
-#  attribution: strava
-
-strava_heatmap_hot:
-  url: https://heatmap-external-b.strava.com/tiles-auth/ride/hot/{z}/{x}/{y}.png?px=256
-  attribution: strava
-
-strava_heatmap_blue:
-  url: https://heatmap-external-b.strava.com/tiles-auth/ride/blue/{z}/{x}/{y}.png?px=256
-  attribution: strava
-  
-strava_heatmap_purple:
-  url: https://heatmap-external-b.strava.com/tiles-auth/ride/purple/{z}/{x}/{y}.png?px=256
-  attribution: strava
-
-strava_heatmap_gray:
-  url: https://heatmap-external-b.strava.com/tiles-auth/ride/gray/{z}/{x}/{y}.png?px=256
-  attribution: strava
-  
