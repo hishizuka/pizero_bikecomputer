@@ -2,6 +2,7 @@
 /log/
 /screenshot/
 /maptile/*
+/course/ridewithgps/*
 /.idea/
 /.vscode/
 __pycache__/
@@ -15,10 +16,12 @@ __pycache__/
 *.o
 *.so
 a.out
-setting*
+setting.conf
+setting.pickle
 layout.yaml
 map.yaml
 nohup.out
 !.gitkeep
 screenlog.*
 gmon.out
+
