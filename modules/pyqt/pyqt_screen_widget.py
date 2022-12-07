@@ -7,6 +7,8 @@ except:
   import PyQt5.QtCore as QtCore
   import PyQt5.QtWidgets as QtWidgets
 
+from qasync import asyncSlot
+
 from .pyqt_item import Item
 
 #################################
@@ -145,7 +147,8 @@ class ScreenWidget(QtWidgets.QWidget):
   def add_extra(self):
     pass
 
-  def update_display(self):
+  @asyncSlot()
+  async def update_display(self):
     if self.items is None:
       return
       
@@ -162,9 +165,9 @@ class ScreenWidget(QtWidgets.QWidget):
         item.update_value(None)
         print("###update_display### : ", item.name, eval(self.config.gui.gui_config.G_ITEM_DEF[item.name][1]))
         traceback.print_exc()
-    self.update_extra()
+    await self.update_extra()
 
-  def update_extra(self):
+  async def update_extra(self):
     pass
 
 
