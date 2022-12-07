@@ -19,15 +19,7 @@ class GUI_Config():
 
   G_GUI_INDEX = {
     'boot':0,
-    'main':1,
-    'menu':2,
-    'ANT+Top':3,
-    'ANT+Detail':4,
-    'Wheel Size':5,
-    'Adjust Altitude':6,
-    'Debug Log Viewer':7,
-    #'log':5,
-    #'setting':6,
+    'Main':1,
   }
 
   G_UNIT ={
@@ -51,7 +43,7 @@ class GUI_Config():
     "Speed":(G_UNIT["Speed"],"self.sensor.values['integrated']['speed']"),
     "Dist.":(G_UNIT["Distance"],"self.sensor.values['integrated']['distance']"),
     "Cad.":(G_UNIT["Cadence"],"self.sensor.values['integrated']['cadence']"),
-    "HR":(G_UNIT["HeartRate"],"self.sensor.values['integrated']['hr']"),
+    "HR":(G_UNIT["HeartRate"],"self.sensor.values['integrated']['heart_rate']"),
     "Work":(G_UNIT["Work"],"self.sensor.values['integrated']['accumulated_power']"),
     "W'bal":("{0:^.0f}kJ","self.sensor.values['integrated']['w_prime_balance']"),
     "W'bal(Norm)":("{0:^d}%","self.sensor.values['integrated']['w_prime_balance_normalized']"),
@@ -131,7 +123,7 @@ class GUI_Config():
     "HR2":(G_UNIT["HeartRate"],"None"),
     "HR3":(G_UNIT["HeartRate"],"None"),
     #Sensor raw
-    "Temp":("{0:^3.0f}C","self.sensor.values['I2C']['temperature']"),
+    "Temp":("{0:^3.0f}C","self.sensor.values['integrated']['temperature']"),
     "Pressure":("{0:^4.0f}hPa","self.sensor.values['I2C']['pressure']"),
     "Altitude":(G_UNIT["Altitude"],"self.sensor.values['I2C']['altitude']"),
     "Humidity":("{0:^3.0f}%","self.sensor.values['I2C']['humidity']"),
@@ -226,17 +218,36 @@ class GUI_Config():
     self.key_press = QtCore.QEvent.Type.KeyPress if USE_PYQT6 else QtCore.QEvent.KeyPress
     self.key_release = QtCore.QEvent.Type.KeyRelease if USE_PYQT6 else QtCore.QEvent.KeyRelease
     self.no_modifier = QtCore.Qt.KeyboardModifier.NoModifier if USE_PYQT6 else QtCore.Qt.NoModifier
+
     self.align_left = QtCore.Qt.AlignmentFlag.AlignLeft if USE_PYQT6 else QtCore.Qt.AlignLeft
     self.align_center = QtCore.Qt.AlignmentFlag.AlignCenter if USE_PYQT6 else QtCore.Qt.AlignCenter
+    self.align_h_center = QtCore.Qt.AlignmentFlag.AlignHCenter if USE_PYQT6 else QtCore.Qt.AlignHCenter
+    self.align_v_center = QtCore.Qt.AlignmentFlag.AlignVCenter if USE_PYQT6 else QtCore.Qt.AlignVCenter
     self.align_right = QtCore.Qt.AlignmentFlag.AlignRight if USE_PYQT6 else QtCore.Qt.AlignRight
+    self.align_bottom = QtCore.Qt.AlignmentFlag.AlignBottom if USE_PYQT6 else QtCore.Qt.AlignBottom
+    self.align_top = QtCore.Qt.AlignmentFlag.AlignTop if USE_PYQT6 else QtCore.Qt.AlignTop
     self.expanding = QtWidgets.QSizePolicy.Policy.Expanding if USE_PYQT6 else QtWidgets.QSizePolicy.Expanding
+    self.fixed = QtWidgets.QSizePolicy.Policy.Fixed if USE_PYQT6 else QtWidgets.QSizePolicy.Fixed
+
     self.no_focus = QtCore.Qt.FocusPolicy.NoFocus if USE_PYQT6 else QtCore.Qt.NoFocus
     self.strong_focus = QtCore.Qt.FocusPolicy.StrongFocus if USE_PYQT6 else QtCore.Qt.StrongFocus
+    self.tab_focus_reason = QtCore.Qt.FocusReason.TabFocusReason if USE_PYQT6 else QtCore.Qt.TabFocusReason
+    self.backtab_focus_reason = QtCore.Qt.FocusReason.BacktabFocusReason if USE_PYQT6 else QtCore.Qt.BacktabFocusReason
+
+    self.scrollbar_alwaysoff = QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff if USE_PYQT6 else QtCore.Qt.ScrollBarAlwaysOff
+    self.qtextedit_nowrap = QtWidgets.QTextEdit.LineWrapMode.NoWrap if USE_PYQT6 else QtWidgets.QTextEdit.NoWrap
+
+    self.stackingmode_stackone = QtWidgets.QStackedLayout.StackingMode.StackOne if USE_PYQT6 else QtWidgets.QStackedLayout.StackOne
+    self.stackingmode_stackall = QtWidgets.QStackedLayout.StackingMode.StackAll if USE_PYQT6 else QtWidgets.QStackedLayout.StackAll
+    
+    self.PE_Widget = QtWidgets.QStyle.PrimitiveElement.PE_Widget if USE_PYQT6 else QtWidgets.QStyle.PE_Widget
+    self.WA_TranslucentBackground = QtCore.Qt.WidgetAttribute.WA_TranslucentBackground if USE_PYQT6 else QtCore.Qt.WA_TranslucentBackground
+    self.WA_TransparentForMouseEvents = QtCore.Qt.WidgetAttribute.WA_TransparentForMouseEvents if USE_PYQT6 else QtCore.Qt.WA_TransparentForMouseEvents
 
     #for draw_display
     self.format_rgb888 = QtGui.QImage.Format.Format_RGB888 if USE_PYQT6 else QtGui.QImage.Format_RGB888
     self.format_mono = QtGui.QImage.Format.Format_Mono if USE_PYQT6 else QtGui.QImage.Format_Mono
-    if self.config.G_AVAILABLE_DISPLAY[self.config.G_DISPLAY]['color']:
+    if self.config.display.has_color():
       self.format = self.format_rgb888
     else:
       self.format = self.format_mono
@@ -244,7 +255,7 @@ class GUI_Config():
   def get_screen_shape(self, p):
     screen_shape = None
     remove_bytes = 0
-    if self.config.G_AVAILABLE_DISPLAY[self.config.G_DISPLAY]['color']:
+    if self.config.display.has_color():
       screen_shape = (p.height(), p.width(), 3)
     else:
       screen_shape = (p.height(), int(p.width()/8))
