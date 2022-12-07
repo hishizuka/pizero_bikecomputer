@@ -472,6 +472,7 @@ Uploads the most recent activity record file(.fit) created by the reset operatio
   - Select a standard map.
 - Map Overlay
   - Toggle map overlay(heatmap, rain map and wind map) and select an overlay map.
+  - Heatmaps are cached, but rain map and wind map require internet connection to fetch the latest images.
 
 ### Profile
 
