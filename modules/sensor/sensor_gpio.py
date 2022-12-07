@@ -10,7 +10,9 @@ try:
   _SENSOR_RPiGPIO = True
 except:
   pass
-print('  RPi GPIO : ',_SENSOR_RPiGPIO)
+
+if _SENSOR_RPiGPIO:
+  print('GPIO ', end='')
 
 
 class SensorGPIO(Sensor):
@@ -53,6 +55,6 @@ class SensorGPIO(Sensor):
         GPIO.add_event_detect(key, GPIO.FALLING, callback=self.my_callback, bouncetime=500)
 
   def quit(self):
-    #move to config
-    pass
+    if _SENSOR_RPiGPIO:
+      GPIO.cleanup()
 
