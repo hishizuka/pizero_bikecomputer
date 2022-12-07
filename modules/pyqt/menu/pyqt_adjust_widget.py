@@ -7,6 +7,8 @@ except:
   import PyQt5.QtWidgets as QtWidgets
   import PyQt5.QtGui as QtGui
 
+from qasync import asyncSlot
+
 from .pyqt_menu_widget import MenuWidget 
 
 ##################################
@@ -18,13 +20,8 @@ class AdjustWidget(MenuWidget):
   unit = ""
 
   def setup_menu(self):
-    self.menu = QtWidgets.QWidget()
-    self.back_index_key = 'menu'
+    self.make_menu_layout(QtWidgets.QGridLayout)
     
-    self.menu_layout = QtWidgets.QGridLayout()
-    self.menu_layout.setContentsMargins(15,0,15,0)
-    self.menu_layout.setSpacing(0)
-
     self.display = QtWidgets.QLineEdit('')
     self.display.setReadOnly(True)
     self.display.setAlignment(self.config.gui.gui_config.align_right)
@@ -62,6 +59,8 @@ class AdjustWidget(MenuWidget):
     self.set_button.clicked.connect(self.set_value)
 
     self.menu.setLayout(self.menu_layout)
+    if not self.config.display.has_touch():
+      self.focus_widget = self.num_button[1]
 
     self.init_extra()
 
@@ -77,22 +76,23 @@ class AdjustWidget(MenuWidget):
       self.display.setText('')
     self.display.setText(self.display.text() + str(digit_value))
 
-  def set_value(self):
+  @asyncSlot()
+  async def set_value(self):
     value = self.display.text()
     if value == "":
       return
     value = int(value)
-    self.set_value_extra(value)
     index = self.config.gui.gui_config.G_GUI_INDEX[self.back_index_key]
     self.config.gui.change_menu_page(index)
+    await self.set_value_extra(value)
   
-  def set_value_extra(self, value):
+  async def set_value_extra(self, value):
     pass
     
   def clear(self):
     self.display.setText('')
 
-  def update_display(self):
+  def print_value(self):
     pass
 
 
@@ -103,8 +103,8 @@ class AdjustAltitudeWidget(AdjustWidget):
   def init_extra(self):
     self.display.setMaxLength(4)
   
-  def set_value_extra(self, value):
-    self.config.logger.sensor.sensor_i2c.update_sealevel_pa(value)
+  async def set_value_extra(self, value):
+    await self.config.logger.sensor.sensor_i2c.update_sealevel_pa(value)
 
 
 class AdjustWheelCircumferenceWidget(AdjustWidget):
@@ -114,12 +114,39 @@ class AdjustWheelCircumferenceWidget(AdjustWidget):
   def init_extra(self):
     self.display.setMaxLength(4)
 
-  def set_value_extra(self, value):
+  async def set_value_extra(self, value):
     pre_v = self.config.G_WHEEL_CIRCUMFERENCE
     v = value / 1000
     self.config.G_WHEEL_CIRCUMFERENCE = v
     print("set G_WHEEL_CIRCUMFERENCE from", pre_v, "to", self.config.G_WHEEL_CIRCUMFERENCE)
 
-  def update_display(self):
+  def preprocess(self):
     self.display.setText(str(int(self.config.G_WHEEL_CIRCUMFERENCE*1000)))
 
+
+class AdjustCPWidget(AdjustWidget):
+  
+  unit = "W"
+
+  def init_extra(self):
+    self.display.setMaxLength(4)
+
+  async def set_value_extra(self, value):
+    self.config.G_POWER_CP = value
+
+  def preprocess(self):
+    self.display.setText(str(int(self.config.G_POWER_CP)))
+
+
+class AdjustWPrimeBalanceWidget(AdjustWidget):
+  
+  unit = "J"
+
+  def init_extra(self):
+    self.display.setMaxLength(5)
+
+  async def set_value_extra(self, value):
+    self.config.G_POWER_W_PRIME = value
+
+  def preprocess(self):
+    self.display.setText(str(int(self.config.G_POWER_W_PRIME)))
