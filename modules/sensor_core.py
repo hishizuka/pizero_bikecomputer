@@ -1,7 +1,6 @@
-import time
 import datetime
-import threading
 import math
+import asyncio
 
 import numpy as np
 
@@ -12,11 +11,14 @@ try:
 except:
   pass
 
+print('detected sensor modules:')
+print('  ', end='')
 from .sensor.sensor_gps import SensorGPS
 from .sensor.sensor_ant import SensorANT
 from .sensor.sensor_gpio import SensorGPIO
 from .sensor.sensor_i2c import SensorI2C
-from .sensor.sensor_spi import SensorSPI
+print()
+print()
 
 #Todo: BLE
 
@@ -35,13 +37,11 @@ class SensorCore():
     'ave_power_3s','ave_power_30s',
     'w_prime_balance','w_prime_balance_normalized','w_prime_power_sum','w_prime_power_count', 'w_prime_t','w_prime_sum',
     'grade','grade_spd','glide_ratio','dem_altitude',
+    'temperature',
     'cpu_percent',
     ]
   process = None
-  thread_ant = None
-  thread_gps = None
-  thread_integrate = None
-  time_threshold = {'HR':15, 'SPD':5, 'CDC':3, 'PWR':3} #valid period of sensor [sec]
+  time_threshold = {'HR':15, 'SPD':5, 'CDC':3, 'PWR':3, 'TEMP':45} #valid period of sensor [sec]
   grade_range = 9
   grade_window_size = 5
   graph_keys = [
@@ -65,7 +65,6 @@ class SensorCore():
     self.values['ANT+'] = {}
     self.values['BLE'] = {}
     self.values['I2C'] = {}
-    self.values['SPI'] = {}
     self.values['integrated'] = {}
 
     #reset
@@ -81,39 +80,41 @@ class SensorCore():
     if _IMPORT_PSUTIL:
       self.process = psutil.Process(self.config.G_PID)
 
-    time_profile = [datetime.datetime.now(),] #for time profile
     self.sensor_gps = SensorGPS(config, self.values['GPS'])
-    self.thread_gps = threading.Thread(target=self.sensor_gps.start, name="thread_gps", args=())
-    time_profile.append(datetime.datetime.now()) #for time profile
+
+    time_profile = []
+    t1 = datetime.datetime.now()
     self.sensor_ant = SensorANT(config, self.values['ANT+'])
-    self.thread_ant = threading.Thread(target=self.sensor_ant.start, name="thread_ant", args=())
-    time_profile.append(datetime.datetime.now()) #for time profile
-    self.sensor_i2c = SensorI2C(config, self.values['I2C'])
-    self.thread_i2c = threading.Thread(target=self.sensor_i2c.start, name="thread_i2c", args=())
-    self.sensor_spi = SensorSPI(config, self.values['SPI'])
-    time_profile.append(datetime.datetime.now()) #for time profile
-    self.sensor_gpio = SensorGPIO(config, None)
-    time_profile.append(datetime.datetime.now()) #for time profile
+    t2 = datetime.datetime.now()
+    time_profile.append((t2-t1).total_seconds())
     
-    self.thread_integrate = threading.Thread(target=self.integrate, name="thread_integrate", args=())
-    time_profile.append(datetime.datetime.now()) #for time profile
-    self.start()
-    time_profile.append(datetime.datetime.now()) #for time profile
+    t1 = t2
+    self.sensor_i2c = SensorI2C(config, self.values['I2C'])
+    t2 = datetime.datetime.now()
+    time_profile.append((t2-t1).total_seconds())
 
-    sec_diff = [] #for time profile
-    for i in range(len(time_profile)):
-      if i == 0: continue
-      sec_diff.append("{0:.6f}".format((time_profile[i]-time_profile[i-1]).total_seconds()))
-    print("\tGPS/ANT+/I2C/GPIO/integrate/start:", sec_diff)
-
-  def start(self):
-    self.thread_gps.start()
-    self.thread_ant.start()
+    self.sensor_gpio = SensorGPIO(config, None)
     self.sensor_gpio.update()
-    self.thread_i2c.start()
-    self.thread_integrate.start()
+    
+    print()
+    print("[sensor] Initialize:")
+    print("  ANT+ : {:.3f} sec".format(time_profile[0]))
+    print("  I2C  : {:.3f} sec".format(time_profile[1]))
+    print("  total: {:.3f} sec".format(sum(time_profile)))
+    print()
 
-  def integrate(self):
+  def start_coroutine(self):
+    asyncio.create_task(self.integrate())
+    self.sensor_ant.start_coroutine()
+    self.sensor_gps.start_coroutine()
+    self.sensor_i2c.start_coroutine()
+  
+  async def quit(self):
+    self.sensor_ant.quit()
+    await self.sensor_gps.quit()
+    self.sensor_gpio.quit()
+
+  async def integrate(self):
     pre_dst = {'ANT+':0, 'GPS': 0} 
     pre_ttlwork = {'ANT+':0}
     pre_alt = {'ANT+':np.nan, 'GPS': np.nan}
@@ -128,7 +129,7 @@ class SensorCore():
     }
     #for w_prime_balance
     pwr_mean_under_cp = 0
-    tau = tau = 546*np.exp(-0.01*(self.config.G_POWER_CP-pwr_mean_under_cp))+316
+    tau = 546*np.exp(-0.01*(self.config.G_POWER_CP-pwr_mean_under_cp))+316
     #alias for self.values
     v = {'GPS':self.values['GPS'], 'I2C':self.values['I2C']}
     #loop control
@@ -138,12 +139,12 @@ class SensorCore():
     
     #if True:
     while(not self.config.G_QUIT):
-      time.sleep(self.wait_time)
+      await asyncio.sleep(self.wait_time)
       start_time = datetime.datetime.now()
-      #print(start_time)
+      #print(start_time, self.wait_time)
 
       time_profile = [start_time,]
-      hr = spd = cdc = pwr = self.config.G_ANT_NULLVALUE
+      hr = spd = cdc = pwr = temperature = self.config.G_ANT_NULLVALUE
       grade = grade_spd = glide = self.config.G_ANT_NULLVALUE
       ttlwork_diff = 0
       dst_diff = {'ANT+':0, 'GPS': 0, 'USE': 0}
@@ -161,15 +162,15 @@ class SensorCore():
 
       ant_id_type = self.config.G_ANT['ID_TYPE']
       delta = {'PWR':{0x10:float("inf"), 0x11:float("inf"), 0x12:float("inf")}}
-      for key in ['HR','SPD','CDC','GPS']:
+      for key in ['HR','SPD','CDC','TEMP','GPS']:
         delta[key] = float("inf")
       #need for ANT+ ID update
-      for key in ['HR','SPD','CDC','PWR']:
+      for key in ['HR','SPD','CDC','PWR','TEMP']:
         if self.config.G_ANT['USE'][key] and ant_id_type[key] in self.values['ANT+']:
           v[key] = self.values['ANT+'][ant_id_type[key]]
 
       #make intervals from timestamp
-      for key in ['HR','SPD','CDC']:
+      for key in ['HR','SPD','CDC','TEMP']:
         if not self.config.G_ANT['USE'][key]: continue
         if 'timestamp' in v[key]:
           delta[key] = (now_time - v[key]['timestamp']).total_seconds()
@@ -207,7 +208,7 @@ class SensorCore():
         #get from powermeter
         elif self.config.G_ANT['TYPE']['CDC'] == 0x0B:
           for page in [0x12,0x10]:
-            if not 'timestamp' in v[key][page]: continue
+            if not 'timestamp' in v['CDC'][page]: continue
             if delta['CDC'] < self.time_threshold['CDC']:
               cdc = v['CDC'][page]['cadence']
               break
@@ -278,12 +279,16 @@ class SensorCore():
             pre_ttlwork['ANT+'] = v['PWR'][page]['accumulated_power']
             #never take other powermeter
             break
-     
+      
+      #Temperature : ANT+
+      if self.config.G_ANT['USE']['TEMP']:
+        if delta['TEMP'] < self.time_threshold['TEMP']:
+          temperature = v['TEMP']['temperature']
+      elif not np.isnan(v['I2C']['temperature']):
+        temperature = v['I2C']['temperature']
+
       #altitude
-      #if not np.isnan(v['I2C']['altitude_kalman']):
       if not np.isnan(v['I2C']['pre_altitude']):
-        #alt = v['I2C']['altitude_kalman']
-        #alt = round(v['I2C']['altitude_kalman'], 1)
         alt = v['I2C']['altitude']
         #for grade (distance base)
         for key in ['ANT+', 'GPS']:
@@ -301,7 +306,7 @@ class SensorCore():
           pre_alt_spd['ANT+'] = alt
       #dem_altitude
       if self.config.G_LOG_ALTITUDE_FROM_DATA_SOUCE:
-        self.values['integrated']['dem_altitude'] = self.config.get_altitude_from_tile([v['GPS']['lon'], v['GPS']['lat']])
+        self.values['integrated']['dem_altitude'] = await self.config.get_altitude_from_tile([v['GPS']['lon'], v['GPS']['lat']])
 
       #grade (distance base)
       if dst_diff['USE'] > 0:
@@ -351,7 +356,7 @@ class SensorCore():
       elif dst_diff_spd['ANT+'] == 0 and self.config.G_STOPWATCH_STATUS == "START":
         grade_spd = pre_grade_spd
       
-      self.values['integrated']['hr'] = hr
+      self.values['integrated']['heart_rate'] = hr
       self.values['integrated']['speed'] = spd
       self.values['integrated']['cadence'] = cdc
       self.values['integrated']['power'] = pwr
@@ -360,6 +365,7 @@ class SensorCore():
       self.values['integrated']['grade'] = grade
       self.values['integrated']['grade_spd'] = grade_spd
       self.values['integrated']['glide_ratio'] = glide
+      self.values['integrated']['temperature'] = temperature
       
       for g in self.graph_keys:
         self.values['integrated'][g][0:-1] = self.values['integrated'][g][1:]
@@ -450,11 +456,11 @@ class SensorCore():
       
       #auto backlight
       if self.config.G_IS_RASPI and self.config.G_USE_AUTO_BACKLIGHT:
-        if self.config.G_DISPLAY in ('MIP', 'MIP_640') and self.sensor_spi.send_display and not np.isnan(v['I2C']['light']):
+        if self.config.G_DISPLAY in ('MIP', 'MIP_640') and self.config.display.send_display and not np.isnan(v['I2C']['light']):
           if v['I2C']['light'] <= self.config.G_AUTO_BACKLIGHT_CUTOFF:
-            self.sensor_spi.display.set_brightness(3)
+            self.config.display.display.set_brightness(3)
           else:
-            self.sensor_spi.display.set_brightness(0)
+            self.config.display.display.set_brightness(0)
         if self.config.G_MANUAL_STATUS == "START":
           if v['I2C']['light'] <= self.config.G_AUTO_BACKLIGHT_CUTOFF:
             self.sensor_ant.set_light_mode("FLASH_LOW", auto=True)
@@ -491,12 +497,11 @@ class SensorCore():
       d1, d2 = divmod(loop_time, self.config.G_SENSOR_INTERVAL)
       if d1 > self.config.G_SENSOR_INTERVAL * 10: #[s]
         print(
-          "too long loop_time({}):{:.2f}, d1:{:.0f}, d2:{:.2f}".format(
-           self.__class__.__name__,
-           loop_time,
-           d1,
-           d2
-           ))
+          "too long loop_time({}):{:.2f}, interval:{:.1f}".format(
+          self.__class__.__name__,
+          loop_time,
+          self.config.G_SENSOR_INTERVAL
+        ))
         d1 = d2 = 0
       self.wait_time = self.config.G_SENSOR_INTERVAL - d2
       self.actual_loop_interval = (d1 + 1)*self.config.G_SENSOR_INTERVAL
