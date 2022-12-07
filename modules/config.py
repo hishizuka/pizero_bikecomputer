@@ -1,36 +1,31 @@
-import sys
 import os
-import shutil
-import struct
-import subprocess
-import time
+import sys
 import datetime
 import argparse
-import configparser
-import threading
-import queue
-import traceback
 import json
-import pickle
 import socket
+import asyncio
+
+import shutil
+import subprocess
+import traceback
 import math
 
 import numpy as np
-from PIL import Image
 import oyaml as yaml
 
-import asyncio
-import aiohttp
+from PIL import Image
+
 
 _IS_RASPI = False
 try:
   import RPi.GPIO as GPIO
   GPIO.setmode(GPIO.BCM)
-  #GPIO.setmode(GPIO.BOARD)
   _IS_RASPI = True
 except:
   pass
 
+from modules.helper.setting import Setting
 from modules.button_config import Button_Config
 
 
@@ -56,12 +51,12 @@ class Config():
 
   #average including ZERO when logging
   G_AVERAGE_INCLUDING_ZERO = {
-    "cadence":False,
-    "power":True
+    "cadence": False,
+    "power": True
   }
 
   #log several altitudes (from DEM and course file)
-  G_LOG_ALTITUDE_FROM_DATA_SOUCE = False
+  G_LOG_ALTITUDE_FROM_DATA_SOUCE = True
 
   #calculate index on course
   G_COURSE_INDEXING = True
@@ -70,8 +65,8 @@ class Config():
   G_GROSS_AVE_SPEED = 15 #[km/h]
 
   #W'bal
-  G_POWER_CP = 100
-  G_POWER_W_PRIME = 10000
+  G_POWER_CP = 150
+  G_POWER_W_PRIME = 15000
   G_POWER_W_PRIME_ALGORITHM = "WATERWORTH" #WATERWORTH, DIFFERENTIAL
 
   ###########################
@@ -100,7 +95,9 @@ class Config():
   G_FONT_NAME = ""
   
   #course file
-  G_COURSE_FILE = "course/course.tcx"
+  G_COURSE_DIR = "course/"
+  G_COURSE_FILE = "course.tcx"
+  G_COURSE_FILE_PATH = G_COURSE_DIR + G_COURSE_FILE
   #G_CUESHEET_FILE = "course/cue_sheet.csv"
   G_CUESHEET_DISPLAY_NUM = 3 #max: 5
   G_CUESHEET_SCROLL = False
@@ -109,6 +106,9 @@ class Config():
   G_LOG_DIR = "log/"
   G_LOG_DB = G_LOG_DIR + "log.db"
   G_LOG_START_DATE = None
+
+  #asyncio semaphore
+  G_COROUTINE_SEM = 100
   
   #map setting
   #default map (can overwrite in settings.conf)
@@ -117,15 +117,27 @@ class Config():
     #basic map
     'toner': {
       # 0:z(zoom), 1:tile_x, 2:tile_y
-      'url': "http://a.tile.stamen.com/toner/{z}/{x}/{y}.png",
+      'url': "https://stamen-tiles.a.ssl.fastly.net/toner/{z}/{x}/{y}.png",
+      'attribution': 'Map tiles by Stamen Design, under CC BY 3.0.<br />Data by OpenStreetMap, under ODbL',
+      'tile_size': 256,
+    },
+    'toner-lite': {
+      # 0:z(zoom), 1:tile_x, 2:tile_y
+      'url': "https://stamen-tiles.a.ssl.fastly.net/toner-lite/{z}/{x}/{y}.png",
       'attribution': 'Map tiles by Stamen Design, under CC BY 3.0.<br />Data by OpenStreetMap, under ODbL',
       'tile_size': 256,
     },
     'toner_2x': {
       # 0:z(zoom), 1:tile_x, 2:tile_y
-      'url': "http://a.tile.stamen.com/toner/{z}/{x}/{y}@2x.png",
+      'url': "https://stamen-tiles.a.ssl.fastly.net/toner/{z}/{x}/{y}@2x.png",
       'attribution': 'Map tiles by Stamen Design, under CC BY 3.0.<br />Data by OpenStreetMap, under ODbL',
       'tile_size': 512,
+    },
+    'toner-terrain': {
+      # 0:z(zoom), 1:tile_x, 2:tile_y
+      'url': "https://stamen-tiles.a.ssl.fastly.net/terrain/{z}/{x}/{y}.png",
+      'attribution': 'Map tiles by Stamen Design, under CC BY 3.0.<br />Data by OpenStreetMap, under ODbL',
+      'tile_size': 256,
     },
     'wikimedia': {
       'url': "https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png",
@@ -138,33 +150,135 @@ class Config():
       'attribution': '国土地理院',
       'tile_size': 256,
     },
+  }
 
-    #heatmap
-    'strava_heatmap_bluered': {
-      'url': "https://heatmap-external-b.strava.com/tiles-auth/ride/bluered/{z}/{x}/{y}.png?px=256",
-      'attribution': 'strava',
-      'tile_size': 256,
-      'max_zoomlevel': 16,
-      'min_zoomlevel': 10,
-    },
+  G_HEATMAP_OVERLAY_MAP_CONFIG = {
     'rwg_heatmap': {
       #start_color: low, white(FFFFFF) is recommended.
       #end_color: high, any color you like.
       'url': "https://heatmap.ridewithgps.com/normalized/{z}/{x}/{y}.png?start_color=%23FFFFFF&end_color=%23FF8800",
-      'attribution': 'ride with gps',
+      'attribution': 'Ride with GPS',
       'tile_size': 256,
       'max_zoomlevel': 16,
       'min_zoomlevel': 10,
     },
+    #strava heatmap
+    #https://wiki.openstreetmap.org/wiki/Strava
+    #bluered / hot / blue / purple / gray
+    'strava_heatmap_bluered': {
+      'url': "https://heatmap-external-b.strava.com/tiles-auth/ride/bluered/{z}/{x}/{y}.png?px=256&Key-Pair-Id={key_pair_id}&Policy={policy}&Signature={signature}",
+      'attribution': 'STRAVA',
+      'tile_size': 256,
+      'max_zoomlevel': 16,
+      'min_zoomlevel': 10,
+    },
+    'strava_heatmap_hot': {
+      'url': "https://heatmap-external-b.strava.com/tiles-auth/ride/hot/{z}/{x}/{y}.png?px=256&Key-Pair-Id={key_pair_id}&Policy={policy}&Signature={signature}",
+      'attribution': 'STRAVA',
+      'tile_size': 256,
+      'max_zoomlevel': 16,
+      'min_zoomlevel': 10,
+    },
+    'strava_heatmap_blue': {
+      'url': "https://heatmap-external-b.strava.com/tiles-auth/ride/blue/{z}/{x}/{y}.png?px=256&Key-Pair-Id={key_pair_id}&Policy={policy}&Signature={signature}",
+      'attribution': 'STRAVA',
+      'tile_size': 256,
+      'max_zoomlevel': 16,
+      'min_zoomlevel': 10,
+    },
+    'strava_heatmap_purple': {
+      'url': "https://heatmap-external-b.strava.com/tiles-auth/ride/purple/{z}/{x}/{y}.png?px=256&Key-Pair-Id={key_pair_id}&Policy={policy}&Signature={signature}",
+      'attribution': 'STRAVA',
+      'tile_size': 256,
+      'max_zoomlevel': 16,
+      'min_zoomlevel': 10,
+    },
+    'strava_heatmap_gray': {
+      'url': "https://heatmap-external-b.strava.com/tiles-auth/ride/gray/{z}/{x}/{y}.png?px=256&Key-Pair-Id={key_pair_id}&Policy={policy}&Signature={signature}",
+      'attribution': 'STRAVA',
+      'tile_size': 256,
+      'max_zoomlevel': 16,
+      'min_zoomlevel': 10,
+    },
+  }
 
+  G_RAIN_OVERLAY_MAP_CONFIG = {
     #worldwide rain tile
+    'rainviewer': {
+      'url': "https://tilecache.rainviewer.com/v2/radar/{basetime}/256/{z}/{x}/{y}/6/1_1.png",
+      'attribution': 'RainViewer',
+      'tile_size': 256,
+      'max_zoomlevel': 18,
+      'min_zoomlevel': 1,
+      'time_list': 'https://api.rainviewer.com/public/weather-maps.json',
+      'nowtime':None,
+      'nowtime_func': datetime.datetime.now, #local?
+      'basetime': None,
+      'time_interval': 10, #[minutes]
+      'update_minutes': 1, #typically int(time_interval/2) [minutes]
+      'time_format':'unix_timestamp',
+    },
 
     #japanese rain tile
+    'jpn_jma_bousai': {
+      'url': "https://www.jma.go.jp/bosai/jmatile/data/nowc/{basetime}/none/{validtime}/surf/hrpns/{z}/{x}/{y}.png",
+      'attribution': 'Japan Meteorological Agency',
+      'tile_size': 256,
+      'max_zoomlevel': 10,
+      'min_zoomlevel': 4,
+      'past_time_list': 'https://www.jma.go.jp/bosai/jmatile/data/nowc/targetTimes_N1.json',
+      'forcast_time_list': 'https://www.jma.go.jp/bosai/jmatile/data/nowc/targetTimes_N2.json',
+      'nowtime':None,
+      'nowtime_func': datetime.datetime.utcnow,
+      'basetime': None,
+      'validtime': None,
+      'time_interval': 5, #[minutes]
+      'update_minutes': 1, #[minutes]
+      'time_format':'%Y%m%d%H%M%S',
+    },
+  }
 
+  G_WIND_OVERLAY_MAP_CONFIG = {
     #worldwide wind tile
+    #https://weather.openportguide.de/index.php/en/weather-forecasts/weather-tiles
+    'openportguide': {
+      'url': "https://weather.openportguide.de/tiles/actual/wind_stream/0h/{z}/{x}/{y}.png",
+      'attribution': 'openportguide',
+      'tile_size': 256,
+      'max_zoomlevel': 7,
+      'min_zoomlevel': 0,
+      'nowtime':None,
+      'nowtime_func': datetime.datetime.utcnow,
+      'basetime': None,
+      'validtime': None,
+      'time_interval': 60, #[minutes]
+      'update_minutes': 30, #[minutes]
+      'time_format':'%H%MZ%d%b%Y',
+    },
 
     #japanese wind tile
-    
+    'jpn_scw': {
+      'url': "https://{subdomain}.supercweather.com/tl/msm/{basetime}/{validtime}/wa/{z}/{x}/{y}.png",
+      'attribution': 'SCW',
+      'tile_size': 256,
+      'max_zoomlevel': 8,
+      'min_zoomlevel': 8,
+      'inittime': 'https://k2.supercweather.com/tl/msm/initime.json?rand={rand}',
+      'fl': 'https://k2.supercweather.com/tl/msm/{basetime}/fl.json?rand={rand}',
+      'nowtime':None,
+      'nowtime_func': datetime.datetime.utcnow,
+      'timeline': None,
+      'basetime': None,
+      'validtime': None,
+      'subdomain': None,
+      'time_interval': 60, #[minutes]
+      'update_minutes': 30, #[minutes]
+      'time_format':'%H%MZ%d%b%Y', #need upper()
+      'referer': 'https://supercweather.com/',
+    },
+  }
+
+  G_DEM_MAP_CONFIG = {
     #worldwide DEM(Digital Elevation Model) map
 
     #japanese DEM(Digital Elevation Model) map
@@ -188,15 +302,17 @@ class Config():
       'attribution': '国土地理院',
       'fix_zoomlevel':14
     }, 
-
   }
   #external input of G_MAP_CONFIG
   G_MAP_LIST = "map.yaml"
 
   #overlay map
-  G_STRAVA_OVERLAY_MAP = "strava_heatmap_bluered"
-  G_RAIN_OVERLAY_MAP = "jpn_jma_bousai"
-  G_WIND_OVERLAY_MAP =""
+  G_USE_HEATMAP_OVERLAY_MAP = False
+  G_HEATMAP_OVERLAY_MAP = "rwg_heatmap"
+  G_USE_RAIN_OVERLAY_MAP = False
+  G_RAIN_OVERLAY_MAP = "rainviewer"
+  G_USE_WIND_OVERLAY_MAP = False
+  G_WIND_OVERLAY_MAP ="openportguide"
 
   #DEM tile (Digital Elevation Model)
   G_DEM_MAP = 'jpn_kokudo_chiri_in_DEM5A'
@@ -218,6 +334,9 @@ class Config():
 
   #for read load average in sensor_core
   G_PID = os.getpid()
+
+  #IP ADDRESS
+  G_IP_ADDRESS = ''
 
   #stopwatch state
   G_MANUAL_STATUS = "INIT"
@@ -249,6 +368,7 @@ class Config():
       'PWR':False,
       'LGT':False,
       'CTRL':False,
+      'TEMP':False,
       },
     'NAME':{
       'HR':'HeartRate',
@@ -257,6 +377,7 @@ class Config():
       'PWR':'Power',
       'LGT':'Light',
       'CTRL':'Control',
+      'TEMP':'Temperature',
       },
     'ID':{
       'HR':0,
@@ -265,6 +386,7 @@ class Config():
       'PWR':0,
       'LGT':0,
       'CTRL':0,
+      'TEMP':0,
       },
     'TYPE':{
       'HR':0,
@@ -273,6 +395,7 @@ class Config():
       'PWR':0,
       'LGT':0,
       'CTRL':0,
+      'TEMP':0,
       },
     'ID_TYPE':{
       'HR':0,
@@ -281,6 +404,7 @@ class Config():
       'PWR':0,
       'LGT':0,
       'CTRL':0,
+      'TEMP':0,
       },
     'TYPES':{
       'HR':(0x78,),
@@ -289,6 +413,7 @@ class Config():
       'PWR':(0x0B,),
       'LGT':(0x23,),
       'CTRL':(0x10,),
+      'TEMP':(0x19,),
       },
     'TYPE_NAME':{
       0x78:'HeartRate',
@@ -298,9 +423,10 @@ class Config():
       0x0B:'Power',
       0x23:'Light',
       0x10:'Control',
+      0x19:'Temperature',
       },
     #for display order in ANT+ menu (antMenuWidget)
-    'ORDER':['HR','SPD','CDC','PWR','LGT','CTRL'],
+    'ORDER':['HR','SPD','CDC','PWR','LGT','CTRL','TEMP'],
    }
   
   #GPS Null value
@@ -315,10 +441,13 @@ class Config():
 
   #fullscreen switch (overwritten with setting.conf)
   G_FULLSCREEN = False
-  #display type (overwritten with setting.conf)
-  G_DISPLAY = 'PiTFT' #PiTFT, MIP, Papirus, MIP_Sharp
+
+    #display type (overwritten with setting.conf)
+  G_DISPLAY = 'None' #PiTFT, MIP, Papirus, MIP_Sharp
+
   #screen size (need to add when adding new device)
   G_AVAILABLE_DISPLAY = {
+    'None': {'size':(400, 240),'touch':True, 'color': True},
     'PiTFT': {'size':(320, 240),'touch':True, 'color': True},
     'MIP': {'size':(400, 240),'touch':False, 'color': True}, #LPM027M128C, LPM027M128B
     'MIP_640': {'size':(640, 480),'touch':False, 'color': True}, #LPM044M141A
@@ -329,6 +458,12 @@ class Config():
   }
   G_WIDTH = 320
   G_HEIGHT = 240
+
+  #auto backlight with spi mip display
+  #(PiTFT actually needs max brightness under sunlights, so there are no implementation with PiTFT)
+  G_USE_AUTO_BACKLIGHT = True
+  G_AUTO_BACKLIGHT_CUTOFF = 30
+
   #GUI mode
   G_GUI_MODE = "PyQt"
   #G_GUI_MODE = "QML"
@@ -400,33 +535,56 @@ class Config():
     "REFRESH_TOKEN": "",
   }
   G_STRAVA_COOKIE = {
+    "EMAIL": "",
+    "PASSWORD": "",
     "KEY_PAIR_ID": "",
     "POLICY": "",
     "SIGNATURE": "",
   }
-  G_STRAVA_UPLOAD_FILE = ""
+  G_UPLOAD_FILE = ""
 
-  #GOOGLE DIRECTION API TOKEN
   G_GOOGLE_DIRECTION_API = {
     "TOKEN": "",
-  }
-  G_HAVE_GOOGLE_DIRECTION_API_TOKEN = False
-  G_GOOGLE_DIRECTION_API_URL = "https://maps.googleapis.com/maps/api/directions/json?units=metric&language=ja"
-  G_GOOGLE_DIRECTION_API_MODE = {
-    "BICYCLING": "mode=bicycling",
-    "DRIVING": "mode=driving&avoid=tolls|highways",
+    "HAVE_API_TOKEN": False,
+    "URL": "https://maps.googleapis.com/maps/api/directions/json?units=metric&language=ja",
+    "API_MODE": {
+      "bicycling": "mode=bicycling",
+      "driving": "mode=driving&avoid=tolls|highways",
+    },
+    "API_MODE_SETTING": "bicycling",
   }
 
   G_OPENWEATHERMAP_API = {
     "TOKEN": "",
+    "HAVE_API_TOKEN": False,
+    "URL": "http://api.openweathermap.org/data/2.5/weather",
   }
-  G_HAVE_OPENWEATHERMAP_API_TOKEN = False
-  G_OPENWEATHERMAP_API_URL = "http://api.openweathermap.org/data/2.5/weather"
-  
-  #auto backlight with spi mip display
-  #(PiTFT actually needs max brightness under sunlights, so there are no implementation with PiTFT)
-  G_USE_AUTO_BACKLIGHT = True
-  G_AUTO_BACKLIGHT_CUTOFF = 30
+
+  G_RIDEWITHGPS_API = {
+    "APIKEY": "pizero_bikecomputer",
+    "TOKEN": "",
+    "HAVE_API_TOKEN": False,
+    "USER_ID": "",
+    "URL_USER_DETAIL": "https://ridewithgps.com/users/current.json",
+    "URL_USER_ROUTES": "https://ridewithgps.com/users/{user}/routes.json?offset={offset}&limit={limit}",
+    "USER_ROUTES_NUM": None,
+    "USER_ROUTES_START": 0,
+    "USER_ROUTES_OFFSET": 10,
+    "URL_ROUTE_BASE_URL": "https://ridewithgps.com/routes/{route_id}",
+    "URL_ROUTE_DOWNLOAD_DIR": "./course/ridewithgps/",
+    "URL_UPLOAD": "https://ridewithgps.com/trips.json",
+    "PARAMS" : {
+      "apikey": None,
+      "version": "2",
+      "auth_token": None,
+    }
+  }
+
+  G_GARMINCONNECT_API = {
+    "EMAIL": "",
+    "PASSWORD": "",
+    "URL_UPLOAD_DIFF": "proxy/upload-service/upload/.fit", #https://connect.garmin.com/modern/proxy/upload-service/upload/.fit
+  }
 
   #IMU axis conversion
   #  X: to North (up rotation is plus)
@@ -439,10 +597,19 @@ class Config():
     'STATUS': False,
     'COEF': np.ones(3) #X, Y, Z
   }
+  #sometimes axes of magnetic sensor are different from acc or gyro
+  G_IMU_MAG_AXIS_SWAP_XY = {
+    'STATUS': False, #Y->X, X->Y
+  }
+  G_IMU_MAG_AXIS_CONVERSION = {
+    'STATUS': False,
+    'COEF': np.ones(3) #X, Y, Z
+  }
   G_IMU_MAG_DECLINATION = 0.0
 
-  #blue tooth setting
+  #Bluetooth tethering
   G_BT_ADDRESS = {}
+  G_BT_USE_ADDRESS = ""
   G_BT_CMD_BASE = ["/usr/local/bin/bt-pan","client"]
 
   #for track
@@ -463,22 +630,12 @@ class Config():
   #######################
   # class objects       #
   #######################
-  
-  #LoggerCore
   logger = None
-
-  #GUI (GUI_PyQt)
+  display = None
+  network = None
+  setting = None
   gui = None
   gui_config = None
-
-  #config file (store user specified values. readable and editable.)
-  config_file = "setting.conf"
-  config_parser = None
-  #config file (store temporary values. unreadable and uneditable.)
-  config_pickle_file = "setting.pickle"
-  config_pickle = {}
-  config_pickle_write_time = datetime.datetime.utcnow()
-  config_pickle_interval = 10 #[s]
 
   def __init__(self):
 
@@ -512,22 +669,18 @@ class Config():
     if self.G_IS_DEBUG:
       print(args)
     
-    #object for setting.conf
-    self.config_parser = configparser.ConfigParser()
-    if os.path.exists(self.config_file):
-      self.read_config()
+    #read setting.conf and settings.pickle
+    self.setting = Setting(self)
+    self.setting.read()
 
-    if os.path.exists(self.config_pickle_file):
-      self.read_config_pickle()
-
-    #set dir(for using from pitft desktop)
+    #set dir
     if self.G_IS_RASPI:
       self.G_SCREENSHOT_DIR = self.G_INSTALL_PATH + self.G_SCREENSHOT_DIR 
       self.G_LOG_DIR = self.G_INSTALL_PATH + self.G_LOG_DIR
       self.G_LOG_DB = self.G_INSTALL_PATH + self.G_LOG_DB
-      self.config_file = self.G_INSTALL_PATH + self.config_file
       self.G_LAYOUT_FILE = self.G_INSTALL_PATH + self.G_LAYOUT_FILE
-      self.G_COURSE_FILE = self.G_INSTALL_PATH + self.G_COURSE_FILE
+      self.G_COURSE_DIR = self.G_INSTALL_PATH + self.G_COURSE_DIR
+      self.G_COURSE_FILE_PATH = self.G_INSTALL_PATH + self.G_COURSE_FILE_PATH
     
     #layout file
     if not os.path.exists(self.G_LAYOUT_FILE):
@@ -545,18 +698,19 @@ class Config():
     if os.path.exists(self.G_MAP_LIST):
       self.read_map_list()
     #set default values
-    for key in self.G_MAP_CONFIG:
-      if 'tile_size' not in self.G_MAP_CONFIG[key]:
-        self.G_MAP_CONFIG[key]['tile_size'] = 256
-      if 'referer' not in self.G_MAP_CONFIG[key]:
-        self.G_MAP_CONFIG[key]['referer'] = None
-      if 'use_mbtiles' not in self.G_MAP_CONFIG[key]:
-        self.G_MAP_CONFIG[key]['use_mbtiles'] = False
-      
-      if 'user_agent' in self.G_MAP_CONFIG[key] and self.G_MAP_CONFIG[key]['user_agent']:
-        self.G_MAP_CONFIG[key]['user_agent'] = self.G_PRODUCT
-      else:
-        self.G_MAP_CONFIG[key]['user_agent'] = None
+    for map_config in [self.G_MAP_CONFIG, self.G_HEATMAP_OVERLAY_MAP_CONFIG, self.G_RAIN_OVERLAY_MAP_CONFIG, self.G_WIND_OVERLAY_MAP_CONFIG, self.G_DEM_MAP_CONFIG]:
+      for key in map_config:
+        if 'tile_size' not in map_config[key]:
+          map_config[key]['tile_size'] = 256
+        if 'referer' not in map_config[key]:
+          map_config[key]['referer'] = None
+        if 'use_mbtiles' not in map_config[key]:
+          map_config[key]['use_mbtiles'] = False
+        
+        if 'user_agent' in map_config[key] and map_config[key]['user_agent']:
+          map_config[key]['user_agent'] = self.G_PRODUCT
+        else:
+          map_config[key]['user_agent'] = None
       
     if self.G_MAP not in self.G_MAP_CONFIG:
       print("don't exist map \"{}\" in {}".format(self.G_MAP, self.G_MAP_LIST), file=sys.stderr)
@@ -570,26 +724,14 @@ class Config():
       os.mkdir(self.G_SCREENSHOT_DIR)
     if not os.path.exists(self.G_LOG_DIR):
       os.mkdir(self.G_LOG_DIR)
-    if not self.G_MAP_CONFIG[self.G_MAP]['use_mbtiles'] and not os.path.exists("maptile/"+self.G_MAP):
-      os.mkdir("maptile/"+self.G_MAP)
+
+    self.check_map_dir()
     
-    #optional
-    if not self.G_MAP_CONFIG[self.G_MAP]['use_mbtiles'] and not os.path.exists("maptile/"+self.G_STRAVA_OVERLAY_MAP):
-      os.mkdir("maptile/"+self.G_STRAVA_OVERLAY_MAP)
-    #if not self.G_MAP_CONFIG[self.G_MAP]['use_mbtiles'] and not os.path.exists("maptile/"+self.G_RAIN_OVERLAY_MAP):
-    #  os.mkdir("maptile/"+self.G_RAIN_OVERLAY_MAP)
-    #if not self.G_MAP_CONFIG[self.G_MAP]['use_mbtiles'] and not os.path.exists("maptile/"+self.G_WIND_OVERLAY_MAP):
-    #  os.mkdir("maptile/"+self.G_WIND_OVERLAY_MAP)
-    if self.G_LOG_ALTITUDE_FROM_DATA_SOUCE and not os.path.exists("maptile/"+self.G_DEM_MAP):
-      os.mkdir("maptile/"+self.G_DEM_MAP)
+    self.G_RIDEWITHGPS_API["PARAMS"]["apikey"] = self.G_RIDEWITHGPS_API["APIKEY"]
+    self.G_RIDEWITHGPS_API["PARAMS"]["auth_token"] = self.G_RIDEWITHGPS_API["TOKEN"]
 
     #get serial number
     self.get_serial()
-    
-    self.detect_display()
-    self.set_resolution()
-
-    self.button_config = Button_Config(self)
 
     #set ant interval. 0:4Hz(0.25s), 1:2Hz(0.5s), 2:1Hz(1.0s)
     if self.G_ANT_INTERVAL == 0.25:
@@ -600,25 +742,54 @@ class Config():
       self.G_ANT['INTERVAL'] = 2
 
     #coroutine loop
-    self.loop = asyncio.get_event_loop()
-    self.G_COROUTINE_SEM = 100
+    self.init_loop()
 
     self.log_time = datetime.datetime.now()
 
-    #thread for downloading map tiles
-    self.download_queue = queue.Queue()
-    self.download_thread = threading.Thread(target=self.download_worker, name="download_worker", args=())
-    self.download_thread.start()
+    self.button_config = Button_Config(self)
 
-    self.keyboard_control_thread = None
+  def init_loop(self, call_from_gui=False):
+    if self.G_GUI_MODE == "PyQt":
+      if call_from_gui:
+        asyncio.set_event_loop(self.loop)
+        self.start_coroutine()
+    else:
+      self.loop = asyncio.get_event_loop()
+    
+  def start_coroutine(self):
+    self.logger.start_coroutine()
+    self.display.start_coroutine()
+
+    #deley init start
+    asyncio.create_task(self.delay_init())
+
+  async def delay_init(self):
+    await asyncio.sleep(0.01)
+    t1 = datetime.datetime.now()
+
+    #network
+    await self.gui.set_boot_status("initialize network modules...")
+    from modules.helper.network import Network
+    self.network = Network(self)
+
+    #logger, sensor
+    await self.gui.set_boot_status("initialize sensor...")
+    self.logger.delay_init()
+
+    #gui
+    await self.gui.set_boot_status("initialize screens...")
+    self.gui.delay_init()
+
     if self.G_HEADLESS:
-      self.keyboard_control_thread = threading.Thread(target=self.keyboard_check, name="keyboard_check", args=())
-      self.keyboard_control_thread.start()
+      asyncio.create_task(self.keyboard_check())
+    
+    t2 = datetime.datetime.now()
+    print("delay init: {:.3f} sec".format((t2-t1).total_seconds()))
 
-  def keyboard_check(self):
+  async def keyboard_check(self):
     while(not self.G_QUIT):
       print("s:start/stop, l: lap, r:reset, p: previous screen, n: next screen, q: quit")
-      key = input()
+      key = await self.loop.run_in_executor(None, input, "> ")
 
       if key == "s":
         self.logger.start_and_stop_manual()
@@ -631,36 +802,47 @@ class Config():
       elif key == "p" and self.gui != None:
         self.gui.scroll_prev()
       elif key == "q" and self.gui != None:
-        self.quit()
+        await self.quit()
+      ##### temporary #####
+      # test hardware key signals
+      elif key == "," and self.gui != None:
+        self.gui.press_tab()
+      elif key == "." and self.gui != None:
+        self.gui.press_shift_tab()
+      elif key == "b" and self.gui != None:
+        self.gui.back_menu()
+      elif key == "c" and self.gui != None:
+        await self.gui.show_message("name","message")
+      elif key == "x" and self.gui != None:
+        self.gui.delete_popup()
 
   def set_logger(self, logger):
     self.logger = logger
+  
+  def set_display(self, display):
+    self.display = display
 
-  def detect_display(self):
-    hatdir = '/proc/device-tree/hat'
-    product_file = hatdir + '/product'
-    vendor_file = hatdir + '/vendor'
-    
-    if (os.path.exists(product_file)) and (os.path.exists(vendor_file)) :
-      with open(hatdir + '/product') as f :
-        p = f.read()
-      with open(hatdir + '/vendor') as f :
-        v = f.read()
-      print(product_file, ":", p)
-      print(vendor_file, ":", v)
-      
-      #set display
-      if (p.find('Adafruit PiTFT HAT - 2.4 inch Resistive Touch') == 0):
-        self.G_DISPLAY = 'PiTFT'
-      elif (p.find('PaPiRus ePaper HAT') == 0) and (v.find('Pi Supply') == 0) :
-        self.G_DISPLAY = 'Papirus'
-
-  def set_resolution(self):
-    for key in self.G_AVAILABLE_DISPLAY.keys():
-      if self.G_DISPLAY == key:
-        self.G_WIDTH = self.G_AVAILABLE_DISPLAY[key]['size'][0]
-        self.G_HEIGHT = self.G_AVAILABLE_DISPLAY[key]['size'][1]
-        break
+  def check_map_dir(self):
+    #mkdir (map)
+    if not self.G_MAP_CONFIG[self.G_MAP]['use_mbtiles'] and not os.path.exists("maptile/"+self.G_MAP):
+      os.mkdir("maptile/"+self.G_MAP)
+    #optional
+    if not self.G_MAP_CONFIG[self.G_MAP]['use_mbtiles'] and not os.path.exists("maptile/"+self.G_HEATMAP_OVERLAY_MAP):
+      os.mkdir("maptile/"+self.G_HEATMAP_OVERLAY_MAP)
+    if not os.path.exists("maptile/"+self.G_RAIN_OVERLAY_MAP):
+      os.mkdir("maptile/"+self.G_RAIN_OVERLAY_MAP)
+    if not os.path.exists("maptile/"+self.G_WIND_OVERLAY_MAP):
+      os.mkdir("maptile/"+self.G_WIND_OVERLAY_MAP)
+    if self.G_LOG_ALTITUDE_FROM_DATA_SOUCE and not os.path.exists("maptile/"+self.G_DEM_MAP):
+      os.mkdir("maptile/"+self.G_DEM_MAP)
+  
+  def remove_maptiles(self, map_name):
+    path = "maptile/"+map_name
+    if os.path.exists(path):
+      files = os.listdir(path)
+      dir = [f for f in files if os.path.isdir(os.path.join(path, f))]
+      for d in dir:
+        shutil.rmtree(os.path.join(path, d))
 
   def get_serial(self):
     if not self.G_IS_RASPI:
@@ -694,13 +876,8 @@ class Config():
   def exec_cmd(self, cmd, cmd_print=True):
     if cmd_print:
       print(cmd)
-    ver = sys.version_info
     try:
-      if ver[0] >= 3 and ver[1] >= 5:
-        subprocess.run(cmd)
-      elif ver[0] == 3 and ver[1] < 5:
-        #deplicated
-        subprocess.call(cmd)
+      subprocess.run(cmd)
     except:
       traceback.print_exc()
 
@@ -710,173 +887,51 @@ class Config():
       print(cmd)
     ver = sys.version_info
     try:
-      if ver[0] >= 3 and ver[1] >= 5:
-        p = subprocess.run(
-          cmd, 
-          stdout = subprocess.PIPE,
-          stderr = subprocess.PIPE,
-          #universal_newlines = True
-          )
-        string = p.stdout.decode("utf8").strip()
-      elif ver[0] == 3 and ver[1] < 5:
-        #deplicated
-        p = subprocess.Popen(
-          cmd,
-          stdout = subprocess.PIPE,
-          stderr = subprocess.PIPE,
-          #universal_newlines = True
-          )
-        string = p.communicate()[0].decode("utf8").strip()
+      p = subprocess.run(
+        cmd, 
+        stdout = subprocess.PIPE,
+        stderr = subprocess.PIPE,
+        #universal_newlines = True
+        )
+      string = p.stdout.decode("utf8").strip()
       return string
     except:
       traceback.print_exc()
-  
-  def get_maptile_filename(self, map_name, z, x, y):
-    return "maptile/"+map_name+"/{0}/{1}/{2}.png".format(z, x, y)
-  
-  def detect_network(self):
-    try:
-      socket.setdefaulttimeout(3)
-      socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect(("8.8.8.8", 53))
-      return True
-    except socket.error as ex:
-      return False
 
-  def download_maptile(self, map_name, z, tiles, additional_download=False):
-    if not self.detect_network() or self.G_MAP_CONFIG[map_name]['url'] == None:
-      return False
-
-    urls = []
-    save_paths = []
-    request_header = {}
-
-    #make header
-    if 'referer' in self.G_MAP_CONFIG[map_name] and self.G_MAP_CONFIG[map_name]['referer'] != None:
-      request_header['Referer'] = self.G_MAP_CONFIG[map_name]['referer']
-    if 'user_agent' in self.G_MAP_CONFIG[map_name] and self.G_MAP_CONFIG[map_name]['user_agent'] != None:
-      request_header['User-Agent'] = self.G_MAP_CONFIG[map_name]['user_agent']
-
-    for tile in tiles:
-      os.makedirs("maptile/"+map_name+"/{0}/{1}/".format(z, tile[0]), exist_ok=True)
-      url = self.G_MAP_CONFIG[map_name]['url'].format(z=z, x=tile[0], y=tile[1])
-      if 'strava_heatmap' in map_name:
-        url = url \
-          + "&Key-Pair-Id=" + self.G_STRAVA_COOKIE['KEY_PAIR_ID'] \
-          + "&Policy=" + self.G_STRAVA_COOKIE['POLICY'] \
-          + "&Signature=" + self.G_STRAVA_COOKIE['SIGNATURE']
-      save_path = self.get_maptile_filename(map_name, z, *tile)
-      urls.append(url)
-      save_paths.append(save_path)
-
-    self.download_queue.put((urls, request_header, save_paths))
-
-    if additional_download:
-      additional_urls = []
-      additional_save_paths = []
-      for tile in tiles:
-        for i in range(2):
-          os.makedirs("maptile/"+map_name+"/{0}/{1}/".format(z+1, 2*tile[0]+i), exist_ok=True)
-          for j in range(2):
-            url = self.G_MAP_CONFIG[map_name]['url'].format(z=z+1, x=2*tile[0]+i, y=2*tile[1]+j)
-            save_path = self.get_maptile_filename(map_name, z+1, 2*tile[0]+i, 2*tile[1]+j)
-            additional_urls.append(url)
-            additional_save_paths.append(save_path)
-      
-        if z-1 <= 0:
+  async def kill_tasks(self):
+    tasks = asyncio.all_tasks()
+    current_task = asyncio.current_task()
+    for task in tasks:
+      if self.G_GUI_MODE == "PyQt":
+        if task == current_task or task.get_coro().__name__ in ["update_display"]:
           continue
-        os.makedirs("maptile/"+map_name+"/{0}/{1}/".format(z-1, int(tile[0]/2)), exist_ok=True)
-        zoomout_url = self.G_MAP_CONFIG[map_name]['url'].format(z=z-1, x=int(tile[0]/2), y=int(tile[1]/2))
-        if zoomout_url not in additional_urls:
-          additional_urls.append(zoomout_url)
-          additional_save_paths.append(self.get_maptile_filename(map_name, z-1, int(tile[0]/2), int(tile[1]/2)))
-      self.download_queue.put((additional_urls, request_header, additional_save_paths))
-    
-    return True
+      task.cancel()
+      try:
+        await task
+      except asyncio.CancelledError:
+        print("cancel task", task.get_coro().__qualname__)
+      else:
+        pass
 
-  def download_worker(self):
-    failed = []
-    for urls, header, save_paths in iter(self.download_queue.get, None):
-      res = self.loop.run_until_complete(self.download_files(urls, header, save_paths))
-      self.download_queue.task_done()
-
-      #all False -> give up
-      if not any(res) or res == None:
-        failed.append((datetime.datetime.now(), urls, header, save_paths))
-        print("failed download")
-        print(urls)
-      #retry
-      elif not all(res) and len(urls) > 0 and len(res) > 0 and len(urls) == len(res):
-        retry_urls = []
-        retry_save_paths = []
-        for url, save_path, status in zip(urls, save_paths, res):
-          if not status:
-            retry_urls.append(url)
-            retry_save_paths.append(save_path)
-        if len(retry_urls) > 0:
-          self.download_queue.put((retry_urls, header, retry_save_paths))
-
-  async def get_http_request(self, session, url, save_path, header):
-    try:
-      async with session.get(url, headers=header) as dl_file:
-        if dl_file.status == 200:
-          with open(save_path, mode='wb') as f:
-            f.write(await dl_file.read())
-            return True
-        else:
-          return False
-    except:
-      traceback.print_exc()
-      return False
-
-  async def download_files(self, urls, header, save_paths):
-    
-    tasks = []
-    res = None
-    async with asyncio.Semaphore(self.G_COROUTINE_SEM):
-      async with aiohttp.ClientSession() as session:
-        for url, save_path in zip(urls, save_paths):
-          tasks.append(self.get_http_request(session, url, save_path, header))
-        res = await asyncio.gather(*tasks)
-    return res
-
-  def download_demtile(self, z, x, y):
-    if not self.detect_network():
-      return False
-    header = {}
-    try:
-      os.makedirs("maptile/"+self.G_DEM_MAP+"/{0}/{1}/".format(z, x), exist_ok=True)
-      self.download_queue.put((
-        [self.G_MAP_CONFIG[self.G_DEM_MAP]['url'].format(z=z, x=x, y=y),],
-        header,
-        [self.get_maptile_filename(self.G_DEM_MAP, z, x, y),]
-        ))
-      return True
-    except:
-      traceback.print_exc()
-      return False
-
-  def quit(self):
+  async def quit(self):
     print("quit")
-    self.download_queue.put(None)
+    await self.network.quit()
+
     if self.G_MANUAL_STATUS == "START":
       self.logger.start_and_stop_manual()
     self.G_QUIT = True
-    time.sleep(0.1)
-    
-    self.logger.sensor.sensor_ant.quit()
-    self.logger.sensor.sensor_gpio.quit()
-    self.logger.sensor.sensor_spi.quit()
-    self.logger.sensor.sensor_gps.quit()
-    if self.G_IS_RASPI:
-      GPIO.cleanup()
-    
-    self.download_thread.join()
-    self.loop.close()
+
+    await self.logger.quit()
+    self.display.quit()
+    await asyncio.sleep(0.05)
+    await self.kill_tasks()
+
+    if self.G_GUI_MODE != "PyQt":
+      self.loop.close()
 
     #time.sleep(self.G_LOGGING_INTERVAL)
-    self.logger.quit()
-    self.write_config()
-    self.delete_config_pickle()
+    self.setting.write_config()
+    self.setting.delete_config_pickle()
 
   def poweroff(self):
     if self.G_IS_RASPI:
@@ -890,354 +945,70 @@ class Config():
       restart_cmd = ["sudo", "systemctl", "restart", "pizero_bikecomputer.service"]
       self.exec_cmd(restart_cmd)
 
+  def detect_network(self):
+    try:
+      socket.setdefaulttimeout(3)
+      connect_interface = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+      connect_interface.connect(("8.8.8.8", 53))
+      self.G_IP_ADDRESS = connect_interface.getsockname()[0]
+      return True
+    except socket.error as ex:
+      self.G_IP_ADDRESS = "No address"
+      return False
+
   def get_wifi_bt_status(self):
+    if not self.G_IS_RASPI:
+      return (False, False)
+
     status = {
       'wlan': False,
       'bluetooth': False
     }
-    if self.G_IS_RASPI:
-      try:
-        #json opetion requires raspbian buster
-        raw_status = self.exec_cmd_return_value(["rfkill", "--json"])
-        json_status = json.loads(raw_status)
-        for l in json_status['']:
-          if 'type' not in l or l['type'] not in ['wlan', 'bluetooth']:
-            continue
-          if l['soft'] == 'unblocked':
-            status[l['type']] = True
-      except:
-        pass
+    try:
+      #json opetion requires raspbian buster
+      raw_status = self.exec_cmd_return_value(["rfkill", "--json"])
+      json_status = json.loads(raw_status)
+      for l in json_status['']:
+        if 'type' not in l or l['type'] not in ['wlan', 'bluetooth']:
+          continue
+        if l['soft'] == 'unblocked':
+          status[l['type']] = True
+    except:
+      pass
     return (status['wlan'], status['bluetooth'])
 
-  def wifi_bt_onoff(self):
+  def onoff_wifi_bt(self, key=None):
     #in future, manage with pycomman
-    if self.G_IS_RASPI:
-      wifioff_cmd = ["rfkill", "block", "wifi"]
-      wifion_cmd  = ["rfkill", "unblock", "wifi"]
-      btoff_cmd   = ["rfkill", "block", "bluetooth"]
-      bton_cmd    = ["rfkill", "unblock", "bluetooth"]
+    if not self.G_IS_RASPI:
+      return
 
-      wifi_status, bt_status = self.get_wifi_bt_status()
-
-      if wifi_status:
-        self.exec_cmd(wifioff_cmd)
-      else:
-        self.exec_cmd(wifion_cmd)
-      if bt_status:
-        self.exec_cmd(btoff_cmd)
-      else:
-        self.exec_cmd(bton_cmd)
-
-  async def get_json(self, url):
-     async with aiohttp.ClientSession() as session:
-       async with session.get(url) as res:
-         json = await res.json()
-         return json
+    onoff_cmd = {
+      'Wifi': {
+        True: ["rfkill", "block", "wifi"],
+        False: ["rfkill", "unblock", "wifi"],
+      },
+      'Bluetooth': {
+        True: ["rfkill", "block", "bluetooth"],
+        False: ["rfkill", "unblock", "bluetooth"],
+      }
+    }
+    status = {}
+    status['Wifi'], status['Bluetooth'] = self.get_wifi_bt_status()
+    self.exec_cmd(onoff_cmd[key][status[key]])
+  
+  def bluetooth_tethering(self):
+    if not self.G_IS_RASPI:
+      return
+    if not os.path.exists(self.G_BT_CMD_BASE[0]):
+      return
+    if self.G_BT_USE_ADDRESS == "":
+      return
+    self.exec_cmd([*self.G_BT_CMD_BASE, self.G_BT_ADDRESS[self.G_BT_USE_ADDRESS]])
 
   def check_time(self, log_str):
      t = datetime.datetime.now()
      print("###", log_str, (t-self.log_time).total_seconds())
      self.log_time = t
-
-  def get_google_routes(self, x1, y1, x2, y2):
-
-    if not self.detect_network() or self.G_GOOGLE_DIRECTION_API["TOKEN"] == "":
-      return None
-    if np.any(np.isnan([x1, y1, x2, y2])):
-      return None
-      
-    origin = "origin={},{}".format(y1,x1)
-    destination = "destination={},{}".format(y2,x2)
-    url = "{}&{}&key={}&{}&{}".format(
-      self.G_GOOGLE_DIRECTION_API_URL,
-      self.G_GOOGLE_DIRECTION_API_MODE["BICYCLING"],
-      self.G_GOOGLE_DIRECTION_API["TOKEN"],
-      origin,
-      destination
-    )
-    print(url)
-    response = self.loop.run_until_complete(self.get_json(url))
-    #print(response)
-    return response
-
-  def get_openweathermap_data(self, x, y):
-
-    if not self.detect_network() or self.G_OPENWEATHERMAP_API["TOKEN"] == "":
-      return None
-    if np.any(np.isnan([x, y])):
-      return None
-      
-    url = "{}?lat={}&lon={}&appid={}".format(
-      self.G_OPENWEATHERMAP_API_URL,
-      y,
-      x,
-      self.G_OPENWEATHERMAP_API["TOKEN"],
-    )
-    print(url)
-    response = self.loop.run_until_complete(self.get_json(url))
-    #print(response)
-    return response
-
-  def strava_upload(self):
-
-    if not self.detect_network():
-      print("No Internet connection")
-      return
-
-    #strava setting check
-    if self.G_STRAVA_API["CLIENT_ID"] == "" or \
-      self.G_STRAVA_API["CLIENT_SECRET"] == "" or\
-      self.G_STRAVA_API["CODE"] == "" or \
-      self.G_STRAVA_API["ACCESS_TOKEN"] == "" or \
-      self.G_STRAVA_API["REFRESH_TOKEN"] == "":
-      print("set strava settings (token, client_id, etc)")
-      return
-
-    #curl check
-    curl_cmd = shutil.which('curl')
-    if curl_cmd == None:
-      print("curl does not exist")
-      return
-
-    #file check/
-    if not os.path.exists(self.G_STRAVA_UPLOAD_FILE):
-      print("file does not exist")
-      return
-
-    #[Todo] network check
-
-    #reflesh access token
-    refresh_cmd = [
-      "curl", "-L", "-X" "POST", self.G_STRAVA_API_URL["OAUTH"],
-      "-d", "client_id="+self.G_STRAVA_API["CLIENT_ID"],
-      "-d", "client_secret="+self.G_STRAVA_API["CLIENT_SECRET"],
-      "-d", "code="+self.G_STRAVA_API["CODE"],
-      "-d", "grant_type=refresh_token",
-      "-d", "refresh_token="+self.G_STRAVA_API["REFRESH_TOKEN"],
-    ]
-    reflesh_result = self.exec_cmd_return_value(refresh_cmd)
-    tokens = json.loads(reflesh_result)
-    print(tokens)
-    if 'access_token' in tokens and 'refresh_token' in tokens and \
-      tokens['access_token'] != self.G_STRAVA_API["ACCESS_TOKEN"]:
-      print("update strava tokens")
-      self.G_STRAVA_API["ACCESS_TOKEN"] = tokens['access_token']
-      self.G_STRAVA_API["REFRESH_TOKEN"] = tokens['refresh_token']
-    elif 'message' in tokens and tokens['message'].find('Error') > 0:
-      print("error occurs at refreshing tokens")
-      return
-  
-    #upload
-    upload_cmd = [
-      "curl", "-X" "POST", self.G_STRAVA_API_URL["UPLOAD"],
-      "-H", "Authorization: Bearer "+self.G_STRAVA_API["ACCESS_TOKEN"],
-      "-F", "data_type=fit",
-      "-F", "file=@"+self.G_STRAVA_UPLOAD_FILE,
-    ]
-    upload_result = self.exec_cmd_return_value(upload_cmd)
-    tokens = json.loads(upload_result)
-    print(tokens)
-    if 'status' in tokens:
-      print(tokens['status'])
-
-  def read_config(self):
-    self.config_parser.read(self.config_file)
-         
-    if 'GENERAL' in self.config_parser:
-      if 'DISPLAY' in self.config_parser['GENERAL']:
-        self.G_DISPLAY = self.config_parser['GENERAL']['DISPLAY']
-        self.set_resolution()
-      if 'AUTOSTOP_CUTOFF' in self.config_parser['GENERAL']:
-        self.G_AUTOSTOP_CUTOFF = int(self.config_parser['GENERAL']['AUTOSTOP_CUTOFF'])/3.6
-        self.G_GPS_SPEED_CUTOFF = self.G_AUTOSTOP_CUTOFF
-      if 'WHEEL_CIRCUMFERENCE' in self.config_parser['GENERAL']:
-        self.G_WHEEL_CIRCUMFERENCE = int(self.config_parser['GENERAL']['WHEEL_CIRCUMFERENCE'])/1000
-      if 'GROSS_AVE_SPEED' in self.config_parser['GENERAL']:
-        self.G_GROSS_AVE_SPEED = int(self.config_parser['GENERAL']['GROSS_AVE_SPEED'])
-      if 'AUTO_BACKLIGHT_CUTOFF' in self.config_parser['GENERAL']:
-        self.G_AUTO_BACKLIGHT_CUTOFF = int(self.config_parser['GENERAL']['AUTO_BACKLIGHT_CUTOFF'])
-      if 'LANG' in self.config_parser['GENERAL']:
-        self.G_LANG = self.config_parser['GENERAL']['LANG'].upper()
-      if 'FONT_FILE' in self.config_parser['GENERAL']:
-        self.G_FONT_FILE = self.config_parser['GENERAL']['FONT_FILE']
-      if 'MAP' in self.config_parser['GENERAL']:
-        self.G_MAP = self.config_parser['GENERAL']['MAP'].lower()
-
-    if 'POWER' in self.config_parser:
-      if 'CP' in self.config_parser['POWER']:
-        self.G_POWER_CP = int(self.config_parser['POWER']['CP'])
-      if 'W_PRIME' in self.config_parser['POWER']:
-        self.G_POWER_W_PRIME = int(self.config_parser['POWER']['W_PRIME'])
-
-    if 'ANT' in self.config_parser:
-      for key in self.config_parser['ANT']:
-
-        if key.upper() == 'STATUS':
-          self.G_ANT['STATUS'] = self.config_parser['ANT'].getboolean(key)
-          continue
-        i = key.rfind("_")
-        
-        if i < 0:
-          continue
-        
-        key1 = key[0:i]
-        key2 = key[i+1:]
-        try:
-          k1 = key1.upper()
-          k2 = key2.upper()
-        except:
-          continue
-        if k1 == 'USE' and k2 in self.G_ANT['ID'].keys(): #['HR','SPD','CDC','PWR']:
-          try:
-            self.G_ANT[k1][k2] = self.config_parser['ANT'].getboolean(key)
-          except:
-            pass
-        elif k1 in ['ID','TYPE'] and k2 in self.G_ANT['ID'].keys(): #['HR','SPD','CDC','PWR']:
-          try:
-            self.G_ANT[k1][k2] = self.config_parser['ANT'].getint(key)
-          except:
-            pass
-      for key in self.G_ANT['ID'].keys(): #['HR','SPD','CDC','PWR']:
-        if not (0 <= self.G_ANT['ID'][key] <= 0xFFFF) or\
-           not self.G_ANT['TYPE'][key] in self.G_ANT['TYPES'][key]:
-          self.G_ANT['USE'][key] = False
-          self.G_ANT['ID'][key] = 0
-          self.G_ANT['TYPE'][key] = 0
-        if self.G_ANT['ID'][key] != 0 and self.G_ANT['TYPE'][key] != 0:
-          self.G_ANT['ID_TYPE'][key] = \
-            struct.pack('<HB', self.G_ANT['ID'][key], self.G_ANT['TYPE'][key]) 
-    
-    if 'SENSOR_IMU' in self.config_parser:
-      for s, c, m in [
-        ['AXIS_CONVERSION_STATUS', 'AXIS_CONVERSION_COEF', self.G_IMU_AXIS_CONVERSION], 
-        ['AXIS_SWAP_XY_STATUS', '', self.G_IMU_AXIS_SWAP_XY]]:
-        if s.lower() in self.config_parser['SENSOR_IMU']:
-          m['STATUS'] = self.config_parser['SENSOR_IMU'].getboolean(s)
-        if c != '' and c.lower() in self.config_parser['SENSOR_IMU']:
-          coef = np.array(json.loads(self.config_parser['SENSOR_IMU'][c]))
-          n = m['COEF'].shape[0]
-          if np.sum((coef == 1) | (coef == -1)) == n:
-            m['COEF'] = coef[0:n]
-        if 'MAG_DECLINATION' in self.config_parser['SENSOR_IMU']:
-          self.G_IMU_MAG_DECLINATION = int(self.config_parser['SENSOR_IMU']['MAG_DECLINATION'])
-      
-    if 'STRAVA_API' in self.config_parser:
-      for k in self.G_STRAVA_API.keys():
-        if k in self.config_parser['STRAVA_API']:
-          self.G_STRAVA_API[k] = self.config_parser['STRAVA_API'][k]
-    
-    if 'STRAVA_COOKIE' in self.config_parser:
-      for k in self.G_STRAVA_COOKIE.keys():
-        if k in self.config_parser['STRAVA_COOKIE']:
-          self.G_STRAVA_COOKIE[k] = self.config_parser['STRAVA_COOKIE'][k]
-    
-    if 'GOOGLE_DIRECTION_API' in self.config_parser:
-      for k in self.G_GOOGLE_DIRECTION_API.keys():
-        if k in self.config_parser['GOOGLE_DIRECTION_API']:
-          self.G_GOOGLE_DIRECTION_API[k] = self.config_parser['GOOGLE_DIRECTION_API'][k]
-      if self.G_GOOGLE_DIRECTION_API["TOKEN"] != "":
-        self.G_HAVE_GOOGLE_DIRECTION_API_TOKEN = True
-    
-    if 'OPENWEATHERMAP_API' in self.config_parser:
-      for k in self.G_OPENWEATHERMAP_API.keys():
-        if k in self.config_parser['OPENWEATHERMAP_API']:
-          self.G_OPENWEATHERMAP_API[k] = self.config_parser['OPENWEATHERMAP_API'][k]
-      if self.G_OPENWEATHERMAP_API["TOKEN"] != "":
-        self.G_HAVE_OPENWEATHERMAP_API_TOKEN = True
-
-    if 'BT_ADDRESS' in self.config_parser:
-      for k in self.config_parser['BT_ADDRESS']:
-        self.G_BT_ADDRESS[k] = str(self.config_parser['BT_ADDRESS'][k])
-
-  def write_config(self):
-
-    self.config_parser['GENERAL'] = {}
-    self.config_parser['GENERAL']['DISPLAY'] = self.G_DISPLAY
-    self.config_parser['GENERAL']['AUTOSTOP_CUTOFF'] = str(int(self.G_AUTOSTOP_CUTOFF*3.6))
-    self.config_parser['GENERAL']['WHEEL_CIRCUMFERENCE'] = str(int(self.G_WHEEL_CIRCUMFERENCE*1000))
-    self.config_parser['GENERAL']['GROSS_AVE_SPEED'] = str(int(self.G_GROSS_AVE_SPEED))
-    self.config_parser['GENERAL']['AUTO_BACKLIGHT_CUTOFF'] = str(int(self.G_AUTO_BACKLIGHT_CUTOFF))
-    self.config_parser['GENERAL']['LANG'] = self.G_LANG
-    self.config_parser['GENERAL']['FONT_FILE'] = self.G_FONT_FILE
-    self.config_parser['GENERAL']['MAP'] = self.G_MAP
-
-    self.config_parser['POWER'] = {}
-    self.config_parser['POWER']['CP'] = str(int(self.G_POWER_CP))
-    self.config_parser['POWER']['W_PRIME'] = str(int(self.G_POWER_W_PRIME))
-
-    if not self.G_DUMMY_OUTPUT:
-      self.config_parser['ANT'] = {}
-      self.config_parser['ANT']['STATUS'] = str(self.G_ANT['STATUS'])
-      for key1 in ['USE','ID','TYPE']:
-        for key2 in self.G_ANT[key1]:
-          if key2 in self.G_ANT['ID'].keys(): #['HR','SPD','CDC','PWR']:
-            self.config_parser['ANT'][key1+"_"+key2] = str(self.G_ANT[key1][key2])
-    
-    self.config_parser['SENSOR_IMU'] = {}
-    self.config_parser['SENSOR_IMU']['AXIS_SWAP_XY_STATUS'] = str(self.G_IMU_AXIS_SWAP_XY['STATUS'])
-    self.config_parser['SENSOR_IMU']['AXIS_CONVERSION_STATUS'] = str(self.G_IMU_AXIS_CONVERSION['STATUS'])
-    self.config_parser['SENSOR_IMU']['AXIS_CONVERSION_COEF'] = str(list(self.G_IMU_AXIS_CONVERSION['COEF']))
-    self.config_parser['SENSOR_IMU']['MAG_DECLINATION'] = str(int(self.G_IMU_MAG_DECLINATION))
-
-    self.config_parser['STRAVA_API'] = {}
-    for k in self.G_STRAVA_API.keys():
-      self.config_parser['STRAVA_API'][k] = self.G_STRAVA_API[k] 
-
-    self.config_parser['STRAVA_COOKIE'] = {}
-    for k in self.G_STRAVA_COOKIE.keys():
-      self.config_parser['STRAVA_COOKIE'][k] = self.G_STRAVA_COOKIE[k]
-
-    self.config_parser['GOOGLE_DIRECTION_API'] = {}
-    for k in self.G_GOOGLE_DIRECTION_API.keys():
-      self.config_parser['GOOGLE_DIRECTION_API'][k] = self.G_GOOGLE_DIRECTION_API[k] 
-
-    self.config_parser['OPENWEATHERMAP_API'] = {}
-    for k in self.G_OPENWEATHERMAP_API.keys():
-      self.config_parser['OPENWEATHERMAP_API'][k] = self.G_OPENWEATHERMAP_API[k] 
-    
-    self.config_parser['BT_ADDRESS'] = {}
-    for k in self.G_BT_ADDRESS.keys():
-      self.config_parser['BT_ADDRESS'][k] = self.G_BT_ADDRESS[k]
-
-    with open(self.config_file, 'w') as file:
-      self.config_parser.write(file)
-  
-  def read_config_pickle(self):
-    with open(self.config_pickle_file, 'rb') as f:
-      self.config_pickle = pickle.load(f)
-
-  def set_config_pickle(self, key, value, quick_apply=False):
-    self.config_pickle[key] = value
-    #write with config_pickle_interval
-    t = (datetime.datetime.utcnow()-self.config_pickle_write_time).total_seconds()
-    if not quick_apply and t < self.config_pickle_interval:
-      return
-    with open(self.config_pickle_file, 'wb') as f:
-      pickle.dump(self.config_pickle, f)
-    self.config_pickle_write_time = datetime.datetime.utcnow()
-  
-  def get_config_pickle(self, key, default_value):
-    if key in self.config_pickle:
-      return self.config_pickle[key]
-    else:
-      return default_value
-
-  #reset 
-  def reset_config_pickle(self):
-    for k, v in list(self.config_pickle.items()):
-      if "mag" in k:
-        continue
-      del(self.config_pickle[k])
-    with open(self.config_pickle_file, 'wb') as f:
-      pickle.dump(self.config_pickle, f)
-
-  #quit
-  def delete_config_pickle(self):
-    for k, v in list(self.config_pickle.items()):
-      if "ant+" in k:
-        del(self.config_pickle[k])
-    with open(self.config_pickle_file, 'wb') as f:
-      pickle.dump(self.config_pickle, f)
 
   def read_map_list(self):
     text = None
@@ -1311,15 +1082,18 @@ class Config():
       )), 360).astype(dtype='int16')
     return azimuth
   
-  def get_altitude_from_tile(self, pos):
+  def get_maptile_filename(self, map_name, z, x, y):
+    return "maptile/"+map_name+"/{0}/{1}/{2}.png".format(z, x, y)
+
+  async def get_altitude_from_tile(self, pos):
     if np.isnan(pos[0]) or np.isnan(pos[1]):
       return np.nan
-    z = self.G_MAP_CONFIG[self.G_DEM_MAP]['fix_zoomlevel']
+    z = self.G_DEM_MAP_CONFIG[self.G_DEM_MAP]['fix_zoomlevel']
     f_x, f_y, p_x, p_y = self.get_tilexy_and_xy_in_tile(z, pos[0], pos[1], 256)
     filename = self.get_maptile_filename(self.G_DEM_MAP, z, f_x, f_y)
     
     if not os.path.exists(filename):
-      self.download_demtile(z, f_x, f_y)
+      await self.network.download_demtile(z, f_x, f_y)
       return np.nan
     if os.path.getsize(filename) == 0:
       return np.nan
