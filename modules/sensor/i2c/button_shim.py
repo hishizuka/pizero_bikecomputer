@@ -66,6 +66,8 @@ class ButtonShim():
   def press_E_LONG(self):
     self.press_button('E', 1)
 
+  def set_pixel(self, r, g, b):
+    buttonshim.set_pixel(r, g, b)
 
   # Button A
   @buttonshim.on_press(buttonshim.BUTTON_A)
