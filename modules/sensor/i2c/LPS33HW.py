@@ -1,5 +1,4 @@
 import time
-import smbus
 
 try:
   #run from top directory (pizero_bikecomputer)

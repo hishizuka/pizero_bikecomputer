@@ -1,5 +1,4 @@
 import time
-import smbus
 import struct
 
 try:
