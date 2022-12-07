@@ -27,7 +27,7 @@ class i2c():
   def __init__(self):
     self.bus = smbus.SMBus(1)
     self.bus.write_byte_data(self.SENSOR_ADDRESS, self.RESET_ADDRESS, self.RESET_VALUE)
-    time.sleep(0.1)
+    time.sleep(0.01)
     self.reset_value()
     self.init_sensor()
 
