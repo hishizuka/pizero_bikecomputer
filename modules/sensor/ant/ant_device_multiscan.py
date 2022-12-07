@@ -61,7 +61,7 @@ class ANT_Device_MultiScan(ant_device.ANT_Device):
   def disconnect(self, wait):
     if not self.config.G_ANT['STATUS']: return False
     if not self.isUse: return False
-    if self.stateCheck("CLOSE"):
+    if self.state_check("CLOSE"):
       self.isUse = False
       return True
     try:

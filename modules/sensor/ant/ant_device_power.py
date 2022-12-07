@@ -144,7 +144,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
     #on_data timestamp
     values['on_data_timestamp'] = t
     #store raw power
-    self.config.set_config_pickle("ant+_power_values_16", power_values[1])
+    self.config.setting.set_config_pickle("ant+_power_values_16", power_values[1])
 
   def on_data_power_0x11(self, data, power_values, pre_values, values):
     #(page), evt_count, wheel_ticks, x, wheel period(2byte), accumulatd power(2byte)
@@ -157,7 +157,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
       values['on_data_timestamp'] = t
       values['power'] = 0
       
-      pre_pwr_value = self.config.get_config_pickle("ant+_power_values_17", pre_values)
+      pre_pwr_value = self.config.setting.get_config_pickle("ant+_power_values_17", pre_values)
       pwr_diff = pre_values[1] - pre_pwr_value[1]
       spd_diff = pre_values[3] - pre_pwr_value[3]
       if -65535 <= pwr_diff < 0:
@@ -214,7 +214,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
     values['on_data_timestamp'] = t
 
     #store raw power
-    self.config.set_config_pickle("ant+_power_values_17", power_values)
+    self.config.setting.set_config_pickle("ant+_power_values_17", power_values)
 
   def on_data_power_0x12(self, data, power_values, pre_values, values):
     #(page), x, x, cadence, period(2byte), accumulatd power(2byte)
@@ -225,7 +225,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
       values['on_data_timestamp'] = t
       values['power'] = 0
       
-      pre_pwr_value = self.config.get_config_pickle("ant+_power_values_18", pre_values[1])
+      pre_pwr_value = self.config.setting.get_config_pickle("ant+_power_values_18", pre_values[1])
       diff = pre_values[1] - pre_pwr_value
       if -65535 <= diff < 0:
         diff += 65536
@@ -273,4 +273,4 @@ class ANT_Device_Power(ant_device.ANT_Device):
     values['on_data_timestamp'] = t
 
     #store raw power
-    self.config.set_config_pickle("ant+_power_values_18", power_values[1])
+    self.config.setting.set_config_pickle("ant+_power_values_18", power_values[1])

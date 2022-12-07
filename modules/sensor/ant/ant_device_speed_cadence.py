@@ -21,10 +21,10 @@ class ANT_Device_Speed_Cadence(ant_device.ANT_Device):
 
   pickle_key = "ant+_sc_values"
 
-  def addStructPattern(self):
+  def add_struct_pattern(self):
     self.structPattern[self.name] = struct.Struct('<HHHH')
 
-  def resetValue(self):
+  def reset_value(self):
     self.values['distance'] = 0.0
     self.sc_values = [-1,-1,-1,-1]
     self.pre_values = [-1,-1,-1,-1]
@@ -41,14 +41,14 @@ class ANT_Device_Speed_Cadence(ant_device.ANT_Device):
       self.values['cadence'] = 0
       self.values['on_data_timestamp'] = t
       
-      pre_speed_value = self.config.get_config_pickle(self.pickle_key, self.pre_values[3])
+      pre_speed_value = self.config.setting.get_config_pickle(self.pickle_key, self.pre_values[3])
       diff = self.pre_values[3] - pre_speed_value
       if -65535 <= diff < 0:
         diff += 65536
       if diff > 0:
         self.values['distance'] += self.config.G_WHEEL_CIRCUMFERENCE * diff
         print("### resume spd ", self.pre_values[3], pre_speed_value, diff, "###")
-        print("### resume spd ", self.values['distance'], self.config.G_WHEEL_CIRCUMFERENCE * diff, "[m] ###")
+        print("### resume spd ", int(self.values['distance']), int(self.config.G_WHEEL_CIRCUMFERENCE * diff), "[m] ###")
 
       return
 
@@ -77,7 +77,7 @@ class ANT_Device_Speed_Cadence(ant_device.ANT_Device):
     else:
       print("ANT+ S&C(speed) err: ", datetime.datetime.now().strftime("%Y%m%d %H:%M:%S"), self.delta)
     #store raw speed
-    self.config.set_config_pickle(self.pickle_key, self.sc_values[3])
+    self.config.setting.set_config_pickle(self.pickle_key, self.sc_values[3])
     
     #cadence
     if self.delta[0] > 0 and 0 <= self.delta[1] < 6553: #for spike
@@ -114,10 +114,10 @@ class ANT_Device_Cadence(ant_device.ANT_Device):
   
   pickle_key = "ant+_cdc_values"
 
-  def addStructPattern(self):
+  def add_struct_pattern(self):
     self.structPattern[self.name] = struct.Struct('<xxxxHH')
 
-  def resetValue(self):
+  def reset_value(self):
     self.sc_values = [-1,-1]
     self.pre_values = [-1,-1]
     self.delta = [-1,-1]
@@ -206,18 +206,18 @@ class ANT_Device_Speed(ANT_Device_Cadence):
     self.const = self.config.G_WHEEL_CIRCUMFERENCE
   
   def resumeAccumulatedValue(self):
-    pre_speed_value = self.config.get_config_pickle(self.pickle_key, self.pre_values[1])
+    pre_speed_value = self.config.setting.get_config_pickle(self.pickle_key, self.pre_values[1])
     diff = self.pre_values[1] - pre_speed_value
     if -65535 <= diff < 0:
       diff += 65536
     if diff > 0:
       self.values['distance'] += self.config.G_WHEEL_CIRCUMFERENCE * diff
       print("### resume spd ", self.pre_values[1], pre_speed_value, diff, "###")
-      print("### resume spd ", self.values['distance'], self.config.G_WHEEL_CIRCUMFERENCE * diff, "[m] ###")
+      print("### resume spd ", int(self.values['distance']), "[m] ###")
  
   def accumulateValue(self):
     if self.config.G_MANUAL_STATUS == "START":
       #unit: m
       self.values['distance'] += self.config.G_WHEEL_CIRCUMFERENCE * self.delta[1]
     #store raw speed
-    self.config.set_config_pickle(self.pickle_key, self.sc_values[1])
+    self.config.setting.set_config_pickle(self.pickle_key, self.sc_values[1])

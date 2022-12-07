@@ -81,7 +81,7 @@ class ANT_Device():
   def make_channel(self, c_type, ext_assign=None):
     if self.config.G_ANT['STATUS'] and self.channel == None:
       self.channel = self.node.new_channel(c_type, ext_assign=ext_assign)
-      print(self.name, ': channel_num: ', self.channel.id)
+      print("{} ".format(self.name), end="")
       self.channel.on_broadcast_data = self.on_data
       self.channel.on_burst_data = self.on_data
       self.channel.on_acknowledge_data = self.on_data
@@ -112,7 +112,7 @@ class ANT_Device():
     if not self.config.G_ANT['STATUS']: return
     if isCheck:
       if not self.config.G_ANT['USE'][self.name]: return
-    if self.stateCheck('OPEN'):
+    if self.state_check('OPEN'):
       if isChange: self.config.G_ANT['USE'][self.name] = True
       return
     try:
@@ -128,7 +128,7 @@ class ANT_Device():
     if not self.config.G_ANT['STATUS']: return
     if isCheck:
       if not self.config.G_ANT['USE'][self.name]: return
-    if self.stateCheck('CLOSE'):
+    if self.state_check('CLOSE'):
       if isChange: self.config.G_ANT['USE'][self.name] = False
       return
     try:
@@ -142,14 +142,14 @@ class ANT_Device():
   def delete(self):
     self.node.delete_channel()
 
-  def stateCheck(self, mode):
+  def state_check(self, mode):
     result = self.channel.get_channel_status()
     #Bits 4~7: Channel type, Bits 2~3: Network number, Bits 0~1: Channel State
     #  Channel State: Un-Assigned = 0, Assigned = 1, Searching = 2, Tracking = 3
-    channelState = result[2][0] & 0b00000011
+    channel_state = result[2][0] & 0b00000011
     state = False
-    if mode == 'OPEN' and channelState != 1: state = True
-    elif mode == 'CLOSE' and (channelState == 0 or channelState == 1): state = True
+    if mode == 'OPEN' and channel_state != 1: state = True
+    elif mode == 'CLOSE' and (channel_state == 0 or channel_state == 1): state = True
     return state
   
   def close_extra(self):
