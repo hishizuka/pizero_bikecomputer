@@ -1,7 +1,9 @@
 import sys
 import os
-from datetime import datetime
+#import platform
+import datetime
 import signal
+import asyncio
 import numpy as np
 
 USE_PYQT6 = False
@@ -15,24 +17,19 @@ except:
   import PyQt5.QtWidgets as QtWidgets
   import PyQt5.QtGui as QtGui
 
+import qasync
+
 from modules.gui_config import GUI_Config
 from modules.pyqt.pyqt_style import PyQtStyle
-import modules.pyqt.pyqt_graph as pyqt_graph
-import modules.pyqt.pyqt_graph_debug as pyqt_graph_debug
-import modules.pyqt.pyqt_multiscan_widget as pyqt_multiscan
-from modules.pyqt.pyqt_values_widget import ValuesWidget
-from modules.pyqt.menu.pyqt_menu_widget import TopMenuWidget, ANTMenuWidget, ANTDetailWidget
-from modules.pyqt.menu.pyqt_adjust_widget import AdjustAltitudeWidget, AdjustWheelCircumferenceWidget
-from modules.pyqt.menu.pyqt_debug_widget import DebugLogViewerWidget
-from modules.pyqt.pyqt_cuesheet_widget import CueSheetWidget
+
 
 class MyWindow(QtWidgets.QMainWindow):
   config = None
   gui = None
 
   def __init__(self, parent=None):
-    #super(QtWidgets.QMainWindow, self).__init__(parent, flags=QtCore.Qt.FramelessWindowHint)
-    super(QtWidgets.QMainWindow, self).__init__(parent)
+    #super().__init__(parent, flags=QtCore.Qt.FramelessWindowHint)
+    super().__init__(parent=parent)
     print("Qt version:", QtCore.QT_VERSION_STR)
   
   def set_config(self, config):
@@ -42,8 +39,9 @@ class MyWindow(QtWidgets.QMainWindow):
     self.gui = gui
 
   #override from QtWidget
-  def closeEvent(self, event):
-    self.config.quit()
+  @qasync.asyncClose
+  async def closeEvent(self, event):
+    await self.config.quit()
 
   #override from QtWidget
   def paintEvent(self, event):
@@ -60,19 +58,16 @@ class GUI_PyQt(QtCore.QObject):
   style = None
 
   stack_widget = None
+  button_box_widget = None
   main_page = None
   main_page_index = 0
   altitude_graph_widget = None
   acc_graph_widget = None
   performance_graph_widget  = None
   course_profile_graph_widget = None
-  simple_map_widget = None
+  map_widget = None
   cuesheet_widget = None
   multi_scan_widget = None
-
-  #for long press
-  lap_button_count = 0
-  start_button_count = 0
 
   #signal
   signal_next_button = QtCore.pyqtSignal(int)
@@ -80,20 +75,31 @@ class GUI_PyQt(QtCore.QObject):
   signal_menu_button = QtCore.pyqtSignal(int)
   signal_menu_back_button = QtCore.pyqtSignal()
   signal_get_screenshot = QtCore.pyqtSignal()
+  signal_popup = QtCore.pyqtSignal(str)
+  signal_message = QtCore.pyqtSignal(str, str)
+  signal_start_and_stop_manual = QtCore.pyqtSignal()
+  signal_count_laps = QtCore.pyqtSignal()
+  signal_boot_status = QtCore.pyqtSignal(str)
 
+  #for draw_display
   screen_shape = None
   screen_image = None
   remove_bytes = 0
   old_pyqt = False
   bufsize = 0
 
+  #for dialog
+  display_dialog = False
+
   def __init__(self, config):
     super().__init__()
+
     self.config = config
     self.config.gui = self
+    
     self.gui_config = GUI_Config(config)
     self.gui_config.set_qt5_or_qt6_constants(USE_PYQT6)
-    #from other program, call self.config.gui.style
+    
     self.style = PyQtStyle()
     self.logger = self.config.logger
     try:
@@ -103,23 +109,109 @@ class GUI_PyQt(QtCore.QObject):
       signal.signal(signal.SIGHUP, self.quit_by_ctrl_c)
     except:
       pass
-
+    
     self.init_window()
   
-  def quit_by_ctrl_c(self, signal, frame):
-    self.quit()
-
-  def quit(self):
-    self.app.quit()
-    if not USE_PYQT6:
-      self.config.quit()
-
   def init_window(self):
     self.app = QtWidgets.QApplication(sys.argv)
+    self.config.loop = qasync.QEventLoop(self.app)
+    self.config.loop.set_debug(True)
+    self.config.init_loop(call_from_gui=True)
 
-    self.icon_dir = ""
-    if self.config.G_IS_RASPI:
-      self.icon_dir = self.config.G_INSTALL_PATH 
+    self.main_window = MyWindow()
+    self.main_window.set_config(self.config)
+    self.main_window.set_gui(self)
+    self.main_window.setWindowTitle(self.config.G_PRODUCT)
+    self.main_window.setMinimumSize(self.config.G_WIDTH, self.config.G_HEIGHT)
+    self.main_window.show()
+    self.set_color()
+
+    self.stack_widget = QtWidgets.QStackedWidget(self.main_window)
+    self.main_window.setCentralWidget(self.stack_widget)
+    self.stack_widget.setContentsMargins(0,0,0,0)
+
+    #stack_widget elements (splash)
+    self.splash_widget = QtWidgets.QWidget(self.stack_widget)
+    self.splash_widget.setContentsMargins(0,0,0,0)
+    self.stack_widget.addWidget(self.splash_widget)
+
+    self.splash_layout = QtWidgets.QVBoxLayout(self.splash_widget)
+    self.splash_layout.setContentsMargins(0,0,0,0)
+    self.splash_layout.setSpacing(0)
+    self.splash_widget.setStyleSheet(self.style.G_GUI_PYQT_splash_screen)
+
+    #self.splash_image = QtWidgets.QLabel()
+    #self.splash_image.setPixmap(QtGui.QPixmap("some_logo.png"))
+    #self.splash_layout.addWidget(self.splash_image)
+
+    self.boot_status = QtWidgets.QLabel()
+    self.signal_boot_status.connect(self.set_boot_status_internal)
+    self.boot_status.setStyleSheet(self.style.G_GUI_PYQT_splash_boot_text)
+    self.boot_status.setAlignment(self.gui_config.align_center)
+    self.splash_layout.addWidget(self.boot_status)
+
+    #for draw_display
+    self.init_buffer()
+
+    self.exec()
+  
+  async def set_boot_status(self, text):
+    self.signal_boot_status.emit(text)
+    self.draw_display(direct_update=True)
+    if not self.config.G_IS_RASPI:
+      await asyncio.sleep(0.01) #need for changing QLabel in the event loop
+  
+  def set_boot_status_internal(self, text):
+    self.boot_status.setText(text)
+
+  def delay_init(self):
+    time_profile = []
+    t1 = datetime.datetime.now()
+    
+    self.add_font()
+    
+    #navi icon
+    self.navi_icon = {
+      'Default': QtGui.QIcon("img/navi_flag.png"), #svg
+      'Left': QtGui.QIcon("img/navi_turn_left.svg"),
+      'Right': QtGui.QIcon("img/navi_turn_right.svg"),
+      'Summit': QtGui.QIcon("img/summit.png"), #svg
+    }
+
+    #physical button
+    self.signal_next_button.connect(self.scroll)
+    self.signal_prev_button.connect(self.scroll)
+    self.signal_menu_button.connect(self.change_menu_page)
+    self.signal_menu_back_button.connect(self.change_menu_back)
+    #other
+    self.signal_get_screenshot.connect(self.screenshot)
+    self.signal_popup.connect(self.show_popup_internal)
+    self.signal_message.connect(self.show_message_internal)
+
+    self.signal_start_and_stop_manual.connect(self.start_and_stop_manual_internal)
+    self.signal_count_laps.connect(self.count_laps_internal)
+
+    t2 = datetime.datetime.now()
+    time_profile.append((t2-t1).total_seconds())
+    t1 = t2
+
+    import modules.pyqt.graph.pyqt_map as pyqt_map
+    import modules.pyqt.graph.pyqt_course_profile as pyqt_course_profile
+    import modules.pyqt.graph.pyqt_value_graph as pyqt_value_graph
+    from modules.pyqt.pyqt_values_widget import ValuesWidget
+
+    from modules.pyqt.menu.pyqt_menu_widget import TopMenuWidget, UploadActivityMenuWidget
+    from modules.pyqt.menu.pyqt_system_menu_widget import SystemMenuWidget, NetworkMenuWidget, BluetoothTetheringListWidget, DebugLogViewerWidget
+    from modules.pyqt.menu.pyqt_profile_widget import ProfileWidget
+    from modules.pyqt.menu.pyqt_sensor_menu_widget import SensorMenuWidget, ANTMenuWidget, ANTListWidget, ANTMultiScanScreenWidget
+    from modules.pyqt.menu.pyqt_course_menu_widget import CoursesMenuWidget, CourseListWidget, CourseDetailWidget, GoogleDirectionsAPISettingMenuWidget
+    from modules.pyqt.menu.pyqt_map_menu_widget import MapMenuWidget, MapListWidget, MapOverlayMenuWidget, HeatmapListWidget, RainmapListWidget, WindmapListWidget
+    from modules.pyqt.menu.pyqt_adjust_widget import AdjustAltitudeWidget, AdjustWheelCircumferenceWidget, AdjustCPWidget, AdjustWPrimeBalanceWidget
+    from modules.pyqt.pyqt_cuesheet_widget import CueSheetWidget
+    
+    t2 = datetime.datetime.now()
+    time_profile.append((t2-t1).total_seconds())
+    t1 = t2
 
     #self.main_window
     #  stack_widget
@@ -129,22 +221,146 @@ class GUI_PyQt(QtCore.QObject):
     #        main_page
     #        button_box_widget
     #    menu_widget
+    #    ant_menu_widget
+    #    ant_detail_widget
+    #    adjust_wheel_circumference_widget
+    #    adjust_atitude_widget
+    #    debug_log_viewer_widget
 
-    time_profile = [datetime.now(),] #for time profile
-    self.main_window = MyWindow()
-    self.main_window.set_config(self.config)
-    self.main_window.set_gui(self)
-    self.main_window.setWindowTitle(self.config.G_PRODUCT)
-    self.main_window.setMinimumSize(self.config.G_WIDTH, self.config.G_HEIGHT)
-    self.main_window.show()
-    self.set_color()
+    #stack_widget elements (main)
+    self.main_widget = QtWidgets.QWidget(self.stack_widget)
+    self.main_widget.setContentsMargins(0,0,0,0)
+    self.stack_widget.addWidget(self.main_widget)
+    
+    #reverse order (make children widget first, then make parent widget)
+    menus = [
+      ("ANT+ Detail", ANTListWidget),
+      ("ANT+ MultiScan", ANTMultiScanScreenWidget),
+      ("ANT+ Sensors", ANTMenuWidget),
+      ("Wheel Size", AdjustWheelCircumferenceWidget),
+      ("Adjust Altitude", AdjustAltitudeWidget),
+      ("Sensors", SensorMenuWidget),
+      ("BT Tethering", BluetoothTetheringListWidget),
+      ("Network", NetworkMenuWidget),
+      ("Debug Log", DebugLogViewerWidget),
+      ("System", SystemMenuWidget),
+      ("CP", AdjustCPWidget),
+      ("W Prime Balance", AdjustWPrimeBalanceWidget),
+      ("Profile", ProfileWidget),
+      ("Upload Activity", UploadActivityMenuWidget),
+      ("Wind map List", WindmapListWidget),
+      ("Rain map List", RainmapListWidget),
+      ("Heatmap List", HeatmapListWidget),
+      ("Map Overlay", MapOverlayMenuWidget),
+      ("Select Map", MapListWidget),
+      ("Map", MapMenuWidget),
+      ("Google Directions API mode", GoogleDirectionsAPISettingMenuWidget),
+      ("Course Detail", CourseDetailWidget),
+      ("Courses List", CourseListWidget),
+      ("Courses", CoursesMenuWidget),
+      ("Menu", TopMenuWidget),
+    ]
+    menu_count = max(self.gui_config.G_GUI_INDEX.values()) + 1
+    for m in menus:
+      m_widget = m[1](self.stack_widget, m[0], self.config)
+      m_widget.setContentsMargins(0,0,0,0)
+      self.stack_widget.addWidget(m_widget)
+      self.gui_config.G_GUI_INDEX[m[0]] = menu_count
+      menu_count += 1
+    
+    self.stack_widget.setCurrentIndex(1)
+ 
+    #main layout
+    self.main_layout = QtWidgets.QVBoxLayout(self.main_widget)
+    self.main_layout.setContentsMargins(0,0,0,0)
+    self.main_layout.setSpacing(0)
+ 
+    #main Widget
+    self.main_page = QtWidgets.QStackedWidget(self.main_widget)
+    self.main_page.setContentsMargins(0,0,0,0)
+    
+    for k in self.gui_config.G_LAYOUT:
+      if not self.gui_config.G_LAYOUT[k]["STATUS"]:
+        continue
+      if "LAYOUT" in self.gui_config.G_LAYOUT[k]:
+        self.main_page.addWidget(
+          ValuesWidget(self.main_page, self.config, self.gui_config.G_LAYOUT[k]["LAYOUT"])
+          )
+      else:
+        if k == "ALTITUDE_GRAPH" and 'i2c_baro_temp' in self.config.logger.sensor.sensor_i2c.sensor:
+          self.altitude_graph_widget = pyqt_value_graph.AltitudeGraphWidget(self.main_page, self.config)
+          self.main_page.addWidget(self.altitude_graph_widget)
+        elif k == "ACC_GRAPH" and self.config.logger.sensor.sensor_i2c.motion_sensor['ACC']:
+          self.acc_graph_widget = pyqt_value_graph.AccelerationGraphWidget(self.main_page, self.config)
+          self.main_page.addWidget(self.acc_graph_widget)
+        elif k == "PERFORMANCE_GRAPH" and self.config.G_ANT['STATUS']:
+          self.performance_graph_widget = pyqt_value_graph.PerformanceGraphWidget(self.main_page, self.config)
+          self.main_page.addWidget(self.performance_graph_widget)
+        elif k == "COURSE_PROFILE_GRAPH" and os.path.exists(self.config.G_COURSE_FILE_PATH) and self.config.G_COURSE_INDEXING:
+          self.course_profile_graph_widget = pyqt_course_profile.CourseProfileGraphWidget(self.main_page, self.config)
+          self.main_page.addWidget(self.course_profile_graph_widget)
+        elif k == "SIMPLE_MAP":
+          self.map_widget = pyqt_map.MapWidget(self.main_page, self.config)
+          self.main_page.addWidget(self.map_widget)
+        elif k == "CUESHEET" and len(self.config.logger.course.point_name) > 0 and self.config.G_COURSE_INDEXING and \
+          self.config.G_CUESHEET_DISPLAY_NUM > 0:
+          self.cuesheet_widget = CueSheetWidget(self.main_page, self.config)
+          self.main_page.addWidget(self.cuesheet_widget)
+    
+    t2 = datetime.datetime.now()
+    time_profile.append((t2-t1).total_seconds())
+    t1 = t2
+    
+    #integrate main_layout
+    self.main_layout.addWidget(self.main_page)
+    if self.config.display.has_touch():
+      #button
+      from modules.pyqt.pyqt_button_box_widget import ButtonBoxWidget
+      self.button_box_widget = ButtonBoxWidget(self.main_widget, self.config)
+      self.main_layout.addWidget(self.button_box_widget)
+    
+    #fullscreen
+    if self.config.G_FULLSCREEN:
+      self.main_window.showFullScreen()
 
-    #base stack_widget
-    self.stack_widget = QtWidgets.QStackedWidget(self.main_window)
-    self.main_window.setCentralWidget(self.stack_widget)
-    self.stack_widget.setContentsMargins(0,0,0,0)
+    self.on_change_main_page(self.main_page_index)
+    
+    t2 = datetime.datetime.now()
+    time_profile.append((t2-t1).total_seconds())
 
-    #default font
+    print()
+    print("Drawing components:")
+    print("  misc  : {:.3f} sec".format(time_profile[0]))
+    print("  import: {:.3f} sec".format(time_profile[1]))
+    print("  init  : {:.3f} sec".format(time_profile[2]))
+    print("  layout: {:.3f} sec".format(time_profile[3]))
+    print("  total : {:.3f} sec".format(sum(time_profile)))
+    print()
+
+  def init_buffer(self):
+    if self.config.display.send_display:
+      p = self.stack_widget.grab().toImage().convertToFormat(self.gui_config.format)
+      #PyQt 5.11(Buster) or 5.15(Bullseye)
+      qt_version = (QtCore.QT_VERSION_STR).split(".")
+      if(qt_version[0] == '5' and int(qt_version[1]) < 15):
+        self.bufsize = p.bytesPerLine()*p.height() #PyQt 5.11(Buster)
+      else:  
+        self.bufsize = p.sizeInBytes() #PyQt 5.15 or lator (Bullseye)
+    
+      self.screen_shape, self.remove_bytes = self.gui_config.get_screen_shape(p)
+
+  def exec(self):
+    #self.app.exec()
+    with self.config.loop:
+      self.config.loop.run_forever()
+      #loop is stopped
+      tasks = asyncio.all_tasks()
+      if len(tasks) > 0:
+        print("Remaining tasks:", asyncio.all_tasks())
+    #loop is closed
+  
+  def add_font(self):
+    #default font (macOS is not allowed relative path)
     res = QtGui.QFontDatabase.addApplicationFont('fonts/Yantramanav/Yantramanav-Black.ttf')
     if res != -1:
       font_name = QtGui.QFontDatabase.applicationFontFamilies(res)[0]
@@ -159,156 +375,43 @@ class GUI_PyQt(QtCore.QObject):
         #self.stack_widget.setStyleSheet("font-family: {}".format(self.config.G_FONT_NAME))
         print("add font:", self.config.G_FONT_NAME)
 
-    #self.stack_widget.setWindowFlags(QtCore.Qt.FramelessWindowHint)
+    #for macOS
+    #if platform.system() == 'Darwin' and QtCore.QLocale.system().bcp47Name() == "ja":
+    #  font = QtGui.QFont("Hiragino Sans") #or Osaka
+    #  self.app.setFont(font)
 
-    #elements
-    #splash
-    self.splash_widget = QtWidgets.QWidget(self.stack_widget)
-    self.splash_widget.setContentsMargins(0,0,0,0)
-    #main
-    self.main_widget = QtWidgets.QWidget(self.stack_widget)
-    self.main_widget.setContentsMargins(0,0,0,0)
-    #menu top
-    self.menu_widget = TopMenuWidget(self.stack_widget, "Settings", self.config)
-    self.menu_widget.setContentsMargins(0,0,0,0)
-    #ANT+ menu
-    self.ant_menu_widget = ANTMenuWidget(self.stack_widget, "ANT+ Sensors", self.config)
-    self.ant_menu_widget.setContentsMargins(0,0,0,0)
-    #ANT+ detail
-    self.ant_detail_widget = ANTDetailWidget(self.stack_widget, "ANT+ Detail", self.config)
-    self.ant_detail_widget.setContentsMargins(0,0,0,0)
-    #adjust altitude
-    self.adjust_wheel_circumference_widget = AdjustWheelCircumferenceWidget(self.stack_widget, "Wheel Size (Circumference)", self.config)
-    self.adjust_wheel_circumference_widget.setContentsMargins(0,0,0,0)
-    #adjust altitude
-    self.adjust_atitude_widget = AdjustAltitudeWidget(self.stack_widget, "Adjust Altitude", self.config)
-    self.adjust_atitude_widget.setContentsMargins(0,0,0,0)
-    #Debug log viewer
-    self.debug_log_viewer_widget = DebugLogViewerWidget(self.stack_widget, "Debug Log Viewer", self.config)
-    self.debug_log_viewer_widget.setContentsMargins(0,0,0,0)
-    #integrate
-    self.stack_widget.addWidget(self.splash_widget)
-    self.stack_widget.addWidget(self.main_widget)
-    self.stack_widget.addWidget(self.menu_widget)
-    self.stack_widget.addWidget(self.ant_menu_widget)
-    self.stack_widget.addWidget(self.ant_detail_widget)
-    self.stack_widget.addWidget(self.adjust_wheel_circumference_widget)
-    self.stack_widget.addWidget(self.adjust_atitude_widget)
-    self.stack_widget.addWidget(self.debug_log_viewer_widget)
-    self.stack_widget.setCurrentIndex(1)
- 
-    #main layout
-    self.main_layout = QtWidgets.QVBoxLayout(self.main_widget)
-    self.main_layout.setContentsMargins(0,0,0,0)
-    self.main_layout.setSpacing(0)
-    self.main_widget.setLayout(self.main_layout)
- 
-    #main Widget
-    self.main_page = QtWidgets.QStackedWidget(self.main_widget)
-    self.main_page.setContentsMargins(0,0,0,0)
+  @qasync.asyncSlot(object, object)
+  async def quit_by_ctrl_c(self, signal, frame):
+    await self.quit()
 
-    time_profile.append(datetime.now())
-    
-    for k in self.gui_config.G_LAYOUT:
-      if not self.gui_config.G_LAYOUT[k]["STATUS"]:
-        continue
-      if "LAYOUT" in self.gui_config.G_LAYOUT[k]:
-        self.main_page.addWidget(
-          ValuesWidget(self.main_page, self.config, self.gui_config.G_LAYOUT[k]["LAYOUT"])
-          )
-      else:
-        if k == "ALTITUDE_GRAPH" and 'i2c_baro_temp' in self.config.logger.sensor.sensor_i2c.sensor:
-          self.altitude_graph_widget = pyqt_graph_debug.AltitudeGraphWidget(self.main_page, self.config)
-          self.main_page.addWidget(self.altitude_graph_widget)
-        elif k == "ACC_GRAPH" and self.config.logger.sensor.sensor_i2c.motion_sensor['ACC']:
-          self.acc_graph_widget = pyqt_graph_debug.AccelerationGraphWidget(self.main_page, self.config)
-          self.main_page.addWidget(self.acc_graph_widget)
-        elif k == "PERFORMANCE_GRAPH" and self.config.G_ANT['STATUS']:
-          self.performance_graph_widget = pyqt_graph.PerformanceGraphWidget(self.main_page, self.config)
-          self.main_page.addWidget(self.performance_graph_widget)
-        elif k == "COURSE_PROFILE_GRAPH" and os.path.exists(self.config.G_COURSE_FILE) and self.config.G_COURSE_INDEXING:
-          self.course_profile_graph_widget = pyqt_graph.CourseProfileGraphWidget(self.main_page, self.config)
-          self.main_page.addWidget(self.course_profile_graph_widget)
-        elif k == "SIMPLE_MAP":
-          self.simple_map_widget = pyqt_graph.SimpleMapWidget(self.main_page, self.config)
-          self.main_page.addWidget(self.simple_map_widget)
-        elif k == "CUESHEET" and len(self.config.logger.course.point_name) > 0 and self.config.G_COURSE_INDEXING and \
-          self.config.G_CUESHEET_DISPLAY_NUM > 0:
-          self.cuesheet_widget = pyqt_graph.CueSheetWidget(self.main_page, self.config)
-          self.main_page.addWidget(self.cuesheet_widget)
-        elif k == "MULTI_SCAN" and self.config.G_ANT['STATUS']:
-          self.multi_scan_widget = pyqt_multiscan.MultiScanWidget(self.main_page, self.config)
-          self.main_page.addWidget(self.multi_scan_widget)
+  async def quit(self):
+    if not USE_PYQT6:
+      await self.config.quit()
 
-    time_profile.append(datetime.now())
+    #with loop.close, so execute at the end
+    self.app.quit()
 
-    #button
-    self.button_box_widget = ButtonBoxWidget(self.main_widget, self.config)
-    self.button_box_widget.start_button.clicked.connect(self.gui_start_and_stop_quit)
-    self.button_box_widget.lap_button.clicked.connect(self.gui_lap_reset)
-    self.button_box_widget.menu_button.clicked.connect(self.goto_menu)
-    self.button_box_widget.scrollnext_button.clicked.connect(self.scroll_next)
-    self.button_box_widget.scrollprev_button.clicked.connect(self.scroll_prev)
-
-    #physical button
-    self.signal_next_button.connect(self.scroll)
-    self.signal_prev_button.connect(self.scroll)
-    self.signal_menu_button.connect(self.change_menu_page)
-    self.signal_menu_back_button.connect(self.change_menu_back)
-    #other
-    self.signal_get_screenshot.connect(self.screenshot)
-   
-    #integrate main_layout
-    self.main_layout.addWidget(self.main_page)
-    if not self.config.G_AVAILABLE_DISPLAY[self.config.G_DISPLAY]['touch']:
-      self.button_box_widget.setVisible(False)
-    else:
-      self.main_layout.addWidget(self.button_box_widget)
-
-    time_profile.append(datetime.now()) #for time profile
-    
-    #self.main_window.show()
-
-    #fullscreen
-    if self.config.G_FULLSCREEN:
-      self.main_window.showFullScreen()
-
-    self.on_change_main_page(self.main_page_index)
-    
-    diff_label = ["base","widget","button"]
-    print("  gui_pyqt:")
-    for i in range(len(time_profile)):
-      if i == 0: continue
-      t = "{0:.4f}".format((time_profile[i]-time_profile[i-1]).total_seconds())
-      print("   ",'{:<13}'.format(diff_label[i-1]), ":", t)
-
-    #for draw_display
-    p = self.stack_widget.grab().toImage().convertToFormat(self.gui_config.format)
-    #PyQt 5.11(Buster) or 5.15(Bullseye)
-    qt_version = (QtCore.QT_VERSION_STR).split(".")
-    if(qt_version[0] == '5' and qt_version[1] == '11'):
-      self.bufsize = p.bytesPerLine()*p.height() #PyQt 5.11(Buster)
-    else:  
-      self.bufsize = p.sizeInBytes() #PyQt 5.15 or lator (Bullseye)
-    
-    self.screen_shape, self.remove_bytes = self.gui_config.get_screen_shape(p)
- 
-    self.app.exec()  
-  
-  #for stack_widget page transition
+  #for main_page page transition
   def on_change_main_page(self,index):
     self.main_page.widget(self.main_page_index).stop()
     self.main_page.widget(index).start()
     self.main_page_index = index
   
   def start_and_stop_manual(self):
+    self.signal_start_and_stop_manual.emit()
+
+  def start_and_stop_manual_internal(self):
     self.logger.start_and_stop_manual()
 
   def count_laps(self):
+    self.signal_count_laps.emit()
+
+  def count_laps_internal(self):
     self.logger.count_laps()
   
   def reset_count(self):
     self.logger.reset_count()
+    self.config.gui.map_widget.reset_track()
  
   def press_key(self, key):
     e_press = QtGui.QKeyEvent(self.gui_config.key_press, key, self.gui_config.no_modifier, None)
@@ -316,13 +419,13 @@ class GUI_PyQt(QtCore.QObject):
     QtCore.QCoreApplication.postEvent(QtWidgets.QApplication.focusWidget(), e_press)
     QtCore.QCoreApplication.postEvent(QtWidgets.QApplication.focusWidget(), e_release)
 
-  def press_tab(self):
-    #self.press_key(QtCore.Qt.Key_Tab)
-    self.main_page.widget(self.main_page_index).focusPreviousChild()
+  def press_shift_tab(self):
+    self.press_key(QtCore.Qt.Key_Backtab)
+    #self.stack_widget.currentWidget().focusPreviousChild()
 
-  def press_down(self):
-    #self.press_key(QtCore.Qt.Key_Down)
-    self.main_page.widget(self.main_page_index).focusNextChild()
+  def press_tab(self):
+    self.press_key(QtCore.Qt.Key_Tab)
+    #self.stack_widget.currentWidget().focusNextChild()
 
   def press_space(self):
     self.press_key(self.gui_config.key_space)
@@ -337,7 +440,7 @@ class GUI_PyQt(QtCore.QObject):
     i = self.stack_widget.currentIndex()
     if i == 1:
       #goto_menu:
-      self.signal_menu_button.emit(2)
+      self.signal_menu_button.emit(self.gui_config.G_GUI_INDEX['Menu'])
     elif i >= 2:
       #back
       self.back_menu()
@@ -377,10 +480,9 @@ class GUI_PyQt(QtCore.QObject):
 
   def map_method(self, mode):
     w = self.main_page.widget(self.main_page.currentIndex())
-    widget_name = w.__class__.__name__
-    if widget_name == 'SimpleMapWidget':
+    if w == self.config.gui.map_widget:
       eval('w.signal_'+mode+'.emit()')
-    if widget_name == 'CourseProfileGraphWidget':
+    elif w == self.config.gui.course_profile_graph_widget:
       eval('w.signal_'+mode+'.emit()')
 
   def dummy(self):
@@ -395,14 +497,14 @@ class GUI_PyQt(QtCore.QObject):
     self.signal_get_screenshot.emit()
 
   def screenshot(self):
-    date = datetime.now()
+    date = datetime.datetime.now()
     filename = date.strftime('%Y-%m-%d_%H-%M-%S.png')
     print("screenshot:", filename)
     p = self.stack_widget.grab()
     p.save(self.config.G_SCREENSHOT_DIR+filename, 'png')
- 
-  def draw_display(self):
-    if not self.config.logger.sensor.sensor_spi.send_display or self.stack_widget == None:
+
+  def draw_display(self, direct_update=False):
+    if not self.config.display.send_display or self.stack_widget == None:
       return
 
     #self.config.check_time("draw_display start")
@@ -425,63 +527,31 @@ class GUI_PyQt(QtCore.QObject):
     else:
       buf = np.frombuffer(ptr, dtype=np.uint8).reshape(self.screen_shape)
 
-    self.config.logger.sensor.sensor_spi.update(buf)
+    self.config.display.update(buf, direct_update)
     #self.config.check_time("draw_display end")
-  
-  def gui_lap_reset(self):
-    if self.button_box_widget.lap_button.isDown():
-      if self.button_box_widget.lap_button._state == 0:
-        self.button_box_widget.lap_button._state = 1
-      else:
-        self.lap_button_count += 1
-        print('lap button pressing : ', self.lap_button_count)
-        if self.lap_button_count == self.config.button_config.G_BUTTON_LONG_PRESS:
-          print('reset')
-          self.logger.reset_count()
-          self.simple_map_widget.reset_track()
-          self.lap_button_count = 0
-    elif self.button_box_widget.lap_button._state == 1:
-      self.button_box_widget.lap_button._state = 0
-      self.lap_button_count = 0
-    else:
-      self.logger.count_laps()
-
-  def gui_start_and_stop_quit(self):
-    if self.button_box_widget.start_button.isDown():
-      if self.button_box_widget.start_button._state == 0:
-        self.button_box_widget.start_button._state = 1
-      else:
-        self.start_button_count += 1
-        print('start button pressing : ', self.start_button_count)
-        if self.start_button_count == self.config.button_config.G_BUTTON_LONG_PRESS:
-          print('quit or poweroff')
-          self.quit()
-    elif self.button_box_widget.start_button._state == 1:
-      self.button_box_widget.start_button._state = 0
-      self.start_button_count = 0
-    else:
-      self.logger.start_and_stop_manual()
 
   def change_start_stop_button(self, status):
-    icon = QtGui.QIcon(self.icon_dir+'img/pause_white.png')
-    if status == "START":
-      icon = QtGui.QIcon(self.icon_dir+'img/next_white.png')
-    self.button_box_widget.start_button.setIcon(icon)
+    if self.button_box_widget != None:
+      self.button_box_widget.change_start_stop_button(status)
 
   def brightness_control(self):
-    self.config.logger.sensor.sensor_spi.brightness_control()
+    self.config.display.brightness_control()
 
   def turn_on_off_light(self):
     self.config.logger.sensor.sensor_ant.set_light_mode("ON_OFF_FLASH_LOW")
 
-  def change_menu_page(self, page):
+  def change_menu_page(self, page, focus_reset=True):
     self.stack_widget.setCurrentIndex(page)
-    
+    #default focus
+    if not self.config.display.has_touch() and hasattr(self.stack_widget.widget(page), 'focus_widget'):
+      if focus_reset and self.stack_widget.widget(page).focus_widget != None:
+        self.stack_widget.widget(page).focus_widget.setFocus()
+
   def change_menu_back(self):
     self.stack_widget.currentWidget().back()
 
   def goto_menu(self):
-    self.change_menu_page(self.gui_config.G_GUI_INDEX['menu'])
+    self.change_menu_page(self.gui_config.G_GUI_INDEX['Menu'])
 
   def set_color(self, daylight=True):
     if daylight:
@@ -489,65 +559,175 @@ class GUI_PyQt(QtCore.QObject):
     else:
       self.main_window.setStyleSheet("color: white; background-color: #222222")
 
+  def delete_popup(self):
+    if self.display_dialog:
+      self.signal_menu_back_button.emit()
 
-#################################
-# Button
-#################################
+  def show_popup(self, title):
+    self.signal_popup.emit(title)
 
-class ButtonBoxWidget(QtWidgets.QWidget):
+  async def show_message(self, title, message):
+    self.signal_message.emit(title, message)
+    await self.config.logger.sensor.sensor_i2c.led_blink(5)
 
-  config = None
+  def show_popup_internal(self, title, title_icon=None):
+    self.show_dialog_base(title=title, title_icon=title_icon, button_num=0, position=self.gui_config.align_bottom)
+  
+  def show_message_internal(self, title, message):
+    self.show_dialog_base(title=title, message=message, button_num=0, position=self.gui_config.align_bottom)
+  
+  def show_navi_internal(self, title, title_icon=None):
+    self.show_dialog_base(title=title, title_icon=title_icon, button_num=0, position=self.gui_config.align_bottom)
 
-  def __init__(self, parent, config):
-    self.config = config
-    QtWidgets.QWidget.__init__(self, parent=parent)
-    self.setup_ui()
+  def show_dialog(self, fn, title):
+    self.show_dialog_base(fn=fn, title=title, button_num=2)
+  
+  def show_dialog_ok_only(self, fn, title):
+    self.show_dialog_base(fn=fn, title=title, button_num=1)
 
-  def setup_ui(self):
+  def show_dialog_base(self, **kargs):
+
+    if self.display_dialog:
+      return
     
-    self.setContentsMargins(0,0,0,0)
-    self.setStyleSheet("background-color: #CCCCCC")
-    self.show()
-    self.setAutoFillBackground(True)
+    title = kargs.get("title")
+    title_icon = kargs.get("title_icon")
+    message = kargs.get("message")
+    button_num = kargs.get("button_num", 0) #0: none, 1: OK, 2: OK/Cancel
+    timeout = kargs.get("timeout", 5)
+    position = kargs.get("position", self.gui_config.align_center)
+    fn = kargs.get("fn") #use with OK button(button_num=2)
 
-    self.icon_dir = ""
-    if self.config.G_IS_RASPI:
-      self.icon_dir = self.config.G_INSTALL_PATH 
+    self.display_dialog = True
+
+    class DialogButton(QtWidgets.QPushButton):
+      next_button = None
+      prev_button = None
+      
+      def focusNextPrevChild(self, next):
+        if next:
+          self.next_button.setFocus()
+        else:
+          self.prev_button.setFocus()
+        return True
+
+    class Container(QtWidgets.QWidget):
+      pe_widget = None
     
-    #self.start_button = QtWidgets.QPushButton(QtGui.QIcon(self.icon_dir+'img/next_white.png'),"")
-    self.start_button = QtWidgets.QPushButton(QtGui.QIcon(self.icon_dir+'img/pause_white.png'),"")
-    self.lap_button = QtWidgets.QPushButton(QtGui.QIcon(self.icon_dir+'img/lap_white.png'),"")
-    self.menu_button = QtWidgets.QPushButton(QtGui.QIcon(self.icon_dir+'img/menu.png'),"")
-    self.scrollnext_button = QtWidgets.QPushButton(QtGui.QIcon(self.icon_dir+'img/nextarrow_black.png'),"")
-    self.scrollprev_button = QtWidgets.QPushButton(QtGui.QIcon(self.icon_dir+'img/backarrow_black.png'),"")
+      def showEvent(self, event):
+        if not event.spontaneous():
+          self.setFocus()
+          QtCore.QTimer.singleShot(0, self.focusNextChild)
 
-    self.scrollprev_button.setFixedSize(60,30)
-    self.lap_button.setFixedSize(50,30)
-    self.menu_button.setFixedSize(50,30)
-    self.start_button.setFixedSize(50,30)
-    self.scrollnext_button.setFixedSize(60,30)
+      def paintEvent(self, event):
+        qp = QtWidgets.QStylePainter(self)
+        opt = QtWidgets.QStyleOption()
+        opt.initFrom(self)
+        qp.drawPrimitive(self.pe_widget, opt)
 
-    #long press 
-    for button in [self.start_button, self.lap_button]:
-      button.setAutoRepeat(True)
-      button.setAutoRepeatDelay(1000)
-      button.setAutoRepeatInterval(1000)
-      button._state = 0
+    def back():
+      if not self.display_dialog:
+        return
+      self.close_dialog(self.stack_widget_current_index)
+      background.deleteLater()
+
+    self.stack_widget_current_index = self.stack_widget.currentIndex()
+    self.stack_widget.layout().setStackingMode(self.gui_config.stackingmode_stackall)
     
-    self.start_button.setStyleSheet(self.config.gui.style.G_GUI_PYQT_buttonStyle_timer)
-    self.lap_button.setStyleSheet(self.config.gui.style.G_GUI_PYQT_buttonStyle_timer)
-    self.menu_button.setStyleSheet(self.config.gui.style.G_GUI_PYQT_buttonStyle_gotoMenu)
-    self.scrollnext_button.setStyleSheet(self.config.gui.style.G_GUI_PYQT_buttonStyle_navi)
-    self.scrollprev_button.setStyleSheet(self.config.gui.style.G_GUI_PYQT_buttonStyle_navi)
+    background = QtWidgets.QWidget(parent=self.stack_widget, objectName="background")
+    background.setStyleSheet(self.config.gui.style.G_GUI_PYQT_dialog)
+    background.back = back
+    back_layout = QtWidgets.QVBoxLayout(background)
+    container = Container(background)
+    container.pe_widget = self.gui_config.PE_Widget
 
-    button_layout = QtWidgets.QHBoxLayout()
-    button_layout.setContentsMargins(0,5,0,5)
-    button_layout.setSpacing(0)
-    button_layout.addWidget(self.scrollprev_button)
-    button_layout.addWidget(self.lap_button)
-    button_layout.addWidget(self.menu_button)
-    button_layout.addWidget(self.start_button)
-    button_layout.addWidget(self.scrollnext_button)
+    #position
+    back_layout.addWidget(container, alignment=position)
+    container.setAutoFillBackground(True)
+    layout = QtWidgets.QVBoxLayout(container)
+    layout.setContentsMargins(10, 10, 10, 10)
+    layout.setSpacing(20)
+
+    font = self.main_window.font()
+    fontsize = font.pointSize()
+    font.setPointSize(int(fontsize * 2))
+    title_label = QtWidgets.QLabel(title, font=font)
+    #title_label = MarqueeLabel(config=self.config)
+    title_label.setWordWrap(True)
+    title_label.setText(title)
+    title_label.setFont(font)
+
+    if position == self.gui_config.align_center:
+      title_label.setAlignment(self.gui_config.align_center)
+    else:
+      title_label.setAlignment(self.gui_config.align_left)
     
-    self.setLayout(button_layout)
+    #title_label_width = title_label.fontMetrics().horizontalAdvance(title_label.text())
+
+    #title_icon
+    if title_icon != None:
+      outer_widget = QtWidgets.QWidget(container)
+      
+      left_icon = QtWidgets.QLabel()
+      left_icon.setPixmap(title_icon.pixmap(QtCore.QSize(32, 32)))
+
+      label_layout = QtWidgets.QHBoxLayout(outer_widget)
+      label_layout.setContentsMargins(0, 0, 0, 0)
+      label_layout.addWidget(left_icon)
+      label_layout.addWidget(title_label, stretch=2)
+      layout.addWidget(outer_widget)
+    elif message != None:
+      outer_widget = QtWidgets.QWidget(container)
+      font.setPointSize(int(fontsize*1.5))
+      message_label = QtWidgets.QLabel(message, font=font)
+      title_label.setFont(font)
+      title_label.setStyleSheet("font-weight: bold;")
+
+      label_layout = QtWidgets.QVBoxLayout(outer_widget)
+      label_layout.setContentsMargins(0, 0, 0, 0)
+      label_layout.addWidget(title_label)
+      label_layout.addWidget(message_label)
+      layout.addWidget(outer_widget)   
+    else:
+      layout.addWidget(title_label)
+    
+    #timeout
+    if button_num == 0:
+      QtCore.QTimer.singleShot(timeout*1000, back)
+    #button_num
+    elif button_num > 0:
+      button_widget = QtWidgets.QWidget(container)
+      button_layout = QtWidgets.QHBoxLayout(button_widget)
+      button_label = ['OK', 'Cancel']
+      buttons = []
+
+      for i in range(button_num):
+        b = DialogButton(text=button_label[i], parent=button_widget)
+        b.setFixedWidth(70)
+        button_layout.addWidget(b)
+        buttons.append(b)
+
+      for i in range(button_num):
+        next_index = i+1
+        prev_index = i-1
+        if next_index == button_num:
+          next_index = 0
+        buttons[i].next_button = buttons[next_index]
+        buttons[i].prev_button = buttons[prev_index]
+        buttons[i].clicked.connect(lambda: self.close_dialog(self.stack_widget_current_index))
+        buttons[i].clicked.connect(background.deleteLater)
+      
+      #func with OK button
+      if fn != None:
+        buttons[0].clicked.connect(fn)
+      
+      layout.addWidget(button_widget)
+
+    self.main_window.centralWidget().addWidget(background)
+    self.main_window.centralWidget().setCurrentWidget(background)
+
+  def close_dialog(self, index):
+    self.stack_widget.layout().setStackingMode(self.gui_config.stackingmode_stackone)
+    self.stack_widget.setCurrentIndex(index)
+    self.display_dialog = False
 
