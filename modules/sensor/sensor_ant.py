@@ -4,17 +4,17 @@ import random
 import os
 import sys
 import struct
+import asyncio
 
-import array
 import numpy as np
 
 from .sensor import Sensor
-from .ant import ant_device
 from .ant import ant_device_heartrate
 from .ant import ant_device_speed_cadence
 from .ant import ant_device_power
 from .ant import ant_device_light
 from .ant import ant_device_ctrl
+from .ant import ant_device_temperature
 from .ant import ant_device_multiscan
 from .ant import ant_device_search
 
@@ -32,7 +32,8 @@ except:
   pass
 f.close()
 sys.stdout = sys.__stdout__
-print("  ANT : ",_SENSOR_ANT)
+if _SENSOR_ANT:
+  print('ANT ', end='')
 
 
 class SensorANT(Sensor):
@@ -57,6 +58,10 @@ class SensorANT(Sensor):
       self.node.set_network_key(self.NETWORK_NUM, self.NETWORK_KEY)
 
     #initialize scan channel (reserve ch0)
+    if _SENSOR_ANT:
+      print()
+      print("detected ANT+ sensors")
+      print("  ", end="")
     self.scanner = ant_device_multiscan.ANT_Device_MultiScan(self.node, self.config)
     self.searcher = ant_device_search.ANT_Device_Search(self.node, self.config, self.values)
     self.scanner.set_main_ant_device(self.device)
@@ -68,6 +73,7 @@ class SensorANT(Sensor):
           antID = self.config.G_ANT['ID'][key]
           antType = self.config.G_ANT['TYPE'][key]
           self.connect_ant_sensor(key, antID, antType, False)
+      print()
       return
     #otherwise, initialize
     else:
@@ -84,6 +90,7 @@ class SensorANT(Sensor):
         'SPD': True,
         'CDC': True, #same as SPD
         'PWR': True,
+        'TEMP': False,
       }
       self.config.G_ANT['ID_TYPE'] = { 
         'HR': struct.pack('<HB', 0, 0x78),
@@ -106,17 +113,20 @@ class SensorANT(Sensor):
 
     self.reset()
 
-  def start(self):
+  def start_coroutine(self):
+    asyncio.create_task(self.start())
+
+  async def start(self):
     if self.config.G_ANT['STATUS']:
-      self.node.start()
+      await asyncio.get_running_loop().run_in_executor(None, self.node.start)
  
   def update(self):
     if self.config.G_ANT['STATUS'] or not self.config.G_DUMMY_OUTPUT:
       return
     
-    hr_value = random.randint(70,130)
+    hr_value = random.randint(70,150)
     speed_value = random.randint(5,30)/3.6 #5 - 30km/h [unit:m/s]
-    cad_value = random.randint(0,80)
+    cad_value = random.randint(60,100)
     power_value = random.randint(0,250)
     timestamp = datetime.datetime.now()
 
@@ -204,6 +214,9 @@ class SensorANT(Sensor):
     elif antType == 0x10:
       self.device[antIDType] \
         = ant_device_ctrl.ANT_Device_CTRL(self.node, self.config, self.values[antIDType], antName)
+    elif antType == 0x19:
+      self.device[antIDType] \
+        = ant_device_temperature.ANT_Device_Temperature(self.node, self.config, self.values[antIDType], antName)
     self.device[antIDType].ant_state = 'connect_ant_sensor'
     self.device[antIDType].init_after_connect()
 
@@ -246,7 +259,7 @@ class SensorANT(Sensor):
     self.scanner.set_wait_normal_mode()
   
   def set_light_mode(self, mode, auto=False):
-    if not self.config.G_ANT['USE']['LGT']: return
+    if 'LGT' not in self.config.G_ANT['USE'] or not self.config.G_ANT['USE']['LGT']: return
     if mode == "OFF":
       self.device[self.config.G_ANT['ID_TYPE']['LGT']].send_light_setting_light_off(auto)
     elif mode == "FLASH_LOW":
