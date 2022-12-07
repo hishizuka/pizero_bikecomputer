@@ -1,8 +1,6 @@
 import time
 #import datetime
-import threading
-import queue
-
+import asyncio
 import numpy as np
 
 
@@ -20,6 +18,7 @@ print('  MIP SHARP DISPLAY : ',_SENSOR_DISPLAY)
 #GPIO.BCM
 GPIO_DISP = 27 #13 in GPIO.BOARD
 GPIO_SCS = 22 #15 in GPIO.BOARD
+#GPIO_SCS = 23 #16 in GPIO.BOARD
 GPIO_VCOMSEL = 17 #11 in GPIO.BOARD
 
 #update mode
@@ -34,10 +33,8 @@ class MipSharpDisplay():
   interval = 0.25
 
   def __init__(self, config):
-    
     self.config = config
     self.init_buffer()
-    self.init_worker_thread()
 
     if not _SENSOR_DISPLAY:
       return
@@ -55,12 +52,9 @@ class MipSharpDisplay():
     self.pi.write(GPIO_VCOMSEL, 1)
     time.sleep(0.1)
 
-  def init_worker_thread(self): 
-    self.draw_queue = queue.Queue()
-    self.draw_thread = threading.Thread(target=self.draw_worker, name="draw_worker", args=())
-    self.draw_thread.setDaemon(True)
-    self.draw_thread.start()
-    time.sleep(0.01)     #Wait
+  def start_coroutine(self):
+    self.draw_queue = asyncio.Queue()
+    asyncio.create_task(self.draw_worker())
 
   def init_buffer(self):
     self.buff_width = int(self.config.G_WIDTH/8)+2
@@ -101,44 +95,56 @@ class MipSharpDisplay():
     self.pi.spi_write(self.spi, [0x00000000,0])
     self.pi.write(GPIO_SCS, 0)
 
-  def draw_worker(self):
-    for img_bytes in iter(self.draw_queue.get, None):
+  async def draw_worker(self):
+    while True:
+      img_bytes = await self.draw_queue.get()
+      if img_bytes == None:
+        break
       self.pi.write(GPIO_SCS, 1)
-      time.sleep(0.000006)
+      await asyncio.sleep(0.000006)
       if len(img_bytes) > 0:
         self.pi.spi_write(self.spi, img_bytes)
       #dummy output for ghost line
       self.pi.spi_write(self.spi, [0x00000000,0])
+      await asyncio.sleep(0.000006)
       self.pi.write(GPIO_SCS, 0)
+      self.draw_queue.task_done()
 
-  def update(self, im_array):
-    
-    #update
+  async def update(self, im_array, direct_update):
+    if not _SENSOR_DISPLAY or self.config.G_QUIT:
+      return
+
+    #self.config.check_time("mip_sharp_update start")
     self.img_buff_rgb8[:,2:] = im_array
-
+    
     #differential update
-    rewrite_flag = True
     diff_lines = np.where(np.sum((self.img_buff_rgb8 == self.pre_img), axis=1) != self.buff_width)[0] 
     #print("diff ", int(len(diff_lines)/self.config.G_HEIGHT*100), "%")
     #print(" ")
-    img_bytes = self.img_buff_rgb8[diff_lines].tobytes()
-    if len(diff_lines) == 0:
-      rewrite_flag = False
-    self.pre_img[diff_lines] = self.img_buff_rgb8[diff_lines]
 
-    #print("Loading images... :", (datetime.datetime.now()-t).total_seconds(),"sec")
-    #t = datetime.datetime.now()
+    if len(diff_lines) == 0:
+      return
+    self.pre_img[diff_lines] = self.img_buff_rgb8[diff_lines]
+    #self.config.check_time("diff_lines")
     
-    if _SENSOR_DISPLAY and rewrite_flag and not self.config.G_QUIT:
-      #put queue
-      self.draw_queue.put((img_bytes))
+    if direct_update:
+      self.pi.write(GPIO_SCS, 1)
+      time.sleep(0.000006)
+      self.pi.spi_write(self.spi, self.img_buff_rgb8[diff_lines].tobytes())
+      time.sleep(0.000006)
+      self.pi.write(GPIO_SCS, 0)
+    else:
+      await self.draw_queue.put((self.img_buff_rgb8[diff_lines].tobytes()))
   
-  def quit(self):
+  async def quit(self):
     if not _SENSOR_DISPLAY:
       return
+    
+    await self.draw_queue.put(None)
     self.clear()
+    
     self.pi.write(GPIO_DISP, 1)
-    time.sleep(0.1)
+    await asyncio.sleep(0.01)
 
     self.pi.spi_close(self.spi)
     self.pi.stop()

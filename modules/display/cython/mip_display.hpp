@@ -13,7 +13,8 @@
 
 //#GPIO.BCM
 #define GPIO_DISP 27 //13 in GPIO.BOARD
-#define GPIO_SCS 22 //15 in GPIO.BOARD
+#define GPIO_SCS 23 //16 in GPIO.BOARD
+//define GPIO_SCS 22 15 in GPIO.BOARD
 #define GPIO_VCOMSEL 17 //11 in GPIO.BOARD
 #define GPIO_BACKLIGHT 18 //12 in GPIO.BOARD with hardware PWM in pigpio
 #define GPIO_BACKLIGHT_FREQ 64
@@ -41,8 +42,6 @@ class MipDisplay {
     const char thresholds[2] = {216, 128};
     const char add_bit[8] = {0b10000000, 0b01000000, 0b00100000, 0b00010000, 0b00001000, 0b00000100, 0b00000010, 0b00000001};
 
-    int diff_count = 0;
-    int refresh_count = 1200;
     int MAX_HEIGHT_PER_ONCE = 270;
 
     std::queue<std::vector<char> > queue_;
@@ -66,7 +65,6 @@ class MipDisplay {
 
     void update(unsigned char* image);
     void set_screen_size(int w, int h);
-    void set_refresh_count(int r);
     void set_brightness(int brightness);
     void inversion(float sec);
     void quit();

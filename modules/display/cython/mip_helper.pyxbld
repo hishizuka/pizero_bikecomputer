@@ -5,7 +5,7 @@ def make_ext(modname, pyxfilename):
         sources=[pyxfilename, 'mip_display.cpp'],
         extra_compile_args=['-std=c++17'],
         language='c++',
-        include_dirs = ['modules/sensor/spi/cython', numpy.get_include()],
+        include_dirs = ['modules/display/cython', numpy.get_include()],
         extra_link_args = ['-lpigpiod_if2'],
     )
     return ext

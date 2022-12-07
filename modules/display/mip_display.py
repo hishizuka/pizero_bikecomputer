@@ -1,8 +1,8 @@
 import time
-import threading
-import queue
+#import datetime
+import asyncio
 import numpy as np
-import datetime
+
 
 _SENSOR_DISPLAY = False
 MODE="Python"
@@ -11,7 +11,8 @@ try:
   _SENSOR_DISPLAY = True
   import pyximport; pyximport.install()
   from .cython.mip_helper import conv_3bit_color, MipDisplay_CPP
-  #MODE = "Cython"
+  MODE = "Cython"
+  #MODE = "Cython_full" #cannot use with asyncio
 except:
   pass
 print('  MIP DISPLAY : ',_SENSOR_DISPLAY)
@@ -22,7 +23,8 @@ print('  MIP DISPLAY : ',_SENSOR_DISPLAY)
 
 #GPIO.BCM
 GPIO_DISP = 27 #13 in GPIO.BOARD
-GPIO_SCS = 22 #15 in GPIO.BOARD
+GPIO_SCS = 23 #16 in GPIO.BOARD
+#GPIO_SCS = 22 #15 in GPIO BOARD
 GPIO_VCOMSEL = 17 #11 in GPIO.BOARD
 GPIO_BACKLIGHT = 18 #12 in GPIO.BOARD with hardware PWM in pigpio
 
@@ -47,32 +49,28 @@ class MipDisplay():
   brightness_index = 0
   brightness_table = [0,10,100]
   brightness = 0
-  #diff_count = 0
-  refresh_count = 1200
   mip_display_cpp = None
 
   def __init__(self, config):
-    
     self.config = config
+    
+    if not _SENSOR_DISPLAY:
+      return
+
     if MODE == "Cython":
-      #self.conv_color = conv_3bit_color
-      
+      self.conv_color = conv_3bit_color
+    elif MODE == "Cython_full": 
       self.mip_display_cpp = MipDisplay_CPP(self.spi_clock)
       self.mip_display_cpp.set_screen_size(self.config.G_WIDTH, self.config.G_HEIGHT)
       self.update = self.mip_display_cpp.update
       self.set_brightness = self.mip_display_cpp.set_brightness
       self.inversion = self.mip_display_cpp.inversion
       self.quit = self.mip_display_cpp.quit
-      self.mip_display_cpp.set_refresh_count(20)
       return
     else:
       self.conv_color = self.conv_3bit_color_py
     
     self.init_buffer()
-    self.init_worker_thread()
-
-    if not _SENSOR_DISPLAY:
-      return
 
     #spi
     self.pi = pigpio.pi()
@@ -104,11 +102,9 @@ class MipDisplay():
     #for MIP_640
     self.img_buff_rgb8[:,0] = self.img_buff_rgb8[:,0] + (np.arange(self.config.G_HEIGHT) >> 8)
   
-  def init_worker_thread(self):
-    self.draw_queue = queue.Queue()
-    self.draw_thread = threading.Thread(target=self.draw_worker, name="draw_worker", args=())
-    self.draw_thread.setDaemon(True)
-    self.draw_thread.start()
+  def start_coroutine(self):
+    self.draw_queue = asyncio.Queue()
+    asyncio.create_task(self.draw_worker())
 
   def clear(self):
     self.pi.write(GPIO_SCS, 1)
@@ -160,52 +156,60 @@ class MipDisplay():
       s -= self.interval
       state = not state
     self.no_update()
-
-  def draw_worker(self):
-    for img_bytes in iter(self.draw_queue.get, None):
+  
+  async def draw_worker(self):
+    while True:
+      img_bytes = await self.draw_queue.get()
+      if img_bytes == None:
+        break
       #self.config.check_time("mip_draw_worker start")
       #t = datetime.datetime.now()
       self.pi.write(GPIO_SCS, 1)
-      time.sleep(0.000006)
+      await asyncio.sleep(0.000006)
       self.pi.spi_write(self.spi, img_bytes)
       #dummy output for ghost line
       self.pi.spi_write(self.spi, [0x00000000,0])
-      time.sleep(0.000006)
+      await asyncio.sleep(0.000006)
       self.pi.write(GPIO_SCS, 0)
       #self.config.check_time("mip_draw_worker end")
       #print("####### draw(Py)", (datetime.datetime.now()-t).total_seconds())
+      self.draw_queue.task_done()
 
-  def update(self, im_array):
+  def update(self, im_array, direct_update):
+    if not _SENSOR_DISPLAY or self.config.G_QUIT:
+      return
 
     #self.config.check_time("mip_update start")
     self.img_buff_rgb8[:,2:] = self.conv_color(im_array)
     #self.config.check_time("packbits")
    
     #differential update
-    diff_lines = np.where(np.sum((self.img_buff_rgb8 == self.pre_img), axis=1) != self.buff_width)[0] 
+    diff_lines = np.where(np.sum((self.img_buff_rgb8 == self.pre_img), axis=1) != self.buff_width)[0]
     #print("diff ", int(len(diff_lines)/self.config.G_HEIGHT*100), "%")
     #print(" ")
+    
     if len(diff_lines) == 0:
       return
-    #img_bytes = None
-    #if self.diff_count <= self.refresh_count:
-    img_bytes = self.img_buff_rgb8[diff_lines].tobytes()
-    #  self.diff_count += 1
-    #else:
-    #  img_bytes = self.img_buff_rgb8.tobytes()
-    #  self.diff_count = 0
-
     self.pre_img[diff_lines] = self.img_buff_rgb8[diff_lines]
     #self.config.check_time("diff_lines")
-    
-    if _SENSOR_DISPLAY and not self.config.G_QUIT:
-      #put queue
-      if len(diff_lines) < 270:
-        self.draw_queue.put((img_bytes))
-      else:
-        #for MIP 640x480
-        self.draw_queue.put((self.img_buff_rgb8[diff_lines[0:int(len(diff_lines)/2)]].tobytes()))
-        self.draw_queue.put((self.img_buff_rgb8[diff_lines[int(len(diff_lines)/2):]].tobytes()))
+      
+    if direct_update:
+      self.pi.write(GPIO_SCS, 1)
+      time.sleep(0.000006)
+      self.pi.spi_write(self.spi, self.img_buff_rgb8[diff_lines].tobytes())
+      time.sleep(0.000006)
+      self.pi.write(GPIO_SCS, 0)
+    #put queue
+    elif len(diff_lines) < 270:
+      #await self.draw_queue.put((self.img_buff_rgb8[diff_lines].tobytes()))
+      asyncio.create_task(self.draw_queue.put((self.img_buff_rgb8[diff_lines].tobytes())))
+    else:
+      #for MIP 640x480
+      l = int(len(diff_lines)/2)
+      #await self.draw_queue.put((self.img_buff_rgb8[diff_lines[0:l]].tobytes()))
+      #await self.draw_queue.put((self.img_buff_rgb8[diff_lines[l:]].tobytes()))
+      asyncio.create_task(self.draw_queue.put((self.img_buff_rgb8[diff_lines[0:l]].tobytes())))
+      asyncio.create_task(self.draw_queue.put((self.img_buff_rgb8[diff_lines[l:]].tobytes())))
 
   def conv_2bit_color_py(self, im_array):
     return np.packbits(
@@ -231,7 +235,7 @@ class MipDisplay():
   def change_brightness(self):
     
     #brightness is changing as followings,
-    # [self.brightness_table(0, b1, b2, ..., bmax), G_USE_AUTO_BACKLIGHT]
+    # [self.brightness_table(0, b1, b2, ..., bmax), self.display.G_USE_AUTO_BACKLIGHT]
     self.brightness_index = (self.brightness_index+1)%(len(self.brightness_table)+1)
 
     if self.brightness_index == len(self.brightness_table):
@@ -262,11 +266,13 @@ class MipDisplay():
     if not _SENSOR_DISPLAY:
       return
     
+    asyncio.create_task(self.draw_queue.put(None))
     self.set_brightness(0)
     self.clear()
 
     self.pi.write(GPIO_DISP, 1)
     time.sleep(0.01)
+    
     self.pi.spi_close(self.spi)
     self.pi.stop()
 

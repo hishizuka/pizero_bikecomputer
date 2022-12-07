@@ -2,7 +2,6 @@ import numpy as np
 cimport numpy as cnp
 cimport cython
 from libcpp cimport bool
-import datetime
 
 
 cdef extern from "mip_display.hpp":
@@ -11,7 +10,6 @@ cdef extern from "mip_display.hpp":
     void update(unsigned char* image)
     void set_screen_size(int w, int h)
     void set_brightness(int b)
-    void set_refresh_count(int r)
     void inversion(float sec)
     void quit()
 
@@ -34,9 +32,6 @@ cdef class MipDisplay_CPP:
 
   cpdef set_brightness(self, b):
     self.m.set_brightness(b)
-  
-  cpdef set_refresh_count(self, r):
-    self.m.set_refresh_count(r)
   
   cpdef inversion(self, sec):
     self.m.inversion(sec)
@@ -66,19 +61,19 @@ cpdef conv_3bit_color(cnp.ndarray[cnp.uint8_t, ndim=3] im_array):
     bit_index = 0
 
     for j in range(w):
-      if(im_array[i,j,0] > thresholds[t_index]):
+      if(im_array[i,j,0] >= thresholds[t_index]):
         im_bits_view[i, bit_index] |= add_bit[bit_count]
         pass
       bit_count = (bit_count+1)&7
       bit_index += 1 - <bool>bit_count
 
-      if(im_array[i,j,1] > thresholds[t_index]):
+      if(im_array[i,j,1] >= thresholds[t_index]):
         im_bits_view[i, bit_index] |= add_bit[bit_count]
         pass
       bit_count = (bit_count+1)&7
       bit_index += 1 - <bool>bit_count
 
-      if(im_array[i,j,2] > thresholds[t_index]):
+      if(im_array[i,j,2] >= thresholds[t_index]):
         im_bits_view[i, bit_index] |= add_bit[bit_count]
         pass
       bit_count = (bit_count+1)&7

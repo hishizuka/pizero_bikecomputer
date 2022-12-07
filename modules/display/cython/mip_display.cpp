@@ -64,10 +64,6 @@ void MipDisplay::set_screen_size(int w, int h) {
   memcpy(pre_buf_image, buf_image, length);
 }
 
-void MipDisplay::set_refresh_count(int r) {
-  refresh_count = r;
-}
-
 void MipDisplay::clear_buf() {
   memset(buf_image, 0, HEIGHT*BUF_WIDTH);
   for(int i = 0; i < HEIGHT; i++) {
@@ -164,19 +160,19 @@ void MipDisplay::update(unsigned char* image) {
     
     //3bit color CPU code
     for(int x = 0; x < WIDTH; x++) {
-      if(*image_index++ > thresholds[t_index]) {
+      if(*image_index++ >= thresholds[t_index]) {
         *buf_image_index |= add_bit[bit_count];
       }
       bit_count = (bit_count+1)&7;
       buf_image_index += 1 - (bool)bit_count;
 
-      if(*image_index++ > thresholds[t_index]) {
+      if(*image_index++ >= thresholds[t_index]) {
         *buf_image_index |= add_bit[bit_count];
       }
       bit_count = (bit_count+1)&7;
       buf_image_index += 1 - (bool)bit_count;
 
-      if(*image_index++ > thresholds[t_index]) {
+      if(*image_index++ >= thresholds[t_index]) {
         *buf_image_index |= add_bit[bit_count];
       }
       bit_count = (bit_count+1)&7;
@@ -200,11 +196,6 @@ void MipDisplay::update(unsigned char* image) {
   if(update_lines == 0) {
     return;
   }
-  //if(diff_count == refresh_count) {
-  //  update_lines = HEIGHT;
-  //  diff_count = 0;
-  //}
-  //diff_count++;
 
   {
     std::unique_lock<std::mutex> ul(mutex_);
