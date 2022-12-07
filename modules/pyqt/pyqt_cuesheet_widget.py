@@ -113,7 +113,12 @@ class CueSheetWidget(ScreenWidget):
     for i in range(len(self.cuesheet)-1):
       self.cuesheet[i].name.setStyleSheet(
         self.cuesheet[i].name.styleSheet() + " QLabel {border-bottom: 1px solid #CCCCCC;}"
-        )
+      )
+    
+  def reset(self):
+    for i in range(len(self.cuesheet)):
+      self.cuesheet[i].dist.setText("")
+      self.cuesheet[i].name.setText("")
   
   def resizeEvent(self, event):
     #w = self.size().width()
@@ -126,7 +131,7 @@ class CueSheetWidget(ScreenWidget):
   def set_font_size(self, length):
     self.font_size = int(length / 7)
 
-  def update_extra(self):
+  async def update_extra(self):
     if len(self.config.logger.course.point_distance) == 0 or self.config.G_CUESHEET_DISPLAY_NUM == 0:
       return
     

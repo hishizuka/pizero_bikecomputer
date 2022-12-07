@@ -1,9 +1,10 @@
 import os
-import sqlite3
+import glob
+import json
 import datetime
 import shutil
 import re
-import xml.etree.ElementTree as ET
+#import xml.etree.ElementTree as ET
 from math import factorial
 from crdp import rdp
 
@@ -20,7 +21,6 @@ except:
 class LoaderTcx():
   
   config = None
-  sensor = None
 
   #for course
   info = {}
@@ -28,8 +28,8 @@ class LoaderTcx():
   altitude = np.array([])
   latitude = np.array([])
   longitude = np.array([])
-  points_diff = np.array([]) #for course distance
 
+  points_diff = np.array([])
   azimuth = np.array([])
   slope = np.array([])
   slope_smoothing = np.array([])
@@ -43,14 +43,13 @@ class LoaderTcx():
   point_type = np.array([])
   point_notes = np.array([])
   point_distance = np.array([])
+  point_altitude = np.array([])
 
-  def __init__(self, config, sensor):
-    print("\tlogger_core : init...")
+  def __init__(self, config):
     super().__init__()
     self.config = config
-    self.sensor = sensor
 
-  def reset(self):
+  def reset(self, delete_course=False):
     
     #for course
     self.info = {}
@@ -60,11 +59,11 @@ class LoaderTcx():
     self.latitude = np.array([])
     self.longitude = np.array([])
     #processed variables
+    self.points_diff = np.array([])
     self.azimuth = np.array([])
     self.slope = np.array([])
     self.slope_smoothing = np.array([])
     self.colored_altitude = np.array([])
-    self.points_diff = np.array([])
     self.climb_segment = []
 
     #for course points
@@ -76,31 +75,103 @@ class LoaderTcx():
     self.point_distance = np.array([])
     self.point_altitude = np.array([])
 
-    #for external modules
-    self.sensor.sensor_gps.reset_course_index()
+    if delete_course:
+      if os.path.exists(self.config.G_COURSE_FILE_PATH):
+        os.remove(self.config.G_COURSE_FILE_PATH)
 
   def load(self):
     self.reset()
+    time_profile = []
+
+    t1 = datetime.datetime.now()
     self.read_tcx()
+    t2 = datetime.datetime.now()
+    time_profile.append((t2-t1).total_seconds())
+
+    t1 = t2
     self.downsample()
+    t2 = datetime.datetime.now()
+    time_profile.append((t2-t1).total_seconds())
+
+    t1 = t2
     self.calc_slope_smoothing()
+    t2 = datetime.datetime.now()
+    time_profile.append((t2-t1).total_seconds())
+
+    t1 = t2
     self.modify_course_points()
+    t2 = datetime.datetime.now()
+    time_profile.append((t2-t1).total_seconds())
+
+    if len(self.latitude) == 0:
+      return
+    print()
+    print("[logger] Loading course:")
+    print("  read_tcx            : {:.3f} sec".format(time_profile[0]))
+    print("  downsample          : {:.3f} sec".format(time_profile[1]))
+    print("  calc_slope_smoothing: {:.3f} sec".format(time_profile[2]))
+    print("  modify_course_points: {:.3f} sec".format(time_profile[3]))
+    print("  total               : {:.3f} sec".format(sum(time_profile)))
   
-  def search_route(self, x1, y1, x2, y2):
+  async def search_route(self, x1, y1, x2, y2):
     if np.any(np.isnan([x1, y1, x2, y2])):
       return
     self.reset()
-    self.get_google_route(x1, y1, x2, y2)
+    await self.get_google_route(x1, y1, x2, y2)
     self.downsample()
     self.calc_slope_smoothing()
     self.modify_course_points()
 
-  def read_tcx(self):
-    if not os.path.exists(self.config.G_COURSE_FILE):
-      return
-    print("loading", self.config.G_COURSE_FILE)
+  def get_courses(self):
+
+    #pattern = {
+    #  "name": re.compile(r'<Name>(?P<text>[\s\S]*?)</Name>'),
+    #  "distance_meters": re.compile(r'<DistanceMeters>(?P<text>[\s\S]*?)</DistanceMeters>'),
+    #  #"track": re.compile(r'<Track>(?P<text>[\s\S]*?)</Track>'),
+    #  #"altitude": re.compile(r'<AltitudeMeters>(?P<text>[^<]*)</AltitudeMeters>'),
+    #}
+
+    dir_list = sorted(glob.glob(self.config.G_COURSE_DIR+"/*.tcx"), key=lambda f: os.stat(f).st_mtime, reverse=True)
+    file_list = [f for f in dir_list if os.path.isfile(f) and f != self.config.G_COURSE_FILE_PATH]
     
-    t = datetime.datetime.utcnow()
+    courses = []
+    for c in file_list:
+      info = {
+        'id': c[len(self.config.G_COURSE_DIR):],
+        'name': c[len(self.config.G_COURSE_DIR):],
+      }
+      #heavy: delayed updates required
+      #with open(c, 'r', encoding="utf-8_sig") as f:
+      #  tcx = f.read()
+      #  match_name = pattern["name"].search(tcx)
+      #  if match_name:
+      #    info['name'] = match_name.group('text').strip()
+      #  
+      #  match_distance_meter = pattern["distance_meters"].search(tcx)
+      #  if match_distance_meter:
+      #    info['distance'] = float(match_distance_meter.group('text').strip())
+      #  
+      courses.append(info)
+
+    return courses
+
+  def get_ridewithgps_privacycode(self, route_id):
+    privacy_code = None
+    filename = (self.config.G_RIDEWITHGPS_API["URL_ROUTE_DOWNLOAD_DIR"]+"course-{route_id}.json").format(route_id=route_id)
+    with open(filename, 'r') as json_file:
+      json_contents = json.load(json_file)
+      if "privacy_code" in json_contents["route"]:
+        privacy_code = json_contents["route"]["privacy_code"]
+    return privacy_code
+
+  def set_course(self, file):
+    shutil.copy(file, self.config.G_COURSE_FILE_PATH)
+    self.load()
+
+  def read_tcx(self):
+    if not os.path.exists(self.config.G_COURSE_FILE_PATH):
+      return
+    print("loading", self.config.G_COURSE_FILE_PATH)
 
     #read with regex
     pattern = {
@@ -117,7 +188,7 @@ class LoaderTcx():
       "course_notes": re.compile(r'<Notes>(?P<text>[^<]*)</Notes>'),
     }
 
-    with open(self.config.G_COURSE_FILE, 'r', encoding="utf-8_sig") as f:
+    with open(self.config.G_COURSE_FILE_PATH, 'r', encoding="utf-8_sig") as f:
       tcx = f.read()
 
       match_name = pattern["name"].search(tcx)
@@ -144,8 +215,6 @@ class LoaderTcx():
         self.point_longitude = np.array([float(m.group('text').strip()) for m in pattern["longitude"].finditer(course_point)])
         self.point_type = [m.group('text').strip() for m in pattern["course_point_type"].finditer(course_point)]
         self.point_notes = [m.group('text').strip() for m in pattern["course_notes"].finditer(course_point)]
-    
-    print("\tlogger_core : load_course : read tcx(regex): ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
 
     check_course = False
     if not (len(self.latitude) == len(self.longitude) == len(self.altitude) == len(self.distance)):
@@ -179,15 +248,16 @@ class LoaderTcx():
       if len(self.point_notes) > 0:
         self.point_notes = list(np.array(self.point_notes)[not_straight_cond])
   
-  def get_google_route(self, x1, y1, x2, y2):
-    json_routes = self.config.get_google_routes(x1, y1, x2, y2)
+  async def get_google_route(self, x1, y1, x2, y2):
+    json_routes = await self.config.network.api.get_google_routes(x1, y1, x2, y2)
+    print(json_routes)
     if not POLYLINE_DECODER or json_routes == None or json_routes["status"] != "OK":
       return
     
     self.info['Name'] = "Google routes"
     self.info['DistanceMeters'] = round(json_routes["routes"][0]["legs"][0]["distance"]["value"]/1000,1)
 
-    points = np.array(polyline.decode(json_routes["routes"][0]["overview_polyline"]["points"]))
+    #points = np.array(polyline.decode(json_routes["routes"][0]["overview_polyline"]["points"]))
     points_detail = []
     self.point_name = []
     self.point_latitude = []
@@ -251,8 +321,6 @@ class LoaderTcx():
     if len_lat == 0 and len_lon == 0 and len_alt == 0 and len_dist == 0:
       return
 
-    t = datetime.datetime.utcnow()
-
     try:
       cond = np.array(rdp(np.column_stack([self.longitude, self.latitude]), epsilon=0.0001, return_mask=True))
       if len_alt > 0 and len_dist > 0:
@@ -306,8 +374,6 @@ class LoaderTcx():
 
     print("downsampling:{} -> {}".format(len_lat, len(self.latitude)))
 
-    print("\tlogger_core : load_course : downsampling: ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
-
   def calc_slope_smoothing(self):
     #parameters
     course_n = len(self.distance)
@@ -318,8 +384,6 @@ class LoaderTcx():
 
     if course_n < 2*diff_num or len(self.altitude) < 2*diff_num:
       return
-    
-    t = datetime.datetime.utcnow()
 
     dist_diff = np.zeros((diff_num, course_n))
     alt_diff = np.zeros((diff_num, course_n))
@@ -403,23 +467,23 @@ class LoaderTcx():
     #print(self.climb_segment)
     self.colored_altitude = np.array(self.config.G_SLOPE_COLOR)[slope_smoothing_cat]
 
-    print("\tlogger_core : load_course : slope_smoothing: ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
-
   def modify_course_points(self):
-    #make route colors by slope for SimpleMapWidget, CourseProfileWidget
-    t = datetime.datetime.utcnow()
+    #make route colors by slope for MapWidget, CourseProfileWidget
 
+    len_pnt_lat = len(self.point_latitude)
     len_pnt_dist = len(self.point_distance)
     len_pnt_alt = len(self.point_altitude)
+    len_dist = len(self.distance)
+    len_alt = len(self.altitude)
 
     #calculate course point distance
-    if len_pnt_dist == 0 and len(self.distance) > 0:
-      self.point_distance = np.empty(len(self.point_latitude))
-    if len_pnt_alt == 0 and len(self.altitude) > 0:
-      self.point_altitude = np.zeros(len(self.point_latitude))
+    if len_pnt_dist == 0 and len_dist > 0:
+      self.point_distance = np.empty(len_pnt_lat)
+    if len_pnt_alt == 0 and len_alt > 0:
+      self.point_altitude = np.zeros(len_pnt_lat)
     
     min_index = 0
-    for i in range(len(self.point_latitude)):
+    for i in range(len_pnt_lat):
       b_a_x = self.points_diff[0][min_index:]
       b_a_y = self.points_diff[1][min_index:]
       lon_diff = self.point_longitude[i] - self.longitude[min_index:]
@@ -446,16 +510,16 @@ class LoaderTcx():
           min_j = j
           min_dist_diff_h = dist_diff_h
           min_dist_delta = self.config.get_dist_on_earth(self.longitude[min_index+j], self.latitude[min_index+j], h_lon, h_lat)/1000
-          if len(self.altitude) > 0:
+          if len_alt > 0:
             min_alt_delta = (self.altitude[min_index+j+1]-self.altitude[min_index+j]) / (self.distance[min_index+j+1]-self.distance[min_index+j]) * min_dist_delta
 
       if min_j == None:
         min_j = 0
       min_index = min_index+min_j
       
-      if len_pnt_dist == 0 and len(self.distance) > 0:
+      if len_pnt_dist == 0 and len_dist > 0:
         self.point_distance[i] = self.distance[min_index] + min_dist_delta
-      if len_pnt_alt == 0 and len(self.altitude) > 0:
+      if len_pnt_alt == 0 and len_alt > 0:
         self.point_altitude[i] = self.altitude[min_index] + min_alt_delta
 
     #add climb tops
@@ -471,14 +535,11 @@ class LoaderTcx():
     #    self.point_distance = np.insert(self.point_distance, min_index, self.climb_segment[i]['course_point_distance'])
     #    self.point_altitude = np.insert(self.point_altitude, min_index, self.climb_segment[i]['course_point_altitude'])
 
-    len_lat = len(self.point_latitude)
-    len_dist = len(self.distance)
-    len_alt = len(self.altitude)
     len_pnt_dist = len(self.point_distance)
     len_pnt_alt = len(self.point_altitude)
 
     #add start course point
-    if len_lat > 0 and len_pnt_dist > 0 and len_dist > 0 and self.point_distance[0] != 0.0:
+    if len_pnt_lat > 0 and len_pnt_dist > 0 and len_dist > 0 and self.point_distance[0] != 0.0:
       self.point_name.insert(0, "Start")
       self.point_latitude = np.insert(self.point_latitude, 0, self.latitude[0])
       self.point_longitude = np.insert(self.point_longitude, 0, self.longitude[0])
@@ -497,7 +558,7 @@ class LoaderTcx():
         self.point_longitude[-1], 
         self.point_latitude[-1],
         )
-    if len_lat > 0 and len_pnt_dist > 0 and len_dist > 0 and end_distance != None and end_distance > 5:
+    if len_pnt_lat > 0 and len_pnt_dist > 0 and len_dist > 0 and end_distance != None and end_distance > 5:
       self.point_name.append("End")
       self.point_latitude = np.append(self.point_latitude, self.latitude[-1])
       self.point_longitude = np.append(self.point_longitude, self.longitude[-1])
@@ -510,8 +571,6 @@ class LoaderTcx():
     self.point_name = np.array(self.point_name)
     self.point_type = np.array(self.point_type)
     self.point_name = np.array(self.point_name)
-
-    print("\tlogger_core : load_course : modify course points: ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
   
   def savitzky_golay(self, y, window_size, order, deriv=0, rate=1):
     try:
