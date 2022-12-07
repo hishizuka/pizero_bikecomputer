@@ -1,8 +1,11 @@
 import os
-import numpy as np
 import datetime
 import sqlite3
 import io
+import math
+
+import numpy as np
+from PIL import Image
 
 try:
   import PyQt6.QtCore as QtCore
@@ -14,556 +17,18 @@ except:
   import PyQt5.QtGui as QtGui
 
 import pyqtgraph as pg
+from qasync import asyncSlot
 
-from PIL import Image
-import math
-
-from .pyqt_screen_widget import ScreenWidget
-from .pyqt_cuesheet_widget import CueSheetWidget
+from modules.pyqt.pyqt_cuesheet_widget import CueSheetWidget
 
 pg.setConfigOptions(antialias=True)
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
 
+from .pyqt_base_map import BaseMapWidget
 
-class PerformanceGraphWidget(ScreenWidget):
 
-  def init_extra(self):
-    self.display_item = self.config.G_GUI_PERFORMANCE_GRAPH_DISPLAY_ITEM
-    self.item = {
-      'POWER': {
-        'name':'POWER',
-        'graph_key': 'power_graph',
-        'yrange':[self.config.G_GUI_MIN_POWER, self.config.G_GUI_MAX_POWER],
-      },
-      'HR': {
-        'name':'HR',
-        'graph_key': 'hr_graph',
-        'yrange':[self.config.G_GUI_MIN_HR, self.config.G_GUI_MAX_HR],
-      },
-      'W_BAL': {
-        'name':'W_BAL',
-        'graph_key': 'w_bal_graph',
-        'yrange':[self.config.G_GUI_MIN_W_BAL, self.config.G_GUI_MAX_W_BAL],
-      },
-
-    }
-    self.plot_data_x1 = []
-    for i in range(self.config.G_GUI_PERFORMANCE_GRAPH_DISPLAY_RANGE):
-      self.plot_data_x1.append(i)
-
-  def setup_ui_extra(self): 
-    #1st graph: POWER
-    self.plot = pg.PlotWidget()
-    self.plot.setBackground(None)
-    self.p1 = self.plot.plotItem
-
-    #2nd graph: HR or W_BAL
-    self.p2 = pg.ViewBox()
-    self.p1.showAxis('right')
-    self.p1.scene().addItem(self.p2)
-    self.p1.getAxis('right').linkToView(self.p2)
-    self.p2.setXLink(self.p1)
-
-    self.plot.setXRange(0, self.config.G_GUI_PERFORMANCE_GRAPH_DISPLAY_RANGE)
-    self.p1.setYRange(*self.item[self.display_item[0]]['yrange'])
-    self.p2.setYRange(*self.item[self.display_item[1]]['yrange'])
-    self.plot.setMouseEnabled(x=False, y=False)
-    
-    #self.p1.setLabels(left=self.item[self.display_item[0]]['name'])
-    #self.p1.getAxis('right').setLabel(self.display_item[self.item[1]]['name'])
-
-    #p2 on p1
-    self.p1.setZValue(-100)
-  
-    #for Power
-    #self.brush = pg.mkBrush(color=(0,160,255,64))
-    self.brush = pg.mkBrush(color=(0,255,255))
-    #self.pen2 = pg.mkPen(color=(255,255,255,0), width=0.01) #transparent and thin line
-    self.pen1 = pg.mkPen(color=(255,255,255), width=0.01) #transparent and thin line
-    #for HR, wbal
-    self.pen2 = pg.mkPen(color=(255,0,0), width=2)
-
-  def make_item_layout(self):
-    #self.item_layout = {"Power":(0, 0), "HR":(0, 1), "Lap PWR":(0, 2), "LapTime":(0, 3)}
-    self.item_layout = {"Power":(0, 0), "HR":(0, 1), "W'bal(Norm)":(0, 2), "LapTime":(0, 3)}
-
-  def add_extra(self):
-    self.layout.addWidget(self.plot, 1, 0, 2, 4)
-
-  def set_border(self):
-    self.max_height = 1
-    self.max_width = 3
-
-  def set_font_size(self, length):
-    self.font_size = int(length / 7)
-    self.set_minimum_size()
-
-  def update_extra(self):
-    #all_nan = {'hr_graph': True, 'power_graph': True}
-    all_nan = {self.item[self.display_item[0]]['graph_key']: True, self.item[self.display_item[1]]['graph_key']: True}
-    for key in all_nan.keys():
-      chk = np.isnan(self.config.logger.sensor.values['integrated'][key])
-      if False in chk:
-        all_nan[key] = False
-   
-    if not all_nan[self.item[self.display_item[0]]['graph_key']]:
-      self.p1.clear()
-
-      #change max for power
-      if self.display_item[0] == 'POWER':
-        power_max = 100 * (int(np.nanmax(self.config.logger.sensor.values['integrated'][self.item[self.display_item[0]]['graph_key']])/100) + 1)
-        if self.item[self.display_item[0]]['yrange'][1] != power_max:
-          self.item[self.display_item[0]]['yrange'][1] = power_max
-          self.p1.setYRange(*self.item[self.display_item[0]]['yrange'])
-
-      self.p1.addItem(
-        pg.BarGraphItem(
-          x0 = self.plot_data_x1[:-1],
-          x1 = self.plot_data_x1[1:],
-          height = self.config.logger.sensor.values['integrated'][self.item[self.display_item[0]]['graph_key']],
-          brush = self.brush,
-          pen = self.pen1
-        )
-      )
-
-    #if not all_nan['hr_graph']:
-    if not all_nan[self.item[self.display_item[1]]['graph_key']]:
-      self.p2.clear()
-      self.p2.setGeometry(self.p1.vb.sceneBoundingRect())
-      self.p2.linkedViewChanged(self.p1.vb, self.p2.XAxis)
-      #for HR
-      self.p2.addItem(
-        pg.PlotCurveItem(
-          #self.config.logger.sensor.values['integrated']['hr_graph'], 
-          self.config.logger.sensor.values['integrated'][self.item[self.display_item[1]]['graph_key']], 
-          pen=self.pen2
-        )
-      )
-
-
-class BaseMapWidget(ScreenWidget):
-
-  #map button
-  button = {}
-  button_name = ['lock','zoomup','zoomdown','left','right','up','down','go']
-  lock_status = True
-  button_press_count = {}
-
-  #show range from zoom
-  zoom = 2000 #[m] #for CourseProfileGraphWidget
-  zoomlevel = 13 #for SimpleMapWidget
-
-  #load course
-  course_loaded = False
-
-  #course points
-  course_points_label = []
-
-  #signal for physical button
-  signal_move_x_plus = QtCore.pyqtSignal()
-  signal_move_x_minus = QtCore.pyqtSignal()
-  signal_move_y_plus = QtCore.pyqtSignal()
-  signal_move_y_minus = QtCore.pyqtSignal()
-  signal_zoom_plus = QtCore.pyqtSignal()
-  signal_zoom_minus = QtCore.pyqtSignal()
-  signal_change_move = QtCore.pyqtSignal()
-
-  #for change_move
-  move_adjust_mode = False
-  move_factor = 1.0
-
-  def init_extra(self):
-    self.gps_values = self.config.logger.sensor.values['GPS']
-    self.gps_sensor = self.config.logger.sensor.sensor_gps
-    
-    self.signal_move_x_plus.connect(self.move_x_plus)
-    self.signal_move_x_minus.connect(self.move_x_minus)
-    self.signal_move_y_plus.connect(self.move_y_plus)
-    self.signal_move_y_minus.connect(self.move_y_minus)
-    self.signal_zoom_plus.connect(self.zoom_plus)
-    self.signal_zoom_minus.connect(self.zoom_minus)
-    self.signal_change_move.connect(self.change_move)
-  
-  def setup_ui_extra(self):
-    #main graph from pyqtgraph 
-    self.plot = pg.PlotWidget()
-    self.plot.setBackground(None)
-    self.plot.hideAxis('left')
-    self.plot.hideAxis('bottom')
-    
-    #current point
-    self.current_point = pg.ScatterPlotItem(pxMode=True)
-    self.point_color = {
-      #'fix':pg.mkBrush(color=(0,0,160,128)), 
-      'fix':pg.mkBrush(color=(0,0,255)),
-      #'lost':pg.mkBrush(color=(96,96,96,128))
-      'lost':pg.mkBrush(color=(128,128,128))
-      }
-    self.point = {
-      'pos': [np.nan, np.nan],
-      'size': 20,
-      'pen': {'color': 'w', 'width': 2},
-      'brush':self.point_color['lost']
-      }
-    
-    #self.plot.setMouseEnabled(x=False, y=False)
-    #pg.setConfigOptions(antialias=True)
-
-    #make buttons
-    self.button['lock'] = QtWidgets.QPushButton("L")
-    self.button['zoomup'] = QtWidgets.QPushButton("+")
-    self.button['zoomdown'] = QtWidgets.QPushButton("-")
-    self.button['left'] = QtWidgets.QPushButton("←")
-    self.button['right'] = QtWidgets.QPushButton("→")
-    self.button['up'] = QtWidgets.QPushButton("↑")
-    self.button['down'] = QtWidgets.QPushButton("↓")
-    self.button['go'] = QtWidgets.QPushButton("Go")
-    for b in self.button_name:
-      self.button[b].setStyleSheet(self.config.gui.style.G_GUI_PYQT_buttonStyle_map)
-
-    self.button['lock'].clicked.connect(self.switch_lock)
-    self.button['right'].clicked.connect(self.move_x_plus)
-    self.button['left'].clicked.connect(self.move_x_minus)
-    self.button['up'].clicked.connect(self.move_y_plus)
-    self.button['down'].clicked.connect(self.move_y_minus)
-    self.button['zoomdown'].clicked.connect(self.zoom_minus)
-    self.button['zoomup'].clicked.connect(self.zoom_plus)
-
-    #long press 
-    for key in ['lock']:
-      self.button[key].setAutoRepeat(True)
-      self.button[key].setAutoRepeatDelay(1000)
-      self.button[key].setAutoRepeatInterval(1000)
-      self.button[key]._state = 0
-      self.button_press_count[key] = 0
-
-    self.get_max_zoom()
-  
-  def make_item_layout(self):
-    self.item_layout = {}
-
-  def add_extra(self):
-    pass
-
-  #override disable
-  def set_minimum_size(self):
-    pass
-
-  #for expanding row
-  def resize_extra(self):
-    n = self.layout.rowCount()
-    h = int(self.size().height()/n)
-    for i in range(n):
-      self.layout.setRowMinimumHeight(i, h)
-
-  def set_border(self):
-    self.max_height = 1
-    self.max_width = 3
-
-  #def set_font_size(self):
-  #  self.font_size = int(length / 8)
-
-  def lock_off(self):
-    self.lock_status = False
-
-  def lock_on(self):
-    self.lock_status = True
-
-  def switch_lock(self):
-    if self.lock_status:
-      self.lock_off()
-    else:
-      self.lock_on()
-
-  def change_move(self):
-    if not self.move_adjust_mode:
-      self.move_factor = 32
-      self.move_adjust_mode = True
-    else:
-      self.move_factor = 1.0
-      self.move_adjust_mode = False
-
-  def move_x_plus(self):
-    self.move_x(+self.zoom/2)
-
-  def move_x_minus(self):
-    self.move_x(-self.zoom/2)
-
-  def move_y_plus(self):
-    self.move_y(+self.zoom/2)
-
-  def move_y_minus(self):
-    self.move_y(-self.zoom/2)
-
-  def move_x(self, delta):
-    self.move_pos['x'] += delta
-    self.update_extra()
-
-  def move_y(self, delta):
-    self.move_pos['y'] += delta
-    self.update_extra()
-
-  def zoom_plus(self):
-    self.zoom /= 2
-    self.zoomlevel += 1
-    self.update_extra()
-    
-  def zoom_minus(self):
-    self.zoom *= 2
-    self.zoomlevel -= 1
-    self.update_extra()
-
-  def get_max_zoom(self):
-
-    if len(self.config.logger.course.distance) == 0:
-      return
-    
-    if self.config.G_MAX_ZOOM != 0:
-      return
-    z = self.zoom
-    dist = self.config.logger.course.distance[-1]
-    if(z/1000 < dist):
-      while(z/1000 < dist):
-        z *= 2
-      z *= 2
-    else:
-      while(z/1000 > dist):
-        z /= 2
-    self.config.G_MAX_ZOOM = z
-    #print("MAX_ZOOM", self.config.G_MAX_ZOOM, dist)
-  
-  def load_course(self):
-    pass
-  
-  def update_extra(self):
-    pass
-
-
-class CourseProfileGraphWidget(BaseMapWidget):
-
-  #map position
-  map_area = {'w':np.nan, 'h':np.nan} #witdh(longitude diff) and height(latitude diff)
-  move_pos = {'x':0, 'y':0}
-  map_pos = {'x':np.nan, 'y':np.nan} #center
-
-  #current point
-  location = []
-  point_color = {'fix':None, 'lost':None}
-
-  #other
-  climb_detail = None
-
-  #remove button(up, down)
-  def add_extra(self):
-    #map
-    self.layout.addWidget(self.plot, 0, 0, 3, 3)
-
-    if self.config.G_AVAILABLE_DISPLAY[self.config.G_DISPLAY]['touch']:
-      #zoom
-      self.layout.addWidget(self.button['zoomdown'],0,0)
-      self.layout.addWidget(self.button['lock'],1,0)
-      self.layout.addWidget(self.button['zoomup'],2,0)
-      #arrow
-      self.layout.addWidget(self.button['left'],0,2)
-      self.layout.addWidget(self.button['right'],1,2)
-
-    self.climb_detail = pg.TextItem(color=(0,0,0), anchor=(1.0,1.0))
-    self.climb_detail.setZValue(100)
-
-    #for expanding column
-    self.layout.setColumnMinimumWidth(0, 40)
-    self.layout.setColumnStretch(1, 1)
-    self.layout.setColumnMinimumWidth(2, 40)
-
-  #load course profile and display
-  def load_course(self):
-
-    if len(self.config.logger.course.distance) == 0 or len(self.config.logger.course.altitude) == 0:
-      return
-    
-    t = datetime.datetime.utcnow()
-
-    if not self.config.logger.sensor.sensor_gps.hasGPS():
-      self.zoom = self.config.G_MAX_ZOOM
-    
-    self.plot.showGrid(x=True, y=True, alpha=1)
-    self.plot.showAxis('left')
-    self.plot.showAxis('bottom')
-    font = QtGui.QFont()
-    font.setPixelSize(16)
-    font.setBold(True)
-    self.plot.getAxis("bottom").tickFont = font
-    #self.plot.getAxis("bottom").setStyle(tickTextOffset = 5)
-    self.plot.getAxis("left").tickFont = font
-    #self.plot.getAxis("left").setStyle(tickTextOffset = 5)
-    #self.plot.setAutoPan()
-
-    print("\tpyqt_graph : load course profile : ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
-    t = datetime.datetime.utcnow()
-
-    bg = pg.CourseProfileGraphItem(
-      x=self.config.logger.course.distance,
-      y=self.config.logger.course.altitude,
-      brushes=self.config.logger.course.colored_altitude, 
-      pen=pg.mkPen(color=(255,255,255,0), width=0.01)
-    ) #transparent(alpha=0) and thin line
-    self.plot.addItem(bg)
-
-    self.climb_top_plot = pg.ScatterPlotItem(pxMode=True, symbol='t', size=15)
-    climb_points = []
-    for i in range(len(self.config.logger.course.climb_segment)):
-      p = {
-        'pos': [
-          self.config.logger.course.climb_segment[i]['start_point_distance'], 
-          self.config.logger.course.climb_segment[i]['start_point_altitude']+10
-        ],
-        'pen': {'color': 'w', 'width': 1},
-        'brush':pg.mkBrush(color=(0,0,0))
-        }
-      climb_points.append(p)
-      p = {
-        'pos': [
-          self.config.logger.course.climb_segment[i]['course_point_distance'], 
-          self.config.logger.course.climb_segment[i]['course_point_altitude']+10
-        ],
-        'pen': {'color': 'w', 'width': 1},
-        'brush':pg.mkBrush(color=(255,0,0))
-        }
-      climb_points.append(p)
-    self.climb_top_plot.setData(climb_points)
-    self.plot.addItem(self.climb_top_plot)
-
-    print("\tpyqt_graph : plot course profile : ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
-
-  def update_extra(self):
-
-    if len(self.config.logger.course.distance) == 0 or len(self.config.logger.course.altitude) == 0:
-      return
-
-    if not self.course_loaded:
-      self.load_course()
-      self.course_loaded = True
-    
-    if self.zoom == self.config.G_MAX_ZOOM:
-      self.zoom_plus()
-      return
-    
-    #remove current position for reloading
-    if len(self.location) > 0 :
-      self.plot.removeItem(self.current_point)
-      self.location.pop()
-
-    #initialize
-    x_start = x_end = np.nan
-    x_width = self.zoom/1000
-    dist_end = self.config.logger.course.distance[-1]
-    self.graph_index = self.gps_values['course_index']
-    x_start = self.config.logger.course.distance[self.graph_index]
-    
-    #get x,y from current position or start(temporary) without GPS
-    if self.gps_values['on_course_status']:
-      self.point['brush'] = self.point_color['fix']
-    else:
-      self.point['brush'] = self.point_color['lost']
-    
-    #move x,y
-    if self.lock_status:
-      self.map_pos['x'] = x_start - x_width/10
-      if self.map_pos['x'] < 0:
-        self.map_pos['x'] = 0
-      self.map_pos['x_index'] = self.graph_index
-    else: #no lock (scroll is available)
-      self.map_pos['x'] += self.move_pos['x']/1000
-      if self.map_pos['x'] <= 0:
-        self.map_pos['x_index'] = 0
-      elif self.map_pos['x'] >= dist_end:
-        self.map_pos['x_index'] = len(self.config.logger.course.distance)-1
-      elif self.move_pos['x'] != 0:
-        self.map_pos['x_index'] = self.gps_sensor.get_index_with_distance_cutoff(
-          self.map_pos['x_index'], 
-          self.move_pos['x']/1000
-        )
-
-    x_end = self.map_pos['x'] + x_width
-    x_end_index = 0
-    if x_end >= dist_end:
-      x_end_index = len(self.config.logger.course.distance)-1
-      self.map_pos['x_index'] = self.gps_sensor.get_index_with_distance_cutoff(
-          x_end_index, 
-          -x_width
-        )
-    else:
-      x_end_index = self.gps_sensor.get_index_with_distance_cutoff(
-        self.map_pos['x_index'], 
-        x_width
-        )
-    
-    #check borders
-    #too short course or zoom out: display all
-    if x_width > dist_end:
-      self.map_pos['x'] = 0
-      x_end = dist_end
-    #over move: fix border
-    else:
-      if x_end > dist_end:
-        x_end = dist_end
-        self.map_pos['x'] = dist_end - x_width
-      if self.map_pos['x'] < 0:
-        self.map_pos['x'] = 0
-        x_end = x_width
-   
-    if 0 <= self.graph_index < len(self.config.logger.course.distance) and not np.isnan(self.gps_values['course_altitude']):
-      self.point['pos'][0] = self.gps_values['course_distance']/1000
-      self.point['pos'][1] = self.gps_values['course_altitude']
-      self.location.append(self.point)
-      self.current_point.setData(self.location)
-      self.plot.addItem(self.current_point)
-
-    #positioning
-    self.plot.setXRange(min=self.map_pos['x'], max=x_end, padding=0)
-    y_min = float('inf')
-    y_max = -float('inf')
-    if 0 <= self.map_pos['x_index'] < x_end_index:
-      y_min = np.min(self.config.logger.course.altitude[self.map_pos['x_index']:x_end_index])
-      y_max = np.max(self.config.logger.course.altitude[self.map_pos['x_index']:x_end_index])
-   
-    if y_min != float('inf') and y_max != -float('inf'):
-      y_range_space = (y_max - y_min)* 0.2
-      y_min = int((y_min - y_range_space)/50)*50
-      y_max = int((y_max + y_range_space)/50+2)*50
-      self.plot.setYRange(min=y_min, max=y_max, padding=0)
-
-    if self.climb_detail != None:
-      self.plot.removeItem(self.climb_detail)
-    climb_index = None
-
-    for i in range(len(self.config.logger.course.climb_segment)):
-      if self.config.logger.course.climb_segment[i]['start'] <= self.graph_index <= self.config.logger.course.climb_segment[i]['end']:
-        climb_index = i
-        break
-    
-    if climb_index == None:
-      self.climb_detail.setHtml("")
-    else:
-      summit_img = '<img src="img/summit.png">'
-      altitude_up_img = '<img src="img/altitude_up.png">'
-      rest_distance = self.config.logger.course.climb_segment[climb_index]['course_point_distance'] - self.gps_values['course_distance']/1000
-      rest_distance_str = "{:.1f}km<br />".format(rest_distance)
-      rest_altitude = self.config.logger.course.climb_segment[climb_index]['course_point_altitude'] - self.gps_values['course_altitude']
-      rest_altitude_str = "{:.0f}m".format(rest_altitude)
-      #grade_str = "{:2.0f}%".format(rest_altitude/(rest_distance*1000)*100) #rest
-      grade_str = "({:.0f}%)".format(self.config.logger.course.climb_segment[climb_index]['average_grade'])
-      self.climb_detail.setHtml('<div style="text-align: right; vertical-align: bottom; font-size: 20px;">' + summit_img + rest_distance_str + altitude_up_img + rest_altitude_str + grade_str +'</div>')
-    
-    self.climb_detail.setPos(x_end, y_min)
-    self.plot.addItem(self.climb_detail)
-    
-    #reset move_pos
-    self.move_pos['x'] = self.move_pos['y'] = 0
-
-
-class SimpleMapWidget(BaseMapWidget):
+class MapWidget(BaseMapWidget):
   
   #map position
   map_area = {'w':np.nan, 'h':np.nan} #witdh(longitude diff) and height(latitude diff)
@@ -584,7 +49,6 @@ class SimpleMapWidget(BaseMapWidget):
   course_plot = None
   plot_verification = None
   course_points_plot = None
-  course_point_text = None
   instruction = None
 
   cuesheet_widget = None
@@ -597,9 +61,9 @@ class SimpleMapWidget(BaseMapWidget):
   existing_tiles = {}
   map_cuesheet_ratio = 1 #map:cuesheet = 1:0
 
-  font = ""
+  zoom_delta_from_tilesize = 0
   auto_zoomlevel = None
-  auto_zoomlevel_diff = 1 #auto_zoomlevel = zoomlevel + auto_zoomlevel_diff
+  auto_zoomlevel_diff = 2 #auto_zoomlevel = zoomlevel + auto_zoomlevel_diff
   auto_zoomlevel_back = None
 
   #signal for physical button
@@ -630,8 +94,6 @@ class SimpleMapWidget(BaseMapWidget):
     self.plot.addItem(self.scale_text)
     
     self.map_attribution = pg.TextItem(
-      #text = self.config.G_MAP_CONFIG[self.config.G_MAP]['attribution'],
-      html = '<div style="text-align: right;"><span style="color: #000; font-size: 10px;">' + self.config.G_MAP_CONFIG[self.config.G_MAP]['attribution'] + '</span></div>',
       anchor = (1, 1), 
       angle = 0, 
       border = (255, 255, 255, 255),
@@ -676,31 +138,50 @@ class SimpleMapWidget(BaseMapWidget):
 
     #connect signal
     self.signal_search_route.connect(self.search_route)
-    
-    #adjust zoom level for large tiles
-    self.zoom_delta_from_tilesize = int(self.config.G_MAP_CONFIG[self.config.G_MAP]['tile_size'] / 256) - 1
-    self.zoomlevel -= self.zoom_delta_from_tilesize
-    if self.zoomlevel < 1:
-      self.zoomlevel = 1
-    self.auto_zoomlevel = self.zoomlevel + self.auto_zoomlevel_diff
-    
-    for key in [self.config.G_MAP, self.config.G_STRAVA_OVERLAY_MAP, self.config.G_RAIN_OVERLAY_MAP]:
-      self.drawn_tile[key] = {}
-      self.existing_tiles[key] = {}
-      self.pre_zoomlevel[key] = np.nan
-    
+
+    self.reset_map()
 
     #self.load_course()
     t = datetime.datetime.utcnow()
     self.get_track() #heavy when resume
-    print("\tpyqt_graph : get_track(init) : ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
+    if len(self.tracks_lon) != 0:
+      print("resume_track(init): {:.3f} sec".format((datetime.datetime.utcnow()-t).total_seconds()))
+
+  def reset_map(self):
+    #adjust zoom level for large tiles
+    zoom_delta_from_tilesize = int(self.config.G_MAP_CONFIG[self.config.G_MAP]['tile_size'] / 256) - 1
+    self.zoomlevel += (self.zoom_delta_from_tilesize - zoom_delta_from_tilesize)
+    self.zoom_delta_from_tilesize = zoom_delta_from_tilesize
+    if self.zoomlevel < 1:
+      self.zoomlevel = 1
+    self.auto_zoomlevel = self.zoomlevel + self.auto_zoomlevel_diff
+    
+    for key in [self.config.G_MAP, self.config.G_HEATMAP_OVERLAY_MAP, self.config.G_RAIN_OVERLAY_MAP, self.config.G_WIND_OVERLAY_MAP]:
+      self.drawn_tile[key] = {}
+      self.existing_tiles[key] = {}
+      self.pre_zoomlevel[key] = np.nan
+    
+    attribution_text = self.config.G_MAP_CONFIG[self.config.G_MAP]['attribution']
+    if self.config.G_USE_HEATMAP_OVERLAY_MAP:
+      attribution_text += '<br />' + self.config.G_HEATMAP_OVERLAY_MAP_CONFIG[self.config.G_HEATMAP_OVERLAY_MAP]['attribution']
+    if self.config.G_USE_RAIN_OVERLAY_MAP:
+      attribution_text += '<br />' + self.config.G_RAIN_OVERLAY_MAP_CONFIG[self.config.G_RAIN_OVERLAY_MAP]['attribution']
+    if self.config.G_USE_WIND_OVERLAY_MAP:
+      attribution_text += '<br />' + self.config.G_WIND_OVERLAY_MAP_CONFIG[self.config.G_WIND_OVERLAY_MAP]['attribution']
+    self.map_attribution.setHtml(
+      '<div style="text-align: right;"><span style="color: #000; font-size: 10px;">' + attribution_text + '</span></div>'
+    )
+    if attribution_text == '':
+      self.map_attribution.setZValue(-100)
+    else:
+      self.map_attribution.setZValue(100)
 
   def add_extra(self):
 
     #map
     self.layout.addWidget(self.plot, 0, 0, 4, 3)
 
-    if self.config.G_AVAILABLE_DISPLAY[self.config.G_DISPLAY]['touch']:
+    if self.config.display.has_touch():
       #zoom
       self.layout.addWidget(self.button['zoomdown'],0,0)
       self.layout.addWidget(self.button['lock'],1,0)
@@ -711,7 +192,7 @@ class SimpleMapWidget(BaseMapWidget):
       self.layout.addWidget(self.button['down'],2,2)
       self.layout.addWidget(self.button['right'],3,2)
 
-      if self.config.G_HAVE_GOOGLE_DIRECTION_API_TOKEN:
+      if self.config.G_GOOGLE_DIRECTION_API["HAVE_API_TOKEN"]:
         self.layout.addWidget(self.button['go'],3,0)
         self.button['go'].clicked.connect(self.search_route)
 
@@ -725,7 +206,9 @@ class SimpleMapWidget(BaseMapWidget):
 
   def init_cuesheet_and_instruction(self):
     if len(self.config.logger.course.point_name) > 0 and self.config.G_CUESHEET_DISPLAY_NUM > 0 and self.config.G_COURSE_INDEXING:
-      self.cuesheet_widget = CueSheetWidget(self, self.config)
+      if self.cuesheet_widget == None:
+        self.cuesheet_widget = CueSheetWidget(self, self.config)
+        self.cuesheet_widget.hide() #adhoc
       #self.map_cuesheet_ratio = 0.7
       self.map_cuesheet_ratio = 1.0
       #self.layout.addWidget(self.cuesheet_widget, 0, 3, 4, 4)
@@ -739,7 +222,7 @@ class SimpleMapWidget(BaseMapWidget):
       self.instruction.setZValue(100)
 
   def resizeEvent(self, event):
-    if len(self.config.logger.course.point_name) == 0 or self.config.G_CUESHEET_DISPLAY_NUM == 0 or not self.config.G_COURSE_INDEXING :
+    if len(self.config.logger.course.point_name) == 0 or self.config.G_CUESHEET_DISPLAY_NUM == 0 or not self.config.G_COURSE_INDEXING:
       self.map_cuesheet_ratio = 1.0
     #if self.config.G_CUESHEET_DISPLAY_NUM > 0:
     else:
@@ -770,7 +253,8 @@ class SimpleMapWidget(BaseMapWidget):
     if len(self.config.logger.course.latitude) == 0:
       return
 
-    t = datetime.datetime.utcnow()
+    time_profile = []
+    t1 = datetime.datetime.now()
 
     if self.course_plot != None:
       self.plot.removeItem(self.course_plot)
@@ -799,7 +283,10 @@ class SimpleMapWidget(BaseMapWidget):
         test_points.append(p)
       self.plot_verification.setData(test_points)
       self.plot.addItem(self.plot_verification)
-    print("\tpyqt_graph : course plot : ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
+
+    t2 = datetime.datetime.now()
+    time_profile.append((t2-t1).total_seconds())
+    t1 = t2
       
     #course point
     if len(self.config.logger.course.point_longitude) == 0:
@@ -833,9 +320,16 @@ class SimpleMapWidget(BaseMapWidget):
     self.course_points_plot.setData(self.course_points)
     self.plot.addItem(self.course_points_plot)
 
-    print("\tpyqt_graph : load course points plot : ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
+    t2 = datetime.datetime.now()
+    time_profile.append((t2-t1).total_seconds())
 
-  def update_extra(self):
+    print("Plotting course:")
+    print("  course plot  : {:.3f} sec".format(time_profile[0]))
+    print("  course points: {:.3f} sec".format(time_profile[1]))
+    print("  total        : {:.3f} sec".format(sum(time_profile)))
+    print()
+
+  async def update_extra(self):
 
     #t = datetime.datetime.utcnow()
 
@@ -851,8 +345,8 @@ class SimpleMapWidget(BaseMapWidget):
     #current position
     self.point['pos'] = [self.gps_values['lon'], self.gps_values['lat']]
     #dummy position
-    if np.isnan(self.gps_values['lon']) and np.isnan(self.gps_values['lat']):
-      #recent point(from log or pre_point) / course start / fix(TOKYO station)
+    if np.isnan(self.gps_values['lon']) or np.isnan(self.gps_values['lat']):
+      #recent point(from log or pre_point) / course start / dummy
       if len(self.tracks_lon) > 0 and len(self.tracks_lat) > 0:
         self.point['pos'] = [self.tracks_lon_pos, self.tracks_lat_pos]
       elif len(self.config.logger.course.longitude) > 0 and len(self.config.logger.course.latitude) > 0:
@@ -865,13 +359,9 @@ class SimpleMapWidget(BaseMapWidget):
     #update y_mod (adjust for lat:lon=1:1)
     self.y_mod = self.calc_y_mod(self.point['pos'][1])
     #add position circle to map
-    if not np.isnan(self.point['pos'][0]) and not np.isnan(self.point['pos'][1]):
-      if self.gps_values['mode'] == 3:
-        self.point['brush'] = self.point_color['fix']
-      else:
-        self.point['brush'] = self.point_color['lost']
+    if self.gps_values['mode'] == 3:
+      self.point['brush'] = self.point_color['fix']
     else:
-      #set dummy
       self.point['brush'] = self.point_color['lost']
 
     #center position
@@ -919,10 +409,6 @@ class SimpleMapWidget(BaseMapWidget):
     self.move_pos['x'] = self.move_pos['y'] = 0
 
     self.map_area['w'], self.map_area['h'] = self.get_geo_area(self.map_pos['x'], self.map_pos['y'])
-    
-    #experimental
-    #self.config.logger.sensor.values['integrated']['dem_altitude'] = self.get_altitude_from_tile([self.point['pos'][0], self.point['pos'][1]])
-    #print(self.config.logger.sensor.values['integrated']['dem_altitude'], self.map_pos) #################### bug
 
     ###########
     # drawing #
@@ -965,7 +451,7 @@ class SimpleMapWidget(BaseMapWidget):
     if not np.isnan(y_start) and not np.isnan(y_end):
       self.plot.setYRange(self.get_mod_lat(y_start), self.get_mod_lat(y_end), padding=0)
 
-    self.draw_map_tile(x_start, x_end, y_start, y_end)
+    await self.draw_map_tile(x_start, x_end, y_start, y_end)
     #print("\tpyqt_graph : update_extra map : ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
     #t = datetime.datetime.utcnow()
 
@@ -973,7 +459,7 @@ class SimpleMapWidget(BaseMapWidget):
       self.load_course()
       self.course_loaded = True
     
-    self.update_cuesheet_and_instruction(x_start, x_end, y_start, y_end, auto_zoom=True)
+    await self.update_cuesheet_and_instruction(x_start, x_end, y_start, y_end, auto_zoom=True)
 
     #print("\tpyqt_graph : update_extra cuesheet : ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
     #t = datetime.datetime.utcnow()
@@ -1005,24 +491,37 @@ class SimpleMapWidget(BaseMapWidget):
       self.tracks_lat = np.append(self.tracks_lat, self.get_mod_lat_np(np.array(lat)))
 
   def reset_track(self):
-    self.tracks_lon = []
-    self.tracks_lat = []
+    self.tracks_lon = np.array([])
+    self.tracks_lat = np.array([])
   
-  def search_route(self):
+  def reset_course(self):
+    for p in [self.course_plot, self.plot_verification, self.course_points_plot, self.instruction]:
+      if p != None:
+        self.plot.removeItem(p)
+        p = None
+
+    if self.cuesheet_widget != None:
+      self.cuesheet_widget.reset()
+
+  @asyncSlot()
+  async def search_route(self):
     if self.lock_status:
       return
     
-    self.config.logger.course.search_route(
+    await self.config.logger.course.search_route(
       self.point['pos'][0],
       self.point['pos'][1]/self.y_mod,
       self.map_pos['x'],
       self.map_pos['y'],
     )
+    self.reinit_course()
+  
+  def reinit_course(self):
     self.init_cuesheet_and_instruction()
     self.course_loaded = False
     self.resizeEvent(None)
 
-  def draw_map_tile(self, x_start, x_end, y_start, y_end):
+  async def draw_map_tile(self, x_start, x_end, y_start, y_end):
     
     #get tile coordinates of display border points
     p0 = {
@@ -1035,7 +534,8 @@ class SimpleMapWidget(BaseMapWidget):
     }
 
     #map
-    self.draw_map_tile_by_overlay(
+    drawn_main_map = await self.draw_map_tile_by_overlay(
+      self.config.G_MAP_CONFIG,
       self.config.G_MAP, 
       self.zoomlevel, 
       p0, 
@@ -1044,38 +544,144 @@ class SimpleMapWidget(BaseMapWidget):
       use_mbtiles=self.config.G_MAP_CONFIG[self.config.G_MAP]['use_mbtiles']
     )
     
-    #heatmap (need ON/OFF switch)
-    if False:
-      z_h = self.zoomlevel + int(self.config.G_MAP_CONFIG[self.config.G_MAP]['tile_size']/self.config.G_MAP_CONFIG[self.config.G_STRAVA_OVERLAY_MAP]['tile_size'])-1
-      if self.config.G_MAP_CONFIG[self.config.G_STRAVA_OVERLAY_MAP]['min_zoomlevel'] <= z_h <= self.config.G_MAP_CONFIG[self.config.G_STRAVA_OVERLAY_MAP]['max_zoomlevel']:
-        self.draw_map_tile_by_overlay(self.config.G_STRAVA_OVERLAY_MAP, z_h, p0, p1, overley=True)
-      else:
-        self.pre_zoomlevel[self.config.G_STRAVA_OVERLAY_MAP] = z_h
+    await self.overlay_heatmap(drawn_main_map, p0, p1)
+    await self.overlay_rainmap(drawn_main_map, p0, p1)
+    await self.overlay_windmap(drawn_main_map, p0, p1)
+ 
+  async def overlay_heatmap(self, drawn_main_map, p0, p1):
+    if not self.config.G_USE_HEATMAP_OVERLAY_MAP:
+      return
+    await self.overlay_map(drawn_main_map, p0, p1, self.config.G_HEATMAP_OVERLAY_MAP_CONFIG, self.config.G_HEATMAP_OVERLAY_MAP)
 
-    #rain map with expanding rain tiles when the zoomlevel is larger than max zoomlevel of rain tiles (need ON/OFF switch)
-    if False:
-      z_r = self.zoomlevel + int(self.config.G_MAP_CONFIG[self.config.G_MAP]['tile_size']/self.config.G_MAP_CONFIG[self.config.G_RAIN_OVERLAY_MAP]['tile_size'])-1  
-      if z_r > self.config.G_MAP_CONFIG[self.config.G_RAIN_OVERLAY_MAP]['max_zoomlevel']:
-        self.draw_map_tile_by_overlay(self.config.G_RAIN_OVERLAY_MAP, self.zoomlevel, p0, p1, overley=True, expand=True)
-      elif self.config.G_MAP_CONFIG[self.config.G_RAIN_OVERLAY_MAP]['min_zoomlevel'] <= z_r <= self.config.G_MAP_CONFIG[self.config.G_RAIN_OVERLAY_MAP]['max_zoomlevel']:
-        self.draw_map_tile_by_overlay(self.config.G_RAIN_OVERLAY_MAP, self.zoomlevel, p0, p1, overley=True)
-      else:
-        self.pre_zoomlevel[self.config.G_RAIN_OVERLAY_MAP] = z_h
-
-  def draw_map_tile_by_overlay(self, map_name, z, p0, p1, overley=False, expand=False, use_mbtiles=False):
-    tile_size = self.config.G_MAP_CONFIG[map_name]['tile_size']
-    z_draw, z_conv_factor, tile_x, tile_y = self.init_draw_map(map_name, z, p0, p1, expand, tile_size)
+  async def overlay_rainmap(self, drawn_main_map, p0, p1):
+    if not self.config.G_USE_RAIN_OVERLAY_MAP:
+      return
     
+    map_config = self.config.G_RAIN_OVERLAY_MAP_CONFIG
+    map_name = self.config.G_RAIN_OVERLAY_MAP
+    if self.update_overlay_basetime(map_config, map_name):
+      #basetime update
+      if map_config[map_name]['time_format'] == 'unix_timestamp':
+        basetime_str = str(int(map_config[map_name]['nowtime'].timestamp()))
+      else:
+        basetime_str = map_config[map_name]['nowtime'].strftime(map_config[map_name]['time_format'])
+
+      map_config[map_name]['basetime'] = basetime_str
+      map_config[map_name]['validtime'] = map_config[map_name]['basetime']
+        
+      #re-draw from self.config.G_MAP
+      return
+
+    await self.overlay_map(drawn_main_map, p0, p1, map_config, map_name)
+
+  async def overlay_windmap(self, drawn_main_map, p0, p1):
+    if not self.config.G_USE_WIND_OVERLAY_MAP:
+      return
+    
+    map_config = self.config.G_WIND_OVERLAY_MAP_CONFIG
+    map_name = self.config.G_WIND_OVERLAY_MAP
+    if self.update_overlay_basetime(map_config, map_name):
+    
+      #basetime update
+      if 'jpn_scw' in map_name:
+        init_time_list = await self.config.network.api.get_scw_list(map_config[map_name], 'inittime')
+        if init_time_list != None:
+          map_config[map_name]['basetime'] = init_time_list[0]['it']
+
+        timeline = await self.config.network.api.get_scw_list(map_config[map_name], 'fl')
+        if timeline != None:
+          map_config[map_name]['fl'] = timeline
+          time_str = map_config[map_name]['nowtime'].strftime('%H%M')
+          for tl in map_config[map_name]['fl']:
+            if tl['it'][0:4] == time_str:
+              map_config[map_name]['validtime'] = tl['it']
+              map_config[map_name]['subdomain'] = tl['sd']
+              break
+      else:
+        basetime_str = map_config[map_name]['nowtime'].strftime(map_config[map_name]['time_format'])
+        map_config[map_name]['basetime'] = basetime_str
+        map_config[map_name]['validtime'] = map_config[map_name]['basetime']
+        
+      #re-draw from self.config.G_MAP
+      return
+
+    await self.overlay_map(drawn_main_map, p0, p1, map_config, map_name)
+
+  def update_overlay_basetime(self, map_config, map_name):
+    config = map_config[map_name]
+
+    #update basetime
+    nowtime = config['nowtime_func']()
+    delta_minutes = nowtime.minute % config['time_interval']
+    delta_seconds = delta_minutes*60 + nowtime.second
+    delta_seconds_cutoff = config['update_minutes']*60 + 15
+      
+    if delta_seconds < delta_seconds_cutoff:
+      delta_minutes = delta_minutes+config['time_interval']
+    nowtime_mod =  (nowtime + datetime.timedelta(minutes=-delta_minutes)).replace(second=0, microsecond=0)
+
+    if config['nowtime'] != nowtime_mod:
+      #clear tile
+      self.drawn_tile[self.config.G_MAP] = {}
+      self.drawn_tile[map_name] = {}
+      self.existing_tiles[map_name] = {}
+      self.pre_zoomlevel[map_name] = np.nan
+      self.config.remove_maptiles(map_name)
+        
+      config['nowtime'] = nowtime_mod
+      return True
+    
+    return False
+
+  async def overlay_map(self, drawn_main_map, p0, p1, map_config, map_name):
+    if drawn_main_map:
+      self.drawn_tile[map_name] = {}
+
+    z = self.zoomlevel + int(self.config.G_MAP_CONFIG[self.config.G_MAP]['tile_size']/map_config[map_name]['tile_size'])-1
+    #supported zoom levels
+    if map_config[map_name]['min_zoomlevel'] <= z <= map_config[map_name]['max_zoomlevel']:
+      await self.draw_map_tile_by_overlay(
+        map_config,
+        map_name,
+        z,
+        p0,
+        p1,
+        overley=True
+      )
+    #above maximum zoom level: expand max zoomlevel tiles
+    elif z > map_config[map_name]['max_zoomlevel']:
+      await self.draw_map_tile_by_overlay(
+        map_config,
+        map_name,
+        z,
+        p0, 
+        p1, 
+        overley=True, 
+        expand=True
+      )
+    else:
+      self.pre_zoomlevel[map_name] = z
+
+  async def draw_map_tile_by_overlay(self, map_config, map_name, z, p0, p1, overley=False, expand=False, use_mbtiles=False):
+
+    tile_size = map_config[map_name]['tile_size']
+
+    #specify tile range and zoomlevel
+    #z: current zoomlevel from map widget
+    #z_draw: actual zoomlevel of map tile (for overlay map tiles which have limited zoomlevel)
+    #tile_x, tile_y: tile range in zoomlevel z
+    z_draw, z_conv_factor, tile_x, tile_y = self.init_draw_map(map_config, map_name, z, p0, p1, expand, tile_size)
+
     if not use_mbtiles:
-      ##### prepare tiles for download #####
+      #prepare tiles for download
       tiles = self.get_tiles_for_drawing(tile_x, tile_y, z_conv_factor, expand)
 
-      ##### download #####
+      #download 
       if z not in self.existing_tiles[map_name]:
         self.existing_tiles[map_name][z_draw] = {}
-      self.download_tiles(tiles, map_name, z_draw)
+      await self.download_tiles(tiles, map_config, map_name, z_draw)
 
-    ##### tile check #####
+    #tile check
     if use_mbtiles:
       self.con = sqlite3.connect("file:./maptile/{0:^s}.mbtiles?mode=ro".format(map_name), uri=True)
       self.cur = self.con.cursor()
@@ -1087,7 +693,7 @@ class SimpleMapWidget(BaseMapWidget):
       if use_mbtiles:
         self.cur.close()
         self.con.close() 
-      return
+      return False
 
     #draw only the necessary tiles 
     w_h = int(tile_size/z_conv_factor) if expand else 0
@@ -1122,12 +728,18 @@ class SimpleMapWidget(BaseMapWidget):
     if use_mbtiles:
       self.cur.close()
       self.con.close()
+    
+    return True
 
-  def init_draw_map(self, map_name, z, p0, p1, expand, tile_size):
+  def init_draw_map(self, map_config, map_name, z, p0, p1, expand, tile_size):
     z_draw = z
     z_conv_factor = 1
     if expand:
-      z_draw = min(z, self.config.G_MAP_CONFIG[map_name]['max_zoomlevel'])
+      if z > map_config[map_name]['max_zoomlevel']:
+        z_draw = map_config[map_name]['max_zoomlevel']
+      elif z < map_config[map_name]['min_zoomlevel']:
+        z_draw = map_config[map_name]['min_zoomlevel']
+      #z_draw = min(z, map_config[map_name]['max_zoomlevel'])
       z_conv_factor = 2**(z-z_draw)
 
     #tile range
@@ -1152,12 +764,12 @@ class SimpleMapWidget(BaseMapWidget):
         tiles.append((i, j))
         #tiles.append((int(i/z_conv_factor), int(j/z_conv_factor)))
 
-    if expand:
-      tiles = list(map(lambda x: tuple(map(lambda y: int(y/z_conv_factor), x)), tiles))
+    if expand and z_conv_factor > 1:
+      tiles = list(set(map(lambda x: tuple(map(lambda y: int(y/z_conv_factor), x)), tiles)))
 
     return tiles
 
-  def download_tiles(self, tiles, map_name, z_draw):
+  async def download_tiles(self, tiles, map_config, map_name, z_draw):
     download_tile = []
     for tile in tiles:
       filename = self.config.get_maptile_filename(map_name, z_draw, *tile)
@@ -1177,7 +789,7 @@ class SimpleMapWidget(BaseMapWidget):
 
     #start downloading
     if len(download_tile) > 0:
-      if not self.config.download_maptile(map_name, z_draw, download_tile, additional_download=True):
+      if not await self.config.network.download_maptile(map_config, map_name, z_draw, download_tile, additional_download=True):
         #failed to put queue, then retry
         for tile in download_tile:
           key = "{0}-{1}".format(*tile)
@@ -1202,7 +814,9 @@ class SimpleMapWidget(BaseMapWidget):
           pixel_y ,y_start = divmod(j, z_conv_factor)
           exist_tile_key = (pixel_x, pixel_y)
 
-        if drawn_tile_key not in self.drawn_tile[map_name][z] and self.check_tile(use_mbtiles, map_name, z_draw, exist_tile_key):
+        if drawn_tile_key not in self.drawn_tile[map_name][z] and \
+          self.check_tile(use_mbtiles, map_name, z_draw, exist_tile_key):
+
           self.drawn_tile[map_name][z][drawn_tile_key] = True
           add_keys[(i,j)] = True
           draw_flag = True
@@ -1234,7 +848,7 @@ class SimpleMapWidget(BaseMapWidget):
     
   def draw_scale(self, x_start, y_start):
     #draw scale at left bottom
-    scale_factor = 6
+    scale_factor = 10
     scale_dist = self.get_width_distance(y_start, self.map_area['w'])/scale_factor
     num = scale_dist/(10**int(np.log10(scale_dist)))
     modify = 1
@@ -1273,20 +887,20 @@ class SimpleMapWidget(BaseMapWidget):
       self.get_mod_lat(y_start)
       )
 
-  def update_cuesheet_and_instruction(self, x_start, x_end, y_start, y_end, auto_zoom=False):
-    if self.cuesheet_widget == None:
+  async def update_cuesheet_and_instruction(self, x_start, x_end, y_start, y_end, auto_zoom=False):
+    if len(self.config.logger.course.point_name) == 0 or self.config.G_CUESHEET_DISPLAY_NUM == 0 or not self.config.G_COURSE_INDEXING:
       return
-    self.cuesheet_widget.update_extra()
+    await self.cuesheet_widget.update_extra()
 
     if self.instruction != None:
       self.plot.removeItem(self.instruction)
-    image_src = '<img src="img/flag.png">'
+    image_src = '<img src="img/navi_flag.png">' #svg
     if self.cuesheet_widget.cuesheet[0].name.text() == 'Right':
-      image_src = '<img src="img/arrow_right.png">'
+      image_src = '<img src="img/navi_turn_right.svg">'
     elif self.cuesheet_widget.cuesheet[0].name.text() == 'Left':
-      image_src = '<img src="img/arrow_left.png">'
+      image_src = '<img src="img/navi_turn_left.svg">'
     elif self.cuesheet_widget.cuesheet[0].name.text() == 'Summit':
-      image_src = '<img src="img/summit.png">'
+      image_src = '<img src="img/summit.png">' #svg
     self.instruction.setHtml('<div style="text-align: left; vertical-align: bottom;">' + image_src + '<span style="font-size: 28px;">' + self.cuesheet_widget.cuesheet[0].dist.text() + '</span></div>')
     self.instruction.setPos((x_end+x_start)/2, (self.get_mod_lat(y_start)+(self.get_mod_lat(y_end)-self.get_mod_lat(y_start))*0.85))
     self.plot.addItem(self.instruction)
@@ -1320,6 +934,8 @@ class SimpleMapWidget(BaseMapWidget):
     return lat * self.config.GEO_R2 / (self.config.GEO_R1 * np.cos(lat/180*np.pi))
 
   def get_geo_area(self, x, y):
+    if np.isnan(x) or np.isnan(y):
+      return np.nan, np.nan
     tile_x, tile_y, _, _ = self.config.get_tilexy_and_xy_in_tile(self.zoomlevel, x, y, self.config.G_MAP_CONFIG[self.config.G_MAP]['tile_size'])
     pos_x0, pos_y0 = self.config.get_lon_lat_from_tile_xy(self.zoomlevel, tile_x, tile_y)
     pos_x1, pos_y1 = self.config.get_lon_lat_from_tile_xy(self.zoomlevel, tile_x+1, tile_y+1)
