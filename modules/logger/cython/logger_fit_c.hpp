@@ -45,7 +45,7 @@ struct config {
   unsigned int G_UNIT_ID_HEX = 0;
   char* G_LOG_START_DATE;
   char* G_LOG_DIR;
-  char* G_STRAVA_UPLOAD_FILE;
+  char* G_UPLOAD_FILE;
 };
 static config cfg;
 
@@ -67,7 +67,7 @@ inline uint8_t base_type_size_from_id(uint8_t base_type_id) {
 bool exit_with_error(const char* message, sqlite3* db);
 unsigned int crc16(std::vector<uint8_t>& data);
 
-int convert_value(const char* value_str, const int data_type);
+unsigned int convert_value(const char* value_str, const int data_type);
 
 static int parse_single_str(void *user_data, int argc, char **argv, char **azColName);
 static int parse_single_num(void *user_data, int argc, char **argv, char **azColName);

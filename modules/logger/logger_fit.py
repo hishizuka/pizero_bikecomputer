@@ -26,6 +26,7 @@ class config_local():
 
 class LoggerFit(Logger):
 
+  mode = None
   epoch_datetime = datetime.datetime(1989,12,31,0,0,0,0)
   profile = {
     0:{
@@ -174,6 +175,7 @@ class LoggerFit(Logger):
   def __init__(self, config):
     self.config = config
     self.reset()
+    self.mode = MODE
     if MODE == "Cython":
       set_config(config)
 
@@ -221,7 +223,7 @@ class LoggerFit(Logger):
   def write_log(self):
     if MODE == "Cython":
       if write_log_cython(self.config.G_LOG_DB):
-        self.config.G_STRAVA_UPLOAD_FILE = get_upload_file_name()
+        self.config.G_UPLOAD_FILE = get_upload_file_name()
         self.config.G_LOG_START_DATE = get_start_date_str()
         return True
     return self.write_log_python()
@@ -396,7 +398,7 @@ class LoggerFit(Logger):
     
     #success
     self.reset()
-    self.config.G_STRAVA_UPLOAD_FILE = filename
+    self.config.G_UPLOAD_FILE = filename
     return True
 
   def write_definition(self, local_message_num):

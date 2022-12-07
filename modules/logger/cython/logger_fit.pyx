@@ -5,7 +5,7 @@ cdef extern from "logger_fit_c.hpp":
     unsigned int G_UNIT_ID_HEX
     char* G_LOG_START_DATE
     char* G_LOG_DIR
-    char* G_STRAVA_UPLOAD_FILE
+    char* G_UPLOAD_FILE
   cdef void set_config_c(const config& _cfg)
   cdef char* get_upload_file_name_c()
   cdef char* get_start_date_str_c()

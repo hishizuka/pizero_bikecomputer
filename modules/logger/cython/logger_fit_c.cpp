@@ -8,7 +8,7 @@ void set_config_c(const config& _cfg) {
 }
 
 char* get_upload_file_name_c() {
-  return cfg.G_STRAVA_UPLOAD_FILE;
+  return cfg.G_UPLOAD_FILE;
 }
 char* get_start_date_str_c() {
   return cfg.G_LOG_START_DATE;
@@ -242,11 +242,11 @@ unsigned int crc16(std::vector<uint8_t>& data) {
   return crc;
 }
 
-int convert_value(const char* value_str, const int data_type) {
-  int value = 0;
+unsigned int convert_value(const char* value_str, const int data_type) {
+  unsigned int value = 0;
   //latitude(0) longitude(1)
   if(message_num == 20 and (data_type == 0 or data_type == 1)) {
-    value = int(atof(value_str) * LAT_LON_CONST); //int(atof(value_str) / 180 * pow(2,31));
+    value = (unsigned int)int(atof(value_str) * LAT_LON_CONST); //int(atof(value_str) / 180 * pow(2,31));
   }
   //timestamp(253), local_timestamp, start_time
   else if (
@@ -263,11 +263,11 @@ int convert_value(const char* value_str, const int data_type) {
       atoi(s.substr(5,2).c_str())-1,
       atoi(s.substr(0,4).c_str())-1900,
     };
-    value = int(difftime(mktime(&t), epoch_datetime_sec));
+    value = (unsigned int)int(difftime(mktime(&t), epoch_datetime_sec));
   }
   //altitude(2): with scale and offset
   else if (message_num == 20 and data_type == 2) {
-    value = int(data_scale[message_num][data_type] * (atof(value_str) + 500));
+    value = (unsigned int)int(data_scale[message_num][data_type] * (atof(value_str) + 500));
   }
   //distance(5), speed(6): with scale
   else if (
@@ -275,10 +275,10 @@ int convert_value(const char* value_str, const int data_type) {
     (message_num == 19 and (data_type == 8 or data_type == 9 or data_type == 13 or data_type == 14)) or 
     (message_num == 20 and (data_type == 5 or data_type == 6))
   ) {
-    value = data_scale[message_num][data_type] * atof(value_str);
+    value = (unsigned int)data_scale[message_num][data_type] * atof(value_str);
   }
   else {
-    value = int(atof(value_str));
+    value = (unsigned int)int(atof(value_str));
   }
   return value;
 }
@@ -339,17 +339,17 @@ void write_definition() {
   int m_num = local_num[local_message_num];
   std::vector<int>& l_field = local_num_field[local_message_num];
   std::vector<int> _size = {1,1,2,1};
-  std::vector<int> _data = {0,0,m_num,(int)l_field.size()};
+  std::vector<unsigned int> _data = {0,0,(unsigned int)m_num,(unsigned int)l_field.size()};
 
   //write definition header(0x40)
   fit_data.push_back(uint8_t(local_message_num+0x40));
   add_fit_data(fit_data, _data, _size);
 
   for (int f_id: l_field) {
-    int base_type_id = base_type_id_from_string(profile_name_type[message_num][f_id][1]);
-    int base_type_size = base_type_size_from_id(base_type_id);
+    unsigned int base_type_id = base_type_id_from_string(profile_name_type[message_num][f_id][1]);
+    unsigned int base_type_size = base_type_size_from_id(base_type_id);
     _size = {1,1,1};
-    _data = {f_id, base_type_size, base_type_id};
+    _data = {(unsigned int)f_id, base_type_size, base_type_id};
     add_fit_data(fit_data, _data, _size);
   }
 
@@ -373,7 +373,8 @@ static int parse_records_message_num_18_19(void *user_data, int argc, char **arg
 
 static int parse_records_message_num_20(void *user_data, int argc, char **argv, char **azColName) {
   //int *counter = (int*)user_data;
-  std::vector<int> available_fields, available_data, _size;
+  std::vector<int> available_fields, _size;
+  std::vector<unsigned int> available_data;
   available_fields.reserve(argc*sizeof(int));
   available_data.reserve(argc*sizeof(int));
 
@@ -408,7 +409,8 @@ bool get_summary(int lap_num, sqlite3 *db) {
   int rc;
   char *zErrMsg = 0;
   std::unordered_map<int, std::vector<lap_summary_data> > _ret_data;
-  std::vector<int> available_fields, available_data, _size;
+  std::vector<int> available_fields, _size;
+  std::vector<unsigned int> available_data;
   _ret_data[0].reserve(profile_indexes[message_num].size());
   _ret_data[1].reserve(profile_indexes[message_num].size());
   
@@ -435,7 +437,7 @@ bool get_summary(int lap_num, sqlite3 *db) {
     else if(i == 7 and available_data.size() >= 2) {
       //253 - 2
       available_fields.push_back(i);
-      available_data.push_back(data_scale[message_num][i]*(available_data[0]-available_data[1]));
+      available_data.push_back((unsigned int)(data_scale[message_num][i]*(available_data[0]-available_data[1])));
       continue;
     }
 
@@ -583,7 +585,7 @@ bool write_log_c(const char* db_file) {
   get_struct_def(_size, local_message_num, false);
   _data = {
     (unsigned int)end_date_epoch,
-    (unsigned int)(end_date_epoch-start_date_epoch)*1000,
+    (unsigned int)((end_date_epoch-start_date_epoch)*1000),
     1,  //num of sessions: 1(fix)
     0,  //activity_type: general
     26, //event: activity 
@@ -645,8 +647,8 @@ bool write_log_c(const char* db_file) {
 
   cfg.G_LOG_START_DATE = (char *)malloc(sizeof(char) * strlen(startdate_local));
   strcpy(cfg.G_LOG_START_DATE, startdate_local);
-  cfg.G_STRAVA_UPLOAD_FILE = (char *)malloc(sizeof(char) * strlen(filename));
-  strcpy(cfg.G_STRAVA_UPLOAD_FILE, filename);
+  cfg.G_UPLOAD_FILE = (char *)malloc(sizeof(char) * strlen(filename));
+  strcpy(cfg.G_UPLOAD_FILE, filename);
 
   return true;
 }
