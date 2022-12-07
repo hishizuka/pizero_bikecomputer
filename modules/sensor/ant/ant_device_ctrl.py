@@ -18,6 +18,14 @@ class ANT_Device_CTRL(ant_device.ANT_Device):
   data_page_02 = array.array("B", [0x02,0x00,0x00,0x00,0x00,0x00,0x00,0x10])
   pickle_key = "ant+_ctrl_values"
 
+  ctrl_cmd = {
+    0x0024: ('LAP', 0), #lap button
+    0x0001: ('PAGE', 0), #page button
+    0x0000: ('PAGE', 1), #page button (long press)
+    0x8000: ('CUSTOM', 0), #custom button
+    0x8001: ('CUSTOM', 1), #custom button (long press)
+  }
+
   def channel_set_id(self): #for master
     self.channel.set_id(self.ant_config['master_id'], self.ant_config['type'], self.ant_config['transmission_type'])
 
@@ -34,14 +42,7 @@ class ANT_Device_CTRL(ant_device.ANT_Device):
 
   def on_data(self, data):
     (self.values['ctrl_cmd'],) = self.structPattern[self.name].unpack(data[0:8])
-    if self.values['ctrl_cmd'] == 0x0024: #lap
-      self.config.press_button('Edge_Remote', 'LAP', 0)
-    elif self.values['ctrl_cmd'] == 0x0001: #page
-      self.config.press_button('Edge_Remote', 'PAGE', 0)
-    elif self.values['ctrl_cmd'] == 0x0000: #page(long press)
-      self.config.press_button('Edge_Remote', 'PAGE', 1)
-    elif self.values['ctrl_cmd'] == 0x8000: #custom
-      self.config.press_button('Edge_Remote', 'CUSTOM', 0)
-      #self.config.logger.sensor.sensor_ant.set_light_mode("ON_OFF_FLASH_LOW")
-    elif self.values['ctrl_cmd'] == 0x8001: #custom(long press)
-      self.config.press_button('Edge_Remote', 'CUSTOM', 1)
+    if self.values['ctrl_cmd'] == 0xFFFF:
+      return
+    self.config.press_button('Edge_Remote', *(self.ctrl_cmd[self.values['ctrl_cmd']]))
+
