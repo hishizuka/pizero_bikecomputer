@@ -9,7 +9,7 @@
   - [ANT+ USB dongle](#ant+-usb-dongle)
   - [SD card](#sd-card)
   - [Case](#case)
-- [Assembly](#assembly)
+- [Hardware Assembly](#hardware-assembly)
   - [Displays with headers](#displays-with-headers-pitft-or-e-ink-displays)
   - [Displays with non headers](#displays-without-headers-mip-reflective-color-lcd-and-sharp-memory-display)
 - [Bicycle mounting](#bicycle-mounting)
@@ -22,14 +22,6 @@
 <img src ="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.amazonaws.com%2F0%2F100741%2F41773d64-fc33-cc2a-190a-ce14b7b6b24c.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=393a8049c6f10a90dc8cc1f6e2030426" height=360 />
 
 ## Display
-
-### [PiTFT 2.4](https://www.adafruit.com/product/2455)  (OBSOLETE)
-
-Pros&Cons
-
-- (good) easy to assemble and test
-- (bad) hard to see in direct sunshine
-- <img src ="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F100741%2Fe16fc94e-7449-80df-c044-b8705789345e.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=ca5f5dcbdbe33f473187a50c2b585b81" width=240 height=180 />
 
 ### [MIP Reflective color LCD module 2.7" w/ backlight (LPM027M128C)](https://international.switch-science.com/catalog/5395/) 
 
@@ -67,6 +59,14 @@ Pros&Cons
 - Recommend if you think costs. I think it's better than PiTFT and E-ink displays.
 - <img src="https://user-images.githubusercontent.com/12926652/91795951-fe3ee280-ec59-11ea-8fc1-b5ae35a7306f.png" width=360 />
 
+### [PiTFT 2.4](https://www.adafruit.com/product/2455)  (OBSOLETE)
+
+Pros&Cons
+
+- (good) easy to assemble and test
+- (bad) hard to see in direct sunshine
+- <img src ="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F100741%2Fe16fc94e-7449-80df-c044-b8705789345e.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=ca5f5dcbdbe33f473187a50c2b585b81" width=240 height=180 />
+
 ### E-ink display (OBSOLETE)
 
 Pros&Cons
@@ -77,9 +77,9 @@ Pros&Cons
 - (bad) no backlight
 - (bad) 2 colors only
 - [PaPiRus ePaper / eInk Screen HAT for Raspberry Pi](https://uk.pi-supply.com/products/papirus-epaper-eink-screen-hat-for-raspberry-pi) 
-- <img src="https://qiita-user-contents.imgix.net/https%3A%2F%2Fpbs.twimg.com%2Fmedia%2FEWcpqIRVcAECnhm%3Fformat%3Dpng%26name%3Dmedium?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=e63859ff88d76213591bfaab25111aca" width=240 height=180 />
+- <img src="https://qiita-user-contents.imgix.net/https%3A%2F%2Fpbs.twimg.com%2Fmedia%2FEWcpqIRVcAECnhm%3Fformat%3Dpng%26name%3Dmedium?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=e63859ff88d76213591bfaab25111aca" width=240 height=180 /> ![eink-01-mini](https://user-images.githubusercontent.com/12926652/205788235-34bbf557-a395-4094-a2b3-10c052f6f743.jpg)
 - [DFRobot e-ink Display Module for Raspberry Pi 4B/3B+/Zero W](https://www.dfrobot.com/product-1866.html)
-- <img src="https://qiita-user-contents.imgix.net/https%3A%2F%2Fpbs.twimg.com%2Fmedia%2FEWvezNTXgAATZuN%3Fformat%3Dpng%26name%3Dmedium?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=5c0e572fce9492179d347bfb58e312fc" width=240 height=180 />
+- <img src="https://qiita-user-contents.imgix.net/https%3A%2F%2Fpbs.twimg.com%2Fmedia%2FEWvezNTXgAATZuN%3Fformat%3Dpng%26name%3Dmedium?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=5c0e572fce9492179d347bfb58e312fc" width=240 height=180 /> ![eink-02-mini](https://user-images.githubusercontent.com/12926652/205788573-4ea31e88-7714-4300-96f8-4fa98a4103e8.jpg)
 
 
 ## GPS module
@@ -136,9 +136,10 @@ If you use Sparkfun Qwiic or Adafruit STEMMA QT sensors, [SparkFun Qwiic SHIM fo
 for altitude, grade, and total ascent/descent
 
 - [BMP280](https://shop.pimoroni.com/products/enviro-phat) (\*1)
-- [BMP388](https://www.dfrobot.com/product-1928.html) (\*1)
-- [BMP390](https://www.adafruit.com/product/4816) (\*1)
-- [LPS33HW](https://www.adafruit.com/product/4414) (\*1)
+- [BMP388](https://www.dfrobot.com/product-1928.html)
+- [BMP390](https://www.adafruit.com/product/4816)
+- [LPS33HW](https://www.adafruit.com/product/4414)
+- [BMP581](https://www.sparkfun.com/products/20170)
 
 ### IMU
 
@@ -150,6 +151,8 @@ The accelerometer is used for stop detection when using GPS. The magnetometer is
 - [LIS3MDL](https://www.adafruit.com/product/4485): Mag 
 - [BMX160](https://www.dfrobot.com/product-1928.html): Accel / Gyro / Mag
 - [BNO055](https://www.adafruit.com/product/4646): Accel / Gyro / Mag / Euler / Quatenrion
+- [ISM330DHCX and ](https://www.sparkfun.com/products/19895): Accel / Gyro
+- [MMC5983MA](https://www.sparkfun.com/products/19895): Mag
 
 ### Light
 
@@ -198,25 +201,27 @@ get battery percent, etc.
   - On the other hand, if you want to put some sensors in, Topeak SMARTPHONE DRYBAG 6" is better.
 
 
-# Assembly
+# Hardware Assembly
 
 Using many pHATs can be bulky, so it's best to use one pHat only. It's essential to make it compact.
 
 Here are two assembly examples.
 
-## Displays with headers (PiTFT or E-ink displays)
+## Displays with pHAT headers (PiTFT or E-ink displays)
 
-see [hardware_installation_pitft.md](./hardware_installation_pitft.md)
+see [hardware_installation_pitft.md](./hardware_installation_pitft.md) as PiTFT(obsolete) example.
 
-## Displays without headers (MIP Reflective color LCD and SHARP Memory Display)
+## Displays without pHAT headers (MIP Reflective color LCD and SHARP Memory Display)
 
 It's quite difficult, but the hardware configuration is better than PiTFT.
+
+### Adafruit SHARP Memory Display
 
 <img src="https://user-images.githubusercontent.com/12926652/91796767-f6803d80-ec5b-11ea-9bde-19940a951588.png" width=360 />
 
 - top left: Raspberry Pi Zero WH
 - top right: PiJuice Zero
-- central left: adafruit SHARP Memory Display
+- central left: Adafruit SHARP Memory Display
 - center: GPS module
 - central right: DFRobot BMP160(IMU) and BMP388(pressure and temperature)
 - bottom left: Button SHIM
@@ -230,7 +235,7 @@ Note that the connection between Raspberry Pi and SHARP Memory Display is differ
 | GND      | IO25 | GND   | CN1-4 |
 | VCOMSEL  | IO11 | EXTIN | CN2-3 |
 | DISP     | IO13 | DISP  | CN1-9 |
-| CS       | IO15 | CS    | CN1-8 |
+| CS       | IO16 | CS    | CN1-8 |
 | 3.3V     | IO17 | VIN   | CN1-6 |
 | SPI MOSI | IO19 | MOSI  | CN1-7 |
 | SPI SCLK | IO23 | SCLK  | CN1-5 |
@@ -267,6 +272,25 @@ Fix the parts with screws.
 Finally, connect the battery for the PiJuice Zero.
 
 <img src="https://user-images.githubusercontent.com/12926652/91796781-fd0eb500-ec5b-11ea-8451-593858d32b17.png" width=360 />
+
+
+### MIP Reflective color LCD module 2.7" w/ backlight (LPM027M128C)
+
+Here is another example.
+
+<img src="https://user-images.githubusercontent.com/12926652/205553726-3e2cca72-7a52-49e1-ba2b-931d9e210425.jpg" width=360 /> <img src="https://user-images.githubusercontent.com/12926652/205553732-3a2d8a87-af90-44c1-ace8-228eb3751017.jpg" width=287 />
+
+- Raspberry Pi Zero WH
+- MIP Reflective color LCD module 2.7" w/ backlight (LPM027M128C)
+- Adafruit SHARP Memory Display Breakout
+- [MAX-M10S Ultra Low Power GNSS receiver with SMA connector](https://gnss.store/max-m10s-gnss-modules/170-elt0151.html)
+- SparkFun 9DoF IMU Breakout
+  - ISM330DHCX(Accel / Gyro)
+  - MMC5983MA(Mag)
+- SparkFun BMP581
+- SparkFun Qwiic SHIM for Raspberry Pi
+- Pimoroni Button SHIM
+- ANT+ USB dongle
 
 
 # Bicycle mounting

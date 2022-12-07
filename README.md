@@ -7,14 +7,23 @@ https://github.com/hishizuka/pizero_bikecomputer
 
 # News
 
-- 2022/6/12 Please delete log/log.db (`rm log/log.db`) because column layouts is changed.
-- 2022/6/12 Please replace GPS section in layout.yaml from layouts/layout-cycling.yaml because the item "Error" is deleted.
-- 2022/3/7 Please install aiohttp for faster downloading of map tiles.
+- 2022/12/7 There are so many updates, so you might want to look over [software_installation.md](/doc/software_installation.md)..
+- 2022/12/7 Please install qasync and aiofiles for asynchronous process.
+- 2022/12/7 Install garminconnect if you want to upload to Garmin Connect.
+- 2022/12/7 Install stravacookies if you want to show Strava heatmaps.
+- 2022/12/7 Add support of ISM330DHCX, MMC5983MA([SparkFun 9DoF IMU Breakout](https://www.sparkfun.com/products/19895)) and BMP581([SparkFun Micro Pressure Sensor](https://www.sparkfun.com/products/20171))
+- 2022/12/7 Changed the SPI SCLK connection of the MIP color display and SHARP memory display from 22 to 23 for future support of Radxa Zero. Please modify headers(GPIO_SCS) of modules/display/mip_display.py or mip_sharp_display.py as needed.
 
 ```
-$ sudo apt install python3-aiohttp
+#2022/12/7 update
+$ sudo pip3 install qasync
+
+Debian
+$ sudo apt install python3-aiofiles
 or
-$ sudo pip3 install aiohttp
+$ sudo pip3 install aiofiles
+
+$ sudo pip3 install garminconnect stravacookies
 ```
 
 
@@ -52,6 +61,8 @@ Daily update [at twitter (@pi0bikecomputer)](https://twitter.com/pi0bikecomputer
 
 <img width="836" alt="system-02" src="https://user-images.githubusercontent.com/12926652/97240633-23069f00-1832-11eb-8e8b-8312997b4710.png">
 
+![hardware_top](https://user-images.githubusercontent.com/12926652/205796409-f0ef443a-d1d1-4daa-abdd-4f20748c83e9.png)
+
 
 # Features
 
@@ -85,7 +96,7 @@ Some functions depend on your parts.
 |:-|:-|:-|
 | Logging | Yes |  |
 | Sensors | Yes |  |
-| Positioning | Yes | A GPS module is required. |
+| Positioning | Yes | A GPS module is supported. |
 | GUI | Yes |  |
 | Wifi | Yes | Built-in wifi |
 | Battery life(Reference) | 18h | with 3100mAh mobile battery([Garmin Charge Power Pack](https://buy.garmin.com/en-US/US/p/571552)) and MIP Reflective color LCD. |
@@ -102,8 +113,8 @@ Some functions depend on your parts.
 | Recording insterval | 1s |  Smart recording is not supported. |
 | Resume | Yes |  |
 | Output .fit log file | Yes |  |
-| Upload to STRAVA | Yes |  |
-| Live sending | Yes | But I can't find a good dashboard service like as Garmin LiveTrack |
+| Upload | Yes | Strava, Garmin and Ride with GPS. |
+| Live sending | Suspend | I am looking for a good dashboard service like as Garmin LiveTrack |
 
 ## Sensors
 
@@ -111,37 +122,53 @@ USB dongle is required if using ANT+ sensors.
 
 | Specs | Detail | Note |
 |:-|:-|:-|
-| ANT+ heartrate sensor |  Yes | |
-| ANT+ speed sensor |  Yes | |
-| ANT+ cadence sensor |  Yes | |
-| ANT+ speed&cadence sensor |  Yes | |
-| ANT+ powermeter |  Yes | Calibration is not supported. |
+| ANT+ Heartrate sensor |  Yes | |
+| ANT+ Speed sensor |  Yes | |
+| ANT+ Cadence sensor |  Yes | |
+| ANT+ Speed&Cadence sensor |  Yes | |
+| ANT+ Powermeter |  Yes | Calibration is not supported. |
 | ANT+ LIGHT |  Yes | Bontrager Flare RT only. |
 | ANT+ Control |  Yes | Garmin Edge Remote only. |
+| ANT+ Enviroment |  Yes | Garmin tempe (temperature sensor) |
 | Bluetooth sensors |  No |  |
-| Barometric altimeter | Yes | An I2c sensor(pressure, temperature) is required. |
-| Accelerometer | Yes | An I2c sensor is required. |
-| Magnetometer | Yes | An I2c sensor is required. |
-| Light sensor | Yes | An I2c sensor is required. For auto backlight and lighting. |
+| Barometric altimeter | Yes | I2c sensor(pressure, temperature) |
+| Accelerometer | Yes | I2c sensor |
+| Magnetometer | Yes | I2c sensor |
+| Light sensor | Yes | I2c sensor. Use for auto backlight and lighting. |
 
 ## Positioning
 
 | Specs | Detail | Note |
 |:-|:-|:-|
-| Map | Yes | Support raster map tile format like OSM. So, offline map is available with local caches. Also, raster mbtile format is supported. |
-| Course on the map| Yes | A course file(.tcx) is required. |
-| Course profile | Yes | A course file(.tcx) is required. |
+| Map | Yes | Support raster map tile format like OSM (z/x/y.png or jpg). So, offline map is available with local caches. Also, raster .mbtile format is supported. |
+| Course on the map| Yes | A course file(.tcx) is supported. |
+| Course profile | Yes | A course file(.tcx) is supported. |
 | Cuesheet | Yes | Use course points included in course files. |
-| Search Route | Yes | Google Directions API |
+| Search route | Yes | Google Directions API |
+| Map overlay | Yes | Heatmap (Strava / Ride with GPS) and weather(rain / wind). |
 
-- Map with [Toner Map](http://maps.stamen.com/)
-  - Very useful with 2 colors displays (black and white).
-  - <img src ="https://camo.qiitausercontent.com/0c2cf8d528b613a4665aa62170e2e9ee4a8ab90a/68747470733a2f2f71696974612d696d6167652d73746f72652e73332e61702d6e6f727468656173742d312e616d617a6f6e6177732e636f6d2f302f3130303734312f38623335636566652d663836302d643662662d396366642d3963633336643561313863622e706e67" width=320 height=240 />
-- Map with custimized [Mapbox](https://www.mapbox.com)
-  - Use 8 colors suitable for MIP Reflective color LCD.
-  - <img src ="https://camo.qiitausercontent.com/3dde7fcb864f8226c23332a30c33ab743b0b2b06/68747470733a2f2f71696974612d696d6167652d73746f72652e73332e61702d6e6f727468656173742d312e616d617a6f6e6177732e636f6d2f302f3130303734312f66663366353439362d373266642d353831352d656533332d3437303862623364323565392e706e67" width=320 height=240 />
-- Course profile
-  -  <img src ="https://camo.qiitausercontent.com/e2d197a1cb6fea4341a8bc7dfd89be86dab3d784/68747470733a2f2f71696974612d696d6167652d73746f72652e73332e61702d6e6f727468656173742d312e616d617a6f6e6177732e636f6d2f302f3130303734312f33393064333061652d653765632d623738652d346365322d3036303232313433663566612e706e67" width=320 height=240 />
+### Map example
+
+
+#### Map and Course Profile
+
+<img src ="https://user-images.githubusercontent.com/12926652/205572034-f6188d60-6d6c-4708-a6b9-4d6c0953421c.png" width=400/> <img src ="https://user-images.githubusercontent.com/12926652/205572083-712f9cd2-5f3d-420c-9863-3002d6d1802a.png" width=400/>
+
+#### Heatmap overlay
+
+Strava heatmap.
+
+![map_overlay-strava](https://user-images.githubusercontent.com/12926652/205793586-0b754cde-d1e7-4e57-81d2-2bbd60fc8b11.png)    !
+
+#### Weather map overlay
+
+[RainViewer](https://www.rainviewer.com/weather-radar-map-live.html) and [openportguide](http://weather.openportguide.de/map.html) are available worldwide.
+
+In Japan, [気象庁降水ナウキャスト](https://www.jma.go.jp/bosai/nowc/)(rain) and [SCW](https://supercweather.com)(wind) are available.
+
+![map_overlay_rainviewer](https://user-images.githubusercontent.com/12926652/205876664-ae1b629c-5b3f-4d8a-b789-d3ac24753d7f.png) ![map_overlay_weather openportguide de](https://user-images.githubusercontent.com/12926652/205876684-253b672f-615d-410c-8496-5eb9a13b2558.png)
+
+<img src ="https://user-images.githubusercontent.com/12926652/205563333-549cf4dc-abbd-4392-9233-b8391687e0bc.png" width=400/> 
 
 
 ## GUI
@@ -149,19 +176,23 @@ USB dongle is required if using ANT+ sensors.
 | Specs | Detail | Note |
 |:-|:-|:-|
 | Basic page(values only) | Yes |  |
-| Graph | Yes | Altitude and performance(HR, PWR) |
+| Graph | Yes | Altitude and performance(HR, PWR, W prime balance) |
 | Customize data pages | Yes | With layout.yaml |
 | ANT+ pairing | Yes |  |
-| Adjust wheel size | Yes | Set once, store values |
-| Adjust altitude | Yes | Auto adjustments can be made only once, if on the course. |
+| Select course | Yes | local .tcx file and Ride with GPS. |
+| Upload activity | Yes | Strava, Garmin and Ride with GPS. |
+| Select map | Yes | map and overlay(heatmap and weather) |
+| Adjust parameter | Yes | wheel size, altitude, CP and W prime balance |
+| Network setting | Yes | Toggle wifi and BT, BT tethering. |
 | Language localization | Yes | Font and translation file of items are required. |
 | No GUI option | Yes | headless mode |
 
 
-- Performance graph
-  - <img src ="https://camo.qiitausercontent.com/05c8c8facf076fbc3faf6abe848493ac0e82ffc1/68747470733a2f2f71696974612d696d6167652d73746f72652e73332e61702d6e6f727468656173742d312e616d617a6f6e6177732e636f6d2f302f3130303734312f39316336643837382d666436632d383262652d663638642d6533303531323832356631662e706e67" width=320 height=240 />
-- Language localization（Japanese)
-  - <img src ="https://user-images.githubusercontent.com/12926652/90345269-3808ca00-e05a-11ea-91fe-42efbcd6040b.png" width=320 height=310 />
+### Performance graph
+![performance_graph-01](https://user-images.githubusercontent.com/12926652/205787731-6a249ccf-8115-433d-a4d1-7f068a804972.jpeg)
+
+### Language localization（Japanese)
+![language-ja](https://user-images.githubusercontent.com/12926652/205787136-ed87e959-ff54-48ac-835f-a1b337b77b87.png)
 
 
 ## Experimental functions

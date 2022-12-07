@@ -2,7 +2,7 @@
 
 # Table of Contents
 
-- [Installation](#installation)
+- [Software Installation](#software-installation)
   - [macOS or Linux](#macOS-or-Linux)
   - [Raspberry Pi OS](#Raspberry-Pi-OS)
     - [common](#common)
@@ -11,16 +11,14 @@
     - [Display](#display)
     - [I2C sensors](#i2c-sensors)
 - [Quick Start](#quick-start)
-  - [Run on X Window](#Run-on-X-Window)
-    - [Run from the lancher menu](#run-from-the-lancher-menu)
-    - [Run with autostart](#run-with-autostart)
-  - [Run in a console](#Run-in-a-console)
+  - [Run on X Window](#run-on-x-window)
+  - [Run on console](#run-on-console)
     - [Manual execution](#manual-execution)
     - [Run as a service](#run-as-a-service)
 - [Usage](#usage)
   - [Button](#button)
-    - [Software button](#Software-button)
-    - [Hardware button](#Hardware-button)
+    - [Software button](#software-button)
+    - [Hardware button](#hardware-button)
   - [Menu screen](#menu-screen)
   - [Settings](#settings)
     - [setting.conf](#settingconf)
@@ -30,7 +28,7 @@
     - [config.py](#configpy)
   - [Prepare course files and maps](#prepare-course-files-and-maps)
 
-# Installation
+# Software Installation
 
 Assume Python version 3 environment. Version 2 is not supported.
 
@@ -38,8 +36,9 @@ Assume Python version 3 environment. Version 2 is not supported.
 
 ```
 $ git clone https://github.com/hishizuka/pizero_bikecomputer.git
-$ pip3 install PyQt5 numpy oyaml pillow polyline aiohttp
+$ pip3 install PyQt5 numpy oyaml pillow polyline aiohttp aiofiles qasync garminconnect 
 $ pip3 install git+https://github.com/hishizuka/pyqtgraph.git
+$ pip3 install git+https://github.com/hishizuka/crdp.git
 $ cd pizero_bikecomputer
 ```
 
@@ -48,21 +47,22 @@ Pyqt version 5.15.0 in macOS has [a qpushbutton issue](https://bugreports.qt.io/
 
 ## Raspberry Pi OS
 
-Assume Raspberry Pi OS (32-bit) with desktop, not Raspberry Pi OS (32-bit) Lite. I haven't checked the procedure in Lite, but in the future I will try minimum OS such as Lite or buildroot.
+Raspberry Pi OS (32-bit) with desktop is recommended.
 
-Also, your Raspberry Pi is connected to internet and updated with `apt-get update & apt-get upgrade`.
+The program works with Raspberry Pi OS (32-bit) Lite, but missing libraries will need to be installed. Especially installing python3-pyqt5 with `apt` command will also installs massive libraries of desktop software, so building PyQt5 package is recommended.
 
 Here is [my setup guide in Japanese](https://qiita.com/hishi/items/8bdfd9d72fa8fe2e7573).
 
 ### Common
 
-Install in the home directory of default user "pi".
+Install in the home directory of default user "pi". Also, your Raspberry Pi is connected to internet and updated with `apt-get update & apt-get upgrade`.
+
 
 ```
 $ cd
 $ git clone https://github.com/hishizuka/pizero_bikecomputer.git
-$ sudo apt-get install python3-pip cython3 cmake gawk python3-numpy python3-pyqt5 sqlite3 libsqlite3-dev libatlas-base-dev python3-aiohttp
-$ sudo pip3 install oyaml sip polyline
+$ sudo apt-get install python3-pip cython3 cmake gawk python3-numpy python3-pyqt5 sqlite3 libsqlite3-dev libatlas-base-dev python3-aiohttp python3-aiofiles
+$ sudo pip3 install oyaml sip polyline garminconnect stravacookies qasync
 $ sudo apt-get install wiringpi python3-smbus python3-rpi.gpio python3-psutil python3-pil
 $ sudo pip3 install git+https://github.com/hishizuka/pyqtgraph.git
 $ sudo pip3 install git+https://github.com/hishizuka/crdp.git
@@ -108,70 +108,19 @@ $ sudo pip3 install git+https://github.com/hishizuka/openant.git
 
 Assume SPI interface is on in raspi-config.
 
-#### PiTFT 2.4
-
-Follow [official setup guide](https://learn.adafruit.com/adafruit-2-4-pitft-hat-with-resistive-touchscreen-mini-kit/overview) of Adafruit, or [my setup guide (Japanese)](https://qiita.com/hishi/items/bdd630666277e4f8162a).
-
-Additionally, install programs which to turn the PiTFT 2.4 backlight on and off.
-
-```
-$ sudo cp install/usr/local/bin/disable-pitft /usr/local/bin/
-$ sudo cp install/usr/local/bin/enable-pitft /usr/local/bin/
-```
-
-Install the program which turns off the backlight at shutdown.
-
-```
-$ sudo cp install/etc/systemd/system/disable-pitft.service /etc/systemd/system/
-$ sudo systemctl daemon-reload
-$ sudo systemctl enable disable-pitft.service
-```
-
-If you run the program in a console, you need to build Qt5 and PyQt5 because the package python3-pyqt5 provided with Raspbian OS does not include a touchscreen library(tslib).
-
-Note:
-
-The touchscreen does not work properly in Raspbian OS(Buster) + Qt　5.14(or higher) + PyQt 5.14(or higher) from some issues. So, if you use PiTFT, I recomand to run on X Window at present.
-In Raspbian OS(Stretch) + Qt　5.12.3 + PyQt 5.12.3, the touchscreen works.
-
-##### Build Qt
-
-Follow ["Building Qt 5.12 LTS for Raspberry Pi on Raspbian"](https://www.tal.org/tutorials/building-qt-512-raspberry-pi) with Raspberry Pi 4 4GB or 8GB. Use the compile option "-platform linux-rpi-g++" for Raspberry Pi 1 or zero, not use options for Raspberry Pi 4 and so on.
-Use the same SD card on Raspberry Pi 4.
-
-You will need libts-dev package before configure of Qt. (from [RaspberryPi2EGLFS](https://wiki.qt.io/RaspberryPi2EGLFS))
-
-```
-sudo apt-get install libudev-dev libinput-dev libts-dev libxcb-xinerama0-dev libxcb-xinerama0
-```
-
-##### Build PyQt5
-
-Follow [PyQt Reference Guide](https://www.riverbankcomputing.com/static/Docs/PyQt5/installation.html).
-The source is avaiable [here](https://pypi.org/project/PyQt5/#files)
-
-```
-$ cd
-$ mkdir work; cd work
-$ wget NEWEST-PYQT5-PACKAGE-SOURCE-FILE
-$ sudo pip3 install PyQt-builder
-$ sip-build --no-make --qmake PATH-TO-YOUR-QMAKE
-$ cd build
-$ make -j4
-$ sudo make install
-$ sudo pip3 install PyQt5-sip
-```
-
 #### MIP Reflective color LCD module and Adafruit SHARP Memory Display Breakout
 
 You can use python3-pyqt5 package. Don't need building Qt.
 
 ```
-$ sudo apt-get install python3-spidev python3-pigpio
-$ sudo pip3 install spidev --upgrade
+$ sudo apt-get install python3-pigpio
 $ sudo systemctl enable pigpiod
 $ sudo systemctl start pigpiod
 ```
+
+#### PiTFT 2.4
+
+see [hardware_installation_pitft.md](./hardware_installation_pitft.md#display)
 
 #### E-ink Displays
 
@@ -204,10 +153,12 @@ $ sudo pip3 install adafruit-circuitpython-bmp280
 | [Pimoroni](https://shop.pimoroni.com) | [Enviro pHAT](https://shop.pimoroni.com/products/enviro-phat) | None |
 | [Adafruit](https://www.adafruit.com) | [BMP280](https://www.adafruit.com/product/2651) | None |
 | [Adafruit](https://www.adafruit.com) | [BMP390](https://www.adafruit.com/product/4816) | None |
+| [Sparkfun](https://www.sparkfun.com/) | [BMP581](https://www.sparkfun.com/products/20170) | None |
 | [Adafruit](https://www.adafruit.com) | [LPS33HW](https://www.adafruit.com/product/4414) | adafruit-circuitpython-lps35hw |
 | [Strawberry Linux](https://strawberry-linux.com) | [LPS33HW](https://strawberry-linux.com/catalog/items?code=12133) | None |
 | [DFRobot](https://www.dfrobot.com) | [BMX160+BMP388](https://www.dfrobot.com/product-1928.html) | BMX160(*1) | 
 | [Adafruit](https://www.adafruit.com) | [LSM6DS33 + LIS3MDL](https://www.adafruit.com/product/4485) | adafruit-circuitpython-lsm6ds adafruit-circuitpython-lis3mdl |
+| [Sparkfun](https://www.sparkfun.com/) | [ISM330DHCX + MMC5983MA ](https://www.sparkfun.com/products/19895) | adafruit-circuitpython-lsm6ds |
 | [Adafruit](https://www.adafruit.com) | [LSM9DS1](https://www.adafruit.com/product/4634) | adafruit-circuitpython-lsm9ds1 | 
 | [Adafruit](https://www.adafruit.com) | [BNO055](https://www.adafruit.com/product/4646) | adafruit-circuitpython-bno055(*2) | 
 | [Adafruit](https://www.adafruit.com) | [VCNL4040](https://www.adafruit.com/product/4161) | adafruit-circuitpython-vcnl4040 |
@@ -243,56 +194,19 @@ If cython is available, it will take a few minutes to run for the first time to 
 
 ## Run on X Window
 
-If you run the program from the SSH login shell, add the following environment variable.
+If you use Raspberry Pi OS with desktop, starting on X Window (or using VNC) at first would be better.
 
 ```
-export DISPLAY=:0.0
-```
-
-Then, run the program.
-
-```
-$ python3 pizero_bikecomputer.py -f
-```
-
-### Run from the lancher menu.
-
-Making launcher menu or desktop icon may be useful.
-
-![lancher menu](https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F100741%2Fc466c6f0-ede8-5de2-2061-fbbbcccb93fc.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=864176ddffe3895226a6fd8bf20fb4d0)
-
-Make "New Item" in Main Menu Editor, and set "/home/pi/pizero_bikecomputer/exec.sh" in "Command:" field.
-
-![short cut](https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F100741%2Fe318acf1-3c89-0537-956c-9e64738b8f81.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=fedb51b245af88bffc2e090031cf10a3)
-
-### Run with autostart
-
-If you are using the autologin option, you can run the program automatically using the following procedure。
-
-```
-$ mkdir -p ~/.config/lxsession/LXDE-pi
-$ cp /etc/xdg/lxsession/LXDE-pi/autostart ~/.config/lxsession/LXDE-pi/
-$ echo "@/home/pi/pizero_bikecomputer/exec.sh" >> ~/.config/lxsession/LXDE-pi/autostart
-```
-
-## Run in a console
-
-### Manual execution
-
-#### PiTFT
-
-Before run the program, add the following environment variables.
-
-```
-$ export QT_QPA_PLATFORM=linuxfb:fb=/dev/fb1
-$ export QT_QPA_EVDEV_TOUCHSCREEN_PARAMETERS=/dev/input/event0:rotate=270
-$ export QT_QPA_FB_TSLIB=1
-$ export TSLIB_FBDEVICE=/dev/fb1
-$ export TSLIB_TSDEVICE=/dev/input/event0
 $ python3 pizero_bikecomputer.py
 ```
 
-Note: Works with Raspbian Stretch. No further versions have been confirmed to work. It seems that the touch screen axis is not set.
+### PiTFT
+
+see [hardware_installation_pitft.md](./hardware_installation_pitft.md#run-on-x-window)
+
+## Run on console
+
+### Manual execution
 
 #### MIP Reflective color LCD module, SHARP Memory Display or E-Ink displays
 
@@ -301,6 +215,11 @@ Before run the program, add the following environment variable.
 ```
 $ QT_QPA_PLATFORM=offscreen python3 pizero_bikecomputer.py
 ```
+
+#### PiTFT
+
+see [hardware_installation_pitft.md](./hardware_installation_pitft.md#run-on-console)
+
 
 ### Run as a service
 
@@ -340,17 +259,17 @@ $ sudo systemctl start pizero_bikecomputer.service
 
 ### Software button
 
-![app-01.png](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/100741/f8eeed99-878d-817e-21e7-543c985f0009.png)
+<img width="400" alt="screen01" src="https://user-images.githubusercontent.com/12926652/206077256-f8bda5e5-e4a3-4c39-a7ff-ea343067756c.png">
 
 The buttons at the bottom of the screen are assigned the following functions from left to right. 
 
 | Button | Short press | Long press |
 |:-|:-|:-|
-| Left (<-) | Screen switching(Back) | None |
+| Left (<) | Screen switching(Back) | None |
 | LAP | Lap | Reset |
 | MENU | Menu | None |
 | Start/Stop  | Start/Stop | Quit the program |
-| Right (->) | Screen switching(Forward) | None |
+| Right (>) | Screen switching(Forward) | None |
 
 ### Hardware button
 
@@ -359,29 +278,7 @@ You can change both short and long presses in "modules/config.py".
 
 #### PiTFT 2.4
 
-<img width="300" alt="pitft_button" src="https://user-images.githubusercontent.com/12926652/100878687-da579b00-34ed-11eb-987f-e15bf488f1f3.png">
-
-From left to right, the button assignments are as follows.
-
-| GPIO NUM | Short press | Long press |
-|:-|:-|:-|
-| 5 | Left (<-) | None |
-| 6 | Lap | Reset |
-| 12 | Screen brightness On/Off | None |
-| 13 | Start/Stop | None |
-| 16 | Right (->) | Menu |
-
-In the menu, the button has different assignments. From left to right, the button assignments are as follows.
-
-| GPIO NUM | Short press | Long press |
-|:-|:-|:-|
-| 5 | Back | None |
-| 6 | None | None |
-| 12 | Enter | None |
-| 13 | Select items (Back) | None |
-| 16 | Select items (Forward) | None |
-
-Both short press and long press can be changed. And only the GPIO number of PiTFT 2.4 is supported. For other models, you need to change it in modules/config.py.
+see [hardware_installation_pitft.md](./hardware_installation_pitft.md#hardware-button)
 
 ### Button shim
 
@@ -393,25 +290,23 @@ From left to right, the button assignments are as follows.
 
 | Button | Short press | Long press |
 |:-|:-|:-|
-| A | Left (<-) | None |
+| A | Left (<) | None |
 | B | Lap | Reset |
 | C | Screenshot | None |
 | D | Start/Stop | None |
-| E | Right (->) | Menu |
+| E | Right (>) | Menu |
 
-#### Map and Course Profile
-
-On the map or course profile, the button assignments are changed.
+#### Map
 
 | Button | Short press | Long press |
 |:-|:-|:-|
-| A | Left (<-) | None |
+| A | Left (<) | None |
 | B | Zoom out | Reset |
-| C | Change button mode(*1, *2) | None |
+| C | Change button mode(*1) | None |
 | D | Zoom in | None |
-| E | Right (->) | Menu |
+| E | Right (>) | Menu |
 
-(*1) In the map
+Another button mode
 
 | Button | Short press | Long press |
 |:-|:-|:-|
@@ -423,7 +318,17 @@ On the map or course profile, the button assignments are changed.
 
 (*)Search route by Google Directions API. Set your API key in setting.conf.
 
-(*2) In the course profile 
+#### Course Profile
+
+| Button | Short press | Long press |
+|:-|:-|:-|
+| A | Move left | None |
+| B | Zoom out | None |
+| C | Restore button mode | None |
+| D | Zoom in | None |
+| E | Move right | None |
+
+Another button mode
 
 | Button | Short press | Long press |
 |:-|:-|:-|
@@ -449,17 +354,17 @@ In the menu, the button assignments are changed.
 
 ### Garmin Edge Remote (ANT+)
 
-#### MAIN
+#### Main
 
 The button assignments are as follows.
 
 | Button | Short press | Long press |
 |:-|:-|:-|
-| PAGE | Left (<-) | Right (->) |
-| CUSTOM | Change button mode(*1) | Entering the menu |
+| PAGE | Left (<) | Right (>) |
+| CUSTOM | Change button mode | Menu |
 | LAP | Lap | None |
 
-(*1) Mode1
+Another button mode
 
 | Button | Short press | Long press |
 |:-|:-|:-|
@@ -467,25 +372,39 @@ The button assignments are as follows.
 | CUSTOM | Restore button mode | None |
 | LAP | Start/Stop | None |
 
-#### Map and Course Profile
-
-On the map or course profile, the button assignments are changed.
+#### Map
 
 | Button | Short press | Long press |
 |:-|:-|:-|
 | PAGE | Left (<-) | Right (->) |
-| CUSTOM | Change button mode(*1, *2) | Zoom out |
+| CUSTOM | Change button mode | Zoom out |
 | LAP | Zoom in | None |
 
-(*1) In the map and course profile
+Another button mode
 
 | Button | Short press | Long press |
 |:-|:-|:-|
-| PAGE | None(not implemented) | None(not implemented)  |
+| PAGE | None | None  |
 | CUSTOM | Restore button mode| Zoom out |
 | LAP | Zoom in | None |
 
-#### MENU
+#### Course Profile
+
+| Button | Short press | Long press |
+|:-|:-|:-|
+| PAGE | Left (<-) | Right (->) |
+| CUSTOM | Change button mode | Zoom out |
+| LAP | Zoom in | None |
+
+Another button mode
+
+| Button | Short press | Long press |
+|:-|:-|:-|
+| PAGE | None | None  |
+| CUSTOM | Restore button mode| Move left |
+| LAP | Move right | None |
+
+#### Menu
 
 In the menu, the button assignments are changed.
 
@@ -498,31 +417,94 @@ In the menu, the button assignments are changed.
 
 ## Menu screen
 
-![app-02.png](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/100741/43df2bd6-2af9-16cd-f356-a30ede21d63a.png)
+<img width="400" alt="menu-01-all" src="https://user-images.githubusercontent.com/12926652/206076181-5118d71a-1750-4570-8bd0-923b4b9699eb.png">
+
+### Sensors
+
+<img width="400" alt="menu-02-sensors" src="https://user-images.githubusercontent.com/12926652/206076191-4b8a4084-64a0-443b-a434-f6c6b4d51e2a.png">
 
 - ANT+ Sensors
   - Pairing with ANT+ sensors. 
-  - You need to install the ANT+ library and to set [ANT section](#ant-section) of [setting.conf](#settingconf) with `status = True`.
+  - You need to install the ANT+ library and to set [ANT section](#ant-section) of setting.conf with `status = True`.
   - The pairing setting is saved in setting.conf when a sensor is connected, so it will be automatically connected next time you start the program.
-- Wifi BT
-  - Wifi and BT are switched on and off.
-- Update
-  - Update the program.
-  - It just does a `git pull origin master` in update.sh.
-- Strava Upload
-  - Upload the log file(.fit) to Strava.
-  - You need to set the Strava Token in [Strava API section](#strava_api-section) of [setting.conf](#settingconf).
+- ANT+ MultiScan
 - Wheel Size
   - Enter the wheel circumference in mm when the ANT+ speed sensor is available.
   - It is used to calculate the distance.
   - The default value is 2,105mm, which is the circumference of 700x25c tire.
-  - The value is saved in setting.conf.
+  - The value is saved in setting.conf
 - Adjust Altitude
   - Enter the current altitude to correct the sea level and increase the accuracy when an I2C pressure sensor is connected.
+
+### Courses
+
+<img width="400" alt="menu-03-courses" src="https://user-images.githubusercontent.com/12926652/206076194-a0b3b356-fbda-4591-ba27-02701e461aaa.png">
+
+- Local Strage
+  - Select course .tcx file in `courses` folder.
+- Ride sith GPS
+  - If you set token in setting.conf, select course from Ride with GPS. Internet access is required. Sample image are shown as belows.
+- Google Directions API mode
+  - If you set token in [GOOGLE_DIRECTION_API section](#google_direction_api-section) of setting.conf, select route type: Car or Bicycle.
+
+Load course with the right icon (>).
+
+<img width="400" alt="RidewithGPS-01" src="https://user-images.githubusercontent.com/12926652/206076210-9c50f789-bac3-4bd0-8209-9dea3a61a132.png"> <img width="400" alt="RidewithGPS-02" src="https://user-images.githubusercontent.com/12926652/206076212-8696ac34-c9e6-485f-b1ba-687c0d2a0061.png">
+
+### Upload Activity
+
+Uploads the most recent activity record file(.fit) created by the reset operation after the power is turned on.
+
+<img width="400" alt="menu-04-upload_activity" src="https://user-images.githubusercontent.com/12926652/206076198-55803175-ef4c-4f9b-9408-b44dbe98b1b3.png">
+
+- Strava
+  - You need to set the Strava Token in [Strava API section](#strava_api-section) of setting.conf).
+- Garmin
+  - You need to set the Garmin setting in [GARMINCONNECT_API section](#garminconnect_api-section) of setting.conf.
+- Ride with GPS
+  - You need to set the Ride with GPS Token in [RIDEWITHGPS_API section](#ridewithgps_api-section) of setting.conf.
+
+### Map
+
+<img width="400" alt="menu-05-map" src="https://user-images.githubusercontent.com/12926652/206076200-383c1d24-ec26-4b79-95e9-a6fd88e161dd.png"> <img width="400" alt="menu-06-map_overlay" src="https://user-images.githubusercontent.com/12926652/206076202-29989a71-34c0-4892-8433-48305868326d.png">
+
+- Select Map
+  - Select a standard map.
+- Map Overlay
+  - Toggle map overlay(heatmap, rain map and wind map) and select an overlay map.
+
+### Profile
+
+If ANT+ powermeter is available, set both parameters are used in W'balance (%). They are determind by histrical activity data with bycicle power with [GoldenCheetah](http://www.goldencheetah.org) or [intervals.icu](https://intervals.icu).
+
+<img width="400" alt="menu-07-profile" src="https://user-images.githubusercontent.com/12926652/206076204-197f2454-940b-4267-a626-52740391ddac.png">
+
+### System
+
+<img width="400" alt="menu-08-system" src="https://user-images.githubusercontent.com/12926652/206076205-a4fa9665-bc2a-4339-8c8b-15cde6a19004.png">
+
+- Network
+  - See below.
+- Update
+  - Update the program.
+  - It just does a `git pull origin master` in update.sh.
 - Power Off
   - Power off the raspberry pi zero when the program is started with the service.
 - Debug log
-  - View "log/debug.log". But The viewer is created temporarily and not properly implemented. So, this will be removed in the future.
+  - View "log/debug.log".
+
+<img width="400" alt="menu-09-network" src="https://user-images.githubusercontent.com/12926652/206076207-9a284166-ce16-4589-8ef3-b428ee09e7a5.png">
+
+- BT Tethering
+  - If `/usr/local/bin/bt-pan` is avaiable, start bluetooth tethering with devices of [BT_ADDRESS_section](#bt_address-section) in setting.conf.
+  - Latest Raspberry Pi OS has only python version 3, so bt-pan must be modified to work with python version 3(not shown).
+- Phone Msg
+  - This is experimental. Assume wifi or bluetooth network(Use tethering when outdoors).
+  - Start http server and recieve messages via GET method.
+  - The http address is http://address:8080/message?app={app}&title={title}&message={message}
+  - The IP address can be get from "IP Address".
+  - Phone notifications can be forwarded by Android [MacroDroid](https://play.google.com/store/apps/details?id=com.arlosoft.macrodroid) or iOS Shortcuts.
+  - <img width="400" alt="message" src="https://user-images.githubusercontent.com/12926652/206078983-fcf6b101-21c5-4c12-a118-d25a1e133d6a.png">
 
 ## Settings
 
@@ -533,17 +515,12 @@ There are five different configuration files. You need to edit at the first "set
 The settings are dependent on the user environment.
 GENERAL -> display must be set.
 
-#### ANT+ section
-
-- Enable ANT+ with `status = True`.
-- Additional setting is not necessary because the settings are written when pairing ANT+ sensors.
-- If there are some settings, the program will connect at startup.
-
 #### GENERAL section
 
 - `display`
   - Set the type of display.
   - There are definitions in `modules/config.py` for the resolution and availability of the touchscreen.
+  - `None`: default (no hardware control)
   - `PiTFT`: PiTFT2.4 (or a PiTFT2.8 with the same resolution)
   - `MIP`: MIP color reflective LCD module 2.7 inch.
   - `MIP_Sharp`: SHARP Memory Display Breakout
@@ -586,18 +563,15 @@ map.yaml entry
     use_mbtiles: true
 ```
 
-#### STRAVA_API section
+#### ANT+ section
 
-Set up for uploading your .fit file to Strava in the "Strava Upload" of the menu. The upload is limited to the most recently reset and exported .fit file.
+- Enable ANT+ with `status = True`.
+- Additional setting is not necessary because the settings are written when pairing ANT+ sensors.
+- If there are some settings, the program will connect at startup.
 
-To get the Strava token, see "[Trying the Authorization Method (OAuth2) of the Strava V3 API (In Japanese)](https://hhhhhskw.hatenablog.com/entry/2018/11/06/014206)".
-Set the `client_id`, `client_secret`, `code`, `access_token` and `refresh_token` as described in the article. Once set, they will be updated automatically.
+#### Power section
 
-#### STRAVA_COOKIE section
-
-Set the variables of Strava cookie if you want to use Strava HeatMap.
-Log in to Strava, get the `key_pair_id`, `policy` and `signature` from the cookie from Strava and set these variables. 
-After that, set the URL of Strava heatmap in map.yaml.
+If ANT+ power meter is available, set `cp` as CP and `w_prime` as W prime balance.
 
 #### SENSOR_IMU section
 In modules/sensor_i2c.py, use the change_axis method to change the axis direction of the IMU (accelerometer/magnetometer/gyroscope) according to its mounting direction.
@@ -617,13 +591,47 @@ Axis conversion is performed with the following variables.
   - Change to `False` by default, or `True` if you want to apply it.
   - `axis_conversion_coef`: Fill in [X, Y, Z] with ±1.
 
+`mag_axis_swap_xy_status`, `mag_axis_conversion_status` and `mag_axis_conversion_coef` can be set if magnetometer axes are different from accelerometer and gyroscope. For example, [SparkFun 9DoF IMU Breakout - ISM330DHCX, MMC5983MA (Qwiic)](https://www.sparkfun.com/products/19895).
+
+`mag_declination` is automatically set by magnetic-field-calculator package.
+
+#### STRAVA_API section
+
+Set up for uploading your .fit file to Strava in the "Strava Upload" of the menu. The upload is limited to the most recently reset and exported .fit file.
+
+To get the Strava token, see "[Trying the Authorization Method (OAuth2) of the Strava V3 API (In Japanese)](https://hhhhhskw.hatenablog.com/entry/2018/11/06/014206)".
+Set the `client_id`, `client_secret`, `code`, `access_token` and `refresh_token` as described in the article. Once set, they will be updated automatically.
+
+#### STRAVA_COOKIE section
+
+If you want to use Strava HeatMap, set `email` and `password`.
+
+#### RIDEWITHGPS_API section
+
+If you want to use heatmap or upload activities to RidewithGPS, set your `token` of the Ride with GPS API.
+Apikey is assumed as `pizero_bikecomputer`.
+
+#### GARMINCONNECT_API section
+
+If you want to upload activities to Garmin Connect, set your `email` and `password`.
+
 #### GOOGLE_DIRECTION_API section
 
-Set your token of the Google Directions API. 
+If you want to search for a route on a map, set your `token` of the Google Directions API.
+
+#### OPENWEATHERMAP_API section
+
+If you want to correct the altitude using a barometric pressure sensor, set your `token` of the OpenWeatherMap API. 
 
 #### BT_ADDRESS section
 
-Unused.
+If you want to use bluetooth tethering, set address.
+Assume bluetooth pairing has already been set up(not shown).
+
+```
+device_A = 01:23:45:67:89:AB
+device_B = CD:EF:01:23:45:67
+```
 
 ### setting.pickle
 
