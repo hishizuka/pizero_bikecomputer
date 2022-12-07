@@ -1,11 +1,6 @@
 #!/usr/bin/python3
 
 import datetime
-print("Loading original modules...")
-t = datetime.datetime.now()
-
-import modules
-print("Loading modules... done :", (datetime.datetime.now()-t).total_seconds(),"sec")
 
 #import logging
 #logging.basicConfig(level=logging.DEBUG)
@@ -14,38 +9,70 @@ print("Loading modules... done :", (datetime.datetime.now()-t).total_seconds(),"
 
 def main():
 
-  time_profile = [datetime.datetime.now(),] #for time profile
-  config = modules.config.Config()
-  time_profile.append(datetime.datetime.now()) #for time profile
-  logger = modules.logger_core.LoggerCore(config)
-  config.set_logger(logger)
-  time_profile.append(datetime.datetime.now()) #for time profile
+  print()
+  print("########## INITIALIZE START ##########")
+  print()
+  time_profile = []
 
-  sec_diff = [] #for time profile
-  for i in range(len(time_profile)):
-    if i == 0:
-      continue
-    sec_diff.append("{0:.6f}".format((time_profile[i]-time_profile[i-1]).total_seconds()))
-  print("\tconfig/logger:", sec_diff)
+  t1 = datetime.datetime.now()
+  from modules import config
+  t2 = datetime.datetime.now()
+  time_profile.append((t2-t1).total_seconds())
 
-  gui = None
-  #if config.G_HEADLESS:
-  #  pass
+  t1 = t2
+  config = config.Config()
+  t2 = datetime.datetime.now()
+  time_profile.append((t2-t1).total_seconds())
+
+  #display
+  t1 = t2
+  from modules.display.display_core import Display
+  t2 = datetime.datetime.now()
+  time_profile.append((t2-t1).total_seconds())
+
+  t1 = t2
+  config.set_display(Display(config, {}))
+  t2 = datetime.datetime.now()
+  time_profile.append((t2-t1).total_seconds())
+  
+  #minimal gui
+  t1 = t2
   if config.G_GUI_MODE == "PyQt":
-    print("running in PyQt...")
-    t1 = datetime.datetime.now()
     from modules import gui_pyqt
-    print("\tgui_pyqt :", (datetime.datetime.now()-t1).total_seconds(),"sec")
-    gui = gui_pyqt.GUI_PyQt(config)
   elif config.G_GUI_MODE == "QML":
-    print("running in QML...")
     from modules import gui_qml
-    gui = modules.gui_qml.GUI_QML(config)
   elif config.G_GUI_MODE == "Kivy":
     from modules import gui_kivy
-    print("running in kivy...")
-    gui = gui_kivy.GUI_Kivy(config)
+  t2 = datetime.datetime.now()
+  time_profile.append((t2-t1).total_seconds())
+  
+  t1 = t2
+  from modules import logger_core
+  logger = logger_core.LoggerCore(config)
+  config.set_logger(logger)
+  t2 = datetime.datetime.now()
+  time_profile.append((t2-t1).total_seconds())
+  
+  print()
+  print("Initialize modules:")
+  print("  config import : {:.3f} sec".format(time_profile[0]))
+  print("  config init   : {:.3f} sec".format(time_profile[1]))
+  print("  display import: {:.3f} sec".format(time_profile[2]))
+  print("  display init  : {:.3f} sec".format(time_profile[3]))
+  print("  import gui    : {:.3f} sec".format(time_profile[4]))
+  print("  import logger : {:.3f} sec".format(time_profile[5]))
+  print("  total         : {:.3f} sec".format(sum(time_profile)))
+  print()
+  print("########## INITIALIZE END ##########")
+  #return
 
+  if config.G_GUI_MODE == "PyQt":
+    gui = gui_pyqt.GUI_PyQt(config)
+  elif config.G_GUI_MODE == "QML":
+    gui = gui_qml.GUI_QML(config)
+  elif config.G_GUI_MODE == "Kivy":
+    gui = gui_kivy.GUI_Kivy(config)
+    
 
 if __name__ == "__main__":
   main()
