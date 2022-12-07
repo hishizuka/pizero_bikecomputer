@@ -1,5 +1,6 @@
 import time
 import datetime
+import asyncio
 
 class Sensor():
   config = None
@@ -18,6 +19,10 @@ class Sensor():
   def sensor_init(self):
     pass
 
+  def quit(self):
+    pass
+
+  #async def update(self):
   def update(self):
     pass
 
@@ -27,8 +32,8 @@ class Sensor():
   def reset(self):
     pass
 
-  def sleep(self):
-    time.sleep(self.wait_time)
+  async def sleep(self):
+    await asyncio.sleep(self.wait_time)
     self.start_time = datetime.datetime.now()
 
   def get_sleep_time(self, interval):
@@ -36,12 +41,11 @@ class Sensor():
     d1, d2 = divmod(loop_time, interval)
     if d1 > interval * 10: #[s]
       print(
-        "too long loop_time({}):{:.2f}, d1:{:.0f}, d2:{:.2f}".format(
+        "too long loop_time({}):{:.2f}s, interval:{:.1f}".format(
         self.__class__.__name__,
         loop_time,
-        d1,
-        d2
-        ))
+        interval
+      ))
       d1 = d2 = 0
     self.wait_time = interval - d2
     self.actual_loop_interval = (d1 + 1)*interval
