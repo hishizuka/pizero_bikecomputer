@@ -33,15 +33,15 @@ Pros&Cons
 - (good) ultra-low power consumption
 - (good) backlight
 - (bad) very expensive ($170, Alternatives: $100~)
-- (bad) 8 colors only
+- (bad) 8 colors only (but can use more colors with dithering)
 - Recommend if you don't think costs. Commercial products often uses a reflective LCD.
 
-- <img src="https://qiita-user-contents.imgix.net/https%3A%2F%2Fpbs.twimg.com%2Fmedia%2FEV8NXnaVAAEjoFS%3Fformat%3Dpng%26name%3Dsmall?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=3b5218cc2e1d11c88eec77bbebadbaef" height=480 />
+- <img src="https://user-images.githubusercontent.com/12926652/206317535-71345000-8dfa-4051-a674-15e21afb4203.jpeg" width=480 />
 
 Alternatives: 
-
+- [Aliexpress New LPM027M128B LPM027M128C LTPS TFT-LCD, LCM 2.7 inch 400X240 display](https://ja.aliexpress.com/item/1005002351792191.html?spm=a2g0o.productlist.0.0.52452576NqqM6z&algo_pvid=ba698ed0-3580-48fa-8fdc-b7774c4c9cf0&algo_expid=ba698ed0-3580-48fa-8fdc-b7774c4c9cf0-0&btsid=0bb0623116212468747683928ed47e&ws_ab_test=searchweb0_0,searchweb201602_,searchweb201603_)
 - [WAHOO ELEMNT ROAM screen replacement](https://ja.aliexpress.com/item/1005002276498187.html?spm=a2g0o.productlist.0.0.75631bcfeHZvG1&algo_pvid=15c33af1-273e-4fac-a224-6dff903b6f43&algo_expid=15c33af1-273e-4fac-a224-6dff903b6f43-0&btsid=0b0a555416212467903751350ef791&ws_ab_test=searchweb0_0,searchweb201602_,searchweb201603_): Protector panel is included.
-- [Aliexpress](https://ja.aliexpress.com/item/1005002351792191.html?spm=a2g0o.productlist.0.0.52452576NqqM6z&algo_pvid=ba698ed0-3580-48fa-8fdc-b7774c4c9cf0&algo_expid=ba698ed0-3580-48fa-8fdc-b7774c4c9cf0-0&btsid=0bb0623116212468747683928ed47e&ws_ab_test=searchweb0_0,searchweb201602_,searchweb201603_)
+  - <img src="https://user-images.githubusercontent.com/12926652/206317870-dfb424bf-f16f-49bc-a39f-3310ae243257.png" width=320 />
 - [Digikey LPM027M128B](https://www.digikey.com/en/products/detail/azumo/12380-06-T2/9602620): backlight cable is different from original
 - [LPM044M141](https://www.digikey.com/en/products/detail/azumo/12567-06-T3/10492348): 4.4" color LCD
 - [Adafruit SHARP Memory Display Breakout](https://www.adafruit.com/product/4694): Alternative for MIP Interface Board. Replace monochrome LCD panel. Backlight control is not included.
@@ -125,7 +125,7 @@ UART modules with GPSd are recomended. I2C(Sparkfun qwiic or Adafruit STEMMA QT)
 
 ## I2C sensors
 
-Adafuit circuitpython library is required except some sensors(\*1). Refer to learing page of each sensors.
+Adafuit circuitpython library is required or original drivers are available. Refer to learing page of each sensors.
 
 If you use Sparkfun Qwiic or Adafruit STEMMA QT sensors, [SparkFun Qwiic SHIM for Raspberry Pi](https://www.sparkfun.com/products/15794) is very useful for connecting sensors.
 
@@ -135,7 +135,7 @@ If you use Sparkfun Qwiic or Adafruit STEMMA QT sensors, [SparkFun Qwiic SHIM fo
 
 for altitude, grade, and total ascent/descent
 
-- [BMP280](https://shop.pimoroni.com/products/enviro-phat) (\*1)
+- [BMP280](https://shop.pimoroni.com/products/enviro-phat)
 - [BMP388](https://www.dfrobot.com/product-1928.html)
 - [BMP390](https://www.adafruit.com/product/4816)
 - [LPS33HW](https://www.adafruit.com/product/4414)
@@ -145,7 +145,7 @@ for altitude, grade, and total ascent/descent
 
 The accelerometer is used for stop detection when using GPS. The magnetometer is used in compasses. 
 
-- [LSM303](https://shop.pimoroni.com/products/enviro-phat) (\*1); 
+- [LSM303](https://shop.pimoroni.com/products/enviro-phat)
 - [LSM6DS](https://www.adafruit.com/product/4485): Accel / Gyro
 - [LSM9DS1](https://www.sparkfun.com/products/13944): Accel / Gyro / Mag 
 - [LIS3MDL](https://www.adafruit.com/product/4485): Mag 
@@ -191,7 +191,8 @@ get battery percent, etc.
 
 ## SD card
 - youw own (over 8GB)
-- [SanDisk® High Endurance microSD™ Card](https://shop.westerndigital.com/products/memory-cards/sandisk-high-endurance-uhs-i-microsd#SDSQQNR-032G-AN6IA) is recommended if you use several years.
+- [SanDisk MAX ENDURANCE microSD™ Card](https://www.westerndigital.com/products/memory-cards/sandisk-max-endurance-uhs-i-microsd#SDSQQVR-032G-GN6IA) is recommended if you use several years.
+- [SanDisk® High Endurance microSD™ Card](https://shop.westerndigital.com/products/memory-cards/sandisk-high-endurance-uhs-i-microsd#SDSQQNR-032G-AN6IA) is not compatible with  Raspberry Pi OS Bullseye. See [post1](https://forums.raspberrypi.com/viewtopic.php?p=2021511) and [post2](https://forums.raspberrypi.com/viewtopic.php?p=2006250)
 
 ## Case
 

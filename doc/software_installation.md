@@ -474,6 +474,28 @@ Uploads the most recent activity record file(.fit) created by the reset operatio
   - Toggle map overlay(heatmap, rain map and wind map) and select an overlay map.
   - Heatmaps are cached, but rain map and wind map require internet connection to fetch the latest images.
 
+#### Heatmap
+
+Strava heatmap (bluered)
+
+![map_overlay-strava](https://user-images.githubusercontent.com/12926652/205793586-0b754cde-d1e7-4e57-81d2-2bbd60fc8b11.png)
+
+#### Rain map
+
+RainViewer
+
+![map_overlay_rainviewer](https://user-images.githubusercontent.com/12926652/205876664-ae1b629c-5b3f-4d8a-b789-d3ac24753d7f.png)
+
+国土地理院(Japan)
+
+<img src ="https://user-images.githubusercontent.com/12926652/205563333-549cf4dc-abbd-4392-9233-b8391687e0bc.png" width=400/> 
+
+#### Wind map
+
+openportguide
+
+![map_overlay_weather openportguide de](https://user-images.githubusercontent.com/12926652/205876684-253b672f-615d-410c-8496-5eb9a13b2558.png)
+
 ### Profile
 
 If ANT+ powermeter is available, set both parameters are used in W'balance (%). They are determind by histrical activity data with bycicle power with [GoldenCheetah](http://www.goldencheetah.org) or [intervals.icu](https://intervals.icu).

@@ -152,13 +152,13 @@ USB dongle is required if using ANT+ sensors.
 
 #### Map and Course Profile
 
-<img src ="https://user-images.githubusercontent.com/12926652/205572034-f6188d60-6d6c-4708-a6b9-4d6c0953421c.png" width=400/> <img src ="https://user-images.githubusercontent.com/12926652/205572083-712f9cd2-5f3d-420c-9863-3002d6d1802a.png" width=400/>
+<img width="400" alt="map-01" src="https://user-images.githubusercontent.com/12926652/206341071-5f9bee00-d959-489b-832a-9b4bf7fe2279.png"> <img width="400" alt="map-02" src="https://user-images.githubusercontent.com/12926652/206341086-7935cfbd-8ed3-4068-9f2b-93f676a8932a.png">
 
 #### Heatmap overlay
 
 Strava heatmap.
 
-![map_overlay-strava](https://user-images.githubusercontent.com/12926652/205793586-0b754cde-d1e7-4e57-81d2-2bbd60fc8b11.png)    !
+![map_overlay-strava](https://user-images.githubusercontent.com/12926652/205793586-0b754cde-d1e7-4e57-81d2-2bbd60fc8b11.png)
 
 #### Weather map overlay
 
