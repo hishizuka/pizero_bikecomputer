@@ -118,8 +118,8 @@ class MS5637(i2c.i2c):
       OFF2 = 61 * ((TEMP - 2000) * (TEMP - 2000)) / 16
       SENS2 = 29 * ((TEMP - 2000) * (TEMP - 2000)) / 16
       if TEMP < -1500:
-        OFF2 = OFF2 + 17 * ((Temp + 1500) * (Temp + 1500))
-        SENS2 = SENS2 + 9 * ((Temp + 1500) * (Temp +1500))
+        OFF2 = OFF2 + 17 * ((TEMP + 1500) * (TEMP + 1500))
+        SENS2 = SENS2 + 9 * ((TEMP + 1500) * (TEMP +1500))
     
     TEMP = TEMP - T2
     OFF = OFF - OFF2
@@ -141,5 +141,3 @@ if __name__=='__main__':
     time.sleep(1)
     s.read()
     print(s.values['temperature'], s.values['pressure'])
-    
-
