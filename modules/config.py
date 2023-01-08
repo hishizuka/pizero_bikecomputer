@@ -589,7 +589,7 @@ class Config():
   #IMU axis conversion
   #  X: to North (up rotation is plus)
   #  Y: to West (up rotation is plus)
-  #  Z: to down (defualt is plus)
+  #  Z: to down (default is plus)
   G_IMU_AXIS_SWAP_XY = {
     'STATUS': False, #Y->X, X->Y
   }
@@ -1039,7 +1039,7 @@ class Config():
     except:
       #traceback.print_exc()
       #print("cos_d =", cos_d)
-      #print("paramater:", p0_lon, p0_lat, p1_lon, p1_lat)
+      #print("parameter:", p0_lon, p0_lat, p1_lon, p1_lat)
       return 0
   
   #return [m]
@@ -1059,7 +1059,7 @@ class Config():
     except:
       traceback.print_exc()
     #  #print("cos_d =", cos_d)
-    #  #print("paramater:", p0_lon, p0_lat, p1_lon, p1_lat)
+    #  #print("parameter:", p0_lon, p0_lat, p1_lon, p1_lat)
       return np.array([])
   
   #return [m]

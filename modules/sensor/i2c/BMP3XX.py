@@ -76,12 +76,12 @@ class BMP3XX(i2c.i2c):
       )
 
     # Convert the data
-    # Temp coefficents
+    # Temp coefficients
     self.T1 = b[0] / 2 ** -8.0
     self.T2 = b[1] / 2 ** 30.0
     self.T3 = b[2] / 2 ** 48.0
 
-    # Pressure coefficents
+    # Pressure coefficients
     self.P1 = (b[3] - 2 ** 14.0) / 2 ** 20.0
     self.P2 = (b[4] - 2 ** 14.0) / 2 ** 29.0
     self.P3 = b[5] / 2 ** 32.0

@@ -184,7 +184,7 @@ class SensorANT(Sensor):
     if connectStatus:
       return
 
-    #recconect
+    #reconnect
     if antIDType in self.device:
       self.device[antIDType].connect(isCheck=False, isChange=False) #USE: True -> True)
       self.device[antIDType].ant_state = 'connect_ant_sensor'

@@ -353,7 +353,7 @@ class LoaderTcx():
 
     if len_alt > 0:
       modified_altitude = self.savitzky_golay(self.altitude, 53, 3)
-      #do not apply if length is differnet (occurs when too short course)
+      #do not apply if length is different (occurs when too short course)
       if(len(self.altitude) == len(modified_altitude)):
         self.altitude = modified_altitude
 
@@ -411,7 +411,7 @@ class LoaderTcx():
     cond_diff = cond ^ cond_all
     grade_mod[cond_diff] = grade[3][cond_diff]
 
-    #apply LP fileter (forward and backward)
+    #apply LP filter (forward and backward)
     self.slope_smoothing = np.zeros(course_n)
     self.slope_smoothing[0] = grade_mod[0]
     self.slope_smoothing[-1] = grade_mod[-1]

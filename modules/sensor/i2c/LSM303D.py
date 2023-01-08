@@ -74,9 +74,9 @@ ACT_DUR         = 0x3F
 
 ### Mag scales ###
 MAG_SCALE_2     = 0x00 # full-scale is +/- 2 Gauss
-MAG_SCALE_4     = 0x20 # +/- 4 Guass
-MAG_SCALE_8     = 0x40 # +/- 8 Guass
-MAG_SCALE_12    = 0x60 # +/- 12 Guass
+MAG_SCALE_4     = 0x20 # +/- 4 Gauss
+MAG_SCALE_8     = 0x40 # +/- 8 Gauss
+MAG_SCALE_12    = 0x60 # +/- 12 Gauss
 
 ACCEL_SCALE     = 2 # +/- 2g
 
@@ -127,7 +127,7 @@ class LSM303D(i2c.i2c):
     self.bus.write_byte_data(self.SENSOR_ADDRESS, CTRL_REG4, 0x00)
     # 0x10 = mag 50Hz output rate
     self.bus.write_byte_data(self.SENSOR_ADDRESS, CTRL_REG5, 0x80) # 0x80|(4<<2): 50Hz
-    # Magnetic Scale +/1 1.3 Guass
+    # Magnetic Scale +/1 1.3 Gauss
     self.bus.write_byte_data(self.SENSOR_ADDRESS, CTRL_REG6, MAG_SCALE_2)
     # 0x00 continuous conversion mode
     self.bus.write_byte_data(self.SENSOR_ADDRESS, CTRL_REG7, 0x00)

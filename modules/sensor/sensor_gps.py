@@ -505,7 +505,7 @@ class SensorGPS(Sensor):
     forward_search_index = min(start + 5, course_n-1)
     #2nd search index(a several kilometers ahead: weak GPS signal, long tunnel)
     forward_search_index_next = max(self.get_index_with_distance_cutoff(start, self.config.G_GPS_SEARCH_RANGE), forward_search_index)
-    #3rd search index(backword)
+    #3rd search index(backward)
     backword_search_index = self.get_index_with_distance_cutoff(start, -self.config.G_GPS_SEARCH_RANGE)
     
     b_a_x = self.config.logger.course.points_diff[0]
@@ -586,7 +586,7 @@ class SensorGPS(Sensor):
         #go forward
         pass
       else:
-        #go backword
+        #go backward
         #print("self.values['track']:{}, m:{}".format(self.values['track'], m))
         #print(self.config.logger.course.azimuth)
         #print("azimuth_diff:{}".format(azimuth_diff))

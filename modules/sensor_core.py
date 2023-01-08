@@ -231,7 +231,7 @@ class SensorCore():
         elif self.config.G_ANT['TYPE']['SPD'] == 0x0B:
           if delta['SPD'] < self.time_threshold['SPD']:
             spd = v['SPD'][0x11]['speed']
-        #complement from GPS speed when I2C acc sensor is avaiable (using moving status)
+        #complement from GPS speed when I2C acc sensor is available (using moving status)
         if delta['SPD'] > self.time_threshold['SPD'] and spd == 0 and v['I2C']['m_stat'] == 1 and v['GPS']['speed'] > 0:
           spd = v['GPS']['speed']
           #print("speed from GPS: delta {}s, {:.1f}km/h".format(delta['SPD'], v['GPS']['speed']*3.6))
@@ -260,7 +260,7 @@ class SensorCore():
         if not self.config.G_ANT['USE']['SPD'] and dst_diff['GPS'] > 0:
           dst_diff['USE'] = dst_diff['GPS']
           grade_use['GPS'] = True
-        #complement from GPS speed when I2C acc sensor is avaiable (using moving status)
+        #complement from GPS speed when I2C acc sensor is available (using moving status)
         #ANT+ sensor is disconnected and GPS is available
         elif self.config.G_ANT['USE']['SPD']:
           if delta['SPD'] == np.inf and dst_diff['ANT+'] == 0 and dst_diff['GPS'] > 0:
@@ -417,7 +417,7 @@ class SensorCore():
       time_profile.append(datetime.datetime.now())
 
       #toggle auto stop
-      #ANT+ or GPS speed is avaiable
+      #ANT+ or GPS speed is available
       if not np.isnan(spd) and self.config.G_MANUAL_STATUS == "START":
         
         #speed from ANT+ or GPS
@@ -445,7 +445,7 @@ class SensorCore():
           and self.config.logger != None:
           self.config.logger.start_and_stop()
           
-      #ANT+ or GPS speed is not avaiable
+      #ANT+ or GPS speed is not available
       elif np.isnan(spd) and self.config.G_MANUAL_STATUS == "START":
         #stop recording if speed is broken
         if (self.config.G_ANT['USE']['SPD'] or 'timestamp' in v['GPS']) \

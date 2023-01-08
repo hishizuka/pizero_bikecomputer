@@ -83,7 +83,7 @@ class BMP280(i2c.i2c):
     b1 = self.bus.read_i2c_block_data(self.SENSOR_ADDRESS, 0x88, 24)
 
     # Convert the data
-    # Temp coefficents
+    # Temp coefficients
     self.dig_T1 = b1[1] * 256 + b1[0]
     self.dig_T2 = b1[3] * 256 + b1[2]
     if self.dig_T2 > 32767 :
@@ -92,7 +92,7 @@ class BMP280(i2c.i2c):
     if self.dig_T3 > 32767 :
         self.dig_T3 -= 65536
 
-    # Pressure coefficents
+    # Pressure coefficients
     self.dig_P1 = b1[7] * 256 + b1[6]
     self.dig_P2 = b1[9] * 256 + b1[8]
     if self.dig_P2 > 32767 :

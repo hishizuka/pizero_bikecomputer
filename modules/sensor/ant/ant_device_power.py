@@ -25,7 +25,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
 
   def add_struct_pattern(self):
     self.structPattern[self.name] = {
-      #(page), evt_count, lr_balance, cadence, accumlated power(2byte), instantaneous power(2byte)
+      #(page), evt_count, lr_balance, cadence, accumulated power(2byte), instantaneous power(2byte)
       0x10:struct.Struct('<xBBBHH'),
       #(page), evt_count, wheel_ticks, x, wheel period(2byte), accumulatd power(2byte)
       0x11:struct.Struct('<xBBxHH'),
@@ -92,7 +92,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
     #self.channel.send_acknowledged_data(array.array('B',[0x46,0xFF,0xFF,0xFF,0xFF,0x88,0x02,0x01]))
 
   def on_data_power_0x10(self, data, power_values, pre_values, values):
-    #(page), evt_count, balance, cadence, accumlated power(2byte), instantaneous power(2byte)
+    #(page), evt_count, balance, cadence, accumulated power(2byte), instantaneous power(2byte)
     (power_values[0], lr_balance, cadence, power_values[1], power_16_simple) \
       = self.structPattern[self.name][0x10].unpack(data[0:8])
     t = datetime.datetime.now()

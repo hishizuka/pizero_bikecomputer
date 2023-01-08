@@ -95,7 +95,7 @@ class CourseListWidget(ListWidget):
     
   @asyncSlot()
   async def button_func(self):
-    if self.list_type == "Local Strage":
+    if self.list_type == "Local Storage":
       self.set_course()
     elif self.list_type == "Ride with GPS":
       await self.change_course_detail_page()
@@ -130,7 +130,7 @@ class CourseListWidget(ListWidget):
   def set_course(self, course_file=None):
     if self.selected_item == None: return
     
-    #from Local Strage (self.list)
+    #from Local Storage (self.list)
     if course_file == None:
       self.course_file = self.config.G_COURSE_DIR + self.selected_item.list_info['id']
     #from Ride with GPS (CourseDetailWidget)
@@ -168,7 +168,7 @@ class CourseListItemWidget(ListItemWidget):
     super().__init__(parent=parent, config=config)
     self.list_type = list_type
     
-    if self.list_type == "Local Strage":
+    if self.list_type == "Local Storage":
       self.enter_signal.connect(self.parentWidget().set_course)
       self.set_simple_list_stylesheet(hide_detail_label=True)
     elif self.list_type == "Ride with GPS":
