@@ -440,7 +440,7 @@ In the menu, the button assignments are changed.
 
 <img width="400" alt="menu-03-courses" src="https://user-images.githubusercontent.com/12926652/206076194-a0b3b356-fbda-4591-ba27-02701e461aaa.png">
 
-- Local Strage
+- Local Storage
   - Select course .tcx file in `courses` folder.
 - Ride sith GPS
   - If you set token in setting.conf, select course from Ride with GPS. Internet access is required. Sample image are shown as belows.
@@ -498,7 +498,7 @@ openportguide
 
 ### Profile
 
-If ANT+ powermeter is available, set both parameters are used in W'balance (%). They are determind by histrical activity data with bycicle power with [GoldenCheetah](http://www.goldencheetah.org) or [intervals.icu](https://intervals.icu).
+If ANT+ powermeter is available, set both parameters are used in W'balance (%). They are determined by histrical activity data with bycicle power with [GoldenCheetah](http://www.goldencheetah.org) or [intervals.icu](https://intervals.icu).
 
 <img width="400" alt="menu-07-profile" src="https://user-images.githubusercontent.com/12926652/206076204-197f2454-940b-4267-a626-52740391ddac.png">
 
@@ -519,11 +519,11 @@ If ANT+ powermeter is available, set both parameters are used in W'balance (%). 
 <img width="400" alt="menu-09-network" src="https://user-images.githubusercontent.com/12926652/206076207-9a284166-ce16-4589-8ef3-b428ee09e7a5.png">
 
 - BT Tethering
-  - If `/usr/local/bin/bt-pan` is avaiable, start bluetooth tethering with devices of [BT_ADDRESS_section](#bt_address-section) in setting.conf.
+  - If `/usr/local/bin/bt-pan` is available, start bluetooth tethering with devices of [BT_ADDRESS_section](#bt_address-section) in setting.conf.
   - Latest Raspberry Pi OS has only python version 3, so bt-pan must be modified to work with python version 3(not shown).
 - Phone Msg
   - This is experimental. Assume wifi or bluetooth network(Use tethering when outdoors).
-  - Start http server and recieve messages via GET method.
+  - Start http server and receive messages via GET method.
   - The http address is http://address:8080/message?app={app}&title={title}&message={message}
   - The IP address can be get from "IP Address".
   - Phone notifications can be forwarded by Android [MacroDroid](https://play.google.com/store/apps/details?id=com.arlosoft.macrodroid) or iOS Shortcuts.

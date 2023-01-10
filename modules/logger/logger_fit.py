@@ -90,8 +90,8 @@ class LoggerFit(Logger):
       "name":"record",
       "field":{
         253:("timestamp","uint32"),
-        0:("position_lat","sint32"), #need convertion to semicircles
-        1:("position_long","sint32"), #need convertion to semicircles
+        0:("position_lat","sint32"), #need conversion to semicircles
+        1:("position_long","sint32"), #need conversion to semicircles
         2:("altitude","uint16",5,500), #with scale and offset
         3:("heart_rate","uint8"),
         4:("cadence","uint8"),

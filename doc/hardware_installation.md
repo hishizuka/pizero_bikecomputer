@@ -84,7 +84,7 @@ Pros&Cons
 
 ## GPS module
 
-UART modules with GPSd are recomended. I2C(Sparkfun qwiic or Adafruit STEMMA QT) modules are supported experimentally.
+UART modules with GPSd are recommended. I2C(Sparkfun qwiic or Adafruit STEMMA QT) modules are supported experimentally.
 
 ### [SparkFun ZOE-M8Q](https://www.sparkfun.com/products/15193)
 

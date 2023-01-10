@@ -110,7 +110,7 @@ sudo apt-get install libudev-dev libinput-dev libts-dev libxcb-xinerama0-dev lib
 ##### Build PyQt5
 
 Follow [PyQt Reference Guide](https://www.riverbankcomputing.com/static/Docs/PyQt5/installation.html).
-The source is avaiable [here](https://pypi.org/project/PyQt5/#files)
+The source is available [here](https://pypi.org/project/PyQt5/#files)
 
 ```
 $ cd

@@ -31,7 +31,7 @@ from .pyqt_base_map import BaseMapWidget
 class MapWidget(BaseMapWidget):
   
   #map position
-  map_area = {'w':np.nan, 'h':np.nan} #witdh(longitude diff) and height(latitude diff)
+  map_area = {'w':np.nan, 'h':np.nan} #width(longitude diff) and height(latitude diff)
   move_pos = {'x':0, 'y':0}
   map_pos = {'x':np.nan, 'y':np.nan} #center
 

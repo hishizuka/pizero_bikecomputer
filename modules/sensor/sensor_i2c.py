@@ -761,7 +761,7 @@ class SensorI2C(Sensor):
     #require acc
     if not self.motion_sensor['ACC']:
       return
-    #conver absolute coordinates
+    #convert absolute coordinates
     cos_p = math.cos(self.values['pitch'])
     sin_p = math.sin(self.values['pitch'])
     cos_r = math.cos(self.values['roll'])
@@ -904,7 +904,7 @@ class SensorI2C(Sensor):
    
     altitude_raw = self.sealevel_temp / 0.0065 * (1 - pow(self.values['pressure']/self.sealevel_pa, 1.0/5.257))
 
-    #filterd altitude
+    #filtered altitude
     #self.update_kf(altitude_raw)
     
     #average filter

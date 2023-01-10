@@ -141,7 +141,7 @@ class KalmanFilter(object):
         updates this variable.
     x_prior : numpy.array(dim_x, 1)
         Prior (predicted) state estimate. The *_prior and *_post attributes
-        are for convienence; they store the  prior and posterior of the
+        are for convenience; they store the  prior and posterior of the
         current epoch. Read Only.
     P_prior : numpy.array(dim_x, dim_x)
         Prior (predicted) state covariance matrix. Read Only.

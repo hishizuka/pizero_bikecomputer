@@ -234,7 +234,7 @@ class MipDisplay():
 
   def change_brightness(self):
     
-    #brightness is changing as followings,
+    #brightness is changing as following,
     # [self.brightness_table(0, b1, b2, ..., bmax), self.display.G_USE_AUTO_BACKLIGHT]
     self.brightness_index = (self.brightness_index+1)%(len(self.brightness_table)+1)
 
