@@ -30,10 +30,7 @@ class MenuWidget(QtWidgets.QWidget):
     QtWidgets.QWidget.__init__(self, parent=parent)
     self.config = config
     self.page_name = page_name
-    self.icon_dir = ""
-    if self.config.G_IS_RASPI:
-      self.icon_dir = self.config.G_INSTALL_PATH
-    self.icon = QtGui.QIcon(self.icon_dir+'img/back_white.svg')
+    self.icon = QtGui.QIcon(self.config.gui.gui_config.icon_dir+'img/back_white.svg')
     self.icon_x = 40
     self.icon_y = 32
     
@@ -301,6 +298,21 @@ class MenuWidget(QtWidgets.QWidget):
       self.button_type = 'null'
       self.set_icon_with_size()
  
+    def onoff_button(self, status):
+      if status:
+        self.enable()
+      else:
+        self.disable()
+      self.setStyleSheet(self.config.gui.style.G_GUI_PYQT_buttonStyle_menu)
+
+    def disable(self):
+      self.setEnabled(False)
+      self.setProperty("style", "unavailable")
+
+    def enable(self):
+      self.setEnabled(True)
+      self.setProperty("style", None)
+
     def resizeEvent(self, event):
       #w = self.size().width()
       h = self.size().height()
@@ -387,13 +399,15 @@ class TopMenuWidget(MenuWidget):
       #Name(page_name), button_attribute, connected functions, layout
       ('Sensors', 'submenu', self.sensors_menu),
       ('Courses', 'submenu', self.courses_menu),
+      ('Live Track', 'submenu', self.livetrack_menu),
       ('Upload Activity', 'submenu', self.cloud_services_menu),
       ('Map', 'submenu', self.map_menu),
       ('Profile', 'submenu', self.profile_menu),
       ('System', 'submenu', self.setting_menu),
     )
     self.add_buttons(button_conf)
-    
+
+
   def sensors_menu(self):
     self.change_page('Sensors')
 
@@ -403,6 +417,9 @@ class TopMenuWidget(MenuWidget):
   def courses_menu(self):
     self.change_page('Courses', preprocess=True)
   
+  def livetrack_menu(self):
+    self.change_page('Live Track', preprocess=True)
+
   def map_menu(self):
     self.change_page('Map')
 
@@ -603,3 +620,51 @@ class UploadActivityMenuWidget(MenuWidget):
   async def rwgps_upload(self):
     await self.button['Ride with GPS'].run(self.config.network.api.rwgps_upload)
 
+
+class LiveTrackMenuWidget(MenuWidget):
+  
+  def setup_menu(self):
+    self.button = {}
+    button_conf = (
+      #Name(page_name), button_attribute, connected functions, layout
+      ('Live Track', 'toggle', lambda: self.onoff_live_track(True)),
+      ('Auto upload via BT', 'toggle', lambda: self.onoff_auto_upload_via_BT(True)),
+      ('Select BT device', 'submenu', self.bt_tething),
+    )
+    self.add_buttons(button_conf, back_connect=False)
+    
+    #set back_index of child widget
+    self.bt_page_name = "BT Tethering"
+    self.bt_index = self.config.gui.gui_config.G_GUI_INDEX[self.bt_page_name]
+
+    if not self.config.G_THINGSBOARD_API['HAVE_API_TOKEN']:
+      self.button['Live Track'].disable()
+    else:
+      if not self.config.G_IS_RASPI:
+        self.button['Auto upload via BT'].disable()
+    
+    if not self.config.G_THINGSBOARD_API['AUTO_UPLOAD_VIA_BT']:
+      self.button['Select BT device'].disable()
+  
+  def preprocess(self):
+    #initialize toggle button status
+    self.onoff_live_track(change=False)
+    self.parentWidget().widget(self.bt_index).back_index_key = self.page_name
+
+  def onoff_live_track(self, change=True):
+    if change:
+      self.config.G_THINGSBOARD_API['STATUS'] = not self.config.G_THINGSBOARD_API['STATUS']
+      self.config.setting.set_config_pickle('G_THINGSBOARD_API_STATUS', self.config.G_THINGSBOARD_API['STATUS'])
+    self.button['Live Track'].change_toggle(self.config.G_THINGSBOARD_API['STATUS'])
+  
+  def onoff_auto_upload_via_BT(self, change=True):
+    if change:
+      self.config.G_THINGSBOARD_API['AUTO_UPLOAD_VIA_BT'] = not self.config.G_THINGSBOARD_API['AUTO_UPLOAD_VIA_BT']
+      self.config.setting.set_config_pickle('AUTO_UPLOAD_VIA_BT', self.config.G_THINGSBOARD_API['AUTO_UPLOAD_VIA_BT'])
+    self.button['Auto upload via BT'].change_toggle(self.config.G_THINGSBOARD_API['AUTO_UPLOAD_VIA_BT'])
+
+    self.button['Select BT device'].onoff_button(self.config.G_THINGSBOARD_API['AUTO_UPLOAD_VIA_BT'])
+
+  def bt_tething(self):
+    self.change_page(self.bt_page_name, preprocess=True, run_bt_tethering=False)
+  
