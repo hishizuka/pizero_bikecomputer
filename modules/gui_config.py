@@ -23,18 +23,18 @@ class GUI_Config():
   }
 
   G_UNIT ={
-    "HeartRate":"{0:^.0f}bpm",
-    "Cadence":"{0:^.0f}rpm",
-    "Speed":"{0:^3.1f}km/h",
-    "Distance":"{0:^3.1f}km",
-    "Power":"{0:^4.0f}w",
-    "Work":"{0:^4.0f}kJ",
-    "Position":"{0:^3.5f}",
-    "Altitude":"{0:^5.0f}m",
-    "Grade":"{0:^2.0f}%",
-    "GPS_error":"{0:^4.0f}m",
-    "GPS_DOP":"{0:^1.1f}",
-    "String":"{0:^s}",
+    "HeartRate":"{:.0f}bpm",
+    "Cadence":"{:.0f}rpm",
+    "Speed":"{:.1f}km/h",
+    "Distance":"{:.1f}km",
+    "Power":"{:.0f}w",
+    "Work":"{:.0f}kJ",
+    "Position":"{:.5f}",
+    "Altitude":"{:.0f}m",
+    "Grade":"{:.0f}%",
+    "GPS_error":"{:.0f}m",
+    "GPS_DOP":"{:.1f}",
+    "String":"{:s}",
   }
 
   G_ITEM_DEF = {
@@ -45,11 +45,11 @@ class GUI_Config():
     "Cad.":(G_UNIT["Cadence"],"self.sensor.values['integrated']['cadence']"),
     "HR":(G_UNIT["HeartRate"],"self.sensor.values['integrated']['heart_rate']"),
     "Work":(G_UNIT["Work"],"self.sensor.values['integrated']['accumulated_power']"),
-    "W'bal":("{0:^.0f}kJ","self.sensor.values['integrated']['w_prime_balance']"),
-    "W'bal(Norm)":("{0:^d}%","self.sensor.values['integrated']['w_prime_balance_normalized']"),
+    "W'bal":("{:.0f}kJ","self.sensor.values['integrated']['w_prime_balance']"),
+    "W'bal(Norm)":("{:d}%","self.sensor.values['integrated']['w_prime_balance_normalized']"),
     "Grade":(G_UNIT["Grade"],"self.sensor.values['integrated']['grade']"),
     "Grade(spd)":(G_UNIT["Grade"],"self.sensor.values['integrated']['grade_spd']"),
-    "GlideRatio":("{0:.0f}m","self.sensor.values['integrated']['glide_ratio']"),
+    "GlideRatio":("{:.0f}m","self.sensor.values['integrated']['glide_ratio']"),
     #average_values
     "Power(3s)":(G_UNIT["Power"],"self.sensor.values['integrated']['ave_power_3s']"),
     "Power(30s)":(G_UNIT["Power"],"self.sensor.values['integrated']['ave_power_30s']"),
@@ -68,11 +68,11 @@ class GUI_Config():
     "HDOP":(G_UNIT["GPS_DOP"],"self.sensor.values['GPS']['hdop']"),
     "VDOP":(G_UNIT["GPS_DOP"],"self.sensor.values['GPS']['vdop']"),
     "GPSTime":(G_UNIT["String"],"self.sensor.values['GPS']['utctime']"),
-    "GPS Fix":("{0:^d}","self.sensor.values['GPS']['mode']"),
+    "GPS Fix":("{:d}","self.sensor.values['GPS']['mode']"),
     "Course Dist.":(G_UNIT["Distance"],"self.sensor.values['GPS']['course_distance']"),
     #ANT+ raw
     "HR(ANT+)":(G_UNIT["HeartRate"],\
-      "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['HR']]['hr']"),
+      "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['HR']]['heart_rate']"),
     "Speed(ANT+)":(G_UNIT["Speed"],\
       "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['SPD']]['speed']"),
     "Dist.(ANT+)":(G_UNIT["Distance"],\
@@ -123,36 +123,37 @@ class GUI_Config():
     "HR2":(G_UNIT["HeartRate"],"None"),
     "HR3":(G_UNIT["HeartRate"],"None"),
     #Sensor raw
-    "Temp":("{0:^3.0f}C","self.sensor.values['integrated']['temperature']"),
-    "Pressure":("{0:^4.0f}hPa","self.sensor.values['I2C']['pressure']"),
+    "Temp":("{:3.0f}C","self.sensor.values['integrated']['temperature']"),
+    "Pressure":("{:4.0f}hPa","self.sensor.values['I2C']['pressure']"),
     "Altitude":(G_UNIT["Altitude"],"self.sensor.values['I2C']['altitude']"),
-    "Humidity":("{0:^3.0f}%","self.sensor.values['I2C']['humidity']"),
+    "Humidity":("{:3.0f}%","self.sensor.values['I2C']['humidity']"),
     "Accum.Alt.":(G_UNIT["Altitude"],"self.sensor.values['I2C']['accumulated_altitude']"),
-    "Vert.Spd":("{0:^3.1f}m/s","self.sensor.values['I2C']['vertical_speed']"),
+    "Vert.Spd":("{:3.1f}m/s","self.sensor.values['I2C']['vertical_speed']"),
     "Ascent":(G_UNIT["Altitude"],"self.sensor.values['I2C']['total_ascent']"),
     "Descent":(G_UNIT["Altitude"],"self.sensor.values['I2C']['total_descent']"),
-    "Light":("{0:^.0f}","self.sensor.values['I2C']['light']"),
-    "Infrared":("{0:^.0f}","self.sensor.values['I2C']['infrared']"),
-    "UVI":("{0:^.0f}","self.sensor.values['I2C']['uvi']"),
-    "VOC_Index":("{0:^.0f}","self.sensor.values['I2C']['voc_index']"),
-    "Raw_Gas":("{0:^.0f}","self.sensor.values['I2C']['raw_gas']"),
-    "Motion":("{0:^1.1f}","self.sensor.values['I2C']['motion']"),
-    "M_Stat":("{0:^1.1f}","self.sensor.values['I2C']['m_stat']"),
-    "ACC_X":("{0:^1.1f}","self.sensor.values['I2C']['acc'][0]"),
-    "ACC_Y":("{0:^1.1f}","self.sensor.values['I2C']['acc'][1]"),
-    "ACC_Z":("{0:^1.1f}","self.sensor.values['I2C']['acc'][2]"),
-    "Battery":("{0:^1.0f}%","self.sensor.values['I2C']['battery_percentage']"),
+    "Light":("{:.0f}","self.sensor.values['I2C']['light']"),
+    "Infrared":("{:.0f}","self.sensor.values['I2C']['infrared']"),
+    "UVI":("{:.0f}","self.sensor.values['I2C']['uvi']"),
+    "VOC_Index":("{:.0f}","self.sensor.values['I2C']['voc_index']"),
+    "Raw_Gas":("{:.0f}","self.sensor.values['I2C']['raw_gas']"),
+    "Motion":("{:1.1f}","self.sensor.values['I2C']['motion']"),
+    "M_Stat":("{:1.1f}","self.sensor.values['I2C']['m_stat']"),
+    "ACC_X":("{:1.1f}","self.sensor.values['I2C']['acc'][0]"),
+    "ACC_Y":("{:1.1f}","self.sensor.values['I2C']['acc'][1]"),
+    "ACC_Z":("{:1.1f}","self.sensor.values['I2C']['acc'][2]"),
+    "Battery":("{:1.0f}%","self.sensor.values['I2C']['battery_percentage']"),
     "Heading":(G_UNIT["String"],"self.sensor.values['I2C']['heading_str']"),
-    "Pitch":("{0:^1.0f}","self.sensor.values['I2C']['modified_pitch']"),
+    "Pitch":("{:1.0f}","self.sensor.values['I2C']['modified_pitch']"),
     #General
     "Timer":("timer","self.logger.values['count']"),
     "LapTime":("timer","self.logger.values['count_lap']"),
-    "Lap":("{0:^d}","self.logger.values['lap']"),
+    "Lap":("{:d}","self.logger.values['lap']"),
     "Time":("time","0"),
     "ElapsedTime":("timer","self.logger.values['elapsed_time']"),
     "GrossAveSPD":(G_UNIT["Speed"],"self.logger.values['gross_ave_spd']"),
     "GrossDiffTime":(G_UNIT["String"],"self.logger.values['gross_diff_time']"),
     "CPU_MEM":(G_UNIT["String"],"self.sensor.values['integrated']['CPU_MEM']"),
+    "Send Time":(G_UNIT["String"],"self.sensor.values['integrated']['send_time']"),
     #Statistics
     #Pre Lap Average or total
     "PLap HR":(G_UNIT["HeartRate"],"self.logger.record_stats['pre_lap_avg']['heart_rate']"),
@@ -212,6 +213,10 @@ class GUI_Config():
     #read layout
     if os.path.exists(self.config.G_LAYOUT_FILE):
       self.read_layout()
+    
+    self.icon_dir = ""
+    if self.config.G_IS_RASPI:
+      self.icon_dir = self.config.G_INSTALL_PATH
 
   def set_qt5_or_qt6_constants(self, USE_PYQT6):
     self.key_space = QtCore.Qt.Key.Key_Space if USE_PYQT6 else QtCore.Qt.Key_Space
