@@ -49,7 +49,7 @@ class LoaderTcx():
     super().__init__()
     self.config = config
 
-  def reset(self, delete_course=False):
+  def reset(self, delete_course=False, replace=False):
     
     #for course
     self.info = {}
@@ -78,6 +78,8 @@ class LoaderTcx():
     if delete_course:
       if os.path.exists(self.config.G_COURSE_FILE_PATH):
         os.remove(self.config.G_COURSE_FILE_PATH)
+      if not replace and self.config.G_THINGSBOARD_API['STATUS']:
+        self.config.network.api.send_livetrack_course_reset()
 
   def load(self):
     self.reset()
@@ -112,6 +114,9 @@ class LoaderTcx():
     print("  calc_slope_smoothing: {:.3f} sec".format(time_profile[2]))
     print("  modify_course_points: {:.3f} sec".format(time_profile[3]))
     print("  total               : {:.3f} sec".format(sum(time_profile)))
+
+    if self.config.G_THINGSBOARD_API['STATUS']:
+      self.config.network.api.send_livetrack_course_load()
   
   async def search_route(self, x1, y1, x2, y2):
     if np.any(np.isnan([x1, y1, x2, y2])):
@@ -121,6 +126,9 @@ class LoaderTcx():
     self.downsample()
     self.calc_slope_smoothing()
     self.modify_course_points()
+
+    if self.config.G_THINGSBOARD_API['STATUS']:
+      self.config.network.api.send_livetrack_course_load()
 
   def get_courses(self):
 
@@ -574,8 +582,8 @@ class LoaderTcx():
   
   def savitzky_golay(self, y, window_size, order, deriv=0, rate=1):
     try:
-      window_size = np.abs(np.int(window_size))
-      order = np.abs(np.int(order))
+      window_size = np.abs(np.intc(window_size))
+      order = np.abs(np.intc(order))
     except ValueError as msg:
       raise ValueError("window_size and order have to be of type int")
     if window_size % 2 != 1 or window_size < 1:
