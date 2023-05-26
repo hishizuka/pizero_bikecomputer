@@ -9,7 +9,7 @@ https://github.com/hishizuka/pizero_bikecomputer
 
 - 2023/5/26 There are so many updates, so you might want to look over [software_installation.md](/doc/software_installation.md)..
 - 2023/5/26 Install dbus-next and bluez-peripheral if you want to link your Android smartphone. [GadgetBridge](https://gadgetbridge.org) is also required, which can mirror Android notifications and get location without GPS modules.
-- 2023/5/26 Install tb-mqtt-client if you want to send [ThingsBoard](https://thingsboard.io), which is an online dashboard. You can share your location in the map with your course or track.
+- 2023/5/26 Install tb-mqtt-client if you want to send to [ThingsBoard](https://thingsboard.io), which is an online dashboard. You can share your location in the map with your course or track.
 
 ```
 #2023/5/26 update
