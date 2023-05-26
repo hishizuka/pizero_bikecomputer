@@ -77,7 +77,7 @@ class MapWidget(BaseMapWidget):
     self.current_point.setZValue(40)
     
     #self.plot.showGrid(x=True, y=True, alpha=1)
-    self.track_plot = self.plot.plot(pen=pg.mkPen(color=(0,128,255), width=4))
+    self.track_plot = self.plot.plot(pen=pg.mkPen(color=(0,170,255), width=4))
     self.track_plot.setZValue(30)
     #self.track_plot = self.plot.plot(pen=pg.mkPen(color=(0,192,255,128), width=8))
 
@@ -451,7 +451,8 @@ class MapWidget(BaseMapWidget):
     if not np.isnan(y_start) and not np.isnan(y_end):
       self.plot.setYRange(self.get_mod_lat(y_start), self.get_mod_lat(y_end), padding=0)
 
-    await self.draw_map_tile(x_start, x_end, y_start, y_end)
+    if not np.any(np.isnan([x_start, x_end, y_start, y_end])):
+      await self.draw_map_tile(x_start, x_end, y_start, y_end)
     #print("\tpyqt_graph : update_extra map : ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
     #t = datetime.datetime.utcnow()
 

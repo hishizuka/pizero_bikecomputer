@@ -73,7 +73,7 @@ class PyQtStyle():
   '''
 
   G_GUI_PYQT_menu_topbar = '''
-    background-color: #008000
+    background-color: #00AA00
   '''
 
   G_GUI_PYQT_menu_topbar_page_name_label = '''
@@ -86,7 +86,7 @@ class PyQtStyle():
 
   G_GUI_PYQT_buttonStyle_menu = """
     QPushButton{
-      border-color: #CCCCCC;
+      border-color: #AAAAAA;
       border-style: outset;
       border-width: 0px 1px 1px 0px;
       text-align: left;
@@ -101,11 +101,11 @@ class PyQtStyle():
       border-style: solid;
     }
     QPushButton[style='dummy']{ border-width: 0px; }
-    QPushButton[style='unavailable']{ color: #808080; }
+    QPushButton[style='unavailable']{ color: #AAAAAA; }
   """
 
   G_GUI_PYQT_menu_list_border = '''
-    border-bottom: 1px solid #CCCCCC;
+    border-bottom: 1px solid #AAAAAA;
   '''
 
   G_GUI_PYQT_buttonStyle = '''
@@ -165,10 +165,14 @@ class PyQtStyle():
       padding: 15px;
     }
     Container DialogButton{
-      border: 2px solid #808080;
+      border: 2px solid #AAAAAA;
       border-radius: 3px;
       text-align: center;
     }
     Container DialogButton:pressed{background-color: black; }
     Container DialogButton:focus{background-color: black; color: white; }
+  '''
+  G_GUI_PYQT_item = '''
+    border-style: solid;
+    border-color: #AAAAAA;
   '''

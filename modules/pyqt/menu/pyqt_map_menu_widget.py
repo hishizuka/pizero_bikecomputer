@@ -93,12 +93,7 @@ class MapOverlayMenuWidget(MenuWidget):
     self.button[overlay_type].change_toggle(status)
 
     #toggle list
-    self.button[list_key].setEnabled(status)
-    if status:
-      self.button[list_key].setProperty("style", None)
-    else:
-      self.button[list_key].setProperty("style", "unavailable")
-    self.button[list_key].setStyleSheet(self.config.gui.style.G_GUI_PYQT_buttonStyle_menu)
+    self.button[list_key].onoff_button(status)
 
     #OFF: remove overlay
     if self.config.gui.map_widget != None:

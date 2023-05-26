@@ -99,6 +99,7 @@ class ANTMenuWidget(MenuWidget):
     if self.config.G_ANT['USE'][ant_name]:
       #disable ANT+ sensor
       self.config.logger.sensor.sensor_ant.disconnect_ant_sensor(ant_name)
+      self.config.setting.write_config()
     else:
       #search ANT+ sensor
       self.change_page(self.child_page_name, preprocess=True, reset=True, list_type=ant_name)

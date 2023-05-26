@@ -64,6 +64,7 @@ def main():
   print("  total         : {:.3f} sec".format(sum(time_profile)))
   print()
   print("########## INITIALIZE END ##########")
+  config.boot_time += sum(time_profile)
   #return
 
   if config.G_GUI_MODE == "PyQt":

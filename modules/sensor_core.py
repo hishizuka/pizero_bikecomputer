@@ -32,13 +32,14 @@ class SensorCore():
   sensor_gpio = None
   values = {}
   integrated_value_keys =  [
-    'hr','speed','cadence','power',
+    'heart_rate','speed','cadence','power',
     'distance','accumulated_power',
     'ave_power_3s','ave_power_30s',
     'w_prime_balance','w_prime_balance_normalized','w_prime_power_sum','w_prime_power_count', 'w_prime_t','w_prime_sum',
     'grade','grade_spd','glide_ratio','dem_altitude',
     'temperature',
     'cpu_percent',
+    'send_time',
     ]
   process = None
   time_threshold = {'HR':15, 'SPD':5, 'CDC':3, 'PWR':3, 'TEMP':45} #valid period of sensor [sec]
@@ -115,7 +116,7 @@ class SensorCore():
     self.sensor_gpio.quit()
 
   async def integrate(self):
-    pre_dst = {'ANT+':0, 'GPS': 0} 
+    pre_dst = {'ANT+':0, 'GPS': 0}
     pre_ttlwork = {'ANT+':0}
     pre_alt = {'ANT+':np.nan, 'GPS': np.nan}
     pre_alt_spd = {'ANT+':np.nan}
@@ -196,7 +197,7 @@ class SensorCore():
       #HeartRate : ANT+
       if self.config.G_ANT['USE']['HR']:
         if delta['HR'] < self.time_threshold['HR']:
-          hr = v['HR']['hr']
+          hr = v['HR']['heart_rate']
         
       #Cadence : ANT+
       if self.config.G_ANT['USE']['CDC']:
@@ -260,10 +261,9 @@ class SensorCore():
         if not self.config.G_ANT['USE']['SPD'] and dst_diff['GPS'] > 0:
           dst_diff['USE'] = dst_diff['GPS']
           grade_use['GPS'] = True
-        #complement from GPS speed when I2C acc sensor is available (using moving status)
-        #ANT+ sensor is disconnected and GPS is available
+        #ANT+ sensor is not connected from the beginning of the ride
         elif self.config.G_ANT['USE']['SPD']:
-          if delta['SPD'] == np.inf and dst_diff['ANT+'] == 0 and dst_diff['GPS'] > 0:
+          if (delta['SPD'] == np.inf and dst_diff['ANT+'] == 0 and dst_diff['GPS'] > 0):
             dst_diff['USE'] = dst_diff['GPS']
             grade_use['ANT+'] = False
             grade_use['GPS'] = True
@@ -433,9 +433,9 @@ class SensorCore():
         #flag_moving is not considered (set True) as follows,
         # accelerometer is not available (nan)
         # ANT+ speed sensor is available
-        if np.isnan(v['I2C']['m_stat']) or self.config.G_ANT['USE']['SPD']:
+        if np.isnan(v['I2C']['m_stat']) or self.config.G_ANT['USE']['SPD'] or self.config.G_DUMMY_OUTPUT:
           flag_moving = True
-  
+        
         if self.config.G_STOPWATCH_STATUS == "STOP" \
           and flag_spd and flag_moving \
           and self.config.logger != None:
@@ -512,7 +512,7 @@ class SensorCore():
       g = 0
     return int(g)
 
-  def get_lp_filterd_value(self, value, pre):
+  def get_lp_filtered_value(self, value, pre):
     o = p = self.config.G_ANT_NULLVALUE
     #value must be initialized with None
     if np.isnan(pre):
