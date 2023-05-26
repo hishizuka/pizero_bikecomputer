@@ -41,7 +41,8 @@ class MyWindow(QtWidgets.QMainWindow):
   #override from QtWidget
   @qasync.asyncClose
   async def closeEvent(self, event):
-    await self.config.quit()
+    #await self.config.quit()
+    await self.config.gui.quit()
 
   #override from QtWidget
   def paintEvent(self, event):
@@ -80,6 +81,7 @@ class GUI_PyQt(QtCore.QObject):
   signal_start_and_stop_manual = QtCore.pyqtSignal()
   signal_count_laps = QtCore.pyqtSignal()
   signal_boot_status = QtCore.pyqtSignal(str)
+  signal_draw_display = QtCore.pyqtSignal()
 
   #for draw_display
   screen_shape = None
@@ -191,6 +193,12 @@ class GUI_PyQt(QtCore.QObject):
     self.signal_start_and_stop_manual.connect(self.start_and_stop_manual_internal)
     self.signal_count_laps.connect(self.count_laps_internal)
 
+    self.signal_draw_display.connect(self.draw_display)
+
+    self.msg_queue = asyncio.Queue()
+    self.msg_event = asyncio.Event()
+    asyncio.create_task(self.msg_worker())
+
     t2 = datetime.datetime.now()
     time_profile.append((t2-t1).total_seconds())
     t1 = t2
@@ -200,8 +208,8 @@ class GUI_PyQt(QtCore.QObject):
     import modules.pyqt.graph.pyqt_value_graph as pyqt_value_graph
     from modules.pyqt.pyqt_values_widget import ValuesWidget
 
-    from modules.pyqt.menu.pyqt_menu_widget import TopMenuWidget, UploadActivityMenuWidget
-    from modules.pyqt.menu.pyqt_system_menu_widget import SystemMenuWidget, NetworkMenuWidget, BluetoothTetheringListWidget, DebugLogViewerWidget
+    from modules.pyqt.menu.pyqt_menu_widget import TopMenuWidget, LiveTrackMenuWidget, UploadActivityMenuWidget
+    from modules.pyqt.menu.pyqt_system_menu_widget import SystemMenuWidget, NetworkMenuWidget, BluetoothTetheringListWidget, DebugMenuWidget, DebugLogViewerWidget
     from modules.pyqt.menu.pyqt_profile_widget import ProfileWidget
     from modules.pyqt.menu.pyqt_sensor_menu_widget import SensorMenuWidget, ANTMenuWidget, ANTListWidget, ANTMultiScanScreenWidget
     from modules.pyqt.menu.pyqt_course_menu_widget import CoursesMenuWidget, CourseListWidget, CourseDetailWidget, GoogleDirectionsAPISettingMenuWidget
@@ -243,10 +251,12 @@ class GUI_PyQt(QtCore.QObject):
       ("BT Tethering", BluetoothTetheringListWidget),
       ("Network", NetworkMenuWidget),
       ("Debug Log", DebugLogViewerWidget),
+      ("Debug", DebugMenuWidget),
       ("System", SystemMenuWidget),
       ("CP", AdjustCPWidget),
       ("W Prime Balance", AdjustWPrimeBalanceWidget),
       ("Profile", ProfileWidget),
+      ("Live Track", LiveTrackMenuWidget),
       ("Upload Activity", UploadActivityMenuWidget),
       ("Wind map List", WindmapListWidget),
       ("Rain map List", RainmapListWidget),
@@ -354,9 +364,12 @@ class GUI_PyQt(QtCore.QObject):
     with self.config.loop:
       self.config.loop.run_forever()
       #loop is stopped
-      tasks = asyncio.all_tasks()
-      if len(tasks) > 0:
-        print("Remaining tasks:", asyncio.all_tasks())
+
+      if not USE_PYQT6:
+        tasks = asyncio.all_tasks()
+        if len(tasks) > 0:
+          print("Remaining tasks:", asyncio.all_tasks())
+
     #loop is closed
   
   def add_font(self):
@@ -385,8 +398,8 @@ class GUI_PyQt(QtCore.QObject):
     await self.quit()
 
   async def quit(self):
-    if not USE_PYQT6:
-      await self.config.quit()
+    await self.msg_queue.put(None)
+    await self.config.quit()
 
     #with loop.close, so execute at the end
     self.app.quit()
@@ -485,6 +498,23 @@ class GUI_PyQt(QtCore.QObject):
     elif w == self.config.gui.course_profile_graph_widget:
       eval('w.signal_'+mode+'.emit()')
 
+  def change_color_low(self):
+    if self.config.G_DITHERING_CUTOFF_LOW_INDEX == len(self.config.G_DITHERING_CUTOFF['LOW']) - 1:
+      self.config.G_DITHERING_CUTOFF_LOW_INDEX = 0
+    else:
+      self.config.G_DITHERING_CUTOFF_LOW_INDEX += 1
+    self.signal_draw_display.emit()
+    print("LOW:", self.config.G_DITHERING_CUTOFF['LOW'][self.config.G_DITHERING_CUTOFF_LOW_INDEX])
+
+  def change_color_high(self):
+    
+    if self.config.G_DITHERING_CUTOFF_HIGH_INDEX == len(self.config.G_DITHERING_CUTOFF['HIGH']) - 1:
+      self.config.G_DITHERING_CUTOFF_HIGH_INDEX = 0
+    else:
+      self.config.G_DITHERING_CUTOFF_HIGH_INDEX += 1
+    self.signal_draw_display.emit()
+    print("HIGH:", self.config.G_DITHERING_CUTOFF['HIGH'][self.config.G_DITHERING_CUTOFF_HIGH_INDEX])
+
   def dummy(self):
     pass
 
@@ -559,22 +589,40 @@ class GUI_PyQt(QtCore.QObject):
     else:
       self.main_window.setStyleSheet("color: white; background-color: #222222")
 
+  async def add_message_queue(self, title=None, message=None, fn=None):
+     await self.msg_queue.put(message)
+
+  async def msg_worker(self):
+    while True:
+      msg = await self.msg_queue.get()
+      if msg == None:
+        break
+      self.msg_queue.task_done()
+
+      print(msg)
+      
+      #if wait
+      #  await asyncio.sleep(wait)
+      await self.msg_event.wait()
+
+      #self.show_popup()
+
   def delete_popup(self):
     if self.display_dialog:
       self.signal_menu_back_button.emit()
 
-  def show_popup(self, title):
+  async def show_popup(self, title):
     self.signal_popup.emit(title)
 
   async def show_message(self, title, message):
     self.signal_message.emit(title, message)
-    await self.config.logger.sensor.sensor_i2c.led_blink(5)
+    #await self.config.logger.sensor.sensor_i2c.led_blink(5)
 
-  def show_popup_internal(self, title, title_icon=None):
-    self.show_dialog_base(title=title, title_icon=title_icon, button_num=0, position=self.gui_config.align_bottom)
+  def show_popup_internal(self, title):
+    self.show_dialog_base(title=title, button_num=0, position=self.gui_config.align_bottom)
   
   def show_message_internal(self, title, message):
-    self.show_dialog_base(title=title, message=message, button_num=0, position=self.gui_config.align_bottom)
+    self.show_dialog_base(title=title, message=message, button_num=0, timeout=10, position=self.gui_config.align_bottom)
   
   def show_navi_internal(self, title, title_icon=None):
     self.show_dialog_base(title=title, title_icon=title_icon, button_num=0, position=self.gui_config.align_bottom)
@@ -583,6 +631,7 @@ class GUI_PyQt(QtCore.QObject):
     self.show_dialog_base(fn=fn, title=title, button_num=2)
   
   def show_dialog_ok_only(self, fn, title):
+    #asyncio.create_task(self.msg_queue.put({'fn':fn, 'title':title}))
     self.show_dialog_base(fn=fn, title=title, button_num=1)
 
   def show_dialog_base(self, **kargs):
@@ -596,6 +645,7 @@ class GUI_PyQt(QtCore.QObject):
     button_num = kargs.get("button_num", 0) #0: none, 1: OK, 2: OK/Cancel
     timeout = kargs.get("timeout", 5)
     position = kargs.get("position", self.gui_config.align_center)
+    text_align = kargs.get("text_align", self.gui_config.align_center)
     fn = kargs.get("fn") #use with OK button(button_num=2)
 
     self.display_dialog = True
@@ -655,13 +705,9 @@ class GUI_PyQt(QtCore.QObject):
     #title_label = MarqueeLabel(config=self.config)
     title_label.setWordWrap(True)
     title_label.setText(title)
+    title_label.setAlignment(text_align)
     title_label.setFont(font)
 
-    if position == self.gui_config.align_center:
-      title_label.setAlignment(self.gui_config.align_center)
-    else:
-      title_label.setAlignment(self.gui_config.align_left)
-    
     #title_label_width = title_label.fontMetrics().horizontalAdvance(title_label.text())
 
     #title_icon
@@ -680,6 +726,7 @@ class GUI_PyQt(QtCore.QObject):
       outer_widget = QtWidgets.QWidget(container)
       font.setPointSize(int(fontsize*1.5))
       message_label = QtWidgets.QLabel(message, font=font)
+      message_label.setAlignment(text_align)
       title_label.setFont(font)
       title_label.setStyleSheet("font-weight: bold;")
 
