@@ -40,8 +40,7 @@ class MipSharpDisplay():
       return
 
     self.pi = pigpio.pi()
-    self.spi = self.pi.spi_open(0, 2000000, 0)
-    #self.spi = self.pi.spi_open(0, 8000000, 0) #overclocking
+    self.spi = self.pi.spi_open(0, self.config.G_DISPLAY_PARAM['SPI_CLOCK'], 0)
     
     self.pi.set_mode(GPIO_DISP, pigpio.OUTPUT)
     self.pi.set_mode(GPIO_SCS, pigpio.OUTPUT)
