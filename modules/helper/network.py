@@ -8,7 +8,7 @@ import aiohttp
 import aiofiles
 
 from modules.helper.api import api
-from modules.helper.server import server
+
 
 class Network():
   config = None
@@ -16,7 +16,6 @@ class Network():
   def __init__(self, config):
     self.config = config
     self.api = api(self.config)
-    self.server = server(self.config)
   
     self.download_queue = asyncio.Queue()
     asyncio.create_task(self.download_worker())
@@ -30,7 +29,7 @@ class Network():
          json = await res.json()
          return json
 
-  async def post(self, url, headers=None, params=None, data=None, ):
+  async def post(self, url, headers=None, params=None, data=None):
      async with aiohttp.ClientSession() as session:
        async with session.post(url, headers=headers, params=params, data=data) as res:
          json = await res.json()
