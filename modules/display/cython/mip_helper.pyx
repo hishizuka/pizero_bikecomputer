@@ -27,7 +27,7 @@ cdef class MipDisplay_CPP:
     pass
     self.m.set_screen_size(w, h)
 
-  cpdef update(self, const cnp.uint8_t[:,:,::1] im_array):
+  cpdef update(self, const cnp.uint8_t[:,:,::1] im_array, direct_update):
     self.m.update(<unsigned char*> &im_array[0,0,0])
 
   cpdef set_brightness(self, b):
@@ -63,19 +63,16 @@ cpdef conv_3bit_color(cnp.ndarray[cnp.uint8_t, ndim=3] im_array):
     for j in range(w):
       if(im_array[i,j,0] >= thresholds[t_index]):
         im_bits_view[i, bit_index] |= add_bit[bit_count]
-        pass
       bit_count = (bit_count+1)&7
       bit_index += 1 - <bool>bit_count
 
       if(im_array[i,j,1] >= thresholds[t_index]):
         im_bits_view[i, bit_index] |= add_bit[bit_count]
-        pass
       bit_count = (bit_count+1)&7
       bit_index += 1 - <bool>bit_count
 
       if(im_array[i,j,2] >= thresholds[t_index]):
         im_bits_view[i, bit_index] |= add_bit[bit_count]
-        pass
       bit_count = (bit_count+1)&7
       bit_index += 1 - <bool>bit_count
       
