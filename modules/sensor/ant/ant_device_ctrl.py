@@ -42,7 +42,9 @@ class ANT_Device_CTRL(ant_device.ANT_Device):
 
   def on_data(self, data):
     (self.values['ctrl_cmd'],) = self.structPattern[self.name].unpack(data[0:8])
-    if self.values['ctrl_cmd'] == 0xFFFF:
-      return
-    self.config.press_button('Edge_Remote', *(self.ctrl_cmd[self.values['ctrl_cmd']]))
+    if self.values['ctrl_cmd'] in self.ctrl_cmd.keys():
+      self.config.press_button('Edge_Remote', *(self.ctrl_cmd[self.values['ctrl_cmd']]))
+    else:
+      if self.values['ctrl_cmd'] != 0xFFFF:
+        print("ANT_Device_CTRL wrong cmd:", hex(self.values['ctrl_cmd']))
 
