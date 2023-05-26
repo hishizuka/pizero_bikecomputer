@@ -65,7 +65,7 @@ class SensorGPS(Sensor):
 
   gps_thread = None
   elements = [
-    'lat','lon','alt',
+    'lat','lon','alt','raw_lat','raw_lon',
     'pre_lat','pre_lon','pre_alt','pre_track',
     'speed','track', 'track_str',
     'used_sats','total_sats','used_sats_str',
@@ -78,6 +78,8 @@ class SensorGPS(Sensor):
   is_altitude_modified = False
   course_index_check = []
   azimuth_cutoff = [0,360]
+  time_format = "%Y/%m/%d %H:%M:%S +0000"
+  gb_timediff_ftom_utc = datetime.timedelta(hours=0)
 
   def sensor_init(self):
     if _SENSOR_GPS_GPSD:
@@ -94,6 +96,13 @@ class SensorGPS(Sensor):
     elif _SENSOR_GPS_I2C:
       self.i2c_gps = _sensor_i2c_gps
       self.config.G_GPS_NULLVALUE = None
+      
+    self.valid_cutoff_ep = np.array([
+      self.config.G_GPSD_PARAM['EPX_EPY_CUTOFF'],
+      self.config.G_GPSD_PARAM['EPX_EPY_CUTOFF'],
+      self.config.G_GPSD_PARAM['EPV_CUTOFF'],
+    ])
+    self.valid_cutoff_dof = np.array([99.0, 99.0, 99.0])
 
     self.reset()
     for element in self.elements:
@@ -143,7 +152,8 @@ class SensorGPS(Sensor):
     while not self.config.G_QUIT:
       await self.sleep()
 
-      if self.config.logger == None or len(self.config.logger.course.latitude) == 0:
+      if self.config.logger == None or \
+        (len(self.config.logger.course.latitude) == 0 and self.config.logger.position_log.shape[0] == 0):
         continue
 
       #self.values['track_str'] = "-"
@@ -165,6 +175,9 @@ class SensorGPS(Sensor):
         self.values['lon'] = self.config.logger.position_log[course_i][1]
         self.values['distance'] = self.config.logger.position_log[course_i][2]
         self.values['track'] = self.config.logger.position_log[course_i][3]
+        if self.values['lat'] == None or self.values['lon'] == None:
+          self.values['lat'] = np.nan
+          self.values['lon'] = np.nan
         if(self.values['track'] == None):
           self.values['track'] = self.values['pre_track']
         if course_i == pre_course_i:
@@ -208,6 +221,7 @@ class SensorGPS(Sensor):
     while not self.config.G_QUIT:
       await self.sleep()
       self.init_GPS_values()
+      self.get_satellites(g.satellites)
       await self.get_GPS_basic_values(
         g.lat,
         g.lon,
@@ -218,33 +232,27 @@ class SensorGPS(Sensor):
         [g.epx, g.epy, g.epv],
         [g.pdop, g.hdop, g.vdop],
       )
-      self.get_satellites(g.satellites)
       self.get_utc_time(g.time)
       self.get_sleep_time(self.config.G_GPS_INTERVAL)
 
   #experimental code
   async def update_adafruit(self):
     g = self.adafruit_gps
-    #self.start_time = datetime.datetime.now()
-    #self.wait_time = 0
+
     while not self.config.G_QUIT:
-      #print(datetime.datetime.now(), self.wait_time)
-      #sleep
       await self.sleep()
-      cnt = 0
-      #while (datetime.datetime.now() - self.start_time).total_seconds() < self.wait_time:
-      #while cnt < 20:
-      for i in range(20):
-        g.update()
-        #print(datetime.datetime.now(), i)
-        #cnt += 1
-        await asyncio.sleep(0.04)
-      #self.start_time = datetime.datetime.now()
+
+      for i in range(10):
+        if not g.update():
+          break
+        await asyncio.sleep(0.05)
+
       if g.has_fix:
         self.init_GPS_values()
         speed = 0
         if g.speed_knots != self.config.G_GPS_NULLVALUE:
           speed = g.speed_knots * 1.852 / 3.6
+        self.get_satellites_adafruit(g.sats)
         await self.get_GPS_basic_values(
           g.latitude,
           g.longitude,
@@ -255,8 +263,7 @@ class SensorGPS(Sensor):
           None,
           [g.pdop, g.hdop, g.vdop],
         )
-        self.get_satellites_adafruit(g.sats)
-        self.get_utc_time(time.strftime("%Y/%m/%d %H:%M:%S +0000", g.timestamp_utc))
+        self.get_utc_time(time.strftime(self.time_format, g.timestamp_utc))
       self.get_sleep_time(self.config.G_GPS_INTERVAL)
 
   async def update_i2c(self):
@@ -276,9 +283,12 @@ class SensorGPS(Sensor):
           lat = g.data['latitude']
           lon = g.data['longitude']
         if g.data['timestamp'] != self.config.G_GPS_NULLVALUE:
-          timestamp = g.data['timestamp'].strftime("%H:%M:%S +0000") 
+          timestamp = g.data['timestamp']
         if g.data['speed_over_ground'] != self.config.G_GPS_NULLVALUE:
           speed = g.data['speed_over_ground'] * 1.852 / 3.6
+        if g.data['num_sats'] != self.config.G_GPS_NULLVALUE:
+          self.values['used_sats_str'] = str(g.data['num_sats'])
+          self.values['used_sats'] = g.data['num_sats']
         await self.get_GPS_basic_values(
           lat,
           lon,
@@ -289,11 +299,55 @@ class SensorGPS(Sensor):
           None,
           [g.data['pdop'], g.data['hdop'], g.data['vdop']],
           )
-        if g.data['num_sats'] != self.config.G_GPS_NULLVALUE:
-          self.values['used_sats_str'] = str(g.data['num_sats'])
-          self.values['used_sats'] = g.data['num_sats']
-        self.get_utc_time(timestamp)
+        self.get_utc_time_from_datetime(timestamp)
       self.get_sleep_time(self.config.G_GPS_INTERVAL)
+  
+  async def update_GB(self, message):
+    if _SENSOR_GPS_GPSD or _SENSOR_GPS_ADAFRUIT_UART or _SENSOR_GPS_I2C:
+      return
+
+    lat = lon = alt = spd = heading = hdop = mode = timestamp = self.config.G_GPS_NULLVALUE
+    if 'lat' in message and 'lon' in message:
+      lat = float(message['lat'])
+      lon = float(message['lon'])
+    if 'alt' in message:
+      alt = float(message['alt'])
+    if 'speed' in message:
+      spd = float(message['speed']) #m/s
+    if 'course' in message:
+      heading = int(message['course'])
+    if 'time' in message:
+      timestamp = datetime.datetime.fromtimestamp(int(message['time']/1000)) - self.gb_timediff_ftom_utc
+    if 'hdop' in message:
+      hdop = float(message['hdop'])
+      if hdop < 10:
+        mode = 3
+      elif hdop < 20:
+        mode = 2
+      else:
+        mode = 1
+    if hdop >= 20.0:
+      return
+    
+    self.init_GPS_values()
+    if 'satellites' in message:
+      self.values['used_sats_str'] = str(message['satellites'])
+      self.values['used_sats'] = int(message['satellites'])
+
+    await self.get_GPS_basic_values(
+      lat,
+      lon,
+      alt,
+      spd,
+      heading,
+      mode,
+      None,
+      [hdop, hdop, hdop],
+    )
+    self.get_utc_time_from_datetime(timestamp)
+  
+  def set_timediff_from_utc(self, timediff):
+    self.gb_timediff_ftom_utc = timediff
 
   def init_GPS_values(self):
     #backup values
@@ -309,7 +363,7 @@ class SensorGPS(Sensor):
       self.values[element] = np.nan
 
   async def get_GPS_basic_values(self, lat, lon, alt, speed, track, mode, error, dop):
-    valid_pos = False
+    valid_pos = True
 
     #fix
     if mode != self.config.G_GPS_NULLVALUE:
@@ -325,19 +379,36 @@ class SensorGPS(Sensor):
     for i, key in enumerate(['pdop', 'hdop', 'vdop']):
       if dop[i] != self.config.G_GPS_NULLVALUE:
         self.values[key] = dop[i]
+      
+    #raw coordinate
+    self.values['raw_lat'] = lat
+    self.values['raw_lon'] = lon
 
     #coordinate
-    if lat != self.config.G_GPS_NULLVALUE and lon != self.config.G_GPS_NULLVALUE \
-      and (-90 <= lat <= 90) and (-180 <= lon <= 180) \
-      and self.values['mode'] == 3 \
-      and not np.isnan(self.values['epx']) \
-      and not np.isnan(self.values['epy']) \
-      and not np.isnan(self.values['epv']) \
-      and self.values['epx'] < self.config.G_GPS_GPSD_EPX_EPY_CUTOFF \
-      and self.values['epy'] < self.config.G_GPS_GPSD_EPX_EPY_CUTOFF \
-      and self.values['epv'] < self.config.G_GPS_GPSD_EPV_CUTOFF:
-      valid_pos = True
+    if lat == self.config.G_GPS_NULLVALUE or lon == self.config.G_GPS_NULLVALUE \
+      or abs(lat) > 90 or abs(lon) > 180 \
+      or self.values['mode'] < 3 \
+      or np.any(np.isnan([self.values['pdop'], self.values['hdop'], self.values['vdop']])) \
+      or np.any(np.array([self.values['pdop'], self.values['hdop'], self.values['vdop']]) >= self.valid_cutoff_dof) \
+      or self.values['used_sats'] <= 3 \
+      :
+      valid_pos = False
+
+    if error != None:
+      if np.any(np.isnan([self.values['epx'], self.values['epy'], self.values['epv']])) \
+        or np.any(np.array([self.values['epx'], self.values['epy'], self.values['epv']]) >= self.valid_cutoff_ep) \
+        :
+        valid_pos = False
+      #special condition #1
+      if self.values['used_sats'] < self.config.G_GPSD_PARAM['SP1_USED_SATS_CUTOFF'] and self.values['epv'] > self.config.G_GPSD_PARAM['SP1_EPV_CUTOFF']:
+        valid_pos = False
     
+    #special condition #2
+    #if not valid_pos and self.values['mode'] == 3 and self.values['used_sats'] >= 10 \
+    #  and np.all(np.array([self.values['pdop'], self.values['hdop'], self.values['vdop']]) < np.array([3.0, 3.0, 3.0])) \
+    #  :
+    #  valid_pos = True
+      
     if valid_pos:
       self.values['lat'] = lat
       self.values['lon'] = lon
@@ -442,6 +513,9 @@ class SensorGPS(Sensor):
     self.config.G_TIMEZONE = self.config.exec_cmd_return_value(tzcmd)
     return True
   
+  def get_utc_time_from_datetime(self, gps_time):
+    self.get_utc_time(gps_time.strftime(self.time_format))
+
   def get_utc_time(self, gps_time):
     #UTC time
     if gps_time == self.config.G_GPS_NULLVALUE:
@@ -506,7 +580,7 @@ class SensorGPS(Sensor):
     #2nd search index(a several kilometers ahead: weak GPS signal, long tunnel)
     forward_search_index_next = max(self.get_index_with_distance_cutoff(start, self.config.G_GPS_SEARCH_RANGE), forward_search_index)
     #3rd search index(backward)
-    backword_search_index = self.get_index_with_distance_cutoff(start, -self.config.G_GPS_SEARCH_RANGE)
+    backward_search_index = self.get_index_with_distance_cutoff(start, -self.config.G_GPS_SEARCH_RANGE)
     
     b_a_x = self.config.logger.course.points_diff[0]
     b_a_y = self.config.logger.course.points_diff[1]
@@ -538,15 +612,15 @@ class SensorGPS(Sensor):
     # 1st start -> forward_search_index
     # 2nd forward_search_index -> forward_search_index_next
     #with penalty (continue running while G_GPS_KEEP_ON_COURSE_CUTOFF seconds, then change course_index)
-    # 3rd backword_search_index -> start
+    # 3rd backward_search_index -> start
     # 4th forward_search_index -> end of course
-    # 5th start of course -> backword_search_index
+    # 5th start of course -> backward_search_index
     search_indexes = [
       [start, forward_search_index],
       [forward_search_index, forward_search_index_next],
-      [backword_search_index, start],
+      [backward_search_index, start],
       [forward_search_index_next, course_n-1],
-      [0, backword_search_index],
+      [0, backward_search_index],
       ]
     s_state=['forward(close)', 'forward(far)', 'back', 'end', 'start']
     penalty_index = 2
