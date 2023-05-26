@@ -38,12 +38,11 @@ class Config():
   #loop interval
   G_SENSOR_INTERVAL = 1.0 #[s] for sensor_core
   G_ANT_INTERVAL = 1.0 #[s] for ANT+. 0.25, 0.5, 1.0 only.
-  G_I2C_INTERVAL = 0.5 #[s] for I2C (altitude, accelerometer, etc)
+  G_I2C_INTERVAL = 1.0 #0.2 #[s] for I2C (altitude, accelerometer, etc)
   G_GPS_INTERVAL = 1.0 #[s] for GPS
   G_DRAW_INTERVAL = 1000 #[ms] for GUI (QtCore.QTimer)
-  #G_LOGGING_INTERVAL = 1000 #[ms] for logger_core (log interval)
   G_LOGGING_INTERVAL = 1.0 #[s] for logger_core (log interval)
-  G_REALTIME_GRAPH_INTERVAL = 200 #[ms] for pyqt_graph
+  G_REALTIME_GRAPH_INTERVAL = 1000 #200 #[ms] for pyqt_graph
   
   #log format switch
   G_LOG_WRITE_CSV = True
@@ -436,8 +435,12 @@ class Config():
   #timezone (not use, get from GPS position)
   G_TIMEZONE = None
   #GPSd error handling
-  G_GPS_GPSD_EPX_EPY_CUTOFF = 99#15
-  G_GPS_GPSD_EPV_CUTOFF = 99#20
+  G_GPSD_PARAM = {
+    "EPX_EPY_CUTOFF": 100.0,
+    "EPV_CUTOFF": 100.0,
+    "SP1_EPV_CUTOFF": 100.0,
+    "SP1_USED_SATS_CUTOFF": 3,
+  }
 
   #fullscreen switch (overwritten with setting.conf)
   G_FULLSCREEN = False
@@ -456,8 +459,18 @@ class Config():
     'Papirus': {'size':(264, 176),'touch':False, 'color': False},
     'DFRobot_RPi_Display': {'size':(250, 122),'touch':False, 'color': False}
   }
-  G_WIDTH = 320
+  G_WIDTH = 400
   G_HEIGHT = 240
+  
+  G_DISPLAY_PARAM = {
+    'SPI_CLOCK': 2000000,
+  }
+  G_DITHERING_CUTOFF = {
+    'LOW':[128, 150, 170],
+    'HIGH':[170, 193, 216],
+  }
+  G_DITHERING_CUTOFF_LOW_INDEX = 2
+  G_DITHERING_CUTOFF_HIGH_INDEX = 1
 
   #auto backlight with spi mip display
   #(PiTFT actually needs max brightness under sunlights, so there are no implementation with PiTFT)
@@ -586,6 +599,16 @@ class Config():
     "URL_UPLOAD_DIFF": "proxy/upload-service/upload/.fit", #https://connect.garmin.com/modern/proxy/upload-service/upload/.fit
   }
 
+  G_THINGSBOARD_API = {
+    "STATUS": False,
+    "HAVE_API_TOKEN": False,
+    "SERVER": "demo.thingsboard.io",
+    "TOKEN": "",
+    "INTERVAL_SEC": 120,
+    "TIMEOUT_SEC": 15,
+    "AUTO_UPLOAD_VIA_BT": False,
+  }
+
   #IMU axis conversion
   #  X: to North (up rotation is plus)
   #  Y: to West (up rotation is plus)
@@ -610,7 +633,6 @@ class Config():
   #Bluetooth tethering
   G_BT_ADDRESS = {}
   G_BT_USE_ADDRESS = ""
-  G_BT_CMD_BASE = ["/usr/local/bin/bt-pan","client"]
 
   #for track
   TRACK_STR = [
@@ -633,9 +655,12 @@ class Config():
   logger = None
   display = None
   network = None
+  bt_pan = None
+  ble_uart = None
   setting = None
   gui = None
   gui_config = None
+  boot_time = 0
 
   def __init__(self):
 
@@ -772,6 +797,26 @@ class Config():
     from modules.helper.network import Network
     self.network = Network(self)
 
+    #bluetooth
+    if self.G_IS_RASPI:
+      await self.gui.set_boot_status("initialize bluetooth modules...")
+
+      from modules.helper.bt_pan import BTPanDbus, BTPanDbusNext, HAS_DBUS_NEXT, HAS_DBUS
+      if HAS_DBUS_NEXT:
+        self.bt_pan = BTPanDbusNext()
+      elif HAS_DBUS:
+        self.bt_pan = BTPanDbus()
+      if HAS_DBUS_NEXT or HAS_DBUS:
+        await self.bt_pan.check_dbus()
+        if self.bt_pan.is_available:
+          self.G_BT_ADDRESS = await self.bt_pan.find_bt_pan_devices()
+
+      try:
+        from modules.helper.ble_gatt_server import GadgetbridgeService
+        self.ble_uart = GadgetbridgeService(self)
+      except:
+        pass
+
     #logger, sensor
     await self.gui.set_boot_status("initialize sensor...")
     self.logger.delay_init()
@@ -782,9 +827,22 @@ class Config():
 
     if self.G_HEADLESS:
       asyncio.create_task(self.keyboard_check())
-    
+
+    #resume BT and thingsboard setting
+    if self.G_IS_RASPI:
+      self.G_BT_USE_ADDRESS = self.setting.get_config_pickle("G_BT_USE_ADDRESS", self.G_BT_USE_ADDRESS)
+      self.G_THINGSBOARD_API['STATUS'] = self.setting.get_config_pickle("G_THINGSBOARD_API_STATUS", self.G_THINGSBOARD_API['STATUS'])
+      self.G_THINGSBOARD_API['AUTO_UPLOAD_VIA_BT'] = self.setting.get_config_pickle("AUTO_UPLOAD_VIA_BT", self.G_THINGSBOARD_API['AUTO_UPLOAD_VIA_BT'])
+
+      #resume BT tethering
+      if self.G_BT_USE_ADDRESS != "" and not self.G_THINGSBOARD_API['AUTO_UPLOAD_VIA_BT']:
+        await self.bluetooth_tethering()
+
     t2 = datetime.datetime.now()
     print("delay init: {:.3f} sec".format((t2-t1).total_seconds()))
+    self.boot_time += (t2-t1).total_seconds()
+
+    await self.logger.resume_start_stop()
 
   async def keyboard_check(self):
     while(not self.G_QUIT):
@@ -853,7 +911,7 @@ class Config():
       for line in f:
         if line[0:6]=='Serial':
           #include char, not number only
-          self.G_UNIT_ID = (line.split(':')[1]).replace(' ','').strip()
+          self.G_UNIT_ID = (line.split(':')[1]).replace(' ','').strip()[-8:]
           self.G_UNIT_ID_HEX = int(self.G_UNIT_ID, 16)
         if line[0:5]=='Model':
           self.G_UNIT_MODEL = (line.split(':')[1]).strip()
@@ -915,35 +973,57 @@ class Config():
 
   async def quit(self):
     print("quit")
+    if self.ble_uart != None:
+      await self.ble_uart.quit()
     await self.network.quit()
 
     if self.G_MANUAL_STATUS == "START":
       self.logger.start_and_stop_manual()
+    self.display.quit()
     self.G_QUIT = True
 
     await self.logger.quit()
-    self.display.quit()
-    await asyncio.sleep(0.05)
-    await self.kill_tasks()
-
-    if self.G_GUI_MODE != "PyQt":
-      self.loop.close()
-
-    #time.sleep(self.G_LOGGING_INTERVAL)
     self.setting.write_config()
     self.setting.delete_config_pickle()
 
+    await asyncio.sleep(0.5)
+    await self.kill_tasks()
+    self.logger.remove_handler()
+    print("quit done")
+    
+    if self.G_GUI_MODE != "PyQt":
+      self.loop.close()
+
   def poweroff(self):
     if self.G_IS_RASPI:
-      shutdown_cmd = ["sudo", "systemctl", "start", "pizero_bikecomputer_shutdown.service"]
-      self.exec_cmd(shutdown_cmd)
+      cmd = ["sudo", "systemctl", "start", "pizero_bikecomputer_shutdown.service"]
+      self.exec_cmd(cmd)
+
+  def reboot(self):
+    if self.G_IS_RASPI:
+      cmd = ["sudo", "reboot"]
+      self.exec_cmd(cmd)
+  
+  def hardware_wifi_bt_on(self):
+    if self.G_IS_RASPI:
+      cmd = [self.G_INSTALL_PATH+"scripts/comment_out.sh"]
+      self.exec_cmd(cmd)
+  
+  def hardware_wifi_bt_off(self):
+    if self.G_IS_RASPI:
+      cmd = [self.G_INSTALL_PATH+"scripts/uncomment.sh"]
+      self.exec_cmd(cmd)
 
   def update_application(self):
     if self.G_IS_RASPI:
-      update_cmd = ["git", "pull", "origin", "master"]
-      self.exec_cmd(update_cmd)
-      restart_cmd = ["sudo", "systemctl", "restart", "pizero_bikecomputer.service"]
-      self.exec_cmd(restart_cmd)
+      cmd = ["git", "pull", "origin", "master"]
+      self.exec_cmd(cmd)
+      self.restart_application()
+  
+  def restart_application(self):
+    if self.G_IS_RASPI:
+      cmd = ["sudo", "systemctl", "restart", "pizero_bikecomputer.service"]
+      self.exec_cmd(cmd)
 
   def detect_network(self):
     try:
@@ -966,7 +1046,7 @@ class Config():
     }
     try:
       #json opetion requires raspbian buster
-      raw_status = self.exec_cmd_return_value(["rfkill", "--json"])
+      raw_status = self.exec_cmd_return_value(["rfkill", "--json"], cmd_print=False)
       json_status = json.loads(raw_status)
       for l in json_status['']:
         if 'type' not in l or l['type'] not in ['wlan', 'bluetooth']:
@@ -996,14 +1076,23 @@ class Config():
     status['Wifi'], status['Bluetooth'] = self.get_wifi_bt_status()
     self.exec_cmd(onoff_cmd[key][status[key]])
   
-  def bluetooth_tethering(self):
+  async def bluetooth_tethering(self, disconnect=False, cmd_print=True):
     if not self.G_IS_RASPI:
-      return
-    if not os.path.exists(self.G_BT_CMD_BASE[0]):
       return
     if self.G_BT_USE_ADDRESS == "":
       return
-    self.exec_cmd([*self.G_BT_CMD_BASE, self.G_BT_ADDRESS[self.G_BT_USE_ADDRESS]])
+    if self.bt_pan == None:
+      return
+
+    res = None
+    if not disconnect:
+      res = await self.bt_pan.connect_tethering(self.G_BT_ADDRESS[self.G_BT_USE_ADDRESS])
+    else:
+      res = await self.bt_pan.disconnect_tethering(self.G_BT_ADDRESS[self.G_BT_USE_ADDRESS])
+    if res != None and res:
+      return True
+    else:
+      return False
 
   def check_time(self, log_str):
      t = datetime.datetime.now()
