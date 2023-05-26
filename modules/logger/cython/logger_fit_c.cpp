@@ -144,7 +144,8 @@ void reset() {
     },
     {20,
       {
-        {"timestamp,position_lat,position_long,altitude,heart_rate,cadence,distance,speed,power,temperature,accumulated_power"} 
+        {"timestamp,position_lat,position_long,altitude,heart_rate,cadence,distance,speed,power,temperature,accumulated_power"},
+        {"lap"},
       }
     },
   };
@@ -163,7 +164,8 @@ void reset() {
     },
     {20,
       {
-        {"SELECT %s FROM BIKECOMPUTER_LOG WHERE lap = %d"} 
+        {"SELECT %s FROM BIKECOMPUTER_LOG WHERE lap = %d"} ,
+        {"SELECT COUNT(*) FROM BIKECOMPUTER_LOG WHERE lap = %d"},
       }
     },
   };
@@ -487,7 +489,7 @@ bool get_summary(int lap_num, sqlite3 *db) {
 bool write_log_c(const char* db_file) {
   sqlite3 *db;
   char *zErrMsg = 0;
-  int rc, max_lap, rows;
+  int rc, max_lap, rows, lap_lows;
   char start_date[30], end_date[30];
   std::vector<int> _size;
   std::vector<unsigned int> _data;
@@ -550,11 +552,21 @@ bool write_log_c(const char* db_file) {
 
   //get log records by laps
   for(int lap_num = 0; lap_num < max_lap; ++lap_num) {
-    //get log records
+
     message_num = 20;
+
+    //record check
+    char _check_sql[strlen(base_sql[message_num][1].c_str())+strlen(sql_items[message_num][1].c_str())+10];
+    sprintf(_check_sql, base_sql[message_num][1].c_str(), lap_num);
+    rc = sqlite3_exec(db, _check_sql, parse_single_num, &lap_lows, &zErrMsg);
+    if(rc) { return exit_with_error("SQL error(lap lows)", db); }
+    if(lap_lows == 0){
+      continue;
+    }
+
+    //get log records
     char _sql[strlen(base_sql[message_num][0].c_str())+strlen(sql_items[message_num][0].c_str())+10];
     sprintf(_sql, base_sql[message_num][0].c_str(), sql_items[message_num][0].c_str(), lap_num);
-    message_num = 20;
     rc = sqlite3_exec(db, _sql, parse_records_message_num_20, NULL, &zErrMsg);
     if(rc) { return exit_with_error("SQL error(record)", db); }
     //printf("records: %d\n", (int)crc16(fit_data));

@@ -289,6 +289,10 @@ class LoggerFit(Logger):
     record_row = ",".join(record_row)
     
     for lap_num in range(max_lap+1):
+      cur.execute("SELECT COUNT(lap) FROM BIKECOMPUTER_LOG WHERE lap = %s" % (lap_num))
+      if (cur.fetchone())[0] == 0:
+        continue
+
       for row in cur.execute("SELECT %s FROM BIKECOMPUTER_LOG WHERE lap = %s" % (record_row,lap_num)):
 
         #search definition in localNum
