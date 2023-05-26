@@ -11,8 +11,8 @@ try:
   _SENSOR_DISPLAY = True
   import pyximport; pyximport.install()
   from .cython.mip_helper import conv_3bit_color, MipDisplay_CPP
-  MODE = "Cython"
-  #MODE = "Cython_full" #cannot use with asyncio
+  #MODE = "Cython"
+  MODE = "Cython_full"
 except:
   pass
 print('  MIP DISPLAY : ',_SENSOR_DISPLAY)
@@ -44,8 +44,6 @@ class MipDisplay():
   pi = None
   spi = None
   interval = 0.25
-  spi_clock = 2000000 #normal
-  #spi_clock = 5000000 #overclocking
   brightness_index = 0
   brightness_table = [0,10,100]
   brightness = 0
@@ -60,7 +58,7 @@ class MipDisplay():
     if MODE == "Cython":
       self.conv_color = conv_3bit_color
     elif MODE == "Cython_full": 
-      self.mip_display_cpp = MipDisplay_CPP(self.spi_clock)
+      self.mip_display_cpp = MipDisplay_CPP(self.config.G_DISPLAY_PARAM['SPI_CLOCK'])
       self.mip_display_cpp.set_screen_size(self.config.G_WIDTH, self.config.G_HEIGHT)
       self.update = self.mip_display_cpp.update
       self.set_brightness = self.mip_display_cpp.set_brightness
@@ -74,7 +72,7 @@ class MipDisplay():
 
     #spi
     self.pi = pigpio.pi()
-    self.spi = self.pi.spi_open(0, self.spi_clock, 0)
+    self.spi = self.pi.spi_open(0, self.config.G_DISPLAY_PARAM['SPI_CLOCK'], 0)
     
     self.pi.set_mode(GPIO_DISP, pigpio.OUTPUT)
     self.pi.set_mode(GPIO_SCS, pigpio.OUTPUT)
@@ -221,11 +219,18 @@ class MipDisplay():
     #pseudo 3bit color (128~216: simple dithering)
     #set even pixel and odd pixel to 0   
     #1. convert 2bit color
-    im_array_bin = (im_array >= 128)
+    #im_array_bin = (im_array >= 128)
+    
     #2. set even pixel (2n, 2n) to 0
-    im_array_bin[0::2, 0::2, :][im_array[0::2, 0::2, :] <= 216] = 0
+    #im_array_bin[0::2, 0::2, :][im_array[0::2, 0::2, :] <= 216] = 0
     #3. set odd pixel (2n+1, 2n+1) to 0
-    im_array_bin[1::2, 1::2, :][im_array[1::2, 1::2, :] <= 216] = 0
+    #im_array_bin[1::2, 1::2, :][im_array[1::2, 1::2, :] <= 216] = 0
+
+    im_array_bin = np.zeros(im_array.shape).astype('bool')
+    im_array_bin[0::2, 0::2, :][im_array[0::2, 0::2, :] >= self.config.G_DITHERING_CUTOFF['LOW'][self.config.G_DITHERING_CUTOFF_LOW_INDEX]] = 1
+    im_array_bin[1::2, 1::2, :][im_array[1::2, 1::2, :] >= self.config.G_DITHERING_CUTOFF['LOW'][self.config.G_DITHERING_CUTOFF_LOW_INDEX]] = 1
+    im_array_bin[0::2, 1::2, :][im_array[0::2, 1::2, :] > self.config.G_DITHERING_CUTOFF['HIGH'][self.config.G_DITHERING_CUTOFF_HIGH_INDEX]] = 1
+    im_array_bin[1::2, 0::2, :][im_array[1::2, 0::2, :] > self.config.G_DITHERING_CUTOFF['HIGH'][self.config.G_DITHERING_CUTOFF_HIGH_INDEX]] = 1
 
     return np.packbits(
       im_array_bin.reshape(self.config.G_HEIGHT, self.config.G_WIDTH*3),
@@ -246,7 +251,7 @@ class MipDisplay():
       self.set_brightness(b)
   
   def set_brightness(self, b):
-    if not _SENSOR_DISPLAY or b == self.brightness:
+    if not _SENSOR_DISPLAY or b == self.brightness or self.config.G_QUIT:
       return
     self.pi.hardware_PWM(GPIO_BACKLIGHT, GPIO_BACKLIGHT_FREQ, b*10000)
     self.brightness = b
