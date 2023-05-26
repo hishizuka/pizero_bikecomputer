@@ -131,7 +131,7 @@ class SensorANT(Sensor):
     timestamp = datetime.datetime.now()
 
     ac = self.config.G_ANT['ID_TYPE']
-    self.values[ac['HR']]['hr'] = hr_value
+    self.values[ac['HR']]['heart_rate'] = hr_value
     self.values[ac['SPD']]['speed'] = speed_value
     self.values[ac['CDC']]['cadence'] = cad_value
     self.values[ac['PWR']][0x10]['power'] = power_value
