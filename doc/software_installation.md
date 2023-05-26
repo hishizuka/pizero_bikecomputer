@@ -62,7 +62,7 @@ Install in the home directory of default user "pi". Also, your Raspberry Pi is c
 $ cd
 $ git clone https://github.com/hishizuka/pizero_bikecomputer.git
 $ sudo apt-get install python3-pip cython3 cmake gawk python3-numpy python3-pyqt5 sqlite3 libsqlite3-dev libatlas-base-dev python3-aiohttp python3-aiofiles
-$ sudo pip3 install oyaml sip polyline garminconnect stravacookies qasync
+$ sudo pip3 install oyaml sip polyline garminconnect stravacookies qasync dbus-next bluez-peripheral tb-mqtt-client
 $ sudo apt-get install wiringpi python3-smbus python3-rpi.gpio python3-psutil python3-pil
 $ sudo pip3 install git+https://github.com/hishizuka/pyqtgraph.git
 $ sudo pip3 install git+https://github.com/hishizuka/crdp.git
@@ -486,6 +486,10 @@ Load course with the right icon (>).
 
 <img width="400" alt="RidewithGPS-01" src="https://user-images.githubusercontent.com/12926652/206076210-9c50f789-bac3-4bd0-8209-9dea3a61a132.png"> <img width="400" alt="RidewithGPS-02" src="https://user-images.githubusercontent.com/12926652/206076212-8696ac34-c9e6-485f-b1ba-687c0d2a0061.png">
 
+### LiveTrack
+
+(In progress)
+
 ### Upload Activity
 
 Uploads the most recent activity record file(.fit) created by the reset operation after the power is turned on.
@@ -554,14 +558,10 @@ If ANT+ powermeter is available, set both parameters are used in W'balance (%). 
 <img width="400" alt="menu-09-network" src="https://user-images.githubusercontent.com/12926652/206076207-9a284166-ce16-4589-8ef3-b428ee09e7a5.png">
 
 - BT Tethering
-  - If `/usr/local/bin/bt-pan` is available, start bluetooth tethering with devices of [BT_ADDRESS_section](#bt_address-section) in setting.conf.
-  - Latest Raspberry Pi OS has only python version 3, so bt-pan must be modified to work with python version 3(not shown).
-- Phone Msg
-  - This is experimental. Assume wifi or bluetooth network(Use tethering when outdoors).
-  - Start http server and receive messages via GET method.
-  - The http address is http://address:8080/message?app={app}&title={title}&message={message}
-  - The IP address can be get from "IP Address".
-  - Phone notifications can be forwarded by Android [MacroDroid](https://play.google.com/store/apps/details?id=com.arlosoft.macrodroid) or iOS Shortcuts.
+  - If dbus and bluez is available, start bluetooth tethering with devices of [BT_ADDRESS_section](#bt_address-section) in setting.conf.
+- GadgetBridge
+  - (In progress) Install [GadgetBridge](https://gadgetbridge.org) Android app and toggle on.
+  - Do pairing in the GadgetBridge app as Bangle.js.
   - <img width="400" alt="message" src="https://user-images.githubusercontent.com/12926652/206078983-fcf6b101-21c5-4c12-a118-d25a1e133d6a.png">
 
 ## Settings

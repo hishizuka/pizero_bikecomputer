@@ -7,27 +7,14 @@ https://github.com/hishizuka/pizero_bikecomputer
 
 # News
 
-- 2023/3/XX
-- 2022/12/7 There are so many updates, so you might want to look over [software_installation.md](/doc/software_installation.md)..
-- 2022/12/7 Please install qasync and aiofiles for asynchronous process.
-- 2022/12/7 Install garminconnect if you want to upload to Garmin Connect.
-- 2022/12/7 Install stravacookies if you want to show Strava heatmaps.
-- 2022/12/7 Add support of ISM330DHCX, MMC5983MA([SparkFun 9DoF IMU Breakout](https://www.sparkfun.com/products/19895)) and BMP581([SparkFun Micro Pressure Sensor](https://www.sparkfun.com/products/20171))
-- 2022/12/7 Changed the SPI SCLK connection of the MIP color display and SHARP memory display from 22 to 23 for future support of Radxa Zero. Please modify headers(GPIO_SCS) of modules/display/mip_display.py or mip_sharp_display.py as needed.
+- 2023/5/26 There are so many updates, so you might want to look over [software_installation.md](/doc/software_installation.md)..
+- 2023/5/26 Install dbus-next and bluez-peripheral if you want to link your Android smartphone. [GadgetBridge](https://gadgetbridge.org) is also required, which can mirror Android notifications and get location without GPS modules.
+- 2023/5/26 Install tb-mqtt-client if you want to send [ThingsBoard](https://thingsboard.io), which is an online dashboard. You can share your location in the map with your course or track.
 
 ```
-#2023/3/XX update
+#2023/5/26 update
+$ sudo pip3 install dbus-next bluez-peripheral
 $ sudo pip3 install tb-mqtt-client
-
-#2022/12/7 update
-$ sudo pip3 install qasync
-
-Debian
-$ sudo apt install python3-aiofiles
-or
-$ sudo pip3 install aiofiles
-
-$ sudo pip3 install garminconnect stravacookies
 ```
 
 
