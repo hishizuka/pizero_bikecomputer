@@ -36,7 +36,7 @@ Assume Python version 3 environment. Version 2 is not supported.
 
 ```
 $ git clone https://github.com/hishizuka/pizero_bikecomputer.git
-$ pip3 install PyQt5 numpy oyaml pillow polyline aiohttp aiofiles qasync garminconnect 
+$ pip3 install PyQt5 numpy cython oyaml pillow polyline aiohttp aiofiles qasync garminconnect stravacookies
 $ pip3 install git+https://github.com/hishizuka/pyqtgraph.git
 $ pip3 install git+https://github.com/hishizuka/crdp.git
 $ cd pizero_bikecomputer
@@ -414,10 +414,45 @@ In the menu, the button assignments are changed.
 | CUSTOM | Select items (Back) | None |
 | LAP | Enter | None |
 
+## Map
+
+<img width="400" alt="map-01" src="https://user-images.githubusercontent.com/12926652/206341071-5f9bee00-d959-489b-832a-9b4bf7fe2279.png">
+
+Left side
+
+- "-": zoom in
+- "L": lock / unlock
+  - The map can be moved when unlocked.
+- "+": zoom out
+- "G": route search by Google Directions API
+  - set token in [GOOGLE_DIRECTION_API section](#google_direction_api-section) of setting.conf
+
+Right side
+
+- "left"
+- "up"
+- "down"
+- "right"
+
+## Course profile
+<img width="400" alt="map-02" src="https://user-images.githubusercontent.com/12926652/206341086-7935cfbd-8ed3-4068-9f2b-93f676a8932a.png">
+
+Left side
+
+- "-": zoom in
+- "L": lock / unlock
+  - The course profile can be moved to left or right when unlocked.
+- "+": zoom out
+
+Right side
+
+- "left"
+- "right"
 
 ## Menu screen
 
 <img width="400" alt="menu-01-all" src="https://user-images.githubusercontent.com/12926652/206076181-5118d71a-1750-4570-8bd0-923b4b9699eb.png">
+
 
 ### Sensors
 
@@ -486,7 +521,7 @@ RainViewer
 
 ![map_overlay_rainviewer](https://user-images.githubusercontent.com/12926652/205876664-ae1b629c-5b3f-4d8a-b789-d3ac24753d7f.png)
 
-国土地理院(Japan)
+気象庁降水ナウキャスト(Japan)
 
 <img src ="https://user-images.githubusercontent.com/12926652/205563333-549cf4dc-abbd-4392-9233-b8391687e0bc.png" width=400/> 
 
@@ -536,7 +571,6 @@ There are five different configuration files. You need to edit at the first "set
 ### setting.conf
 
 The settings are dependent on the user environment.
-GENERAL -> display must be set.
 
 #### GENERAL section
 

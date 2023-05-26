@@ -7,6 +7,7 @@ https://github.com/hishizuka/pizero_bikecomputer
 
 # News
 
+- 2023/3/XX
 - 2022/12/7 There are so many updates, so you might want to look over [software_installation.md](/doc/software_installation.md)..
 - 2022/12/7 Please install qasync and aiofiles for asynchronous process.
 - 2022/12/7 Install garminconnect if you want to upload to Garmin Connect.
@@ -15,6 +16,9 @@ https://github.com/hishizuka/pizero_bikecomputer
 - 2022/12/7 Changed the SPI SCLK connection of the MIP color display and SHARP memory display from 22 to 23 for future support of Radxa Zero. Please modify headers(GPIO_SCS) of modules/display/mip_display.py or mip_sharp_display.py as needed.
 
 ```
+#2023/3/XX update
+$ sudo pip3 install tb-mqtt-client
+
 #2022/12/7 update
 $ sudo pip3 install qasync
 
@@ -38,6 +42,7 @@ $ sudo pip3 install garminconnect stravacookies
 - [Q&A](#qa)
 - [License](#License)
 - [Author](#Author)
+- [Link](#Link)
 
 
 # Abstract
@@ -141,16 +146,17 @@ USB dongle is required if using ANT+ sensors.
 | Specs | Detail | Note |
 |:-|:-|:-|
 | Map | Yes | Support raster map tile format like OSM (z/x/y.png or jpg). So, offline map is available with local caches. Also, raster .mbtile format is supported. |
-| Course on the map| Yes | A course file(.tcx) is supported. |
-| Course profile | Yes | A course file(.tcx) is supported. |
-| Cuesheet | Yes | Use course points included in course files. |
+| Course on the map| Yes | Local file(.tcx), Ride with GPS. |
 | Search route | Yes | Google Directions API |
+| Course profile | Yes |  |
+| Detect climbs | Yes |  |
+| Cuesheet | Yes | Use course points included in course files. |
 | Map overlay | Yes | Heatmap (Strava / Ride with GPS) and weather(rain / wind). |
 
 ### Map example
 
 
-#### Map and Course Profile
+#### Map and Course Profile with climb segments
 
 <img width="400" alt="map-01" src="https://user-images.githubusercontent.com/12926652/206341071-5f9bee00-d959-489b-832a-9b4bf7fe2279.png"> <img width="400" alt="map-02" src="https://user-images.githubusercontent.com/12926652/206341086-7935cfbd-8ed3-4068-9f2b-93f676a8932a.png">
 
@@ -235,3 +241,9 @@ This repository is available under the [GNU General Public License v3.0](https:/
 # Author
 
 [hishizuka](https://github.com/hishizuka/) ([@pi0bikecomputer](https://twitter.com/pi0bikecomputer) at twitter, [pizero bikecomputer](https://www.strava.com/athletes/40248693) at STRAVA)
+
+# Link
+
+[Maker Faire Tokyo 2020 - Raspberry Pi Zero Cyclecomputer](https://makezine.jp/event/makers-mft2020/m0016/)
+
+[HACKADAY - DEVELOPING AN OPEN SOURCE BIKE COMPUTER](https://hackaday.com/2023/01/06/developing-an-open-source-bike-computer/)
