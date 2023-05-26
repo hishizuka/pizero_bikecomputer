@@ -80,6 +80,13 @@ class Button_Config():
         'D':('map_move_y_plus', 'map_zoom_plus'),
         'E':('map_move_x_plus', 'map_search_route'),
       },
+      'MAP_2':{
+        'A':('', ''),
+        'B':('change_color_low', ''),
+        'C':('change_mode', ''),
+        'D':('change_color_high', ''),
+        'E':('', ''),
+      },
       'COURSE_PROFILE':{
         'A':('scroll_prev', ''),
         'B':('map_zoom_minus', ''),
@@ -141,6 +148,7 @@ class Button_Config():
   G_BUTTON_MODE_IS_CHANGE = False
   G_BUTTON_MODE_PAGES = {
     'MAIN': ['MAIN','MAIN_1'],
+    #'MAP': ['MAP','MAP_1','MAP_2'],
     'MAP': ['MAP','MAP_1'],
     'COURSE_PROFILE': ['COURSE_PROFILE','COURSE_PROFILE_1'],
   }
