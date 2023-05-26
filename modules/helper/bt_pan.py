@@ -1,3 +1,4 @@
+import asyncio
 import traceback
 
 HAS_DBUS_NEXT = False
