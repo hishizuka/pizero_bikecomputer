@@ -76,8 +76,6 @@ class GUI_PyQt(QtCore.QObject):
   signal_menu_button = QtCore.pyqtSignal(int)
   signal_menu_back_button = QtCore.pyqtSignal()
   signal_get_screenshot = QtCore.pyqtSignal()
-  signal_popup = QtCore.pyqtSignal(str)
-  signal_message = QtCore.pyqtSignal(str, str)
   signal_start_and_stop_manual = QtCore.pyqtSignal()
   signal_count_laps = QtCore.pyqtSignal()
   signal_boot_status = QtCore.pyqtSignal(str)
@@ -187,8 +185,6 @@ class GUI_PyQt(QtCore.QObject):
     self.signal_menu_back_button.connect(self.change_menu_back)
     #other
     self.signal_get_screenshot.connect(self.screenshot)
-    self.signal_popup.connect(self.show_popup_internal)
-    self.signal_message.connect(self.show_message_internal)
 
     self.signal_start_and_stop_manual.connect(self.start_and_stop_manual_internal)
     self.signal_count_laps.connect(self.count_laps_internal)
@@ -398,6 +394,7 @@ class GUI_PyQt(QtCore.QObject):
     await self.quit()
 
   async def quit(self):
+    self.msg_event.set()
     await self.msg_queue.put(None)
     await self.config.quit()
 
@@ -599,54 +596,62 @@ class GUI_PyQt(QtCore.QObject):
         break
       self.msg_queue.task_done()
 
-      print(msg)
-      
-      #if wait
-      #  await asyncio.sleep(wait)
-      await self.msg_event.wait()
+      await self.show_dialog_base(msg)
 
-      #self.show_popup()
+      #event set in close_dialog()
+      await self.msg_event.wait()
+      self.msg_event.clear()
+      await asyncio.sleep(0.1)
 
   def delete_popup(self):
     if self.display_dialog:
       self.signal_menu_back_button.emit()
 
-  async def show_popup(self, title):
-    self.signal_popup.emit(title)
-
-  async def show_message(self, title, message):
-    self.signal_message.emit(title, message)
-    #await self.config.logger.sensor.sensor_i2c.led_blink(5)
-
-  def show_popup_internal(self, title):
-    self.show_dialog_base(title=title, button_num=0, position=self.gui_config.align_bottom)
+  def show_popup(self, title):
+    asyncio.create_task(self.msg_queue.put({'title':title, 'button_num':0, 'position':self.gui_config.align_bottom}))
   
-  def show_message_internal(self, title, message):
-    self.show_dialog_base(title=title, message=message, button_num=0, timeout=10, position=self.gui_config.align_bottom)
+  def show_popup_multiline(self, title, message):
+    asyncio.create_task(self.msg_queue.put({'title':title, 'message':message, 'position':self.gui_config.align_bottom, 'text_align':self.gui_config.align_left}))
+
+  def show_message(self, title, message, limit_length=False):
+    t = title
+    m = message
+
+    if limit_length:
+      width = 14
+      w_t = width - 1
+      w_m = 3*width - 1 
+      
+      if len(t) > w_t:
+        t = t[0:w_t] + "..."
+      if len(m) > w_m:
+        m = m[0:w_m] + "..."
+    asyncio.create_task(self.msg_queue.put({'title':t, 'message':m, 'button_num':1, 'position':self.gui_config.align_bottom, 'text_align':self.gui_config.align_left}))
+    #await self.config.logger.sensor.sensor_i2c.led_blink(5)
   
   def show_navi_internal(self, title, title_icon=None):
-    self.show_dialog_base(title=title, title_icon=title_icon, button_num=0, position=self.gui_config.align_bottom)
+    #self.show_dialog_base(title=title, title_icon=title_icon, button_num=0, position=self.gui_config.align_bottom)
+    pass
 
   def show_dialog(self, fn, title):
-    self.show_dialog_base(fn=fn, title=title, button_num=2)
+    asyncio.create_task(self.msg_queue.put({'fn':fn, 'title':title, 'button_num':2}))
   
   def show_dialog_ok_only(self, fn, title):
-    #asyncio.create_task(self.msg_queue.put({'fn':fn, 'title':title}))
-    self.show_dialog_base(fn=fn, title=title, button_num=1)
+    asyncio.create_task(self.msg_queue.put({'fn':fn, 'title':title, 'button_num':1}))
 
-  def show_dialog_base(self, **kargs):
+  async def show_dialog_base(self, msg):
 
     if self.display_dialog:
       return
     
-    title = kargs.get("title")
-    title_icon = kargs.get("title_icon")
-    message = kargs.get("message")
-    button_num = kargs.get("button_num", 0) #0: none, 1: OK, 2: OK/Cancel
-    timeout = kargs.get("timeout", 5)
-    position = kargs.get("position", self.gui_config.align_center)
-    text_align = kargs.get("text_align", self.gui_config.align_center)
-    fn = kargs.get("fn") #use with OK button(button_num=2)
+    title = msg.get("title")
+    title_icon = msg.get("title_icon")
+    message = msg.get("message")
+    button_num = msg.get("button_num", 0) #0: none, 1: OK, 2: OK/Cancel
+    timeout = msg.get("timeout", 5)
+    position = msg.get("position", self.gui_config.align_center)
+    text_align = msg.get("text_align", self.gui_config.align_center)
+    fn = msg.get("fn") #use with OK button(button_num=2)
 
     self.display_dialog = True
 
@@ -727,6 +732,7 @@ class GUI_PyQt(QtCore.QObject):
       font.setPointSize(int(fontsize*1.5))
       message_label = QtWidgets.QLabel(message, font=font)
       message_label.setAlignment(text_align)
+      message_label.setWordWrap(True)
       title_label.setFont(font)
       title_label.setStyleSheet("font-weight: bold;")
 
@@ -777,4 +783,4 @@ class GUI_PyQt(QtCore.QObject):
     self.stack_widget.layout().setStackingMode(self.gui_config.stackingmode_stackone)
     self.stack_widget.setCurrentIndex(index)
     self.display_dialog = False
-
+    self.msg_event.set()
