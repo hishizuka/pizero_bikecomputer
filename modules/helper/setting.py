@@ -23,6 +23,8 @@ class Setting():
   
   def __init__(self, config):
     self.config = config
+    self.config_parser = configparser.ConfigParser()
+
     if self.config.G_IS_RASPI:
       self.config_file = self.config.G_INSTALL_PATH + self.config_file
       self.config_pickle_file = self.config.G_INSTALL_PATH + self.config_pickle_file
@@ -34,10 +36,8 @@ class Setting():
       self.read_config_pickle()
 
   def read_config(self):
-    self.config_parser = configparser.ConfigParser()
-
     self.config_parser.read(self.config_file)
-         
+
     if 'GENERAL' in self.config_parser:
       if 'AUTOSTOP_CUTOFF' in self.config_parser['GENERAL']:
         self.config.G_AUTOSTOP_CUTOFF = int(self.config_parser['GENERAL']['AUTOSTOP_CUTOFF'])/3.6
@@ -117,7 +117,21 @@ class Setting():
             m['COEF'] = coef[0:n]
         if 'MAG_DECLINATION' in self.config_parser['SENSOR_IMU']:
           self.config.G_IMU_MAG_DECLINATION = int(self.config_parser['SENSOR_IMU']['MAG_DECLINATION'])
-      
+    
+    if 'DISPLAY_PARAM' in self.config_parser:
+      if 'SPI_CLOCK' in self.config_parser['DISPLAY_PARAM']:
+        self.config.G_DISPLAY_PARAM['SPI_CLOCK'] = float(self.config_parser['DISPLAY_PARAM']['SPI_CLOCK'])
+
+    if 'GPSD_PARAM' in self.config_parser:
+      if 'EPX_EPY_CUTOFF' in self.config_parser['GPSD_PARAM']:
+        self.config.G_GPSD_PARAM['EPX_EPY_CUTOFF'] = float(self.config_parser['GPSD_PARAM']['EPX_EPY_CUTOFF'])
+      if 'EPV_CUTOFF' in self.config_parser['GPSD_PARAM']:
+        self.config.G_GPSD_PARAM['EPV_CUTOFF'] = float(self.config_parser['GPSD_PARAM']['EPV_CUTOFF'])
+      if 'SP1_EPV_CUTOFF' in self.config_parser['GPSD_PARAM']:
+        self.config.G_GPSD_PARAM['SP1_EPV_CUTOFF'] = float(self.config_parser['GPSD_PARAM']['SP1_EPV_CUTOFF'])
+      if 'SP1_USED_SATS_CUTOFF' in self.config_parser['GPSD_PARAM']:
+        self.config.G_GPSD_PARAM['SP1_USED_SATS_CUTOFF'] = int(self.config_parser['GPSD_PARAM']['SP1_USED_SATS_CUTOFF'])
+    
     if 'STRAVA_API' in self.config_parser:
       for k in self.config.G_STRAVA_API.keys():
         if k in self.config_parser['STRAVA_API']:
@@ -128,7 +142,7 @@ class Setting():
         if k in self.config_parser['STRAVA_COOKIE']:
           self.config.G_STRAVA_COOKIE[k] = self.config_parser['STRAVA_COOKIE'][k]
     
-    for token in ('GOOGLE_DIRECTION', 'OPENWEATHERMAP', 'RIDEWITHGPS'):
+    for token in ('GOOGLE_DIRECTION', 'OPENWEATHERMAP', 'RIDEWITHGPS', 'THINGSBOARD'):
       token_str = token+'_API'
       config = eval("self.config.G_"+token+"_API")
       if token_str in self.config_parser:
@@ -142,10 +156,6 @@ class Setting():
       for k in ['EMAIL', 'PASSWORD']:
         if k in self.config_parser['GARMINCONNECT_API']:
           self.config.G_GARMINCONNECT_API[k] = self.config_parser['GARMINCONNECT_API'][k]
-
-    if 'BT_ADDRESS' in self.config_parser:
-      for k in self.config_parser['BT_ADDRESS']:
-        self.config.G_BT_ADDRESS[k] = str(self.config_parser['BT_ADDRESS'][k])
 
   def write_config(self):
 
@@ -180,6 +190,15 @@ class Setting():
     self.config_parser['SENSOR_IMU']['MAG_AXIS_CONVERSION_COEF'] = str(list(self.config.G_IMU_MAG_AXIS_CONVERSION['COEF']))
     self.config_parser['SENSOR_IMU']['MAG_DECLINATION'] = str(int(self.config.G_IMU_MAG_DECLINATION))
 
+    self.config_parser['DISPLAY_PARAM'] = {}
+    self.config_parser['DISPLAY_PARAM']['SPI_CLOCK'] = str(int(self.config.G_DISPLAY_PARAM['SPI_CLOCK']))
+
+    self.config_parser['GPSD_PARAM'] = {}
+    self.config_parser['GPSD_PARAM']['EPX_EPY_CUTOFF'] = str(self.config.G_GPSD_PARAM['EPX_EPY_CUTOFF'])
+    self.config_parser['GPSD_PARAM']['EPV_CUTOFF'] = str(self.config.G_GPSD_PARAM['EPV_CUTOFF'])
+    self.config_parser['GPSD_PARAM']['SP1_EPV_CUTOFF'] = str(self.config.G_GPSD_PARAM['SP1_EPV_CUTOFF'])
+    self.config_parser['GPSD_PARAM']['SP1_USED_SATS_CUTOFF'] = str(self.config.G_GPSD_PARAM['SP1_USED_SATS_CUTOFF'])
+
     self.config_parser['STRAVA_API'] = {}
     for k in self.config.G_STRAVA_API.keys():
       self.config_parser['STRAVA_API'][k] = self.config.G_STRAVA_API[k] 
@@ -188,7 +207,7 @@ class Setting():
     for k in self.config.G_STRAVA_COOKIE.keys():
       self.config_parser['STRAVA_COOKIE'][k] = self.config.G_STRAVA_COOKIE[k]
 
-    for token in ('GOOGLE_DIRECTION', 'OPENWEATHERMAP', 'RIDEWITHGPS'):
+    for token in ('GOOGLE_DIRECTION', 'OPENWEATHERMAP', 'RIDEWITHGPS', 'THINGSBOARD'):
       token_str = token+'_API'
       config = eval("self.config.G_"+token+"_API")
       self.config_parser[token_str] = {}
@@ -199,10 +218,6 @@ class Setting():
     self.config_parser['GARMINCONNECT_API'] = {}
     for k in ['EMAIL', 'PASSWORD']:
       self.config_parser['GARMINCONNECT_API'][k] = self.config.G_GARMINCONNECT_API[k] 
-        
-    self.config_parser['BT_ADDRESS'] = {}
-    for k in self.config.G_BT_ADDRESS.keys():
-      self.config_parser['BT_ADDRESS'][k] = self.config.G_BT_ADDRESS[k]
 
     with open(self.config_file, 'w') as file:
       self.config_parser.write(file)
