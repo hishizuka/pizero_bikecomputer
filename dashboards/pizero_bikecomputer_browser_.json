@@ -1,0 +1,1021 @@
+{
+  "title": "Pizero Bikecomputer(browser)",
+  "image": null,
+  "mobileHide": false,
+  "mobileOrder": null,
+  "configuration": {
+    "description": "",
+    "widgets": {
+      "f6d6d9ac-28e1-f4a8-96a5-0ddc7e87de65": {
+        "isSystemType": true,
+        "bundleAlias": "digital_gauges",
+        "typeAlias": "mini_gauge_justgage",
+        "type": "latest",
+        "title": "New widget",
+        "image": null,
+        "description": null,
+        "sizeX": 2,
+        "sizeY": 2,
+        "config": {
+          "datasources": [
+            {
+              "type": "entity",
+              "name": null,
+              "entityAliasId": "ad6dd5ba-5efa-2f13-af1b-cf9b17b3e6d6",
+              "filterId": null,
+              "dataKeys": [
+                {
+                  "name": "power",
+                  "type": "timeseries",
+                  "label": "power",
+                  "color": "#ffff00",
+                  "settings": {},
+                  "_hash": 0.7445110824851564,
+                  "aggregationType": "NONE",
+                  "units": null,
+                  "decimals": 0,
+                  "funcBody": null,
+                  "usePostProcessing": null,
+                  "postFuncBody": null
+                }
+              ]
+            }
+          ],
+          "timewindow": {
+            "displayValue": "",
+            "selectedTab": 0,
+            "realtime": {
+              "realtimeType": 1,
+              "interval": 1000,
+              "timewindowMs": 60000,
+              "quickInterval": "CURRENT_DAY"
+            },
+            "history": {
+              "historyType": 0,
+              "interval": 1000,
+              "timewindowMs": 60000,
+              "fixedTimewindow": {
+                "startTimeMs": 1673873268211,
+                "endTimeMs": 1673959668211
+              },
+              "quickInterval": "CURRENT_DAY"
+            },
+            "aggregation": {
+              "type": "AVG",
+              "limit": 2500
+            }
+          },
+          "showTitle": false,
+          "backgroundColor": "#333333",
+          "color": "rgba(0, 0, 0, 0.87)",
+          "padding": "0px",
+          "settings": {
+            "minValue": 0,
+            "maxValue": 300,
+            "gaugeType": "donut",
+            "donutStartAngle": 90,
+            "gaugeWidthScale": 0.75,
+            "neonGlowBrightness": 0,
+            "dashThickness": 0,
+            "roundedLineCap": true,
+            "useFixedLevelColor": false,
+            "levelColors": [],
+            "showTitle": true,
+            "titleFont": {
+              "family": "Roboto",
+              "size": 12,
+              "style": "normal",
+              "weight": "500"
+            },
+            "showUnitTitle": true,
+            "unitTitle": "W",
+            "showTimestamp": false,
+            "labelFont": {
+              "family": "Roboto",
+              "size": 8,
+              "style": "normal",
+              "weight": "500"
+            },
+            "showValue": true,
+            "valueFont": {
+              "family": "Roboto",
+              "style": "normal",
+              "weight": "500",
+              "size": 32
+            },
+            "showMinMax": false,
+            "showTicks": false,
+            "animation": true,
+            "animationDuration": 500,
+            "animationRule": "linear"
+          },
+          "title": "New Mini gauge",
+          "dropShadow": true,
+          "enableFullscreen": true,
+          "titleStyle": {
+            "fontSize": "16px",
+            "fontWeight": 400
+          },
+          "useDashboardTimewindow": true,
+          "widgetStyle": {},
+          "widgetCss": "",
+          "pageSize": 1024,
+          "noDataDisplayMessage": "",
+          "showLegend": false
+        },
+        "row": 0,
+        "col": 0,
+        "id": "f6d6d9ac-28e1-f4a8-96a5-0ddc7e87de65"
+      },
+      "b7d791f3-5f28-b578-f272-ff4d5d37f422": {
+        "isSystemType": true,
+        "bundleAlias": "cards",
+        "typeAlias": "simple_card",
+        "type": "latest",
+        "title": "New widget",
+        "image": null,
+        "description": null,
+        "sizeX": 5,
+        "sizeY": 3,
+        "config": {
+          "datasources": [
+            {
+              "type": "entity",
+              "name": null,
+              "entityAliasId": "ad6dd5ba-5efa-2f13-af1b-cf9b17b3e6d6",
+              "filterId": null,
+              "dataKeys": [
+                {
+                  "name": "distance",
+                  "type": "timeseries",
+                  "label": "distance",
+                  "color": "#2196f3",
+                  "settings": {},
+                  "_hash": 0.05327490838075111,
+                  "aggregationType": "NONE",
+                  "units": "km",
+                  "decimals": 1,
+                  "funcBody": null,
+                  "usePostProcessing": null,
+                  "postFuncBody": null
+                }
+              ]
+            }
+          ],
+          "timewindow": {
+            "displayValue": "",
+            "selectedTab": 0,
+            "realtime": {
+              "realtimeType": 1,
+              "interval": 1000,
+              "timewindowMs": 60000,
+              "quickInterval": "CURRENT_DAY"
+            },
+            "history": {
+              "historyType": 0,
+              "interval": 1000,
+              "timewindowMs": 60000,
+              "fixedTimewindow": {
+                "startTimeMs": 1673873268211,
+                "endTimeMs": 1673959668211
+              },
+              "quickInterval": "CURRENT_DAY"
+            },
+            "aggregation": {
+              "type": "AVG",
+              "limit": 2500
+            }
+          },
+          "showTitle": false,
+          "backgroundColor": "#333333",
+          "color": "rgba(255, 255, 255, 0.87)",
+          "padding": "16px",
+          "settings": {
+            "labelPosition": "top"
+          },
+          "title": "New Simple card",
+          "dropShadow": true,
+          "enableFullscreen": false,
+          "titleStyle": {
+            "fontSize": "16px",
+            "fontWeight": 400
+          },
+          "units": "°C",
+          "decimals": 0,
+          "useDashboardTimewindow": true,
+          "showLegend": false,
+          "widgetStyle": {},
+          "actions": {},
+          "widgetCss": "",
+          "pageSize": 1024,
+          "noDataDisplayMessage": ""
+        },
+        "row": 0,
+        "col": 0,
+        "id": "b7d791f3-5f28-b578-f272-ff4d5d37f422"
+      },
+      "c39f0ec3-0426-8331-b1e9-bdebfc361565": {
+        "isSystemType": true,
+        "bundleAlias": "cards",
+        "typeAlias": "simple_card",
+        "type": "latest",
+        "title": "New widget",
+        "image": null,
+        "description": null,
+        "sizeX": 5,
+        "sizeY": 3,
+        "config": {
+          "datasources": [
+            {
+              "type": "entity",
+              "name": null,
+              "entityAliasId": "ad6dd5ba-5efa-2f13-af1b-cf9b17b3e6d6",
+              "filterId": null,
+              "dataKeys": [
+                {
+                  "name": "work",
+                  "type": "timeseries",
+                  "label": "work",
+                  "color": "#2196f3",
+                  "settings": {},
+                  "_hash": 0.5292904369185217,
+                  "aggregationType": "NONE",
+                  "units": "kJ",
+                  "decimals": 0,
+                  "funcBody": null,
+                  "usePostProcessing": null,
+                  "postFuncBody": null
+                }
+              ]
+            }
+          ],
+          "timewindow": {
+            "displayValue": "",
+            "selectedTab": 0,
+            "realtime": {
+              "realtimeType": 1,
+              "interval": 1000,
+              "timewindowMs": 60000,
+              "quickInterval": "CURRENT_DAY"
+            },
+            "history": {
+              "historyType": 0,
+              "interval": 1000,
+              "timewindowMs": 60000,
+              "fixedTimewindow": {
+                "startTimeMs": 1673873268211,
+                "endTimeMs": 1673959668211
+              },
+              "quickInterval": "CURRENT_DAY"
+            },
+            "aggregation": {
+              "type": "AVG",
+              "limit": 2500
+            }
+          },
+          "showTitle": false,
+          "backgroundColor": "#333333",
+          "color": "rgba(255, 255, 255, 0.87)",
+          "padding": "16px",
+          "settings": {
+            "labelPosition": "top"
+          },
+          "title": "New Simple card",
+          "dropShadow": true,
+          "enableFullscreen": false,
+          "titleStyle": {
+            "fontSize": "16px",
+            "fontWeight": 400
+          },
+          "units": "°C",
+          "decimals": 0,
+          "useDashboardTimewindow": true,
+          "showLegend": false,
+          "widgetStyle": {},
+          "actions": {},
+          "widgetCss": "",
+          "pageSize": 1024,
+          "noDataDisplayMessage": ""
+        },
+        "row": 0,
+        "col": 0,
+        "id": "c39f0ec3-0426-8331-b1e9-bdebfc361565"
+      },
+      "68f3c24b-f04b-1264-2b48-6f7cfa131a06": {
+        "isSystemType": true,
+        "bundleAlias": "analogue_gauges",
+        "typeAlias": "temperature_gauge_canvas_gauges",
+        "type": "latest",
+        "title": "New widget",
+        "image": null,
+        "description": null,
+        "sizeX": 7,
+        "sizeY": 3,
+        "config": {
+          "datasources": [
+            {
+              "type": "entity",
+              "name": null,
+              "entityAliasId": "ad6dd5ba-5efa-2f13-af1b-cf9b17b3e6d6",
+              "filterId": null,
+              "dataKeys": [
+                {
+                  "name": "temperature",
+                  "type": "timeseries",
+                  "label": "temperature",
+                  "color": "#2196f3",
+                  "settings": {},
+                  "_hash": 0.23605373693082887
+                }
+              ]
+            }
+          ],
+          "timewindow": {
+            "displayValue": "",
+            "selectedTab": 0,
+            "realtime": {
+              "realtimeType": 1,
+              "interval": 1000,
+              "timewindowMs": 60000,
+              "quickInterval": "CURRENT_DAY"
+            },
+            "history": {
+              "historyType": 0,
+              "interval": 1000,
+              "timewindowMs": 60000,
+              "fixedTimewindow": {
+                "startTimeMs": 1673873268211,
+                "endTimeMs": 1673959668211
+              },
+              "quickInterval": "CURRENT_DAY"
+            },
+            "aggregation": {
+              "type": "AVG",
+              "limit": 2500
+            }
+          },
+          "showTitle": false,
+          "backgroundColor": "#333333",
+          "color": "rgba(100,100,100,0.87)",
+          "padding": "8px",
+          "settings": {
+            "startAngle": 45,
+            "ticksAngle": 270,
+            "needleCircleSize": 10,
+            "defaultColor": "#e64a19",
+            "minValue": -10,
+            "maxValue": 50,
+            "majorTicksCount": 8,
+            "colorMajorTicks": "#ffffff",
+            "minorTicks": 8,
+            "colorMinorTicks": "#cccccc",
+            "numbersFont": {
+              "family": "Arial",
+              "size": 18,
+              "style": "normal",
+              "weight": "normal",
+              "color": "#ffffff"
+            },
+            "showUnitTitle": true,
+            "unitTitle": "Temperature",
+            "titleFont": {
+              "family": "Roboto",
+              "size": 24,
+              "style": "normal",
+              "weight": "normal",
+              "color": "#ffffff"
+            },
+            "unitsFont": {
+              "family": "Roboto",
+              "size": 26,
+              "style": "normal",
+              "weight": "500",
+              "color": "#37474f"
+            },
+            "valueBox": true,
+            "valueInt": 3,
+            "valueFont": {
+              "family": "Roboto",
+              "size": 40,
+              "style": "normal",
+              "weight": "500",
+              "color": "#444",
+              "shadowColor": "rgba(0,0,0,0.3)"
+            },
+            "colorValueBoxRect": "#888",
+            "colorValueBoxRectEnd": "#666",
+            "colorValueBoxBackground": "#babab2",
+            "colorValueBoxShadow": "rgba(0,0,0,1)",
+            "showBorder": false,
+            "colorPlate": "#333333",
+            "colorNeedleShadowUp": "rgba(2,255,255,0.2)",
+            "colorNeedleShadowDown": "rgba(188,143,143,0.45)",
+            "highlightsWidth": 10,
+            "highlights": [
+              {
+                "from": -60,
+                "to": -40,
+                "color": "#90caf9"
+              },
+              {
+                "from": -40,
+                "to": -20,
+                "color": "rgba(144, 202, 249, 0.66)"
+              },
+              {
+                "from": -20,
+                "to": 0,
+                "color": "rgba(144, 202, 249, 0.33)"
+              },
+              {
+                "from": 0,
+                "to": 20,
+                "color": "rgba(244, 67, 54, 0.2)"
+              },
+              {
+                "from": 20,
+                "to": 40,
+                "color": "rgba(244, 67, 54, 0.4)"
+              },
+              {
+                "from": 40,
+                "to": 60,
+                "color": "rgba(244, 67, 54, 0.6)"
+              },
+              {
+                "from": 60,
+                "to": 80,
+                "color": "rgba(244, 67, 54, 0.8)"
+              },
+              {
+                "from": 80,
+                "to": 100,
+                "color": "#f44336"
+              }
+            ],
+            "animation": true,
+            "animationDuration": 1500,
+            "animationRule": "linear",
+            "barStrokeWidth": 2.5,
+            "colorBarStroke": "#b0bec5",
+            "colorBar": "rgba(255, 255, 255, 0.4)",
+            "colorBarEnd": "rgba(221, 221, 221, 0.38)",
+            "colorBarProgress": "#90caf9",
+            "colorBarProgressEnd": "#f44336"
+          },
+          "title": "New Thermometer scale",
+          "dropShadow": true,
+          "enableFullscreen": false,
+          "titleStyle": {
+            "fontSize": "16px",
+            "fontWeight": 400
+          },
+          "useDashboardTimewindow": true,
+          "widgetStyle": {},
+          "widgetCss": "",
+          "pageSize": 1024,
+          "noDataDisplayMessage": "",
+          "showLegend": false
+        },
+        "row": 0,
+        "col": 0,
+        "id": "68f3c24b-f04b-1264-2b48-6f7cfa131a06"
+      },
+      "331589b3-8922-5f9a-a984-9d81005d855d": {
+        "isSystemType": true,
+        "bundleAlias": "digital_gauges",
+        "typeAlias": "mini_gauge_justgage",
+        "type": "latest",
+        "title": "New widget",
+        "image": null,
+        "description": null,
+        "sizeX": 2,
+        "sizeY": 2,
+        "config": {
+          "datasources": [
+            {
+              "type": "entity",
+              "name": null,
+              "entityAliasId": "ad6dd5ba-5efa-2f13-af1b-cf9b17b3e6d6",
+              "filterId": null,
+              "dataKeys": [
+                {
+                  "name": "speed",
+                  "type": "timeseries",
+                  "label": "speed",
+                  "color": "#2196f3",
+                  "settings": {},
+                  "_hash": 0.11823396924354612,
+                  "aggregationType": "NONE",
+                  "units": null,
+                  "decimals": 0,
+                  "funcBody": null,
+                  "usePostProcessing": null,
+                  "postFuncBody": null
+                }
+              ]
+            }
+          ],
+          "timewindow": {
+            "displayValue": "",
+            "selectedTab": 0,
+            "realtime": {
+              "realtimeType": 1,
+              "interval": 1000,
+              "timewindowMs": 60000,
+              "quickInterval": "CURRENT_DAY"
+            },
+            "history": {
+              "historyType": 0,
+              "interval": 1000,
+              "timewindowMs": 60000,
+              "fixedTimewindow": {
+                "startTimeMs": 1673873268211,
+                "endTimeMs": 1673959668211
+              },
+              "quickInterval": "CURRENT_DAY"
+            },
+            "aggregation": {
+              "type": "AVG",
+              "limit": 2500
+            }
+          },
+          "showTitle": false,
+          "backgroundColor": "#333333",
+          "color": "rgba(0, 0, 0, 0.87)",
+          "padding": "0px",
+          "settings": {
+            "minValue": 0,
+            "maxValue": 80,
+            "gaugeType": "donut",
+            "donutStartAngle": 90,
+            "gaugeWidthScale": 0.75,
+            "neonGlowBrightness": 0,
+            "dashThickness": 0,
+            "roundedLineCap": true,
+            "useFixedLevelColor": false,
+            "levelColors": [],
+            "showTitle": true,
+            "titleFont": {
+              "family": "Roboto",
+              "size": 12,
+              "style": "normal",
+              "weight": "500"
+            },
+            "showUnitTitle": true,
+            "unitTitle": "km/h",
+            "showTimestamp": false,
+            "labelFont": {
+              "family": "Roboto",
+              "size": 8,
+              "style": "normal",
+              "weight": "500"
+            },
+            "showValue": true,
+            "valueFont": {
+              "family": "Roboto",
+              "style": "normal",
+              "weight": "500",
+              "size": 32
+            },
+            "showMinMax": false,
+            "showTicks": false,
+            "animation": true,
+            "animationDuration": 500,
+            "animationRule": "linear"
+          },
+          "title": "New Mini gauge",
+          "dropShadow": true,
+          "enableFullscreen": false,
+          "titleStyle": {
+            "fontSize": "16px",
+            "fontWeight": 400
+          },
+          "useDashboardTimewindow": true,
+          "widgetStyle": {},
+          "widgetCss": "",
+          "pageSize": 1024,
+          "noDataDisplayMessage": "",
+          "showLegend": false
+        },
+        "row": 0,
+        "col": 0,
+        "id": "331589b3-8922-5f9a-a984-9d81005d855d"
+      },
+      "dd5b1352-b926-2d0b-2120-265727e5fbc7": {
+        "isSystemType": true,
+        "bundleAlias": "digital_gauges",
+        "typeAlias": "mini_gauge_justgage",
+        "type": "latest",
+        "title": "New widget",
+        "image": null,
+        "description": null,
+        "sizeX": 2,
+        "sizeY": 2,
+        "config": {
+          "datasources": [
+            {
+              "type": "entity",
+              "name": null,
+              "entityAliasId": "ad6dd5ba-5efa-2f13-af1b-cf9b17b3e6d6",
+              "filterId": null,
+              "dataKeys": [
+                {
+                  "name": "heartrate",
+                  "type": "timeseries",
+                  "label": "heartrate",
+                  "color": "#f32121",
+                  "settings": {},
+                  "_hash": 0.9436178557858445,
+                  "aggregationType": "NONE",
+                  "units": null,
+                  "decimals": 0,
+                  "funcBody": null,
+                  "usePostProcessing": null,
+                  "postFuncBody": null
+                }
+              ]
+            }
+          ],
+          "timewindow": {
+            "displayValue": "",
+            "selectedTab": 0,
+            "realtime": {
+              "realtimeType": 1,
+              "interval": 1000,
+              "timewindowMs": 60000,
+              "quickInterval": "CURRENT_DAY"
+            },
+            "history": {
+              "historyType": 0,
+              "interval": 1000,
+              "timewindowMs": 60000,
+              "fixedTimewindow": {
+                "startTimeMs": 1673873268211,
+                "endTimeMs": 1673959668211
+              },
+              "quickInterval": "CURRENT_DAY"
+            },
+            "aggregation": {
+              "type": "AVG",
+              "limit": 2500
+            }
+          },
+          "showTitle": false,
+          "backgroundColor": "#333333",
+          "color": "rgba(0, 0, 0, 0.87)",
+          "padding": "0px",
+          "settings": {
+            "minValue": 20,
+            "maxValue": 220,
+            "gaugeType": "donut",
+            "donutStartAngle": 90,
+            "gaugeWidthScale": 0.75,
+            "neonGlowBrightness": 0,
+            "dashThickness": 0,
+            "roundedLineCap": true,
+            "useFixedLevelColor": false,
+            "levelColors": [],
+            "showTitle": true,
+            "titleFont": {
+              "family": "Roboto",
+              "size": 12,
+              "style": "normal",
+              "weight": "500"
+            },
+            "showUnitTitle": true,
+            "unitTitle": "bpm",
+            "showTimestamp": false,
+            "labelFont": {
+              "family": "Roboto",
+              "size": 8,
+              "style": "normal",
+              "weight": "500"
+            },
+            "showValue": true,
+            "valueFont": {
+              "family": "Roboto",
+              "style": "normal",
+              "weight": "500",
+              "size": 32
+            },
+            "showMinMax": false,
+            "showTicks": false,
+            "animation": true,
+            "animationDuration": 500,
+            "animationRule": "linear"
+          },
+          "title": "New Mini gauge",
+          "dropShadow": true,
+          "enableFullscreen": false,
+          "titleStyle": {
+            "fontSize": "16px",
+            "fontWeight": 400
+          },
+          "useDashboardTimewindow": true,
+          "widgetStyle": {},
+          "widgetCss": "",
+          "pageSize": 1024,
+          "noDataDisplayMessage": "",
+          "showLegend": false
+        },
+        "row": 0,
+        "col": 0,
+        "id": "dd5b1352-b926-2d0b-2120-265727e5fbc7"
+      },
+      "f1890755-1bae-fc7a-f8cc-c49efd819dc0": {
+        "isSystemType": true,
+        "bundleAlias": "maps_v2",
+        "typeAlias": "route_map_openstreetmap",
+        "type": "timeseries",
+        "title": "New widget",
+        "image": null,
+        "description": null,
+        "sizeX": 8.5,
+        "sizeY": 6,
+        "config": {
+          "datasources": [
+            {
+              "type": "entity",
+              "name": null,
+              "entityAliasId": "ad6dd5ba-5efa-2f13-af1b-cf9b17b3e6d6",
+              "filterId": null,
+              "dataKeys": [
+                {
+                  "name": "latitude",
+                  "type": "timeseries",
+                  "label": "latitude",
+                  "color": "#2196f3",
+                  "settings": {},
+                  "_hash": 0.9833967155356321
+                },
+                {
+                  "name": "longitude",
+                  "type": "timeseries",
+                  "label": "longitude",
+                  "color": "#4caf50",
+                  "settings": {},
+                  "_hash": 0.17695887413119904
+                }
+              ],
+              "latestDataKeys": [
+                {
+                  "name": "perimeter",
+                  "type": "timeseries",
+                  "label": "perimeter",
+                  "color": "#f44336",
+                  "settings": {},
+                  "_hash": 0.813931479582725
+                }
+              ]
+            }
+          ],
+          "timewindow": {
+            "hideInterval": false,
+            "hideLastInterval": false,
+            "hideQuickInterval": false,
+            "hideAggregation": false,
+            "hideAggInterval": false,
+            "hideTimezone": false,
+            "selectedTab": 0,
+            "realtime": {
+              "realtimeType": 0,
+              "timewindowMs": 18000000,
+              "quickInterval": "CURRENT_DAY",
+              "interval": 60000
+            },
+            "aggregation": {
+              "type": "AVG",
+              "limit": 2500
+            }
+          },
+          "showTitle": false,
+          "backgroundColor": "#333333",
+          "color": "rgba(0, 0, 0, 0.87)",
+          "padding": "8px",
+          "settings": {
+            "provider": "openstreet-map",
+            "mapProvider": "Esri.WorldStreetMap",
+            "useCustomProvider": false,
+            "latKeyName": "latitude",
+            "lngKeyName": "longitude",
+            "xPosKeyName": "xPos",
+            "yPosKeyName": "yPos",
+            "defaultZoomLevel": 12,
+            "defaultCenterPosition": "35.68188106919333,139.764710814819",
+            "disableScrollZooming": false,
+            "disableDoubleClickZooming": false,
+            "disableZoomControl": false,
+            "fitMapBounds": true,
+            "useDefaultCenterPosition": false,
+            "mapPageSize": 16384,
+            "markerOffsetX": 0.5,
+            "markerOffsetY": 1,
+            "posFunction": "return {x: origXPos, y: origYPos};",
+            "draggableMarker": false,
+            "showLabel": true,
+            "useLabelFunction": false,
+            "label": "${entityName}",
+            "showTooltip": false,
+            "showTooltipAction": "click",
+            "autocloseTooltip": true,
+            "useTooltipFunction": false,
+            "tooltipPattern": "<b>${entityName}</b><br/><br/><b>Latitude:</b> ${latitude:7}<br/><b>Longitude:</b> ${longitude:7}",
+            "tooltipOffsetX": 0,
+            "tooltipOffsetY": -1,
+            "color": "rgba(34,170,255,0.75)",
+            "useColorFunction": false,
+            "useMarkerImageFunction": false,
+            "markerImageSize": 34,
+            "markerImages": [],
+            "showPolygon": true,
+            "polygonKeyName": "perimeter",
+            "editablePolygon": false,
+            "showPolygonLabel": false,
+            "usePolygonLabelFunction": false,
+            "polygonLabel": "${entityName}",
+            "showPolygonTooltip": false,
+            "showPolygonTooltipAction": "click",
+            "autoClosePolygonTooltip": true,
+            "usePolygonTooltipFunction": false,
+            "polygonTooltipPattern": "<b>${entityName}</b><br/><br/><b>TimeStamp:</b> ${ts:7}",
+            "polygonColor": "#333fff",
+            "polygonOpacity": 0.2,
+            "usePolygonColorFunction": false,
+            "polygonStrokeColor": "#333fff",
+            "polygonStrokeOpacity": 1,
+            "polygonStrokeWeight": 3,
+            "usePolygonStrokeColorFunction": false,
+            "showCircle": false,
+            "circleKeyName": "perimeter",
+            "editableCircle": false,
+            "showCircleLabel": false,
+            "useCircleLabelFunction": false,
+            "circleLabel": "${entityName}",
+            "showCircleTooltip": false,
+            "showCircleTooltipAction": "click",
+            "autoCloseCircleTooltip": true,
+            "useCircleTooltipFunction": false,
+            "circleTooltipPattern": "<b>${entityName}</b><br/><br/><b>TimeStamp:</b> ${ts:7}",
+            "circleFillColor": "#3388ff",
+            "circleFillColorOpacity": 0.2,
+            "useCircleFillColorFunction": false,
+            "circleStrokeColor": "#3388ff",
+            "circleStrokeOpacity": 1,
+            "circleStrokeWeight": 3,
+            "useCircleStrokeColorFunction": false,
+            "strokeWeight": 4,
+            "strokeOpacity": 0.65
+          },
+          "title": "New Route Map - OpenStreetMap",
+          "dropShadow": true,
+          "enableFullscreen": true,
+          "titleStyle": {
+            "fontSize": "16px",
+            "fontWeight": 400
+          },
+          "useDashboardTimewindow": false,
+          "showLegend": false,
+          "widgetStyle": {},
+          "actions": {},
+          "displayTimewindow": false,
+          "showTitleIcon": false,
+          "widgetCss": "",
+          "pageSize": 1024,
+          "noDataDisplayMessage": ""
+        },
+        "row": 0,
+        "col": 0,
+        "id": "f1890755-1bae-fc7a-f8cc-c49efd819dc0"
+      }
+    },
+    "states": {
+      "default": {
+        "name": "Pizero Bikecomputer (browser)",
+        "root": true,
+        "layouts": {
+          "main": {
+            "widgets": {
+              "f6d6d9ac-28e1-f4a8-96a5-0ddc7e87de65": {
+                "sizeX": 7,
+                "sizeY": 4,
+                "row": 9,
+                "col": 14
+              },
+              "b7d791f3-5f28-b578-f272-ff4d5d37f422": {
+                "sizeX": 7,
+                "sizeY": 3,
+                "row": 13,
+                "col": 0
+              },
+              "c39f0ec3-0426-8331-b1e9-bdebfc361565": {
+                "sizeX": 7,
+                "sizeY": 3,
+                "row": 13,
+                "col": 7
+              },
+              "68f3c24b-f04b-1264-2b48-6f7cfa131a06": {
+                "sizeX": 7,
+                "sizeY": 3,
+                "row": 13,
+                "col": 14
+              },
+              "331589b3-8922-5f9a-a984-9d81005d855d": {
+                "sizeX": 7,
+                "sizeY": 4,
+                "row": 9,
+                "col": 0
+              },
+              "dd5b1352-b926-2d0b-2120-265727e5fbc7": {
+                "sizeX": 7,
+                "sizeY": 4,
+                "row": 9,
+                "col": 7
+              },
+              "f1890755-1bae-fc7a-f8cc-c49efd819dc0": {
+                "sizeX": 21,
+                "sizeY": 9,
+                "row": 0,
+                "col": 0
+              }
+            },
+            "gridSettings": {
+              "backgroundColor": "#333333",
+              "columns": 24,
+              "margin": 10,
+              "backgroundSizeMode": "100%",
+              "autoFillHeight": false,
+              "backgroundImageUrl": null,
+              "mobileAutoFillHeight": false,
+              "mobileRowHeight": 70,
+              "outerMargin": true
+            }
+          }
+        }
+      }
+    },
+    "entityAliases": {
+      "ad6dd5ba-5efa-2f13-af1b-cf9b17b3e6d6": {
+        "id": "ad6dd5ba-5efa-2f13-af1b-cf9b17b3e6d6",
+        "alias": "Pizero Bikecomputer",
+        "filter": {
+          "type": "singleEntity",
+          "resolveMultiple": false,
+          "singleEntity": {
+            "entityType": "DEVICE",
+            "id": "0c0ceef0-817e-11ed-b6c7-ddabd8a32ba6"
+          }
+        }
+      }
+    },
+    "filters": {},
+    "timewindow": {
+      "displayValue": "",
+      "hideInterval": false,
+      "hideLastInterval": false,
+      "hideQuickInterval": false,
+      "hideAggregation": false,
+      "hideAggInterval": false,
+      "hideTimezone": false,
+      "selectedTab": 0,
+      "realtime": {
+        "realtimeType": 0,
+        "interval": 1000,
+        "timewindowMs": 60000,
+        "quickInterval": "CURRENT_DAY"
+      },
+      "history": {
+        "historyType": 0,
+        "interval": 1000,
+        "timewindowMs": 60000,
+        "fixedTimewindow": {
+          "startTimeMs": 1672646002115,
+          "endTimeMs": 1672732402115
+        },
+        "quickInterval": "CURRENT_DAY"
+      },
+      "aggregation": {
+        "type": "AVG",
+        "limit": 2500
+      }
+    },
+    "settings": {
+      "stateControllerId": "entity",
+      "showTitle": false,
+      "showDashboardsSelect": true,
+      "showEntitiesSelect": true,
+      "showDashboardTimewindow": true,
+      "showDashboardExport": true,
+      "toolbarAlwaysOpen": true,
+      "titleColor": "rgba(0,0,0,0.870588)",
+      "showDashboardLogo": false,
+      "dashboardLogoUrl": null,
+      "hideToolbar": false,
+      "showFilters": true,
+      "showUpdateDashboardImage": true,
+      "dashboardCss": ""
+    }
+  },
+  "externalId": null,
+  "name": "Pizero Bikecomputer(browser)"
+}

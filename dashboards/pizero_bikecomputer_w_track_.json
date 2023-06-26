@@ -1,0 +1,488 @@
+{
+  "title": "Pizero Bikecomputer(w track)",
+  "image": null,
+  "mobileHide": false,
+  "mobileOrder": -1,
+  "configuration": {
+    "description": "",
+    "widgets": {
+      "7a3226ef-c253-1b9f-e4df-87e94bf14d45": {
+        "isSystemType": true,
+        "bundleAlias": "maps_v2",
+        "typeAlias": "route_map_openstreetmap",
+        "type": "timeseries",
+        "title": "New widget",
+        "image": null,
+        "description": null,
+        "sizeX": 8.5,
+        "sizeY": 6,
+        "config": {
+          "datasources": [
+            {
+              "type": "entity",
+              "name": null,
+              "entityAliasId": "8614973f-b6d1-9e0c-ffd2-4c080deebe8e",
+              "filterId": null,
+              "dataKeys": [
+                {
+                  "name": "latitude",
+                  "type": "timeseries",
+                  "label": "latitude",
+                  "color": "#2196f3",
+                  "settings": {},
+                  "_hash": 0.2603321418360789
+                },
+                {
+                  "name": "longitude",
+                  "type": "timeseries",
+                  "label": "longitude",
+                  "color": "#4caf50",
+                  "settings": {},
+                  "_hash": 0.17579351602246807
+                }
+              ],
+              "latestDataKeys": [
+                {
+                  "name": "timestamp",
+                  "type": "timeseries",
+                  "label": "timestamp",
+                  "color": "#9c27b0",
+                  "settings": {},
+                  "_hash": 0.42866523449889193
+                },
+                {
+                  "name": "distance",
+                  "type": "timeseries",
+                  "label": "distance",
+                  "color": "#ffc107",
+                  "settings": {},
+                  "_hash": 0.6124285335399835
+                },
+                {
+                  "name": "temperature",
+                  "type": "timeseries",
+                  "label": "temperature",
+                  "color": "#607d8b",
+                  "settings": {},
+                  "_hash": 0.5723699513142838
+                },
+                {
+                  "name": "speed",
+                  "type": "timeseries",
+                  "label": "speed",
+                  "color": "#9c27b0",
+                  "settings": {},
+                  "_hash": 0.7543008868485027
+                },
+                {
+                  "name": "perimeter",
+                  "type": "timeseries",
+                  "label": "perimeter",
+                  "color": "#8bc34a",
+                  "settings": {},
+                  "_hash": 0.4525494818093725
+                }
+              ]
+            }
+          ],
+          "timewindow": {
+            "hideInterval": false,
+            "hideLastInterval": false,
+            "hideQuickInterval": false,
+            "hideAggregation": false,
+            "hideAggInterval": false,
+            "hideTimezone": false,
+            "selectedTab": 0,
+            "realtime": {
+              "realtimeType": 0,
+              "timewindowMs": 18000000,
+              "quickInterval": "CURRENT_DAY",
+              "interval": 60000
+            },
+            "aggregation": {
+              "type": "AVG",
+              "limit": 2500
+            }
+          },
+          "showTitle": false,
+          "backgroundColor": "#fff",
+          "color": "rgba(0, 0, 0, 0.87)",
+          "padding": "8px",
+          "settings": {
+            "provider": "openstreet-map",
+            "gmApiKey": "AIzaSyDoEx2kaGz3PxwbI9T7ccTSg5xjdw8Nw8Q",
+            "gmDefaultMapType": "roadmap",
+            "mapProvider": "Esri.WorldStreetMap",
+            "useCustomProvider": false,
+            "mapProviderHere": "HERE.normalDay",
+            "credentials": {
+              "useV3": true,
+              "app_id": "AhM6TzD9ThyK78CT3ptx",
+              "app_code": "p6NPiITB3Vv0GMUFnkLOOg",
+              "apiKey": "kVXykxAfZ6LS4EbCTO02soFVfjA7HoBzNVVH9u7nzoE"
+            },
+            "mapImageUrl": "data:image/svg+xml;base64,PHN2ZyBpZD0ic3ZnMiIgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iMTAwIiB3aWR0aD0iMTAwIiB2ZXJzaW9uPSIxLjEiIHhtbG5zOmNjPSJodHRwOi8vY3JlYXRpdmVjb21tb25zLm9yZy9ucyMiIHhtbG5zOmRjPSJodHRwOi8vcHVybC5vcmcvZGMvZWxlbWVudHMvMS4xLyIgdmlld0JveD0iMCAwIDEwMCAxMDAiPgogPGcgaWQ9ImxheWVyMSIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMCAtOTUyLjM2KSI+CiAgPHJlY3QgaWQ9InJlY3Q0Njg0IiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBoZWlnaHQ9Ijk5LjAxIiB3aWR0aD0iOTkuMDEiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiB5PSI5NTIuODYiIHg9Ii40OTUwNSIgc3Ryb2tlLXdpZHRoPSIuOTkwMTAiIGZpbGw9IiNlZWUiLz4KICA8dGV4dCBpZD0idGV4dDQ2ODYiIHN0eWxlPSJ3b3JkLXNwYWNpbmc6MHB4O2xldHRlci1zcGFjaW5nOjBweDt0ZXh0LWFuY2hvcjptaWRkbGU7dGV4dC1hbGlnbjpjZW50ZXIiIGZvbnQtd2VpZ2h0PSJib2xkIiB4bWw6c3BhY2U9InByZXNlcnZlIiBmb250LXNpemU9IjEwcHgiIGxpbmUtaGVpZ2h0PSIxMjUlIiB5PSI5NzAuNzI4MDkiIHg9IjQ5LjM5NjQ3NyIgZm9udC1mYW1pbHk9IlJvYm90byIgZmlsbD0iIzY2NjY2NiI+PHRzcGFuIGlkPSJ0c3BhbjQ2OTAiIHg9IjUwLjY0NjQ3NyIgeT0iOTcwLjcyODA5Ij5JbWFnZSBiYWNrZ3JvdW5kIDwvdHNwYW4+PHRzcGFuIGlkPSJ0c3BhbjQ2OTIiIHg9IjQ5LjM5NjQ3NyIgeT0iOTgzLjIyODA5Ij5pcyBub3QgY29uZmlndXJlZDwvdHNwYW4+PC90ZXh0PgogIDxyZWN0IGlkPSJyZWN0NDY5NCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgaGVpZ2h0PSIxOS4zNiIgd2lkdGg9IjY5LjM2IiBzdHJva2U9IiMwMDAiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgeT0iOTkyLjY4IiB4PSIxNS4zMiIgc3Ryb2tlLXdpZHRoPSIuNjM5ODYiIGZpbGw9Im5vbmUiLz4KIDwvZz4KPC9zdmc+Cg==",
+            "tmApiKey": "84d6d83e0e51e481e50454ccbe8986b",
+            "tmDefaultMapType": "roadmap",
+            "latKeyName": "latitude",
+            "lngKeyName": "longitude",
+            "xPosKeyName": "xPos",
+            "yPosKeyName": "yPos",
+            "defaultZoomLevel": 12,
+            "defaultCenterPosition": "35.68188106919333,139.764710814819",
+            "disableScrollZooming": false,
+            "disableDoubleClickZooming": false,
+            "disableZoomControl": false,
+            "fitMapBounds": true,
+            "useDefaultCenterPosition": false,
+            "mapPageSize": 16384,
+            "markerOffsetX": 0.5,
+            "markerOffsetY": 1,
+            "posFunction": "return {x: origXPos, y: origYPos};",
+            "draggableMarker": false,
+            "showLabel": true,
+            "useLabelFunction": false,
+            "label": "${entityName}",
+            "showTooltip": true,
+            "showTooltipAction": "hover",
+            "autocloseTooltip": true,
+            "useTooltipFunction": false,
+            "tooltipPattern": "${timestamp}<br />\n${speed:0} km/h, ${distance:1} km<br />\n${temperature:0} C",
+            "tooltipOffsetX": 0,
+            "tooltipOffsetY": -1,
+            "color": "rgba(34,170,255,0.75)",
+            "useColorFunction": false,
+            "useMarkerImageFunction": false,
+            "markerImageSize": 34,
+            "markerImages": [],
+            "showPolygon": true,
+            "polygonKeyName": "perimeter",
+            "editablePolygon": false,
+            "showPolygonLabel": false,
+            "usePolygonLabelFunction": false,
+            "polygonLabel": "${entityName}",
+            "showPolygonTooltip": false,
+            "showPolygonTooltipAction": "click",
+            "autoClosePolygonTooltip": true,
+            "usePolygonTooltipFunction": false,
+            "polygonTooltipPattern": "<b>${entityName}</b><br/><br/><b>TimeStamp:</b> ${ts:7}",
+            "polygonColor": "#333fff",
+            "polygonOpacity": 0.2,
+            "usePolygonColorFunction": false,
+            "polygonStrokeColor": "#333fff",
+            "polygonStrokeOpacity": 1,
+            "polygonStrokeWeight": 3,
+            "usePolygonStrokeColorFunction": false,
+            "showCircle": false,
+            "circleKeyName": "perimeter",
+            "editableCircle": false,
+            "showCircleLabel": false,
+            "useCircleLabelFunction": false,
+            "circleLabel": "${entityName}",
+            "showCircleTooltip": false,
+            "showCircleTooltipAction": "click",
+            "autoCloseCircleTooltip": true,
+            "useCircleTooltipFunction": false,
+            "circleTooltipPattern": "<b>${entityName}</b><br/><br/><b>TimeStamp:</b> ${ts:7}",
+            "circleFillColor": "#3388ff",
+            "circleFillColorOpacity": 0.2,
+            "useCircleFillColorFunction": false,
+            "circleStrokeColor": "#3388ff",
+            "circleStrokeOpacity": 1,
+            "circleStrokeWeight": 3,
+            "useCircleStrokeColorFunction": false,
+            "strokeWeight": 4,
+            "strokeOpacity": 0.65
+          },
+          "title": "New Route Map - OpenStreetMap",
+          "dropShadow": true,
+          "enableFullscreen": false,
+          "titleStyle": {
+            "fontSize": "16px",
+            "fontWeight": 400
+          },
+          "useDashboardTimewindow": false,
+          "showLegend": false,
+          "widgetStyle": {},
+          "actions": {},
+          "showTitleIcon": false,
+          "widgetCss": "",
+          "pageSize": 1024,
+          "noDataDisplayMessage": "",
+          "displayTimewindow": false
+        },
+        "row": 0,
+        "col": 0,
+        "id": "7a3226ef-c253-1b9f-e4df-87e94bf14d45"
+      },
+      "184a0961-a433-06bb-7ebe-1c3586935563": {
+        "isSystemType": true,
+        "bundleAlias": "charts",
+        "typeAlias": "basic_timeseries",
+        "type": "timeseries",
+        "title": "New widget",
+        "image": null,
+        "description": null,
+        "sizeX": 8,
+        "sizeY": 5,
+        "config": {
+          "datasources": [
+            {
+              "type": "entity",
+              "name": null,
+              "entityAliasId": "8614973f-b6d1-9e0c-ffd2-4c080deebe8e",
+              "filterId": null,
+              "dataKeys": [
+                {
+                  "name": "heartrate",
+                  "type": "timeseries",
+                  "label": "heartrate",
+                  "color": "#ff0000",
+                  "settings": {
+                    "hideDataByDefault": false,
+                    "disableDataHiding": false,
+                    "removeFromLegend": false,
+                    "excludeFromStacking": false,
+                    "showLines": true,
+                    "lineWidth": 1,
+                    "fillLines": false,
+                    "showPoints": false,
+                    "showSeparateAxis": true,
+                    "axisTitle": "HeartRate",
+                    "axisPosition": "left",
+                    "comparisonSettings": {
+                      "showValuesForComparison": true,
+                      "comparisonValuesLabel": "",
+                      "color": ""
+                    },
+                    "thresholds": []
+                  },
+                  "_hash": 0.7561927123751518,
+                  "aggregationType": null,
+                  "units": null,
+                  "decimals": null,
+                  "funcBody": null,
+                  "usePostProcessing": null,
+                  "postFuncBody": null
+                },
+                {
+                  "name": "power",
+                  "type": "timeseries",
+                  "label": "power",
+                  "color": "rgba(0,195,255,0.5)",
+                  "settings": {
+                    "hideDataByDefault": false,
+                    "disableDataHiding": false,
+                    "removeFromLegend": false,
+                    "excludeFromStacking": false,
+                    "showLines": true,
+                    "lineWidth": 1,
+                    "fillLines": false,
+                    "showPoints": false,
+                    "showSeparateAxis": true,
+                    "axisTitle": "Power",
+                    "axisPosition": "right",
+                    "comparisonSettings": {
+                      "showValuesForComparison": true,
+                      "comparisonValuesLabel": "",
+                      "color": ""
+                    },
+                    "thresholds": []
+                  },
+                  "_hash": 0.676955696593791,
+                  "aggregationType": null,
+                  "units": null,
+                  "decimals": null,
+                  "funcBody": null,
+                  "usePostProcessing": null,
+                  "postFuncBody": null
+                }
+              ],
+              "latestDataKeys": []
+            }
+          ],
+          "timewindow": {
+            "hideInterval": false,
+            "hideLastInterval": false,
+            "hideQuickInterval": false,
+            "hideAggregation": false,
+            "hideAggInterval": false,
+            "hideTimezone": false,
+            "selectedTab": 0,
+            "realtime": {
+              "realtimeType": 0,
+              "timewindowMs": 1800000,
+              "quickInterval": "CURRENT_DAY",
+              "interval": 60000
+            },
+            "aggregation": {
+              "type": "NONE",
+              "limit": 2500
+            }
+          },
+          "showTitle": false,
+          "backgroundColor": "#fff",
+          "color": "rgba(0, 0, 0, 0.87)",
+          "padding": "8px",
+          "settings": {
+            "stack": false,
+            "fontSize": 10,
+            "fontColor": "#545454",
+            "showTooltip": false,
+            "grid": {
+              "verticalLines": true,
+              "horizontalLines": true,
+              "outlineWidth": 1,
+              "color": "#545454",
+              "backgroundColor": null,
+              "tickColor": "#DDDDDD"
+            },
+            "xaxis": {
+              "title": null,
+              "showLabels": true,
+              "color": "#545454"
+            },
+            "yaxis": {
+              "min": null,
+              "max": null,
+              "title": null,
+              "showLabels": true,
+              "color": "#545454",
+              "tickSize": null,
+              "tickDecimals": 0,
+              "ticksFormatter": ""
+            },
+            "shadowSize": 4,
+            "smoothLines": true,
+            "comparisonEnabled": false,
+            "xaxisSecond": {
+              "axisPosition": "top",
+              "title": null,
+              "showLabels": true
+            },
+            "customLegendEnabled": false
+          },
+          "title": "New Timeseries Line Chart",
+          "dropShadow": true,
+          "enableFullscreen": false,
+          "titleStyle": {
+            "fontSize": "16px",
+            "fontWeight": 400
+          },
+          "useDashboardTimewindow": false,
+          "displayTimewindow": false,
+          "showTitleIcon": false,
+          "widgetStyle": {},
+          "widgetCss": "",
+          "pageSize": 1024,
+          "noDataDisplayMessage": "",
+          "showLegend": true,
+          "legendConfig": {
+            "direction": "row",
+            "position": "top",
+            "sortDataKeys": false,
+            "showMin": false,
+            "showMax": false,
+            "showAvg": false,
+            "showTotal": false,
+            "showLatest": false
+          }
+        },
+        "row": 0,
+        "col": 0,
+        "id": "184a0961-a433-06bb-7ebe-1c3586935563"
+      }
+    },
+    "states": {
+      "default": {
+        "name": "Pizero Bikecomputer",
+        "root": true,
+        "layouts": {
+          "main": {
+            "widgets": {
+              "7a3226ef-c253-1b9f-e4df-87e94bf14d45": {
+                "sizeX": 24,
+                "sizeY": 10,
+                "mobileHeight": 6,
+                "row": 0,
+                "col": 0,
+                "mobileOrder": 1
+              },
+              "184a0961-a433-06bb-7ebe-1c3586935563": {
+                "sizeX": 24,
+                "sizeY": 6,
+                "row": 10,
+                "col": 0,
+                "mobileHeight": 3,
+                "mobileOrder": 2
+              }
+            },
+            "gridSettings": {
+              "backgroundColor": "#eeeeee",
+              "columns": 24,
+              "margin": 10,
+              "backgroundSizeMode": "100%",
+              "outerMargin": true,
+              "autoFillHeight": false,
+              "backgroundImageUrl": null,
+              "mobileAutoFillHeight": false,
+              "mobileRowHeight": 70
+            }
+          }
+        }
+      }
+    },
+    "entityAliases": {
+      "8614973f-b6d1-9e0c-ffd2-4c080deebe8e": {
+        "id": "8614973f-b6d1-9e0c-ffd2-4c080deebe8e",
+        "alias": "Pizero Bikecomputer",
+        "filter": {
+          "type": "singleEntity",
+          "resolveMultiple": false,
+          "singleEntity": {
+            "entityType": "DEVICE",
+            "id": "0c0ceef0-817e-11ed-b6c7-ddabd8a32ba6"
+          }
+        }
+      }
+    },
+    "filters": {},
+    "timewindow": {
+      "hideInterval": false,
+      "hideLastInterval": false,
+      "hideQuickInterval": false,
+      "hideAggregation": false,
+      "hideAggInterval": false,
+      "hideTimezone": false,
+      "selectedTab": 0,
+      "realtime": {
+        "realtimeType": 0,
+        "timewindowMs": 18000000,
+        "quickInterval": "CURRENT_DAY",
+        "interval": 60000
+      },
+      "aggregation": {
+        "type": "AVG",
+        "limit": 2500
+      }
+    },
+    "settings": {
+      "stateControllerId": "entity",
+      "showTitle": false,
+      "showDashboardsSelect": true,
+      "showEntitiesSelect": true,
+      "showDashboardTimewindow": true,
+      "showDashboardExport": true,
+      "toolbarAlwaysOpen": true,
+      "titleColor": "rgba(0,0,0,0.870588)",
+      "showDashboardLogo": false,
+      "dashboardLogoUrl": null,
+      "hideToolbar": false,
+      "showFilters": true,
+      "showUpdateDashboardImage": true,
+      "dashboardCss": ""
+    }
+  },
+  "externalId": null,
+  "name": "Pizero Bikecomputer(w track)"
+}
