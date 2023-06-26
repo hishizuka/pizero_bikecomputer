@@ -274,7 +274,7 @@ class Config():
       'update_minutes': 30, #[minutes]
       'time_format':'%H%MZ%d%b%Y', #need upper()
       'referer': 'https://supercweather.com/',
-    },
+    }
   }
 
   G_DEM_MAP_CONFIG = {
@@ -356,7 +356,7 @@ class Config():
   #ANT+ setting (overwritten with setting.conf)
   #[Todo] multiple pairing(2 or more riders), ANT+ ctrl(like edge remote)
   G_ANT = {
-    #ANT+ interval internal variabl: 0:4Hz(0.25s), 1:2Hz(0.5s), 2:1Hz(1.0s)
+    #ANT+ interval internal variable: 0:4Hz(0.25s), 1:2Hz(0.5s), 2:1Hz(1.0s)
     #initialized by G_ANT_INTERVAL in __init()__
     'INTERVAL':2, 
     'STATUS':True,
@@ -870,7 +870,7 @@ class Config():
       elif key == "b" and self.gui != None:
         self.gui.back_menu()
       elif key == "c" and self.gui != None:
-        await self.gui.show_message("name","message")
+        self.gui.show_message("name","message")
       elif key == "x" and self.gui != None:
         self.gui.delete_popup()
 
