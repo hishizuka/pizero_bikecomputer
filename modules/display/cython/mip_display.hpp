@@ -14,7 +14,6 @@
 //#GPIO.BCM
 #define GPIO_DISP 27 //13 in GPIO.BOARD
 #define GPIO_SCS 23 //16 in GPIO.BOARD
-//define GPIO_SCS 22 15 in GPIO.BOARD
 #define GPIO_VCOMSEL 17 //11 in GPIO.BOARD
 #define GPIO_BACKLIGHT 18 //12 in GPIO.BOARD with hardware PWM in pigpio
 #define GPIO_BACKLIGHT_FREQ 64
