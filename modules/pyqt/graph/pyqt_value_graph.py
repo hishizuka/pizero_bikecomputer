@@ -31,7 +31,7 @@ class PerformanceGraphWidget(ScreenWidget):
 
     }
     self.plot_data_x1 = []
-    for i in range(self.config.G_GUI_PERFORMANCE_GRAPH_DISPLAY_RANGE):
+    for i in range(self.config.G_GUI_PERFORMANCE_GRAPH_DISPLAY_RANGE+1):
       self.plot_data_x1.append(i)
 
   def setup_ui_extra(self): 
@@ -152,7 +152,7 @@ class AccelerationGraphWidget(ScreenWidget):
     self.pen2 = pg.mkPen(color=(255,0,0), width=3)
     self.pen3 = pg.mkPen(color=(0,0,0), width=2)
     
-    self.g_range = 0.5
+    self.g_range = 0.3
   
   def start(self):
     self.timer.start(self.config.G_REALTIME_GRAPH_INTERVAL)

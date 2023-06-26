@@ -20,6 +20,7 @@ import pyqtgraph as pg
 from qasync import asyncSlot
 
 from modules.pyqt.pyqt_cuesheet_widget import CueSheetWidget
+from modules.pyqt.graph.pyqtgraph.CoursePlotItem import CoursePlotItem
 
 pg.setConfigOptions(antialias=True)
 pg.setConfigOption('background', 'w')
@@ -258,7 +259,7 @@ class MapWidget(BaseMapWidget):
 
     if self.course_plot != None:
       self.plot.removeItem(self.course_plot)
-    self.course_plot = pg.CoursePlotItem(
+    self.course_plot = CoursePlotItem(
       x=self.config.logger.course.longitude,
       y=self.get_mod_lat_np(self.config.logger.course.latitude),
       brushes=self.config.logger.course.colored_altitude, 

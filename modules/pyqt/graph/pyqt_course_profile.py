@@ -17,6 +17,7 @@ pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
 
 from .pyqt_base_map import BaseMapWidget
+from modules.pyqt.graph.pyqtgraph.CourseProfileGraphItem import CourseProfileGraphItem
 
 
 class CourseProfileGraphWidget(BaseMapWidget):
@@ -79,7 +80,7 @@ class CourseProfileGraphWidget(BaseMapWidget):
     #self.plot.getAxis("left").setStyle(tickTextOffset = 5)
     #self.plot.setAutoPan()
 
-    self.course_profile_plot = pg.CourseProfileGraphItem(
+    self.course_profile_plot = CourseProfileGraphItem(
       x=self.config.logger.course.distance,
       y=self.config.logger.course.altitude,
       brushes=self.config.logger.course.colored_altitude, 
