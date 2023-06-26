@@ -53,6 +53,7 @@ class GUI_Config():
     #average_values
     "Power(3s)":(G_UNIT["Power"],"self.sensor.values['integrated']['ave_power_3s']"),
     "Power(30s)":(G_UNIT["Power"],"self.sensor.values['integrated']['ave_power_30s']"),
+    "Power(60s)":(G_UNIT["Power"],"self.sensor.values['integrated']['ave_power_60s']"),
     #GPS raw
     "Latitude":(G_UNIT["Position"],"self.sensor.values['GPS']['lat']"),
     "Longitude":(G_UNIT["Position"],"self.sensor.values['GPS']['lon']"),

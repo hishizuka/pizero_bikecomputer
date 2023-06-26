@@ -38,6 +38,7 @@ except:
 class api():
 
   config = None
+  thingsboard_client = None
 
   def __init__(self, config):
     self.config = config
@@ -45,7 +46,7 @@ class api():
     if _IMPORT_THINGSBOARD:
       self.thingsboard_client = TBDeviceMqttClient(self.config.G_THINGSBOARD_API['SERVER'], 1883, self.config.G_THINGSBOARD_API['TOKEN'])
       self.send_time = int(time.time())
-      self.course_status = ""
+      self.course_send_status = "RESET"
       self.bt_cmd_lock = False
 
   async def get_google_routes(self, x1, y1, x2, y2):
@@ -393,6 +394,12 @@ class api():
     except:
       traceback.print_exc()
 
+  def thingsboard_check(self):
+    if self.thingsboard_client != None:
+      return True
+    else:
+      return False
+
   def send_livetrack_data(self, quick_send=False):
     if not self.check_livetrack():
       return
@@ -409,8 +416,8 @@ class api():
       #print("Install tb-mqtt-client")
       return False
     #network check
-    if not self.config.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"] and not self.config.detect_network():
-    #  #print("No Internet connection")
+    if not self.config.detect_network() and not self.config.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"]:
+      #print("No Internet connection")
       return False
     return True
   
@@ -455,9 +462,6 @@ class api():
     distance = self.config.logger.sensor.values['integrated']['distance']
     if not np.isnan(distance):
       distance = round(distance/1000,1)
-    power = self.config.logger.sensor.values['integrated']['ave_power_3s']
-    if not np.isnan(power):
-      power = int(power)
 
     data = {
       'ts': t*1000, 
@@ -465,8 +469,8 @@ class api():
         'timestamp': timestamp_str_log,
         'speed': speed,
         'distance': distance,
-        'heartrate': self.config.logger.sensor.values['integrated']['heart_rate'],
-        'power': power,
+        'heartrate': self.config.logger.sensor.values['integrated']['ave_heart_rate_60s'],
+        'power': self.config.logger.sensor.values['integrated']['ave_power_60s'],
         'work': int(self.config.logger.sensor.values['integrated']['accumulated_power']/1000),
         #'w_prime_balance': self.config.logger.sensor.values['integrated']['w_prime_balance_normalized'],
         'temperature': self.config.logger.sensor.values['integrated']['temperature'],
@@ -494,9 +498,9 @@ class api():
       self.thingsboard_client.disconnect()
     await asyncio.sleep(5)
 
-    if self.course_status == "LOAD":
+    if self.course_send_status == "LOAD":
       self.send_livetrack_course()
-    elif self.course_status == "RESET":
+    elif self.course_send_status == "RESET":
       self.send_livetrack_course(reset=True)
     
     #close connection
@@ -525,16 +529,16 @@ class api():
     if res != TBPublishInfo.TB_ERR_SUCCESS:
       print("thingsboard upload error:", res)
     self.thingsboard_client.disconnect()
-    self.course_status = ""
+    self.course_send_status = ""
 
   def send_livetrack_course_load(self):
+    self.course_send_status = "LOAD"
     if not self.check_livetrack():
       return
-    self.course_status = "LOAD"
     asyncio.get_running_loop().run_in_executor(None, self.send_livetrack_course, False)
 
   def send_livetrack_course_reset(self):
+    self.course_send_status = "RESET"
     if not self.check_livetrack():
       return
-    self.course_status = "RESET"
     asyncio.get_running_loop().run_in_executor(None, self.send_livetrack_course, True)

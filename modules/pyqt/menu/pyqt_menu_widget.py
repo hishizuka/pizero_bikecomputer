@@ -636,12 +636,13 @@ class LiveTrackMenuWidget(MenuWidget):
     #set back_index of child widget
     self.bt_page_name = "BT Tethering"
     self.bt_index = self.config.gui.gui_config.G_GUI_INDEX[self.bt_page_name]
-
-    if not self.config.G_THINGSBOARD_API['HAVE_API_TOKEN']:
-      self.button['Live Track'].disable()
-    else:
+    
+    if self.config.network.api.thingsboard_check() and self.config.G_THINGSBOARD_API['HAVE_API_TOKEN']:
       if not self.config.G_IS_RASPI:
         self.button['Auto upload via BT'].disable()
+    else:
+      self.button['Live Track'].disable()
+      self.button['Auto upload via BT'].disable()
     
     if not self.config.G_THINGSBOARD_API['AUTO_UPLOAD_VIA_BT']:
       self.button['Select BT device'].disable()

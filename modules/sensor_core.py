@@ -34,13 +34,14 @@ class SensorCore():
   integrated_value_keys =  [
     'heart_rate','speed','cadence','power',
     'distance','accumulated_power',
-    'ave_power_3s','ave_power_30s',
     'w_prime_balance','w_prime_balance_normalized','w_prime_power_sum','w_prime_power_count', 'w_prime_t','w_prime_sum',
     'grade','grade_spd','glide_ratio','dem_altitude',
     'temperature',
     'cpu_percent',
     'send_time',
     ]
+  average_secs = [3, 30, 60]
+  average_values = {'heart_rate':{},'power':{}}
   process = None
   time_threshold = {'HR':15, 'SPD':5, 'CDC':3, 'PWR':3, 'TEMP':45} #valid period of sensor [sec]
   grade_range = 9
@@ -78,6 +79,11 @@ class SensorCore():
     for d in self.diff_keys:
       self.values['integrated'][d] = [np.nan] * self.grade_range
     self.values['integrated']['CPU_MEM'] = ""
+
+    for s in self.average_secs:
+      for v in self.average_values:
+        self.average_values[v][s] = []
+        self.values['integrated']["ave_{}_{}s".format(v,s)] = np.nan
     if _IMPORT_PSUTIL:
       self.process = psutil.Process(self.config.G_PID)
 
@@ -122,12 +128,7 @@ class SensorCore():
     pre_alt_spd = {'ANT+':np.nan}
     pre_grade = pre_grade_spd = pre_glide = self.config.G_ANT_NULLVALUE
     diff_sum = {'alt_diff':0, 'dst_diff':0, 'alt_diff_spd':0, 'dst_diff_spd':0}
-    average_value = {
-      'power': {
-        3: [],
-        30: []
-      },
-    }
+
     #for w_prime_balance
     pwr_mean_under_cp = 0
     tau = 546*np.exp(-0.01*(self.config.G_POWER_CP-pwr_mean_under_cp))+316
@@ -375,17 +376,13 @@ class SensorCore():
       self.values['integrated']['altitude_gps_graph'][-1] = v['GPS']['alt']
       self.values['integrated']['altitude_graph'][-1] = v['I2C']['altitude']
 
-      if self.config.G_ANT['USE']['PWR']:
-        #average power
-        for sec in [3, 30]:
-          if(len(average_value['power'][sec]) < sec):
-            average_value['power'][sec].append(pwr)
-          else:
-            average_value['power'][sec][0:-1] = average_value['power'][sec][1:]
-            average_value['power'][sec][-1] = pwr
-        self.values['integrated']['ave_power_3s'] = int(np.mean(average_value['power'][3]))
-        self.values['integrated']['ave_power_30s'] = int(np.mean(average_value['power'][30]))
+      #average power, heart_rate
+      if self.config.G_ANT['USE']['PWR'] and not np.isnan(pwr):
+        self.get_ave_values('power', pwr)
+      if self.config.G_ANT['USE']['HR'] and not np.isnan(hr):
+        self.get_ave_values('heart_rate', hr)
 
+      if self.config.G_ANT['USE']['PWR']:
         #w_prime_balance
         #https://medium.com/critical-powers/comparison-of-wbalance-algorithms-8838173e2c15
         
@@ -521,6 +518,15 @@ class SensorCore():
       o = pre*(self.lp-1)/self.lp + value/self.lp
     p = value
     return o, p
+
+  def get_ave_values(self, k, v):
+    for sec in self.average_secs:
+      if(len(self.average_values[k][sec]) < sec):
+        self.average_values[k][sec].append(v)
+      else:
+        self.average_values[k][sec][0:-1] = self.average_values[k][sec][1:]
+        self.average_values[k][sec][-1] = v
+      self.values['integrated']['ave_{}_{}s'.format(k, sec)] = int(np.mean(self.average_values[k][sec]))
 
   #reset accumulated values
   def reset(self):
