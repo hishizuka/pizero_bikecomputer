@@ -48,7 +48,7 @@ class GadgetbridgeService(Service):
     #debug print
     self.tx_characteristic.changed(bytes(value+"\\n\n", "utf-8"))
 
-  #recieve from central
+  #receive from central
   @characteristic(rx_characteristic_uuid, CharFlags.WRITE).setter
   def rx_characteristic(self, value, options):
     #debug
@@ -84,13 +84,17 @@ class GadgetbridgeService(Service):
 
     #for gadgetbridge JSON message
     if len(self.value) > 8 and self.value[-3] == 0x7D and self.value[-2] == 0x29 and self.value[-1] == 0x0A:
-      text_mod = re.sub('(\w+):("?\w*"?)', '"\\1":\\2', self.value.decode().strip()[5:-2])
+      #remove emoji
+      text_mod = re.sub(':\w+:','', self.value.decode().strip()[5:-2])
+      #add double quotation
+      text_mod = re.sub('(\w+):("?\w*"?)', '"\\1":\\2', text_mod)
       message = {}
       try:
         message = json.loads('{' + text_mod + '}', strict=False)
       except:
         print("failed to load json")
         print(traceback.print_exc())
+        print(self.value.decode().strip()[5:-2])
         print(text_mod)
         try:
           message = json.loads('{' + text_mod + '"}', strict=False)
@@ -98,11 +102,7 @@ class GadgetbridgeService(Service):
           print("failed to load json (retry)")
 
       if 't' in message and message['t'] == 'notify' and 'title' in message and 'body' in message:
-        if len(message['title'] > 30):
-          message['title'] = message['title'][0:30] + "..."
-        if len(message['body'] > 50):
-          message['body'] = message['body'][0:50] + "..."
-        asyncio.create_task(self.config.gui.show_message(message['title'], message['body']))
+        self.config.gui.show_message(message['title'], message['body'], limit_length=True)
         print("success: ", message)
       elif 't' in message and message['t'] == 'find' and 'n' in message and message['n']:
         self.config.gui.show_dialog_ok_only(fn=None, title="Gadgetbridge")
