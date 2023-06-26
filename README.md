@@ -7,12 +7,18 @@ https://github.com/hishizuka/pizero_bikecomputer
 
 # News
 
+- 2023/6/26 Replace hishizuka/pyqtgraph with original pyqtgraph. So uninstall and re-install pyqtgraph.
+- 2023/6/26 Add GadgetBridge documents in [software_installation.md](./doc/software_installation.md#network).
+- 2023/6/26 Add LiveTrack(ThingsBoard) documents in [software_installation.md](./doc/software_installation.md#live-track) and [thingsboard_setup.md](./doc/thingsboard_setup.md)
 - 2023/5/27 Please delete log/log.db (`rm log/log.db`) because column layouts is changed.
-- 2023/5/26 There are so many updates, so you might want to look over [software_installation.md](/doc/software_installation.md)..
+- 2023/5/26 There are so many updates, so you might want to look over [software_installation.md](/doc/software_installation.md).
 - 2023/5/26 Install dbus-next and bluez-peripheral if you want to link your Android smartphone. [GadgetBridge](https://gadgetbridge.org) is also required, which can mirror Android notifications and get location without GPS modules.
 - 2023/5/26 Install tb-mqtt-client if you want to send to [ThingsBoard](https://thingsboard.io), which is an online dashboard. You can share your location in the map with your course or track.
 
 ```
+#2023/6/26 update
+$ sudo pip3 uninstall pyqtgraph
+$ sudo pip3 install pyqtgraph
 #2023/5/26 update
 $ sudo pip3 install dbus-next bluez-peripheral
 $ sudo pip3 install tb-mqtt-client
@@ -85,66 +91,73 @@ Some functions depend on your parts.
 
 ## Summary
 
-| Specs | Detail | Note |
+| Specs | Support | Detail |
 |:-|:-|:-|
-| Logging | Yes |  |
-| Sensors | Yes |  |
-| Positioning | Yes | A GPS module is supported. |
-| GUI | Yes |  |
-| Wifi | Yes | Built-in wifi |
+| Logging | Yes | See below. |
+| Sensors | Yes | ANT+ sensors and I2C sensors. See below. |
+| Maps and navigations | Yes | A GPS module or the Android app [GadgetBridge](https://gadgetbridge.org) is required. See below. |
+| GUI | Yes | Implemented using PyQt. See below. |
+| Wifi & Bluetooth | Yes | Using built-in modules.|
+| Smartphone connections | Yes | Android only. Mirroring notifications and getting locations via [GadgetBridge](https://gadgetbridge.org).|
 | Battery life(Reference) | 18h | with 3100mAh mobile battery([Garmin Charge Power Pack](https://buy.garmin.com/en-US/US/p/571552)) and MIP Reflective color LCD. |
 
 ## Logging
 
-| Specs | Detail | Note |
+| Specs | Support | Detail |
 |:-|:-|:-|
 | Stopwatch | Yes | Timer, Lap, Lap timer |
-| Lap | Yes | [Total, Lap ave, Pre lap ave] x [HR, Speed, Cadence, Power] |
+| Average value | Yes | [Total, Lap ave, Pre lap ave] x [HR, Speed, Cadence, Power], [3s, 30s, 60s] x [HR, Power] |
 | Cumulative value | Yes | [Total, Lap, Pre lap] x [Distance, Works, Ascent, Descent] |
 | Gross | Yes | Elapsed time, gross average speed(=distance/elapsed time), gained time from average speed 15km/h(for brevet) |
 | Auto stop | Yes | Automatic stop at speeds below 4km/h(configurable), or in the state of the acceleration sensor when calculating the speed by GPS alone |
 | Recording insterval | 1s |  Smart recording is not supported. |
-| Resume | Yes |  |
-| Output .fit log file | Yes |  |
+| Resume | Yes | Recording continues even if the power is suddenly turned off and restored. |
+| Output .fit log file | Yes | The standard format used by famous services as Strava and Garmin Connect. Also .csv format output is supported. |
 | Upload | Yes | Strava, Garmin and Ride with GPS. |
-| Live sending | Suspend | I am looking for a good dashboard service like as Garmin LiveTrack |
+| Live Track | Yes | Track data is uploaded in real time to [ThingsBoard.io](http://thingsboard.io) dashboard service, so you can share your activity with friends and family. |
+
+### Dashboard(ThingsBoard) example
+
+<img alt="thingsboard-01" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/c3df419f-4392-4d83-96ab-1f15508b3605"> <img alt="thingsboard-02" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/a72ffb58-2fa8-4a87-b9d7-0ba67aa3cfde">
+
 
 ## Sensors
 
 USB dongle is required if using ANT+ sensors.
 
-| Specs | Detail | Note |
+| Specs | Support | Detail |
 |:-|:-|:-|
 | ANT+ Heartrate sensor |  Yes | |
 | ANT+ Speed sensor |  Yes | |
 | ANT+ Cadence sensor |  Yes | |
 | ANT+ Speed&Cadence sensor |  Yes | |
 | ANT+ Powermeter |  Yes | Calibration is not supported. |
-| ANT+ LIGHT |  Yes | Bontrager Flare RT only. |
+| ANT+ Light |  Yes | Bontrager Flare RT only. |
 | ANT+ Control |  Yes | Garmin Edge Remote only. |
 | ANT+ Environment |  Yes | Garmin tempe (temperature sensor) |
-| Bluetooth sensors |  No |  |
-| Barometric altimeter | Yes | I2c sensor(pressure, temperature) |
-| Accelerometer | Yes | I2c sensor |
-| Magnetometer | Yes | I2c sensor |
-| Light sensor | Yes | I2c sensor. Use for auto backlight and lighting. |
+| Bluetooth sensors |  No | developping now... |
+| Barometric altimeter | Yes | I2C sensor(pressure, temperature) |
+| Accelerometer | Yes | I2C sensor |
+| Magnetometer | Yes | I2C sensor |
+| Light sensor | Yes | I2C sensor. Use for auto backlight and lighting. |
 
-## Positioning
+## Maps and navigations
 
-| Specs | Detail | Note |
+| Specs | Support | Detail |
 |:-|:-|:-|
+| GPS module | Yes | UART GPS module(via GPSd) and I2C GPS are supported. |
+| Positioning from smartphones | Yes | Using the Android app [GadgetBridge](https://gadgetbridge.org). |
 | Map | Yes | Support raster map tile format like OSM (z/x/y.png or jpg). So, offline map is available with local caches. Also, raster .mbtile format is supported. |
-| Course on the map| Yes | Local file(.tcx), Ride with GPS. |
+| Course on the map| Yes | Local file(.tcx), or cloud course from Ride with GPS with internet connection. |
 | Search route | Yes | Google Directions API |
 | Course profile | Yes |  |
-| Detect climbs | Yes |  |
-| Cuesheet | Yes | Use course points included in course files. |
+| Detect climbs | Yes | Like Garmin ClimbPro. Only climbs on the course, not detect nearby climbs. |
+| Cuesheet | Yes | Use course points included in course files(.tcx). |
 | Map overlay | Yes | Heatmap (Strava / Ride with GPS) and weather(rain / wind). |
 
 ### Map example
 
-
-#### Map and Course Profile with climb segments
+#### Map and Course Profile with detecting climbs.
 
 <img width="400" alt="map-01" src="https://user-images.githubusercontent.com/12926652/206341071-5f9bee00-d959-489b-832a-9b4bf7fe2279.png"> <img width="400" alt="map-02" src="https://user-images.githubusercontent.com/12926652/206341086-7935cfbd-8ed3-4068-9f2b-93f676a8932a.png">
 
@@ -158,9 +171,9 @@ Strava heatmap.
 
 [RainViewer](https://www.rainviewer.com/weather-radar-map-live.html) and [openportguide](http://weather.openportguide.de/map.html) are available worldwide.
 
-In Japan, [気象庁降水ナウキャスト](https://www.jma.go.jp/bosai/nowc/)(rain) and [SCW](https://supercweather.com)(wind) are available.
-
 ![map_overlay_rainviewer](https://user-images.githubusercontent.com/12926652/205876664-ae1b629c-5b3f-4d8a-b789-d3ac24753d7f.png) ![map_overlay_weather openportguide de](https://user-images.githubusercontent.com/12926652/205876684-253b672f-615d-410c-8496-5eb9a13b2558.png)
+
+In Japan, [気象庁降水ナウキャスト](https://www.jma.go.jp/bosai/nowc/)(rain) and [SCW](https://supercweather.com)(wind) are available.
 
 <img src ="https://user-images.githubusercontent.com/12926652/205563333-549cf4dc-abbd-4392-9233-b8391687e0bc.png" width=400/> 
 
@@ -175,7 +188,7 @@ In Japan, [気象庁降水ナウキャスト](https://www.jma.go.jp/bosai/nowc/)
 | ANT+ pairing | Yes |  |
 | Select course | Yes | local .tcx file and Ride with GPS. |
 | Upload activity | Yes | Strava, Garmin and Ride with GPS. |
-| Select map | Yes | map and overlay(heatmap and weather) |
+| Select map | Yes | maps and overlays(heatmap and weather) |
 | Adjust parameter | Yes | wheel size, altitude, CP and W prime balance |
 | Network setting | Yes | Toggle wifi and BT, BT tethering. |
 | Language localization | Yes | Font and translation file of items are required. |

@@ -36,9 +36,14 @@ Assume Python version 3 environment. Version 2 is not supported.
 
 ```
 $ git clone https://github.com/hishizuka/pizero_bikecomputer.git
-$ pip3 install PyQt5 numpy cython oyaml pillow polyline aiohttp aiofiles qasync garminconnect stravacookies
-$ pip3 install git+https://github.com/hishizuka/pyqtgraph.git
+$ pip3 install PyQt5 numpy pyqtgraph cython oyaml pillow polyline aiohttp aiofiles qasync garminconnect stravacookies tb-mqtt-client
 $ pip3 install git+https://github.com/hishizuka/crdp.git
+
+# mac
+$ brew install sqlite3
+# linux
+$ sudo apt-get install sqlite3 libsqlite3-dev
+
 $ cd pizero_bikecomputer
 ```
 
@@ -61,10 +66,8 @@ Install in the home directory of default user "pi". Also, your Raspberry Pi is c
 ```
 $ cd
 $ git clone https://github.com/hishizuka/pizero_bikecomputer.git
-$ sudo apt-get install python3-pip cython3 cmake gawk python3-numpy python3-pyqt5 sqlite3 libsqlite3-dev libatlas-base-dev python3-aiohttp python3-aiofiles
+$ sudo apt-get install python3-pip cython3 cmake gawk python3-numpy python3-pyqt5 python3-pyqtgraph sqlite3 libsqlite3-dev libatlas-base-dev python3-aiohttp python3-aiofiles wiringpi python3-smbus python3-rpi.gpio python3-psutil python3-pil
 $ sudo pip3 install oyaml sip polyline garminconnect stravacookies qasync dbus-next bluez-peripheral tb-mqtt-client
-$ sudo apt-get install wiringpi python3-smbus python3-rpi.gpio python3-psutil python3-pil
-$ sudo pip3 install git+https://github.com/hishizuka/pyqtgraph.git
 $ sudo pip3 install git+https://github.com/hishizuka/crdp.git
 $ cd pizero_bikecomputer
 ```
@@ -451,8 +454,7 @@ Right side
 
 ## Menu screen
 
-<img width="400" alt="menu-01-all" src="https://user-images.githubusercontent.com/12926652/206076181-5118d71a-1750-4570-8bd0-923b4b9699eb.png">
-
+<img width="400" alt="menu-01" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/46291e12-9104-4486-a896-aaf7010d7cd2">
 
 ### Sensors
 
@@ -483,21 +485,34 @@ Right side
   - If you set token in [GOOGLE_DIRECTION_API section](#google_direction_api-section) of setting.conf, select route type: Car or Bicycle.
 
 Load course with the right icon (>).
-
+ 
 <img width="400" alt="RidewithGPS-01" src="https://user-images.githubusercontent.com/12926652/206076210-9c50f789-bac3-4bd0-8209-9dea3a61a132.png"> <img width="400" alt="RidewithGPS-02" src="https://user-images.githubusercontent.com/12926652/206076212-8696ac34-c9e6-485f-b1ba-687c0d2a0061.png">
 
-### LiveTrack
+### Live Track
+ 
+<img width="400" alt="livetrack-01" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/9f9660fd-eca4-4b97-a60a-d2ff890bf3f0">
 
-(In progress)
+- Live Track
+  - Enable real-time data upload to the [ThingsBoard](https://thingsboard.io) dashboard.
+  - `tb-mqtt-client` package, which can be installed with the `pip3` command, is required.
+  - Also, thingsboard device access token is required in [THINGSBOARD_API](#thingsboard_api-section) of setting.conf.
+  - You will also need to upload and set up a dashboard.　For more details of Thingboard setup, see [thingsboard_setup.md](./thingsboard_setup.md).
+- Auto upload via BT
+  - Upload to ThingsBoard via bluetooth tethering via a paired smartphone which are already paired using `bluetoothctl`.
+  - The following `Select BT device` must also be specified.
+  - Since it operates intermittently once every two minutes, the power consumption of the Raspberry Pi and smartphone is much lower than a constant connection via Wifi tethering.
+- Select BT device
+  - Specify the device to use for bluetooth tethering.
+
 
 ### Upload Activity
 
 Uploads the most recent activity record file(.fit) created by the reset operation after the power is turned on.
-
+ 
 <img width="400" alt="menu-04-upload_activity" src="https://user-images.githubusercontent.com/12926652/206076198-55803175-ef4c-4f9b-9408-b44dbe98b1b3.png">
 
 - Strava
-  - You need to set the Strava Token in [Strava API section](#strava_api-section) of setting.conf).
+  - You need to set the Strava Token in [Strava API section](#strava_api-section) of setting.conf.
 - Garmin
   - You need to set the Garmin setting in [GARMINCONNECT_API section](#garminconnect_api-section) of setting.conf.
 - Ride with GPS
@@ -537,32 +552,45 @@ openportguide
 
 ### Profile
 
-If ANT+ powermeter is available, set both parameters are used in W'balance (%). They are determined by histrical activity data with bycicle power with [GoldenCheetah](http://www.goldencheetah.org) or [intervals.icu](https://intervals.icu).
+If ANT+ powermeter is available, set both parameters are used in W'balance (%). They are determined by histrical activity data with bicycle power with [GoldenCheetah](http://www.goldencheetah.org) or [intervals.icu](https://intervals.icu).
 
 <img width="400" alt="menu-07-profile" src="https://user-images.githubusercontent.com/12926652/206076204-197f2454-940b-4267-a626-52740391ddac.png">
 
 ### System
 
-<img width="400" alt="menu-08-system" src="https://user-images.githubusercontent.com/12926652/206076205-a4fa9665-bc2a-4339-8c8b-15cde6a19004.png">
+<img width="400" alt="menu-08-system" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/402692a5-1612-4bf3-a645-a84ba91b766b">
+
 
 - Network
   - See below.
-- Update
-  - Update the program.
-  - It just does a `git pull origin master` in update.sh.
+- Debug (experimental)
+  - Debug log: view "log/debug.log".
+  - Disable Wifi/BT, Enable Wifi/BT: modify /boot/config.txt to turn Wifi and BT On/Off at the hardware level. Reboot required for settings to take effect.
+  - Update: execite `git pull origin master`.
 - Power Off
   - Power off the raspberry pi zero when the program is started with the service.
-- Debug log
-  - View "log/debug.log".
 
-<img width="400" alt="menu-09-network" src="https://user-images.githubusercontent.com/12926652/206076207-9a284166-ce16-4589-8ef3-b428ee09e7a5.png">
+#### Network
 
+<img width="400" alt="menu-09-network" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/48a617c4-73a5-4c4d-ac7b-d2471ed1d404">
+
+- Wifi, Bluetooth
+  - Turn Wifi and BT On/Off at the software level using `rfkill`.
 - BT Tethering
-  - If dbus and bluez is available, start bluetooth tethering with devices of [BT_ADDRESS_section](#bt_address-section) in setting.conf.
+  - If dbus and bluez is available, start bluetooth tethering with a smartphone which are already paired using `bluetoothctl`.
+- IP Address
+  - Show IP address. This can be used for ssh access while tethering a smartphone.
 - GadgetBridge
-  - (In progress) Install [GadgetBridge](https://gadgetbridge.org) Android app and toggle on.
-  - Do pairing in the GadgetBridge app as Bangle.js.
-  - <img width="400" alt="message" src="https://user-images.githubusercontent.com/12926652/206078983-fcf6b101-21c5-4c12-a118-d25a1e133d6a.png">
+  - Recieve notifications and GPS location from a smartphone. Install [GadgetBridge](https://gadgetbridge.org) Android app and toggle on.
+  - `dbus-next` and `bluez-peripheral` packages, which can be installed with the `pip3` command, is required.
+  - GadgetBridge app settings
+    - Enable all permissions.
+    - `Settings` > `Discovery and Pairing options` > `Ignore bonded devices`: Off, `CompanionDevice Pairing`: On, `Discover unsupported devices`: On, `Scanning intensity`: 2 or 3
+    - From `Connect new device` in the menu or `+` button, you can enter '`Device discovery`. Select the device(shown as host name), long press, and do pairing as `Bangle.js`.
+- Get Location
+  - Enable GPS location acquisition by Gadgetbridge.
+  - GadgetBridge app settings
+    - Click the Settings button in the list of devices on the top screen. `Use phone gps data`: On, `GPS data update interval in ms`: 5000-10000.
 
 ## Settings
 
@@ -652,6 +680,13 @@ Axis conversion is performed with the following variables.
 
 `mag_declination` is automatically set by magnetic-field-calculator package.
 
+#### DISPLAY_PARAM section
+
+(experimental)
+- `spi_clock`: specify SPI clock of the following displays.
+  - `MIP`: MIP color reflective LCD module 2.7 inch.
+  - `MIP_Sharp`: SHARP Memory Display Breakout
+
 #### STRAVA_API section
 
 Set up for uploading your .fit file to Strava in the "Strava Upload" of the menu. The upload is limited to the most recently reset and exported .fit file.
@@ -680,15 +715,10 @@ If you want to search for a route on a map, set your `token` of the Google Direc
 
 If you want to correct the altitude using a barometric pressure sensor, set your `token` of the OpenWeatherMap API. 
 
-#### BT_ADDRESS section
+#### THINGSBOARD_API section
 
-If you want to use bluetooth tethering, set address.
-Assume bluetooth pairing has already been set up(not shown).
+If you want to use ThingsBoard dashboard, set your `token` of the Thingboard device access token.
 
-```
-device_A = 01:23:45:67:89:AB
-device_B = CD:EF:01:23:45:67
-```
 
 ### setting.pickle
 
@@ -760,4 +790,4 @@ $ python3 pizero_bikecomputer.py --demo
 Press the left button to move to the map screen and leave it for a while. The current position will move along the course and download the required area of the map. 
 
 
-[Back to README.md](/README.md)
+[Back to README.md](../README.md)
