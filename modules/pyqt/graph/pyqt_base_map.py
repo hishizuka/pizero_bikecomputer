@@ -75,7 +75,7 @@ class BaseMapWidget(ScreenWidget):
       #'fix':pg.mkBrush(color=(0,0,160,128)), 
       'fix':pg.mkBrush(color=(0,0,255)),
       #'lost':pg.mkBrush(color=(96,96,96,128))
-      'lost':pg.mkBrush(color=(128,128,128))
+      'lost':pg.mkBrush(color=(170,170,170))
       }
     self.point = {
       'pos': [np.nan, np.nan],

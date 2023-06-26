@@ -12,5 +12,10 @@ fi
 
 # u: directly output to logging text
 #QT_QPA_PLATFORM=offscreen /usr/bin/python3 -u pizero_bikecomputer.py > ./log/debug.txt 2>&1
-QT_QPA_PLATFORM=offscreen /usr/bin/python3 -u pizero_bikecomputer.py > ./log/debug.txt 2> >(grep --line-buffered -v 'Operation timed out' | gawk '{print "[ERROR]", $0; fflush()}')
+
+export QT_QPA_PLATFORM=offscreen
+#error, warning, info, debug
+export PYUSB_DEBUG=critical
+#export PYUSB_LOG_FILENAME=/dev/null
+/usr/bin/python3 -u pizero_bikecomputer.py > ./log/debug.txt 2> >(gawk '{print "[ERROR]", $0; fflush()}')
 

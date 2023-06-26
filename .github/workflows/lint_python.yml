@@ -8,12 +8,12 @@ jobs:
       - uses: actions/setup-python@v4
         with:
           python-version: 3.x
-      - run: pip install --upgrade pip wheel
+      - run: pip install --upgrade pip wheel setuptools
       - run: pip install bandit black codespell flake8 flake8-2020 flake8-bugbear
                          flake8-comprehensions isort mypy pytest pyupgrade safety
       - run: bandit --recursive --skip B105,B110,B112,B301,B307,B311,B403,B404,B603,B608 .
       - run: black --check . || true
-      - run: codespell --ignore-words-list=bu,elemnt,te,tread || true
+      - run: codespell --ignore-words-list=bu,elemnt,te || true
       - run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
       - run: flake8 . --count --exit-zero --max-complexity=10 --max-line-length=88
                       --show-source --statistics
