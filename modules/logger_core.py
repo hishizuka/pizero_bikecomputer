@@ -179,76 +179,90 @@ class LoggerCore():
       self.sql_queue.task_done()
   
   def init_db(self):
+    self.create_table_sql = """CREATE TABLE BIKECOMPUTER_LOG(
+      timestamp DATETIME,
+      lap INTEGER, 
+      timer INTEGER,
+      total_timer_time INTEGER,
+      elapsed_time INTEGER,
+      position_lat FLOAT,
+      position_long FLOAT,
+      raw_lat FLOAT,
+      raw_long FLOAT,
+      gps_altitude FLOAT,
+      gps_speed FLOAT,
+      gps_distance FLOAT,
+      gps_mode INTEGER,
+      gps_used_sats INTEGER,
+      gps_total_sats INTEGER,
+      gps_track INTEGER,
+      gps_epx FLOAT,
+      gps_epy FLOAT,
+      gps_epv FLOAT,
+      gps_pdop FLOAT,
+      gps_hdop FLOAT,
+      gps_vdop FLOAT,
+      heart_rate INTEGER,
+      cadence INTEGER,
+      distance FLOAT,
+      speed FLOAT,
+      power INTEGER,
+      accumulated_power INTEGER,
+      temperature FLOAT,
+      pressure FLOAT,
+      humidity INTEGER,
+      altitude FLOAT,
+      course_altitude FLOAT,
+      dem_altitude FLOAT,
+      heading INTEGER,
+      motion INTEGER,
+      acc_x FLOAT,
+      acc_y FLOAT,
+      acc_z FLOAT,
+      gyro_x FLOAT,
+      gyro_y FLOAT,
+      gyro_z FLOAT,
+      light INTEGER,
+      cpu_percent INTEGER,
+      total_ascent FLOAT,
+      total_descent FLOAT,
+      lap_heart_rate INTEGER,
+      lap_cadence INTEGER,
+      lap_distance FLOAT,
+      lap_speed FLOAT,
+      lap_power INTEGER,
+      lap_accumulated_power INTEGER,
+      lap_total_ascent FLOAT,
+      lap_total_descent FLOAT,
+      avg_heart_rate INTEGER,
+      avg_cadence INTEGER,
+      avg_speed FLOAT,
+      avg_power INTEGER,
+      lap_cad_count INTEGER,
+      lap_cad_sum INTEGER,
+      avg_cad_count INTEGER,
+      avg_cad_sum INTEGER,
+      lap_power_count INTEGER,
+      lap_power_sum INTEGER,
+      avg_power_count INTEGER,
+      avg_power_sum INTEGER
+    )"""
     self.cur.execute("SELECT * FROM sqlite_master WHERE type='table' and name='BIKECOMPUTER_LOG'")
-    if self.cur.fetchone() == None:
-      self.con.execute("""CREATE TABLE BIKECOMPUTER_LOG(
-        timestamp DATETIME,
-        lap INTEGER, 
-        timer INTEGER,
-        total_timer_time INTEGER,
-        elapsed_time INTEGER,
-        position_lat FLOAT,
-        position_long FLOAT,
-        raw_lat FLOAT,
-        raw_long FLOAT,
-        gps_altitude FLOAT,
-        gps_speed FLOAT,
-        gps_distance FLOAT,
-        gps_mode INTEGER,
-        gps_used_sats INTEGER,
-        gps_total_sats INTEGER,
-        gps_track INTEGER,
-        gps_epx FLOAT,
-        gps_epy FLOAT,
-        gps_epv FLOAT,
-        gps_pdop FLOAT,
-        gps_hdop FLOAT,
-        gps_vdop FLOAT,
-        heart_rate INTEGER,
-        cadence INTEGER,
-        distance FLOAT,
-        speed FLOAT,
-        power INTEGER,
-        accumulated_power INTEGER,
-        temperature FLOAT,
-        pressure FLOAT,
-        humidity INTEGER,
-        altitude FLOAT,
-        course_altitude FLOAT,
-        dem_altitude FLOAT,
-        heading INTEGER,
-        motion INTEGER,
-        acc_x FLOAT,
-        acc_y FLOAT,
-        acc_z FLOAT,
-        gyro_x FLOAT,
-        gyro_y FLOAT,
-        gyro_z FLOAT,
-        light INTEGER,
-        cpu_percent INTEGER,
-        total_ascent FLOAT,
-        total_descent FLOAT,
-        lap_heart_rate INTEGER,
-        lap_cadence INTEGER,
-        lap_distance FLOAT,
-        lap_speed FLOAT,
-        lap_power INTEGER,
-        lap_accumulated_power INTEGER,
-        lap_total_ascent FLOAT,
-        lap_total_descent FLOAT,
-        avg_heart_rate INTEGER,
-        avg_cadence INTEGER,
-        avg_speed FLOAT,
-        avg_power INTEGER,
-        lap_cad_count INTEGER,
-        lap_cad_sum INTEGER,
-        avg_cad_count INTEGER,
-        avg_cad_sum INTEGER,
-        lap_power_count INTEGER,
-        lap_power_sum INTEGER,
-        avg_power_count INTEGER,
-        avg_power_sum INTEGER
-      )""")
+    res = self.cur.fetchone()
+    replace_flg = False
+    if res != None and len(res) >= 5 and res[4] != self.create_table_sql:
+      log_db_moved = self.config.G_LOG_DB+"-old_layout"
+      self.cur.close()
+      self.con.close()
+
+      shutil.move(self.config.G_LOG_DB, log_db_moved)
+      print("The layout of {} is changed to {}".format(self.config.G_LOG_DB, log_db_moved))
+      
+      self.con = sqlite3.connect(self.config.G_LOG_DB, check_same_thread=False)
+      self.cur = self.con.cursor()
+      replace_flg = True
+    if res == None or replace_flg:
+      self.con.execute(self.create_table_sql)
       self.cur.execute("CREATE INDEX lap_index ON BIKECOMPUTER_LOG(lap)")
       self.cur.execute("CREATE INDEX total_timer_time_index ON BIKECOMPUTER_LOG(total_timer_time)")
       self.cur.execute("CREATE INDEX timestamp_index ON BIKECOMPUTER_LOG(timestamp)")
@@ -266,6 +280,9 @@ class LoggerCore():
 
   def start_and_stop_manual(self):
     time_str = datetime.datetime.now().strftime("%Y%m%d %H:%M:%S")
+    popup_extra = ""
+    pre_status = self.config.G_MANUAL_STATUS
+
     if self.config.G_MANUAL_STATUS != "START":
       self.config.display.screen_flash_short()
       print("->M START {}".format(time_str))
@@ -275,6 +292,11 @@ class LoggerCore():
         self.config.gui.change_start_stop_button(self.config.G_MANUAL_STATUS)
       if self.values['start_time'] == None:
         self.values['start_time'] = int(datetime.datetime.utcnow().timestamp())
+      
+      if pre_status == "INIT" and not np.isnan(self.sensor.values['integrated']['dem_altitude']):
+        asyncio.create_task(self.sensor.sensor_i2c.update_sealevel_pa(self.sensor.values['integrated']['dem_altitude']))
+        popup_extra = "<br />altitude corrected: {}m".format(int(self.sensor.values['integrated']['dem_altitude']))
+
     elif self.config.G_MANUAL_STATUS == "START":
       self.config.display.screen_flash_long()
       print("->M STOP  {}".format(time_str))
@@ -282,6 +304,7 @@ class LoggerCore():
       self.config.G_MANUAL_STATUS = "STOP"
       if self.config.gui != None:
         self.config.gui.change_start_stop_button(self.config.G_MANUAL_STATUS)
+
     self.config.setting.set_config_pickle("G_MANUAL_STATUS", self.config.G_MANUAL_STATUS, quick_apply=True)
     
     #send online
@@ -289,9 +312,7 @@ class LoggerCore():
       self.config.network.api.send_livetrack_data(quick_send=True)
     
     #show message
-    self.config.gui.show_popup_internal(
-      self.config.G_MANUAL_STATUS
-    )
+    self.config.gui.show_popup(self.config.G_MANUAL_STATUS + popup_extra)
  
   def start_and_stop(self, status=None):
     if status != None:
@@ -327,7 +348,7 @@ class LoggerCore():
     hour_sec = divmod(lap_time, 3600)
     min_sec = divmod(hour_sec[1], 60)
     lap_time_str = "{:}:{:02}".format(hour_sec[0],min_sec[0])
-    self.config.gui.show_message_internal(
+    self.config.gui.show_popup_multiline(
       "LAP {} ({}km, {})".format(self.values['lap'], round(self.record_stats['pre_lap_avg']['distance']/1000,1), lap_time_str), 
       value_str.format(self.record_stats['pre_lap_avg']['speed']*3.6, self.record_stats['pre_lap_avg']['heart_rate'], self.record_stats['pre_lap_avg']['power'])
     )

@@ -879,8 +879,8 @@ class SensorI2C(Sensor):
       if 'BME280' in sp and sp['BME280']:
         self.values['humidity'] = self.sensor['i2c_baro_temp'].relative_humidity
         #discomfort_index = 0.81*self.values['temperature'] + 0.01*self.values['humidity']*(0.99*self.values['temperature']-14.3) + 46.3
-      #print("\t\tread value: {:.3f} sec".format((datetime.datetime.now()-t).total_seconds()))
-      #print("\t\tpressure:{:.2f}, temperature:{}".format(self.values['pressure_raw'],self.values['temperature']))
+      #print("    read value: {:.3f} sec".format((datetime.datetime.now()-t).total_seconds()))
+      #print("    pressure:{:.2f}, temperature:{}".format(self.values['pressure_raw'],self.values['temperature']))
     except:
       return
   
@@ -935,24 +935,27 @@ class SensorI2C(Sensor):
         time_delta = (self.timestamp_array[-1] - self.timestamp_array[i]).total_seconds()
         if time_delta > 0:
           altitude_delta = self.vspeed_array[-1] - self.vspeed_array[i]
-          self.values['vertical_speed'] = altitude_delta/ time_delta
+          self.values['vertical_speed'] = altitude_delta/time_delta
 
   async def update_sealevel_pa(self, alt):
 
-    if np.isnan(self.values['pressure']) or np.isnan(self.values['temperature']):
+    if np.isnan(self.values['pressure']) or np.isnan(self.values['temperature']) or np.isnan(alt):
       return
     if self.config.logger == None:
       return
     
     #get temperature
     temperature = None
+
     ant_value = np.nan
     if self.config.G_ANT['ID_TYPE']['TEMP'] in self.config.logger.sensor.values['ANT+']:
       ant_value = self.config.logger.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['TEMP']]['temperature']
+
     # from ANT+ sensor (tempe), not use I2C sensor because of inaccuracy
     if self.config.G_ANT['USE']['TEMP'] and self.config.G_ANT['ID_TYPE']['TEMP'] != 0 and not np.isnan(ant_value):
       temperature = ant_value
       self.sealevel_temp = 273.15 + ant_value + 0.0065*alt
+    
     # from OpenWeatherMap API with current point
     else:
       api_data = None
@@ -964,16 +967,16 @@ class SensorI2C(Sensor):
         if "temp" in api_data["main"]:
           temperature = api_data["main"]["temp"] - 273.15
           self.sealevel_temp = api_data["main"]["temp"] + 0.0065*alt
-        #not use (often cannot get)
-        if "grnd_level" in api_data["main"] and "sea_level" in api_data["main"] and "pressure" in api_data["main"]:
-          h = api_data["main"]["temp"]/0.0065*(pow(api_data["main"]["sea_level"]/api_data["main"]["grnd_level"], 1/5.257)-1)
-          print(api_data["main"]["temp"], api_data["main"]["grnd_level"], api_data["main"]["pressure"], api_data["main"]["sea_level"], h)
       except:
         pass
     
     self.sealevel_pa = self.values['pressure'] * pow((self.sealevel_temp-0.0065*alt)/self.sealevel_temp, -5.257)
     self.config.setting.set_config_pickle("sealevel_pa", self.sealevel_pa, quick_apply=False)
     self.config.setting.set_config_pickle("sealevel_temp", self.sealevel_temp, quick_apply=True)
+    
+    #reset historical altitude
+    self.average_val['altitude'] = np.full(self.ave_window_size, np.nan)
+    self.values['pre_altitude'] = np.nan
 
     print('update sealevel pressure')
     print('    altitude:', alt, 'm')
