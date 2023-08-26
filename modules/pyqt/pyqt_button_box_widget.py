@@ -112,7 +112,7 @@ class ButtonBoxWidget(QtWidgets.QWidget):
       self.config.logger.start_and_stop_manual()
 
   def change_start_stop_button(self, status):
-    icon = QtGui.QIcon(self.config.gui.icon_dir+'img/pause_white.png')
+    icon = QtGui.QIcon(self.icon_dir+'img/pause_white.png')
     if status == "START":
-      icon = QtGui.QIcon(self.config.gui.icon_dir+'img/next_white.png')
+      icon = QtGui.QIcon(self.icon_dir+'img/next_white.png')
     self.start_button.setIcon(icon)
