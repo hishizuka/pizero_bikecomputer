@@ -1,0 +1,6 @@
+-r min.in
+
+garminconnect==0.1.55
+polyline==2.0.0
+stravacookies==1.3
+tb-mqtt-client==1.5
