@@ -23,6 +23,7 @@ import qasync
 from logger import app_logger
 from modules.gui_config import GUI_Config
 from modules.pyqt.pyqt_style import PyQtStyle
+from modules.utils.timer import Timer, log_timers
 
 
 class MyWindow(QtWidgets.QMainWindow):
@@ -165,242 +166,243 @@ class GUI_PyQt(QtCore.QObject):
         self.boot_status.setText(text)
 
     def delay_init(self):
-        time_profile = []
-        t1 = datetime.datetime.now()
-
-        self.add_font()
-
-        # navi icon
-        self.navi_icon = {
-            "Default": QtGui.QIcon("img/navi_flag.png"),  # svg
-            "Left": QtGui.QIcon("img/navi_turn_left.svg"),
-            "Right": QtGui.QIcon("img/navi_turn_right.svg"),
-            "Summit": QtGui.QIcon("img/summit.png"),  # svg
-        }
-
-        # physical button
-        self.signal_next_button.connect(self.scroll)
-        self.signal_prev_button.connect(self.scroll)
-        self.signal_menu_button.connect(self.change_menu_page)
-        self.signal_menu_back_button.connect(self.change_menu_back)
-        # other
-        self.signal_get_screenshot.connect(self.screenshot)
-
-        self.signal_start_and_stop_manual.connect(self.start_and_stop_manual_internal)
-        self.signal_count_laps.connect(self.count_laps_internal)
-
-        self.signal_draw_display.connect(self.draw_display)
-
-        self.msg_queue = asyncio.Queue()
-        self.msg_event = asyncio.Event()
-        asyncio.create_task(self.msg_worker())
-
-        t2 = datetime.datetime.now()
-        time_profile.append((t2 - t1).total_seconds())
-        t1 = t2
-
-        import modules.pyqt.graph.pyqt_map as pyqt_map
-        import modules.pyqt.graph.pyqt_course_profile as pyqt_course_profile
-        import modules.pyqt.graph.pyqt_value_graph as pyqt_value_graph
-        from modules.pyqt.pyqt_values_widget import ValuesWidget
-
-        from modules.pyqt.menu.pyqt_menu_widget import (
-            TopMenuWidget,
-            LiveTrackMenuWidget,
-            UploadActivityMenuWidget,
-        )
-        from modules.pyqt.menu.pyqt_system_menu_widget import (
-            SystemMenuWidget,
-            NetworkMenuWidget,
-            BluetoothTetheringListWidget,
-            DebugMenuWidget,
-            DebugLogViewerWidget,
-        )
-        from modules.pyqt.menu.pyqt_profile_widget import ProfileWidget
-        from modules.pyqt.menu.pyqt_sensor_menu_widget import (
-            SensorMenuWidget,
-            ANTMenuWidget,
-            ANTListWidget,
-            ANTMultiScanScreenWidget,
-        )
-        from modules.pyqt.menu.pyqt_course_menu_widget import (
-            CoursesMenuWidget,
-            CourseListWidget,
-            CourseDetailWidget,
-        )  # , GoogleDirectionsAPISettingMenuWidget
-        from modules.pyqt.menu.pyqt_map_menu_widget import (
-            MapMenuWidget,
-            MapListWidget,
-            MapOverlayMenuWidget,
-            HeatmapListWidget,
-            RainmapListWidget,
-            WindmapListWidget,
-        )
-        from modules.pyqt.menu.pyqt_adjust_widget import (
-            AdjustAltitudeWidget,
-            AdjustWheelCircumferenceWidget,
-            AdjustCPWidget,
-            AdjustWPrimeBalanceWidget,
-        )
-        from modules.pyqt.pyqt_cuesheet_widget import CueSheetWidget
-
-        t2 = datetime.datetime.now()
-        time_profile.append((t2 - t1).total_seconds())
-        t1 = t2
-
-        # self.main_window
-        #  stack_widget
-        #    splash_widget
-        #    main_widget
-        #      main_layout
-        #        main_page
-        #        button_box_widget
-        #    menu_widget
-        #    ant_menu_widget
-        #    ant_detail_widget
-        #    adjust_wheel_circumference_widget
-        #    adjust_atitude_widget
-        #    debug_log_viewer_widget
-
-        # stack_widget elements (main)
-        self.main_widget = QtWidgets.QWidget(self.stack_widget)
-        self.main_widget.setContentsMargins(0, 0, 0, 0)
-        self.stack_widget.addWidget(self.main_widget)
-
-        # reverse order (make children widget first, then make parent widget)
-        menus = [
-            ("ANT+ Detail", ANTListWidget),
-            ("ANT+ MultiScan", ANTMultiScanScreenWidget),
-            ("ANT+ Sensors", ANTMenuWidget),
-            ("Wheel Size", AdjustWheelCircumferenceWidget),
-            ("Adjust Altitude", AdjustAltitudeWidget),
-            ("Sensors", SensorMenuWidget),
-            ("BT Tethering", BluetoothTetheringListWidget),
-            ("Network", NetworkMenuWidget),
-            ("Debug Log", DebugLogViewerWidget),
-            ("Debug", DebugMenuWidget),
-            ("System", SystemMenuWidget),
-            ("CP", AdjustCPWidget),
-            ("W Prime Balance", AdjustWPrimeBalanceWidget),
-            ("Profile", ProfileWidget),
-            ("Live Track", LiveTrackMenuWidget),
-            ("Upload Activity", UploadActivityMenuWidget),
-            ("Wind map List", WindmapListWidget),
-            ("Rain map List", RainmapListWidget),
-            ("Heatmap List", HeatmapListWidget),
-            ("Map Overlay", MapOverlayMenuWidget),
-            ("Select Map", MapListWidget),
-            ("Map", MapMenuWidget),
-            # ("Google Directions API mode", GoogleDirectionsAPISettingMenuWidget),
-            ("Course Detail", CourseDetailWidget),
-            ("Courses List", CourseListWidget),
-            ("Courses", CoursesMenuWidget),
-            ("Menu", TopMenuWidget),
+        # ensure visually alignment for log
+        timers = [
+            Timer(auto_start=False, text="misc  : {0:.3f} sec"),
+            Timer(auto_start=False, text="import: {0:.3f} sec"),
+            Timer(auto_start=False, text="init  : {0:.3f} sec"),
+            Timer(auto_start=False, text="layout: {0:.3f} sec"),
         ]
-        menu_count = max(self.gui_config.G_GUI_INDEX.values()) + 1
-        for m in menus:
-            m_widget = m[1](self.stack_widget, m[0], self.config)
-            m_widget.setContentsMargins(0, 0, 0, 0)
-            self.stack_widget.addWidget(m_widget)
-            self.gui_config.G_GUI_INDEX[m[0]] = menu_count
-            menu_count += 1
 
-        self.stack_widget.setCurrentIndex(1)
+        with timers[0]:
+            self.add_font()
 
-        # main layout
-        self.main_layout = QtWidgets.QVBoxLayout(self.main_widget)
-        self.main_layout.setContentsMargins(0, 0, 0, 0)
-        self.main_layout.setSpacing(0)
+            # navi icon
+            self.navi_icon = {
+                "Default": QtGui.QIcon("img/navi_flag.png"),  # svg
+                "Left": QtGui.QIcon("img/navi_turn_left.svg"),
+                "Right": QtGui.QIcon("img/navi_turn_right.svg"),
+                "Summit": QtGui.QIcon("img/summit.png"),  # svg
+            }
 
-        # main Widget
-        self.main_page = QtWidgets.QStackedWidget(self.main_widget)
-        self.main_page.setContentsMargins(0, 0, 0, 0)
+            # physical button
+            self.signal_next_button.connect(self.scroll)
+            self.signal_prev_button.connect(self.scroll)
+            self.signal_menu_button.connect(self.change_menu_page)
+            self.signal_menu_back_button.connect(self.change_menu_back)
+            # other
+            self.signal_get_screenshot.connect(self.screenshot)
 
-        for k in self.gui_config.G_LAYOUT:
-            if not self.gui_config.G_LAYOUT[k]["STATUS"]:
-                continue
-            if "LAYOUT" in self.gui_config.G_LAYOUT[k]:
-                self.main_page.addWidget(
-                    ValuesWidget(
-                        self.main_page,
-                        self.config,
-                        self.gui_config.G_LAYOUT[k]["LAYOUT"],
-                    )
-                )
-            else:
-                if (
-                    k == "ALTITUDE_GRAPH"
-                    and "i2c_baro_temp" in self.config.logger.sensor.sensor_i2c.sensor
-                ):
-                    self.altitude_graph_widget = pyqt_value_graph.AltitudeGraphWidget(
-                        self.main_page, self.config
-                    )
-                    self.main_page.addWidget(self.altitude_graph_widget)
-                elif (
-                    k == "ACC_GRAPH"
-                    and self.config.logger.sensor.sensor_i2c.motion_sensor["ACC"]
-                ):
-                    self.acc_graph_widget = pyqt_value_graph.AccelerationGraphWidget(
-                        self.main_page, self.config
-                    )
-                    self.main_page.addWidget(self.acc_graph_widget)
-                elif k == "PERFORMANCE_GRAPH" and self.config.G_ANT["STATUS"]:
-                    self.performance_graph_widget = (
-                        pyqt_value_graph.PerformanceGraphWidget(
-                            self.main_page, self.config
+            self.signal_start_and_stop_manual.connect(
+                self.start_and_stop_manual_internal
+            )
+            self.signal_count_laps.connect(self.count_laps_internal)
+
+            self.signal_draw_display.connect(self.draw_display)
+
+            self.msg_queue = asyncio.Queue()
+            self.msg_event = asyncio.Event()
+            asyncio.create_task(self.msg_worker())
+
+        with timers[1]:
+            import modules.pyqt.graph.pyqt_map as pyqt_map
+            import modules.pyqt.graph.pyqt_course_profile as pyqt_course_profile
+            import modules.pyqt.graph.pyqt_value_graph as pyqt_value_graph
+            from modules.pyqt.pyqt_values_widget import ValuesWidget
+
+            from modules.pyqt.menu.pyqt_menu_widget import (
+                TopMenuWidget,
+                LiveTrackMenuWidget,
+                UploadActivityMenuWidget,
+            )
+            from modules.pyqt.menu.pyqt_system_menu_widget import (
+                SystemMenuWidget,
+                NetworkMenuWidget,
+                BluetoothTetheringListWidget,
+                DebugMenuWidget,
+                DebugLogViewerWidget,
+            )
+            from modules.pyqt.menu.pyqt_profile_widget import ProfileWidget
+            from modules.pyqt.menu.pyqt_sensor_menu_widget import (
+                SensorMenuWidget,
+                ANTMenuWidget,
+                ANTListWidget,
+                ANTMultiScanScreenWidget,
+            )
+            from modules.pyqt.menu.pyqt_course_menu_widget import (
+                CoursesMenuWidget,
+                CourseListWidget,
+                CourseDetailWidget,
+            )  # , GoogleDirectionsAPISettingMenuWidget
+            from modules.pyqt.menu.pyqt_map_menu_widget import (
+                MapMenuWidget,
+                MapListWidget,
+                MapOverlayMenuWidget,
+                HeatmapListWidget,
+                RainmapListWidget,
+                WindmapListWidget,
+            )
+            from modules.pyqt.menu.pyqt_adjust_widget import (
+                AdjustAltitudeWidget,
+                AdjustWheelCircumferenceWidget,
+                AdjustCPWidget,
+                AdjustWPrimeBalanceWidget,
+            )
+            from modules.pyqt.pyqt_cuesheet_widget import CueSheetWidget
+
+        with timers[2]:
+            # self.main_window
+            #  stack_widget
+            #    splash_widget
+            #    main_widget
+            #      main_layout
+            #        main_page
+            #        button_box_widget
+            #    menu_widget
+            #    ant_menu_widget
+            #    ant_detail_widget
+            #    adjust_wheel_circumference_widget
+            #    adjust_atitude_widget
+            #    debug_log_viewer_widget
+
+            # stack_widget elements (main)
+            self.main_widget = QtWidgets.QWidget(self.stack_widget)
+            self.main_widget.setContentsMargins(0, 0, 0, 0)
+            self.stack_widget.addWidget(self.main_widget)
+
+            # reverse order (make children widget first, then make parent widget)
+            menus = [
+                ("ANT+ Detail", ANTListWidget),
+                ("ANT+ MultiScan", ANTMultiScanScreenWidget),
+                ("ANT+ Sensors", ANTMenuWidget),
+                ("Wheel Size", AdjustWheelCircumferenceWidget),
+                ("Adjust Altitude", AdjustAltitudeWidget),
+                ("Sensors", SensorMenuWidget),
+                ("BT Tethering", BluetoothTetheringListWidget),
+                ("Network", NetworkMenuWidget),
+                ("Debug Log", DebugLogViewerWidget),
+                ("Debug", DebugMenuWidget),
+                ("System", SystemMenuWidget),
+                ("CP", AdjustCPWidget),
+                ("W Prime Balance", AdjustWPrimeBalanceWidget),
+                ("Profile", ProfileWidget),
+                ("Live Track", LiveTrackMenuWidget),
+                ("Upload Activity", UploadActivityMenuWidget),
+                ("Wind map List", WindmapListWidget),
+                ("Rain map List", RainmapListWidget),
+                ("Heatmap List", HeatmapListWidget),
+                ("Map Overlay", MapOverlayMenuWidget),
+                ("Select Map", MapListWidget),
+                ("Map", MapMenuWidget),
+                # ("Google Directions API mode", GoogleDirectionsAPISettingMenuWidget),
+                ("Course Detail", CourseDetailWidget),
+                ("Courses List", CourseListWidget),
+                ("Courses", CoursesMenuWidget),
+                ("Menu", TopMenuWidget),
+            ]
+            menu_count = max(self.gui_config.G_GUI_INDEX.values()) + 1
+            for m in menus:
+                m_widget = m[1](self.stack_widget, m[0], self.config)
+                m_widget.setContentsMargins(0, 0, 0, 0)
+                self.stack_widget.addWidget(m_widget)
+                self.gui_config.G_GUI_INDEX[m[0]] = menu_count
+                menu_count += 1
+
+            self.stack_widget.setCurrentIndex(1)
+
+            # main layout
+            self.main_layout = QtWidgets.QVBoxLayout(self.main_widget)
+            self.main_layout.setContentsMargins(0, 0, 0, 0)
+            self.main_layout.setSpacing(0)
+
+            # main Widget
+            self.main_page = QtWidgets.QStackedWidget(self.main_widget)
+            self.main_page.setContentsMargins(0, 0, 0, 0)
+
+            for k in self.gui_config.G_LAYOUT:
+                if not self.gui_config.G_LAYOUT[k]["STATUS"]:
+                    continue
+                if "LAYOUT" in self.gui_config.G_LAYOUT[k]:
+                    self.main_page.addWidget(
+                        ValuesWidget(
+                            self.main_page,
+                            self.config,
+                            self.gui_config.G_LAYOUT[k]["LAYOUT"],
                         )
                     )
-                    self.main_page.addWidget(self.performance_graph_widget)
-                elif (
-                    k == "COURSE_PROFILE_GRAPH"
-                    and os.path.exists(self.config.G_COURSE_FILE_PATH)
-                    and self.config.G_COURSE_INDEXING
-                ):
-                    self.course_profile_graph_widget = (
-                        pyqt_course_profile.CourseProfileGraphWidget(
+                else:
+                    if (
+                        k == "ALTITUDE_GRAPH"
+                        and "i2c_baro_temp"
+                        in self.config.logger.sensor.sensor_i2c.sensor
+                    ):
+                        self.altitude_graph_widget = (
+                            pyqt_value_graph.AltitudeGraphWidget(
+                                self.main_page, self.config
+                            )
+                        )
+                        self.main_page.addWidget(self.altitude_graph_widget)
+                    elif (
+                        k == "ACC_GRAPH"
+                        and self.config.logger.sensor.sensor_i2c.motion_sensor["ACC"]
+                    ):
+                        self.acc_graph_widget = (
+                            pyqt_value_graph.AccelerationGraphWidget(
+                                self.main_page, self.config
+                            )
+                        )
+                        self.main_page.addWidget(self.acc_graph_widget)
+                    elif k == "PERFORMANCE_GRAPH" and self.config.G_ANT["STATUS"]:
+                        self.performance_graph_widget = (
+                            pyqt_value_graph.PerformanceGraphWidget(
+                                self.main_page, self.config
+                            )
+                        )
+                        self.main_page.addWidget(self.performance_graph_widget)
+                    elif (
+                        k == "COURSE_PROFILE_GRAPH"
+                        and os.path.exists(self.config.G_COURSE_FILE_PATH)
+                        and self.config.G_COURSE_INDEXING
+                    ):
+                        self.course_profile_graph_widget = (
+                            pyqt_course_profile.CourseProfileGraphWidget(
+                                self.main_page, self.config
+                            )
+                        )
+                        self.main_page.addWidget(self.course_profile_graph_widget)
+                    elif k == "SIMPLE_MAP":
+                        self.map_widget = pyqt_map.MapWidget(
                             self.main_page, self.config
                         )
-                    )
-                    self.main_page.addWidget(self.course_profile_graph_widget)
-                elif k == "SIMPLE_MAP":
-                    self.map_widget = pyqt_map.MapWidget(self.main_page, self.config)
-                    self.main_page.addWidget(self.map_widget)
-                elif (
-                    k == "CUESHEET"
-                    and len(self.config.logger.course.point_name)
-                    and self.config.G_COURSE_INDEXING
-                    and self.config.G_CUESHEET_DISPLAY_NUM > 0
-                ):
-                    self.cuesheet_widget = CueSheetWidget(self.main_page, self.config)
-                    self.main_page.addWidget(self.cuesheet_widget)
+                        self.main_page.addWidget(self.map_widget)
+                    elif (
+                        k == "CUESHEET"
+                        and len(self.config.logger.course.point_name)
+                        and self.config.G_COURSE_INDEXING
+                        and self.config.G_CUESHEET_DISPLAY_NUM > 0
+                    ):
+                        self.cuesheet_widget = CueSheetWidget(
+                            self.main_page, self.config
+                        )
+                        self.main_page.addWidget(self.cuesheet_widget)
 
-        t2 = datetime.datetime.now()
-        time_profile.append((t2 - t1).total_seconds())
-        t1 = t2
+        with timers[3]:
+            # integrate main_layout
+            self.main_layout.addWidget(self.main_page)
+            if self.config.display.has_touch():
+                from modules.pyqt.pyqt_button_box_widget import ButtonBoxWidget
 
-        # integrate main_layout
-        self.main_layout.addWidget(self.main_page)
-        if self.config.display.has_touch():
-            from modules.pyqt.pyqt_button_box_widget import ButtonBoxWidget
+                self.button_box_widget = ButtonBoxWidget(self.main_widget, self.config)
+                self.main_layout.addWidget(self.button_box_widget)
 
-            self.button_box_widget = ButtonBoxWidget(self.main_widget, self.config)
-            self.main_layout.addWidget(self.button_box_widget)
+            # fullscreen
+            if self.config.G_FULLSCREEN:
+                self.main_window.showFullScreen()
 
-        # fullscreen
-        if self.config.G_FULLSCREEN:
-            self.main_window.showFullScreen()
-
-        self.on_change_main_page(self.main_page_index)
-
-        t2 = datetime.datetime.now()
-        time_profile.append((t2 - t1).total_seconds())
+            self.on_change_main_page(self.main_page_index)
 
         app_logger.info("Drawing components:")
-        app_logger.info(f"misc  : {time_profile[0]:.3f} sec")
-        app_logger.info(f"import: {time_profile[1]:.3f} sec")
-        app_logger.info(f"init  : {time_profile[2]:.3f} sec")
-        app_logger.info(f"layout: {time_profile[3]:.3f} sec")
-        app_logger.info(f"total : {sum(time_profile):.3f} sec")
+        log_timers(timers, text_total="total : {0:.3f} sec")
 
     def init_buffer(self):
         if self.config.display.send_display:

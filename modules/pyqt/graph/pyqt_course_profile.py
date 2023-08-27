@@ -1,7 +1,4 @@
-import datetime
 import numpy as np
-
-from logger import app_logger
 
 try:
     import PyQt6.QtCore as QtCore
@@ -20,6 +17,7 @@ pg.setConfigOption("foreground", "k")
 
 from .pyqt_base_map import BaseMapWidget
 from modules.pyqt.graph.pyqtgraph.CourseProfileGraphItem import CourseProfileGraphItem
+from modules.utils.timer import Timer
 
 
 class CourseProfileGraphWidget(BaseMapWidget):
@@ -68,60 +66,65 @@ class CourseProfileGraphWidget(BaseMapWidget):
         ):
             return
 
-        t = datetime.datetime.now()
+        with Timer(
+            auto_start=False, auto_log=True, text="Plotting course profile: {0:.3f} sec"
+        ):
+            if not self.config.logger.sensor.sensor_gps.hasGPS():
+                self.zoom = self.config.G_MAX_ZOOM
 
-        if not self.config.logger.sensor.sensor_gps.hasGPS():
-            self.zoom = self.config.G_MAX_ZOOM
+            self.plot.showGrid(x=True, y=True, alpha=1)
+            self.plot.showAxis("left")
+            self.plot.showAxis("bottom")
+            font = QtGui.QFont()
+            font.setPixelSize(16)
+            font.setBold(True)
+            self.plot.getAxis("bottom").tickFont = font
+            # self.plot.getAxis("bottom").setStyle(tickTextOffset = 5)
+            self.plot.getAxis("left").tickFont = font
+            # self.plot.getAxis("left").setStyle(tickTextOffset = 5)
+            # self.plot.setAutoPan()
 
-        self.plot.showGrid(x=True, y=True, alpha=1)
-        self.plot.showAxis("left")
-        self.plot.showAxis("bottom")
-        font = QtGui.QFont()
-        font.setPixelSize(16)
-        font.setBold(True)
-        self.plot.getAxis("bottom").tickFont = font
-        # self.plot.getAxis("bottom").setStyle(tickTextOffset = 5)
-        self.plot.getAxis("left").tickFont = font
-        # self.plot.getAxis("left").setStyle(tickTextOffset = 5)
-        # self.plot.setAutoPan()
+            self.course_profile_plot = CourseProfileGraphItem(
+                x=self.config.logger.course.distance,
+                y=self.config.logger.course.altitude,
+                brushes=self.config.logger.course.colored_altitude,
+                pen=pg.mkPen(color=(255, 255, 255, 0), width=0.01),
+            )  # transparent(alpha=0) and thin line
+            self.plot.addItem(self.course_profile_plot)
 
-        self.course_profile_plot = CourseProfileGraphItem(
-            x=self.config.logger.course.distance,
-            y=self.config.logger.course.altitude,
-            brushes=self.config.logger.course.colored_altitude,
-            pen=pg.mkPen(color=(255, 255, 255, 0), width=0.01),
-        )  # transparent(alpha=0) and thin line
-        self.plot.addItem(self.course_profile_plot)
-
-        self.climb_top_plot = pg.ScatterPlotItem(pxMode=True, symbol="t", size=15)
-        climb_points = []
-        for i in range(len(self.config.logger.course.climb_segment)):
-            p = {
-                "pos": [
-                    self.config.logger.course.climb_segment[i]["start_point_distance"],
-                    self.config.logger.course.climb_segment[i]["start_point_altitude"]
-                    + 10,
-                ],
-                "pen": {"color": "w", "width": 1},
-                "brush": pg.mkBrush(color=(0, 0, 0)),
-            }
-            climb_points.append(p)
-            p = {
-                "pos": [
-                    self.config.logger.course.climb_segment[i]["course_point_distance"],
-                    self.config.logger.course.climb_segment[i]["course_point_altitude"]
-                    + 10,
-                ],
-                "pen": {"color": "w", "width": 1},
-                "brush": pg.mkBrush(color=(255, 0, 0)),
-            }
-            climb_points.append(p)
-        self.climb_top_plot.setData(climb_points)
-        self.plot.addItem(self.climb_top_plot)
-
-        app_logger.info(
-            f"Plotting course profile: {(datetime.datetime.now() - t).total_seconds():.3f} sec"
-        )
+            self.climb_top_plot = pg.ScatterPlotItem(pxMode=True, symbol="t", size=15)
+            climb_points = []
+            for i in range(len(self.config.logger.course.climb_segment)):
+                p = {
+                    "pos": [
+                        self.config.logger.course.climb_segment[i][
+                            "start_point_distance"
+                        ],
+                        self.config.logger.course.climb_segment[i][
+                            "start_point_altitude"
+                        ]
+                        + 10,
+                    ],
+                    "pen": {"color": "w", "width": 1},
+                    "brush": pg.mkBrush(color=(0, 0, 0)),
+                }
+                climb_points.append(p)
+                p = {
+                    "pos": [
+                        self.config.logger.course.climb_segment[i][
+                            "course_point_distance"
+                        ],
+                        self.config.logger.course.climb_segment[i][
+                            "course_point_altitude"
+                        ]
+                        + 10,
+                    ],
+                    "pen": {"color": "w", "width": 1},
+                    "brush": pg.mkBrush(color=(255, 0, 0)),
+                }
+                climb_points.append(p)
+            self.climb_top_plot.setData(climb_points)
+            self.plot.addItem(self.climb_top_plot)
 
     def reset_course(self):
         for p in [self.course_profile_plot, self.climb_top_plot, self.climb_detail]:

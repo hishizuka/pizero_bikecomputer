@@ -16,6 +16,7 @@ from logger import app_logger
 
 app_logger.info("detected sensor modules:")
 
+from modules.utils.timer import Timer, log_timers
 from .sensor.sensor_gps import SensorGPS
 from .sensor.sensor_ant import SensorANT
 from .sensor.sensor_gpio import SensorGPIO
@@ -109,24 +110,22 @@ class SensorCore:
 
         self.sensor_gps = SensorGPS(config, self.values["GPS"])
 
-        time_profile = []
-        t1 = datetime.datetime.now()
-        self.sensor_ant = SensorANT(config, self.values["ANT+"])
-        t2 = datetime.datetime.now()
-        time_profile.append((t2 - t1).total_seconds())
+        timers = [
+            Timer(auto_start=False, text="ANT+ : {0:.3f} sec"),
+            Timer(auto_start=False, text="I2C  : {0:.3f} sec"),
+        ]
 
-        t1 = t2
-        self.sensor_i2c = SensorI2C(config, self.values["I2C"])
-        t2 = datetime.datetime.now()
-        time_profile.append((t2 - t1).total_seconds())
+        with timers[0]:
+            self.sensor_ant = SensorANT(config, self.values["ANT+"])
+
+        with timers[1]:
+            self.sensor_i2c = SensorI2C(config, self.values["I2C"])
 
         self.sensor_gpio = SensorGPIO(config, None)
         self.sensor_gpio.update()
 
         app_logger.info("[sensor] Initialize:")
-        app_logger.info(f"ANT+ : {time_profile[0]:.3f} sec")
-        app_logger.info(f"I2C  : {time_profile[1]:.3f} sec")
-        app_logger.info(f"total: {sum(time_profile):.3f} sec")
+        log_timers(timers)
 
     def start_coroutine(self):
         asyncio.create_task(self.integrate())
