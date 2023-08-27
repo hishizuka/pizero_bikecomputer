@@ -1,5 +1,6 @@
 import os
 
+from logger import app_logger
 from ..sensor.sensor import Sensor
 
 DISPLAY = None
@@ -56,8 +57,8 @@ class Display(Sensor):
                 p = f.read()
             with open(hatdir + "/vendor") as f:
                 v = f.read()
-            print(product_file, ":", p)
-            print(vendor_file, ":", v)
+            app_logger.info(f"{product_file}: {p}")
+            app_logger.info(f"{vendor_file}: {v}")
 
             # set display
             if p.find("Adafruit PiTFT HAT - 2.4 inch Resistive Touch") == 0:

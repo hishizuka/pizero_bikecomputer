@@ -10,6 +10,8 @@ import aiofiles
 
 import numpy as np
 
+from logger import app_logger
+
 _IMPORT_GARMINCONNECT = False
 try:
     from garminconnect import (
@@ -286,18 +288,18 @@ class api:
     def upload_check(self, blank_check, blank_msg, file_check=True):
         # network check
         if not self.config.detect_network():
-            print("No Internet connection")
+            app_logger.warning("No Internet connection")
             return False
 
         # blank check
         for b in blank_check:
             if b == "":
-                print(blank_msg)
+                app_logger.info(blank_msg)
                 return False
 
         # file check
         if file_check and not os.path.exists(self.config.G_UPLOAD_FILE):
-            print("file does not exist")
+            app_logger.warning("file does not exist")
             return False
 
         return True
@@ -335,7 +337,7 @@ class api:
             self.config.G_STRAVA_API["ACCESS_TOKEN"] = tokens["access_token"]
             self.config.G_STRAVA_API["REFRESH_TOKEN"] = tokens["refresh_token"]
         elif "message" in tokens and tokens["message"].find("Error") > 0:
-            print("error occurs at refreshing tokens")
+            app_logger.error("error occurs at refreshing tokens")
             return False
 
         # upload activity
@@ -349,7 +351,7 @@ class api:
                 self.config.G_STRAVA_API_URL["UPLOAD"], headers=headers, data=data
             )
             if "status" in upload_result:
-                print(upload_result["status"])
+                app_logger.info(upload_result["status"])
 
         return True
 
@@ -369,7 +371,7 @@ class api:
 
         # import check
         if not _IMPORT_GARMINCONNECT:
-            print("Install garminconnect")
+            app_logger.warning("Install garminconnect")
             return False
 
         try:
@@ -393,7 +395,7 @@ class api:
                 GarminConnectAuthenticationError,
                 GarminConnectTooManyRequestsError,
             ) as err:
-                print(err)
+                app_logger.error(err)
                 return False
             else:
                 traceback.print_exc()
@@ -411,7 +413,7 @@ class api:
                 GarminConnectAuthenticationError,
                 GarminConnectTooManyRequestsError,
             ) as err:
-                print(err)
+                app_logger.error(err)
             else:
                 traceback.print_exc()
             time.sleep(1.0)
@@ -447,7 +449,7 @@ class api:
     async def get_scw_list(self, wind_config, mode=None):
         # network check
         if not self.config.detect_network():
-            print("No Internet connection")
+            app_logger.warning("No Internet connection")
             return None
 
         url = None
@@ -477,7 +479,7 @@ class api:
 
         # import check
         if not _IMPORT_STRAVA_COOKIE:
-            print("Install stravacookies")
+            app_logger.warning("Install stravacookies")
             return
 
         if not self.config.detect_network():
@@ -567,10 +569,8 @@ class api:
                     )
                 await asyncio.sleep(5)
                 self.bt_cmd_lock = False
-                print(
-                    "[BT] {} connect error, network status:{}".format(
-                        timestamp_str, self.config.detect_network()
-                    )
+                app_logger.error(
+                    f"[BT] {timestamp_str} connect error, network status: {self.config.detect_network()}"
                 )
                 self.config.logger.sensor.values["integrated"]["send_time"] = (
                     datetime.datetime.now().strftime("%H:%M") + "CE"
@@ -617,17 +617,15 @@ class api:
             self.thingsboard_client.connect()
             res = self.thingsboard_client.send_telemetry(data).get()
             if res != TBPublishInfo.TB_ERR_SUCCESS:
-                print("[BT] thingsboard upload error:", res)
+                app_logger.error(f"[BT] thingsboard upload error: {res}")
             else:
                 self.config.logger.sensor.values["integrated"][
                     "send_time"
                 ] = datetime.datetime.now().strftime("%H:%M")
         except socket.timeout as e:
-            print("[BT] socket timeout")
-            print(e)
+            app_logger.error(f"[BT] socket timeout: {e}")
         except socket.error as e:
-            print("[BT] socket error")
-            print(e)
+            app_logger.error(f"[BT] socket error: {e}")
         finally:
             self.thingsboard_client.disconnect()
         await asyncio.sleep(5)
@@ -674,7 +672,7 @@ class api:
         self.thingsboard_client.connect()
         res = self.thingsboard_client.send_telemetry(data).get()
         if res != TBPublishInfo.TB_ERR_SUCCESS:
-            print("thingsboard upload error:", res)
+            app_logger.error(f"thingsboard upload error: {res}")
         self.thingsboard_client.disconnect()
         self.course_send_status = ""
 

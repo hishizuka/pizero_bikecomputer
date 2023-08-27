@@ -1,4 +1,4 @@
-import traceback
+from logger import app_logger
 
 try:
     import PyQt6.QtCore as QtCore
@@ -163,14 +163,11 @@ class ScreenWidget(QtWidgets.QWidget):
                 # item.update_value(None)
                 # print("KeyError :", self.config.gui.gui_config.G_ITEM_DEF[item.name][1])
                 # traceback.print_exc()
-            except:
+            except Exception:  # noqa
                 item.update_value(None)
-                print(
-                    "###update_display### : ",
-                    item.name,
-                    eval(self.config.gui.gui_config.G_ITEM_DEF[item.name][1]),
+                app_logger.exception(
+                    f"###update_display### : {item.name} {eval(self.config.gui.gui_config.G_ITEM_DEF[item.name][1])}",
                 )
-                traceback.print_exc()
         await self.update_extra()
 
     async def update_extra(self):

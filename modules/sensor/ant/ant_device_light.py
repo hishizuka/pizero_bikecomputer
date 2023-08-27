@@ -5,6 +5,7 @@ import array
 import threading
 import queue
 
+from logger import app_logger
 from . import ant_device
 
 
@@ -52,7 +53,7 @@ class ANT_Device_Light(ant_device.ANT_Device):
             try:
                 self.channel.send_acknowledged_data(data)
             except:
-                print("send_acknowledged_data failed: ", data)
+                app_logger.error(f"send_acknowledged_data failed: {data}")
             self.send_queue.task_done()
 
     def reset_value(self):
@@ -99,15 +100,13 @@ class ANT_Device_Light(ant_device.ANT_Device):
                 > self.light_retry_timeout
             ):
                 self.page_34_count -= 1
-                print(
-                    "Retry to change light mode...",
-                    mode,
-                    self.values["lgt_state"],
-                    seq_no,
-                    self.page_34_count,
-                    (
-                        datetime.datetime.now() - self.values["last_changed_timestamp"]
-                    ).total_seconds(),
+                app_logger.info(
+                    f"Retry to change light mode...\n"
+                    f"{mode}"
+                    f"{self.values['lgt_state']}"
+                    f"{seq_no}"
+                    f"{self.page_34_count}"
+                    f"{(datetime.datetime.now() - self.values['last_changed_timestamp']).total_seconds()}"
                 )
                 self.send_light_setting(self.values["lgt_state"])
             self.battery_status = data[2] >> 5
@@ -190,10 +189,8 @@ class ANT_Device_Light(ant_device.ANT_Device):
             self.values["lgt_state"] is not None
             and self.values["lgt_state"] != self.values["pre_lgt_state"]
         ):
-            print(
-                "ANT+ Light mode change: {} -> {}".format(
-                    self.values["pre_lgt_state"], self.values["lgt_state"]
-                )
+            app_logger.info(
+                f"ANT+ Light mode change: {self.values['pre_lgt_state']} -> {self.values['lgt_state']}"
             )
             self.values["pre_lgt_state"] = self.values["lgt_state"]
             self.send_light_setting(self.values["lgt_state"])

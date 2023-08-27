@@ -7,6 +7,7 @@ import concurrent
 import aiohttp
 import aiofiles
 
+from logger import app_logger
 from modules.helper.api import api
 
 
@@ -57,8 +58,8 @@ class Network:
             # all False -> give up
             if not any(res) or res is None:
                 failed.append((datetime.datetime.now(), q))
-                print("failed download")
-                print(q["urls"])
+                app_logger.error("failed download")
+                app_logger.error(q["urls"])
             # retry
             elif (
                 not all(res)

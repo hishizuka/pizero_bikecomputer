@@ -2,6 +2,7 @@ import struct
 import datetime
 import math
 
+from logger import app_logger
 from . import ant_device
 
 
@@ -172,10 +173,8 @@ class ANT_Device_Power(ant_device.ANT_Device):
             values["power_l"] = 0
             values["lr_balance"] = ":"
         else:
-            print(
-                "ANT+ Power(16) err: ",
-                datetime.datetime.now().strftime("%Y%m%d %H:%M:%S"),
-                delta,
+            app_logger.error(
+                f"ANT+ Power(16) err: {datetime.datetime.now().strftime('%Y%m%d %H:%M:%S')} {delta}",
             )
 
         pre_values[0:2] = power_values[0:2]
@@ -259,10 +258,8 @@ class ANT_Device_Power(ant_device.ANT_Device):
             values["power"] = 0
             values["speed"] = 0
         else:
-            print(
-                "ANT+ Power(17) err: ",
-                datetime.datetime.now().strftime("%Y%m%d %H:%M:%S"),
-                delta,
+            app_logger.error(
+                f"ANT+ Power(17) err: {datetime.datetime.now().strftime('%Y%m%d %H:%M:%S')} {delta}",
             )
 
         pre_values = power_values
@@ -291,12 +288,11 @@ class ANT_Device_Power(ant_device.ANT_Device):
                 diff += 65536
             if diff > 0:
                 values["accumulated_power"] += 128 * math.pi * diff / 2048
-                print("### resume pwr ", diff, pre_values[1], pre_pwr_value, "###")
-                print(
-                    "### resume pwr ",
-                    int(values["accumulated_power"]),
-                    int(128 * math.pi * diff / 2048),
-                    "[j] ###",
+                app_logger.info(
+                    f"### resume pwr {diff} {pre_values[1]} {pre_pwr_value} ###"
+                )
+                app_logger.info(
+                    f"### resume pwr {int(values['accumulated_power'])} { int(128 * math.pi * diff / 2048)} [j] ###"
                 )
             return
 
@@ -333,10 +329,8 @@ class ANT_Device_Power(ant_device.ANT_Device):
                 # keep increasing accumulated_power at stopping, so it causes a spike at restart
                 pass
             else:
-                print(
-                    "ANT+ Power(18) err: ",
-                    datetime.datetime.now().strftime("%Y%m%d %H:%M:%S"),
-                    delta,
+                app_logger.error(
+                    f"ANT+ Power(18) err: {datetime.datetime.now().strftime('%Y%m%d %H:%M:%S')} {delta}",
                 )
 
         pre_values[0:2] = power_values[0:2]

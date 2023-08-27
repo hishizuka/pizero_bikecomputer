@@ -4,6 +4,7 @@ import asyncio
 import re
 import numpy as np
 
+from logger import app_logger
 from .sensor import Sensor
 
 
@@ -15,7 +16,7 @@ try:
 
     _SENSOR_GPS_BASIC = True
 except ImportError:
-    pass
+    app_logger.warning("Requirements not fulfilled, GPS will fail")
 
 _SENSOR_GPS_I2C = False
 try:
@@ -27,6 +28,8 @@ try:
         _SENSOR_GPS_I2C = True
 except ImportError:
     pass
+except Exception:  # noqa
+    app_logger.exception("Failed to init GPS_I2C")
 
 _SENSOR_GPS_GPSD = False
 
@@ -37,7 +40,10 @@ try:
         # device test
         _gps3_thread = agps3threaded.AGPS3mechanism()
         _SENSOR_GPS_GPSD = True
-except:
+except ImportError:
+    pass
+except Exception:  # noqa
+    app_logger.exception("Failed to init GPS_GPSD")
     try:
         _gps3_thread.stop()
     except:
@@ -59,11 +65,11 @@ except:
         pass
 
 if _SENSOR_GPS_GPSD:
-    print("GPS ", end="")
+    app_logger.info("GPS")
 if _SENSOR_GPS_ADAFRUIT_UART:
-    print("GPS_ADAFRUIT_UART ", end="")
+    app_logger.info("GPS_ADAFRUIT_UART")
 if _SENSOR_GPS_I2C:
-    print("GPS_I2C ", end="")
+    app_logger.info("GPS_I2C")
 
 
 class SensorGPS(Sensor):
@@ -582,7 +588,7 @@ class SensorGPS(Sensor):
         self.values["used_sats_str"] = str(guse) + "/" + str(gnum)
 
     def set_timezone(self):
-        print("try to modify timezone by gps...")
+        app_logger.info("try to modify timezone by gps...")
         lat = self.values["lat"]
         lon = self.values["lon"]
         if np.isnan(lat) or np.isnan(lon):
@@ -615,7 +621,7 @@ class SensorGPS(Sensor):
             self.is_time_modified = self.set_time()
 
     def set_time(self):
-        print("try to modify time by gps...")
+        app_logger.info("try to modify time by gps...")
         l_time = parser.parse(self.values["time"])
         # kernel version date
         kernel_date = datetime.datetime(2019, 1, 1, 0, 0, 0, 0, tz.tzutc())
@@ -773,14 +779,9 @@ class SensorGPS(Sensor):
                 continue
 
             if m == 0 and inner_p[0] <= 0.0:
-                print("before start of course:", start, "->", m)
-                print(
-                    "\t",
-                    self.values["lat"],
-                    self.values["lon"],
-                    "/",
-                    self.config.logger.course.latitude[m],
-                    self.config.logger.course.longitude[m],
+                app_logger.info(f"before start of course: {start} -> {m}")
+                app_logger.info(
+                    f"\t {self.values['lat']} {self.values['lon']} / {self.config.logger.course.latitude[m]} {self.config.logger.course.longitude[m]}"
                 )
                 self.values["on_course_status"] = False
                 self.values["course_distance"] = 0
@@ -788,14 +789,9 @@ class SensorGPS(Sensor):
                 self.values["course_index"] = m
                 return
             elif m == len(dist_diff) - 1 and inner_p[-1] >= 1.0:
-                print("after end of course", start, "->", m)
-                print(
-                    "\t",
-                    self.values["lat"],
-                    self.values["lon"],
-                    "/",
-                    self.config.logger.course.latitude[m],
-                    self.config.logger.course.longitude[m],
+                app_logger.info(f"after end of course {start} -> {m}")
+                app_logger.info(
+                    f"\t {self.values['lat']} {self.values['lon']} / {self.config.logger.course.latitude[m]} {self.config.logger.course.longitude[m]}",
                 )
                 self.values["on_course_status"] = False
                 m = course_n - 1
@@ -902,16 +898,11 @@ class SensorGPS(Sensor):
                 self.values["course_point_index"] = cp_m
 
             if i >= penalty_index:
-                print(s_state[i], start, "->", m)
-                print(
-                    "\t",
-                    self.values["lat"],
-                    self.values["lon"],
-                    "/",
-                    self.config.logger.course.latitude[m],
-                    self.config.logger.course.longitude[m],
+                app_logger.info(f"{s_state[i]} {start} -> {m}")
+                app_logger.info(
+                    f"\t {self.values['lat']} {self.values['lon']} / {self.config.logger.course.latitude[m]} {self.config.logger.course.longitude[m]}"
                 )
-                print("\t", "azimuth_diff:", azimuth_diff[m])
+                app_logger.info(f"\t azimuth_diff: {azimuth_diff[m]}")
 
             return
 

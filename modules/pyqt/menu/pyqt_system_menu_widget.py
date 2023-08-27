@@ -207,9 +207,8 @@ class DebugLogViewerWidget(MenuWidget):
         self.menu.setLayout(self.menu_layout)
 
     def preprocess(self):
-        debug_log = "log/debug.txt"
-        if not os.path.exists(debug_log):
-            return
-        f = open(debug_log)
-        self.debug_log_screen.setText(f.read())
-        f.close()
+        try:
+            with open(self.config.G_LOG_DEBUG_FILE) as f:
+                self.debug_log_screen.setText(f.read())
+        except FileNotFoundError:
+            self.debug_log_screen.setText("No logs found")

@@ -2,6 +2,7 @@ import struct
 import time
 import datetime
 
+from logger import app_logger
 from . import ant_code
 
 
@@ -100,7 +101,7 @@ class ANT_Device:
     def make_channel(self, c_type, ext_assign=None):
         if self.config.G_ANT["STATUS"] and self.channel is None:
             self.channel = self.node.new_channel(c_type, ext_assign=ext_assign)
-            print("{} ".format(self.name), end="")
+            app_logger.info(self.name)
             self.channel.on_broadcast_data = self.on_data
             self.channel.on_burst_data = self.on_data
             self.channel.on_acknowledge_data = self.on_data
@@ -219,15 +220,8 @@ class ANT_Device:
 
     @staticmethod
     def print_spike(device_str, val, pre_val, delta, delta_t):
-        print(
-            "ANT+ {0} spike: {1},".format(
-                device_str, datetime.datetime.now().strftime("%Y%m%d %H:%M:%S")
-            ),
-            "value:{0:.0f}, pre:{1:.0f},".format(val, pre_val),
-            "delta:",
-            delta,
-            "delta_t:",
-            delta_t,
+        app_logger.info(
+            f"ANT+ {device_str} spike: {datetime.datetime.now().strftime('%Y%m%d %H:%M:%S')}, value:{val:.0f}, pre:{pre_val:.0f}, delta: {delta}, delta_t: {delta_t}"
         )
 
     def set_wait(self, interval):

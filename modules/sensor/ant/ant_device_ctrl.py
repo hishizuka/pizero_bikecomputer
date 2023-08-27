@@ -1,6 +1,7 @@
 import struct
 import array
 
+from logger import app_logger
 from . import ant_device
 
 
@@ -51,4 +52,6 @@ class ANT_Device_CTRL(ant_device.ANT_Device):
             )
         else:
             if self.values["ctrl_cmd"] != 0xFFFF:
-                print("ANT_Device_CTRL wrong cmd:", hex(self.values["ctrl_cmd"]))
+                app_logger.error(
+                    f"ANT_Device_CTRL wrong cmd: {hex(self.values['ctrl_cmd'])}"
+                )

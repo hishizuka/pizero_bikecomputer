@@ -8,6 +8,7 @@ import asyncio
 
 import numpy as np
 
+from logger import app_logger
 from .sensor import Sensor
 from .ant import ant_device_heartrate
 from .ant import ant_device_speed_cadence
@@ -34,7 +35,7 @@ except ImportError:
 f.close()
 sys.stdout = sys.__stdout__
 if _SENSOR_ANT:
-    print("ANT ", end="")
+    app_logger.info("ANT")
 
 
 class SensorANT(Sensor):
@@ -58,9 +59,7 @@ class SensorANT(Sensor):
 
         # initialize scan channel (reserve ch0)
         if _SENSOR_ANT:
-            print()
-            print("detected ANT+ sensors")
-            print("  ", end="")
+            app_logger.info("detected ANT+ sensors")
         self.scanner = ant_device_multiscan.ANT_Device_MultiScan(self.node, self.config)
         self.searcher = ant_device_search.ANT_Device_Search(
             self.node, self.config, self.values
@@ -74,7 +73,6 @@ class SensorANT(Sensor):
                     antID = self.config.G_ANT["ID"][key]
                     antType = self.config.G_ANT["TYPE"][key]
                     self.connect_ant_sensor(key, antID, antType, False)
-            print()
             return
         # otherwise, initialize
         else:

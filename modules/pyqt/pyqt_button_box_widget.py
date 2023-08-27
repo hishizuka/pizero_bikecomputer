@@ -1,3 +1,5 @@
+from logger import app_logger
+
 USE_PYQT6 = False
 try:
     import PyQt6.QtCore as QtCore
@@ -98,12 +100,12 @@ class ButtonBoxWidget(QtWidgets.QWidget):
                 self.lap_button._state = 1
             else:
                 self.lap_button_count += 1
-                print("lap button pressing : ", self.lap_button_count)
+                app_logger.info(f"lap button pressing: {self.lap_button_count}")
                 if (
                     self.lap_button_count
                     == self.config.button_config.G_BUTTON_LONG_PRESS
                 ):
-                    print("reset")
+                    app_logger.info("reset")
                     self.config.logger.reset_count()
                     self.config.gui.map_widget.reset_track()
                     self.lap_button_count = 0
@@ -119,12 +121,12 @@ class ButtonBoxWidget(QtWidgets.QWidget):
                 self.start_button._state = 1
             else:
                 self.start_button_count += 1
-                print("start button pressing : ", self.start_button_count)
+                app_logger.info(f"start button pressing: {self.start_button_count}")
                 if (
                     self.start_button_count
                     == self.config.button_config.G_BUTTON_LONG_PRESS
                 ):
-                    print("quit or poweroff")
+                    app_logger.info("quit or poweroff")
                     self.config.gui.quit()
         elif self.start_button._state == 1:
             self.start_button._state = 0

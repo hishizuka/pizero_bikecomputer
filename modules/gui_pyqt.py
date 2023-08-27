@@ -20,6 +20,7 @@ except ImportError:
 
 import qasync
 
+from logger import app_logger
 from modules.gui_config import GUI_Config
 from modules.pyqt.pyqt_style import PyQtStyle
 
@@ -29,9 +30,8 @@ class MyWindow(QtWidgets.QMainWindow):
     gui = None
 
     def __init__(self, parent=None):
-        # super().__init__(parent, flags=QtCore.Qt.FramelessWindowHint)
         super().__init__(parent=parent)
-        print("Qt version:", QtCore.QT_VERSION_STR)
+        app_logger.info(f"Qt version: {QtCore.QT_VERSION_STR}")
 
     def set_config(self, config):
         self.config = config
@@ -395,14 +395,12 @@ class GUI_PyQt(QtCore.QObject):
         t2 = datetime.datetime.now()
         time_profile.append((t2 - t1).total_seconds())
 
-        print()
-        print("Drawing components:")
-        print("  misc  : {:.3f} sec".format(time_profile[0]))
-        print("  import: {:.3f} sec".format(time_profile[1]))
-        print("  init  : {:.3f} sec".format(time_profile[2]))
-        print("  layout: {:.3f} sec".format(time_profile[3]))
-        print("  total : {:.3f} sec".format(sum(time_profile)))
-        print()
+        app_logger.info("Drawing components:")
+        app_logger.info(f"misc  : {time_profile[0]:.3f} sec")
+        app_logger.info(f"import: {time_profile[1]:.3f} sec")
+        app_logger.info(f"init  : {time_profile[2]:.3f} sec")
+        app_logger.info(f"layout: {time_profile[3]:.3f} sec")
+        app_logger.info(f"total : {sum(time_profile):.3f} sec")
 
     def init_buffer(self):
         if self.config.display.send_display:
@@ -433,8 +431,8 @@ class GUI_PyQt(QtCore.QObject):
         )
         if res != -1:
             font_name = QtGui.QFontDatabase.applicationFontFamilies(res)[0]
-            self.stack_widget.setStyleSheet("font-family: {}".format(font_name))
-            print("add font:", font_name)
+            self.stack_widget.setStyleSheet(f"font-family: {font_name}")
+            app_logger.info(f"add font: {font_name}")
 
         # Additional font from setting.conf
         if self.config.G_FONT_FULLPATH != "":
@@ -444,7 +442,7 @@ class GUI_PyQt(QtCore.QObject):
                     res
                 )[0]
                 # self.stack_widget.setStyleSheet("font-family: {}".format(self.config.G_FONT_NAME))
-                print("add font:", self.config.G_FONT_NAME)
+                app_logger.info(f"add font: {self.config.G_FONT_NAME}")
 
         # for macOS
         # if platform.system() == 'Darwin' and QtCore.QLocale.system().bcp47Name() == "ja":
@@ -582,11 +580,8 @@ class GUI_PyQt(QtCore.QObject):
         else:
             self.config.G_DITHERING_CUTOFF_LOW_INDEX += 1
         self.signal_draw_display.emit()
-        print(
-            "LOW:",
-            self.config.G_DITHERING_CUTOFF["LOW"][
-                self.config.G_DITHERING_CUTOFF_LOW_INDEX
-            ],
+        app_logger.info(
+            f"LOW: {self.config.G_DITHERING_CUTOFF['LOW'][self.config.G_DITHERING_CUTOFF_LOW_INDEX]}"
         )
 
     def change_color_high(self):
@@ -598,11 +593,8 @@ class GUI_PyQt(QtCore.QObject):
         else:
             self.config.G_DITHERING_CUTOFF_HIGH_INDEX += 1
         self.signal_draw_display.emit()
-        print(
-            "HIGH:",
-            self.config.G_DITHERING_CUTOFF["HIGH"][
-                self.config.G_DITHERING_CUTOFF_HIGH_INDEX
-            ],
+        app_logger.info(
+            f"HIGH: {self.config.G_DITHERING_CUTOFF['HIGH'][self.config.G_DITHERING_CUTOFF_HIGH_INDEX]}"
         )
 
     def dummy(self):
@@ -621,7 +613,7 @@ class GUI_PyQt(QtCore.QObject):
     def screenshot(self):
         date = datetime.datetime.now()
         filename = date.strftime("%Y-%m-%d_%H-%M-%S.png")
-        print("screenshot:", filename)
+        app_logger.info(f"screenshot: {filename}")
         p = self.stack_widget.grab()
         p.save(os.path.join(self.config.G_SCREENSHOT_DIR, filename), "png")
 

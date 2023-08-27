@@ -1,5 +1,6 @@
 import asyncio
-import traceback
+
+from logger import app_logger
 
 HAS_DBUS_NEXT = False
 HAS_DBUS = False
@@ -83,8 +84,8 @@ class BTPanDbusNext(BTPan):
                 )
                 self.interface = proxy_object.get_interface(self.obj_service)
                 self.remote_addr = remote_addr
-        except:
-            print(traceback.print_exc())
+        except Exception:  # noqa
+            app_logger.exception("failed to initialize_device")
             return False
         return True
 
@@ -96,7 +97,7 @@ class BTPanDbusNext(BTPan):
             try:
                 await self.interface.call_connect(self.service_uuid)
             except DBusError as e:
-                print(e)
+                app_logger.error(e)
                 await asyncio.sleep(1)
             else:
                 break
@@ -111,7 +112,7 @@ class BTPanDbusNext(BTPan):
         try:
             await self.interface.call_disconnect()
         except DBusError as e:
-            print(e)
+            app_logger.error(e)
         connected = await self.interface.get_connected()
 
         return connected
@@ -159,10 +160,8 @@ class BTPanDbus(BTPan):
                     self.obj_service,
                 )
                 self.remote_addr = remote_addr
-        except:
-            import traceback
-
-            print(traceback.print_exc())
+        except Exception:  # noqa
+            app_logger.exception("failed to initialize_device")
             return False
         return True
 
@@ -174,8 +173,7 @@ class BTPanDbus(BTPan):
             try:
                 iface = self.interface.Connect(self.service_uuid)
             except dbus.exceptions.DBusException as e:
-                error = e.get_dbus_name()
-                print(error)
+                app_logger.error(e.get_dbus_name())
                 await asyncio.sleep(1)
             else:
                 break
@@ -190,8 +188,7 @@ class BTPanDbus(BTPan):
         try:
             self.interface.Disconnect()
         except dbus.exceptions.DBusException as e:
-            error = e.get_dbus_name()
-            print(error)
+            app_logger.error(e.get_dbus_name())
         connected = self.prop_get(self.interface, "Connected")
 
         return connected
