@@ -5,7 +5,7 @@ try:
     import PyQt6.QtCore as QtCore
     import PyQt6.QtWidgets as QtWidgets
     import PyQt6.QtGui as QtGui
-except:
+except ImportError:
     import PyQt5.QtCore as QtCore
     import PyQt5.QtWidgets as QtWidgets
     import PyQt5.QtGui as QtGui
@@ -61,9 +61,8 @@ class CourseProfileGraphWidget(BaseMapWidget):
 
     # load course profile and display
     def load_course(self):
-        if (
-            len(self.config.logger.course.distance) == 0
-            or len(self.config.logger.course.altitude) == 0
+        if not len(self.config.logger.course.distance) or not len(
+            self.config.logger.course.altitude
         ):
             return
 
@@ -126,9 +125,8 @@ class CourseProfileGraphWidget(BaseMapWidget):
 
     def reset_course(self):
         for p in [self.course_profile_plot, self.climb_top_plot, self.climb_detail]:
-            if p != None:
+            if p is not None:
                 self.plot.removeItem(p)
-                p = None
         self.plot.removeItem(self.current_point)
 
     def init_course(self):
@@ -136,9 +134,8 @@ class CourseProfileGraphWidget(BaseMapWidget):
         self.resizeEvent(None)
 
     async def update_extra(self):
-        if (
-            len(self.config.logger.course.distance) == 0
-            or len(self.config.logger.course.altitude) == 0
+        if not len(self.config.logger.course.distance) or not len(
+            self.config.logger.course.altitude
         ):
             return
 
@@ -151,12 +148,11 @@ class CourseProfileGraphWidget(BaseMapWidget):
             return
 
         # remove current position for reloading
-        if len(self.location) > 0:
+        if len(self.location):
             self.plot.removeItem(self.current_point)
             self.location.pop()
 
         # initialize
-        x_start = x_end = np.nan
         x_width = self.zoom / 1000
         dist_end = self.config.logger.course.distance[-1]
         self.graph_index = self.gps_values["course_index"]
@@ -188,7 +184,6 @@ class CourseProfileGraphWidget(BaseMapWidget):
                 )
 
         x_end = self.map_pos["x"] + x_width
-        x_end_index = 0
         if x_end >= dist_end:
             x_end_index = len(self.config.logger.course.distance) - 1
             self.map_pos["x_index"] = self.gps_sensor.get_index_with_distance_cutoff(
@@ -244,7 +239,7 @@ class CourseProfileGraphWidget(BaseMapWidget):
             y_max = int((y_max + y_range_space) / 50 + 2) * 50
             self.plot.setYRange(min=y_min, max=y_max, padding=0)
 
-        if self.climb_detail != None:
+        if self.climb_detail is not None:
             self.plot.removeItem(self.climb_detail)
         climb_index = None
 
@@ -257,7 +252,7 @@ class CourseProfileGraphWidget(BaseMapWidget):
                 climb_index = i
                 break
 
-        if climb_index == None:
+        if climb_index is None:
             self.climb_detail.setHtml("")
         else:
             summit_img = '<img src="img/summit.png">'

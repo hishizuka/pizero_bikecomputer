@@ -1,14 +1,10 @@
 import os
-import asyncio
-import datetime
-import re
-import json
 
 try:
     import PyQt6.QtCore as QtCore
     import PyQt6.QtWidgets as QtWidgets
     import PyQt6.QtGui as QtGui
-except:
+except ImportError:
     import PyQt5.QtCore as QtCore
     import PyQt5.QtWidgets as QtWidgets
     import PyQt5.QtGui as QtGui
@@ -75,10 +71,10 @@ class NetworkMenuWidget(MenuWidget):
         self.bt_page_name = "BT Tethering"
         self.bt_index = self.config.gui.gui_config.G_GUI_INDEX[self.bt_page_name]
 
-        if self.config.bt_pan == None or len(self.config.G_BT_ADDRESS) == 0:
+        if self.config.bt_pan is None or not len(self.config.G_BT_ADDRESS):
             self.button["BT Tethering"].disable()
 
-        if self.config.ble_uart == None:
+        if self.config.ble_uart is None:
             self.button["Gadgetbridge"].disable()
 
         self.button["Get Location"].disable()

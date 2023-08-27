@@ -2,14 +2,14 @@ try:
     import PyQt6.QtCore as QtCore
     import PyQt6.QtWidgets as QtWidgets
     import PyQt6.QtGui as QtGui
-except:
+except ImportError:
     import PyQt5.QtCore as QtCore
     import PyQt5.QtWidgets as QtWidgets
     import PyQt5.QtGui as QtGui
 
+import asyncio
 import os
 import shutil
-import asyncio
 from qasync import asyncSlot
 
 from .pyqt_menu_widget import MenuWidget, ListWidget, ListItemWidget
@@ -20,11 +20,11 @@ class CoursesMenuWidget(MenuWidget):
         self.button = {}
         button_conf = (
             # Name(page_name), button_attribute, connected functions, layout
-            ("Local Storage", "submenu", self.load_local_course),
+            ("Local Storage", "submenu", self.load_local_courses),
             (
                 "Ride with GPS",
                 "submenu",
-                self.load_rwgps_course,
+                self.load_rwgps_courses,
                 "./img/rwgps_logo.svg",
                 QtCore.QSize(self.logo_size * 4, self.logo_size),
             ),
@@ -58,18 +58,18 @@ class CoursesMenuWidget(MenuWidget):
         self.onoff_course_cancel_button()
 
     @asyncSlot()
-    async def load_local_course(self):
-        await self.load_course("Local Storage")
-        await self.parentWidget().widget(self.child_index).list_local_course()
+    async def load_local_courses(self):
+        await self.change_course_page("Local Storage")
+        await self.parentWidget().widget(self.child_index).list_local_courses()
 
     @asyncSlot()
-    async def load_rwgps_course(self):
+    async def load_rwgps_courses(self):
         asyncio.gather(
+            self.change_course_page("Ride with GPS"),
             self.parentWidget().widget(self.child_index).list_ride_with_gps(reset=True),
-            self.load_course("Ride with GPS"),
         )
 
-    async def load_course(self, course_type):
+    async def change_course_page(self, course_type):
         self.change_page(
             self.child_page_name, preprocess=True, reset=True, list_type=course_type
         )
@@ -78,7 +78,7 @@ class CoursesMenuWidget(MenuWidget):
         self.change_page("Google Directions API mode", preprocess=True)
 
     def onoff_course_cancel_button(self):
-        if len(self.config.logger.course.distance) == 0:
+        if not len(self.config.logger.course.distance):
             self.button["Cancel Course"].disable()
         else:
             self.button["Cancel Course"].enable()
@@ -213,7 +213,7 @@ class CourseListWidget(ListWidget):
 
     @asyncSlot()
     async def change_course_detail_page(self):
-        if self.selected_item == None:
+        if self.selected_item is None:
             return
         self.change_page(
             self.child_page_name,
@@ -225,38 +225,36 @@ class CourseListWidget(ListWidget):
     def preprocess_extra(self):
         self.page_name_label.setText(self.list_type)
 
-    async def list_local_course(self):
-        course = self.config.logger.course.get_courses()
-        for c in course:
+    async def list_local_courses(self):
+        courses = self.config.logger.course.get_courses()
+        for c in courses:
             course_item = CourseListItemWidget(self, self.config, self.list_type)
             course_item.set_info(**c)
             self.add_list_item(course_item)
 
     async def list_ride_with_gps(self, add=False, reset=False):
-        course = await self.config.network.api.get_ridewithgps_route(add, reset)
-        if course == None:
+        courses = await self.config.network.api.get_ridewithgps_route(add, reset)
+        if courses is None:
             return
 
-        for c in reversed(course):
+        for c in reversed(courses):
             course_item = CourseListItemWidget(self, self.config, self.list_type)
             course_item.set_info(**c)
             self.add_list_item(course_item)
 
     def set_course(self, course_file=None):
-        if self.selected_item == None:
+        if self.selected_item is None:
             return
 
         # from Local Storage (self.list)
-        if course_file == None:
-            self.course_file = (
-                self.config.G_COURSE_DIR + self.selected_item.list_info["id"]
-            )
+        if course_file is None:
+            self.course_file = self.selected_item.list_info["path"]
         # from Ride with GPS (CourseDetailWidget)
         else:
             self.course_file = course_file
 
         # exist course: cancel and set new course
-        if len(self.config.logger.course.distance) > 0:
+        if len(self.config.logger.course.distance):
             self.config.gui.show_dialog(
                 self.cancel_and_set_new_course, "Replace this course?"
             )
@@ -417,7 +415,7 @@ class CourseDetailWidget(MenuWidget):
         self.elevation_label.setText("{:.0f}m up".format(course_info["elevation_gain"]))
         self.locality_label.setText(self.address_format.format(**course_info))
 
-        self.list_id = course_info["id"]
+        self.list_id = course_info["name"]
 
         self.timer.start(self.config.G_DRAW_INTERVAL)
 
@@ -441,21 +439,21 @@ class CourseDetailWidget(MenuWidget):
         # sequentially draw with download
         # 1st download check
         if (
-            self.privacy_code == None
+            self.privacy_code is None
             and self.config.network.api.check_ridewithgps_files(self.list_id, "1st")
         ):
             self.draw_images(draw_map_image=True, draw_profile_image=False)
             self.privacy_code = self.config.logger.course.get_ridewithgps_privacycode(
                 self.list_id
             )
-            if self.privacy_code != None:
+            if self.privacy_code is not None:
                 # download files with privacy code (2nd download)
                 await self.config.network.api.get_ridewithgps_files_with_privacy_code(
                     self.list_id, self.privacy_code
                 )
         # 2nd download with privacy_code check
         elif (
-            self.privacy_code != None
+            self.privacy_code is not None
             and self.config.network.api.check_ridewithgps_files(self.list_id, "2nd")
         ):
             self.draw_images(draw_map_image=False, draw_profile_image=True)
@@ -464,7 +462,7 @@ class CourseDetailWidget(MenuWidget):
 
     def check_all_image_and_draw(self):
         # if all files exists, reload images and buttons, stop timer and exit
-        if not self.all_downloaded and self.config.network != None:
+        if not self.all_downloaded and self.config.network is not None:
             self.all_downloaded = self.config.network.api.check_ridewithgps_files(
                 self.list_id, "ALL"
             )
@@ -487,7 +485,7 @@ class CourseDetailWidget(MenuWidget):
         )
 
     def draw_images(self, draw_map_image=True, draw_profile_image=True):
-        if self.list_id == None:
+        if self.list_id is None:
             return False
 
         if draw_map_image:
@@ -495,7 +493,7 @@ class CourseDetailWidget(MenuWidget):
                 self.config.G_RIDEWITHGPS_API["URL_ROUTE_DOWNLOAD_DIR"]
                 + "preview-{route_id}.png"
             ).format(route_id=self.list_id)
-            if self.map_image_size == None:
+            if self.map_image_size is None:
                 # self.map_image_size = Image.open(filename).size
                 self.map_image_size = QtGui.QImage(filename).size()
             if self.map_image_size.width() == 0:
@@ -512,7 +510,7 @@ class CourseDetailWidget(MenuWidget):
                 self.config.G_RIDEWITHGPS_API["URL_ROUTE_DOWNLOAD_DIR"]
                 + "elevation_profile-{route_id}.jpg"
             ).format(route_id=self.list_id)
-            if self.profile_image_size == None:
+            if self.profile_image_size is None:
                 # self.profile_image_size = Image.open(filename).size
                 self.profile_image_size = QtGui.QImage(filename).size()
             if self.profile_image_size.width() == 0:

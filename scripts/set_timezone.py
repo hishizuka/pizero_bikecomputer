@@ -28,13 +28,13 @@ tz = TimezoneFinder()
 try:
     tz_str = tz.timezone_at(lng=lon, lat=lat)
 
-    if tz_str == None:
+    if tz_str is None:
         # tz_str = tz.certain_timezone_at(lng=lon, lat=lat)
         tz_str = tz.closest_timezone_at(lng=lon, lat=lat)
 
     print(tz_str)
 
-    if tz_str != None:
+    if tz_str is not None:
         cmd = [
             "sudo",
             "timedatectl",

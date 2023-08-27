@@ -1,16 +1,15 @@
 import asyncio
-import _ctypes
 
 try:
     import PyQt6.QtCore as QtCore
     import PyQt6.QtWidgets as QtWidgets
     import PyQt6.QtGui as QtGui
-except:
+except ImportError:
     import PyQt5.QtCore as QtCore
     import PyQt5.QtWidgets as QtWidgets
     import PyQt5.QtGui as QtGui
 
-from .pyqt_menu_widget import MenuWidget, ListWidget, ListItemWidget
+from .pyqt_menu_widget import MenuWidget, ListWidget
 
 
 class MapMenuWidget(MenuWidget):
@@ -93,7 +92,7 @@ class MapOverlayMenuWidget(MenuWidget):
         self.button[list_key].onoff_button(status)
 
         # OFF: remove overlay
-        if self.config.gui.map_widget != None:
+        if self.config.gui.map_widget is not None:
             self.config.gui.map_widget.reset_map()
 
     def select_heatmap(self):

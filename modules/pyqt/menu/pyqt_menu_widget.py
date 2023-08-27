@@ -2,7 +2,7 @@ try:
     import PyQt6.QtCore as QtCore
     import PyQt6.QtWidgets as QtWidgets
     import PyQt6.QtGui as QtGui
-except:
+except ImportError:
     import PyQt5.QtCore as QtCore
     import PyQt5.QtWidgets as QtWidgets
     import PyQt5.QtGui as QtGui
@@ -116,14 +116,12 @@ class MenuWidget(QtWidgets.QWidget):
 
     def add_buttons(self, buttons, back_connect=True):
         n = len(buttons)
-        layout_type = None
 
         if n <= 4:
             layout_type = QtWidgets.QVBoxLayout
         else:
             layout_type = QtWidgets.QGridLayout
-        if layout_type != None:
-            self.make_menu_layout(layout_type)
+        self.make_menu_layout(layout_type)
 
         i = 0
         for b in buttons:
@@ -141,7 +139,7 @@ class MenuWidget(QtWidgets.QWidget):
             else:
                 self.button[b[0]].set_null_icon()
 
-            if b[2] != None:
+            if b[2] is not None:
                 self.button[b[0]].clicked.connect(b[2])
             else:
                 self.button[b[0]].setEnabled(False)
@@ -183,7 +181,7 @@ class MenuWidget(QtWidgets.QWidget):
     def back(self):
         index = 0
         if (
-            self.back_index_key != None
+            self.back_index_key is not None
             and self.back_index_key in self.config.gui.gui_config.G_GUI_INDEX
         ):
             index = self.config.gui.gui_config.G_GUI_INDEX[self.back_index_key]
@@ -301,7 +299,7 @@ class MenuWidget(QtWidgets.QWidget):
 
         def set_submenu_icon(self, label_img=None, qsize=None):
             self.button_type = "submenu"
-            if label_img != None and qsize != None:
+            if label_img is not None and qsize is not None:
                 self.set_service_icon(label_img, qsize)
             self.set_icon_with_size()
 
@@ -524,7 +522,7 @@ class ListWidget(MenuWidget):
     def changed_item(self):
         # item is QListWidgetItem
         item = self.list.selectedItems()
-        if len(item) > 0:
+        if len(item):
             self.selected_item = self.list.itemWidget(item[0])
 
     def resizeEvent(self, event):
@@ -556,7 +554,7 @@ class ListWidget(MenuWidget):
         for i, k in enumerate(self.settings):
             if k == default_value:
                 default_index = i
-        if default_index != None:
+        if default_index is not None:
             self.list.setCurrentRow(default_index)
             self.list.itemWidget(self.list.currentItem()).setFocus()
 
@@ -565,7 +563,7 @@ class ListWidget(MenuWidget):
 
     def add_list_item(self, item):
         list_item = QtWidgets.QListWidgetItem(self.list)
-        if self.size_hint != None:
+        if self.size_hint is not None:
             list_item.setSizeHint(self.size_hint)
         self.list.setItemWidget(list_item, item)
 

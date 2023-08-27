@@ -7,7 +7,7 @@ try:
     from papirus import Papirus
 
     _SENSOR_DISPLAY = True
-except:
+except ImportError:
     pass
 print("  PAPIRUS E-INK DISPLAY : ", _SENSOR_DISPLAY)
 

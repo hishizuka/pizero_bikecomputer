@@ -7,7 +7,8 @@ import traceback
 from .logger import Logger
 
 # cython
-MODE = ""
+MODE = "Python"
+
 try:
     import pyximport
 
@@ -20,10 +21,8 @@ try:
     )
 
     MODE = "Cython"
-except:
+except ImportError:
     from .cython.crc16_p import crc16
-
-    MODE = "Python"
 
 
 class config_local:
@@ -193,7 +192,8 @@ class LoggerFit(Logger):
         }
         self.struct_def_cache = {}
 
-    def base_type_id_from_string(self, base_type_name):
+    @staticmethod
+    def base_type_id_from_string(base_type_name):
         return {
             "enum": 0x00,  # 0
             "sint8": 0x01,  # 1
@@ -212,11 +212,13 @@ class LoggerFit(Logger):
             "byte": 0x0D,
         }[base_type_name]
 
-    def base_type_size_from_id(self, base_type_id):
+    @staticmethod
+    def base_type_size_from_id(base_type_id):
         #       0 1 2 3 4 5 6 7 8 910111213
         return [1, 1, 1, 2, 2, 4, 4, 1, 4, 8, 1, 2, 4, 1][base_type_id & 0xF]
 
-    def base_type_format_from_id(self, base_type_id):
+    @staticmethod
+    def base_type_format_from_id(base_type_id):
         #       01234567890123
         return "BbBhHiIsfdBHIs"[base_type_id & 0xF]
 
@@ -235,7 +237,6 @@ class LoggerFit(Logger):
 
     def write_log_python(self):
         ## SQLite
-        # con = sqlite3.connect(self.config.G_LOG_DB)
         con = sqlite3.connect(
             self.config.G_LOG_DB,
             detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES,
@@ -244,19 +245,17 @@ class LoggerFit(Logger):
         cur = con.cursor()
 
         # get start_date
-        start_date = None
         # get datetime object (timestamp)
         cur.execute("SELECT timestamp, MIN(timestamp) FROM BIKECOMPUTER_LOG")
         first_row = cur.fetchone()
-        if first_row != None:
+        if first_row is not None:
             start_date = first_row[0]
         else:
             return False
         # get end_date
-        end_date = None
         cur.execute("SELECT timestamp, MAX(timestamp) FROM BIKECOMPUTER_LOG")
         first_row = cur.fetchone()
-        if first_row != None:
+        if first_row is not None:
             end_date = first_row[0]
         else:
             return False
@@ -318,17 +317,17 @@ class LoggerFit(Logger):
                 available_data = []
                 if None in row:
                     for i, v in enumerate(row):
-                        if v == None:
+                        if v is None:
                             continue
                         available_fields.append(record_index[i])
                         available_data.append(
                             self.convertValue((v,), message_num, record_index[i])
                         )
 
-                    # available_fields = [j for i, j in zip(row, record_index) if i != None]
-                    # available_data = list(map(self.convertValue, [(i,) for i in row if i != None], [message_num]*len(available_fields), available_fields))
+                    # available_fields = [j for i, j in zip(row, record_index) if i is not None]
+                    # available_data = list(map(self.convertValue, [(i,) for i in row if i is not None], [message_num]*len(available_fields), available_fields))
 
-                    # available_data_gen = [(self.convertValue((i,),message_num,j), j) for i, j in zip(row, record_index) if i != None]
+                    # available_data_gen = [(self.convertValue((i,),message_num,j), j) for i, j in zip(row, record_index) if i is not None]
                     # available_fields = [row[1] for row in available_data_gen]
                     # available_data = [row[0] for row in available_data_gen]
                 else:
@@ -463,7 +462,6 @@ class LoggerFit(Logger):
             self.write(struct.pack("<BBB", f_id, base_type_size, base_type_id))
 
     def get_struct_def(self, local_message_num, l_num_used=False):
-        struct_def = ""
         if l_num_used and local_message_num in self.struct_def_cache:
             struct_def = self.struct_def_cache[local_message_num]
         else:
@@ -548,7 +546,7 @@ class LoggerFit(Logger):
                 else:
                     cur.execute("SELECT %s FROM BIKECOMPUTER_LOG" % (lap_sql[k]))
             v = list((cur.fetchone()))
-            if len(v) == 0 or v[0] == None:
+            if not len(v) or v[0] is None:
                 continue
             lap_fields.append(k)
             lap_data.append(self.convertValue(v, message_num, k))

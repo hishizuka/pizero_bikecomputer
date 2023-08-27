@@ -20,7 +20,7 @@ try:
     )
 
     _IMPORT_GARMINCONNECT = True
-except:
+except ImportError:
     pass
 
 _IMPORT_STRAVA_COOKIE = False
@@ -28,7 +28,7 @@ try:
     from stravacookies import StravaCookieFetcher
 
     _IMPORT_STRAVA_COOKIE = True
-except:
+except ImportError:
     pass
 
 _IMPORT_THINGSBOARD = False
@@ -36,7 +36,7 @@ try:
     from tb_device_mqtt import TBDeviceMqttClient, TBPublishInfo
 
     _IMPORT_THINGSBOARD = True
-except:
+except ImportError:
     pass
 
 
@@ -134,13 +134,13 @@ class api:
                 params=self.config.G_RIDEWITHGPS_API["PARAMS"],
             )
             user = response.get("user")
-            if user != None:
+            if user is not None:
                 self.config.G_RIDEWITHGPS_API["USER_ID"] = user.get("id")
-            if self.config.G_RIDEWITHGPS_API["USER_ID"] == None:
+            if self.config.G_RIDEWITHGPS_API["USER_ID"] is None:
                 return
 
         # get user route (total_num)
-        if self.config.G_RIDEWITHGPS_API["USER_ROUTES_NUM"] == None:
+        if self.config.G_RIDEWITHGPS_API["USER_ROUTES_NUM"] is None:
             response = await self.config.network.get_json(
                 self.config.G_RIDEWITHGPS_API["URL_USER_ROUTES"].format(
                     user=self.config.G_RIDEWITHGPS_API["USER_ID"], offset=0, limit=0
@@ -343,7 +343,7 @@ class api:
             "Authorization": "Bearer " + self.config.G_STRAVA_API["ACCESS_TOKEN"]
         }
         data = {"data_type": "fit"}
-        async with aiofiles.open(self.config.G_UPLOAD_FILE, "rb") as file:
+        async with aiofiles.open(self.config.G_UPLOAD_FILE, "rb"):
             data["file"] = open(self.config.G_UPLOAD_FILE, "rb")
             upload_result = await self.config.network.post(
                 self.config.G_STRAVA_API_URL["UPLOAD"], headers=headers, data=data
@@ -496,7 +496,7 @@ class api:
             traceback.print_exc()
 
     def thingsboard_check(self):
-        if self.thingsboard_client != None:
+        if self.thingsboard_client is not None:
             return True
         else:
             return False
@@ -527,7 +527,7 @@ class api:
 
     async def send_livetrack_data_internal(self, quick_send=False):
         t = int(time.time())
-        bt_pan_status = False
+
         if (
             not quick_send
             and t - self.send_time < self.config.G_THINGSBOARD_API["INTERVAL_SEC"]
@@ -613,7 +613,6 @@ class api:
             },
         }
 
-        # self.thingsboard_client.disconnect()
         try:
             self.thingsboard_client.connect()
             res = self.thingsboard_client.send_telemetry(data).get()
@@ -654,8 +653,8 @@ class api:
 
     def send_livetrack_course(self, reset=False):
         if not reset and (
-            len(self.config.logger.course.latitude) == 0
-            or len(self.config.logger.course.longitude) == 0
+            not len(self.config.logger.course.latitude)
+            or not len(self.config.logger.course.longitude)
         ):
             return
 

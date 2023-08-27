@@ -2,7 +2,7 @@ try:
     import PyQt6.QtCore as QtCore
     import PyQt6.QtWidgets as QtWidgets
     import PyQt6.QtGui as QtGui
-except:
+except ImportError:
     import PyQt5.QtCore as QtCore
     import PyQt5.QtWidgets as QtWidgets
     import PyQt5.QtGui as QtGui
@@ -61,7 +61,6 @@ class CueSheetItem(QtWidgets.QVBoxLayout):
         self.dist = QtWidgets.QLabel()
         self.dist.setWordWrap(False)
         self.dist_num = 0
-        # self.name = QtWidgets.QLabel()
         self.name = MarqueeLabel(self.config)
         self.name.setWordWrap(False)
 
@@ -128,11 +127,9 @@ class CueSheetWidget(ScreenWidget):
             self.cuesheet[i].name.setText("")
 
     def resizeEvent(self, event):
-        # w = self.size().width()
         h = self.size().height()
         self.set_font_size(h)
         for i in self.cuesheet:
-            # i.update_font_size(int(self.font_size*0.66))
             i.update_font_size(int(self.font_size))  # for 3 rows
 
     def set_font_size(self, length):
@@ -140,7 +137,7 @@ class CueSheetWidget(ScreenWidget):
 
     async def update_extra(self):
         if (
-            len(self.config.logger.course.point_distance) == 0
+            not len(self.config.logger.course.point_distance)
             or self.config.G_CUESHEET_DISPLAY_NUM == 0
         ):
             return
@@ -163,6 +160,5 @@ class CueSheetWidget(ScreenWidget):
             if dist > 1000:
                 text = "{0:4.1f}km ".format(dist / 1000)
             self.cuesheet[j].dist.setText(text)
-            # text = self.config.logger.course.point_name[cp_i+j]
             text = self.config.logger.course.point_type[cp_i + j]
             self.cuesheet[j].name.setText(text)

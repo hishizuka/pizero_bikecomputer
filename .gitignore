@@ -2,8 +2,8 @@
 /log/
 /screenshot/
 /maptile/*
-/course/ridewithgps/*
-/course/*html*
+/courses/ridewithgps/*
+/courses/*html*
 /.idea/
 /.vscode/
 /.venv/

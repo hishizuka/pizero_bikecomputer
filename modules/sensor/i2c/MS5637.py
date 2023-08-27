@@ -1,10 +1,9 @@
 import time
-import struct
 
 try:
     # run from top directory (pizero_bikecomputer)
     from . import i2c
-except:
+except ImportError:
     # directly run this program
     import i2c
 
@@ -105,10 +104,6 @@ class MS5637(i2c.i2c):
         # Calculate temperature compensated pressure
         OFF = self.C2 * 131072 + (self.C4 * dT) / 64
         SENS = self.C1 * 65536 + (self.C3 * dT) / 128
-
-        T2 = 0
-        OFF2 = 0
-        SENS2 = 0
 
         if TEMP >= 2000:
             T2 = 5 * dT * dT / 274877906944

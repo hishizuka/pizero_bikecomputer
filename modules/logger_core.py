@@ -123,7 +123,7 @@ class LoggerCore:
         self.init_db()
         self.cur.execute("SELECT timestamp FROM BIKECOMPUTER_LOG LIMIT 1")
         first_row = self.cur.fetchone()
-        if first_row == None:
+        if first_row is None:
             self.reset()
         else:
             self.resume()
@@ -180,7 +180,7 @@ class LoggerCore:
     async def sql_worker(self):
         while True:
             sql = await self.sql_queue.get()
-            if sql == None:
+            if sql is None:
                 break
             self.cur.execute(*sql)
             self.con.commit()
@@ -260,7 +260,7 @@ class LoggerCore:
         )
         res = self.cur.fetchone()
         replace_flg = False
-        if res != None and len(res) >= 5 and res[4] != self.create_table_sql:
+        if res is not None and len(res) >= 5 and res[4] != self.create_table_sql:
             log_db_moved = self.config.G_LOG_DB + "-old_layout"
             self.cur.close()
             self.con.close()
@@ -275,7 +275,7 @@ class LoggerCore:
             self.con = sqlite3.connect(self.config.G_LOG_DB, check_same_thread=False)
             self.cur = self.con.cursor()
             replace_flg = True
-        if res == None or replace_flg:
+        if res is None or replace_flg:
             self.con.execute(self.create_table_sql)
             self.cur.execute("CREATE INDEX lap_index ON BIKECOMPUTER_LOG(lap)")
             self.cur.execute(
@@ -306,9 +306,9 @@ class LoggerCore:
             print("->M START {}".format(time_str))
             self.start_and_stop("STOP")
             self.config.G_MANUAL_STATUS = "START"
-            if self.config.gui != None:
+            if self.config.gui is not None:
                 self.config.gui.change_start_stop_button(self.config.G_MANUAL_STATUS)
-            if self.values["start_time"] == None:
+            if self.values["start_time"] is None:
                 self.values["start_time"] = int(datetime.datetime.utcnow().timestamp())
 
             if pre_status == "INIT" and not np.isnan(
@@ -328,7 +328,7 @@ class LoggerCore:
             print("->M STOP  {}".format(time_str))
             self.start_and_stop("START")
             self.config.G_MANUAL_STATUS = "STOP"
-            if self.config.gui != None:
+            if self.config.gui is not None:
                 self.config.gui.change_start_stop_button(self.config.G_MANUAL_STATUS)
 
         self.config.setting.set_config_pickle(
@@ -343,7 +343,7 @@ class LoggerCore:
         self.config.gui.show_popup(self.config.G_MANUAL_STATUS + popup_extra)
 
     def start_and_stop(self, status=None):
-        if status != None:
+        if status is not None:
             self.config.G_STOPWATCH_STATUS = status
         time_str = datetime.datetime.now().strftime("%Y%m%d %H:%M:%S")
         if self.config.G_STOPWATCH_STATUS != "START":
@@ -658,7 +658,7 @@ class LoggerCore:
 
     def calc_gross(self):
         # elapsed_time
-        if self.values["start_time"] == None:
+        if self.values["start_time"] is None:
             return
         # [s]
         self.values["elapsed_time"] = int(
@@ -766,7 +766,7 @@ class LoggerCore:
         max_value = list(self.cur.fetchone())
         for i, k in enumerate(main_item):
             self.record_stats["entire_max"][k] = 0
-            if max_value[i] != None:
+            if max_value[i] is not None:
                 self.record_stats["entire_max"][k] = max_value[i]
 
         # get lap max
@@ -776,7 +776,7 @@ class LoggerCore:
         max_value = list(self.cur.fetchone())
         for i, k in enumerate(main_item):
             self.record_stats["lap_max"][k] = 0
-            if max_value[i] != None:
+            if max_value[i] is not None:
                 self.record_stats["lap_max"][k] = max_value[i]
 
         # get pre lap
@@ -813,7 +813,7 @@ class LoggerCore:
         # start_time
         self.cur.execute("SELECT MIN(timestamp) FROM BIKECOMPUTER_LOG")
         first_row = self.cur.fetchone()
-        if first_row[0] != None:
+        if first_row[0] is not None:
             self.values["start_time"] = int(
                 self.config.datetime_myparser(first_row[0]).timestamp() - 1
             )
@@ -830,10 +830,10 @@ class LoggerCore:
             return
         if lat == self.config.G_GPS_NULLVALUE or lon == self.config.G_GPS_NULLVALUE:
             return
-        if len(self.short_log_dist) > 0 and self.short_log_dist[-1] == dist:
+        if len(self.short_log_dist) and self.short_log_dist[-1] == dist:
             return
-        if (len(self.short_log_lat) > 0 and self.short_log_lat[-1] == lat) and (
-            len(self.short_log_lon) > 0 and self.short_log_lon[-1] == lon
+        if (len(self.short_log_lat) and self.short_log_lat[-1] == lat) and (
+            len(self.short_log_lon) and self.short_log_lon[-1] == lon
         ):
             return
         if len(self.short_log_lat) > self.short_log_limit:
@@ -866,7 +866,7 @@ class LoggerCore:
         # t = datetime.datetime.utcnow()
 
         timestamp_delta = None
-        if timestamp != None:
+        if timestamp is not None:
             timestamp_delta = (datetime.datetime.utcnow() - timestamp).total_seconds()
 
         # make_tmp_db = False
@@ -875,14 +875,14 @@ class LoggerCore:
         dist_raw = np.array([])
 
         # get values from short_log to db in logging
-        if timestamp_delta != None and self.short_log_available:
+        if timestamp_delta is not None and self.short_log_available:
             while self.short_log_lock:
                 print("locked: get values")
                 time.sleep(0.02)
             lat_raw = np.array(self.short_log_lat)
             lon_raw = np.array(self.short_log_lon)
             dist_raw = np.array(self.short_log_dist)
-            if len(self.short_log_lon) > 0:
+            if len(self.short_log_lon):
                 timestamp_new = self.short_log_timestamp[-1]
             self.clear_short_log()
             self.short_log_available = True
@@ -895,14 +895,14 @@ class LoggerCore:
                 "SELECT distance,position_lat,position_long FROM BIKECOMPUTER_LOG "
                 + "WHERE position_lat is not null AND position_long is not null "
             )
-            if timestamp != None:
+            if timestamp is not None:
                 query = query + "AND timestamp > '%s'" % timestamp
 
             con = sqlite3.connect(db_file)
             cur = con.cursor()
             cur.execute(query)
             res_array = np.array(cur.fetchall())
-            if len(res_array.shape) > 0 and res_array.shape[0] > 0:
+            if len(res_array.shape) and res_array.shape[0] > 0:
                 dist_raw = res_array[:, 0].astype("float32")  # [m]
                 lat_raw = res_array[:, 1].astype("float32")
                 lon_raw = res_array[:, 2].astype("float32")
@@ -910,7 +910,7 @@ class LoggerCore:
             # timestamp
             cur.execute("SELECT MAX(timestamp) FROM BIKECOMPUTER_LOG")
             first_row = cur.fetchone()
-            if first_row[0] != None:
+            if first_row[0] is not None:
                 timestamp_new = self.config.datetime_myparser(first_row[0])
 
             cur.close()
@@ -919,7 +919,7 @@ class LoggerCore:
             self.short_log_available = True
 
         # print("lat_raw", len(lat_raw))
-        if len(lat_raw) > 0 and (len(lat_raw) == len(lon_raw) == len(dist_raw)):
+        if len(lat_raw) and (len(lat_raw) == len(lon_raw) == len(dist_raw)):
             # downsampling
             try:
                 cond = np.array(

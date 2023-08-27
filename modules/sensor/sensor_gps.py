@@ -14,7 +14,7 @@ try:
     from dateutil import parser
 
     _SENSOR_GPS_BASIC = True
-except:
+except ImportError:
     pass
 
 _SENSOR_GPS_I2C = False
@@ -25,7 +25,7 @@ try:
         _sensor_i2c_gps = pa1010d.PA1010D()
         _sensor_i2c_gps.read_sentence(timeout=1)
         _SENSOR_GPS_I2C = True
-except:
+except ImportError:
     pass
 
 _SENSOR_GPS_GPSD = False
@@ -180,8 +180,8 @@ class SensorGPS(Sensor):
         while not self.config.G_QUIT:
             await self.sleep()
 
-            if self.config.logger == None or (
-                len(self.config.logger.course.latitude) == 0
+            if self.config.logger is None or (
+                not len(self.config.logger.course.latitude)
                 and self.config.logger.position_log.shape[0] == 0
             ):
                 continue
@@ -205,10 +205,10 @@ class SensorGPS(Sensor):
                 self.values["lon"] = self.config.logger.position_log[course_i][1]
                 self.values["distance"] = self.config.logger.position_log[course_i][2]
                 self.values["track"] = self.config.logger.position_log[course_i][3]
-                if self.values["lat"] == None or self.values["lon"] == None:
+                if self.values["lat"] is None or self.values["lon"] is None:
                     self.values["lat"] = np.nan
                     self.values["lon"] = np.nan
-                if self.values["track"] == None:
+                if self.values["track"] is None:
                     self.values["track"] = self.values["pre_track"]
                 if course_i == pre_course_i:
                     course_i += 1 * log_speed
@@ -313,7 +313,10 @@ class SensorGPS(Sensor):
                 lat = self.config.G_GPS_NULLVALUE
                 lon = self.config.G_GPS_NULLVALUE
                 timestamp = self.config.G_GPS_NULLVALUE
-                if g.data["mode_fix_type"] != None and int(g.data["mode_fix_type"]) > 1:
+                if (
+                    g.data["mode_fix_type"] is not None
+                    and int(g.data["mode_fix_type"]) > 1
+                ):
                     lat = g.data["latitude"]
                     lon = g.data["longitude"]
                 if g.data["timestamp"] != self.config.G_GPS_NULLVALUE:
@@ -409,7 +412,7 @@ class SensorGPS(Sensor):
             self.values["mode"] = mode
 
         # err(GPSd only)
-        if error != None:
+        if error is not None:
             for i, key in enumerate(["epx", "epy", "epv"]):
                 if error[i] != self.config.G_GPS_NULLVALUE:
                     self.values[key] = error[i]
@@ -445,7 +448,7 @@ class SensorGPS(Sensor):
         ):
             valid_pos = False
 
-        if error != None:
+        if error is not None:
             if np.any(
                 np.isnan([self.values["epx"], self.values["epy"], self.values["epv"]])
             ) or np.any(
@@ -538,8 +541,8 @@ class SensorGPS(Sensor):
         if (
             not self.is_altitude_modified
             and self.values["on_course_status"]
-            and self.config.logger != None
-            and len(self.config.logger.course.altitude) > 0
+            and self.config.logger is not None
+            and len(self.config.logger.course.altitude)
         ):
             await self.config.logger.sensor.sensor_i2c.update_sealevel_pa(
                 self.config.logger.course.altitude[self.values["course_index"]]
@@ -567,7 +570,7 @@ class SensorGPS(Sensor):
     def get_satellites_adafruit(self, gs):
         gnum = guse = 0
 
-        if gs == self.config.G_GPS_NULLVALUE or len(gs) == 0:
+        if gs == self.config.G_GPS_NULLVALUE or not len(gs):
             return "0/0"
         for v in gs.values():
             gnum += 1
@@ -641,7 +644,7 @@ class SensorGPS(Sensor):
 
         # don't search
         # initializing logger
-        if self.config.logger == None:
+        if self.config.logger is None:
             return
         # no gps value
         if np.isnan(self.values["lon"]) or np.isnan(self.values["lat"]):
@@ -858,7 +861,7 @@ class SensorGPS(Sensor):
                 self.config.logger.course.distance[m] * 1000 + dist_diff_course
             )
 
-            if len(self.config.logger.course.altitude) > 0:
+            if len(self.config.logger.course.altitude):
                 alt_diff_course = 0
                 if m + 1 < len(self.config.logger.course.altitude):
                     alt_diff_course = (
@@ -883,7 +886,7 @@ class SensorGPS(Sensor):
 
             self.values["course_index"] = m
 
-            if len(self.config.logger.course.point_distance) > 0:
+            if len(self.config.logger.course.point_distance):
                 cp_m = np.abs(
                     self.config.logger.course.point_distance
                     - self.values["course_distance"] / 1000
@@ -915,7 +918,7 @@ class SensorGPS(Sensor):
         self.values["on_course_status"] = False
 
     def get_index_with_distance_cutoff(self, start, search_range):
-        if self.config.logger == None or len(self.config.logger.course.distance) == 0:
+        if self.config.logger is None or not len(self.config.logger.course.distance):
             return 0
 
         dist_to = self.config.logger.course.distance[start] + search_range
@@ -943,5 +946,6 @@ class SensorGPS(Sensor):
 
         return min_index
 
-    def hasGPS(self):
+    @staticmethod
+    def hasGPS():
         return _SENSOR_GPS_GPSD or _SENSOR_GPS_I2C or _SENSOR_GPS_ADAFRUIT_UART

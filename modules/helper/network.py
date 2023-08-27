@@ -23,7 +23,8 @@ class Network:
     async def quit(self):
         await self.download_queue.put(None)
 
-    async def get_json(self, url, params=None, headers=None, timeout=10):
+    @staticmethod
+    async def get_json(url, params=None, headers=None, timeout=10):
         async with aiohttp.ClientSession() as session:
             async with session.get(
                 url, params=params, headers=headers, timeout=timeout
@@ -31,7 +32,8 @@ class Network:
                 json = await res.json()
                 return json
 
-    async def post(self, url, headers=None, params=None, data=None):
+    @staticmethod
+    async def post(url, headers=None, params=None, data=None):
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 url, headers=headers, params=params, data=data
@@ -44,7 +46,7 @@ class Network:
         # for urls, header, save_paths, params:
         while True:
             q = await self.download_queue.get()
-            if q == None:
+            if q is None:
                 break
             try:
                 res = await self.download_files(**q)
@@ -53,15 +55,15 @@ class Network:
                 return
 
             # all False -> give up
-            if not any(res) or res == None:
+            if not any(res) or res is None:
                 failed.append((datetime.datetime.now(), q))
                 print("failed download")
                 print(q["urls"])
             # retry
             elif (
                 not all(res)
-                and len(q["urls"]) > 0
-                and len(res) > 0
+                and len(q["urls"])
+                and len(res)
                 and len(q["urls"]) == len(res)
             ):
                 retry_urls = []
@@ -70,7 +72,7 @@ class Network:
                     if not status:
                         retry_urls.append(url)
                         retry_save_paths.append(save_path)
-                if len(retry_urls) > 0:
+                if len(retry_urls):
                     q["urls"] = retry_urls
                     q["save_paths"] = retry_save_paths
                     await self.download_queue.put(q)
@@ -78,7 +80,7 @@ class Network:
     async def download_maptile(
         self, map_config, map_name, z, tiles, additional_download=False
     ):
-        if not self.config.detect_network() or map_config[map_name]["url"] == None:
+        if not self.config.detect_network() or map_config[map_name]["url"] is None:
             return False
 
         urls = []
@@ -98,8 +100,8 @@ class Network:
             self.config.G_WIND_OVERLAY_MAP_CONFIG,
         ]:
             if (
-                map_config[map_name]["basetime"] == None
-                or map_config[map_name]["validtime"] == None
+                map_config[map_name]["basetime"] is None
+                or map_config[map_name]["validtime"] is None
             ):
                 return False
             additional_var["basetime"] = map_config[map_name]["basetime"]
@@ -108,19 +110,19 @@ class Network:
                 map_config == self.config.G_WIND_OVERLAY_MAP_CONFIG
                 and "jpn_scw" in map_name
             ):
-                if map_config[map_name]["subdomain"] == None:
+                if map_config[map_name]["subdomain"] is None:
                     return False
                 additional_var["subdomain"] = map_config[map_name]["subdomain"]
 
         # make header
         if (
             "referer" in map_config[map_name]
-            and map_config[map_name]["referer"] != None
+            and map_config[map_name]["referer"] is not None
         ):
             request_header["Referer"] = map_config[map_name]["referer"]
         if (
             "user_agent" in map_config[map_name]
-            and map_config[map_name]["user_agent"] != None
+            and map_config[map_name]["user_agent"] is not None
         ):
             request_header["User-Agent"] = map_config[map_name]["user_agent"]
 
@@ -201,7 +203,7 @@ class Network:
                             )
                         )
 
-            if len(additional_urls) > 0:
+            if len(additional_urls):
                 await self.download_queue.put(
                     {
                         "urls": additional_urls,
@@ -212,7 +214,8 @@ class Network:
 
         return True
 
-    async def get_http_request(self, session, url, save_path, headers, params):
+    @staticmethod
+    async def get_http_request(session, url, save_path, headers, params):
         try:
             async with session.get(url, headers=headers, params=params) as dl_file:
                 if dl_file.status == 200:
@@ -228,7 +231,6 @@ class Network:
 
     async def download_files(self, urls, save_paths, headers=None, params=None):
         tasks = []
-        res = None
         async with asyncio.Semaphore(self.config.G_COROUTINE_SEM):
             async with aiohttp.ClientSession() as session:
                 for url, save_path in zip(urls, save_paths):

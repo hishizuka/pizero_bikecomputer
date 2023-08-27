@@ -2,10 +2,6 @@
 
 import datetime
 
-# import logging
-# logging.basicConfig(level=logging.DEBUG)
-# logging.basicConfig(filename='example.log', level=logging.DEBUG)
-
 
 def main():
     print()
@@ -40,10 +36,9 @@ def main():
     t1 = t2
     if config.G_GUI_MODE == "PyQt":
         from modules import gui_pyqt
-    elif config.G_GUI_MODE == "QML":
-        from modules import gui_qml
-    elif config.G_GUI_MODE == "Kivy":
-        from modules import gui_kivy
+    else:
+        raise ValueError(f"{config.G_GUI_MODE} mode not supported")
+
     t2 = datetime.datetime.now()
     time_profile.append((t2 - t1).total_seconds())
 
@@ -67,14 +62,9 @@ def main():
     print()
     print("########## INITIALIZE END ##########")
     config.boot_time += sum(time_profile)
-    # return
 
     if config.G_GUI_MODE == "PyQt":
-        gui = gui_pyqt.GUI_PyQt(config)
-    elif config.G_GUI_MODE == "QML":
-        gui = gui_qml.GUI_QML(config)
-    elif config.G_GUI_MODE == "Kivy":
-        gui = gui_kivy.GUI_Kivy(config)
+        gui_pyqt.GUI_PyQt(config)
 
 
 if __name__ == "__main__":

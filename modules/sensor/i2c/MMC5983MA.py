@@ -1,13 +1,12 @@
 import time
 import struct
 
-import math
 import numpy as np
 
 try:
     # run from top directory (pizero_bikecomputer)
     from . import i2c
-except:
+except ImportError:
     # directly run this program
     import i2c
 

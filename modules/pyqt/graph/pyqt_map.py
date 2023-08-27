@@ -11,7 +11,7 @@ try:
     import PyQt6.QtCore as QtCore
     import PyQt6.QtWidgets as QtWidgets
     import PyQt6.QtGui as QtGui
-except:
+except ImportError:
     import PyQt5.QtCore as QtCore
     import PyQt5.QtWidgets as QtWidgets
     import PyQt5.QtGui as QtGui
@@ -157,7 +157,7 @@ class MapWidget(BaseMapWidget):
         # self.load_course()
         t = datetime.datetime.utcnow()
         self.get_track()  # heavy when resume
-        if len(self.tracks_lon) != 0:
+        if len(self.tracks_lon):
             print(
                 "resume_track(init): {:.3f} sec".format(
                     (datetime.datetime.utcnow() - t).total_seconds()
@@ -247,11 +247,11 @@ class MapWidget(BaseMapWidget):
     def init_cuesheet_and_instruction(self):
         # init cuesheet_widget
         if (
-            len(self.config.logger.course.point_name) > 0
+            len(self.config.logger.course.point_name)
             and self.config.G_CUESHEET_DISPLAY_NUM > 0
             and self.config.G_COURSE_INDEXING
         ):
-            if self.cuesheet_widget == None:
+            if self.cuesheet_widget is None:
                 self.cuesheet_widget = CueSheetWidget(self, self.config)
                 self.cuesheet_widget.hide()  # adhoc
             # self.map_cuesheet_ratio = 0.7
@@ -269,7 +269,7 @@ class MapWidget(BaseMapWidget):
 
     def resizeEvent(self, event):
         if (
-            len(self.config.logger.course.point_name) == 0
+            not len(self.config.logger.course.point_name)
             or self.config.G_CUESHEET_DISPLAY_NUM == 0
             or not self.config.G_COURSE_INDEXING
         ):
@@ -303,13 +303,13 @@ class MapWidget(BaseMapWidget):
             super().switch_lock()
 
     def load_course(self):
-        if len(self.config.logger.course.latitude) == 0:
+        if not len(self.config.logger.course.latitude):
             return
 
         time_profile = []
         t1 = datetime.datetime.now()
 
-        if self.course_plot != None:
+        if self.course_plot is not None:
             self.plot.removeItem(self.course_plot)
         self.course_plot = CoursePlotItem(
             x=self.config.logger.course.longitude,
@@ -322,7 +322,7 @@ class MapWidget(BaseMapWidget):
 
         # test
         if not self.config.G_IS_RASPI:
-            if self.plot_verification != None:
+            if self.plot_verification is not None:
                 self.plot.removeItem(self.plot_verification)
             self.plot_verification = pg.ScatterPlotItem(pxMode=True)
             self.plot_verification.setZValue(25)
@@ -346,12 +346,10 @@ class MapWidget(BaseMapWidget):
         t1 = t2
 
         # course point
-        if len(self.config.logger.course.point_longitude) == 0:
+        if not len(self.config.logger.course.point_longitude):
             return
 
-        t = datetime.datetime.utcnow()
-
-        if self.course_points_plot != None:
+        if self.course_points_plot is not None:
             self.plot.removeItem(self.course_points_plot)
         self.course_points_plot = pg.ScatterPlotItem(pxMode=True, symbol="t", size=12)
         self.course_points_plot.setZValue(40)
@@ -390,11 +388,11 @@ class MapWidget(BaseMapWidget):
         # t = datetime.datetime.utcnow()
 
         # display current position
-        if len(self.location) > 0:
+        if len(self.location):
             self.plot.removeItem(self.current_point)
             self.location.pop()
         # display center point
-        if len(self.center_point_location) > 0:
+        if len(self.center_point_location):
             self.plot.removeItem(self.center_point)
             self.center_point_location.pop()
 
@@ -403,11 +401,10 @@ class MapWidget(BaseMapWidget):
         # dummy position
         if np.isnan(self.gps_values["lon"]) or np.isnan(self.gps_values["lat"]):
             # recent point(from log or pre_point) / course start / dummy
-            if len(self.tracks_lon) > 0 and len(self.tracks_lat) > 0:
+            if len(self.tracks_lon) and len(self.tracks_lat):
                 self.point["pos"] = [self.tracks_lon_pos, self.tracks_lat_pos]
-            elif (
-                len(self.config.logger.course.longitude) > 0
-                and len(self.config.logger.course.latitude) > 0
+            elif len(self.config.logger.course.longitude) and len(
+                self.config.logger.course.latitude
             ):
                 self.point["pos"] = [
                     self.config.logger.course.longitude[0],
@@ -440,7 +437,7 @@ class MapWidget(BaseMapWidget):
         x_move = y_move = 0
         if (
             self.lock_status
-            and len(self.config.logger.course.distance) > 0
+            and len(self.config.logger.course.distance)
             and self.gps_values["on_course_status"]
         ):
             index = self.gps_sensor.get_index_with_distance_cutoff(
@@ -515,7 +512,6 @@ class MapWidget(BaseMapWidget):
         # t = datetime.datetime.utcnow()
 
         # set x and y ranges
-        x_start = x_end = y_start = y_end = np.nan
         x_start = self.map_pos["x"] - self.map_area["w"] / 2
         x_end = x_start + self.map_area["w"]
         y_start = self.map_pos["y"] - self.map_area["h"] / 2
@@ -558,13 +554,11 @@ class MapWidget(BaseMapWidget):
 
     def get_track(self):
         # get track from SQL
-        lon = []
-        lat = []
         # not good (input & output)    #conversion coordinate
         (self.tracks_timestamp, lon, lat) = self.config.logger.update_track(
             self.tracks_timestamp
         )
-        if len(lon) > 0 and len(lat) > 0:
+        if len(lon) and len(lat):
             self.tracks_lon_pos = lon[-1]
             self.tracks_lat_pos = lat[-1]
             self.tracks_lon = np.append(self.tracks_lon, np.array(lon))
@@ -583,11 +577,10 @@ class MapWidget(BaseMapWidget):
             self.course_points_plot,
             self.instruction,
         ]:
-            if p != None:
+            if p is not None:
                 self.plot.removeItem(p)
-                p = None
 
-        if self.cuesheet_widget != None:
+        if self.cuesheet_widget is not None:
             self.cuesheet_widget.reset()
 
     def init_course(self):
@@ -674,13 +667,13 @@ class MapWidget(BaseMapWidget):
                 init_time_list = await self.config.network.api.get_scw_list(
                     map_config[map_name], "inittime"
                 )
-                if init_time_list != None:
+                if init_time_list is not None:
                     map_config[map_name]["basetime"] = init_time_list[0]["it"]
 
                 timeline = await self.config.network.api.get_scw_list(
                     map_config[map_name], "fl"
                 )
-                if timeline != None:
+                if timeline is not None:
                     map_config[map_name]["fl"] = timeline
                     time_str = map_config[map_name]["nowtime"].strftime("%H%M")
                     for tl in map_config[map_name]["fl"]:
@@ -808,7 +801,6 @@ class MapWidget(BaseMapWidget):
         # draw only the necessary tiles
         w_h = int(tile_size / z_conv_factor) if expand else 0
         for keys in add_keys:
-            imgarray = np.full((tile_size, tile_size, 3), 255, dtype="uint8")
             x, y = keys[0:2] if not expand else expand_keys[keys][0:2]
             img_file = self.get_image_file(use_mbtiles, map_name, z_draw, x, y)
             if not expand:
@@ -872,7 +864,8 @@ class MapWidget(BaseMapWidget):
         tile_y = sorted([t0[1], t1[1]])
         return z_draw, z_conv_factor, tile_x, tile_y
 
-    def get_tiles_for_drawing(self, tile_x, tile_y, z_conv_factor, expand):
+    @staticmethod
+    def get_tiles_for_drawing(tile_x, tile_y, z_conv_factor, expand):
         tiles = []
         for i in range(tile_x[0], tile_x[1] + 1):
             for j in range(tile_y[0], tile_y[1] + 1):
@@ -917,7 +910,7 @@ class MapWidget(BaseMapWidget):
             download_tile.append(tile)
 
         # start downloading
-        if len(download_tile) > 0:
+        if len(download_tile):
             if not await self.config.network.download_maptile(
                 map_config, map_name, z_draw, download_tile, additional_download=True
             ):
@@ -973,7 +966,6 @@ class MapWidget(BaseMapWidget):
         return cond
 
     def get_image_file(self, use_mbtiles, map_name, z_draw, x, y):
-        img_file = None
         if not use_mbtiles:
             img_file = self.config.get_maptile_filename(map_name, z_draw, x, y)
         else:
@@ -1026,14 +1018,14 @@ class MapWidget(BaseMapWidget):
         self, x_start, x_end, y_start, y_end, auto_zoom=False
     ):
         if (
-            len(self.config.logger.course.point_name) == 0
+            not len(self.config.logger.course.point_name)
             or self.config.G_CUESHEET_DISPLAY_NUM == 0
             or not self.config.G_COURSE_INDEXING
         ):
             return
         await self.cuesheet_widget.update_extra()
 
-        if self.instruction != None:
+        if self.instruction is not None:
             self.plot.removeItem(self.instruction)
         image_src = '<img src="img/navi_flag.png">'  # svg
         if self.cuesheet_widget.cuesheet[0].name.text() == "Right":
@@ -1063,7 +1055,7 @@ class MapWidget(BaseMapWidget):
             # print(self.zoomlevel, self.cuesheet_widget.cuesheet[0].dist_num, self.auto_zoomlevel_back)
             if self.cuesheet_widget.cuesheet[0].dist_num < 1000:
                 if (
-                    self.auto_zoomlevel_back == None
+                    self.auto_zoomlevel_back is None
                     and self.zoomlevel < self.auto_zoomlevel - delta
                 ):
                     self.auto_zoomlevel_back = self.zoomlevel
@@ -1071,7 +1063,7 @@ class MapWidget(BaseMapWidget):
                     # print("zoom in",  self.auto_zoomlevel_back, self.zoomlevel)
             else:
                 if (
-                    self.auto_zoomlevel_back != None
+                    self.auto_zoomlevel_back is not None
                     and self.zoomlevel == self.auto_zoomlevel - delta
                 ):
                     self.zoomlevel = self.auto_zoomlevel_back

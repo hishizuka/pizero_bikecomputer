@@ -1,5 +1,4 @@
 def crc16(data):
-    # if self.config.G_IS_DEBUG: print(data)
     crc = 0
     crc_table = [
         0x0000,

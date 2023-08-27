@@ -79,8 +79,8 @@ class ANT_Device_Light(ant_device.ANT_Device):
 
     def init_after_connect(self):
         if (
-            self.values["pre_lgt_state"] == None
-            and self.values["lgt_state"] == None
+            self.values["pre_lgt_state"] is None
+            and self.values["lgt_state"] is None
             and self.ant_state in ["connect_ant_sensor"]
         ):
             self.send_connect_light()
@@ -91,7 +91,7 @@ class ANT_Device_Light(ant_device.ANT_Device):
             seq_no = data[4]
             # print("###", mode, self.values['lgt_state'], self.page_34_count, seq_no, (datetime.datetime.now() - self.values['last_changed_timestamp']).total_seconds())
             if (
-                self.values["lgt_state"] != None
+                self.values["lgt_state"] is not None
                 and seq_no != self.page_34_count
                 and (
                     datetime.datetime.now() - self.values["last_changed_timestamp"]
@@ -187,7 +187,7 @@ class ANT_Device_Light(ant_device.ANT_Device):
 
     def check_mode(self):
         if (
-            self.values["lgt_state"] != None
+            self.values["lgt_state"] is not None
             and self.values["lgt_state"] != self.values["pre_lgt_state"]
         ):
             print(

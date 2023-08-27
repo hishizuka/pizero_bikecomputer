@@ -72,12 +72,12 @@ class AccelerationGraphWidget(ScreenWidget):
                 all_nan[key] = False
         m = [x for x in v[0] if not np.isnan(x)]
         median = None
-        if len(m) > 0:
+        if len(m):
             median = m[-1]
 
         if not all_nan[X]:
             self.p1.clear()
-            if median != None:
+            if median is not None:
                 self.p1.setYRange(-self.g_range, self.g_range)
 
             self.p1.addItem(pg.PlotCurveItem(v[X], pen=self.pen1, connect="finite"))
@@ -85,7 +85,7 @@ class AccelerationGraphWidget(ScreenWidget):
         if not all_nan[Y]:
             self.p2.clear()
 
-            if median != None:
+            if median is not None:
                 self.p2.setYRange(-self.g_range, self.g_range)
 
             self.p2.setGeometry(self.p1.vb.sceneBoundingRect())
@@ -96,7 +96,7 @@ class AccelerationGraphWidget(ScreenWidget):
         if not all_nan[Z]:
             self.p3.clear()
 
-            if median != None:
+            if median is not None:
                 self.p3.setYRange(-self.g_range, self.g_range)
 
             self.p3.setGeometry(self.p1.vb.sceneBoundingRect())
@@ -161,7 +161,7 @@ class AltitudeGraphWidget(ScreenWidget):
                 all_nan[key] = False
         m = [x for x in v["altitude_graph"] if not np.isnan(x)]
         median = None
-        if len(m) > 0:
+        if len(m):
             median = m[-1]
 
         if not all_nan["altitude_graph"]:
@@ -176,7 +176,7 @@ class AltitudeGraphWidget(ScreenWidget):
                 self.y_range = 10 * (int(self.y_range / 10) + 1)
 
             self.p1.clear()
-            if median != None:
+            if median is not None:
                 self.p1.setYRange(median - self.y_range, median + self.y_range)
 
             self.p1.addItem(
@@ -186,7 +186,7 @@ class AltitudeGraphWidget(ScreenWidget):
         if not all_nan["altitude_gps_graph"]:
             self.p2.clear()
 
-            if median != None:
+            if median is not None:
                 self.p2.setYRange(
                     median - self.y_range + self.y_shift,
                     median + self.y_range + self.y_shift,

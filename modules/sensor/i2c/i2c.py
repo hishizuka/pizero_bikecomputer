@@ -1,7 +1,7 @@
-import smbus
 import time
 
 import numpy as np
+import smbus
 
 
 class i2c:
@@ -33,11 +33,11 @@ class i2c:
         self.init_sensor()
 
     @classmethod
-    def test(self):
+    def test(cls):
         try:
             bus = smbus.SMBus(1)
-            for v in self.TEST_VALUE:
-                if bus.read_byte_data(self.SENSOR_ADDRESS, self.TEST_ADDRESS) == v:
+            for v in cls.TEST_VALUE:
+                if bus.read_byte_data(cls.SENSOR_ADDRESS, cls.TEST_ADDRESS) == v:
                     return True
             return False
         except:

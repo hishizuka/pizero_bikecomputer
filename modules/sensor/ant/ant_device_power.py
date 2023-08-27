@@ -145,7 +145,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
                 values["cadence"] = cadence
                 if (
                     self.config.G_MANUAL_STATUS == "START"
-                    and values["on_data_timestamp"] != None
+                    and values["on_data_timestamp"] is not None
                 ):
                     # unit: j
                     values["accumulated_power"] += pwr * round(
@@ -164,7 +164,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
             else:
                 self.print_spike("Power(16)", pwr, values["power"], delta, delta_t)
         elif delta[0] == 0 and delta[1] == 0:
-            # if values['on_data_timestamp'] != None and delta_t >= self.stop_cutoff:
+            # if values['on_data_timestamp'] is not None and delta_t >= self.stop_cutoff:
             values["power"] = 0
             values["power_16_simple"] = 0
             values["cadence"] = 0
@@ -185,7 +185,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
         self.config.setting.set_config_pickle("ant+_power_values_16", power_values[1])
 
     def on_data_power_0x11(self, data, power_values, pre_values, values):
-        # (page), evt_count, wheel_ticks, x, wheel period(2byte), accumulatd power(2byte)
+        # (page), evt_count, wheel_ticks, x, wheel period(2byte), accumulated power(2byte)
         (
             power_values[2],
             power_values[3],
@@ -255,7 +255,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
             else:
                 self.print_spike("Speed(17)", spd, values["speed"], delta, delta_t)
         elif delta[0] == 0 and delta[1] == 0 and delta[2] == 0:
-            # if values['on_data_timestamp'] != None and delta_t >= self.stop_cutoff:
+            # if values['on_data_timestamp'] is not None and delta_t >= self.stop_cutoff:
             values["power"] = 0
             values["speed"] = 0
         else:

@@ -4,7 +4,7 @@ try:
     import PyQt6.QtCore as QtCore
     import PyQt6.QtGui as QtGui
     import PyQt6.QtWidgets as QtWidgets
-except:
+except ImportError:
     import PyQt5.QtCore as QtCore
     import PyQt5.QtGui as QtGui
     import PyQt5.QtWidgets as QtWidgets
@@ -45,10 +45,10 @@ class Item(QtWidgets.QVBoxLayout):
         self.addWidget(self.value)
 
         bottom_border_width = "1px"
-        if bottom_flag == True:
+        if bottom_flag:
             bottom_border_width = "0px"
         right_border_width = "1px"
-        if right_flag == True:
+        if right_flag:
             right_border_width = "0px"
 
         self.label.setStyleSheet(
@@ -73,7 +73,7 @@ class Item(QtWidgets.QVBoxLayout):
         self.update_value(np.nan)
 
     def update_value(self, value):
-        if value == None:
+        if value is None:
             self.value.setText("-")
         elif isinstance(value, str):
             self.value.setText(value)
