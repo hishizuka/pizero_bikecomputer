@@ -1,15 +1,7 @@
-try:
-    import PyQt6.QtCore as QtCore
-    import PyQt6.QtWidgets as QtWidgets
-    import PyQt6.QtGui as QtGui
-except ImportError:
-    import PyQt5.QtCore as QtCore
-    import PyQt5.QtWidgets as QtWidgets
-    import PyQt5.QtGui as QtGui
-
-from .pyqt_menu_widget import MenuWidget, ListWidget, ListItemWidget
 from logger import app_logger
+from modules._pyqt import QtCore, QtWidgets, QtGui
 import modules.pyqt.pyqt_multiscan_widget as pyqt_multiscan
+from .pyqt_menu_widget import MenuWidget, ListWidget, ListItemWidget
 
 
 class SensorMenuWidget(MenuWidget):

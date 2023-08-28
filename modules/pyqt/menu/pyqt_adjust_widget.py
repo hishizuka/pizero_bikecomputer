@@ -1,15 +1,5 @@
-try:
-    import PyQt6.QtCore as QtCore
-    import PyQt6.QtWidgets as QtWidgets
-    import PyQt6.QtGui as QtGui
-except ImportError:
-    import PyQt5.QtCore as QtCore
-    import PyQt5.QtWidgets as QtWidgets
-    import PyQt5.QtGui as QtGui
-
-from qasync import asyncSlot
-
 from logger import app_logger
+from modules._pyqt import QtWidgets, qasync
 from .pyqt_menu_widget import MenuWidget
 
 ##################################
@@ -89,7 +79,7 @@ class AdjustWidget(MenuWidget):
             self.display.setText("")
         self.display.setText(self.display.text() + str(digit_value))
 
-    @asyncSlot()
+    @qasync.asyncSlot()
     async def set_value(self):
         value = self.display.text()
         if value == "":

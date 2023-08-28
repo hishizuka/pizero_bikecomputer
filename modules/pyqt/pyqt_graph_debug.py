@@ -1,6 +1,6 @@
 import numpy as np
-import pyqtgraph as pg
 
+from modules._pyqt import pg
 from .pyqt_screen_widget import ScreenWidget
 
 pg.setConfigOptions(antialias=True)

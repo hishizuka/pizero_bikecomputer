@@ -1,15 +1,6 @@
 import numpy as np
 
-try:
-    import PyQt6.QtCore as QtCore
-    import PyQt6.QtWidgets as QtWidgets
-    import PyQt6.QtGui as QtGui
-except ImportError:
-    import PyQt5.QtCore as QtCore
-    import PyQt5.QtWidgets as QtWidgets
-    import PyQt5.QtGui as QtGui
-
-import pyqtgraph as pg
+from modules._pyqt import QtGui, pg
 
 pg.setConfigOptions(antialias=True)
 pg.setConfigOption("background", "w")

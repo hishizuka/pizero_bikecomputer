@@ -6,23 +6,10 @@ import signal
 import asyncio
 import numpy as np
 
-USE_PYQT6 = False
-try:
-    import PyQt6.QtCore as QtCore
-    import PyQt6.QtWidgets as QtWidgets
-    import PyQt6.QtGui as QtGui
-
-    USE_PYQT6 = True
-except ImportError:
-    import PyQt5.QtCore as QtCore
-    import PyQt5.QtWidgets as QtWidgets
-    import PyQt5.QtGui as QtGui
-
-import qasync
-
 from logger import app_logger
 from modules.gui_config import GUI_Config
 from modules.pyqt.pyqt_style import PyQtStyle
+from modules._pyqt import USE_PYQT6, QtCore, QtWidgets, QtGui, qasync
 from modules.utils.timer import Timer, log_timers
 
 

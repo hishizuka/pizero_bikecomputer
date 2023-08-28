@@ -1,14 +1,4 @@
-try:
-    import PyQt6.QtCore as QtCore
-    import PyQt6.QtWidgets as QtWidgets
-    import PyQt6.QtGui as QtGui
-except ImportError:
-    import PyQt5.QtCore as QtCore
-    import PyQt5.QtWidgets as QtWidgets
-    import PyQt5.QtGui as QtGui
-
-from qasync import asyncSlot
-
+from modules._pyqt import QtCore, QtWidgets, QtGui, qasync
 
 #################################
 # Menu
@@ -511,7 +501,7 @@ class ListWidget(MenuWidget):
         self.list.itemSelectionChanged.connect(self.changed_item)
         self.list.itemClicked.connect(self.button_func)
 
-    @asyncSlot()
+    @qasync.asyncSlot()
     async def button_func(self):
         await self.button_func_extra()
         self.back()
@@ -675,15 +665,15 @@ class UploadActivityMenuWidget(MenuWidget):
         )
         self.add_buttons(button_conf)
 
-    @asyncSlot()
+    @qasync.asyncSlot()
     async def strava_upload(self):
         await self.button["Strava"].run(self.config.network.api.strava_upload)
 
-    @asyncSlot()
+    @qasync.asyncSlot()
     async def garmin_upload(self):
         await self.button["Garmin"].run(self.config.network.api.garmin_upload)
 
-    @asyncSlot()
+    @qasync.asyncSlot()
     async def rwgps_upload(self):
         await self.button["Ride with GPS"].run(self.config.network.api.rwgps_upload)
 

@@ -1,15 +1,8 @@
 import time
 
-try:
-    import PyQt6.QtCore as QtCore
-    import PyQt6.QtGui as QtGui
-    import PyQt6.QtWidgets as QtWidgets
-except ImportError:
-    import PyQt5.QtCore as QtCore
-    import PyQt5.QtGui as QtGui
-    import PyQt5.QtWidgets as QtWidgets
-
 import numpy as np
+
+from modules._pyqt import QtWidgets
 
 
 #################################

@@ -1,17 +1,6 @@
 import numpy as np
 
-try:
-    import PyQt6.QtCore as QtCore
-    import PyQt6.QtWidgets as QtWidgets
-    import PyQt6.QtGui as QtGui
-except ImportError:
-    import PyQt5.QtCore as QtCore
-    import PyQt5.QtWidgets as QtWidgets
-    import PyQt5.QtGui as QtGui
-
-import pyqtgraph as pg
-from qasync import asyncSlot
-
+from modules._pyqt import QtCore, QtWidgets, pg, qasync
 from modules.pyqt.pyqt_screen_widget import ScreenWidget
 
 pg.setConfigOptions(antialias=True)
@@ -162,19 +151,19 @@ class BaseMapWidget(ScreenWidget):
             self.move_factor = 1.0
             self.move_adjust_mode = False
 
-    @asyncSlot()
+    @qasync.asyncSlot()
     async def move_x_plus(self):
         await self.move_x(+self.zoom / 2)
 
-    @asyncSlot()
+    @qasync.asyncSlot()
     async def move_x_minus(self):
         await self.move_x(-self.zoom / 2)
 
-    @asyncSlot()
+    @qasync.asyncSlot()
     async def move_y_plus(self):
         await self.move_y(+self.zoom / 2)
 
-    @asyncSlot()
+    @qasync.asyncSlot()
     async def move_y_minus(self):
         await self.move_y(-self.zoom / 2)
 
@@ -186,13 +175,13 @@ class BaseMapWidget(ScreenWidget):
         self.move_pos["y"] += delta
         await self.update_extra()
 
-    @asyncSlot()
+    @qasync.asyncSlot()
     async def zoom_plus(self):
         self.zoom /= 2
         self.zoomlevel += 1
         await self.update_extra()
 
-    @asyncSlot()
+    @qasync.asyncSlot()
     async def zoom_minus(self):
         self.zoom *= 2
         self.zoomlevel -= 1
