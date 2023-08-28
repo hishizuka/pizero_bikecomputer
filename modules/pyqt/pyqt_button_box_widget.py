@@ -41,7 +41,7 @@ class ButtonBoxWidget(QtWidgets.QWidget):
       self.icon_dir = self.config.G_INSTALL_PATH 
     
     #self.start_button = QtWidgets.QPushButton(QtGui.QIcon(self.icon_dir+'img/next_white.png'),"")
-    self.start_button = QtWidgets.QPushButton(QtGui.QIcon(self.icon_dir+'img/pause_white.png'),"")
+    self.start_button = QtWidgets.QPushButton(QtGui.QIcon(self.icon_dir+'img/next_white.png'),"")
     self.lap_button = QtWidgets.QPushButton(QtGui.QIcon(self.icon_dir+'img/lap_white.png'),"")
     self.menu_button = QtWidgets.QPushButton(QtGui.QIcon(self.icon_dir+'img/menu.png'),"")
     self.scrollnext_button = QtWidgets.QPushButton(QtGui.QIcon(self.icon_dir+'img/forward_black.svg'),"")
@@ -112,7 +112,7 @@ class ButtonBoxWidget(QtWidgets.QWidget):
       self.config.logger.start_and_stop_manual()
 
   def change_start_stop_button(self, status):
-    icon = QtGui.QIcon(self.icon_dir+'img/pause_white.png')
+    icon = QtGui.QIcon(self.icon_dir+'img/next_white.png')
     if status == "START":
-      icon = QtGui.QIcon(self.icon_dir+'img/next_white.png')
+      icon = QtGui.QIcon(self.icon_dir+'img/pause_white.png')
     self.start_button.setIcon(icon)
