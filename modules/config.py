@@ -6,7 +6,6 @@ import logging
 import socket
 import asyncio
 import shutil
-import subprocess
 import traceback
 import math
 
@@ -27,6 +26,7 @@ except ImportError:
 from logger import CustomRotatingFileHandler, app_logger
 from modules.helper.setting import Setting
 from modules.button_config import Button_Config
+from modules.utils.cmd import exec_cmd, exec_cmd_return_value
 from modules.utils.timer import Timer
 
 
@@ -984,30 +984,6 @@ class Config:
     def change_mode(self):
         self.button_config.change_mode()
 
-    @staticmethod
-    def exec_cmd(cmd, cmd_print=True):
-        if cmd_print:
-            app_logger.info(cmd)
-        try:
-            subprocess.run(cmd)
-        except Exception:  # noqa
-            app_logger.exception(f"Failed executing {cmd}")
-
-    @staticmethod
-    def exec_cmd_return_value(cmd, cmd_print=True):
-        if cmd_print:
-            app_logger.info(cmd)
-        try:
-            p = subprocess.run(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            string = p.stdout.decode("utf8").strip()
-            return string
-        except Exception:  # noqa
-            app_logger.exception(f"Failed executing {cmd}")
-
     async def kill_tasks(self):
         tasks = asyncio.all_tasks()
         current_task = asyncio.current_task()
@@ -1051,33 +1027,33 @@ class Config:
     def poweroff(self):
         if self.G_IS_RASPI:
             cmd = ["sudo", "systemctl", "start", "pizero_bikecomputer_shutdown.service"]
-            self.exec_cmd(cmd)
+            exec_cmd(cmd)
 
     def reboot(self):
         if self.G_IS_RASPI:
             cmd = ["sudo", "reboot"]
-            self.exec_cmd(cmd)
+            exec_cmd(cmd)
 
     def hardware_wifi_bt_on(self):
         if self.G_IS_RASPI:
             cmd = [os.path.join(self.G_INSTALL_PATH, "scripts/comment_out.sh")]
-            self.exec_cmd(cmd)
+            exec_cmd(cmd)
 
     def hardware_wifi_bt_off(self):
         if self.G_IS_RASPI:
             cmd = [os.path.join(self.G_INSTALL_PATH, "scripts/uncomment.sh")]
-            self.exec_cmd(cmd)
+            exec_cmd(cmd)
 
     def update_application(self):
         if self.G_IS_RASPI:
             cmd = ["git", "pull", "origin", "master"]
-            self.exec_cmd(cmd)
+            exec_cmd(cmd)
             self.restart_application()
 
     def restart_application(self):
         if self.G_IS_RASPI:
             cmd = ["sudo", "systemctl", "restart", "pizero_bikecomputer.service"]
-            self.exec_cmd(cmd)
+            exec_cmd(cmd)
 
     def detect_network(self):
         try:
@@ -1092,14 +1068,12 @@ class Config:
 
     def get_wifi_bt_status(self):
         if not self.G_IS_RASPI:
-            return (False, False)
+            return False, False
 
         status = {"wlan": False, "bluetooth": False}
         try:
             # json option requires raspbian buster
-            raw_status = self.exec_cmd_return_value(
-                ["rfkill", "--json"], cmd_print=False
-            )
+            raw_status = exec_cmd_return_value(["rfkill", "--json"], cmd_print=False)
             json_status = json.loads(raw_status)
             for l in json_status[""]:
                 if "type" not in l or l["type"] not in ["wlan", "bluetooth"]:
@@ -1127,7 +1101,7 @@ class Config:
         }
         status = {}
         status["Wifi"], status["Bluetooth"] = self.get_wifi_bt_status()
-        self.exec_cmd(onoff_cmd[key][status[key]])
+        exec_cmd(onoff_cmd[key][status[key]])
 
     async def bluetooth_tethering(self, disconnect=False):
         if not self.G_IS_RASPI:

@@ -1,3 +1,4 @@
+from modules.utils.cmd import exec_cmd
 from logger import app_logger
 
 _SENSOR_DISPLAY = True
@@ -42,6 +43,6 @@ class PiTFT28r:
 
     def change_brightness(self):
         if _SENSOR_DISPLAY:
-            self.brightness_index = not (self.brightness_index)
+            self.brightness_index = not self.brightness_index
             cmd = self.brightness_cmd[int(self.brightness_index)]
-            self.config.exec_cmd(cmd)
+            exec_cmd(cmd)

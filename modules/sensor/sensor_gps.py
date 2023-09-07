@@ -4,6 +4,7 @@ import asyncio
 import re
 import numpy as np
 
+from modules.utils.cmd import exec_cmd, exec_cmd_return_value
 from logger import app_logger
 from .sensor import Sensor
 
@@ -594,7 +595,7 @@ class SensorGPS(Sensor):
         if np.isnan(lat) or np.isnan(lon):
             return False
         tzcmd = ["python3", "./scripts/set_timezone.py", str(lat), str(lon)]
-        self.config.G_TIMEZONE = self.config.exec_cmd_return_value(tzcmd)
+        self.config.G_TIMEZONE = exec_cmd_return_value(tzcmd)
         return True
 
     def get_utc_time_from_datetime(self, gps_time):
@@ -625,7 +626,7 @@ class SensorGPS(Sensor):
         l_time = parser.parse(self.values["time"])
         # kernel version date
         kernel_date = datetime.datetime(2019, 1, 1, 0, 0, 0, 0, tz.tzutc())
-        kernel_date_str = self.config.exec_cmd_return_value(["uname", "-v"])
+        kernel_date_str = exec_cmd_return_value(["uname", "-v"])
         # "#1253 Thu Aug 15 11:37:30 BST 2019"
         if len(kernel_date_str) >= 34:
             m = re.search(r"^.+(\w{3}) (\d+).+(\d{4})$", kernel_date_str)
@@ -637,7 +638,7 @@ class SensorGPS(Sensor):
         if l_time < kernel_date:
             return False
         datecmd = ["sudo", "date", "-u", "--set", l_time.strftime("%Y/%m/%d %H:%M:%S")]
-        self.config.exec_cmd(datecmd)
+        exec_cmd(datecmd)
         return True
 
     def get_course_index(self):

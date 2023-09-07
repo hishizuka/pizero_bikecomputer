@@ -10,6 +10,7 @@ import traceback
 import numpy as np
 from crdp import rdp
 
+from modules.utils.cmd import exec_cmd
 from logger import app_logger
 
 
@@ -166,7 +167,7 @@ class LoggerCore:
                     "--set",
                     utctime.strftime("%Y/%m/%d %H:%M:%S"),
                 ]
-                self.config.exec_cmd(datecmd)
+                exec_cmd(datecmd)
 
     async def quit(self):
         await self.sensor.quit()
