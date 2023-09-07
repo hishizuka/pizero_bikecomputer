@@ -25,12 +25,6 @@ class Setting:
         self.config = config
         self.config_parser = configparser.ConfigParser()
 
-        if self.config.G_IS_RASPI:
-            self.config_file = self.config.G_INSTALL_PATH + self.config_file
-            self.config_pickle_file = (
-                self.config.G_INSTALL_PATH + self.config_pickle_file
-            )
-
     def read(self):
         if os.path.exists(self.config_file):
             self.read_config()

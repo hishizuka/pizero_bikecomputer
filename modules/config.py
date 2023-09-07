@@ -78,9 +78,6 @@ class Config:
     G_UNIT_MODEL = ""
     G_UNIT_HARDWARE = ""
 
-    # install_dir
-    G_INSTALL_PATH = os.path.join(os.path.expanduser("~"), "pizero_bikecomputer")
-
     # layout def
     G_LAYOUT_FILE = "layout.yaml"
 
@@ -709,20 +706,6 @@ class Config:
         self.setting = Setting(self)
         self.setting.read()
 
-        # set dir
-        if self.G_IS_RASPI:
-            self.G_SCREENSHOT_DIR = os.path.join(
-                self.G_INSTALL_PATH, self.G_SCREENSHOT_DIR
-            )
-            self.G_LOG_DIR = os.path.join(self.G_INSTALL_PATH, self.G_LOG_DIR)
-            self.G_LOG_DB = os.path.join(self.G_INSTALL_PATH, self.G_LOG_DB)
-            self.G_LOG_DEBUG_FILE = os.path.join(self.G_INSTALL_PATH, self.G_LOG_DEBUG_FILE)
-            self.G_LAYOUT_FILE = os.path.join(self.G_INSTALL_PATH, self.G_LAYOUT_FILE)
-            self.G_COURSE_DIR = os.path.join(self.G_INSTALL_PATH, self.G_COURSE_DIR)
-            self.G_COURSE_FILE_PATH = os.path.join(
-                self.G_INSTALL_PATH, self.G_COURSE_FILE_PATH
-            )
-
         # make sure all folders exist
         os.makedirs(self.G_SCREENSHOT_DIR, exist_ok=True)
         os.makedirs(self.G_LOG_DIR, exist_ok=True)
@@ -738,11 +721,6 @@ class Config:
         # layout file
         if not os.path.exists(self.G_LAYOUT_FILE):
             default_layout_file = os.path.join("layouts", "layout-cycling.yaml")
-            if self.G_IS_RASPI:
-                default_layout_file = os.path.join(
-                    self.G_INSTALL_PATH, default_layout_file
-                )
-
             shutil.copy(default_layout_file, self.G_LAYOUT_FILE)
 
         # font file
@@ -1026,34 +1004,30 @@ class Config:
 
     def poweroff(self):
         if self.G_IS_RASPI:
-            cmd = ["sudo", "systemctl", "start", "pizero_bikecomputer_shutdown.service"]
-            exec_cmd(cmd)
+            exec_cmd(
+                ["sudo", "systemctl", "start", "pizero_bikecomputer_shutdown.service"]
+            )
 
     def reboot(self):
         if self.G_IS_RASPI:
-            cmd = ["sudo", "reboot"]
-            exec_cmd(cmd)
+            exec_cmd(["sudo", "reboot"])
 
     def hardware_wifi_bt_on(self):
         if self.G_IS_RASPI:
-            cmd = [os.path.join(self.G_INSTALL_PATH, "scripts/comment_out.sh")]
-            exec_cmd(cmd)
+            exec_cmd(["scripts/comment_out.sh"])
 
     def hardware_wifi_bt_off(self):
         if self.G_IS_RASPI:
-            cmd = [os.path.join(self.G_INSTALL_PATH, "scripts/uncomment.sh")]
-            exec_cmd(cmd)
+            exec_cmd(["scripts/uncomment.sh"])
 
     def update_application(self):
         if self.G_IS_RASPI:
-            cmd = ["git", "pull", "origin", "master"]
-            exec_cmd(cmd)
+            exec_cmd(["git", "pull", "origin", "master"])
             self.restart_application()
 
     def restart_application(self):
         if self.G_IS_RASPI:
-            cmd = ["sudo", "systemctl", "restart", "pizero_bikecomputer.service"]
-            exec_cmd(cmd)
+            exec_cmd(["sudo", "systemctl", "restart", "pizero_bikecomputer"])
 
     def detect_network(self):
         try:
@@ -1082,7 +1056,7 @@ class Config:
                     status[l["type"]] = True
         except:
             pass
-        return (status["wlan"], status["bluetooth"])
+        return status["wlan"], status["bluetooth"]
 
     def onoff_wifi_bt(self, key=None):
         # in the future, manage with pycomman

@@ -26,21 +26,14 @@ class ButtonBoxWidget(QtWidgets.QWidget):
         self.show()
         self.setAutoFillBackground(True)
 
-        self.start_button = QtWidgets.QPushButton(
-            QtGui.QIcon(self.config.gui.gui_config.icon_dir + "img/next_white.png"), ""
-        )
-        self.lap_button = QtWidgets.QPushButton(
-            QtGui.QIcon(self.config.gui.gui_config.icon_dir + "img/lap_white.png"), ""
-        )
-        self.menu_button = QtWidgets.QPushButton(
-            QtGui.QIcon(self.config.gui.gui_config.icon_dir + "img/menu.png"), ""
-        )
+        self.start_button = QtWidgets.QPushButton(QtGui.QIcon("img/next_white.png"), "")
+        self.lap_button = QtWidgets.QPushButton(QtGui.QIcon("img/lap_white.png"), "")
+        self.menu_button = QtWidgets.QPushButton(QtGui.QIcon("img/menu.png"), "")
         self.scrollnext_button = QtWidgets.QPushButton(
-            QtGui.QIcon(self.config.gui.gui_config.icon_dir + "img/forward_black.svg"),
-            "",
+            QtGui.QIcon("img/forward_black.svg"), ""
         )
         self.scrollprev_button = QtWidgets.QPushButton(
-            QtGui.QIcon(self.config.gui.gui_config.icon_dir + "img/back_black.svg"), ""
+            QtGui.QIcon("img/back_black.svg"), ""
         )
 
         self.scrollprev_button.setFixedSize(60, 30)
@@ -124,9 +117,7 @@ class ButtonBoxWidget(QtWidgets.QWidget):
             self.config.logger.start_and_stop_manual()
 
     def change_start_stop_button(self, status):
-        icon = QtGui.QIcon(self.config.gui.gui_config.icon_dir + "img/next_white.png")
+        icon = QtGui.QIcon("img/next_white.png")
         if status == "START":
-            icon = QtGui.QIcon(
-                self.config.gui.gui_config.icon_dir + "img/pause_white.png"
-            )
+            icon = QtGui.QIcon("img/pause_white.png")
         self.start_button.setIcon(icon)
