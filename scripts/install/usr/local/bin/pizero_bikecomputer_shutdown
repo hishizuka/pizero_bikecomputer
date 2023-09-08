@@ -1,6 +1,0 @@
-#!/bin/sh
-
-/bin/systemctl stop pizero_bikecomputer.service
-
-/sbin/poweroff
-

@@ -26,7 +26,7 @@ except ImportError:
 from logger import CustomRotatingFileHandler, app_logger
 from modules.helper.setting import Setting
 from modules.button_config import Button_Config
-from modules.utils.cmd import exec_cmd, exec_cmd_return_value
+from modules.utils.cmd import exec_cmd, exec_cmd_return_value, is_running_as_service
 from modules.utils.timer import Timer
 
 
@@ -1003,10 +1003,17 @@ class Config:
             self.loop.close()
 
     def poweroff(self):
+        # TODO
+        #  should be replaced by quit() with power_off option
+        #  keep the logic for now but remove the shutdown service eg:
+        #  if we are running through a service, stop it and issue power-off command (on rasp-pi only)
+
+        # this returns 0 if active
+
+        if is_running_as_service():
+            exec_cmd(["sudo", "systemctl", "stop", "pizero_bikecomputer"])
         if self.G_IS_RASPI:
-            exec_cmd(
-                ["sudo", "systemctl", "start", "pizero_bikecomputer_shutdown.service"]
-            )
+            exec_cmd(["sudo", "poweroff"])
 
     def reboot(self):
         if self.G_IS_RASPI:
