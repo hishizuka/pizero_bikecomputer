@@ -35,17 +35,12 @@ class ButtonBoxWidget(QtWidgets.QWidget):
     self.setStyleSheet(self.config.gui.style.G_GUI_PYQT_button_box)
     self.show()
     self.setAutoFillBackground(True)
-
-    self.icon_dir = ""
-    if self.config.G_IS_RASPI:
-      self.icon_dir = self.config.G_INSTALL_PATH 
     
-    #self.start_button = QtWidgets.QPushButton(QtGui.QIcon(self.icon_dir+'img/next_white.png'),"")
-    self.start_button = QtWidgets.QPushButton(QtGui.QIcon(self.icon_dir+'img/next_white.png'),"")
-    self.lap_button = QtWidgets.QPushButton(QtGui.QIcon(self.icon_dir+'img/lap_white.png'),"")
-    self.menu_button = QtWidgets.QPushButton(QtGui.QIcon(self.icon_dir+'img/menu.png'),"")
-    self.scrollnext_button = QtWidgets.QPushButton(QtGui.QIcon(self.icon_dir+'img/forward_black.svg'),"")
-    self.scrollprev_button = QtWidgets.QPushButton(QtGui.QIcon(self.icon_dir+'img/back_black.svg'),"")
+    self.start_button = QtWidgets.QPushButton(QtGui.QIcon(self.config.gui.gui_config.icon_dir+'img/next_white.png'),"")
+    self.lap_button = QtWidgets.QPushButton(QtGui.QIcon(self.config.gui.gui_config.icon_dir+'img/lap_white.png'),"")
+    self.menu_button = QtWidgets.QPushButton(QtGui.QIcon(self.config.gui.gui_config.icon_dir+'img/menu.png'),"")
+    self.scrollnext_button = QtWidgets.QPushButton(QtGui.QIcon(self.config.gui.gui_config.icon_dir+'img/forward_black.svg'),"")
+    self.scrollprev_button = QtWidgets.QPushButton(QtGui.QIcon(self.config.gui.gui_config.icon_dir+'img/back_black.svg'),"")
 
     self.scrollprev_button.setFixedSize(60,30)
     self.lap_button.setFixedSize(50,30)
@@ -112,7 +107,7 @@ class ButtonBoxWidget(QtWidgets.QWidget):
       self.config.logger.start_and_stop_manual()
 
   def change_start_stop_button(self, status):
-    icon = QtGui.QIcon(self.icon_dir+'img/next_white.png')
+    icon = QtGui.QIcon(self.config.gui.gui_config.icon_dir+'img/next_white.png')
     if status == "START":
-      icon = QtGui.QIcon(self.icon_dir+'img/pause_white.png')
+      icon = QtGui.QIcon(self.config.gui.gui_config.icon_dir+'img/pause_white.png')
     self.start_button.setIcon(icon)

@@ -104,11 +104,11 @@ class GadgetbridgeService(Service):
       if 't' in message and message['t'] == 'notify' and 'title' in message and 'body' in message:
         self.config.gui.show_message(message['title'], message['body'], limit_length=True)
         print("success: ", message)
-      elif 't' in message and message['t'] == 'find' and 'n' in message and message['n']:
+      elif 't' in message and len(message['t']) >= 4 and message['t'][0:4] == 'find' and 'n' in message and message['n']:
         self.config.gui.show_dialog_ok_only(fn=None, title="Gadgetbridge")
       elif 't' in message and message['t'] == 'gps':
         asyncio.create_task(self.config.logger.sensor.sensor_gps.update_GB(message))
-
+        
       self.value_extend = False
 
   async def on_off_uart_service(self):
