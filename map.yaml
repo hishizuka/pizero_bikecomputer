@@ -10,15 +10,6 @@
 #  attribution: Map tiles by Stamen Design, under CC BY 3.0.<br />Data by OpenStreetMap, under ODbL
 #  tile_size: 512
 
-#wikimedia:
-#  url: https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png
-#  attribution: © OpenStreetMap contributors
-
-wikimedia_2x:
-  url: https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}@2x.png
-  attribution: © OpenStreetMap contributors
-  tile_size: 512
-
 openstreetmap:
   url: https://tile.openstreetmap.org/{z}/{x}/{y}.png
   attribution: © OpenStreetMap contributors
