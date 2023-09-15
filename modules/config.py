@@ -100,6 +100,8 @@ class Config():
   #G_CUESHEET_FILE = "course/cue_sheet.csv"
   G_CUESHEET_DISPLAY_NUM = 3 #max: 5
   G_CUESHEET_SCROLL = False
+  G_OBEXD_CMD = '/usr/libexec/bluetooth/obexd'
+  G_RECEIVE_COURSE_FILE = "bluetooth_content_share.html"
 
   #log setting
   G_LOG_DIR = "log/"
@@ -141,7 +143,14 @@ class Config():
     'wikimedia': {
       'url': "https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png",
       'attribution': '© OpenStreetMap contributors',
+      'referer': 'https://maps.wikimedia.org/',
       'tile_size': 256,
+    },
+    'wikimedia_2x': {
+      'url': "https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}@2x.png",
+      'attribution': '© OpenStreetMap contributors',
+      'referer': 'https://maps.wikimedia.org/',
+      'tile_size': 512,
     },
     #japanese tile
     'jpn_kokudo_chiri_in': {
@@ -559,12 +568,19 @@ class Config():
   G_GOOGLE_DIRECTION_API = {
     "TOKEN": "",
     "HAVE_API_TOKEN": False,
-    "URL": "https://maps.googleapis.com/maps/api/directions/json?units=metric&language=ja",
+    "URL": "https://maps.googleapis.com/maps/api/directions/json?units=metric",
     "API_MODE": {
       "bicycling": "mode=bicycling",
       "driving": "mode=driving&avoid=tolls|highways",
     },
     "API_MODE_SETTING": "bicycling",
+  }
+
+  G_MAPSTOGPX = {
+    "URL": "https://mapstogpx.com/load.php?d=default&elev=off&tmode=off&pttype=fixed&o=json&cmt=off&desc=off&descasname=off&w=on",
+    "HEADER": {'Referer': 'https://mapstogpx.com/index.php'},
+    "ROUTE_URL": "",
+    "TIMEOUT": 30
   }
 
   G_OPENWEATHERMAP_API = {
@@ -870,9 +886,7 @@ class Config():
       elif key == "b" and self.gui != None:
         self.gui.back_menu()
       elif key == "c" and self.gui != None:
-        self.gui.show_message("name","message")
-      elif key == "x" and self.gui != None:
-        self.gui.delete_popup()
+        self.gui.get_screenshot()
 
   def set_logger(self, logger):
     self.logger = logger
