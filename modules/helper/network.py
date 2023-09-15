@@ -23,9 +23,9 @@ class Network():
   async def quit(self):
     await self.download_queue.put(None)
 
-  async def get_json(self, url, params=None, headers=None):
+  async def get_json(self, url, params=None, headers=None, timeout=10):
      async with aiohttp.ClientSession() as session:
-       async with session.get(url, params=params, headers=headers, timeout=10) as res:
+       async with session.get(url, params=params, headers=headers, timeout=timeout) as res:
          json = await res.json()
          return json
 
