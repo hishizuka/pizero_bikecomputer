@@ -4,6 +4,7 @@ import random
 import time
 import datetime
 import socket
+import urllib.parse
 import asyncio
 import aiofiles
 
@@ -49,7 +50,7 @@ class api():
       self.course_send_status = "RESET"
       self.bt_cmd_lock = False
 
-  async def get_google_routes(self, x1, y1, x2, y2):
+  async def get_google_route(self, x1, y1, x2, y2):
 
     if not self.config.detect_network() or self.config.G_GOOGLE_DIRECTION_API["TOKEN"] == "":
       return None
@@ -58,16 +59,31 @@ class api():
       
     origin = "origin={},{}".format(y1,x1)
     destination = "destination={},{}".format(y2,x2)
-    url = "{}&{}&key={}&{}&{}".format(
+    language = "language={}".format(self.config.G_LANG)
+    url = "{}&{}&key={}&{}&{}&{}".format(
       self.config.G_GOOGLE_DIRECTION_API["URL"],
       self.config.G_GOOGLE_DIRECTION_API["API_MODE"][self.config.G_GOOGLE_DIRECTION_API["API_MODE_SETTING"]],
       self.config.G_GOOGLE_DIRECTION_API["TOKEN"],
       origin,
-      destination
+      destination,
+      language
     )
     #print(url)
     response = await self.config.network.get_json(url)
     #print(response)
+    return response
+
+  async def get_google_route_from_mapstogpx(self, url):
+    response = await self.config.network.get_json(
+      self.config.G_MAPSTOGPX["URL"]+'&lang={}&dtstr={}&gdata={}'.format(
+        self.config.G_LANG.lower(),
+        datetime.datetime.now().strftime('%Y%m%d_%H%M%S'), 
+        urllib.parse.quote(url, safe='')
+      ),
+      headers = self.config.G_MAPSTOGPX["HEADER"],
+      timeout = self.config.G_MAPSTOGPX["TIMEOUT"]
+    )
+    
     return response
 
   async def get_openweathermap_data(self, x, y):
@@ -83,9 +99,7 @@ class api():
       x,
       self.config.G_OPENWEATHERMAP_API["TOKEN"],
     )
-    #print(url)
     response = await self.config.network.get_json(url)
-    #print(response)
     return response
 
   async def get_ridewithgps_route(self, add=False, reset=False):
@@ -306,7 +320,7 @@ class api():
 
     for i in range(3):
       try:
-        garmin_api.upload_fit_activity(self.config.G_UPLOAD_FILE)
+        garmin_api.upload_activity(self.config.G_UPLOAD_FILE)
         end_status = True
         break
       except (
