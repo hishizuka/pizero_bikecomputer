@@ -870,6 +870,7 @@ class SensorI2C(Sensor):
       #t = datetime.datetime.now()
       if ('LPS3XHW_ORIG' in sp and sp['LPS3XHW_ORIG']) \
         or ('BMP280_ORIG' in sp and sp['BMP280_ORIG']) \
+        or ('BME280' in sp and sp['BME280']) \
         or ('BMP3XX' in sp and sp['BMP3XX']) \
         or ('MS5637' in sp and sp['MS5637']) \
         or ('BMP581' in sp and sp['BMP581']):
