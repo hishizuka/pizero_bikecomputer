@@ -206,6 +206,7 @@ class MapWidget(BaseMapWidget):
     self.layout.setColumnMinimumWidth(2, 40)
 
   def init_cuesheet_and_instruction(self):
+    #init cuesheet_widget
     if len(self.config.logger.course.point_name) > 0 and self.config.G_CUESHEET_DISPLAY_NUM > 0 and self.config.G_COURSE_INDEXING:
       if self.cuesheet_widget == None:
         self.cuesheet_widget = CueSheetWidget(self, self.config)
@@ -214,6 +215,7 @@ class MapWidget(BaseMapWidget):
       self.map_cuesheet_ratio = 1.0
       #self.layout.addWidget(self.cuesheet_widget, 0, 3, 4, 4)
 
+      #init instruction
       self.instruction = pg.TextItem(
         color=(0,0,0),
         anchor=(0.5,0.5),
@@ -504,6 +506,11 @@ class MapWidget(BaseMapWidget):
 
     if self.cuesheet_widget != None:
       self.cuesheet_widget.reset()
+  
+  def init_course(self):
+    self.init_cuesheet_and_instruction()
+    self.course_loaded = False
+    self.resizeEvent(None)
 
   @asyncSlot()
   async def search_route(self):
@@ -516,12 +523,7 @@ class MapWidget(BaseMapWidget):
       self.map_pos['x'],
       self.map_pos['y'],
     )
-    self.reinit_course()
-  
-  def reinit_course(self):
-    self.init_cuesheet_and_instruction()
-    self.course_loaded = False
-    self.resizeEvent(None)
+    self.init_course()
 
   async def draw_map_tile(self, x_start, x_end, y_start, y_end):
     

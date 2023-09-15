@@ -208,7 +208,7 @@ class GUI_PyQt(QtCore.QObject):
     from modules.pyqt.menu.pyqt_system_menu_widget import SystemMenuWidget, NetworkMenuWidget, BluetoothTetheringListWidget, DebugMenuWidget, DebugLogViewerWidget
     from modules.pyqt.menu.pyqt_profile_widget import ProfileWidget
     from modules.pyqt.menu.pyqt_sensor_menu_widget import SensorMenuWidget, ANTMenuWidget, ANTListWidget, ANTMultiScanScreenWidget
-    from modules.pyqt.menu.pyqt_course_menu_widget import CoursesMenuWidget, CourseListWidget, CourseDetailWidget, GoogleDirectionsAPISettingMenuWidget
+    from modules.pyqt.menu.pyqt_course_menu_widget import CoursesMenuWidget, CourseListWidget, CourseDetailWidget#, GoogleDirectionsAPISettingMenuWidget
     from modules.pyqt.menu.pyqt_map_menu_widget import MapMenuWidget, MapListWidget, MapOverlayMenuWidget, HeatmapListWidget, RainmapListWidget, WindmapListWidget
     from modules.pyqt.menu.pyqt_adjust_widget import AdjustAltitudeWidget, AdjustWheelCircumferenceWidget, AdjustCPWidget, AdjustWPrimeBalanceWidget
     from modules.pyqt.pyqt_cuesheet_widget import CueSheetWidget
@@ -260,7 +260,7 @@ class GUI_PyQt(QtCore.QObject):
       ("Map Overlay", MapOverlayMenuWidget),
       ("Select Map", MapListWidget),
       ("Map", MapMenuWidget),
-      ("Google Directions API mode", GoogleDirectionsAPISettingMenuWidget),
+      #("Google Directions API mode", GoogleDirectionsAPISettingMenuWidget),
       ("Course Detail", CourseDetailWidget),
       ("Courses List", CourseListWidget),
       ("Courses", CoursesMenuWidget),
@@ -360,12 +360,6 @@ class GUI_PyQt(QtCore.QObject):
     with self.config.loop:
       self.config.loop.run_forever()
       #loop is stopped
-
-      if not USE_PYQT6:
-        tasks = asyncio.all_tasks()
-        if len(tasks) > 0:
-          print("Remaining tasks:", asyncio.all_tasks())
-
     #loop is closed
   
   def add_font(self):
@@ -421,7 +415,7 @@ class GUI_PyQt(QtCore.QObject):
   
   def reset_count(self):
     self.logger.reset_count()
-    self.config.gui.map_widget.reset_track()
+    self.map_widget.reset_track()
  
   def press_key(self, key):
     e_press = QtGui.QKeyEvent(self.gui_config.key_press, key, self.gui_config.no_modifier, None)
@@ -490,10 +484,20 @@ class GUI_PyQt(QtCore.QObject):
 
   def map_method(self, mode):
     w = self.main_page.widget(self.main_page.currentIndex())
-    if w == self.config.gui.map_widget:
+    if w == self.map_widget:
       eval('w.signal_'+mode+'.emit()')
-    elif w == self.config.gui.course_profile_graph_widget:
+    elif w == self.course_profile_graph_widget:
       eval('w.signal_'+mode+'.emit()')
+  
+  def reset_course(self):
+    self.map_widget.reset_course()
+    if self.course_profile_graph_widget != None:
+      self.course_profile_graph_widget.reset_course()
+
+  def init_course(self):
+    self.map_widget.init_course()
+    if self.course_profile_graph_widget != None:
+      self.course_profile_graph_widget.init_course()
 
   def change_color_low(self):
     if self.config.G_DITHERING_CUTOFF_LOW_INDEX == len(self.config.G_DITHERING_CUTOFF['LOW']) - 1:
@@ -504,7 +508,6 @@ class GUI_PyQt(QtCore.QObject):
     print("LOW:", self.config.G_DITHERING_CUTOFF['LOW'][self.config.G_DITHERING_CUTOFF_LOW_INDEX])
 
   def change_color_high(self):
-    
     if self.config.G_DITHERING_CUTOFF_HIGH_INDEX == len(self.config.G_DITHERING_CUTOFF['HIGH']) - 1:
       self.config.G_DITHERING_CUTOFF_HIGH_INDEX = 0
     else:
@@ -628,7 +631,13 @@ class GUI_PyQt(QtCore.QObject):
         m = m[0:w_m] + "..."
     asyncio.create_task(self.msg_queue.put({'title':t, 'message':m, 'button_num':1, 'position':self.gui_config.align_bottom, 'text_align':self.gui_config.align_left}))
     #await self.config.logger.sensor.sensor_i2c.led_blink(5)
-  
+
+  def show_forced_message(self, msg):
+    if self.dialog_exists():
+      self.change_dialog(title=msg, button_label='OK')
+    else:
+      self.show_dialog_ok_only(None, msg)
+
   def show_navi_internal(self, title, title_icon=None):
     #self.show_dialog_base(title=title, title_icon=title_icon, button_num=0, position=self.gui_config.align_bottom)
     pass
@@ -637,7 +646,10 @@ class GUI_PyQt(QtCore.QObject):
     asyncio.create_task(self.msg_queue.put({'fn':fn, 'title':title, 'button_num':2}))
   
   def show_dialog_ok_only(self, fn, title):
-    asyncio.create_task(self.msg_queue.put({'fn':fn, 'title':title, 'button_num':1}))
+    asyncio.create_task(self.msg_queue.put({'fn':fn, 'title':title, 'button_num':1, 'button_label':['OK']}))
+  
+  def show_dialog_cancel_only(self, fn, title):
+    asyncio.create_task(self.msg_queue.put({'fn':fn, 'title':title, 'button_num':1, 'button_label':['Cancel']}))
 
   async def show_dialog_base(self, msg):
 
@@ -647,7 +659,8 @@ class GUI_PyQt(QtCore.QObject):
     title = msg.get("title")
     title_icon = msg.get("title_icon")
     message = msg.get("message")
-    button_num = msg.get("button_num", 0) #0: none, 1: OK, 2: OK/Cancel
+    button_num = msg.get("button_num", 0) #0: none, 1: OK, 2: OK+Cancel
+    button_label = msg.get("button_label", None) #button label for button_num = 1
     timeout = msg.get("timeout", 5)
     position = msg.get("position", self.gui_config.align_center)
     text_align = msg.get("text_align", self.gui_config.align_center)
@@ -690,7 +703,7 @@ class GUI_PyQt(QtCore.QObject):
     self.stack_widget.layout().setStackingMode(self.gui_config.stackingmode_stackall)
     
     background = QtWidgets.QWidget(parent=self.stack_widget, objectName="background")
-    background.setStyleSheet(self.config.gui.style.G_GUI_PYQT_dialog)
+    background.setStyleSheet(self.style.G_GUI_PYQT_dialog)
     background.back = back
     back_layout = QtWidgets.QVBoxLayout(background)
     container = Container(background)
@@ -706,7 +719,7 @@ class GUI_PyQt(QtCore.QObject):
     font = self.main_window.font()
     fontsize = font.pointSize()
     font.setPointSize(int(fontsize * 2))
-    title_label = QtWidgets.QLabel(title, font=font)
+    title_label = QtWidgets.QLabel(title, font=font, objectName="title_label")
     #title_label = MarqueeLabel(config=self.config)
     title_label.setWordWrap(True)
     title_label.setText(title)
@@ -751,7 +764,8 @@ class GUI_PyQt(QtCore.QObject):
     elif button_num > 0:
       button_widget = QtWidgets.QWidget(container)
       button_layout = QtWidgets.QHBoxLayout(button_widget)
-      button_label = ['OK', 'Cancel']
+      if not button_label:
+        button_label = ['OK', 'Cancel']
       buttons = []
 
       for i in range(button_num):
@@ -778,6 +792,19 @@ class GUI_PyQt(QtCore.QObject):
 
     self.main_window.centralWidget().addWidget(background)
     self.main_window.centralWidget().setCurrentWidget(background)
+
+  def change_dialog(self, title=None, button_label=None):
+    if title:
+      title_label = self.main_window.centralWidget().currentWidget().findChild(QtWidgets.QLabel, "title_label")
+      if title_label:
+        title_label.setText(title)
+    if button_label:
+      button = self.main_window.centralWidget().currentWidget().findChild(QtWidgets.QPushButton)
+      if button:
+        button.setText(button_label)
+  
+  def dialog_exists(self):
+    return self.main_window.centralWidget().currentWidget().objectName() == "background"
 
   def close_dialog(self, index):
     self.stack_widget.layout().setStackingMode(self.gui_config.stackingmode_stackone)

@@ -66,7 +66,7 @@ Install in the home directory of default user "pi". Also, your Raspberry Pi is c
 ```
 $ cd
 $ git clone https://github.com/hishizuka/pizero_bikecomputer.git
-$ sudo apt-get install python3-pip cython3 cmake gawk python3-numpy python3-pyqt5 python3-pyqtgraph sqlite3 libsqlite3-dev libatlas-base-dev python3-aiohttp python3-aiofiles wiringpi python3-smbus python3-rpi.gpio python3-psutil python3-pil
+$ sudo apt-get install python3-pip cython3 cmake gawk python3-numpy python3-pyqt5 python3-pyqtgraph sqlite3 libsqlite3-dev libatlas-base-dev python3-aiohttp python3-aiofiles wiringpi python3-smbus python3-rpi.gpio python3-psutil python3-pil bluez-obexd dbus-x11
 $ sudo pip3 install oyaml sip polyline garminconnect stravacookies qasync dbus-next bluez-peripheral tb-mqtt-client
 $ sudo pip3 install git+https://github.com/hishizuka/crdp.git
 $ cd pizero_bikecomputer
@@ -475,16 +475,21 @@ Right side
 
 ### Courses
 
-<img width="400" alt="menu-03-courses" src="https://user-images.githubusercontent.com/12926652/206076194-a0b3b356-fbda-4591-ba27-02701e461aaa.png">
+<img width="400" alt="menu-03-courses" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/35322fa8-e41e-4f8d-a922-fc86c8481cf5">
+
 
 - Local Storage
   - Select course .tcx file in `courses` folder.
 - Ride sith GPS
   - If you set token in setting.conf, select course from Ride with GPS. Internet access is required. Sample image are shown as belows.
-- Google Directions API mode
-  - If you set token in [GOOGLE_DIRECTION_API section](#google_direction_api-section) of setting.conf, select route type: Car or Bicycle.
+- Android Google Maps
+  - Receive routes from Google Maps on Android via Bluetooth. The result is parsed using [https://mapstogpx.com](https://mapstogpx.com).
+  - To use this feature, pair the device with an Android smartphone with obexd activated. `bluez-obexd` and `dbus-x11` packages are required to be installed in advance.
+    - `eval 'dbus-launch --auto-syntax' /usr/libexec/bluetooth/obexd -d -n -r /home/pi -l -a`
+  - If properly paired, Android Google Maps Directions route search results can be sent with 'Share Directions' > 'Bluetooth' > (your Raspberry Pi).
+    - <img width="320" alt="mapstogpx-01" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/928a8ed5-82e7-4ba2-afc7-6b68150d9043"> <img width="320" alt="mapstogpx-02" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/d6fbfb22-5c93-47e5-920f-8ef4fc9c02de">
 
-Load course with the right icon (>).
+Select 'Local Storage' or 'Ride sith GPS' to load a course from the list.
  
 <img width="400" alt="RidewithGPS-01" src="https://user-images.githubusercontent.com/12926652/206076210-9c50f789-bac3-4bd0-8209-9dea3a61a132.png"> <img width="400" alt="RidewithGPS-02" src="https://user-images.githubusercontent.com/12926652/206076212-8696ac34-c9e6-485f-b1ba-687c0d2a0061.png">
 

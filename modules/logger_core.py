@@ -416,9 +416,13 @@ class LoggerCore():
         self.average[k1][k2]["count"] = 0
         self.average[k1][k2]["sum"] = 0
 
-  def reset_course(self, delete_course=False, replace=False):
-    self.course.reset(delete_course=delete_course, replace=replace)
+  def reset_course(self, delete_course_file=False, replace=False):
+    self.config.gui.reset_course()
+    self.course.reset(delete_course_file=delete_course_file, replace=replace)
     self.sensor.sensor_gps.reset_course_index()
+  
+  def set_new_course(self, course_file):
+    self.course.set_course(course_file)
 
   async def record_log(self):
     #need to detect location delta for smart recording

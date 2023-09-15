@@ -7,6 +7,8 @@ except:
   import PyQt5.QtWidgets as QtWidgets
   import PyQt5.QtGui as QtGui
 
+import os
+import shutil
 import asyncio
 from qasync import asyncSlot
 
@@ -21,21 +23,25 @@ class CoursesMenuWidget(MenuWidget):
       #Name(page_name), button_attribute, connected functions, layout
       ('Local Storage', 'submenu', self.load_local_course),
       ('Ride with GPS', 'submenu', self.load_rwgps_course, "./img/rwgps_logo.svg", QtCore.QSize(self.logo_size*4, self.logo_size)),
-      ('Google Directions API mode', 'submenu', self.google_directions_api_setting_menu),
+      ('Android Google Maps', None, self.receive_route),
+      #('Google Directions API mode', 'submenu', self.google_directions_api_setting_menu),
       ('Cancel Course', 'dialog', lambda: self.config.gui.show_dialog(self.cancel_course, 'Cancel Course'))
     )
     self.add_buttons(button_conf, back_connect=False)
 
-    if not self.config.G_GOOGLE_DIRECTION_API["HAVE_API_TOKEN"]:
-      self.button['Google Directions API mode'].disable()
+    #if not self.config.G_GOOGLE_DIRECTION_API["HAVE_API_TOKEN"]:
+    #  self.button['Google Directions API mode'].disable()
+    
+    if not self.config.G_IS_RASPI or not os.path.isfile(self.config.G_OBEXD_CMD):
+      self.button['Android Google Maps'].disable()
       
     #set back_index of child widget
     self.child_page_name = "Courses List"
     self.child_index = self.config.gui.gui_config.G_GUI_INDEX[self.child_page_name]
     self.parentWidget().widget(self.child_index).back_index_key = self.page_name
 
-    index = self.config.gui.gui_config.G_GUI_INDEX['Google Directions API mode']
-    self.parentWidget().widget(index).back_index_key = self.page_name
+    #index = self.config.gui.gui_config.G_GUI_INDEX['Google Directions API mode']
+    #self.parentWidget().widget(index).back_index_key = self.page_name
 
   def preprocess(self):
     self.onoff_course_cancel_button()
@@ -66,12 +72,86 @@ class CoursesMenuWidget(MenuWidget):
     self.button['Cancel Course'].setStyleSheet(self.config.gui.style.G_GUI_PYQT_buttonStyle_menu)
 
   def cancel_course(self, replace=False):
-    self.config.gui.map_widget.reset_course()
-    if self.config.gui.course_profile_graph_widget != None:
-      self.config.gui.course_profile_graph_widget.reset_course()
-    self.config.logger.reset_course(delete_course=True, replace=replace)
+    self.config.logger.reset_course(delete_course_file=True, replace=replace)
     self.onoff_course_cancel_button()
+  
+  @asyncSlot()
+  async def receive_route(self):
+    self.config.gui.show_dialog_cancel_only(self.cancel_receive_route, 'Share directions > Bluetooth...')
+    self.is_check_folder = True
+    self.status_receive = False
+    
+    self.proc_receive_route = await asyncio.create_subprocess_exec(
+      self.config.G_OBEXD_CMD, '-d', '-n', '-r', self.config.G_COURSE_DIR, '-l', '-a',
+      stdout=asyncio.subprocess.PIPE,
+      stderr=asyncio.subprocess.PIPE
+    )
+   
+    filename_search_str = 'parse_name() NAME: '
+    filename = None
+    while True:
+      if self.proc_receive_route.stdout.at_eof() and self.proc_receive_route.stderr.at_eof():
+        break
+      
+      #obexd outputs logs to stderr
+      async for erdata in self.proc_receive_route.stderr:
+        if erdata:
+          res_str = str(erdata.decode())
+          if res_str.find('obex_session_start()') >= 0:
+            self.status_receive = True
+          elif res_str.find(filename_search_str) >= 0:
+            num_start = res_str.find(filename_search_str) + len(filename_search_str)
+            filename = res_str[num_start:].strip()
+          elif res_str.find('obex_session_destroy()') >= 0:
+            self.status_receive = False
+            await self.load_file(filename)
+            break
+    
+    stdout, stderr = await self.proc_receive_route.communicate()
+  
+  @asyncSlot()
+  async def cancel_receive_route(self):
+    self.is_check_folder = False
+    if self.proc_receive_route.returncode is None:
+      self.proc_receive_route.terminate()
 
+  async def load_file(self, filename):
+    #HTML from GoogleMap App
+    if filename == self.config.G_RECEIVE_COURSE_FILE:
+      await self.load_html_route(self.config.G_COURSE_DIR + self.config.G_RECEIVE_COURSE_FILE)
+      self.onoff_course_cancel_button()
+    #tcx file
+    elif filename.lower().find(".tcx") >= 0:
+      await self.load_tcx_route(filename)
+    await self.cancel_receive_route()
+
+  async def load_html_route(self, html_file):
+    self.config.gui.change_dialog(title='Loading route...', button_label='Return')
+    msg = ""
+    try:
+      self.cancel_course()
+      await self.config.logger.course.load_google_map_route(load_html=True, html_file=html_file)
+      msg = 'Loading succeeded!'
+    except asyncio.TimeoutError:
+      msg = 'Loading failed.'
+    except:
+      import traceback
+      traceback.print_exc()
+    finally:
+      self.config.gui.show_forced_message(msg)
+
+  async def load_tcx_route(self, filename):
+    self.cancel_course()
+    course_file = self.config.G_COURSE_DIR + filename[:filename.lower().find(".tcx")+4]
+    shutil.move(self.config.G_COURSE_DIR + filename, course_file)
+    self.set_new_course(course_file)
+    self.config.gui.show_forced_message('Loading succeeded!')
+
+  def set_new_course(self, course_file):
+    self.config.logger.set_new_course(course_file)
+    self.config.gui.init_course()
+    self.onoff_course_cancel_button()
+ 
 
 class CourseListWidget(ListWidget):
 
@@ -141,18 +221,11 @@ class CourseListWidget(ListWidget):
       self.config.gui.show_dialog(self.set_new_course, 'Set this course?')
 
   def cancel_and_set_new_course(self):
-    #cancel
     self.parentWidget().widget(self.config.gui.gui_config.G_GUI_INDEX[self.back_index_key]).cancel_course(replace=True)
-    #set_new_course
     self.set_new_course()
     
   def set_new_course(self):
-    self.config.logger.course.set_course(self.course_file)
-    self.config.gui.map_widget.reinit_course()
-    if self.config.gui.course_profile_graph_widget != None:
-      self.config.gui.course_profile_graph_widget.reinit_course()
-
-    self.parentWidget().widget(self.config.gui.gui_config.G_GUI_INDEX[self.back_index_key]).onoff_course_cancel_button()
+    self.parentWidget().widget(self.config.gui.gui_config.G_GUI_INDEX[self.back_index_key]).set_new_course(self.course_file)
     self.back()
 
 

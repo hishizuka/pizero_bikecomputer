@@ -45,11 +45,16 @@ class LoaderTcx():
   point_distance = np.array([])
   point_altitude = np.array([])
 
+  html_remove_pattern = [
+    re.compile(r'\<div.+?\<\/div\>'),
+    re.compile(r'\<.+?\>'),
+  ]
+
   def __init__(self, config):
     super().__init__()
     self.config = config
 
-  def reset(self, delete_course=False, replace=False):
+  def reset(self, delete_course_file=False, replace=False):
     
     #for course
     self.info = {}
@@ -75,7 +80,7 @@ class LoaderTcx():
     self.point_distance = np.array([])
     self.point_altitude = np.array([])
 
-    if delete_course:
+    if delete_course_file:
       if os.path.exists(self.config.G_COURSE_FILE_PATH):
         os.remove(self.config.G_COURSE_FILE_PATH)
       if not replace and self.config.G_THINGSBOARD_API['STATUS']:
@@ -118,11 +123,37 @@ class LoaderTcx():
     if self.config.G_THINGSBOARD_API['STATUS']:
       self.config.network.api.send_livetrack_course_load()
   
+  async def load_google_map_route(self, load_html=False, html_file=None):
+    self.reset()
+
+    if load_html:
+      with open(html_file, 'r', encoding='utf-8') as f:
+        s = f.read()
+      url_ptn = re.compile(r'\<a\ href\=\"https\:\/\/(.+?)\"\>')
+      res = url_ptn.search(s)
+      if res:
+        self.config.G_MAPSTOGPX["ROUTE_URL"] = res.groups(1)[0]
+      else:
+        return
+    
+    await self.get_google_route_from_mapstogpx(self.config.G_MAPSTOGPX["ROUTE_URL"])
+    self.downsample()
+    self.calc_slope_smoothing()
+    self.modify_course_points()
+
+    if self.config.G_THINGSBOARD_API['STATUS']:
+      self.config.network.api.send_livetrack_course_load()
+
+    self.config.gui.init_course()
+
   async def search_route(self, x1, y1, x2, y2):
     if np.any(np.isnan([x1, y1, x2, y2])):
       return
+
     self.reset()
+
     await self.get_google_route(x1, y1, x2, y2)
+    
     self.downsample()
     self.calc_slope_smoothing()
     self.modify_course_points()
@@ -256,9 +287,90 @@ class LoaderTcx():
       if len(self.point_notes) > 0:
         self.point_notes = list(np.array(self.point_notes)[not_straight_cond])
   
+  async def get_google_route_from_mapstogpx(self, url):
+
+    json_routes = await self.config.network.api.get_google_route_from_mapstogpx(url)
+
+    self.info['Name'] = "Google routes"
+    self.info['DistanceMeters'] = round(json_routes['totaldist']/1000,1)
+
+    self.latitude = np.array([p['lat'] for p in json_routes['points']])
+    self.longitude = np.array([p['lng'] for p in json_routes['points']])
+
+    self.point_name = []
+    self.point_latitude = []
+    self.point_longitude = []
+    self.point_distance = []
+    self.point_type = []
+    self.point_notes = []
+
+    self.point_distance.append(0)
+
+    cp = [p for p in json_routes['points'] if len(p) > 2]
+
+    cp_n = len(cp)-1
+    cp_i = -1
+    for p in cp:
+      cp_i += 1
+      #skip
+      if ('step' in p and p['step'] in ['straight', 'merge', 'keep']) \
+        or ('step' not in p and cp_i not in [0, cp_n]):
+        self.point_distance[-1] = round(p['dist']['total']/1000, 1)
+        continue
+
+      self.point_latitude.append(p['lat'])
+      self.point_longitude.append(p['lng'])
+
+      if 'dist' in p:
+        dist = round(p['dist']['total']/1000, 1)
+        self.point_distance.append(dist)
+
+      turn_str = ""
+      if 'step' in p:
+        turn_str = p['step']
+        if turn_str[-4:] == "left":
+          turn_str = "Left"
+        elif turn_str[-5:] == "right":
+          turn_str = "Right"
+      self.point_name.append(turn_str)
+      self.point_type.append(turn_str)
+
+      text = ""
+      if 'dir' in p:
+        text = self.remove_html_tag(p['dir'])
+      self.point_notes.append(text)
+    
+    self.point_name[0] = "Start"
+    self.point_name[-1] = "End"
+
+    #print(self.point_name)
+    #print(self.point_type)
+    #print(self.point_notes)
+    #print(self.point_distance)
+
+    self.point_latitude = np.array(self.point_latitude)
+    self.point_longitude = np.array(self.point_longitude)
+    self.point_distance = np.array(self.point_distance)
+
+    check_course = False
+    if not (len(self.latitude) == len(self.longitude)):
+      print("ERROR parse course")
+      check_course = True
+    
+    if check_course:
+      self.latitude = np.array([])
+      self.longitude = np.array([])
+      self.point_name = np.array([])
+      self.point_latitude = np.array([])
+      self.point_longitude = np.array([])
+      self.point_distance = np.array([])
+      self.point_type = np.array([])
+      self.point_notes = []
+      return
+    
   async def get_google_route(self, x1, y1, x2, y2):
-    json_routes = await self.config.network.api.get_google_routes(x1, y1, x2, y2)
-    print(json_routes)
+    json_routes = await self.config.network.api.get_google_route(x1, y1, x2, y2)
+    #print(json_routes)
     if not POLYLINE_DECODER or json_routes == None or json_routes["status"] != "OK":
       return
     
@@ -276,10 +388,7 @@ class LoaderTcx():
 
     dist = 0
     pre_dist = 0
-    pattern = {
-      "html_remove_1": re.compile(r'\/?\</?\w+\/?\>'),
-      "html_remove_2":re.compile(r'\<\S+\>'),
-    }
+
     for step in json_routes["routes"][0]["legs"][0]["steps"]:
       points_detail.extend(polyline.decode(step["polyline"]["points"]))
       dist += pre_dist
@@ -306,18 +415,21 @@ class LoaderTcx():
       self.point_latitude.append(step["start_location"]["lat"])
       self.point_longitude.append(step["start_location"]["lng"])
       self.point_distance.append(dist)
-      text = (re.subn(pattern["html_remove_1"],"", step["html_instructions"])[0]).replace(" ","").replace("&nbsp;", "")
-      text = re.subn(pattern["html_remove_2"],"",text)[0]
-      #self.point_name.append(text)
+      self.point_notes.append(self.remove_html_tag(step["html_instructions"]))
       self.point_name.append(turn_str)
     points_detail = np.array(points_detail)
-    #print(self.point_type)
 
     self.latitude = np.array(points_detail)[:,0]
     self.longitude = np.array(points_detail)[:,1]
     self.point_latitude = np.array(self.point_latitude)
     self.point_longitude = np.array(self.point_longitude)
     self.point_distance = np.array(self.point_distance)
+
+  def remove_html_tag(self, text):
+    res = text.replace("&nbsp;", "")
+    for r in self.html_remove_pattern:
+      res = re.subn(r, "", res)[0]
+    return res
 
   def downsample(self):
     len_lat = len(self.latitude)

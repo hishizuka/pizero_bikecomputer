@@ -6,22 +6,19 @@ An open-source bike computer based on  Raspberry Pi Zero (W, WH, 2 W) with GPS a
 https://github.com/hishizuka/pizero_bikecomputer
 
 # News
-
+- 2023/9/15 Add [receiving route from Android Google Maps](./doc/software_installation.md#courses) with Bluetooth File Transfer Protocol. So, install bluez-obexd and dbus-x11 package.
 - 2023/6/26 Replace hishizuka/pyqtgraph with original pyqtgraph. So uninstall and re-install pyqtgraph.
 - 2023/6/26 Add GadgetBridge documents in [software_installation.md](./doc/software_installation.md#network).
 - 2023/6/26 Add LiveTrack(ThingsBoard) documents in [software_installation.md](./doc/software_installation.md#live-track) and [thingsboard_setup.md](./doc/thingsboard_setup.md)
-- 2023/5/27 Please delete log/log.db (`rm log/log.db`) because column layouts is changed.
-- 2023/5/26 There are so many updates, so you might want to look over [software_installation.md](/doc/software_installation.md).
-- 2023/5/26 Install dbus-next and bluez-peripheral if you want to link your Android smartphone. [GadgetBridge](https://gadgetbridge.org) is also required, which can mirror Android notifications and get location without GPS modules.
-- 2023/5/26 Install tb-mqtt-client if you want to send to [ThingsBoard](https://thingsboard.io), which is an online dashboard. You can share your location in the map with your course or track.
 
 ```
+2023/9/15 update
+#For Android only
+$ sudo apt install bluez-obexd dbus-x11
+
 #2023/6/26 update
 $ sudo pip3 uninstall pyqtgraph
 $ sudo pip3 install pyqtgraph
-#2023/5/26 update
-$ sudo pip3 install dbus-next bluez-peripheral
-$ sudo pip3 install tb-mqtt-client
 ```
 
 
@@ -213,16 +210,16 @@ it displays three of the people around you in the order in which you caught sens
 
 # Comparison with other bike computers
 
-- 200km ride with Garmin Edge 830 and Pizero Bikecomputer ([strava activity](https://www.strava.com/activities/2834588492))
+- 314km ride with GARMIN Edge Explore 2 and Pizero Bikecomputer ([strava activity](https://www.strava.com/activities/9618771273))
 
-- ![title-03.png](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/100741/b355cb92-8e7f-6b3f-7cd0-98ba8803a56c.png)
+- ![2023_TOJ_compare](https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/9fa9a34f-b153-44a6-a718-30c61be84b41)
 
 | Items | Edge830 | Pi Zero Bikecomputer |
 |:-:|:-:|:-:|
-| Distance | 193.8 km  | 194.3 km  |
-| Work |  3,896 kJ | 3,929 kJ  |
-| Moving time | 9:12 | 9:04  |
-| Total Ascent | 2,496 m | 2,569 m |
+| Distance | 313.7 km  | 314.3 km  |
+| Work |  3,889 kJ | 3,926 kJ  |
+| Moving time | 12:03 | 12:04  |
+| Total Ascent | 2,271 m | 1,958 m |
 
 # Hardware Installation
 

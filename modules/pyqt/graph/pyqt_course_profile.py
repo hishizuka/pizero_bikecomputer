@@ -121,7 +121,7 @@ class CourseProfileGraphWidget(BaseMapWidget):
         p = None
     self.plot.removeItem(self.current_point)
   
-  def reinit_course(self):
+  def init_course(self):
     self.course_loaded = False
     self.resizeEvent(None)
 

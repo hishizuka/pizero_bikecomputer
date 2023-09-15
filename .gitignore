@@ -3,6 +3,7 @@
 /screenshot/
 /maptile/*
 /course/ridewithgps/*
+/course/*html*
 /.idea/
 /.vscode/
 /.venv/
