@@ -11,175 +11,183 @@ import numpy as np
 from crdp import rdp
 
 
-class LoggerCore():
-  
-  config = None
-  sensor = None
+class LoggerCore:
+    config = None
+    sensor = None
 
-  #for db
-  con = None
-  cur = None
-  lock = None
-  event = None
+    # for db
+    con = None
+    cur = None
+    lock = None
+    event = None
 
-  #for timer
-  values = {
-    "count": 0,
-    "count_lap": 0,
-    "lap": 0,
-    "elapsed_time": 0, #[s]
-    "start_time": None, 
-    "gross_ave_spd": 0, #[km/h]
-    "gross_diff_time": "00:00", #"+-hh:mm" (string)
-  }
-  record_stats = {
-    "pre_lap_avg":{},
-    "lap_avg":{},
-    "entire_avg":{},
-    "pre_lap_max":{},
-    "lap_max":{},
-    "entire_max":{}
-  }
-  lap_keys = [
-    "heart_rate",
-    "cadence",
-    "distance",
-    "speed",
-    "power",
-    "accumulated_power",
-    "total_ascent",
-    "total_descent",
-  ]
-  #for power and cadence (including / not including zero)
-  average = {
-    "lap":{
-      "cadence":{"count":0,"sum":0},
-      "power":{"count":0,"sum":0}},
-    "entire":{
-      "cadence":{"count":0,"sum":0},
-      "power":{"count":0,"sum":0}}
-  }
+    # for timer
+    values = {
+        "count": 0,
+        "count_lap": 0,
+        "lap": 0,
+        "elapsed_time": 0,  # [s]
+        "start_time": None,
+        "gross_ave_spd": 0,  # [km/h]
+        "gross_diff_time": "00:00",  # "+-hh:mm" (string)
+    }
+    record_stats = {
+        "pre_lap_avg": {},
+        "lap_avg": {},
+        "entire_avg": {},
+        "pre_lap_max": {},
+        "lap_max": {},
+        "entire_max": {},
+    }
+    lap_keys = [
+        "heart_rate",
+        "cadence",
+        "distance",
+        "speed",
+        "power",
+        "accumulated_power",
+        "total_ascent",
+        "total_descent",
+    ]
+    # for power and cadence (including / not including zero)
+    average = {
+        "lap": {"cadence": {"count": 0, "sum": 0}, "power": {"count": 0, "sum": 0}},
+        "entire": {"cadence": {"count": 0, "sum": 0}, "power": {"count": 0, "sum": 0}},
+    }
 
-  #for update_track
-  pre_lat = None
-  pre_lon = None
-  
-  #for store_short_log_for_update_track
-  short_log_dist = []
-  short_log_lat = []
-  short_log_lon = []
-  short_log_timestamp = []
-  short_log_limit = 120
-  short_log_available = True
-  short_log_lock = False
+    # for update_track
+    pre_lat = None
+    pre_lon = None
 
-  #for debug
-  position_log = np.array([])
+    # for store_short_log_for_update_track
+    short_log_dist = []
+    short_log_lat = []
+    short_log_lon = []
+    short_log_timestamp = []
+    short_log_limit = 120
+    short_log_available = True
+    short_log_lock = False
 
-  resume_status = False
-  last_timestamp = None
+    # for debug
+    position_log = np.array([])
 
-  def __init__(self, config):
-    super().__init__()
-    self.config = config
-  
-  def start_coroutine(self):
-    self.sql_queue = asyncio.Queue()
-    asyncio.create_task(self.sql_worker())
-    try:
-      self.count_up_lock = False
-      self.config.loop.add_signal_handler(signal.SIGALRM, self.count_up)
-      signal.setitimer(signal.ITIMER_REAL, self.config.G_LOGGING_INTERVAL, self.config.G_LOGGING_INTERVAL)
-    except:
-      #for windows
-      traceback.print_exc()
-    
-  def delay_init(self):
-    from . import sensor_core
-    from .logger import loader_tcx
-    from .logger import logger_csv
-    from .logger import logger_fit
+    resume_status = False
+    last_timestamp = None
 
-    self.sensor = sensor_core.SensorCore(self.config)
-    self.course = loader_tcx.LoaderTcx(self.config)
-    self.logger_csv = logger_csv.LoggerCsv(self.config)
-    self.logger_fit = logger_fit.LoggerFit(self.config)
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
 
-    self.sensor.start_coroutine()
-    
-    self.course.load()
-    
-    for k in self.lap_keys:
-      self.record_stats['pre_lap_avg'][k] = 0
-      self.record_stats['lap_avg'][k] = 0
-      self.record_stats['entire_avg'][k] = 0
-      self.record_stats['pre_lap_max'][k] = 0
-      self.record_stats['lap_max'][k] = 0
-      self.record_stats['entire_max'][k] = 0
+    def start_coroutine(self):
+        self.sql_queue = asyncio.Queue()
+        asyncio.create_task(self.sql_worker())
+        try:
+            self.count_up_lock = False
+            self.config.loop.add_signal_handler(signal.SIGALRM, self.count_up)
+            signal.setitimer(
+                signal.ITIMER_REAL,
+                self.config.G_LOGGING_INTERVAL,
+                self.config.G_LOGGING_INTERVAL,
+            )
+        except:
+            # for windows
+            traceback.print_exc()
 
-    #sqlite3 
-    #usage of sqlite3 is "insert" only, so check_same_thread=False
-    self.con = sqlite3.connect(self.config.G_LOG_DB, check_same_thread=False)
-    self.cur = self.con.cursor()
-    self.init_db()
-    self.cur.execute("SELECT timestamp FROM BIKECOMPUTER_LOG LIMIT 1")
-    first_row = self.cur.fetchone()
-    if first_row == None:
-      self.reset() 
-    else:
-      self.resume()
-      self.resume_status = True
+    def delay_init(self):
+        from . import sensor_core
+        from .logger import loader_tcx
+        from .logger import logger_csv
+        from .logger import logger_fit
 
-  async def resume_start_stop(self):
-    if not self.resume_status:
-      return
+        self.sensor = sensor_core.SensorCore(self.config)
+        self.course = loader_tcx.LoaderTcx(self.config)
+        self.logger_csv = logger_csv.LoggerCsv(self.config)
+        self.logger_fit = logger_fit.LoggerFit(self.config)
 
-    #resume START/STOP status if temporary values exist
-    self.config.G_MANUAL_STATUS = \
-      self.config.setting.get_config_pickle("G_MANUAL_STATUS", self.config.G_MANUAL_STATUS)
-    if self.config.G_MANUAL_STATUS == "START":
-      #restore system time from self.last_timestamp or self.sensor.gps.get_utc_time(g.time)
-      self.config.G_MANUAL_STATUS = "STOP"
-      await self.restore_utc_time()
-      self.start_and_stop_manual()
-  
-  async def restore_utc_time(self):
-    #restore time from gps or last log(self.last_timestamp)
-    count = 0
-    count_max = 60
-    while not self.sensor.sensor_gps.is_time_modified and count < count_max:
-      await asyncio.sleep(1)
-      count += 1
+        self.sensor.start_coroutine()
 
-    if not self.sensor.sensor_gps.is_time_modified:
-      delta = count + int(self.config.boot_time * 1.25)
-      utctime = datetime.datetime.strptime(self.last_timestamp, '%Y-%m-%d %H:%M:%S.%f') + datetime.timedelta(seconds=delta)
-      if utctime > datetime.datetime.utcnow():
-        datecmd = ['sudo', 'date', '-u', '--set', utctime.strftime("%Y/%m/%d %H:%M:%S")]
-        self.config.exec_cmd(datecmd)
+        self.course.load()
 
-  async def quit(self):
-    await self.sensor.quit()
+        for k in self.lap_keys:
+            self.record_stats["pre_lap_avg"][k] = 0
+            self.record_stats["lap_avg"][k] = 0
+            self.record_stats["entire_avg"][k] = 0
+            self.record_stats["pre_lap_max"][k] = 0
+            self.record_stats["lap_max"][k] = 0
+            self.record_stats["entire_max"][k] = 0
 
-    await self.sql_queue.put(None)
-    await asyncio.sleep(0.1)
-    self.cur.close()
-    self.con.close()
+        # sqlite3
+        # usage of sqlite3 is "insert" only, so check_same_thread=False
+        self.con = sqlite3.connect(self.config.G_LOG_DB, check_same_thread=False)
+        self.cur = self.con.cursor()
+        self.init_db()
+        self.cur.execute("SELECT timestamp FROM BIKECOMPUTER_LOG LIMIT 1")
+        first_row = self.cur.fetchone()
+        if first_row == None:
+            self.reset()
+        else:
+            self.resume()
+            self.resume_status = True
 
-  def remove_handler(self):
-    self.config.loop.remove_signal_handler(signal.SIGALRM)
+    async def resume_start_stop(self):
+        if not self.resume_status:
+            return
 
-  async def sql_worker(self):
-    while True:
-      sql = await self.sql_queue.get()
-      if sql == None:
-        break
-      self.cur.execute(*sql)
-      self.con.commit()
-      self.sql_queue.task_done()
-  
-  def init_db(self):
-    self.create_table_sql = """CREATE TABLE BIKECOMPUTER_LOG(
+        # resume START/STOP status if temporary values exist
+        self.config.G_MANUAL_STATUS = self.config.setting.get_config_pickle(
+            "G_MANUAL_STATUS", self.config.G_MANUAL_STATUS
+        )
+        if self.config.G_MANUAL_STATUS == "START":
+            # restore system time from self.last_timestamp or self.sensor.gps.get_utc_time(g.time)
+            self.config.G_MANUAL_STATUS = "STOP"
+            await self.restore_utc_time()
+            self.start_and_stop_manual()
+
+    async def restore_utc_time(self):
+        # restore time from gps or last log(self.last_timestamp)
+        count = 0
+        count_max = 60
+        while not self.sensor.sensor_gps.is_time_modified and count < count_max:
+            await asyncio.sleep(1)
+            count += 1
+
+        if not self.sensor.sensor_gps.is_time_modified:
+            delta = count + int(self.config.boot_time * 1.25)
+            utctime = datetime.datetime.strptime(
+                self.last_timestamp, "%Y-%m-%d %H:%M:%S.%f"
+            ) + datetime.timedelta(seconds=delta)
+            if utctime > datetime.datetime.utcnow():
+                datecmd = [
+                    "sudo",
+                    "date",
+                    "-u",
+                    "--set",
+                    utctime.strftime("%Y/%m/%d %H:%M:%S"),
+                ]
+                self.config.exec_cmd(datecmd)
+
+    async def quit(self):
+        await self.sensor.quit()
+
+        await self.sql_queue.put(None)
+        await asyncio.sleep(0.1)
+        self.cur.close()
+        self.con.close()
+
+    def remove_handler(self):
+        self.config.loop.remove_signal_handler(signal.SIGALRM)
+
+    async def sql_worker(self):
+        while True:
+            sql = await self.sql_queue.get()
+            if sql == None:
+                break
+            self.cur.execute(*sql)
+            self.con.commit()
+            self.sql_queue.task_done()
+
+    def init_db(self):
+        self.create_table_sql = """CREATE TABLE BIKECOMPUTER_LOG(
       timestamp DATETIME,
       lap INTEGER, 
       timer INTEGER,
@@ -247,256 +255,306 @@ class LoggerCore():
       avg_power_count INTEGER,
       avg_power_sum INTEGER
     )"""
-    self.cur.execute("SELECT * FROM sqlite_master WHERE type='table' and name='BIKECOMPUTER_LOG'")
-    res = self.cur.fetchone()
-    replace_flg = False
-    if res != None and len(res) >= 5 and res[4] != self.create_table_sql:
-      log_db_moved = self.config.G_LOG_DB+"-old_layout"
-      self.cur.close()
-      self.con.close()
+        self.cur.execute(
+            "SELECT * FROM sqlite_master WHERE type='table' and name='BIKECOMPUTER_LOG'"
+        )
+        res = self.cur.fetchone()
+        replace_flg = False
+        if res != None and len(res) >= 5 and res[4] != self.create_table_sql:
+            log_db_moved = self.config.G_LOG_DB + "-old_layout"
+            self.cur.close()
+            self.con.close()
 
-      shutil.move(self.config.G_LOG_DB, log_db_moved)
-      print("The layout of {} is changed to {}".format(self.config.G_LOG_DB, log_db_moved))
-      
-      self.con = sqlite3.connect(self.config.G_LOG_DB, check_same_thread=False)
-      self.cur = self.con.cursor()
-      replace_flg = True
-    if res == None or replace_flg:
-      self.con.execute(self.create_table_sql)
-      self.cur.execute("CREATE INDEX lap_index ON BIKECOMPUTER_LOG(lap)")
-      self.cur.execute("CREATE INDEX total_timer_time_index ON BIKECOMPUTER_LOG(total_timer_time)")
-      self.cur.execute("CREATE INDEX timestamp_index ON BIKECOMPUTER_LOG(timestamp)")
-      self.con.commit()
-      
-  def count_up(self):
-    self.calc_gross()
-    if self.config.G_STOPWATCH_STATUS != "START" or self.count_up_lock:
-      return
-    self.count_up_lock = True
-    self.values['count'] += 1
-    self.values['count_lap'] += 1
-    asyncio.create_task(self.record_log())
-    self.count_up_lock = False
+            shutil.move(self.config.G_LOG_DB, log_db_moved)
+            print(
+                "The layout of {} is changed to {}".format(
+                    self.config.G_LOG_DB, log_db_moved
+                )
+            )
 
-  def start_and_stop_manual(self):
-    time_str = datetime.datetime.now().strftime("%Y%m%d %H:%M:%S")
-    popup_extra = ""
-    pre_status = self.config.G_MANUAL_STATUS
+            self.con = sqlite3.connect(self.config.G_LOG_DB, check_same_thread=False)
+            self.cur = self.con.cursor()
+            replace_flg = True
+        if res == None or replace_flg:
+            self.con.execute(self.create_table_sql)
+            self.cur.execute("CREATE INDEX lap_index ON BIKECOMPUTER_LOG(lap)")
+            self.cur.execute(
+                "CREATE INDEX total_timer_time_index ON BIKECOMPUTER_LOG(total_timer_time)"
+            )
+            self.cur.execute(
+                "CREATE INDEX timestamp_index ON BIKECOMPUTER_LOG(timestamp)"
+            )
+            self.con.commit()
 
-    if self.config.G_MANUAL_STATUS != "START":
-      self.config.display.screen_flash_short()
-      print("->M START {}".format(time_str))
-      self.start_and_stop("STOP")
-      self.config.G_MANUAL_STATUS = "START"
-      if self.config.gui != None:
-        self.config.gui.change_start_stop_button(self.config.G_MANUAL_STATUS)
-      if self.values['start_time'] == None:
-        self.values['start_time'] = int(datetime.datetime.utcnow().timestamp())
-      
-      if pre_status == "INIT" and not np.isnan(self.sensor.values['integrated']['dem_altitude']):
-        asyncio.create_task(self.sensor.sensor_i2c.update_sealevel_pa(self.sensor.values['integrated']['dem_altitude']))
-        popup_extra = "<br />altitude corrected: {}m".format(int(self.sensor.values['integrated']['dem_altitude']))
+    def count_up(self):
+        self.calc_gross()
+        if self.config.G_STOPWATCH_STATUS != "START" or self.count_up_lock:
+            return
+        self.count_up_lock = True
+        self.values["count"] += 1
+        self.values["count_lap"] += 1
+        asyncio.create_task(self.record_log())
+        self.count_up_lock = False
 
-    elif self.config.G_MANUAL_STATUS == "START":
-      self.config.display.screen_flash_long()
-      print("->M STOP  {}".format(time_str))
-      self.start_and_stop("START")
-      self.config.G_MANUAL_STATUS = "STOP"
-      if self.config.gui != None:
-        self.config.gui.change_start_stop_button(self.config.G_MANUAL_STATUS)
+    def start_and_stop_manual(self):
+        time_str = datetime.datetime.now().strftime("%Y%m%d %H:%M:%S")
+        popup_extra = ""
+        pre_status = self.config.G_MANUAL_STATUS
 
-    self.config.setting.set_config_pickle("G_MANUAL_STATUS", self.config.G_MANUAL_STATUS, quick_apply=True)
-    
-    #send online
-    if self.config.G_THINGSBOARD_API['STATUS']:
-      self.config.network.api.send_livetrack_data(quick_send=True)
-    
-    #show message
-    self.config.gui.show_popup(self.config.G_MANUAL_STATUS + popup_extra)
- 
-  def start_and_stop(self, status=None):
-    if status != None:
-      self.config.G_STOPWATCH_STATUS = status
-    time_str = datetime.datetime.now().strftime("%Y%m%d %H:%M:%S")
-    if self.config.G_STOPWATCH_STATUS != "START":
-      self.config.G_STOPWATCH_STATUS = "START"
-      print("->START   {}".format(time_str))
-    elif self.config.G_STOPWATCH_STATUS == "START":
-      self.config.G_STOPWATCH_STATUS = "STOP"
-      print("->STOP    {}".format(time_str))
-  
-  def count_laps(self):
-    if self.values['count'] == 0 or self.values['count_lap'] == 0: return
-    self.config.display.screen_flash_short()
-    lap_time = self.values['count_lap']
-    self.values['lap'] += 1
-    self.values['count_lap'] = 0
-    for k in self.lap_keys:
-      self.record_stats['pre_lap_avg'][k] = self.record_stats['lap_avg'][k]
-      self.record_stats['pre_lap_max'][k] = self.record_stats['lap_max'][k]
-      self.record_stats['lap_max'][k] = 0
-      self.record_stats['lap_avg'][k] = 0
-    for k2 in ["cadence","power"]:
-      self.average["lap"][k2]["count"] = 0
-      self.average["lap"][k2]["sum"] = 0
-    asyncio.create_task(self.record_log())
-    time_str = datetime.datetime.now().strftime("%Y%m%d %H:%M:%S")
-    print("->LAP:{}   {}".format(self.values['lap'], time_str))
+        if self.config.G_MANUAL_STATUS != "START":
+            self.config.display.screen_flash_short()
+            print("->M START {}".format(time_str))
+            self.start_and_stop("STOP")
+            self.config.G_MANUAL_STATUS = "START"
+            if self.config.gui != None:
+                self.config.gui.change_start_stop_button(self.config.G_MANUAL_STATUS)
+            if self.values["start_time"] == None:
+                self.values["start_time"] = int(datetime.datetime.utcnow().timestamp())
 
-    #show message
-    value_str = self.config.gui.gui_config.G_UNIT['Speed'] + ", " + self.config.gui.gui_config.G_UNIT['HeartRate'] + ", " + self.config.gui.gui_config.G_UNIT['Power']
-    hour_sec = divmod(lap_time, 3600)
-    min_sec = divmod(hour_sec[1], 60)
-    lap_time_str = "{:}:{:02}".format(hour_sec[0],min_sec[0])
-    self.config.gui.show_popup_multiline(
-      "LAP {} ({}km, {})".format(self.values['lap'], round(self.record_stats['pre_lap_avg']['distance']/1000,1), lap_time_str), 
-      value_str.format(self.record_stats['pre_lap_avg']['speed']*3.6, self.record_stats['pre_lap_avg']['heart_rate'], self.record_stats['pre_lap_avg']['power'])
-    )
+            if pre_status == "INIT" and not np.isnan(
+                self.sensor.values["integrated"]["dem_altitude"]
+            ):
+                asyncio.create_task(
+                    self.sensor.sensor_i2c.update_sealevel_pa(
+                        self.sensor.values["integrated"]["dem_altitude"]
+                    )
+                )
+                popup_extra = "<br />altitude corrected: {}m".format(
+                    int(self.sensor.values["integrated"]["dem_altitude"])
+                )
 
-  def reset_count(self):
-    if self.config.G_MANUAL_STATUS == "START" or self.values['count'] == 0:
-      return
-      
-    #reset
-    self.config.display.screen_flash_long()
+        elif self.config.G_MANUAL_STATUS == "START":
+            self.config.display.screen_flash_long()
+            print("->M STOP  {}".format(time_str))
+            self.start_and_stop("START")
+            self.config.G_MANUAL_STATUS = "STOP"
+            if self.config.gui != None:
+                self.config.gui.change_start_stop_button(self.config.G_MANUAL_STATUS)
 
-    #close db connect
-    self.cur.close()
-    self.con.close()
+        self.config.setting.set_config_pickle(
+            "G_MANUAL_STATUS", self.config.G_MANUAL_STATUS, quick_apply=True
+        )
 
-    if self.config.G_LOG_WRITE_CSV:
-      t = datetime.datetime.now()
-      if not self.logger_csv.write_log():
-        return
-      print("Write csv :", (datetime.datetime.now()-t).total_seconds(),"sec")
-    if self.config.G_LOG_WRITE_FIT:
-      t = datetime.datetime.now()
-      if not self.logger_fit.write_log():
-        return
-      print("Write Fit({}) : {} sec".format(self.logger_fit.mode,(datetime.datetime.now()-t).total_seconds()))
-    
-    # backup and reset database
-    t = datetime.datetime.now()
-    shutil.move(self.config.G_LOG_DB, self.config.G_LOG_DB+"-"+self.config.G_LOG_START_DATE)
-    
-    self.reset()
+        # send online
+        if self.config.G_THINGSBOARD_API["STATUS"]:
+            self.config.network.api.send_livetrack_data(quick_send=True)
 
-    #restart db connect
-    #usage of sqlite3 is "insert" only, so check_same_thread=False
-    self.con = sqlite3.connect(self.config.G_LOG_DB, check_same_thread=False)
-    self.cur = self.con.cursor()
-    self.init_db()
-    print("DELETE :", (datetime.datetime.now()-t).total_seconds(),"sec")
+        # show message
+        self.config.gui.show_popup(self.config.G_MANUAL_STATUS + popup_extra)
 
-    #reset temporary values
-    self.config.setting.reset_config_pickle()
-    
-    #reset accumulated values
-    self.sensor.reset()
+    def start_and_stop(self, status=None):
+        if status != None:
+            self.config.G_STOPWATCH_STATUS = status
+        time_str = datetime.datetime.now().strftime("%Y%m%d %H:%M:%S")
+        if self.config.G_STOPWATCH_STATUS != "START":
+            self.config.G_STOPWATCH_STATUS = "START"
+            print("->START   {}".format(time_str))
+        elif self.config.G_STOPWATCH_STATUS == "START":
+            self.config.G_STOPWATCH_STATUS = "STOP"
+            print("->STOP    {}".format(time_str))
 
-  def reset(self):
-    #clear lap
-    self.values['count'] = 0
-    self.values['count_lap'] = 0
-    self.values['lap'] = 0
-    self.values['elapsed_time'] = 0
-    self.values['start_time'] = None
-    self.values['gross_ave_spd'] = 0
-    self.values['gross_diff_time'] = "00:00"
+    def count_laps(self):
+        if self.values["count"] == 0 or self.values["count_lap"] == 0:
+            return
+        self.config.display.screen_flash_short()
+        lap_time = self.values["count_lap"]
+        self.values["lap"] += 1
+        self.values["count_lap"] = 0
+        for k in self.lap_keys:
+            self.record_stats["pre_lap_avg"][k] = self.record_stats["lap_avg"][k]
+            self.record_stats["pre_lap_max"][k] = self.record_stats["lap_max"][k]
+            self.record_stats["lap_max"][k] = 0
+            self.record_stats["lap_avg"][k] = 0
+        for k2 in ["cadence", "power"]:
+            self.average["lap"][k2]["count"] = 0
+            self.average["lap"][k2]["sum"] = 0
+        asyncio.create_task(self.record_log())
+        time_str = datetime.datetime.now().strftime("%Y%m%d %H:%M:%S")
+        print("->LAP:{}   {}".format(self.values["lap"], time_str))
 
-    for k in self.lap_keys:
-      self.record_stats['pre_lap_avg'][k] = 0
-      self.record_stats['lap_avg'][k] = 0
-      self.record_stats['entire_avg'][k] = 0
-      self.record_stats['pre_lap_max'][k] = 0
-      self.record_stats['lap_max'][k] = 0
-      self.record_stats['entire_max'][k] = 0
-    for k1 in self.average.keys():
-      for k2 in ["cadence","power"]:
-        self.average[k1][k2]["count"] = 0
-        self.average[k1][k2]["sum"] = 0
+        # show message
+        value_str = (
+            self.config.gui.gui_config.G_UNIT["Speed"]
+            + ", "
+            + self.config.gui.gui_config.G_UNIT["HeartRate"]
+            + ", "
+            + self.config.gui.gui_config.G_UNIT["Power"]
+        )
+        hour_sec = divmod(lap_time, 3600)
+        min_sec = divmod(hour_sec[1], 60)
+        lap_time_str = "{:}:{:02}".format(hour_sec[0], min_sec[0])
+        self.config.gui.show_popup_multiline(
+            "LAP {} ({}km, {})".format(
+                self.values["lap"],
+                round(self.record_stats["pre_lap_avg"]["distance"] / 1000, 1),
+                lap_time_str,
+            ),
+            value_str.format(
+                self.record_stats["pre_lap_avg"]["speed"] * 3.6,
+                self.record_stats["pre_lap_avg"]["heart_rate"],
+                self.record_stats["pre_lap_avg"]["power"],
+            ),
+        )
 
-  def reset_course(self, delete_course_file=False, replace=False):
-    self.config.gui.reset_course()
-    self.course.reset(delete_course_file=delete_course_file, replace=replace)
-    self.sensor.sensor_gps.reset_course_index()
-  
-  def set_new_course(self, course_file):
-    self.course.set_course(course_file)
+    def reset_count(self):
+        if self.config.G_MANUAL_STATUS == "START" or self.values["count"] == 0:
+            return
 
-  async def record_log(self):
-    #need to detect location delta for smart recording
-    
-    #get present value
-    value = self.sensor.values['integrated']
-     
-    #update lap stats if value is not Null
-    for k,v in value.items():
-      #skip when null value(np.nan)
-      if v in [self.config.G_GPS_NULLVALUE, self.config.G_ANT_NULLVALUE]:
-        continue
-      #get average
-      if k in ['heart_rate', 'cadence', 'speed', 'power']:
-        x1 = t1 = 0 #for lap_avg = x1 / t1
-        x2 = t2 = 0 #for entire_ave = x2 / t2
+        # reset
+        self.config.display.screen_flash_long()
 
-        #heart_rate : hr_sum / t
-        #speed : distance / t
-        #power : power_sum / t (exclude/include zero)
-        #cadence : cad_sum / t (exclude/include zero)
-        if k in ['heart_rate']:
-          x1 = self.record_stats['lap_avg'][k] * (self.values['count_lap'] - 1) + v
-          t1 = self.values['count_lap']
-          x2 = self.record_stats['entire_avg'][k] * (self.values['count'] - 1) + v
-          t2 = self.values['count']
-        elif k in ['speed']:
-          x1 = self.record_stats['lap_avg']['distance'] #[m]
-          t1 = self.values['count_lap'] #[s]
-          x2 = value['distance'] #[m]
-          t2 = self.values['count'] #[s]
-        #average including/excluding zero (cadence, power)
-        elif k in ['cadence', 'power']:
-          if v == 0 and not self.config.G_AVERAGE_INCLUDING_ZERO[k]:
-            continue
-          for l_e in ['lap','entire']:
-            self.average[l_e][k]['sum'] += v
-            self.average[l_e][k]['count'] += 1
-          x1 = self.average['lap'][k]['sum']
-          t1 = self.average['lap'][k]['count']
-          x2 = self.average['entire'][k]['sum']
-          t2 = self.average['entire'][k]['count']
-        #update lap average
-        if t1 > 0:
-          self.record_stats['lap_avg'][k] = x1 / t1
-        if t2 > 0:
-          self.record_stats['entire_avg'][k] = x2 / t2
-      #get lap distance, accumulated_power
-      elif k in ['distance', 'accumulated_power']:
-        # v is valid value
-        x1 = self.record_stats['pre_lap_max'][k]
-        if np.isnan(x1): x1 = 0
-        self.record_stats['lap_avg'][k]  = v - x1
-      
-      #update max
-      if k in ['heart_rate', 'cadence', 'speed', 'power']:
-        if self.record_stats['lap_max'][k] < v:
-          self.record_stats['lap_max'][k] = v
-        if self.record_stats['entire_max'][k] < v:
-          self.record_stats['entire_max'][k] = v
-      elif k in ['distance', 'accumulated_power']:
-        self.record_stats['lap_max'][k] = v
-    
-    #get lap total_ascent, total_descent
-    for k in ['total_ascent', 'total_descent']:
-      x1 = self.record_stats['pre_lap_max'][k]
-      x2 = self.sensor.values['I2C'][k]
-      self.record_stats['lap_avg'][k] = x2 - x1
-      self.record_stats['lap_max'][k] = x2
-   
-    ## SQLite
-    now_time = datetime.datetime.utcnow()
-    #self.cur.execute("""\
-    sql = ("""\
+        # close db connect
+        self.cur.close()
+        self.con.close()
+
+        if self.config.G_LOG_WRITE_CSV:
+            t = datetime.datetime.now()
+            if not self.logger_csv.write_log():
+                return
+            print("Write csv :", (datetime.datetime.now() - t).total_seconds(), "sec")
+        if self.config.G_LOG_WRITE_FIT:
+            t = datetime.datetime.now()
+            if not self.logger_fit.write_log():
+                return
+            print(
+                "Write Fit({}) : {} sec".format(
+                    self.logger_fit.mode, (datetime.datetime.now() - t).total_seconds()
+                )
+            )
+
+        # backup and reset database
+        t = datetime.datetime.now()
+        shutil.move(
+            self.config.G_LOG_DB,
+            self.config.G_LOG_DB + "-" + self.config.G_LOG_START_DATE,
+        )
+
+        self.reset()
+
+        # restart db connect
+        # usage of sqlite3 is "insert" only, so check_same_thread=False
+        self.con = sqlite3.connect(self.config.G_LOG_DB, check_same_thread=False)
+        self.cur = self.con.cursor()
+        self.init_db()
+        print("DELETE :", (datetime.datetime.now() - t).total_seconds(), "sec")
+
+        # reset temporary values
+        self.config.setting.reset_config_pickle()
+
+        # reset accumulated values
+        self.sensor.reset()
+
+    def reset(self):
+        # clear lap
+        self.values["count"] = 0
+        self.values["count_lap"] = 0
+        self.values["lap"] = 0
+        self.values["elapsed_time"] = 0
+        self.values["start_time"] = None
+        self.values["gross_ave_spd"] = 0
+        self.values["gross_diff_time"] = "00:00"
+
+        for k in self.lap_keys:
+            self.record_stats["pre_lap_avg"][k] = 0
+            self.record_stats["lap_avg"][k] = 0
+            self.record_stats["entire_avg"][k] = 0
+            self.record_stats["pre_lap_max"][k] = 0
+            self.record_stats["lap_max"][k] = 0
+            self.record_stats["entire_max"][k] = 0
+        for k1 in self.average.keys():
+            for k2 in ["cadence", "power"]:
+                self.average[k1][k2]["count"] = 0
+                self.average[k1][k2]["sum"] = 0
+
+    def reset_course(self, delete_course_file=False, replace=False):
+        self.config.gui.reset_course()
+        self.course.reset(delete_course_file=delete_course_file, replace=replace)
+        self.sensor.sensor_gps.reset_course_index()
+
+    def set_new_course(self, course_file):
+        self.course.set_course(course_file)
+
+    async def record_log(self):
+        # need to detect location delta for smart recording
+
+        # get present value
+        value = self.sensor.values["integrated"]
+
+        # update lap stats if value is not Null
+        for k, v in value.items():
+            # skip when null value(np.nan)
+            if v in [self.config.G_GPS_NULLVALUE, self.config.G_ANT_NULLVALUE]:
+                continue
+            # get average
+            if k in ["heart_rate", "cadence", "speed", "power"]:
+                x1 = t1 = 0  # for lap_avg = x1 / t1
+                x2 = t2 = 0  # for entire_ave = x2 / t2
+
+                # heart_rate : hr_sum / t
+                # speed : distance / t
+                # power : power_sum / t (exclude/include zero)
+                # cadence : cad_sum / t (exclude/include zero)
+                if k in ["heart_rate"]:
+                    x1 = (
+                        self.record_stats["lap_avg"][k] * (self.values["count_lap"] - 1)
+                        + v
+                    )
+                    t1 = self.values["count_lap"]
+                    x2 = (
+                        self.record_stats["entire_avg"][k] * (self.values["count"] - 1)
+                        + v
+                    )
+                    t2 = self.values["count"]
+                elif k in ["speed"]:
+                    x1 = self.record_stats["lap_avg"]["distance"]  # [m]
+                    t1 = self.values["count_lap"]  # [s]
+                    x2 = value["distance"]  # [m]
+                    t2 = self.values["count"]  # [s]
+                # average including/excluding zero (cadence, power)
+                elif k in ["cadence", "power"]:
+                    if v == 0 and not self.config.G_AVERAGE_INCLUDING_ZERO[k]:
+                        continue
+                    for l_e in ["lap", "entire"]:
+                        self.average[l_e][k]["sum"] += v
+                        self.average[l_e][k]["count"] += 1
+                    x1 = self.average["lap"][k]["sum"]
+                    t1 = self.average["lap"][k]["count"]
+                    x2 = self.average["entire"][k]["sum"]
+                    t2 = self.average["entire"][k]["count"]
+                # update lap average
+                if t1 > 0:
+                    self.record_stats["lap_avg"][k] = x1 / t1
+                if t2 > 0:
+                    self.record_stats["entire_avg"][k] = x2 / t2
+            # get lap distance, accumulated_power
+            elif k in ["distance", "accumulated_power"]:
+                # v is valid value
+                x1 = self.record_stats["pre_lap_max"][k]
+                if np.isnan(x1):
+                    x1 = 0
+                self.record_stats["lap_avg"][k] = v - x1
+
+            # update max
+            if k in ["heart_rate", "cadence", "speed", "power"]:
+                if self.record_stats["lap_max"][k] < v:
+                    self.record_stats["lap_max"][k] = v
+                if self.record_stats["entire_max"][k] < v:
+                    self.record_stats["entire_max"][k] = v
+            elif k in ["distance", "accumulated_power"]:
+                self.record_stats["lap_max"][k] = v
+
+        # get lap total_ascent, total_descent
+        for k in ["total_ascent", "total_descent"]:
+            x1 = self.record_stats["pre_lap_max"][k]
+            x2 = self.sensor.values["I2C"][k]
+            self.record_stats["lap_avg"][k] = x2 - x1
+            self.record_stats["lap_max"][k] = x2
+
+        ## SQLite
+        now_time = datetime.datetime.utcnow()
+        # self.cur.execute("""\
+        sql = (
+            """\
       INSERT INTO BIKECOMPUTER_LOG VALUES(\
         ?,?,?,?,?,\
         ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,\
@@ -506,137 +564,148 @@ class LoggerCore():
         ?,?,?,?,\
         ?,?,?,?,?,?,?,?\
       )""",
-      (
-      now_time,
-      self.values['lap'],
-      self.values['count_lap'],
-      self.values['count'],
-      self.values['elapsed_time'],
-      ###
-      self.sensor.values['GPS']['lat'],
-      self.sensor.values['GPS']['lon'],
-      self.sensor.values['GPS']['raw_lat'],
-      self.sensor.values['GPS']['raw_lon'],
-      self.sensor.values['GPS']['alt'],
-      self.sensor.values['GPS']['speed'],
-      self.sensor.values['GPS']['distance'],
-      self.sensor.values['GPS']['mode'],
-      self.sensor.values['GPS']['used_sats'],
-      self.sensor.values['GPS']['total_sats'],
-      self.sensor.values['GPS']['track'],
-      self.sensor.values['GPS']['epx'],
-      self.sensor.values['GPS']['epy'],
-      self.sensor.values['GPS']['epv'],
-      self.sensor.values['GPS']['pdop'],
-      self.sensor.values['GPS']['hdop'],
-      self.sensor.values['GPS']['vdop'],
-      ###
-      value['heart_rate'],
-      value['cadence'],
-      value['distance'],
-      value['speed'],
-      value['power'],
-      value['accumulated_power'],
-      ###
-      value['temperature'],
-      self.sensor.values['I2C']['pressure'],
-      self.sensor.values['I2C']['humidity'],
-      self.sensor.values['I2C']['altitude'],
-      self.sensor.values['GPS']['course_altitude'],
-      value['dem_altitude'],
-      self.sensor.values['I2C']['heading'],
-      self.sensor.values['I2C']['m_stat'],
-      #self.sensor.values['I2C']['acc'][0],
-      #self.sensor.values['I2C']['acc'][1],
-      #self.sensor.values['I2C']['acc'][2],
-      self.sensor.values['I2C']['acc_graph'][0],
-      self.sensor.values['I2C']['acc_graph'][1],
-      self.sensor.values['I2C']['acc_graph'][2],
-      self.sensor.values['I2C']['gyro_mod'][0],
-      self.sensor.values['I2C']['gyro_mod'][1],
-      self.sensor.values['I2C']['gyro_mod'][2],
-      self.sensor.values['I2C']['light'],
-      value['cpu_percent'],
-      self.sensor.values['I2C']['total_ascent'],
-      self.sensor.values['I2C']['total_descent'],
-      ###
-      self.record_stats['lap_avg']['heart_rate'],
-      self.record_stats['lap_avg']['cadence'],
-      self.record_stats['lap_avg']['distance'],
-      self.record_stats['lap_avg']['speed'],
-      self.record_stats['lap_avg']['power'],
-      self.record_stats['lap_avg']['accumulated_power'],
-      self.record_stats['lap_avg']['total_ascent'],
-      self.record_stats['lap_avg']['total_descent'],
-      ###
-      self.record_stats['entire_avg']['heart_rate'],
-      self.record_stats['entire_avg']['cadence'],
-      self.record_stats['entire_avg']['speed'],
-      self.record_stats['entire_avg']['power'],
-      ###
-      self.average['lap']['cadence']['count'],
-      self.average['lap']['cadence']['sum'],
-      self.average['entire']['cadence']['count'],
-      self.average['entire']['cadence']['sum'],
-      self.average['lap']['power']['count'],
-      self.average['lap']['power']['sum'],
-      self.average['entire']['power']['count'],
-      self.average['entire']['power']['sum'],
-      )
-    )
-    #self.con.commit()
-    await self.sql_queue.put((sql))
+            (
+                now_time,
+                self.values["lap"],
+                self.values["count_lap"],
+                self.values["count"],
+                self.values["elapsed_time"],
+                ###
+                self.sensor.values["GPS"]["lat"],
+                self.sensor.values["GPS"]["lon"],
+                self.sensor.values["GPS"]["raw_lat"],
+                self.sensor.values["GPS"]["raw_lon"],
+                self.sensor.values["GPS"]["alt"],
+                self.sensor.values["GPS"]["speed"],
+                self.sensor.values["GPS"]["distance"],
+                self.sensor.values["GPS"]["mode"],
+                self.sensor.values["GPS"]["used_sats"],
+                self.sensor.values["GPS"]["total_sats"],
+                self.sensor.values["GPS"]["track"],
+                self.sensor.values["GPS"]["epx"],
+                self.sensor.values["GPS"]["epy"],
+                self.sensor.values["GPS"]["epv"],
+                self.sensor.values["GPS"]["pdop"],
+                self.sensor.values["GPS"]["hdop"],
+                self.sensor.values["GPS"]["vdop"],
+                ###
+                value["heart_rate"],
+                value["cadence"],
+                value["distance"],
+                value["speed"],
+                value["power"],
+                value["accumulated_power"],
+                ###
+                value["temperature"],
+                self.sensor.values["I2C"]["pressure"],
+                self.sensor.values["I2C"]["humidity"],
+                self.sensor.values["I2C"]["altitude"],
+                self.sensor.values["GPS"]["course_altitude"],
+                value["dem_altitude"],
+                self.sensor.values["I2C"]["heading"],
+                self.sensor.values["I2C"]["m_stat"],
+                # self.sensor.values['I2C']['acc'][0],
+                # self.sensor.values['I2C']['acc'][1],
+                # self.sensor.values['I2C']['acc'][2],
+                self.sensor.values["I2C"]["acc_graph"][0],
+                self.sensor.values["I2C"]["acc_graph"][1],
+                self.sensor.values["I2C"]["acc_graph"][2],
+                self.sensor.values["I2C"]["gyro_mod"][0],
+                self.sensor.values["I2C"]["gyro_mod"][1],
+                self.sensor.values["I2C"]["gyro_mod"][2],
+                self.sensor.values["I2C"]["light"],
+                value["cpu_percent"],
+                self.sensor.values["I2C"]["total_ascent"],
+                self.sensor.values["I2C"]["total_descent"],
+                ###
+                self.record_stats["lap_avg"]["heart_rate"],
+                self.record_stats["lap_avg"]["cadence"],
+                self.record_stats["lap_avg"]["distance"],
+                self.record_stats["lap_avg"]["speed"],
+                self.record_stats["lap_avg"]["power"],
+                self.record_stats["lap_avg"]["accumulated_power"],
+                self.record_stats["lap_avg"]["total_ascent"],
+                self.record_stats["lap_avg"]["total_descent"],
+                ###
+                self.record_stats["entire_avg"]["heart_rate"],
+                self.record_stats["entire_avg"]["cadence"],
+                self.record_stats["entire_avg"]["speed"],
+                self.record_stats["entire_avg"]["power"],
+                ###
+                self.average["lap"]["cadence"]["count"],
+                self.average["lap"]["cadence"]["sum"],
+                self.average["entire"]["cadence"]["count"],
+                self.average["entire"]["cadence"]["sum"],
+                self.average["lap"]["power"]["count"],
+                self.average["lap"]["power"]["sum"],
+                self.average["entire"]["power"]["count"],
+                self.average["entire"]["power"]["sum"],
+            ),
+        )
+        # self.con.commit()
+        await self.sql_queue.put((sql))
 
-    self.store_short_log_for_update_track(
-      value['distance'],
-      self.sensor.values['GPS']['lat'],
-      self.sensor.values['GPS']['lon'],
-      now_time,
-      )
+        self.store_short_log_for_update_track(
+            value["distance"],
+            self.sensor.values["GPS"]["lat"],
+            self.sensor.values["GPS"]["lon"],
+            now_time,
+        )
 
-    #send online
-    if self.config.G_THINGSBOARD_API['STATUS']:
-      self.config.network.api.send_livetrack_data(quick_send=False)
+        # send online
+        if self.config.G_THINGSBOARD_API["STATUS"]:
+            self.config.network.api.send_livetrack_data(quick_send=False)
 
-  def calc_gross(self):
-    #elapsed_time
-    if self.values['start_time'] == None:
-      return
-    #[s]
-    self.values['elapsed_time'] = int(datetime.datetime.utcnow().timestamp() - self.values['start_time'])
+    def calc_gross(self):
+        # elapsed_time
+        if self.values["start_time"] == None:
+            return
+        # [s]
+        self.values["elapsed_time"] = int(
+            datetime.datetime.utcnow().timestamp() - self.values["start_time"]
+        )
 
-    #gross_ave_spd
-    if self.values['elapsed_time'] == 0:
-      return
-    #[m]/[s]
-    self.values['gross_ave_spd'] = self.sensor.values['integrated']['distance']/self.values['elapsed_time']
-    
-    #gross_diff_time
-    if self.config.G_GROSS_AVE_SPEED == 0:
-      return
-    #[km]/[km/h] = +-[h] -> +-[m]
-    diff_time = \
-      (self.sensor.values['integrated']['distance']/1000-self.config.G_GROSS_AVE_SPEED*self.values['elapsed_time']/3600) \
-      / self.config.G_GROSS_AVE_SPEED * 60
-    diff_h, diff_m = divmod(abs(diff_time), 60)
-    diff_m = int(diff_m)
-    diff_time_sign = "+"
-    if np.sign(diff_time) < 0:
-      diff_time_sign = "-"
-    if diff_h == 0 and diff_m == 0:
-      diff_time_sign = ""
-    self.values['gross_diff_time'] = "{:}{:02.0f}:{:02.0f}".format(diff_time_sign, diff_h, diff_m)
-    
-    #print(self.values['elapsed_time'], self.values['gross_ave_spd'], self.values['gross_diff_time'], round(diff_time,1))
+        # gross_ave_spd
+        if self.values["elapsed_time"] == 0:
+            return
+        # [m]/[s]
+        self.values["gross_ave_spd"] = (
+            self.sensor.values["integrated"]["distance"] / self.values["elapsed_time"]
+        )
 
-  def resume(self):
-    self.cur.execute("SELECT count(*) FROM BIKECOMPUTER_LOG")
-    res = self.cur.fetchone()
-    if res[0] == 0:
-      return
-    
-    print("resume existing rides...")
-    row_all = "\
+        # gross_diff_time
+        if self.config.G_GROSS_AVE_SPEED == 0:
+            return
+        # [km]/[km/h] = +-[h] -> +-[m]
+        diff_time = (
+            (
+                self.sensor.values["integrated"]["distance"] / 1000
+                - self.config.G_GROSS_AVE_SPEED * self.values["elapsed_time"] / 3600
+            )
+            / self.config.G_GROSS_AVE_SPEED
+            * 60
+        )
+        diff_h, diff_m = divmod(abs(diff_time), 60)
+        diff_m = int(diff_m)
+        diff_time_sign = "+"
+        if np.sign(diff_time) < 0:
+            diff_time_sign = "-"
+        if diff_h == 0 and diff_m == 0:
+            diff_time_sign = ""
+        self.values["gross_diff_time"] = "{:}{:02.0f}:{:02.0f}".format(
+            diff_time_sign, diff_h, diff_m
+        )
+
+        # print(self.values['elapsed_time'], self.values['gross_ave_spd'], self.values['gross_diff_time'], round(diff_time,1))
+
+    def resume(self):
+        self.cur.execute("SELECT count(*) FROM BIKECOMPUTER_LOG")
+        res = self.cur.fetchone()
+        if res[0] == 0:
+            return
+
+        print("resume existing rides...")
+        row_all = "\
       timestamp,lap,timer,total_timer_time,\
       distance,accumulated_power,total_ascent,total_descent,altitude,\
       position_lat, position_long, \
@@ -645,203 +714,230 @@ class LoggerCore():
       avg_heart_rate,avg_cadence,avg_speed,avg_power,\
       lap_cad_count,lap_cad_sum,lap_power_count,lap_power_sum,\
       avg_cad_count,avg_cad_sum,avg_power_count,avg_power_sum"
-    self.cur.execute("\
+        self.cur.execute(
+            "\
       SELECT %s FROM BIKECOMPUTER_LOG\
       WHERE total_timer_time = (SELECT MAX(total_timer_time) FROM BIKECOMPUTER_LOG) \
-      AND lap = (SELECT MAX(lap) FROM BIKECOMPUTER_LOG)" \
-      % (row_all))
-    value = list(self.cur.fetchone())
-    (self.last_timestamp, self.values['lap'], self.values['count_lap'], self.values['count']) = value[0:4]
+      AND lap = (SELECT MAX(lap) FROM BIKECOMPUTER_LOG)"
+            % (row_all)
+        )
+        value = list(self.cur.fetchone())
+        (
+            self.last_timestamp,
+            self.values["lap"],
+            self.values["count_lap"],
+            self.values["count"],
+        ) = value[0:4]
 
-    sn = self.sensor.values['integrated']
-    i2c = self.sensor.values['I2C']
-    gps = self.sensor.values['GPS']
-    sn['distance'] += value[4]
-    sn['accumulated_power'] += value[5]
-    i2c['total_ascent'] += value[6]
-    i2c['total_descent'] += value[7]
-    #None -> np.nan
-    (i2c['pre_altitude'],gps['pre_lat'],gps['pre_lon']) = np.array(value[8:11], dtype=np.float32)
+        sn = self.sensor.values["integrated"]
+        i2c = self.sensor.values["I2C"]
+        gps = self.sensor.values["GPS"]
+        sn["distance"] += value[4]
+        sn["accumulated_power"] += value[5]
+        i2c["total_ascent"] += value[6]
+        i2c["total_descent"] += value[7]
+        # None -> np.nan
+        (i2c["pre_altitude"], gps["pre_lat"], gps["pre_lon"]) = np.array(
+            value[8:11], dtype=np.float32
+        )
 
-    index = 11
-    for k in self.lap_keys:
-      self.record_stats['lap_avg'][k] = value[index]
-      index += 1
-    for k in ['heart_rate', 'cadence', 'speed', 'power']:
-      self.record_stats['entire_avg'][k] = value[index]
-      index += 1
-    for k1 in ['lap','entire']:
-      for k2 in ['cadence','power']:
-        for k3 in ['count','sum']:
-          self.average[k1][k2][k3] = value[index]
-          index += 1
-    #print(self.average)
-    
-    #get lap
-    self.cur.execute("SELECT MAX(LAP) FROM BIKECOMPUTER_LOG")
-    max_lap = (self.cur.fetchone())[0]
-    
-    #get max
-    max_row = "MAX(heart_rate), MAX(cadence), MAX(speed), MAX(power)"
-    main_item = ['heart_rate', 'cadence', 'speed', 'power']
-    self.cur.execute("SELECT %s FROM BIKECOMPUTER_LOG" % (max_row))
-    max_value = list(self.cur.fetchone())
-    for i,k in enumerate(main_item):
-      self.record_stats['entire_max'][k] = 0
-      if max_value[i] != None:
-        self.record_stats['entire_max'][k] = max_value[i]
-    
-    #get lap max
-    self.cur.execute("SELECT %s FROM BIKECOMPUTER_LOG WHERE LAP = %s" % (max_row,max_lap))
-    max_value = list(self.cur.fetchone())
-    for i,k in enumerate(main_item):
-      self.record_stats['lap_max'][k] = 0
-      if max_value[i] != None:
-        self.record_stats['lap_max'][k] = max_value[i]
-    
-    #get pre lap
-    if max_lap >= 1:
-      self.cur.execute("\
+        index = 11
+        for k in self.lap_keys:
+            self.record_stats["lap_avg"][k] = value[index]
+            index += 1
+        for k in ["heart_rate", "cadence", "speed", "power"]:
+            self.record_stats["entire_avg"][k] = value[index]
+            index += 1
+        for k1 in ["lap", "entire"]:
+            for k2 in ["cadence", "power"]:
+                for k3 in ["count", "sum"]:
+                    self.average[k1][k2][k3] = value[index]
+                    index += 1
+        # print(self.average)
+
+        # get lap
+        self.cur.execute("SELECT MAX(LAP) FROM BIKECOMPUTER_LOG")
+        max_lap = (self.cur.fetchone())[0]
+
+        # get max
+        max_row = "MAX(heart_rate), MAX(cadence), MAX(speed), MAX(power)"
+        main_item = ["heart_rate", "cadence", "speed", "power"]
+        self.cur.execute("SELECT %s FROM BIKECOMPUTER_LOG" % (max_row))
+        max_value = list(self.cur.fetchone())
+        for i, k in enumerate(main_item):
+            self.record_stats["entire_max"][k] = 0
+            if max_value[i] != None:
+                self.record_stats["entire_max"][k] = max_value[i]
+
+        # get lap max
+        self.cur.execute(
+            "SELECT %s FROM BIKECOMPUTER_LOG WHERE LAP = %s" % (max_row, max_lap)
+        )
+        max_value = list(self.cur.fetchone())
+        for i, k in enumerate(main_item):
+            self.record_stats["lap_max"][k] = 0
+            if max_value[i] != None:
+                self.record_stats["lap_max"][k] = max_value[i]
+
+        # get pre lap
+        if max_lap >= 1:
+            self.cur.execute(
+                "\
         SELECT %s FROM BIKECOMPUTER_LOG\
         WHERE LAP = %s AND total_timer_time = (\
           SELECT MAX(total_timer_time) FROM BIKECOMPUTER_LOG\
-          WHERE LAP = %s)" \
-        % (row_all,max_lap-1,max_lap-1))
-      value = list(self.cur.fetchone())
-      
-      index = 4
-      for k in ['distance', 'accumulated_power', 'total_ascent', 'total_descent']:
-        self.record_stats['pre_lap_max'][k] = value[index]
-        index +=1
-      index += 3
-      for k in self.lap_keys:
-        self.record_stats['pre_lap_avg'][k] = value[index]
-        index += 1
-      #max
-      self.cur.execute("SELECT %s FROM BIKECOMPUTER_LOG WHERE LAP = %s" % (max_row,max_lap-1))
-      max_value = list(self.cur.fetchone())
-      for i,k in enumerate(main_item):
-        self.record_stats['pre_lap_max'][k] = max_value[i]
-    #print(self.record_stats)
-    #print(self.average)
+          WHERE LAP = %s)"
+                % (row_all, max_lap - 1, max_lap - 1)
+            )
+            value = list(self.cur.fetchone())
 
-    #start_time
-    self.cur.execute("SELECT MIN(timestamp) FROM BIKECOMPUTER_LOG")
-    first_row = self.cur.fetchone()
-    if first_row[0] != None:
-      self.values['start_time'] = int(self.config.datetime_myparser(first_row[0]).timestamp()-1)
+            index = 4
+            for k in ["distance", "accumulated_power", "total_ascent", "total_descent"]:
+                self.record_stats["pre_lap_max"][k] = value[index]
+                index += 1
+            index += 3
+            for k in self.lap_keys:
+                self.record_stats["pre_lap_avg"][k] = value[index]
+                index += 1
+            # max
+            self.cur.execute(
+                "SELECT %s FROM BIKECOMPUTER_LOG WHERE LAP = %s"
+                % (max_row, max_lap - 1)
+            )
+            max_value = list(self.cur.fetchone())
+            for i, k in enumerate(main_item):
+                self.record_stats["pre_lap_max"][k] = max_value[i]
+        # print(self.record_stats)
+        # print(self.average)
 
-    #if not self.config.G_IS_RASPI and self.config.G_DUMMY_OUTPUT:
-    if self.config.G_DUMMY_OUTPUT:
-      self.cur.execute("SELECT position_lat,position_long,distance,gps_track FROM BIKECOMPUTER_LOG")
-      self.position_log = np.array(self.cur.fetchall())
+        # start_time
+        self.cur.execute("SELECT MIN(timestamp) FROM BIKECOMPUTER_LOG")
+        first_row = self.cur.fetchone()
+        if first_row[0] != None:
+            self.values["start_time"] = int(
+                self.config.datetime_myparser(first_row[0]).timestamp() - 1
+            )
 
-  def store_short_log_for_update_track(self, dist, lat, lon, timestamp):
-    if not self.short_log_available:
-      return
-    if lat == self.config.G_GPS_NULLVALUE or lon == self.config.G_GPS_NULLVALUE:
-      return
-    if len(self.short_log_dist) > 0 and self.short_log_dist[-1] == dist:
-      return
-    if (len(self.short_log_lat) > 0 and self.short_log_lat[-1] == lat) and \
-       (len(self.short_log_lon) > 0 and self.short_log_lon[-1] == lon):
-      return
-    if len(self.short_log_lat) > self.short_log_limit:
-      self.clear_short_log()
-      self.short_log_available = False
-      return
-  
-    self.short_log_lock = True
-    self.short_log_dist.append(dist)
-    self.short_log_lat.append(lat)
-    self.short_log_lon.append(lon)
-    self.short_log_timestamp.append(timestamp)
-    self.short_log_lock = False
-    self.short_log_available = True
-    #print("append", len(self.short_log_dist), len(self.short_log_lat), len(self.short_log_lon))
-  
-  def clear_short_log(self):
-    while self.short_log_lock:
-      print("locked: clear_short_log")
-      time.sleep(0.02)
-    self.short_log_dist = []
-    self.short_log_lat = []
-    self.short_log_lon = []
-    self.short_log_timestamp = []
+        # if not self.config.G_IS_RASPI and self.config.G_DUMMY_OUTPUT:
+        if self.config.G_DUMMY_OUTPUT:
+            self.cur.execute(
+                "SELECT position_lat,position_long,distance,gps_track FROM BIKECOMPUTER_LOG"
+            )
+            self.position_log = np.array(self.cur.fetchall())
 
-  def update_track(self, timestamp):
-    lon = np.array([])
-    lat = np.array([])
-    timestamp_new = timestamp
-    #t = datetime.datetime.utcnow()
-    
-    timestamp_delta = None
-    if timestamp != None:
-      timestamp_delta = \
-        (datetime.datetime.utcnow() - timestamp).total_seconds()
-    
-    #make_tmp_db = False
-    lat_raw = np.array([])
-    lon_raw = np.array([])
-    dist_raw = np.array([])
-    
-    #get values from short_log to db in logging
-    if timestamp_delta != None and self.short_log_available:
-      while self.short_log_lock:
-        print("locked: get values")
-        time.sleep(0.02)
-      lat_raw = np.array(self.short_log_lat)
-      lon_raw = np.array(self.short_log_lon)
-      dist_raw = np.array(self.short_log_dist)
-      if len(self.short_log_lon) > 0:
-        timestamp_new = self.short_log_timestamp[-1]
-      self.clear_short_log()
-      self.short_log_available = True
-    #get values from copied db when initial execution or migration from short_log to db in logging
-    else:
-      db_file = self.config.G_LOG_DB+".tmp"
-      shutil.copy(self.config.G_LOG_DB, db_file)
+    def store_short_log_for_update_track(self, dist, lat, lon, timestamp):
+        if not self.short_log_available:
+            return
+        if lat == self.config.G_GPS_NULLVALUE or lon == self.config.G_GPS_NULLVALUE:
+            return
+        if len(self.short_log_dist) > 0 and self.short_log_dist[-1] == dist:
+            return
+        if (len(self.short_log_lat) > 0 and self.short_log_lat[-1] == lat) and (
+            len(self.short_log_lon) > 0 and self.short_log_lon[-1] == lon
+        ):
+            return
+        if len(self.short_log_lat) > self.short_log_limit:
+            self.clear_short_log()
+            self.short_log_available = False
+            return
 
-      query = \
-        "SELECT distance,position_lat,position_long FROM BIKECOMPUTER_LOG " + \
-        "WHERE position_lat is not null AND position_long is not null "
-      if timestamp != None:
-        query = query + "AND timestamp > '%s'" % timestamp
+        self.short_log_lock = True
+        self.short_log_dist.append(dist)
+        self.short_log_lat.append(lat)
+        self.short_log_lon.append(lon)
+        self.short_log_timestamp.append(timestamp)
+        self.short_log_lock = False
+        self.short_log_available = True
+        # print("append", len(self.short_log_dist), len(self.short_log_lat), len(self.short_log_lon))
 
-      con = sqlite3.connect(db_file)
-      cur = con.cursor()
-      cur.execute(query)
-      res_array = np.array(cur.fetchall())
-      if(len(res_array.shape) > 0 and res_array.shape[0] > 0):
-        dist_raw = res_array[:,0].astype('float32') #[m]
-        lat_raw = res_array[:,1].astype('float32')
-        lon_raw = res_array[:,2].astype('float32')
-      
-      #timestamp
-      cur.execute("SELECT MAX(timestamp) FROM BIKECOMPUTER_LOG")
-      first_row = cur.fetchone()
-      if first_row[0] != None:
-        timestamp_new = self.config.datetime_myparser(first_row[0])
-      
-      cur.close()
-      con.close()
-      os.remove(db_file)
-      self.short_log_available = True
+    def clear_short_log(self):
+        while self.short_log_lock:
+            print("locked: clear_short_log")
+            time.sleep(0.02)
+        self.short_log_dist = []
+        self.short_log_lat = []
+        self.short_log_lon = []
+        self.short_log_timestamp = []
 
-    #print("lat_raw", len(lat_raw))
-    if len(lat_raw) > 0 and (len(lat_raw) == len(lon_raw) == len(dist_raw)):
-      #downsampling
-      try:
-        cond = np.array(rdp(np.column_stack([lon_raw, lat_raw]), epsilon=0.0001, return_mask=True))
-        lat = lat_raw[cond]
-        lon = lon_raw[cond]
-      except:
-        lat = lat_raw
-        lon = lon_raw
+    def update_track(self, timestamp):
+        lon = np.array([])
+        lat = np.array([])
+        timestamp_new = timestamp
+        # t = datetime.datetime.utcnow()
 
-    if timestamp is None:
-      timestamp_new = datetime.datetime.utcnow()
-    
-    #print("\tlogger_core : update_track(new) ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
+        timestamp_delta = None
+        if timestamp != None:
+            timestamp_delta = (datetime.datetime.utcnow() - timestamp).total_seconds()
 
-    return timestamp_new, lon, lat
+        # make_tmp_db = False
+        lat_raw = np.array([])
+        lon_raw = np.array([])
+        dist_raw = np.array([])
+
+        # get values from short_log to db in logging
+        if timestamp_delta != None and self.short_log_available:
+            while self.short_log_lock:
+                print("locked: get values")
+                time.sleep(0.02)
+            lat_raw = np.array(self.short_log_lat)
+            lon_raw = np.array(self.short_log_lon)
+            dist_raw = np.array(self.short_log_dist)
+            if len(self.short_log_lon) > 0:
+                timestamp_new = self.short_log_timestamp[-1]
+            self.clear_short_log()
+            self.short_log_available = True
+        # get values from copied db when initial execution or migration from short_log to db in logging
+        else:
+            db_file = self.config.G_LOG_DB + ".tmp"
+            shutil.copy(self.config.G_LOG_DB, db_file)
+
+            query = (
+                "SELECT distance,position_lat,position_long FROM BIKECOMPUTER_LOG "
+                + "WHERE position_lat is not null AND position_long is not null "
+            )
+            if timestamp != None:
+                query = query + "AND timestamp > '%s'" % timestamp
+
+            con = sqlite3.connect(db_file)
+            cur = con.cursor()
+            cur.execute(query)
+            res_array = np.array(cur.fetchall())
+            if len(res_array.shape) > 0 and res_array.shape[0] > 0:
+                dist_raw = res_array[:, 0].astype("float32")  # [m]
+                lat_raw = res_array[:, 1].astype("float32")
+                lon_raw = res_array[:, 2].astype("float32")
+
+            # timestamp
+            cur.execute("SELECT MAX(timestamp) FROM BIKECOMPUTER_LOG")
+            first_row = cur.fetchone()
+            if first_row[0] != None:
+                timestamp_new = self.config.datetime_myparser(first_row[0])
+
+            cur.close()
+            con.close()
+            os.remove(db_file)
+            self.short_log_available = True
+
+        # print("lat_raw", len(lat_raw))
+        if len(lat_raw) > 0 and (len(lat_raw) == len(lon_raw) == len(dist_raw)):
+            # downsampling
+            try:
+                cond = np.array(
+                    rdp(
+                        np.column_stack([lon_raw, lat_raw]),
+                        epsilon=0.0001,
+                        return_mask=True,
+                    )
+                )
+                lat = lat_raw[cond]
+                lon = lon_raw[cond]
+            except:
+                lat = lat_raw
+                lon = lon_raw
+
+        if timestamp is None:
+            timestamp_new = datetime.datetime.utcnow()
+
+        # print("\tlogger_core : update_track(new) ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
+
+        return timestamp_new, lon, lat

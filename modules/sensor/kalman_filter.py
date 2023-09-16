@@ -6,16 +6,17 @@ from math import log
 from copy import deepcopy
 
 from numpy import dot, zeros, eye, isscalar, linalg, array, atleast_2d, loadtxt, matrix
-#from scipy.linalg import block_diag
+
+# from scipy.linalg import block_diag
 
 
 def reshape_z(z, dim_z, ndim):
-    """ ensure z is a (dim_z, 1) shaped vector"""
+    """ensure z is a (dim_z, 1) shaped vector"""
     z = atleast_2d(z)
     if z.shape[1] == dim_z:
         z = z.T
     if z.shape != (dim_z, 1):
-        raise ValueError('z must be convertible to shape ({}, 1)'.format(dim_z))
+        raise ValueError("z must be convertible to shape ({}, 1)".format(dim_z))
     if ndim == 1:
         z = z[:, 0]
     if ndim == 0:
@@ -46,11 +47,11 @@ def order_by_derivative(Q, dim, block_size):
     for i, x in enumerate(Q.ravel()):
         f = eye(block_size) * x
         ix, iy = (i // dim) * block_size, (i % dim) * block_size
-        D[ix:ix+block_size, iy:iy+block_size] = f
+        D[ix : ix + block_size, iy : iy + block_size] = f
     return D
 
 
-def Q_discrete_white_noise(dim, dt=1., var=1., block_size=1, order_by_dim=True):
+def Q_discrete_white_noise(dim, dt=1.0, var=1.0, block_size=1, order_by_dim=True):
     """
     Returns the Q matrix for the Discrete Constant White Noise
     Model. dim may be either 2, 3, or 4 dt is the time step, and sigma
@@ -95,19 +96,22 @@ def Q_discrete_white_noise(dim, dt=1., var=1., block_size=1, order_by_dim=True):
     if not (dim == 2 or dim == 3 or dim == 4):
         raise ValueError("dim must be between 2 and 4")
     if dim == 2:
-        Q = [[.25*dt**4, .5*dt**3],
-             [ .5*dt**3,    dt**2]]
+        Q = [[0.25 * dt**4, 0.5 * dt**3], [0.5 * dt**3, dt**2]]
     elif dim == 3:
-        Q = [[.25*dt**4, .5*dt**3, .5*dt**2],
-             [ .5*dt**3,    dt**2,       dt],
-             [ .5*dt**2,       dt,        1]]
+        Q = [
+            [0.25 * dt**4, 0.5 * dt**3, 0.5 * dt**2],
+            [0.5 * dt**3, dt**2, dt],
+            [0.5 * dt**2, dt, 1],
+        ]
     else:
-        Q = [[(dt**6)/36, (dt**5)/12, (dt**4)/6, (dt**3)/6],
-             [(dt**5)/12, (dt**4)/4,  (dt**3)/2, (dt**2)/2],
-             [(dt**4)/6,  (dt**3)/2,   dt**2,     dt],
-             [(dt**3)/6,  (dt**2)/2 ,  dt,        1.]]
+        Q = [
+            [(dt**6) / 36, (dt**5) / 12, (dt**4) / 6, (dt**3) / 6],
+            [(dt**5) / 12, (dt**4) / 4, (dt**3) / 2, (dt**2) / 2],
+            [(dt**4) / 6, (dt**3) / 2, dt**2, dt],
+            [(dt**3) / 6, (dt**2) / 2, dt, 1.0],
+        ]
     if order_by_dim:
-        #return block_diag(*[Q]*block_size) * var
+        # return block_diag(*[Q]*block_size) * var
         pass
     return order_by_derivative(array(Q), dim, block_size) * var
 
@@ -197,36 +201,37 @@ class KalmanFilter(object):
     .. [2] Roger Labbe. "Kalman and Bayesian Filters in Python"
            https://github.com/rlabbe/Kalman-and-Bayesian-Filters-in-Python
     """
+
     def __init__(self, dim_x, dim_z, dim_u=0):
         if dim_x < 1:
-            raise ValueError('dim_x must be 1 or greater')
+            raise ValueError("dim_x must be 1 or greater")
         if dim_z < 1:
-            raise ValueError('dim_z must be 1 or greater')
+            raise ValueError("dim_z must be 1 or greater")
         if dim_u < 0:
-            raise ValueError('dim_u must be 0 or greater')
+            raise ValueError("dim_u must be 0 or greater")
 
         self.dim_x = dim_x
         self.dim_z = dim_z
         self.dim_u = dim_u
 
-        self.x = zeros((dim_x, 1))        # state
-        self.P = eye(dim_x)               # uncertainty covariance
-        self.Q = eye(dim_x)               # process uncertainty
-        self.B = None                     # control transition matrix
-        self.F = eye(dim_x)               # state transition matrix
-        self.H = zeros((dim_z, dim_x))    # Measurement function
-        self.R = eye(dim_z)               # state uncertainty
-        self._alpha_sq = 1.               # fading memory control
-        self.M = zeros((dim_z, dim_z)) # process-measurement cross correlation
-        self.z = array([[None]*self.dim_z]).T
+        self.x = zeros((dim_x, 1))  # state
+        self.P = eye(dim_x)  # uncertainty covariance
+        self.Q = eye(dim_x)  # process uncertainty
+        self.B = None  # control transition matrix
+        self.F = eye(dim_x)  # state transition matrix
+        self.H = zeros((dim_z, dim_x))  # Measurement function
+        self.R = eye(dim_z)  # state uncertainty
+        self._alpha_sq = 1.0  # fading memory control
+        self.M = zeros((dim_z, dim_z))  # process-measurement cross correlation
+        self.z = array([[None] * self.dim_z]).T
 
         # gain and residual are computed during the innovation step. We
         # save them so that in case you want to inspect them for various
         # purposes
-        self.K = zeros((dim_x, dim_z)) # kalman gain
+        self.K = zeros((dim_x, dim_z))  # kalman gain
         self.y = zeros((dim_z, 1))
-        self.S = zeros((dim_z, dim_z)) # system uncertainty
-        self.SI = zeros((dim_z, dim_z)) # inverse system uncertainty
+        self.S = zeros((dim_z, dim_z))  # system uncertainty
+        self.SI = zeros((dim_z, dim_z))  # inverse system uncertainty
 
         # identity matrix. Do not alter this.
         self._I = eye(dim_x)
@@ -312,7 +317,7 @@ class KalmanFilter(object):
         self._mahalanobis = None
 
         if z is None:
-            self.z = array([[None]*self.dim_z]).T
+            self.z = array([[None] * self.dim_z]).T
             self.x_post = self.x.copy()
             self.P_post = self.P.copy()
             self.y = zeros((self.dim_z, 1))
@@ -360,72 +365,72 @@ class KalmanFilter(object):
         self.x_post = self.x.copy()
         self.P_post = self.P.copy()
 
-class KalmanFilter_pitch():
 
-  import numpy as np
+class KalmanFilter_pitch:
+    import numpy as np
 
-  theta_variance = 0
-  theta_dot_variance = 0
-  theta_update_interval = 0.1
+    theta_variance = 0
+    theta_dot_variance = 0
+    theta_update_interval = 0.1
 
-  #State vector
-  theta_data_predict = np.matrix([[0],[0]], dtype = 'float')
-  theta_data = np.matrix([[0],[0]], dtype = 'float')
-  #Covariance matrix
-  P_theta_predict = np.matrix([[1,0],[0,0]], dtype = 'float')
-  P_theta = np.matrix([[0,0],[0,0]], dtype = 'float')
-  #A of the state equition
-  A_theta = np.matrix([[1,-theta_update_interval],[0,1]], dtype = 'float')
-  #B of the state equition
-  B_theta = np.matrix([[theta_update_interval],[0]], dtype = 'float')
-  #C of the state equition
-  C_theta = np.matrix([[1,0]], dtype = 'float')
+    # State vector
+    theta_data_predict = np.matrix([[0], [0]], dtype="float")
+    theta_data = np.matrix([[0], [0]], dtype="float")
+    # Covariance matrix
+    P_theta_predict = np.matrix([[1, 0], [0, 0]], dtype="float")
+    P_theta = np.matrix([[0, 0], [0, 0]], dtype="float")
+    # A of the state equition
+    A_theta = np.matrix([[1, -theta_update_interval], [0, 1]], dtype="float")
+    # B of the state equition
+    B_theta = np.matrix([[theta_update_interval], [0]], dtype="float")
+    # C of the state equition
+    C_theta = np.matrix([[1, 0]], dtype="float")
 
-  I = np.array([[1,0],[0,1]])
+    I = np.array([[1, 0], [0, 1]])
 
-  def __init__(self,tm,tv,tdm,tdv,interval):
-    #Kalman filter initialization
-    self.theta_means = tm
-    self.theta_variance = tv
-    self.theta_dot_means = tdm
-    self.theta_dot_variance = tdv
-    self.theta_update_interval = interval
+    def __init__(self, tm, tv, tdm, tdv, interval):
+        # Kalman filter initialization
+        self.theta_means = tm
+        self.theta_variance = tv
+        self.theta_dot_means = tdm
+        self.theta_dot_variance = tdv
+        self.theta_update_interval = interval
 
-    self.A_theta[0,1] = -self.theta_update_interval
-    self.B_theta[0,0] = self.theta_update_interval
-    self.theta_data_predict[1,0] = self.theta_dot_means
-    self.P_theta_predict[1,1] = self.theta_dot_variance
+        self.A_theta[0, 1] = -self.theta_update_interval
+        self.B_theta[0, 0] = self.theta_update_interval
+        self.theta_data_predict[1, 0] = self.theta_dot_means
+        self.P_theta_predict[1, 1] = self.theta_dot_variance
 
-    #print(tm,tv,tdm,tdv,interval)
-  
-  def update(self, y, theta_dot_gyro):
-  
-    #calculate Kalman gain: G = P'@C^T(W+C@P'@C^T)^-1
-    P_CT = self.P_theta_predict@self.C_theta.T #P'@C^T
-    G_temp1 = self.C_theta@P_CT #C@(P'@C^T)
-    G = P_CT * (1 / (G_temp1[0,0]+self.theta_variance)) #(P'@C^T)@(W+C@P'@C^T)^-1
-    #print("G:\n",G)
+        # print(tm,tv,tdm,tdv,interval)
 
-    #theta_data estimation: theta = theta'+G(y-Ctheta')
-    delta_theta = G * (y-(self.C_theta@self.theta_data_predict)[0,0])
-    self.theta_data = self.theta_data_predict + delta_theta
-    #print("theta_data:\n", self.theta_data)
+    def update(self, y, theta_dot_gyro):
+        # calculate Kalman gain: G = P'@C^T(W+C@P'@C^T)^-1
+        P_CT = self.P_theta_predict @ self.C_theta.T  # P'@C^T
+        G_temp1 = self.C_theta @ P_CT  # C@(P'@C^T)
+        G = P_CT * (
+            1 / (G_temp1[0, 0] + self.theta_variance)
+        )  # (P'@C^T)@(W+C@P'@C^T)^-1
+        # print("G:\n",G)
 
-    #calculate covariance matrix: P=(I-GC)P'
-    I2_GC = self.I - (G@self.C_theta) #I-GC
-    self.P_theta = I2_GC@self.P_theta_predict
-    #print("P_theta:\n", self.P_theta)
+        # theta_data estimation: theta = theta'+G(y-Ctheta')
+        delta_theta = G * (y - (self.C_theta @ self.theta_data_predict)[0, 0])
+        self.theta_data = self.theta_data_predict + delta_theta
+        # print("theta_data:\n", self.theta_data)
 
-    #predict the next step data: theta' = Atheta+Bu
-    self.theta_data_predict = (self.A_theta@self.theta_data) + self.B_theta*theta_dot_gyro
-    #print("theta_data_predict:\n", self.theta_data_predict)
+        # calculate covariance matrix: P=(I-GC)P'
+        I2_GC = self.I - (G @ self.C_theta)  # I-GC
+        self.P_theta = I2_GC @ self.P_theta_predict
+        # print("P_theta:\n", self.P_theta)
 
-    #predict covariance matrix: P'=A@P@A^T + B@U@B^T
-    self.P_theta_predict = \
-      self.A_theta@self.P_theta@self.A_theta.T + (self.B_theta@self.B_theta.T)*self.theta_dot_variance
-    #print("P_theta_predict:\n", self.P_theta_predict)
+        # predict the next step data: theta' = Atheta+Bu
+        self.theta_data_predict = (
+            self.A_theta @ self.theta_data
+        ) + self.B_theta * theta_dot_gyro
+        # print("theta_data_predict:\n", self.theta_data_predict)
 
-
-
-
-
+        # predict covariance matrix: P'=A@P@A^T + B@U@B^T
+        self.P_theta_predict = (
+            self.A_theta @ self.P_theta @ self.A_theta.T
+            + (self.B_theta @ self.B_theta.T) * self.theta_dot_variance
+        )
+        # print("P_theta_predict:\n", self.P_theta_predict)

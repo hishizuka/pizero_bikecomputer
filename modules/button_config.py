@@ -1,219 +1,229 @@
+class Button_Config:
+    config = None
 
-class Button_Config():
+    # long press threshold of buttons [sec]
+    G_BUTTON_LONG_PRESS = 1
 
-  config = None
+    # GPIO button action (short press / long press) from gui_pyqt
+    # call from SensorGPIO.my_callback(self, channel)
+    # number is from GPIO.setmode(GPIO.BCM)
+    G_BUTTON_DEF = {
+        "PiTFT": {
+            "MAIN": {
+                5: ("scroll_prev", ""),
+                6: ("count_laps", "reset_count"),
+                12: ("brightness_control", ""),
+                13: ("start_and_stop_manual", ""),
+                16: ("scroll_next", "enter_menu"),
+            },
+            "MENU": {
+                5: ("back_menu", ""),
+                6: ("", ""),
+                12: ("press_space", ""),
+                13: ("press_shift_tab", ""),
+                16: ("press_tab", ""),
+            },
+        },
+        "Papirus": {
+            "MAIN": {
+                16: ("scroll_prev", ""),  # SW1(left)
+                26: ("count_laps", "reset_count"),  # SW2
+                20: ("start_and_stop_manual", ""),  # SW3
+                21: ("scroll_next", "enter_menu"),  # SW4
+            },
+            "MENU": {
+                16: ("back_menu", ""),
+                26: ("press_space", ""),
+                20: ("press_shift_tab", ""),
+                21: ("press_tab", ""),
+            },
+        },
+        "DFRobot_RPi_Display": {
+            "MAIN": {
+                21: ("start_and_stop_manual", "reset_count"),
+                20: ("scroll_next", "enter_menu"),
+            },
+            "MENU": {
+                21: ("press_space", ""),
+                20: ("press_tab", "back_menu"),
+            },
+        },
+        # call from ButtonShim
+        "Button_Shim": {
+            "MAIN": {
+                "A": ("scroll_prev", ""),
+                "B": ("count_laps", "reset_count"),
+                "C": ("get_screenshot", ""),
+                "D": ("start_and_stop_manual", ""),
+                "E": ("scroll_next", "enter_menu"),
+            },
+            "MENU": {
+                "A": ("back_menu", ""),
+                "B": ("brightness_control", ""),
+                "C": ("press_space", ""),
+                "D": ("press_shift_tab", ""),
+                "E": ("press_tab", ""),
+            },
+            "MAP": {
+                "A": ("scroll_prev", ""),
+                "B": ("map_zoom_minus", ""),
+                "C": ("change_mode", ""),
+                "D": ("map_zoom_plus", ""),
+                "E": ("scroll_next", "enter_menu"),
+            },
+            "MAP_1": {
+                "A": ("map_move_x_minus", ""),
+                "B": ("map_move_y_minus", "map_zoom_minus"),
+                "C": ("change_mode", "map_change_move"),
+                "D": ("map_move_y_plus", "map_zoom_plus"),
+                "E": ("map_move_x_plus", "map_search_route"),
+            },
+            "MAP_2": {
+                "A": ("", ""),
+                "B": ("change_color_low", ""),
+                "C": ("change_mode", ""),
+                "D": ("change_color_high", ""),
+                "E": ("", ""),
+            },
+            "COURSE_PROFILE": {
+                "A": ("scroll_prev", ""),
+                "B": ("map_zoom_minus", ""),
+                "C": ("change_mode", ""),
+                "D": ("map_zoom_plus", ""),
+                "E": ("scroll_next", "enter_menu"),
+            },
+            "COURSE_PROFILE_1": {
+                "A": ("map_move_x_minus", ""),
+                "B": ("map_zoom_minus", ""),
+                "C": ("change_mode", ""),
+                "D": ("map_zoom_plus", ""),
+                "E": ("map_move_x_plus", ""),
+            },
+        },
+        # call from sensor_ant
+        "Edge_Remote": {
+            "MAIN": {
+                "PAGE": ("scroll_prev", "scroll_next"),
+                "CUSTOM": ("change_mode", "enter_menu"),
+                "LAP": ("count_laps",),
+            },
+            "MAIN_1": {
+                "PAGE": ("turn_on_off_light", "brightness_control"),
+                "CUSTOM": ("change_mode", ""),
+                "LAP": ("start_and_stop_manual",),
+            },
+            "MENU": {
+                "PAGE": ("press_tab", ""),
+                "CUSTOM": ("press_shift_tab", "back_menu"),
+                "LAP": ("press_space",),
+            },
+            "MAP": {
+                "PAGE": ("scroll_prev", "scroll_next"),
+                "CUSTOM": ("change_mode", "map_zoom_minus"),
+                "LAP": ("map_zoom_plus",),
+            },
+            "MAP_1": {
+                "PAGE": ("", ""),  # go along the route / back along the route
+                "CUSTOM": ("change_mode", "map_zoom_minus"),
+                "LAP": ("map_zoom_plus",),
+            },
+            "COURSE_PROFILE": {
+                "PAGE": ("scroll_prev", "scroll_next"),
+                "CUSTOM": ("change_mode", "map_zoom_minus"),
+                "LAP": ("map_zoom_plus",),
+            },
+            "COURSE_PROFILE_1": {
+                "PAGE": ("", ""),  # go along the route / back along the route
+                "CUSTOM": ("change_mode", "map_move_x_minus"),
+                "LAP": ("map_move_x_plus",),
+            },
+        },
+    }
 
-  #long press threshold of buttons [sec]
-  G_BUTTON_LONG_PRESS = 1
+    G_PAGE_MODE = "MAIN"
 
-  #GPIO button action (short press / long press) from gui_pyqt
-  # call from SensorGPIO.my_callback(self, channel)
-  # number is from GPIO.setmode(GPIO.BCM)
-  G_BUTTON_DEF = {
-    'PiTFT':{
-      'MAIN':{
-        5:('scroll_prev', ''),
-        6:('count_laps', 'reset_count'),
-        12:('brightness_control', ''),
-        13:('start_and_stop_manual', ''),
-        16:('scroll_next', 'enter_menu'),
-      },
-      'MENU':{
-        5:('back_menu', ''),
-        6:('', ''),
-        12:('press_space', ''),
-        13:('press_shift_tab', ''),
-        16:('press_tab', ''),
-      },
-    },
-    'Papirus':{
-      'MAIN':{
-        16:('scroll_prev', ''),#SW1(left)
-        26:('count_laps', 'reset_count'),#SW2
-        20:('start_and_stop_manual', ''),#SW3
-        21:('scroll_next', 'enter_menu'),#SW4
-      },
-      'MENU':{
-        16:('back_menu', ''),
-        26:('press_space', ''),
-        20:('press_shift_tab', ''),
-        21:('press_tab', ''),
-      },
-    },
-    'DFRobot_RPi_Display':{
-      'MAIN':{
-        21:('start_and_stop_manual', 'reset_count'),
-        20:('scroll_next', 'enter_menu'),
-      },
-      'MENU':{
-        21:('press_space', ''),
-        20:('press_tab', 'back_menu'),
-      },
-    },
-    # call from ButtonShim
-    'Button_Shim' : {
-      'MAIN':{
-        'A':('scroll_prev', ''),
-        'B':('count_laps', 'reset_count'),
-        'C':('get_screenshot', ''),
-        'D':('start_and_stop_manual', ''),
-        'E':('scroll_next', 'enter_menu'),
-      },
-      'MENU':{
-        'A':('back_menu', ''),
-        'B':('brightness_control', ''),
-        'C':('press_space', ''),
-        'D':('press_shift_tab', ''),
-        'E':('press_tab', ''),
-      },
-      'MAP':{
-        'A':('scroll_prev', ''),
-        'B':('map_zoom_minus', ''),
-        'C':('change_mode', ''),
-        'D':('map_zoom_plus', ''),
-        'E':('scroll_next', 'enter_menu'),
-      },
-      'MAP_1':{
-        'A':('map_move_x_minus', ''),
-        'B':('map_move_y_minus', 'map_zoom_minus'),
-        'C':('change_mode', 'map_change_move'),
-        'D':('map_move_y_plus', 'map_zoom_plus'),
-        'E':('map_move_x_plus', 'map_search_route'),
-      },
-      'MAP_2':{
-        'A':('', ''),
-        'B':('change_color_low', ''),
-        'C':('change_mode', ''),
-        'D':('change_color_high', ''),
-        'E':('', ''),
-      },
-      'COURSE_PROFILE':{
-        'A':('scroll_prev', ''),
-        'B':('map_zoom_minus', ''),
-        'C':('change_mode', ''),
-        'D':('map_zoom_plus', ''),
-        'E':('scroll_next', 'enter_menu'),
-      },
-      'COURSE_PROFILE_1':{
-        'A':('map_move_x_minus', ''),
-        'B':('map_zoom_minus', ''),
-        'C':('change_mode', ''),
-        'D':('map_zoom_plus', ''),
-        'E':('map_move_x_plus', ''),
-      },
-    },
-    # call from sensor_ant
-    'Edge_Remote':{
-      'MAIN':{
-        'PAGE':('scroll_prev', 'scroll_next'), 
-        'CUSTOM':('change_mode', 'enter_menu'), 
-        'LAP':('count_laps', ),
-      },
-      'MAIN_1':{
-        'PAGE':('turn_on_off_light', 'brightness_control'), 
-        'CUSTOM':('change_mode', ''), 
-        'LAP':('start_and_stop_manual', ),
-      },
-      'MENU':{
-        'PAGE':('press_tab', ''),
-        'CUSTOM':('press_shift_tab', 'back_menu'),
-        'LAP':('press_space', ),
-      },
-      'MAP':{
-        'PAGE':('scroll_prev', 'scroll_next'),
-        'CUSTOM':('change_mode', 'map_zoom_minus'), 
-        'LAP':('map_zoom_plus', ),
-      },
-      'MAP_1':{
-        'PAGE':('', ''), #go along the route / back along the route
-        'CUSTOM':('change_mode', 'map_zoom_minus'), 
-        'LAP':('map_zoom_plus', ),  
-      },
-      'COURSE_PROFILE':{
-        'PAGE':('scroll_prev', 'scroll_next'),
-        'CUSTOM':('change_mode', 'map_zoom_minus'), 
-        'LAP':('map_zoom_plus', ),
-      },
-      'COURSE_PROFILE_1':{
-        'PAGE':('', ''), #go along the route / back along the route
-        'CUSTOM':('change_mode', 'map_move_x_minus'), 
-        'LAP':('map_move_x_plus', ),  
-      },
-    },
-  }
+    # mode group setting changed by change_mode
+    G_BUTTON_MODE_IS_CHANGE = False
+    G_BUTTON_MODE_PAGES = {
+        "MAIN": ["MAIN", "MAIN_1"],
+        #'MAP': ['MAP','MAP_1','MAP_2'],
+        "MAP": ["MAP", "MAP_1"],
+        "COURSE_PROFILE": ["COURSE_PROFILE", "COURSE_PROFILE_1"],
+    }
+    G_BUTTON_MODE_INDEX = {
+        "MAIN": 0,
+        "MAP": 0,
+        "COURSE_PROFILE": 0,
+    }
 
-  G_PAGE_MODE = 'MAIN'
+    def __init__(self, config):
+        self.config = config
 
-  #mode group setting changed by change_mode
-  G_BUTTON_MODE_IS_CHANGE = False
-  G_BUTTON_MODE_PAGES = {
-    'MAIN': ['MAIN','MAIN_1'],
-    #'MAP': ['MAP','MAP_1','MAP_2'],
-    'MAP': ['MAP','MAP_1'],
-    'COURSE_PROFILE': ['COURSE_PROFILE','COURSE_PROFILE_1'],
-  }
-  G_BUTTON_MODE_INDEX = {
-    'MAIN': 0,
-    'MAP': 0,
-    'COURSE_PROFILE': 0,
-  }
+    def press_button(self, button_hard, press_button, index):
+        if self.config.gui == None or self.config.gui.stack_widget == None:
+            return
 
-  def __init__(self, config):
-      self.config = config
+        w_index = self.config.gui.stack_widget.currentIndex()
+        if w_index == 1:
+            if (
+                self.config.gui.main_page.widget(
+                    self.config.gui.main_page.currentIndex()
+                )
+                == self.config.gui.map_widget
+            ):
+                if not self.G_BUTTON_MODE_IS_CHANGE:
+                    self.G_PAGE_MODE = "MAP"
+            elif (
+                self.config.gui.main_page.widget(
+                    self.config.gui.main_page.currentIndex()
+                )
+                == self.config.gui.course_profile_graph_widget
+            ):
+                if not self.G_BUTTON_MODE_IS_CHANGE:
+                    self.G_PAGE_MODE = "COURSE_PROFILE"
+            else:
+                if not self.G_BUTTON_MODE_IS_CHANGE:
+                    self.G_PAGE_MODE = "MAIN"
+            # for no implementation
+            if self.G_PAGE_MODE not in self.G_BUTTON_DEF[button_hard]:
+                self.G_PAGE_MODE = "MAIN"
+        elif w_index >= 2:
+            self.G_PAGE_MODE = "MENU"
 
-  def press_button(self, button_hard, press_button, index):
-    if self.config.gui == None or self.config.gui.stack_widget == None:
-      return
+        func_str = self.G_BUTTON_DEF[button_hard][self.G_PAGE_MODE][press_button][index]
+        if func_str == "":
+            func_str = "dummy"
+        func = eval("self.config.gui." + func_str)
+        func()
 
-    w_index = self.config.gui.stack_widget.currentIndex()
-    if w_index == 1:
-      if self.config.gui.main_page.widget(self.config.gui.main_page.currentIndex()) == self.config.gui.map_widget:
-        if not self.G_BUTTON_MODE_IS_CHANGE:
-          self.G_PAGE_MODE = 'MAP'
-      elif self.config.gui.main_page.widget(self.config.gui.main_page.currentIndex()) == self.config.gui.course_profile_graph_widget:
-        if not self.G_BUTTON_MODE_IS_CHANGE:
-          self.G_PAGE_MODE = 'COURSE_PROFILE'
-      else:
-        if not self.G_BUTTON_MODE_IS_CHANGE:
-          self.G_PAGE_MODE = 'MAIN'
-      #for no implementation
-      if self.G_PAGE_MODE not in self.G_BUTTON_DEF[button_hard]:
-        self.G_PAGE_MODE = 'MAIN'
-    elif w_index >= 2:
-      self.G_PAGE_MODE = 'MENU'
+    def change_mode(self):
+        # check MAP
+        w = self.config.gui.main_page.widget(self.config.gui.main_page.currentIndex())
 
-    func_str = self.G_BUTTON_DEF[button_hard][self.G_PAGE_MODE][press_button][index]
-    if func_str == '':
-      func_str = "dummy"
-    func = eval('self.config.gui.'+func_str)
-    func()
+        if "MAIN" in self.G_PAGE_MODE:
+            self.change_mode_index("MAIN")
+        # if display is MAP: change MAP_1 -> MAP_2 -> MAP -> ...
+        elif w == self.config.gui.map_widget:
+            self.change_mode_index("MAP")
+            # additional: lock current position when normal page
+            if not self.G_BUTTON_MODE_IS_CHANGE:
+                w.lock_on()
+            else:
+                w.lock_off()
+        elif w == self.config.gui.course_profile_graph_widget:
+            self.change_mode_index("COURSE_PROFILE")
+            # additional: lock current position when normal page
+            if not self.G_BUTTON_MODE_IS_CHANGE:
+                w.lock_on()
+            else:
+                w.lock_off()
 
-  def change_mode(self):
-    #check MAP
-    w = self.config.gui.main_page.widget(self.config.gui.main_page.currentIndex())
-
-    if 'MAIN' in self.G_PAGE_MODE:
-      self.change_mode_index("MAIN")
-    #if display is MAP: change MAP_1 -> MAP_2 -> MAP -> ...
-    elif w == self.config.gui.map_widget:
-      self.change_mode_index("MAP")
-      #additional: lock current position when normal page
-      if not self.G_BUTTON_MODE_IS_CHANGE:
-        w.lock_on()
-      else:
-        w.lock_off()
-    elif w == self.config.gui.course_profile_graph_widget:
-      self.change_mode_index("COURSE_PROFILE")
-      #additional: lock current position when normal page
-      if not self.G_BUTTON_MODE_IS_CHANGE:
-        w.lock_on()
-      else:
-        w.lock_off()
-
-  def change_mode_index(self, mode):
-    self.G_BUTTON_MODE_INDEX[mode] = self.G_BUTTON_MODE_INDEX[mode] + 1
-    self.G_BUTTON_MODE_IS_CHANGE = True
-    if self.G_BUTTON_MODE_INDEX[mode] >= len(self.G_BUTTON_MODE_PAGES[mode]):
-      self.G_BUTTON_MODE_INDEX[mode] = 0
-      self.G_BUTTON_MODE_IS_CHANGE = False
-    self.G_PAGE_MODE = self.G_BUTTON_MODE_PAGES[mode][self.G_BUTTON_MODE_INDEX[mode]]
+    def change_mode_index(self, mode):
+        self.G_BUTTON_MODE_INDEX[mode] = self.G_BUTTON_MODE_INDEX[mode] + 1
+        self.G_BUTTON_MODE_IS_CHANGE = True
+        if self.G_BUTTON_MODE_INDEX[mode] >= len(self.G_BUTTON_MODE_PAGES[mode]):
+            self.G_BUTTON_MODE_INDEX[mode] = 0
+            self.G_BUTTON_MODE_IS_CHANGE = False
+        self.G_PAGE_MODE = self.G_BUTTON_MODE_PAGES[mode][
+            self.G_BUTTON_MODE_INDEX[mode]
+        ]
