@@ -162,7 +162,7 @@ class Setting:
 
         if "DISPLAY_PARAM" in self.config_parser:
             if "SPI_CLOCK" in self.config_parser["DISPLAY_PARAM"]:
-                self.config.G_DISPLAY_PARAM["SPI_CLOCK"] = float(
+                self.config.G_DISPLAY_PARAM["SPI_CLOCK"] = int(
                     self.config_parser["DISPLAY_PARAM"]["SPI_CLOCK"]
                 )
 
