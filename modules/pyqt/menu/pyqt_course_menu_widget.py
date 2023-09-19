@@ -267,7 +267,7 @@ class CourseListWidget(ListWidget):
 
 class CourseListItemWidget(ListItemWidget):
     list_type = None
-    locality_text = ""
+    locality_text = ", {elevation_gain:.0f}m up, {locality}, {administrative_area}"
 
     def __init__(self, parent, config, list_type=None):
         super().__init__(parent=parent, config=config)
@@ -279,15 +279,6 @@ class CourseListItemWidget(ListItemWidget):
         elif self.list_type == "Ride with GPS":
             self.enter_signal.connect(self.parentWidget().change_course_detail_page)
             self.set_simple_list_stylesheet()
-            self.locality_text = (
-                ", {elevation_gain:.0f}m up, {locality}, {administrative_area}"
-            )
-            if self.config.G_LANG in [
-                "JA",
-            ]:
-                self.locality_text = (
-                    ", {elevation_gain:.0f}m up, {administrative_area}{locality}"
-                )
 
     def add_extra(self):
         self.right_icon = QtWidgets.QLabel()
@@ -328,6 +319,8 @@ class CourseDetailWidget(MenuWidget):
     map_image_size = None
     profile_image_size = None
 
+    address_format = "{locality}, {administrative_area}"
+
     def setup_menu(self):
         self.make_menu_layout(QtWidgets.QVBoxLayout)
 
@@ -365,12 +358,6 @@ class CourseDetailWidget(MenuWidget):
 
         self.menu_layout.addLayout(self.outer_layout)
         self.menu_layout.addWidget(self.profile_image)
-
-        self.address_format = "{locality}, {administrative_area}"
-        if self.config.G_LANG in [
-            "JA",
-        ]:
-            self.address_format = "{administrative_area}{locality}"
 
         # update panel for every 1 seconds
         self.timer = QtCore.QTimer(parent=self)

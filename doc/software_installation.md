@@ -631,9 +631,8 @@ The settings are dependent on the user environment.
 - `lang`
   - The language setting of the label of items.
   - The default is `EN`.
-  - You can set other languages with `G_LANG` in modules/gui_config.py. Samples of `JA` are available.
 - `font_file`
-  - Set the the full path of the font which you want to use.
+  - Set the full path of the font which you want to use.
   - Place the fonts in `fonts/` folder.
 - `map`
   - Set the map.
