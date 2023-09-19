@@ -10,8 +10,9 @@ try:
     import pigpio
 
     _SENSOR_DISPLAY = True
-except:
+except ImportError:
     pass
+
 print("  MIP SHARP DISPLAY : ", _SENSOR_DISPLAY)
 
 # https://qiita.com/hishi/items/669ce474fcd76bdce1f1
@@ -101,11 +102,11 @@ class MipSharpDisplay:
     async def draw_worker(self):
         while True:
             img_bytes = await self.draw_queue.get()
-            if img_bytes == None:
+            if img_bytes is None:
                 break
             self.pi.write(GPIO_SCS, 1)
             await asyncio.sleep(0.000006)
-            if len(img_bytes) > 0:
+            if len(img_bytes):
                 self.pi.spi_write(self.spi, img_bytes)
             # dummy output for ghost line
             self.pi.spi_write(self.spi, [0x00000000, 0])
@@ -127,7 +128,7 @@ class MipSharpDisplay:
         # print("diff ", int(len(diff_lines)/self.config.G_HEIGHT*100), "%")
         # print(" ")
 
-        if len(diff_lines) == 0:
+        if not len(diff_lines):
             return
         self.pre_img[diff_lines] = self.img_buff_rgb8[diff_lines]
         # self.config.check_time("diff_lines")

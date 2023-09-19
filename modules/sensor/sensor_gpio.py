@@ -9,7 +9,7 @@ try:
     import RPi.GPIO as GPIO
 
     _SENSOR_RPiGPIO = True
-except:
+except ImportError:
     pass
 
 if _SENSOR_RPiGPIO:

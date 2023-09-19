@@ -11,7 +11,7 @@ try:
     from dbus_next import Variant
 
     HAS_DBUS_NEXT = True
-except:
+except ImportError:
     pass
 
 try:
@@ -19,7 +19,7 @@ try:
         import dbus
 
         HAS_DBUS = True
-except:
+except ImportError:
     pass
 
 
@@ -89,8 +89,6 @@ class BTPanDbusNext(BTPan):
         return True
 
     async def connect_tethering(self, remote_addr):
-        connected = None
-
         if not await self.initialize_device(remote_addr):
             return False
 
@@ -98,7 +96,6 @@ class BTPanDbusNext(BTPan):
             try:
                 await self.interface.call_connect(self.service_uuid)
             except DBusError as e:
-                # error = e.get_dbus_name()
                 print(e)
                 await asyncio.sleep(1)
             else:
@@ -108,15 +105,12 @@ class BTPanDbusNext(BTPan):
         return connected
 
     async def disconnect_tethering(self, remote_addr):
-        connected = None
-
         if not await self.initialize_device(remote_addr):
             return False
 
         try:
             await self.interface.call_disconnect()
         except DBusError as e:
-            # error = e.get_dbus_name()
             print(e)
         connected = await self.interface.get_connected()
 
@@ -173,7 +167,6 @@ class BTPanDbus(BTPan):
         return True
 
     async def connect_tethering(self, remote_addr):
-        connected = None
         if not self.initialize_device(remote_addr):
             return False
 
@@ -184,8 +177,6 @@ class BTPanDbus(BTPan):
                 error = e.get_dbus_name()
                 print(error)
                 await asyncio.sleep(1)
-                #'org.freedesktop.DBus.Error.NoReply'
-                #'org.bluez.Error.Failed'
             else:
                 break
         connected = self.prop_get(self.interface, "Connected")
@@ -193,7 +184,6 @@ class BTPanDbus(BTPan):
         return connected
 
     async def disconnect_tethering(self, remote_addr):
-        connected = None
         if not self.initialize_device(remote_addr):
             return False
 
@@ -202,8 +192,6 @@ class BTPanDbus(BTPan):
         except dbus.exceptions.DBusException as e:
             error = e.get_dbus_name()
             print(error)
-            #'org.bluez.Error.NotConnected'
-            #'org.bluez.Error.Failed'
         connected = self.prop_get(self.interface, "Connected")
 
         return connected

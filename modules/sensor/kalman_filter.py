@@ -1,13 +1,10 @@
 # simplify filterpy
 
-import datetime
 import sys
 from math import log
 from copy import deepcopy
 
-from numpy import dot, zeros, eye, isscalar, linalg, array, atleast_2d, loadtxt, matrix
-
-# from scipy.linalg import block_diag
+from numpy import dot, zeros, eye, isscalar, linalg, array, atleast_2d
 
 
 def reshape_z(z, dim_z, ndim):
@@ -244,7 +241,7 @@ class KalmanFilter(object):
         self.x_post = self.x.copy()
         self.P_post = self.P.copy()
 
-        # Only computed only if requested via property
+        # Only computed if requested via property
         self._log_likelihood = log(sys.float_info.min)
         self._likelihood = sys.float_info.min
         self._mahalanobis = None

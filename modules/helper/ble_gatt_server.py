@@ -1,4 +1,3 @@
-import os
 import asyncio
 import json
 import re
@@ -37,7 +36,7 @@ class GadgetbridgeService(Service):
         super().__init__(self.service_uuid, True)
 
     async def quit(self):
-        if not self.status and self.bus != None:
+        if not self.status and self.bus is not None:
             self.bus.disconnect()
 
     # direct access from central
@@ -47,18 +46,11 @@ class GadgetbridgeService(Service):
 
     # notice to central
     def send_message(self, value):
-        # debug print
         self.tx_characteristic.changed(bytes(value + "\\n\n", "utf-8"))
 
     # receive from central
     @characteristic(rx_characteristic_uuid, CharFlags.WRITE).setter
     def rx_characteristic(self, value, options):
-        # debug
-        # try:
-        #  print(value.decode())
-        # except:
-        #  print(value)
-
         if value[0] == 0x10:
             self.value = bytearray()
             self.value_extend = True
@@ -76,7 +68,7 @@ class GadgetbridgeService(Service):
             res = re.match(
                 "^setTime\((\d+)\);E.setTimeZone\((\S+)\)", self.timestamp_str
             )
-            if res != None:
+            if res is not None:
                 self.timestamp_done = True
                 self.timestamp_status = False
                 time_diff = datetime.timedelta(hours=float(res.group(2)))
@@ -86,7 +78,6 @@ class GadgetbridgeService(Service):
 
         if self.value_extend:
             self.value.extend(bytearray(value))
-        # self.value.extend(bytearray(value))
 
         # for gadgetbridge JSON message
         if (

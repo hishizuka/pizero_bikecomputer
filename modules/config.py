@@ -23,7 +23,7 @@ try:
 
     GPIO.setmode(GPIO.BCM)
     _IS_RASPI = True
-except:
+except ImportError:
     pass
 
 from modules.helper.setting import Setting
@@ -52,7 +52,7 @@ class Config:
     G_AVERAGE_INCLUDING_ZERO = {"cadence": False, "power": True}
 
     # log several altitudes (from DEM and course file)
-    G_LOG_ALTITUDE_FROM_DATA_SOUCE = False
+    G_LOG_ALTITUDE_FROM_DATA_SOURCE = False
 
     # calculate index on course
     G_COURSE_INDEXING = True
@@ -79,7 +79,7 @@ class Config:
     G_UNIT_HARDWARE = ""
 
     # install_dir
-    G_INSTALL_PATH = os.path.expanduser("~") + "/pizero_bikecomputer/"
+    G_INSTALL_PATH = os.path.join(os.path.expanduser("~"), "pizero_bikecomputer")
 
     # layout def
     G_LAYOUT_FILE = "layout.yaml"
@@ -90,19 +90,17 @@ class Config:
     G_FONT_FULLPATH = ""
     G_FONT_NAME = ""
 
-    # course file
-    G_COURSE_DIR = "course/"
-    G_COURSE_FILE = "course.tcx"
-    G_COURSE_FILE_PATH = G_COURSE_DIR + G_COURSE_FILE
-    # G_CUESHEET_FILE = "course/cue_sheet.csv"
+    # courses
+    G_COURSE_DIR = "courses"
+    G_COURSE_FILE_PATH = os.path.join(G_COURSE_DIR, "course.tcx")
     G_CUESHEET_DISPLAY_NUM = 3  # max: 5
     G_CUESHEET_SCROLL = False
     G_OBEXD_CMD = "/usr/libexec/bluetooth/obexd"
     G_RECEIVE_COURSE_FILE = "bluetooth_content_share.html"
 
     # log setting
-    G_LOG_DIR = "log/"
-    G_LOG_DB = G_LOG_DIR + "log.db"
+    G_LOG_DIR = "log"
+    G_LOG_DB = os.path.join(G_LOG_DIR, "log.db")
     G_LOG_START_DATE = None
 
     # asyncio semaphore
@@ -320,7 +318,7 @@ class Config:
     G_DEM_MAP = "jpn_kokudo_chiri_in_DEM5A"
 
     # screenshot dir
-    G_SCREENSHOT_DIR = "screenshot/"
+    G_SCREENSHOT_DIR = "screenshots"
 
     # debug switch (change with --debug option)
     G_IS_DEBUG = False
@@ -486,8 +484,6 @@ class Config:
 
     # GUI mode
     G_GUI_MODE = "PyQt"
-    # G_GUI_MODE = "QML"
-    # G_GUI_MODE = "Kivy"
 
     # PerformanceGraph:
     # 1st: POWER
@@ -598,7 +594,7 @@ class Config:
         "USER_ROUTES_START": 0,
         "USER_ROUTES_OFFSET": 10,
         "URL_ROUTE_BASE_URL": "https://ridewithgps.com/routes/{route_id}",
-        "URL_ROUTE_DOWNLOAD_DIR": "./course/ridewithgps/",
+        "URL_ROUTE_DOWNLOAD_DIR": "./courses/ridewithgps/",
         "URL_UPLOAD": "https://ridewithgps.com/trips.json",
         "PARAMS": {
             "apikey": None,
@@ -713,25 +709,29 @@ class Config:
 
         # set dir
         if self.G_IS_RASPI:
-            self.G_SCREENSHOT_DIR = self.G_INSTALL_PATH + self.G_SCREENSHOT_DIR
-            self.G_LOG_DIR = self.G_INSTALL_PATH + self.G_LOG_DIR
-            self.G_LOG_DB = self.G_INSTALL_PATH + self.G_LOG_DB
-            self.G_LAYOUT_FILE = self.G_INSTALL_PATH + self.G_LAYOUT_FILE
-            self.G_COURSE_DIR = self.G_INSTALL_PATH + self.G_COURSE_DIR
-            self.G_COURSE_FILE_PATH = self.G_INSTALL_PATH + self.G_COURSE_FILE_PATH
+            self.G_SCREENSHOT_DIR = os.path.join(
+                self.G_INSTALL_PATH, self.G_SCREENSHOT_DIR
+            )
+            self.G_LOG_DIR = os.path.join(self.G_INSTALL_PATH, self.G_LOG_DIR)
+            self.G_LOG_DB = os.path.join(self.G_INSTALL_PATH, self.G_LOG_DB)
+            self.G_LAYOUT_FILE = os.path.join(self.G_INSTALL_PATH, self.G_LAYOUT_FILE)
+            self.G_COURSE_DIR = os.path.join(self.G_INSTALL_PATH, self.G_COURSE_DIR)
+            self.G_COURSE_FILE_PATH = os.path.join(
+                self.G_INSTALL_PATH, self.G_COURSE_FILE_PATH
+            )
 
         # layout file
         if not os.path.exists(self.G_LAYOUT_FILE):
+            default_layout_file = os.path.join("layouts", "layout-cycling.yaml")
             if self.G_IS_RASPI:
-                shutil.copy(
-                    self.G_INSTALL_PATH + "layouts/" + "layout-cycling.yaml",
-                    self.G_LAYOUT_FILE,
+                default_layout_file = os.path.join(
+                    self.G_INSTALL_PATH, default_layout_file
                 )
-            else:
-                shutil.copy("./layouts/layout-cycling.yaml", self.G_LAYOUT_FILE)
+
+            shutil.copy(default_layout_file, self.G_LAYOUT_FILE)
 
         # font file
-        if self.G_FONT_FILE != "" or self.G_FONT_FILE != None:
+        if self.G_FONT_FILE:
             if os.path.exists(self.G_FONT_FILE):
                 self.G_FONT_FULLPATH = self.G_FONT_FILE
 
@@ -766,16 +766,13 @@ class Config:
             )
             self.G_MAP = "toner"
         if self.G_MAP_CONFIG[self.G_MAP]["use_mbtiles"] and not os.path.exists(
-            "maptile/{}.mbtiles".format(self.G_MAP)
+            os.path.join("maptile", f"{self.G_MAP}.mbtiles")
         ):
             self.G_MAP_CONFIG[self.G_MAP]["use_mbtiles"] = False
         self.loaded_dem = None
 
-        # mkdir
-        if not os.path.exists(self.G_SCREENSHOT_DIR):
-            os.mkdir(self.G_SCREENSHOT_DIR)
-        if not os.path.exists(self.G_LOG_DIR):
-            os.mkdir(self.G_LOG_DIR)
+        os.makedirs(self.G_SCREENSHOT_DIR, exist_ok=True)
+        os.makedirs(self.G_LOG_DIR, exist_ok=True)
 
         self.check_map_dir()
 
@@ -812,7 +809,7 @@ class Config:
         self.logger.start_coroutine()
         self.display.start_coroutine()
 
-        # deley init start
+        # delay init start
         asyncio.create_task(self.delay_init())
 
     async def delay_init(self):
@@ -903,21 +900,21 @@ class Config:
                 self.logger.count_laps()
             elif key == "r":
                 self.logger.reset_count()
-            elif key == "n" and self.gui != None:
+            elif key == "n" and self.gui is not None:
                 self.gui.scroll_next()
-            elif key == "p" and self.gui != None:
+            elif key == "p" and self.gui is not None:
                 self.gui.scroll_prev()
-            elif key == "q" and self.gui != None:
+            elif key == "q" and self.gui is not None:
                 await self.quit()
             ##### temporary #####
             # test hardware key signals
-            elif key == "," and self.gui != None:
+            elif key == "," and self.gui is not None:
                 self.gui.press_tab()
-            elif key == "." and self.gui != None:
+            elif key == "." and self.gui is not None:
                 self.gui.press_shift_tab()
-            elif key == "b" and self.gui != None:
+            elif key == "b" and self.gui is not None:
                 self.gui.back_menu()
-            elif key == "c" and self.gui != None:
+            elif key == "c" and self.gui is not None:
                 self.gui.get_screenshot()
 
     def set_logger(self, logger):
@@ -927,31 +924,26 @@ class Config:
         self.display = display
 
     def check_map_dir(self):
-        # mkdir (map)
-        if not self.G_MAP_CONFIG[self.G_MAP]["use_mbtiles"] and not os.path.exists(
-            "maptile/" + self.G_MAP
-        ):
-            os.mkdir("maptile/" + self.G_MAP)
-        # optional
-        if not self.G_MAP_CONFIG[self.G_MAP]["use_mbtiles"] and not os.path.exists(
-            "maptile/" + self.G_HEATMAP_OVERLAY_MAP
-        ):
-            os.mkdir("maptile/" + self.G_HEATMAP_OVERLAY_MAP)
-        if not os.path.exists("maptile/" + self.G_RAIN_OVERLAY_MAP):
-            os.mkdir("maptile/" + self.G_RAIN_OVERLAY_MAP)
-        if not os.path.exists("maptile/" + self.G_WIND_OVERLAY_MAP):
-            os.mkdir("maptile/" + self.G_WIND_OVERLAY_MAP)
-        if self.G_LOG_ALTITUDE_FROM_DATA_SOUCE and not os.path.exists(
-            "maptile/" + self.G_DEM_MAP
-        ):
-            os.mkdir("maptile/" + self.G_DEM_MAP)
+        if not self.G_MAP_CONFIG[self.G_MAP]["use_mbtiles"]:
+            os.makedirs(os.path.join("maptile", self.G_MAP), exist_ok=True)
+            # optional
+            os.makedirs(
+                os.path.join("maptile", self.G_HEATMAP_OVERLAY_MAP), exist_ok=True
+            )
 
-    def remove_maptiles(self, map_name):
-        path = "maptile/" + map_name
+        os.makedirs(os.path.join("maptile", self.G_RAIN_OVERLAY_MAP), exist_ok=True)
+        os.makedirs(os.path.join("maptile", self.G_WIND_OVERLAY_MAP), exist_ok=True)
+
+        if self.G_LOG_ALTITUDE_FROM_DATA_SOURCE:
+            os.makedirs(os.path.join("maptile", self.G_DEM_MAP), exist_ok=True)
+
+    @staticmethod
+    def remove_maptiles(map_name):
+        path = os.path.join("maptile", map_name)
         if os.path.exists(path):
             files = os.listdir(path)
-            dir = [f for f in files if os.path.isdir(os.path.join(path, f))]
-            for d in dir:
+            dirs = [f for f in files if os.path.isdir(os.path.join(path, f))]
+            for d in dirs:
                 shutil.rmtree(os.path.join(path, d))
 
     def get_serial(self):
@@ -987,7 +979,8 @@ class Config:
     def change_mode(self):
         self.button_config.change_mode()
 
-    def exec_cmd(self, cmd, cmd_print=True):
+    @staticmethod
+    def exec_cmd(cmd, cmd_print=True):
         if cmd_print:
             print(cmd)
         try:
@@ -995,17 +988,15 @@ class Config:
         except:
             traceback.print_exc()
 
-    def exec_cmd_return_value(self, cmd, cmd_print=True):
-        string = ""
+    @staticmethod
+    def exec_cmd_return_value(cmd, cmd_print=True):
         if cmd_print:
             print(cmd)
-        ver = sys.version_info
         try:
             p = subprocess.run(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                # universal_newlines = True
             )
             string = p.stdout.decode("utf8").strip()
             return string
@@ -1031,7 +1022,7 @@ class Config:
 
     async def quit(self):
         print("quit")
-        if self.ble_uart != None:
+        if self.ble_uart is not None:
             await self.ble_uart.quit()
         await self.network.quit()
 
@@ -1064,12 +1055,12 @@ class Config:
 
     def hardware_wifi_bt_on(self):
         if self.G_IS_RASPI:
-            cmd = [self.G_INSTALL_PATH + "scripts/comment_out.sh"]
+            cmd = [os.path.join(self.G_INSTALL_PATH, "scripts/comment_out.sh")]
             self.exec_cmd(cmd)
 
     def hardware_wifi_bt_off(self):
         if self.G_IS_RASPI:
-            cmd = [self.G_INSTALL_PATH + "scripts/uncomment.sh"]
+            cmd = [os.path.join(self.G_INSTALL_PATH, "scripts/uncomment.sh")]
             self.exec_cmd(cmd)
 
     def update_application(self):
@@ -1090,7 +1081,7 @@ class Config:
             connect_interface.connect(("8.8.8.8", 53))
             self.G_IP_ADDRESS = connect_interface.getsockname()[0]
             return True
-        except socket.error as ex:
+        except socket.error:
             self.G_IP_ADDRESS = "No address"
             return False
 
@@ -1100,7 +1091,7 @@ class Config:
 
         status = {"wlan": False, "bluetooth": False}
         try:
-            # json opetion requires raspbian buster
+            # json option requires raspbian buster
             raw_status = self.exec_cmd_return_value(
                 ["rfkill", "--json"], cmd_print=False
             )
@@ -1115,7 +1106,7 @@ class Config:
         return (status["wlan"], status["bluetooth"])
 
     def onoff_wifi_bt(self, key=None):
-        # in future, manage with pycomman
+        # in the future, manage with pycomman
         if not self.G_IS_RASPI:
             return
 
@@ -1133,15 +1124,14 @@ class Config:
         status["Wifi"], status["Bluetooth"] = self.get_wifi_bt_status()
         self.exec_cmd(onoff_cmd[key][status[key]])
 
-    async def bluetooth_tethering(self, disconnect=False, cmd_print=True):
+    async def bluetooth_tethering(self, disconnect=False):
         if not self.G_IS_RASPI:
             return
         if self.G_BT_USE_ADDRESS == "":
             return
-        if self.bt_pan == None:
+        if self.bt_pan is None:
             return
 
-        res = None
         if not disconnect:
             res = await self.bt_pan.connect_tethering(
                 self.G_BT_ADDRESS[self.G_BT_USE_ADDRESS]
@@ -1150,10 +1140,7 @@ class Config:
             res = await self.bt_pan.disconnect_tethering(
                 self.G_BT_ADDRESS[self.G_BT_USE_ADDRESS]
             )
-        if res != None and res:
-            return True
-        else:
-            return False
+        return bool(res)
 
     def check_time(self, log_str):
         t = datetime.datetime.now()
@@ -1161,14 +1148,13 @@ class Config:
         self.log_time = t
 
     def read_map_list(self):
-        text = None
         with open(self.G_MAP_LIST) as file:
             text = file.read()
             map_list = yaml.safe_load(text)
-            if map_list == None:
+            if map_list is None:
                 return
             for key in map_list:
-                if map_list[key]["attribution"] == None:
+                if map_list[key]["attribution"] is None:
                     map_list[key]["attribution"] = ""
             self.G_MAP_CONFIG.update(map_list)
 
@@ -1233,7 +1219,8 @@ class Config:
             + (self.GEO_R1_2 / w) * c2 * (r0_lon - r1_lon) ** 2
         )
 
-    def calc_azimuth(self, lat, lon):
+    @staticmethod
+    def calc_azimuth(lat, lon):
         rad_latitude = np.radians(lat)
         rad_longitude = np.radians(lon)
         rad_longitude_delta = rad_longitude[1:] - rad_longitude[0:-1]
@@ -1249,7 +1236,8 @@ class Config:
         ).astype(dtype="int16")
         return azimuth
 
-    def get_maptile_filename(self, map_name, z, x, y):
+    @staticmethod
+    def get_maptile_filename(map_name, z, x, y):
         return "maptile/" + map_name + "/{0}/{1}/{2}.png".format(z, x, y)
 
     async def get_altitude_from_tile(self, pos):
@@ -1280,7 +1268,8 @@ class Config:
         # print(altitude, filename, p_x, p_y, pos[1], pos[0])
         return altitude
 
-    def get_tilexy_and_xy_in_tile(self, z, x, y, tile_size):
+    @staticmethod
+    def get_tilexy_and_xy_in_tile(z, x, y, tile_size):
         n = 2.0**z
         _y = math.radians(y)
         x_in_tile, tile_x = math.modf((x + 180.0) / 360.0 * n)
@@ -1295,15 +1284,17 @@ class Config:
             int(y_in_tile * tile_size),
         )
 
-    def get_lon_lat_from_tile_xy(self, z, x, y):
+    @staticmethod
+    def get_lon_lat_from_tile_xy(z, x, y):
         n = 2.0**z
         lon = x / n * 360.0 - 180.0
         lat = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * y / n))))
 
         return lon, lat
 
+    @staticmethod
     # replacement of dateutil.parser.parse
-    def datetime_myparser(self, ts):
+    def datetime_myparser(ts):
         if len(ts) == 14:
             # 20190322232414 / 14 chars
             dt = datetime.datetime(

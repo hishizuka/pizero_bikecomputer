@@ -15,7 +15,6 @@ class ANT_Device_Speed_Cadence(ant_device.ANT_Device):
     sc_values = []  # cad_time, cad, speed_time, speed
     pre_values = []  # cad_time, cad, speed_time, speed
     delta = []  # cad_time, cad, speed_time, speed
-    pre_values = []  # cad_time, cad, speed_time, speed
     elements = ("speed", "cadence", "distance")
 
     pickle_key = "ant+_sc_values"
@@ -90,7 +89,7 @@ class ANT_Device_Speed_Cadence(ant_device.ANT_Device):
                     "Speed(S&C)", spd, self.values["speed"], self.delta, []
                 )
         elif self.delta[2] == 0 and self.delta[3] == 0:
-            # if self.values['on_data_timestamp'] != None and (t - self.values['on_data_timestamp']).total_seconds() >= self.stop_cutoff:
+            # if self.values['on_data_timestamp'] is not None and (t - self.values['on_data_timestamp']).total_seconds() >= self.stop_cutoff:
             self.values["speed"] = 0
         else:
             print(
@@ -109,7 +108,7 @@ class ANT_Device_Speed_Cadence(ant_device.ANT_Device):
                 # refresh timestamp called from sensor_core
                 self.values["timestamp"] = t
         elif self.delta[0] == 0 and self.delta[1] == 0:
-            # if self.values['on_data_timestamp'] != None and (t - self.values['on_data_timestamp']).total_seconds() >= self.stop_cutoff:
+            # if self.values['on_data_timestamp'] is not None and (t - self.values['on_data_timestamp']).total_seconds() >= self.stop_cutoff:
             self.values["cadence"] = 0
         else:
             print(
@@ -186,7 +185,7 @@ class ANT_Device_Cadence(ant_device.ANT_Device):
                     self.elements[0], val, self.values[self.elements[0]], self.delta, []
                 )
         elif self.delta[0] == 0 and self.delta[1] == 0:
-            # if self.values['on_data_timestamp'] != None and (t - self.values['on_data_timestamp']).total_seconds() >= self.stop_cutoff:
+            # if self.values['on_data_timestamp'] is not None and (t - self.values['on_data_timestamp']).total_seconds() >= self.stop_cutoff:
             self.values[self.elements[0]] = 0
         else:
             print(

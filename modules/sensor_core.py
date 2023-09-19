@@ -9,7 +9,7 @@ try:
     import psutil
 
     _IMPORT_PSUTIL = True
-except:
+except ImportError:
     pass
 
 print("detected sensor modules:")
@@ -158,11 +158,7 @@ class SensorCore:
         # loop control
         self.wait_time = self.config.G_SENSOR_INTERVAL
         self.actual_loop_interval = self.config.G_SENSOR_INTERVAL
-        time_profile = [
-            None,
-        ]
 
-        # if True:
         while not self.config.G_QUIT:
             await asyncio.sleep(self.wait_time)
             start_time = datetime.datetime.now()
@@ -360,7 +356,7 @@ class SensorCore:
                         alt_diff_spd["ANT+"] = alt - pre_alt_spd["ANT+"]
                     pre_alt_spd["ANT+"] = alt
             # dem_altitude
-            if self.config.G_LOG_ALTITUDE_FROM_DATA_SOUCE:
+            if self.config.G_LOG_ALTITUDE_FROM_DATA_SOURCE:
                 self.values["integrated"][
                     "dem_altitude"
                 ] = await self.config.get_altitude_from_tile(
@@ -379,7 +375,7 @@ class SensorCore:
                         self.values["integrated"][key][-self.grade_window_size :]
                     )
                 # set grade
-                gr = gl = self.config.G_ANT_NULLVALUE
+                gl = self.config.G_ANT_NULLVALUE
                 gr = self.config.G_ANT_NULLVALUE
                 x = self.config.G_ANT_NULLVALUE
                 y = diff_sum["alt_diff"]
@@ -549,13 +545,13 @@ class SensorCore:
                     self.config.G_STOPWATCH_STATUS == "STOP"
                     and flag_spd
                     and flag_moving
-                    and self.config.logger != None
+                    and self.config.logger is not None
                 ):
                     self.config.logger.start_and_stop()
                 elif (
                     self.config.G_STOPWATCH_STATUS == "START"
                     and (not flag_spd or not flag_moving)
-                    and self.config.logger != None
+                    and self.config.logger is not None
                 ):
                     self.config.logger.start_and_stop()
 
@@ -565,7 +561,7 @@ class SensorCore:
                 if (
                     (self.config.G_ANT["USE"]["SPD"] or "timestamp" in v["GPS"])
                     and self.config.G_STOPWATCH_STATUS == "START"
-                    and self.config.logger != None
+                    and self.config.logger is not None
                 ):
                     self.config.logger.start_and_stop()
             # time.sleep(1)
@@ -640,14 +636,14 @@ class SensorCore:
             self.wait_time = self.config.G_SENSOR_INTERVAL - d2
             self.actual_loop_interval = (d1 + 1) * self.config.G_SENSOR_INTERVAL
 
-    def conv_grade(self, gr):
+    @staticmethod
+    def conv_grade(gr):
         g = gr
         if -1.5 < g < 1.5:
             g = 0
         return int(g)
 
     def get_lp_filtered_value(self, value, pre):
-        o = p = self.config.G_ANT_NULLVALUE
         # value must be initialized with None
         if np.isnan(pre):
             o = value

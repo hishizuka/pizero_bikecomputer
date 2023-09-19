@@ -50,15 +50,18 @@ class ANT_Device:
     }
     ant_idle_interval = {"NORMAL": 0.20, "QUICK": 0.01, "SCAN": 0.20}
 
-    def __init__(self, node=None, config=None, values={}, name=""):
+    def __init__(self, node=None, config=None, values=None, name=""):
         self.node = node
         self.config = config
         self.name = name
-        self.values = values
+        if values is None:
+            self.values = {}
+        else:
+            self.values = values
         self.add_struct_pattern()
         self.init_value()
 
-        if node == None:
+        if node is None:
             return  # for dummy device
         self.make_channel(self.ant_config["channel_type"])
         self.init_extra()
@@ -95,7 +98,7 @@ class ANT_Device:
         pass
 
     def make_channel(self, c_type, ext_assign=None):
-        if self.config.G_ANT["STATUS"] and self.channel == None:
+        if self.config.G_ANT["STATUS"] and self.channel is None:
             self.channel = self.node.new_channel(c_type, ext_assign=ext_assign)
             print("{} ".format(self.name), end="")
             self.channel.on_broadcast_data = self.on_data
@@ -214,7 +217,8 @@ class ANT_Device:
         values["battery_status"] = self.battery_status[(data[1] >> 4) & 0b111]
         values["battery_voltage"] = round(float(data[1] & 0b1111) + data[0] / 256, 2)
 
-    def print_spike(self, device_str, val, pre_val, delta, delta_t):
+    @staticmethod
+    def print_spike(device_str, val, pre_val, delta, delta_t):
         print(
             "ANT+ {0} spike: {1},".format(
                 device_str, datetime.datetime.now().strftime("%Y%m%d %H:%M:%S")

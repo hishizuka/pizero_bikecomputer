@@ -29,7 +29,7 @@ try:
     # device test
     _driver = find_driver()
     _SENSOR_ANT = True
-except:
+except ImportError:
     pass
 f.close()
 sys.stdout = sys.__stdout__

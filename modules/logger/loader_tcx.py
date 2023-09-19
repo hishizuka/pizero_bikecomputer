@@ -5,20 +5,18 @@ import datetime
 import shutil
 import re
 
-# import xml.etree.ElementTree as ET
 from math import factorial
 from crdp import rdp
 
 import numpy as np
 
-import importlib
 
 POLYLINE_DECODER = False
 try:
     import polyline
 
     POLYLINE_DECODER = True
-except:
+except ImportError:
     pass
 
 
@@ -71,7 +69,9 @@ class LoaderTcx:
         self.slope = np.array([])
         self.slope_smoothing = np.array([])
         self.colored_altitude = np.array([])
-        self.climb_segment = []
+        self.climb_segment = (
+            []
+        )  # [start_index, end_index, distance, average_grade, volume(=dist*average), cat]
 
         # for course points
         self.point_name = np.array([])
@@ -112,7 +112,7 @@ class LoaderTcx:
         t2 = datetime.datetime.now()
         time_profile.append((t2 - t1).total_seconds())
 
-        if len(self.latitude) == 0:
+        if not len(self.latitude):
             return
         print()
         print("[logger] Loading course:")
@@ -172,7 +172,7 @@ class LoaderTcx:
         # }
 
         dir_list = sorted(
-            glob.glob(self.config.G_COURSE_DIR + "/*.tcx"),
+            glob.glob(os.path.join(self.config.G_COURSE_DIR, "*.tcx")),
             key=lambda f: os.stat(f).st_mtime,
             reverse=True,
         )
@@ -185,8 +185,8 @@ class LoaderTcx:
         courses = []
         for c in file_list:
             info = {
-                "id": c[len(self.config.G_COURSE_DIR) :],
-                "name": c[len(self.config.G_COURSE_DIR) :],
+                "path": c,
+                "name": os.path.basename(c),
             }
             # heavy: delayed updates required
             # with open(c, 'r', encoding="utf-8_sig") as f:
@@ -343,17 +343,17 @@ class LoaderTcx:
             return
 
         # delete 'Straight' of course points
-        if len(self.point_type) > 0:
+        if len(self.point_type):
             ptype = np.array(self.point_type)
             not_straight_cond = np.where(ptype != "Straight", True, False)
             self.point_type = list(ptype[not_straight_cond])
-            if len(self.point_name) > 0:
+            if len(self.point_name):
                 self.point_name = list(np.array(self.point_name)[not_straight_cond])
-            if len(self.point_latitude) > 0:
+            if len(self.point_latitude):
                 self.point_latitude = np.array(self.point_latitude)[not_straight_cond]
-            if len(self.point_longitude) > 0:
+            if len(self.point_longitude):
                 self.point_longitude = np.array(self.point_longitude)[not_straight_cond]
-            if len(self.point_notes) > 0:
+            if len(self.point_notes):
                 self.point_notes = list(np.array(self.point_notes)[not_straight_cond])
 
     async def get_google_route_from_mapstogpx(self, url):
@@ -438,9 +438,9 @@ class LoaderTcx:
             return
 
     async def get_google_route(self, x1, y1, x2, y2):
-        json_routes = await self.config.network.api.get_google_route(x1, y1, x2, y2)
-        # print(json_routes)
-        if not POLYLINE_DECODER or json_routes == None or json_routes["status"] != "OK":
+        json_routes = await self.config.network.api.get_google_routes(x1, y1, x2, y2)
+
+        if not POLYLINE_DECODER or json_routes is None or json_routes["status"] != "OK":
             return
 
         self.info["Name"] = "Google routes"
@@ -511,7 +511,7 @@ class LoaderTcx:
         len_dist = len(self.distance)
 
         # empty check
-        if len_lat == 0 and len_lon == 0 and len_alt == 0 and len_dist == 0:
+        if not len_lat and not len_lon and not len_alt and not len_dist:
             return
 
         try:
@@ -522,7 +522,7 @@ class LoaderTcx:
                     return_mask=True,
                 )
             )
-            if len_alt > 0 and len_dist > 0:
+            if len_alt and len_dist:
                 cond = cond | np.array(
                     rdp(
                         np.column_stack([self.distance, self.altitude]),
@@ -532,9 +532,9 @@ class LoaderTcx:
                 )
             self.latitude = self.latitude[cond]
             self.longitude = self.longitude[cond]
-            if len_alt > 0:
+            if len_alt:
                 self.altitude = self.altitude[cond]  # [m]
-            if len_dist > 0:
+            if len_dist:
                 self.distance = self.distance[cond] / 1000  # [km]
         except:
             self.distance = self.distance / 1000  # [km]
@@ -547,7 +547,7 @@ class LoaderTcx:
         )
         self.points_diff_dist = np.sqrt(self.points_diff_sum_of_squares)
 
-        if len_dist == 0:
+        if not len_dist:
             self.distance = (
                 self.config.get_dist_on_earth_array(
                     self.longitude[0:-1],
@@ -561,7 +561,7 @@ class LoaderTcx:
             self.distance = np.cumsum(self.distance)
         dist_diff = 1000 * np.diff(self.distance)  # [m]
 
-        if len_alt > 0:
+        if len_alt:
             modified_altitude = self.savitzky_golay(self.altitude, 53, 3)
             # do not apply if length is different (occurs when too short course)
             if len(self.altitude) == len(modified_altitude):
@@ -653,7 +653,6 @@ class LoaderTcx:
             slope_smoothing_cat,
         )
 
-        # self.climb_segment = [] #[start_index, end_index, distance, average_grade, volume(=dist*average), cat]
         climb_search_state = False
         climb_start_cutoff = 2
         climb_end_cutoff = 1
@@ -752,9 +751,9 @@ class LoaderTcx:
         len_alt = len(self.altitude)
 
         # calculate course point distance
-        if len_pnt_dist == 0 and len_dist > 0:
+        if not len_pnt_dist and len_dist:
             self.point_distance = np.empty(len_pnt_lat)
-        if len_pnt_alt == 0 and len_alt > 0:
+        if not len_pnt_alt and len_alt:
             self.point_altitude = np.zeros(len_pnt_lat)
 
         min_index = 0
@@ -796,7 +795,7 @@ class LoaderTcx:
                     dist_diff_h < self.config.G_GPS_ON_ROUTE_CUTOFF
                     and dist_diff_h < min_dist_diff_h
                 ):
-                    if min_j != None and j - min_j > 2:
+                    if min_j is not None and j - min_j > 2:
                         continue
                     min_j = j
                     min_dist_diff_h = dist_diff_h
@@ -809,7 +808,7 @@ class LoaderTcx:
                         )
                         / 1000
                     )
-                    if len_alt > 0:
+                    if len_alt:
                         min_alt_delta = (
                             (
                                 self.altitude[min_index + j + 1]
@@ -822,17 +821,17 @@ class LoaderTcx:
                             * min_dist_delta
                         )
 
-            if min_j == None:
+            if min_j is None:
                 min_j = 0
             min_index = min_index + min_j
 
-            if len_pnt_dist == 0 and len_dist > 0:
+            if not len_pnt_dist and len_dist:
                 self.point_distance[i] = self.distance[min_index] + min_dist_delta
-            if len_pnt_alt == 0 and len_alt > 0:
+            if not len_pnt_alt and len_alt:
                 self.point_altitude[i] = self.altitude[min_index] + min_alt_delta
 
         # add climb tops
-        # if len(self.climb_segment) > 0:
+        # if len(self.climb_segment):
         #  min_index = 0
         #  for i in range(len(self.climb_segment)):
         #    diff_dist = np.abs(self.point_distance - self.climb_segment[i]['course_point_distance'])
@@ -848,26 +847,21 @@ class LoaderTcx:
         len_pnt_alt = len(self.point_altitude)
 
         # add start course point
-        if (
-            len_pnt_lat > 0
-            and len_pnt_dist > 0
-            and len_dist > 0
-            and self.point_distance[0] != 0.0
-        ):
+        if len_pnt_lat and len_pnt_dist and len_dist and self.point_distance[0] != 0.0:
             self.point_name.insert(0, "Start")
             self.point_latitude = np.insert(self.point_latitude, 0, self.latitude[0])
             self.point_longitude = np.insert(self.point_longitude, 0, self.longitude[0])
             self.point_type.insert(0, "")
-            if len_pnt_dist > 0 and len_dist > 0:
+            if len_pnt_dist and len_dist:
                 self.point_distance = np.insert(self.point_distance, 0, 0.0)
-            if len_pnt_alt > 0 and len_alt > 0:
+            if len_pnt_alt and len_alt:
                 self.point_altitude = np.insert(
                     self.point_altitude, 0, self.altitude[0]
                 )
         # add end course point
         # print(self.point_latitude, self.latitude, self.point_longitude, self.longitude)
         end_distance = None
-        if len(self.latitude) > 0 and len(self.point_longitude) > 0:
+        if len(self.latitude) and len(self.point_longitude):
             end_distance = self.config.get_dist_on_earth_array(
                 self.longitude[-1],
                 self.latitude[-1],
@@ -875,30 +869,31 @@ class LoaderTcx:
                 self.point_latitude[-1],
             )
         if (
-            len_pnt_lat > 0
-            and len_pnt_dist > 0
-            and len_dist > 0
-            and end_distance != None
+            len_pnt_lat
+            and len_pnt_dist
+            and len_dist
+            and end_distance is not None
             and end_distance > 5
         ):
             self.point_name.append("End")
             self.point_latitude = np.append(self.point_latitude, self.latitude[-1])
             self.point_longitude = np.append(self.point_longitude, self.longitude[-1])
             self.point_type.append("")
-            if len_pnt_dist > 0 and len_dist > 0:
+            if len_pnt_dist and len_dist:
                 self.point_distance = np.append(self.point_distance, self.distance[-1])
-            if len_pnt_alt > 0 and len_alt > 0:
+            if len_pnt_alt and len_alt:
                 self.point_altitude = np.append(self.point_altitude, self.altitude[-1])
 
         self.point_name = np.array(self.point_name)
         self.point_type = np.array(self.point_type)
         self.point_name = np.array(self.point_name)
 
-    def savitzky_golay(self, y, window_size, order, deriv=0, rate=1):
+    @staticmethod
+    def savitzky_golay(y, window_size, order, deriv=0, rate=1):
         try:
             window_size = np.abs(np.intc(window_size))
             order = np.abs(np.intc(order))
-        except ValueError as msg:
+        except ValueError:
             raise ValueError("window_size and order have to be of type int")
         if window_size % 2 != 1 or window_size < 1:
             raise TypeError("window_size size must be a positive odd number")

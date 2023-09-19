@@ -4,7 +4,7 @@ try:
     import PyQt6.QtCore as QtCore
     import PyQt6.QtWidgets as QtWidgets
     import PyQt6.QtGui as QtGui
-except:
+except ImportError:
     import PyQt5.QtCore as QtCore
     import PyQt5.QtWidgets as QtWidgets
     import PyQt5.QtGui as QtGui
@@ -199,7 +199,7 @@ class BaseMapWidget(ScreenWidget):
         await self.update_extra()
 
     def get_max_zoom(self):
-        if len(self.config.logger.course.distance) == 0:
+        if not len(self.config.logger.course.distance):
             return
 
         if self.config.G_MAX_ZOOM != 0:

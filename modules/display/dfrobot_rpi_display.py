@@ -1,16 +1,12 @@
-import time
-
-import numpy as np
-from PIL import Image
-
 _SENSOR_DISPLAY = False
-# try:
-from PIL import Image
-from DFRobot_RPi_Display.devices.dfrobot_epaper import DFRobot_Epaper_SPI
 
-_SENSOR_DISPLAY = True
-# except:
-#  pass
+try:
+    from DFRobot_RPi_Display.devices.dfrobot_epaper import DFRobot_Epaper_SPI
+
+    _SENSOR_DISPLAY = True
+except ImportError:
+    pass
+
 print("  DFRobot RPi Display : ", _SENSOR_DISPLAY)
 
 RASPBERRY_SPI_BUS = 0

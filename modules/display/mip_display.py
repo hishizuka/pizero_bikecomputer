@@ -1,6 +1,5 @@
 import time
 
-# import datetime
 import asyncio
 import numpy as np
 
@@ -16,10 +15,10 @@ try:
     pyximport.install()
     from .cython.mip_helper import conv_3bit_color, MipDisplay_CPP
 
-    # MODE = "Cython"
     MODE = "Cython_full"
-except:
+except ImportError:
     pass
+
 print("  MIP DISPLAY : ", _SENSOR_DISPLAY)
 
 
@@ -170,7 +169,7 @@ class MipDisplay:
     async def draw_worker(self):
         while True:
             img_bytes = await self.draw_queue.get()
-            if img_bytes == None:
+            if img_bytes is None:
                 break
             # self.config.check_time("mip_draw_worker start")
             # t = datetime.datetime.now()
@@ -200,7 +199,7 @@ class MipDisplay:
         # print("diff ", int(len(diff_lines)/self.config.G_HEIGHT*100), "%")
         # print(" ")
 
-        if len(diff_lines) == 0:
+        if not len(diff_lines):
             return
         self.pre_img[diff_lines] = self.img_buff_rgb8[diff_lines]
         # self.config.check_time("diff_lines")

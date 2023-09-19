@@ -1,12 +1,5 @@
-import time
-import datetime
+_SENSOR_DISPLAY = True
 
-_SENSOR_DISPLAY = False
-try:
-    # import RPi.GPIO as GPIO
-    _SENSOR_DISPLAY = True
-except:
-    pass
 print("  PiTFT 2.8(r) : ", _SENSOR_DISPLAY)
 
 # SCREEN

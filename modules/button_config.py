@@ -160,7 +160,7 @@ class Button_Config:
         self.config = config
 
     def press_button(self, button_hard, press_button, index):
-        if self.config.gui == None or self.config.gui.stack_widget == None:
+        if self.config.gui is None or self.config.gui.stack_widget is None:
             return
 
         w_index = self.config.gui.stack_widget.currentIndex()
