@@ -533,29 +533,17 @@ class GUI_PyQt(QtCore.QObject):
         # loop is closed
 
     def add_font(self):
-        # default font (macOS is not allowing relative paths)
-        res = QtGui.QFontDatabase.addApplicationFont(
-            "fonts/Yantramanav/Yantramanav-Black.ttf"
-        )
-        if res != -1:
-            font_name = QtGui.QFontDatabase.applicationFontFamilies(res)[0]
-            self.stack_widget.setStyleSheet(f"font-family: {font_name}")
-            app_logger.info(f"add font: {font_name}")
-
         # Additional font from setting.conf
-        if self.config.G_FONT_FULLPATH != "":
-            res = QtGui.QFontDatabase.addApplicationFont(self.config.G_FONT_FULLPATH)
+        if self.config.G_FONT_FILE:
+            # use full path as macOS is not allowing relative paths
+            res = QtGui.QFontDatabase.addApplicationFont(
+                os.path.join(os.getcwd(), "fonts", self.config.G_FONT_FILE)
+            )
             if res != -1:
-                self.config.G_FONT_NAME = QtGui.QFontDatabase.applicationFontFamilies(
-                    res
-                )[0]
-                # self.stack_widget.setStyleSheet("font-family: {}".format(self.config.G_FONT_NAME))
-                app_logger.info(f"add font: {self.config.G_FONT_NAME}")
-
-        # for macOS
-        # if platform.system() == 'Darwin' and QtCore.QLocale.system().bcp47Name() == "ja":
-        #  font = QtGui.QFont("Hiragino Sans") #or Osaka
-        #  self.app.setFont(font)
+                font_name = QtGui.QFontDatabase.applicationFontFamilies(res)[0]
+                font = QtGui.QFont(font_name)
+                self.app.setFont(font)
+                app_logger.info(f"add font: {font_name}")
 
     @qasync.asyncSlot(object, object)
     async def quit_by_ctrl_c(self, signal, frame):

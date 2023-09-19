@@ -58,11 +58,6 @@ class CueSheetItem(QtWidgets.QVBoxLayout):
         self.name.setWordWrap(False)
 
         self.dist.setStyleSheet("QLabel {padding: 0px 0px 0px 0px;}")
-        # self.name.setStyleSheet("QLabel {padding: 0px 0px 10px 10px;}")
-        if self.config.G_FONT_NAME != "":
-            self.name.setStyleSheet(
-                "QLabel {font-family:" + self.config.G_FONT_NAME + ";}"
-            )
 
         self.addWidget(self.dist)
         self.addWidget(self.name)

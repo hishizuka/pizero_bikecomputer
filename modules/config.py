@@ -84,8 +84,6 @@ class Config:
     # Language defined by G_LANG in gui_config.py
     G_LANG = "EN"
     G_FONT_FILE = ""
-    G_FONT_FULLPATH = ""
-    G_FONT_NAME = ""
 
     # courses
     G_COURSE_DIR = "courses"
@@ -722,10 +720,6 @@ class Config:
         if not os.path.exists(self.G_LAYOUT_FILE):
             default_layout_file = os.path.join("layouts", "layout-cycling.yaml")
             shutil.copy(default_layout_file, self.G_LAYOUT_FILE)
-
-        # font file
-        if self.G_FONT_FILE and os.path.exists(self.G_FONT_FILE):
-            self.G_FONT_FULLPATH = self.G_FONT_FILE
 
         # map list
         if os.path.exists(self.G_MAP_LIST):
