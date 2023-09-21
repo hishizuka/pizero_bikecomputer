@@ -21,6 +21,8 @@ from .ant import ant_device_search
 
 # ANT+
 _SENSOR_ANT = False
+
+_sys_stdout = sys.stdout
 f = open(os.devnull, "w")
 sys.stdout = f
 try:
@@ -33,7 +35,8 @@ try:
 except ImportError:
     pass
 f.close()
-sys.stdout = sys.__stdout__
+sys.stdout = _sys_stdout
+
 if _SENSOR_ANT:
     app_logger.info("ANT")
 
@@ -303,3 +306,6 @@ class SensorANT(Sensor):
             self.device[
                 self.config.G_ANT["ID_TYPE"]["LGT"]
             ].send_light_setting_light_off_flash_low(auto)
+
+
+print("CUBU ANT")

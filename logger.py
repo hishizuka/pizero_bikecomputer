@@ -1,9 +1,26 @@
 import logging
 import os
 import re
+import sys
 from datetime import datetime, timedelta
 
 from logging.handlers import RotatingFileHandler
+
+
+class StreamToLogger:
+    logger = None
+    level = None
+
+    def __init__(self, logger, level):
+        self.logger = logger
+        self.level = level
+
+    def write(self, buf):
+        for line in buf.rstrip().splitlines():
+            self.logger.log(self.level, line.rstrip())
+
+    def flush(self):
+        pass
 
 
 class CustomRotatingFileHandler(RotatingFileHandler):
@@ -53,3 +70,6 @@ app_logger.setLevel(level=logging.INFO)
 sh = logging.StreamHandler()
 
 app_logger.addHandler(sh)
+
+sys.stdout = StreamToLogger(app_logger, logging.INFO)
+sys.stderr = StreamToLogger(app_logger, logging.ERROR)
