@@ -358,7 +358,7 @@ class LoggerFit(Logger):
                     self.write(struct.pack(struct_def, *available_data))
                 except Exception:  # noqa
                     app_logger.exception("Failed writing struct")
-                    app_logger.error("l_num =", l_num, " message_num =", message_num)
+                    app_logger.error(f"l_num = {l_num} message_num = {message_num}")
                     app_logger.error(available_fields)
                     app_logger.error(struct_def)
                     app_logger.error(available_data)
@@ -550,7 +550,7 @@ class LoggerFit(Logger):
         app_logger.debug(lap_fields, lap_data)
         l_num = self.get_local_message_num(message_num, lap_fields)
         if l_num == -1:
-            # write header if need
+            # write header if needed
             local_message_num = (local_message_num + 1) % 16
             self.local_num[local_message_num] = {
                 "message_num": message_num,
@@ -565,7 +565,7 @@ class LoggerFit(Logger):
             self.write(struct.pack(struct_def, *lap_data))
         except Exception:  # noqa
             app_logger.exception("Failed writing struct")
-            app_logger.error("l_num =", l_num, " message_num =", message_num)
+            app_logger.error(f"l_num = {l_num} message_num = {message_num}")
             app_logger.error(lap_fields)
             app_logger.error(struct_def)
             app_logger.error(lap_data)
