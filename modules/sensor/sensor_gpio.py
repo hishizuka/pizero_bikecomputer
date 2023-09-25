@@ -1,5 +1,6 @@
 import time
 
+from logger import app_logger
 from .sensor import Sensor
 
 
@@ -13,7 +14,7 @@ except ImportError:
     pass
 
 if _SENSOR_RPiGPIO:
-    print("GPIO ", end="")
+    app_logger.info("GPIO")
 
 
 class SensorGPIO(Sensor):

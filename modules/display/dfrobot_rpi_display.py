@@ -1,3 +1,5 @@
+from logger import app_logger
+
 _SENSOR_DISPLAY = False
 
 try:
@@ -7,7 +9,7 @@ try:
 except ImportError:
     pass
 
-print("  DFRobot RPi Display : ", _SENSOR_DISPLAY)
+app_logger.info(f"DFRobot RPi Display: {_SENSOR_DISPLAY}")
 
 RASPBERRY_SPI_BUS = 0
 RASPBERRY_SPI_DEV = 0

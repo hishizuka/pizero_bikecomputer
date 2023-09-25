@@ -2,11 +2,12 @@
 
 import datetime
 
+from logger import app_logger
+
 
 def main():
-    print()
-    print("########## INITIALIZE START ##########")
-    print()
+    app_logger.info("########## INITIALIZE START ##########")
+
     time_profile = []
 
     t1 = datetime.datetime.now()
@@ -47,21 +48,21 @@ def main():
 
     logger = logger_core.LoggerCore(config)
     config.set_logger(logger)
+
     t2 = datetime.datetime.now()
     time_profile.append((t2 - t1).total_seconds())
+    total_time = sum(time_profile)
 
-    print()
-    print("Initialize modules:")
-    print("  config import : {:.3f} sec".format(time_profile[0]))
-    print("  config init   : {:.3f} sec".format(time_profile[1]))
-    print("  display import: {:.3f} sec".format(time_profile[2]))
-    print("  display init  : {:.3f} sec".format(time_profile[3]))
-    print("  import gui    : {:.3f} sec".format(time_profile[4]))
-    print("  import logger : {:.3f} sec".format(time_profile[5]))
-    print("  total         : {:.3f} sec".format(sum(time_profile)))
-    print()
-    print("########## INITIALIZE END ##########")
-    config.boot_time += sum(time_profile)
+    app_logger.info("Initialize modules:")
+    app_logger.info(f"config import : {time_profile[0]:.3f} sec")
+    app_logger.info(f"config init   : {time_profile[1]:.3f} sec")
+    app_logger.info(f"display import: {time_profile[2]:.3f} sec")
+    app_logger.info(f"display init  : {time_profile[3]:.3f} sec")
+    app_logger.info(f"import gui    : {time_profile[4]:.3f} sec")
+    app_logger.info(f"import logger : {time_profile[5]:.3f} sec")
+    app_logger.info(f"total         : {total_time:.3f} sec")
+    app_logger.info("########## INITIALIZE END ##########")
+    config.boot_time += total_time
 
     if config.G_GUI_MODE == "PyQt":
         gui_pyqt.GUI_PyQt(config)

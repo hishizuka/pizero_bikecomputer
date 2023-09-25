@@ -3,6 +3,7 @@ import time
 import asyncio
 import numpy as np
 
+from logger import app_logger
 
 _SENSOR_DISPLAY = False
 MODE = "Python"
@@ -19,7 +20,7 @@ try:
 except ImportError:
     pass
 
-print("  MIP DISPLAY : ", _SENSOR_DISPLAY)
+app_logger.info(f"MIP DISPLAY: {_SENSOR_DISPLAY}")
 
 
 # https://qiita.com/hishi/items/669ce474fcd76bdce1f1

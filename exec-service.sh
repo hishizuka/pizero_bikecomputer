@@ -13,19 +13,10 @@ export QT_QPA_FB_TSLIB=1
 export TSLIB_FBDEVICE=/dev/fb1
 export TSLIB_TSDEVICE=/dev/input/event0
 
-if [ -e $PGMDIR/log/debug.txt ]; then
-/bin/cp $PGMDIR/log/debug.txt $PGMDIR/log/debug.txt-`date "+%Y%m%d_%H%M%S" -r $PGMDIR/log/debug.txt`
-fi
-
 cd $PGMDIR
 
-# O: optimize
-# u: directly output to logging text
-#/usr/bin/python3 -u $PGMDIR/pizero_bikecomputer.py > $PGMDIR/log/debug.txt 2>&1 &
-/usr/bin/python3 -u pizero_bikecomputer.py > ./log/debug.txt 2> >(grep --line-buffered -v 'Operation timed out' | gawk '{print "[ERROR]", $0; fflush()}')
+/usr/bin/python3 pizero_bikecomputer.py
 
 sub_pid=$!
 echo $$ $sub_pid
 wait
-
-

@@ -9,6 +9,7 @@ except ImportError:
 
 from qasync import asyncSlot
 
+from logger import app_logger
 from .pyqt_menu_widget import MenuWidget
 
 ##################################
@@ -128,11 +129,8 @@ class AdjustWheelCircumferenceWidget(AdjustWidget):
         pre_v = self.config.G_WHEEL_CIRCUMFERENCE
         v = value / 1000
         self.config.G_WHEEL_CIRCUMFERENCE = v
-        print(
-            "set G_WHEEL_CIRCUMFERENCE from",
-            pre_v,
-            "to",
-            self.config.G_WHEEL_CIRCUMFERENCE,
+        app_logger.info(
+            f"set G_WHEEL_CIRCUMFERENCE from {pre_v} to {self.config.G_WHEEL_CIRCUMFERENCE}"
         )
 
     def preprocess(self):

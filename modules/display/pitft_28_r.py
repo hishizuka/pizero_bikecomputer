@@ -1,6 +1,8 @@
+from logger import app_logger
+
 _SENSOR_DISPLAY = True
 
-print("  PiTFT 2.8(r) : ", _SENSOR_DISPLAY)
+app_logger.info(f"PiTFT 2.8(r): {_SENSOR_DISPLAY}")
 
 # SCREEN
 SCREEN_WIDTH = 320

@@ -8,6 +8,7 @@ except ImportError:
     import PyQt5.QtGui as QtGui
 
 from .pyqt_menu_widget import MenuWidget, ListWidget, ListItemWidget
+from logger import app_logger
 import modules.pyqt.pyqt_multiscan_widget as pyqt_multiscan
 
 
@@ -122,8 +123,8 @@ class ANTListWidget(ListWidget):
         self.timer.timeout.connect(self.update_display)
 
     async def button_func_extra(self):
-        print(
-            "connect {}: {}".format(self.list_type, self.selected_item.list_info["id"])
+        app_logger.info(
+            f"connect {self.list_type}: {self.selected_item.list_info['id']}"
         )
         if self.selected_item is None:
             return

@@ -12,15 +12,14 @@ try:
 except ImportError:
     pass
 
-print("detected sensor modules:")
-print("  ", end="")
+from logger import app_logger
+
+app_logger.info("detected sensor modules:")
+
 from .sensor.sensor_gps import SensorGPS
 from .sensor.sensor_ant import SensorANT
 from .sensor.sensor_gpio import SensorGPIO
 from .sensor.sensor_i2c import SensorI2C
-
-print()
-print()
 
 # Todo: BLE
 
@@ -124,12 +123,10 @@ class SensorCore:
         self.sensor_gpio = SensorGPIO(config, None)
         self.sensor_gpio.update()
 
-        print()
-        print("[sensor] Initialize:")
-        print("  ANT+ : {:.3f} sec".format(time_profile[0]))
-        print("  I2C  : {:.3f} sec".format(time_profile[1]))
-        print("  total: {:.3f} sec".format(sum(time_profile)))
-        print()
+        app_logger.info("[sensor] Initialize:")
+        app_logger.info(f"ANT+ : {time_profile[0]:.3f} sec")
+        app_logger.info(f"I2C  : {time_profile[1]:.3f} sec")
+        app_logger.info(f"total: {sum(time_profile):.3f} sec")
 
     def start_coroutine(self):
         asyncio.create_task(self.integrate())
@@ -615,22 +612,15 @@ class SensorCore:
                     time_profile[i] - time_profile[i - 1]
                 ).total_seconds()
             if time_progile_sec > 1.5 * self.config.G_SENSOR_INTERVAL:
-                print(
-                    "too long loop time: ",
-                    datetime.datetime.now().strftime("%Y%m%d %H:%M:%S"),
-                    ", sec_diff:",
-                    sec_diff,
+                app_logger.warning(
+                    f"too long loop time: {datetime.datetime.now().strftime('%Y%m%d %H:%M:%S')}, sec_diff: {sec_diff}"
                 )
 
             loop_time = (datetime.datetime.now() - start_time).total_seconds()
             d1, d2 = divmod(loop_time, self.config.G_SENSOR_INTERVAL)
             if d1 > self.config.G_SENSOR_INTERVAL * 10:  # [s]
-                print(
-                    "too long loop_time({}):{:.2f}, interval:{:.1f}".format(
-                        self.__class__.__name__,
-                        loop_time,
-                        self.config.G_SENSOR_INTERVAL,
-                    )
+                app_logger.warning(
+                    f"too long loop_time({self.__class__.__name__}):{loop_time:.2f}, interval:{self.config.G_SENSOR_INTERVAL:.1f}"
                 )
                 d1 = d2 = 0
             self.wait_time = self.config.G_SENSOR_INTERVAL - d2

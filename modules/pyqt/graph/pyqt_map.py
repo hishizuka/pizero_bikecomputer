@@ -19,6 +19,7 @@ except ImportError:
 import pyqtgraph as pg
 from qasync import asyncSlot
 
+from logger import app_logger
 from modules.pyqt.pyqt_cuesheet_widget import CueSheetWidget
 from modules.pyqt.graph.pyqtgraph.CoursePlotItem import CoursePlotItem
 
@@ -158,10 +159,8 @@ class MapWidget(BaseMapWidget):
         t = datetime.datetime.utcnow()
         self.get_track()  # heavy when resume
         if len(self.tracks_lon):
-            print(
-                "resume_track(init): {:.3f} sec".format(
-                    (datetime.datetime.utcnow() - t).total_seconds()
-                )
+            app_logger.info(
+                f"resume_track(init): {(datetime.datetime.utcnow() - t).total_seconds():.3f} sec"
             )
 
     def reset_map(self):
@@ -378,11 +377,10 @@ class MapWidget(BaseMapWidget):
         t2 = datetime.datetime.now()
         time_profile.append((t2 - t1).total_seconds())
 
-        print("Plotting course:")
-        print("  course plot  : {:.3f} sec".format(time_profile[0]))
-        print("  course points: {:.3f} sec".format(time_profile[1]))
-        print("  total        : {:.3f} sec".format(sum(time_profile)))
-        print()
+        app_logger.info("Plotting course:")
+        app_logger.info(f"course plot  : {time_profile[0]:.3f} sec")
+        app_logger.info(f"course points: {time_profile[1]:.3f} sec")
+        app_logger.info(f"total        : {sum(time_profile):.3f} sec")
 
     async def update_extra(self):
         # t = datetime.datetime.utcnow()

@@ -13,6 +13,8 @@ from bluez_peripheral.util import *
 from bluez_peripheral.advert import Advertisement
 from bluez_peripheral.agent import NoIoAgent
 
+from logger import app_logger
+
 
 class GadgetbridgeService(Service):
     service_uuid = "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
@@ -93,15 +95,14 @@ class GadgetbridgeService(Service):
             message = {}
             try:
                 message = json.loads("{" + text_mod + "}", strict=False)
-            except:
-                print("failed to load json")
-                print(traceback.print_exc())
-                print(self.value.decode().strip()[5:-2])
-                print(text_mod)
+            except json.JSONDecodeError:
+                app_logger.exception("failed to load json")
+                app_logger.debug(self.value.decode().strip()[5:-2])
+                app_logger.debug(text_mod)
                 try:
                     message = json.loads("{" + text_mod + '"}', strict=False)
-                except:
-                    print("failed to load json (retry)")
+                except json.JSONDecodeError:
+                    app_logger.error("failed to load json (retry)")
 
             if (
                 "t" in message
@@ -112,7 +113,7 @@ class GadgetbridgeService(Service):
                 self.config.gui.show_message(
                     message["title"], message["body"], limit_length=True
                 )
-                print("success: ", message)
+                app_logger.info(f"success: {message}")
             elif (
                 "t" in message
                 and len(message["t"]) >= 4

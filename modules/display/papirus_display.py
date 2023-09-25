@@ -1,5 +1,6 @@
 from PIL import Image
 
+from logger import app_logger
 
 _SENSOR_DISPLAY = False
 try:
@@ -9,7 +10,8 @@ try:
     _SENSOR_DISPLAY = True
 except ImportError:
     pass
-print("  PAPIRUS E-INK DISPLAY : ", _SENSOR_DISPLAY)
+
+app_logger.info(f"PAPIRUS E-INK DISPLAY: {_SENSOR_DISPLAY}")
 
 
 class PapirusDisplay:

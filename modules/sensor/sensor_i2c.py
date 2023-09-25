@@ -4,6 +4,7 @@ import asyncio
 
 import numpy as np
 
+from logger import app_logger
 from .sensor import Sensor
 
 # I2C
@@ -15,7 +16,7 @@ try:
 except ImportError:
     pass
 if _SENSOR_I2C:
-    print("I2C ", end="")
+    app_logger.info("I2C")
 
 _SENSOR_MAG_DECLINATION = False
 try:
@@ -368,13 +369,12 @@ class SensorI2C(Sensor):
         # print
         if not _SENSOR_I2C:
             return
-        print()
-        print("detected I2c sensors:")
+
+        app_logger.info("detected I2c sensors:")
         for k in self.available_sensors.keys():
             for kk in self.available_sensors[k]:
                 if self.available_sensors[k][kk]:
-                    print("    {}: {}".format(k, kk))
-        print()
+                    app_logger.info(f"{k}: {kk}")
 
     def reset(self):
         for key in self.elements:
@@ -785,7 +785,9 @@ class SensorI2C(Sensor):
                     self.config.G_IMU_MAG_DECLINATION = int(
                         result["field-value"]["declination"]["value"]
                     )
-                    print("_SENSOR_MAG_DECLINATION:", self.config.G_IMU_MAG_DECLINATION)
+                    app_logger.info(
+                        f"_SENSOR_MAG_DECLINATION: {self.config.G_IMU_MAG_DECLINATION}"
+                    )
                     self.is_mag_declination_modified = True
                 except:
                     pass
@@ -858,10 +860,8 @@ class SensorI2C(Sensor):
             self.values["fixed_roll"] = roll
             self.values["gyro"] = np.zeros(3)
             self.do_position_calibration = False
-            print(
-                "calibrated position: pitch:{}, roll:{}".format(
-                    int(math.degrees(pitch)), int(math.degrees(roll))
-                )
+            app_logger.info(
+                f"calibrated position: pitch:{int(math.degrees(pitch))}, roll:{int(math.degrees(roll))}"
             )
 
     def modified_acc(self):
@@ -1129,13 +1129,15 @@ class SensorI2C(Sensor):
         self.average_val["altitude"] = np.full(self.ave_window_size, np.nan)
         self.values["pre_altitude"] = np.nan
 
-        print("update sealevel pressure")
-        print("    altitude:", alt, "m")
-        print("    pressure:", round(self.values["pressure"], 3), "hPa")
+        app_logger.info("update sealevel pressure")
+        app_logger.info(f"altitude: {alt} m")
+        app_logger.info(f"pressure: {round(self.values['pressure'], 3)} hPa")
         if temperature is not None:
-            print("    temp:", round(temperature, 1), "C")
-        print("    sealevel temperature:", round(self.sealevel_temp - 273.15, 1), "C")
-        print("    sealevel pressure:", round(self.sealevel_pa, 3), "hPa")
+            app_logger.info(f"temp: {round(temperature, 1)} C")
+        app_logger.info(
+            f"sealevel temperature: {round(self.sealevel_temp - 273.15, 1)} C"
+        )
+        app_logger.info(f"sealevel pressure: {round(self.sealevel_pa, 3)} hPa")
 
     def lp_filter(self, key, filter_val):
         if key not in self.values:
@@ -1163,13 +1165,8 @@ class SensorI2C(Sensor):
             return
         hampel_value = np.abs(self.values[key] - self.median_val[key])
         if (hampel_value > diff_min) and (hampel_value > sigma * hampel_std):
-            print(
-                "pressure spike:{}, {:.3f}hPa, diff:{:.3f}, threshold:{:.3f}".format(
-                    datetime.datetime.now().strftime("%Y%m%d %H:%M:%S"),
-                    self.values[key],
-                    hampel_value,
-                    sigma * hampel_std,
-                )
+            app_logger.info(
+                f"pressure spike:{datetime.datetime.now().strftime('%Y%m%d %H:%M:%S')}, {self.values[key]:.3f}hPa, diff:{hampel_value:.3f}, threshold:{sigma * hampel_std:.3f}"
             )
             self.values[key] = self.median_val[key]
 

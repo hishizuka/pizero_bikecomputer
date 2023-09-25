@@ -1,11 +1,10 @@
 import os
-import sys
 import datetime
 import argparse
 import json
+import logging
 import socket
 import asyncio
-
 import shutil
 import subprocess
 import traceback
@@ -13,7 +12,6 @@ import math
 
 import numpy as np
 import oyaml as yaml
-
 from PIL import Image
 
 
@@ -26,6 +24,7 @@ try:
 except ImportError:
     pass
 
+from logger import CustomRotatingFileHandler, app_logger
 from modules.helper.setting import Setting
 from modules.button_config import Button_Config
 
@@ -101,6 +100,7 @@ class Config:
     # log setting
     G_LOG_DIR = "log"
     G_LOG_DB = os.path.join(G_LOG_DIR, "log.db")
+    G_LOG_DEBUG_FILE = os.path.join(G_LOG_DIR, "debug.log")
     G_LOG_START_DATE = None
 
     # asyncio semaphore
@@ -701,7 +701,8 @@ class Config:
             self.G_HEADLESS = True
         # show options
         if self.G_IS_DEBUG:
-            print(args)
+            app_logger.setLevel(logging.DEBUG)
+            app_logger.debug(args)
 
         # read setting.conf and settings.pickle
         self.setting = Setting(self)
@@ -714,11 +715,24 @@ class Config:
             )
             self.G_LOG_DIR = os.path.join(self.G_INSTALL_PATH, self.G_LOG_DIR)
             self.G_LOG_DB = os.path.join(self.G_INSTALL_PATH, self.G_LOG_DB)
+            self.G_LOG_DEBUG_FILE = os.path.join(self.G_INSTALL_PATH, self.G_LOG_DB)
             self.G_LAYOUT_FILE = os.path.join(self.G_INSTALL_PATH, self.G_LAYOUT_FILE)
             self.G_COURSE_DIR = os.path.join(self.G_INSTALL_PATH, self.G_COURSE_DIR)
             self.G_COURSE_FILE_PATH = os.path.join(
                 self.G_INSTALL_PATH, self.G_COURSE_FILE_PATH
             )
+
+        # make sure all folders exist
+        os.makedirs(self.G_SCREENSHOT_DIR, exist_ok=True)
+        os.makedirs(self.G_LOG_DIR, exist_ok=True)
+
+        if self.G_LOG_DEBUG_FILE:
+            delay = not os.path.exists(self.G_LOG_DEBUG_FILE)
+            fh = CustomRotatingFileHandler(self.G_LOG_DEBUG_FILE, delay=delay)
+            fh.doRollover()
+            fh_formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+            fh.setFormatter(fh_formatter)
+            app_logger.addHandler(fh)
 
         # layout file
         if not os.path.exists(self.G_LAYOUT_FILE):
@@ -731,9 +745,8 @@ class Config:
             shutil.copy(default_layout_file, self.G_LAYOUT_FILE)
 
         # font file
-        if self.G_FONT_FILE:
-            if os.path.exists(self.G_FONT_FILE):
-                self.G_FONT_FULLPATH = self.G_FONT_FILE
+        if self.G_FONT_FILE and os.path.exists(self.G_FONT_FILE):
+            self.G_FONT_FULLPATH = self.G_FONT_FILE
 
         # map list
         if os.path.exists(self.G_MAP_LIST):
@@ -760,19 +773,13 @@ class Config:
                     map_config[key]["user_agent"] = None
 
         if self.G_MAP not in self.G_MAP_CONFIG:
-            print(
-                'don\'t exist map "{}" in {}'.format(self.G_MAP, self.G_MAP_LIST),
-                file=sys.stderr,
-            )
+            app_logger.error(f"{self.G_MAP} does not exist in {self.G_MAP_LIST}")
             self.G_MAP = "toner"
         if self.G_MAP_CONFIG[self.G_MAP]["use_mbtiles"] and not os.path.exists(
             os.path.join("maptile", f"{self.G_MAP}.mbtiles")
         ):
             self.G_MAP_CONFIG[self.G_MAP]["use_mbtiles"] = False
         self.loaded_dem = None
-
-        os.makedirs(self.G_SCREENSHOT_DIR, exist_ok=True)
-        os.makedirs(self.G_LOG_DIR, exist_ok=True)
 
         self.check_map_dir()
 
@@ -882,14 +889,15 @@ class Config:
                 await self.bluetooth_tethering()
 
         t2 = datetime.datetime.now()
-        print("delay init: {:.3f} sec".format((t2 - t1).total_seconds()))
-        self.boot_time += (t2 - t1).total_seconds()
+        delta = (t2 - t1).total_seconds()
+        app_logger.info(f"delay init: {delta:.3f} sec")
+        self.boot_time += delta
 
         await self.logger.resume_start_stop()
 
     async def keyboard_check(self):
         while not self.G_QUIT:
-            print(
+            app_logger.info(
                 "s:start/stop, l: lap, r:reset, p: previous screen, n: next screen, q: quit"
             )
             key = await self.loop.run_in_executor(None, input, "> ")
@@ -967,10 +975,8 @@ class Config:
             with open(model_path, "r") as f:
                 self.G_UNIT_MODEL = f.read().replace("\x00", "").strip()
 
-        print(
-            "{}({}), serial:{}".format(
-                self.G_UNIT_MODEL, self.G_UNIT_HARDWARE, hex(self.G_UNIT_ID_HEX)
-            )
+        app_logger.info(
+            f"{self.G_UNIT_MODEL}({self.G_UNIT_HARDWARE}), serial:{hex(self.G_UNIT_ID_HEX)}"
         )
 
     def press_button(self, button_hard, press_button, index):
@@ -982,16 +988,16 @@ class Config:
     @staticmethod
     def exec_cmd(cmd, cmd_print=True):
         if cmd_print:
-            print(cmd)
+            app_logger.info(cmd)
         try:
             subprocess.run(cmd)
-        except:
-            traceback.print_exc()
+        except Exception:  # noqa
+            app_logger.exception(f"Failed executing {cmd}")
 
     @staticmethod
     def exec_cmd_return_value(cmd, cmd_print=True):
         if cmd_print:
-            print(cmd)
+            app_logger.info(cmd)
         try:
             p = subprocess.run(
                 cmd,
@@ -1000,8 +1006,8 @@ class Config:
             )
             string = p.stdout.decode("utf8").strip()
             return string
-        except:
-            traceback.print_exc()
+        except Exception:  # noqa
+            app_logger.exception(f"Failed executing {cmd}")
 
     async def kill_tasks(self):
         tasks = asyncio.all_tasks()
@@ -1016,12 +1022,12 @@ class Config:
             try:
                 await task
             except asyncio.CancelledError:
-                print("cancel task", task.get_coro().__qualname__)
+                app_logger.info(f"cancel task {task.get_coro().__qualname__}")
             else:
                 pass
 
     async def quit(self):
-        print("quit")
+        app_logger.info("quit")
         if self.ble_uart is not None:
             await self.ble_uart.quit()
         await self.network.quit()
@@ -1038,7 +1044,7 @@ class Config:
         await asyncio.sleep(0.5)
         await self.kill_tasks()
         self.logger.remove_handler()
-        print("quit done")
+        app_logger.info("quit done")
 
         if self.G_GUI_MODE != "PyQt":
             self.loop.close()
@@ -1318,4 +1324,4 @@ class Config:
                 int(ts[17:19]),  # %s
             )
             return dt
-        print("err", ts, len(ts))
+        app_logger.error(f"Could not parse date {ts} {len(ts)}")

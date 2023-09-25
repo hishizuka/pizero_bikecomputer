@@ -10,6 +10,8 @@ import traceback
 import numpy as np
 from crdp import rdp
 
+from logger import app_logger
+
 
 class LoggerCore:
     config = None
@@ -266,10 +268,8 @@ class LoggerCore:
             self.con.close()
 
             shutil.move(self.config.G_LOG_DB, log_db_moved)
-            print(
-                "The layout of {} is changed to {}".format(
-                    self.config.G_LOG_DB, log_db_moved
-                )
+            app_logger.info(
+                f"The layout of {self.config.G_LOG_DB} is changed to {log_db_moved}"
             )
 
             self.con = sqlite3.connect(self.config.G_LOG_DB, check_same_thread=False)
@@ -303,7 +303,7 @@ class LoggerCore:
 
         if self.config.G_MANUAL_STATUS != "START":
             self.config.display.screen_flash_short()
-            print("->M START {}".format(time_str))
+            app_logger.info(f"->M START {time_str}")
             self.start_and_stop("STOP")
             self.config.G_MANUAL_STATUS = "START"
             if self.config.gui is not None:
@@ -325,7 +325,7 @@ class LoggerCore:
 
         elif self.config.G_MANUAL_STATUS == "START":
             self.config.display.screen_flash_long()
-            print("->M STOP  {}".format(time_str))
+            app_logger.info(f"->M STOP  {time_str}")
             self.start_and_stop("START")
             self.config.G_MANUAL_STATUS = "STOP"
             if self.config.gui is not None:
@@ -348,10 +348,10 @@ class LoggerCore:
         time_str = datetime.datetime.now().strftime("%Y%m%d %H:%M:%S")
         if self.config.G_STOPWATCH_STATUS != "START":
             self.config.G_STOPWATCH_STATUS = "START"
-            print("->START   {}".format(time_str))
+            app_logger.info(f"->START   {time_str}")
         elif self.config.G_STOPWATCH_STATUS == "START":
             self.config.G_STOPWATCH_STATUS = "STOP"
-            print("->STOP    {}".format(time_str))
+            app_logger.info(f"->STOP    {time_str}")
 
     def count_laps(self):
         if self.values["count"] == 0 or self.values["count_lap"] == 0:
@@ -370,7 +370,7 @@ class LoggerCore:
             self.average["lap"][k2]["sum"] = 0
         asyncio.create_task(self.record_log())
         time_str = datetime.datetime.now().strftime("%Y%m%d %H:%M:%S")
-        print("->LAP:{}   {}".format(self.values["lap"], time_str))
+        app_logger.info(f"->LAP:{self.values['lap']}   {time_str}")
 
         # show message
         value_str = (
@@ -407,19 +407,18 @@ class LoggerCore:
         self.cur.close()
         self.con.close()
 
+        t = datetime.datetime.now()
         if self.config.G_LOG_WRITE_CSV:
-            t = datetime.datetime.now()
             if not self.logger_csv.write_log():
                 return
-            print("Write csv :", (datetime.datetime.now() - t).total_seconds(), "sec")
+            app_logger.info(
+                f"Write csv : {(datetime.datetime.now() - t).total_seconds()} sec"
+            )
         if self.config.G_LOG_WRITE_FIT:
-            t = datetime.datetime.now()
             if not self.logger_fit.write_log():
                 return
-            print(
-                "Write Fit({}) : {} sec".format(
-                    self.logger_fit.mode, (datetime.datetime.now() - t).total_seconds()
-                )
+            app_logger.info(
+                f"Write Fit({self.logger_fit.mode}) : {(datetime.datetime.now() - t).total_seconds()} sec"
             )
 
         # backup and reset database
@@ -436,7 +435,7 @@ class LoggerCore:
         self.con = sqlite3.connect(self.config.G_LOG_DB, check_same_thread=False)
         self.cur = self.con.cursor()
         self.init_db()
-        print("DELETE :", (datetime.datetime.now() - t).total_seconds(), "sec")
+        app_logger.info(f"DELETE : {(datetime.datetime.now() - t).total_seconds()} sec")
 
         # reset temporary values
         self.config.setting.reset_config_pickle()
@@ -704,7 +703,7 @@ class LoggerCore:
         if res[0] == 0:
             return
 
-        print("resume existing rides...")
+        app_logger.info("resume existing rides...")
         row_all = "\
       timestamp,lap,timer,total_timer_time,\
       distance,accumulated_power,total_ascent,total_descent,altitude,\
@@ -852,7 +851,7 @@ class LoggerCore:
 
     def clear_short_log(self):
         while self.short_log_lock:
-            print("locked: clear_short_log")
+            app_logger.info("locked: clear_short_log")
             time.sleep(0.02)
         self.short_log_dist = []
         self.short_log_lat = []
@@ -877,7 +876,7 @@ class LoggerCore:
         # get values from short_log to db in logging
         if timestamp_delta is not None and self.short_log_available:
             while self.short_log_lock:
-                print("locked: get values")
+                app_logger.info("locked: get values")
                 time.sleep(0.02)
             lat_raw = np.array(self.short_log_lat)
             lon_raw = np.array(self.short_log_lon)

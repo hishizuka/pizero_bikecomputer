@@ -1,6 +1,8 @@
 import datetime
 import asyncio
 
+from logger import app_logger
+
 
 class Sensor:
     config = None
@@ -40,10 +42,8 @@ class Sensor:
         loop_time = (datetime.datetime.now() - self.start_time).total_seconds()
         d1, d2 = divmod(loop_time, interval)
         if d1 > interval * 10:  # [s]
-            print(
-                "too long loop_time({}):{:.2f}s, interval:{:.1f}".format(
-                    self.__class__.__name__, loop_time, interval
-                )
+            app_logger.warning(
+                f"too long loop_time({self.__class__.__name__}):{loop_time:.2f}s, interval:{interval:.1f}"
             )
             d1 = d2 = 0
         self.wait_time = interval - d2

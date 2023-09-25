@@ -1,5 +1,7 @@
-import numpy as np
 import datetime
+import numpy as np
+
+from logger import app_logger
 
 try:
     import PyQt6.QtCore as QtCore
@@ -117,10 +119,8 @@ class CourseProfileGraphWidget(BaseMapWidget):
         self.climb_top_plot.setData(climb_points)
         self.plot.addItem(self.climb_top_plot)
 
-        print(
-            "Plotting course profile: {:.3f} sec".format(
-                (datetime.datetime.now() - t).total_seconds()
-            )
+        app_logger.info(
+            f"Plotting course profile: {(datetime.datetime.now() - t).total_seconds():.3f} sec"
         )
 
     def reset_course(self):

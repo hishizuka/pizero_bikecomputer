@@ -2,8 +2,8 @@ import sqlite3
 import time
 import datetime
 import struct
-import traceback
 
+from logger import app_logger
 from .logger import Logger
 
 # cython
@@ -263,8 +263,7 @@ class LoggerFit(Logger):
         local_message_num = 0
 
         # file_id
-        if self.config.G_IS_DEBUG:
-            print("file_id")
+        app_logger.debug("file_id")
         self.write_definition(local_message_num)
         struct_def = self.get_struct_def(local_message_num)
         self.write(
@@ -280,15 +279,13 @@ class LoggerFit(Logger):
 
         # file_creator
         local_message_num += 1
-        if self.config.G_IS_DEBUG:
-            print("file_creator")
+        app_logger.debug("file_creator")
         self.write_definition(local_message_num)
         struct_def = self.get_struct_def(local_message_num)
         self.write(struct.pack("<1H1B", 100, 1))
 
         # record
-        if self.config.G_IS_DEBUG:
-            print("record")
+        app_logger.debug("record")
         # get Max Lap
         cur.execute("SELECT MAX(lap) FROM BIKECOMPUTER_LOG")
         max_lap = (cur.fetchone())[0]
@@ -359,30 +356,26 @@ class LoggerFit(Logger):
 
                 try:
                     self.write(struct.pack(struct_def, *available_data))
-                except:
-                    traceback.print_exc()
-                    print("ERROR")
-                    print("l_num =", l_num, " message_num =", message_num)
-                    print(available_fields)
-                    print(struct_def)
-                    print(available_data)
+                except Exception:  # noqa
+                    app_logger.exception("Failed writing struct")
+                    app_logger.error(f"l_num = {l_num} message_num = {message_num}")
+                    app_logger.error(available_fields)
+                    app_logger.error(struct_def)
+                    app_logger.error(available_data)
                     cur.close()
                     con.close()
                     return False
 
             # lap: 19
-            if self.config.G_IS_DEBUG:
-                print("lap")
+            app_logger.debug("lap")
             local_message_num = self.get_summary(19, local_message_num, lap_num, cur)
 
         # session: 18
-        if self.config.G_IS_DEBUG:
-            print("session")
+        app_logger.debug("session")
         local_message_num = self.get_summary(18, local_message_num, 0, cur)
 
         # activity: 34
-        if self.config.G_IS_DEBUG:
-            print("activity")
+        app_logger.debug("activity")
         local_message_num = (local_message_num + 1) % 16
         self.local_num[local_message_num] = {
             "message_num": 34,
@@ -554,11 +547,10 @@ class LoggerFit(Logger):
         if message_num == 18:
             lap_fields.append(5)
             lap_data.append(2)
-        if self.config.G_IS_DEBUG:
-            print(lap_fields, lap_data)
+        app_logger.debug(lap_fields, lap_data)
         l_num = self.get_local_message_num(message_num, lap_fields)
         if l_num == -1:
-            # write header if need
+            # write header if needed
             local_message_num = (local_message_num + 1) % 16
             self.local_num[local_message_num] = {
                 "message_num": message_num,
@@ -571,13 +563,12 @@ class LoggerFit(Logger):
         struct_def = self.get_struct_def(l_num)
         try:
             self.write(struct.pack(struct_def, *lap_data))
-        except:
-            traceback.print_exc()
-            print("ERROR")
-            print("l_num =", l_num, " message_num =", message_num)
-            print(lap_fields)
-            print(struct_def)
-            print(lap_data)
+        except Exception:  # noqa
+            app_logger.exception("Failed writing struct")
+            app_logger.error(f"l_num = {l_num} message_num = {message_num}")
+            app_logger.error(lap_fields)
+            app_logger.error(struct_def)
+            app_logger.error(lap_data)
             return -1
         return local_message_num
 

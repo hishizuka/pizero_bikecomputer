@@ -1,9 +1,9 @@
 import time
 
-# import datetime
 import asyncio
 import numpy as np
 
+from logger import app_logger
 
 _SENSOR_DISPLAY = False
 try:
@@ -13,7 +13,7 @@ try:
 except ImportError:
     pass
 
-print("  MIP SHARP DISPLAY : ", _SENSOR_DISPLAY)
+app_logger.info(f"MIP SHARP DISPLAY: {_SENSOR_DISPLAY}")
 
 # https://qiita.com/hishi/items/669ce474fcd76bdce1f1
 # LS027B7DH01
