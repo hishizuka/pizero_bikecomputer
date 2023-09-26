@@ -1,7 +1,6 @@
 import os
 import glob
 import json
-import datetime
 import shutil
 import re
 
@@ -11,6 +10,7 @@ from crdp import rdp
 import numpy as np
 
 from logger import app_logger
+from modules.utils.timer import Timer, log_timers
 
 POLYLINE_DECODER = False
 try:
@@ -91,36 +91,31 @@ class LoaderTcx:
 
     def load(self):
         self.reset()
-        time_profile = []
 
-        t1 = datetime.datetime.now()
-        self.read_tcx()
-        t2 = datetime.datetime.now()
-        time_profile.append((t2 - t1).total_seconds())
+        timers = [
+            Timer(auto_start=False, text="read_tcx            : {0:.3f} sec"),
+            Timer(auto_start=False, text="downsample          : {0:.3f} sec"),
+            Timer(auto_start=False, text="calc_slope_smoothing: {0:.3f} sec"),
+            Timer(auto_start=False, text="modify_course_points: {0:.3f} sec"),
+        ]
 
-        t1 = t2
-        self.downsample()
-        t2 = datetime.datetime.now()
-        time_profile.append((t2 - t1).total_seconds())
+        with timers[0]:
+            self.read_tcx()
 
-        t1 = t2
-        self.calc_slope_smoothing()
-        t2 = datetime.datetime.now()
-        time_profile.append((t2 - t1).total_seconds())
+        with timers[1]:
+            self.downsample()
 
-        t1 = t2
-        self.modify_course_points()
-        t2 = datetime.datetime.now()
-        time_profile.append((t2 - t1).total_seconds())
+        with timers[2]:
+            self.calc_slope_smoothing()
+
+        with timers[3]:
+            self.modify_course_points()
 
         if not len(self.latitude):
             return
+
         app_logger.info(f"[logger] Loading course:")
-        app_logger.info(f"read_tcx            : {time_profile[0]:.3f} sec")
-        app_logger.info(f"downsample          : {time_profile[1]:.3f} sec")
-        app_logger.info(f"calc_slope_smoothing: {time_profile[2]:.3f} sec")
-        app_logger.info(f"modify_course_points: {time_profile[3]:.3f} sec")
-        app_logger.info(f"total               : {sum(time_profile):.3f} sec")
+        log_timers(timers, text_total="total               : {0:.3f} sec")
 
         if self.config.G_THINGSBOARD_API["STATUS"]:
             self.config.network.api.send_livetrack_course_load()

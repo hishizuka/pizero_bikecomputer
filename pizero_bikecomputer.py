@@ -1,66 +1,50 @@
 #!/usr/bin/python3
 
-import datetime
-
 from logger import app_logger
+from modules.utils.timer import Timer, log_timers
 
 
 def main():
     app_logger.info("########## INITIALIZE START ##########")
 
-    time_profile = []
+    # ensure visually alignment for log
+    timers = [
+        Timer(auto_start=False, text="config import : {0:.3f} sec"),
+        Timer(auto_start=False, text="config init   : {0:.3f} sec"),
+        Timer(auto_start=False, text="display import: {0:.3f} sec"),
+        Timer(auto_start=False, text="display init  : {0:.3f} sec"),
+        Timer(auto_start=False, text="import gui    : {0:.3f} sec"),
+        Timer(auto_start=False, text="import logger : {0:.3f} sec"),
+    ]
 
-    t1 = datetime.datetime.now()
-    from modules import config
+    with timers[0]:
+        from modules import config
 
-    t2 = datetime.datetime.now()
-    time_profile.append((t2 - t1).total_seconds())
-
-    t1 = t2
-    config = config.Config()
-    t2 = datetime.datetime.now()
-    time_profile.append((t2 - t1).total_seconds())
+    with timers[1]:
+        config = config.Config()
 
     # display
-    t1 = t2
-    from modules.display.display_core import Display
+    with timers[2]:
+        from modules.display.display_core import Display
 
-    t2 = datetime.datetime.now()
-    time_profile.append((t2 - t1).total_seconds())
-
-    t1 = t2
-    config.set_display(Display(config, {}))
-    t2 = datetime.datetime.now()
-    time_profile.append((t2 - t1).total_seconds())
+    with timers[3]:
+        config.set_display(Display(config, {}))
 
     # minimal gui
-    t1 = t2
-    if config.G_GUI_MODE == "PyQt":
-        from modules import gui_pyqt
-    else:
-        raise ValueError(f"{config.G_GUI_MODE} mode not supported")
+    with timers[4]:
+        if config.G_GUI_MODE == "PyQt":
+            from modules import gui_pyqt
+        else:
+            raise ValueError(f"{config.G_GUI_MODE} mode not supported")
 
-    t2 = datetime.datetime.now()
-    time_profile.append((t2 - t1).total_seconds())
+    with timers[5]:
+        from modules import logger_core
 
-    t1 = t2
-    from modules import logger_core
-
-    logger = logger_core.LoggerCore(config)
-    config.set_logger(logger)
-
-    t2 = datetime.datetime.now()
-    time_profile.append((t2 - t1).total_seconds())
-    total_time = sum(time_profile)
+        logger = logger_core.LoggerCore(config)
+        config.set_logger(logger)
 
     app_logger.info("Initialize modules:")
-    app_logger.info(f"config import : {time_profile[0]:.3f} sec")
-    app_logger.info(f"config init   : {time_profile[1]:.3f} sec")
-    app_logger.info(f"display import: {time_profile[2]:.3f} sec")
-    app_logger.info(f"display init  : {time_profile[3]:.3f} sec")
-    app_logger.info(f"import gui    : {time_profile[4]:.3f} sec")
-    app_logger.info(f"import logger : {time_profile[5]:.3f} sec")
-    app_logger.info(f"total         : {total_time:.3f} sec")
+    total_time = log_timers(timers, text_total="total         : {0:.3f} sec")
     app_logger.info("########## INITIALIZE END ##########")
     config.boot_time += total_time
 

@@ -22,6 +22,7 @@ from qasync import asyncSlot
 from logger import app_logger
 from modules.pyqt.pyqt_cuesheet_widget import CueSheetWidget
 from modules.pyqt.graph.pyqtgraph.CoursePlotItem import CoursePlotItem
+from modules.utils.timer import Timer, log_timers
 
 pg.setConfigOptions(antialias=True)
 pg.setConfigOption("background", "w")
@@ -305,82 +306,80 @@ class MapWidget(BaseMapWidget):
         if not len(self.config.logger.course.latitude):
             return
 
-        time_profile = []
-        t1 = datetime.datetime.now()
+        timers = [
+            Timer(auto_start=False, text="course plot  : {0:.3f} sec"),
+            Timer(auto_start=False, text="course points: {0:.3f} sec"),
+        ]
 
-        if self.course_plot is not None:
-            self.plot.removeItem(self.course_plot)
-        self.course_plot = CoursePlotItem(
-            x=self.config.logger.course.longitude,
-            y=self.get_mod_lat_np(self.config.logger.course.latitude),
-            brushes=self.config.logger.course.colored_altitude,
-            width=6,
-        )
-        self.course_plot.setZValue(20)
-        self.plot.addItem(self.course_plot)
+        with timers[0]:
+            if self.course_plot is not None:
+                self.plot.removeItem(self.course_plot)
+            self.course_plot = CoursePlotItem(
+                x=self.config.logger.course.longitude,
+                y=self.get_mod_lat_np(self.config.logger.course.latitude),
+                brushes=self.config.logger.course.colored_altitude,
+                width=6,
+            )
+            self.course_plot.setZValue(20)
+            self.plot.addItem(self.course_plot)
 
-        # test
-        if not self.config.G_IS_RASPI:
-            if self.plot_verification is not None:
-                self.plot.removeItem(self.plot_verification)
-            self.plot_verification = pg.ScatterPlotItem(pxMode=True)
-            self.plot_verification.setZValue(25)
-            test_points = []
-            for i in range(len(self.config.logger.course.longitude)):
-                p = {
+            # test
+            if not self.config.G_IS_RASPI:
+                if self.plot_verification is not None:
+                    self.plot.removeItem(self.plot_verification)
+                self.plot_verification = pg.ScatterPlotItem(pxMode=True)
+                self.plot_verification.setZValue(25)
+                test_points = []
+                for i in range(len(self.config.logger.course.longitude)):
+                    p = {
+                        "pos": [
+                            self.config.logger.course.longitude[i],
+                            self.get_mod_lat(self.config.logger.course.latitude[i]),
+                        ],
+                        "size": 2,
+                        "pen": {"color": "w", "width": 1},
+                        "brush": pg.mkBrush(color=(255, 0, 0)),
+                    }
+                    test_points.append(p)
+                self.plot_verification.setData(test_points)
+                self.plot.addItem(self.plot_verification)
+
+        with timers[1]:
+            # course point
+            if not len(self.config.logger.course.point_longitude):
+                app_logger.warning("Point_longitude is empty")
+                return
+
+            if self.course_points_plot is not None:
+                self.plot.removeItem(self.course_points_plot)
+            self.course_points_plot = pg.ScatterPlotItem(
+                pxMode=True, symbol="t", size=12
+            )
+            self.course_points_plot.setZValue(40)
+            self.course_points = []
+
+            for i in reversed(range(len(self.config.logger.course.point_longitude))):
+                color = (255, 0, 0)
+                symbol = "t"
+                if self.config.logger.course.point_type[i] == "Left":
+                    symbol = "t3"
+                elif self.config.logger.course.point_type[i] == "Right":
+                    symbol = "t2"
+                cp = {
                     "pos": [
-                        self.config.logger.course.longitude[i],
-                        self.get_mod_lat(self.config.logger.course.latitude[i]),
+                        self.config.logger.course.point_longitude[i],
+                        self.get_mod_lat(self.config.logger.course.point_latitude[i]),
                     ],
-                    "size": 2,
-                    "pen": {"color": "w", "width": 1},
-                    "brush": pg.mkBrush(color=(255, 0, 0)),
+                    "pen": {"color": color, "width": 1},
+                    "symbol": symbol,
+                    "brush": pg.mkBrush(color=color),
                 }
-                test_points.append(p)
-            self.plot_verification.setData(test_points)
-            self.plot.addItem(self.plot_verification)
-
-        t2 = datetime.datetime.now()
-        time_profile.append((t2 - t1).total_seconds())
-        t1 = t2
-
-        # course point
-        if not len(self.config.logger.course.point_longitude):
-            return
-
-        if self.course_points_plot is not None:
-            self.plot.removeItem(self.course_points_plot)
-        self.course_points_plot = pg.ScatterPlotItem(pxMode=True, symbol="t", size=12)
-        self.course_points_plot.setZValue(40)
-        self.course_points = []
-
-        for i in reversed(range(len(self.config.logger.course.point_longitude))):
-            color = (255, 0, 0)
-            symbol = "t"
-            if self.config.logger.course.point_type[i] == "Left":
-                symbol = "t3"
-            elif self.config.logger.course.point_type[i] == "Right":
-                symbol = "t2"
-            cp = {
-                "pos": [
-                    self.config.logger.course.point_longitude[i],
-                    self.get_mod_lat(self.config.logger.course.point_latitude[i]),
-                ],
-                "pen": {"color": color, "width": 1},
-                "symbol": symbol,
-                "brush": pg.mkBrush(color=color),
-            }
-            self.course_points.append(cp)
-        self.course_points_plot.setData(self.course_points)
-        self.plot.addItem(self.course_points_plot)
-
-        t2 = datetime.datetime.now()
-        time_profile.append((t2 - t1).total_seconds())
+                self.course_points.append(cp)
+            self.course_points_plot.setData(self.course_points)
+            self.plot.addItem(self.course_points_plot)
 
         app_logger.info("Plotting course:")
-        app_logger.info(f"course plot  : {time_profile[0]:.3f} sec")
-        app_logger.info(f"course points: {time_profile[1]:.3f} sec")
-        app_logger.info(f"total        : {sum(time_profile):.3f} sec")
+        log_timers(timers, text_total=f"total        : {0:.3f} sec")
 
     async def update_extra(self):
         # t = datetime.datetime.utcnow()
