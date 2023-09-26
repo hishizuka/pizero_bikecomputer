@@ -716,7 +716,7 @@ class Config:
             )
             self.G_LOG_DIR = os.path.join(self.G_INSTALL_PATH, self.G_LOG_DIR)
             self.G_LOG_DB = os.path.join(self.G_INSTALL_PATH, self.G_LOG_DB)
-            self.G_LOG_DEBUG_FILE = os.path.join(self.G_INSTALL_PATH, self.G_LOG_DB)
+            self.G_LOG_DEBUG_FILE = os.path.join(self.G_INSTALL_PATH, self.G_LOG_DEBUG_FILE)
             self.G_LAYOUT_FILE = os.path.join(self.G_INSTALL_PATH, self.G_LAYOUT_FILE)
             self.G_COURSE_DIR = os.path.join(self.G_INSTALL_PATH, self.G_COURSE_DIR)
             self.G_COURSE_FILE_PATH = os.path.join(
