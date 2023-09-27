@@ -114,7 +114,7 @@ class MipSharpDisplay:
             self.pi.write(GPIO_SCS, 0)
             self.draw_queue.task_done()
 
-    async def update(self, im_array, direct_update):
+    def update(self, im_array, direct_update):
         if not _SENSOR_DISPLAY or self.config.G_QUIT:
             return
 
@@ -140,17 +140,16 @@ class MipSharpDisplay:
             time.sleep(0.000006)
             self.pi.write(GPIO_SCS, 0)
         else:
-            await self.draw_queue.put((self.img_buff_rgb8[diff_lines].tobytes()))
+            asyncio.create_task(
+                self.draw_queue.put((self.img_buff_rgb8[diff_lines].tobytes()))
+            )
 
-    async def quit(self):
-        if not _SENSOR_DISPLAY:
-            return
-
-        await self.draw_queue.put(None)
+    def quit(self):
+        asyncio.create_task(self.draw_queue.put(None))
         self.clear()
 
         self.pi.write(GPIO_DISP, 1)
-        await asyncio.sleep(0.01)
+        time.sleep(0.01)
 
         self.pi.spi_close(self.spi)
         self.pi.stop()

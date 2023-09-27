@@ -22,7 +22,6 @@ except ImportError:
 
 app_logger.info(f"MIP DISPLAY: {_SENSOR_DISPLAY}")
 
-
 # https://qiita.com/hishi/items/669ce474fcd76bdce1f1
 # LPM027M128C, LPM027M128B,
 
