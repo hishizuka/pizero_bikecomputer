@@ -1,14 +1,5 @@
 import asyncio
 
-try:
-    import PyQt6.QtCore as QtCore
-    import PyQt6.QtWidgets as QtWidgets
-    import PyQt6.QtGui as QtGui
-except ImportError:
-    import PyQt5.QtCore as QtCore
-    import PyQt5.QtWidgets as QtWidgets
-    import PyQt5.QtGui as QtGui
-
 from .pyqt_menu_widget import MenuWidget, ListWidget
 
 

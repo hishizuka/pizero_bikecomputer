@@ -1,16 +1,4 @@
-import os
-
-try:
-    import PyQt6.QtCore as QtCore
-    import PyQt6.QtWidgets as QtWidgets
-    import PyQt6.QtGui as QtGui
-except ImportError:
-    import PyQt5.QtCore as QtCore
-    import PyQt5.QtWidgets as QtWidgets
-    import PyQt5.QtGui as QtGui
-
-from qasync import asyncSlot
-
+from modules._pyqt import QtWidgets, QtGui, qasync
 from .pyqt_menu_widget import MenuWidget, ListWidget
 
 
@@ -103,7 +91,7 @@ class NetworkMenuWidget(MenuWidget):
         # Button is OK only
         self.config.gui.show_dialog_ok_only(None, self.config.G_IP_ADDRESS)
 
-    @asyncSlot()
+    @qasync.asyncSlot()
     async def onoff_ble_uart_service(self, change=True):
         if change:
             await self.config.ble_uart.on_off_uart_service()

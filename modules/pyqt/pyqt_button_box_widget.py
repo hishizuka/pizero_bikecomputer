@@ -1,16 +1,5 @@
 from logger import app_logger
-
-USE_PYQT6 = False
-try:
-    import PyQt6.QtCore as QtCore
-    import PyQt6.QtWidgets as QtWidgets
-    import PyQt6.QtGui as QtGui
-
-    USE_PYQT6 = True
-except ImportError:
-    import PyQt5.QtCore as QtCore
-    import PyQt5.QtWidgets as QtWidgets
-    import PyQt5.QtGui as QtGui
+from modules._pyqt import QtWidgets, QtGui
 
 
 class ButtonBoxWidget(QtWidgets.QWidget):

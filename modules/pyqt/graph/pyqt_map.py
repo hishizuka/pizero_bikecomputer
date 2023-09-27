@@ -7,19 +7,8 @@ import math
 import numpy as np
 from PIL import Image
 
-try:
-    import PyQt6.QtCore as QtCore
-    import PyQt6.QtWidgets as QtWidgets
-    import PyQt6.QtGui as QtGui
-except ImportError:
-    import PyQt5.QtCore as QtCore
-    import PyQt5.QtWidgets as QtWidgets
-    import PyQt5.QtGui as QtGui
-
-import pyqtgraph as pg
-from qasync import asyncSlot
-
 from logger import app_logger
+from modules._pyqt import QtCore, QtGui, pg, qasync
 from modules.pyqt.pyqt_cuesheet_widget import CueSheetWidget
 from modules.pyqt.graph.pyqtgraph.CoursePlotItem import CoursePlotItem
 from modules.utils.timer import Timer, log_timers
@@ -585,7 +574,7 @@ class MapWidget(BaseMapWidget):
         self.course_loaded = False
         self.resizeEvent(None)
 
-    @asyncSlot()
+    @qasync.asyncSlot()
     async def search_route(self):
         if self.lock_status:
             return

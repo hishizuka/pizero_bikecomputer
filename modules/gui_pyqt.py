@@ -6,23 +6,10 @@ import signal
 import asyncio
 import numpy as np
 
-USE_PYQT6 = False
-try:
-    import PyQt6.QtCore as QtCore
-    import PyQt6.QtWidgets as QtWidgets
-    import PyQt6.QtGui as QtGui
-
-    USE_PYQT6 = True
-except ImportError:
-    import PyQt5.QtCore as QtCore
-    import PyQt5.QtWidgets as QtWidgets
-    import PyQt5.QtGui as QtGui
-
-import qasync
-
 from logger import app_logger
 from modules.gui_config import GUI_Config
 from modules.pyqt.pyqt_style import PyQtStyle
+from modules._pyqt import USE_PYQT6, QtCore, QtWidgets, QtGui, qasync
 from modules.utils.timer import Timer, log_timers
 
 
@@ -99,7 +86,7 @@ class GUI_PyQt(QtCore.QObject):
         self.config.gui = self
 
         self.gui_config = GUI_Config(config)
-        self.gui_config.set_qt5_or_qt6_constants(USE_PYQT6)
+        self.set_qt5_or_qt6_constants()
 
         self.style = PyQtStyle()
         self.logger = self.config.logger
@@ -112,6 +99,125 @@ class GUI_PyQt(QtCore.QObject):
             pass
 
         self.init_window()
+
+    def set_qt5_or_qt6_constants(self):
+        self.gui_config.key_space = (
+            QtCore.Qt.Key.Key_Space if USE_PYQT6 else QtCore.Qt.Key_Space
+        )
+        self.gui_config.key_press = (
+            QtCore.QEvent.Type.KeyPress if USE_PYQT6 else QtCore.QEvent.KeyPress
+        )
+        self.gui_config.key_release = (
+            QtCore.QEvent.Type.KeyRelease if USE_PYQT6 else QtCore.QEvent.KeyRelease
+        )
+        self.gui_config.no_modifier = (
+            QtCore.Qt.KeyboardModifier.NoModifier if USE_PYQT6 else QtCore.Qt.NoModifier
+        )
+
+        self.gui_config.align_left = (
+            QtCore.Qt.AlignmentFlag.AlignLeft if USE_PYQT6 else QtCore.Qt.AlignLeft
+        )
+        self.gui_config.align_center = (
+            QtCore.Qt.AlignmentFlag.AlignCenter if USE_PYQT6 else QtCore.Qt.AlignCenter
+        )
+        self.gui_config.align_h_center = (
+            QtCore.Qt.AlignmentFlag.AlignHCenter
+            if USE_PYQT6
+            else QtCore.Qt.AlignHCenter
+        )
+        self.gui_config.align_v_center = (
+            QtCore.Qt.AlignmentFlag.AlignVCenter
+            if USE_PYQT6
+            else QtCore.Qt.AlignVCenter
+        )
+        self.gui_config.align_right = (
+            QtCore.Qt.AlignmentFlag.AlignRight if USE_PYQT6 else QtCore.Qt.AlignRight
+        )
+        self.gui_config.align_bottom = (
+            QtCore.Qt.AlignmentFlag.AlignBottom if USE_PYQT6 else QtCore.Qt.AlignBottom
+        )
+        self.gui_config.align_top = (
+            QtCore.Qt.AlignmentFlag.AlignTop if USE_PYQT6 else QtCore.Qt.AlignTop
+        )
+        self.gui_config.expanding = (
+            QtWidgets.QSizePolicy.Policy.Expanding
+            if USE_PYQT6
+            else QtWidgets.QSizePolicy.Expanding
+        )
+        self.gui_config.fixed = (
+            QtWidgets.QSizePolicy.Policy.Fixed
+            if USE_PYQT6
+            else QtWidgets.QSizePolicy.Fixed
+        )
+
+        self.gui_config.no_focus = (
+            QtCore.Qt.FocusPolicy.NoFocus if USE_PYQT6 else QtCore.Qt.NoFocus
+        )
+        self.gui_config.strong_focus = (
+            QtCore.Qt.FocusPolicy.StrongFocus if USE_PYQT6 else QtCore.Qt.StrongFocus
+        )
+        self.gui_config.tab_focus_reason = (
+            QtCore.Qt.FocusReason.TabFocusReason
+            if USE_PYQT6
+            else QtCore.Qt.TabFocusReason
+        )
+        self.gui_config.backtab_focus_reason = (
+            QtCore.Qt.FocusReason.BacktabFocusReason
+            if USE_PYQT6
+            else QtCore.Qt.BacktabFocusReason
+        )
+
+        self.gui_config.scrollbar_alwaysoff = (
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+            if USE_PYQT6
+            else QtCore.Qt.ScrollBarAlwaysOff
+        )
+        self.gui_config.qtextedit_nowrap = (
+            QtWidgets.QTextEdit.LineWrapMode.NoWrap
+            if USE_PYQT6
+            else QtWidgets.QTextEdit.NoWrap
+        )
+
+        self.gui_config.stackingmode_stackone = (
+            QtWidgets.QStackedLayout.StackingMode.StackOne
+            if USE_PYQT6
+            else QtWidgets.QStackedLayout.StackOne
+        )
+        self.gui_config.stackingmode_stackall = (
+            QtWidgets.QStackedLayout.StackingMode.StackAll
+            if USE_PYQT6
+            else QtWidgets.QStackedLayout.StackAll
+        )
+
+        self.gui_config.PE_Widget = (
+            QtWidgets.QStyle.PrimitiveElement.PE_Widget
+            if USE_PYQT6
+            else QtWidgets.QStyle.PE_Widget
+        )
+        self.gui_config.WA_TranslucentBackground = (
+            QtCore.Qt.WidgetAttribute.WA_TranslucentBackground
+            if USE_PYQT6
+            else QtCore.Qt.WA_TranslucentBackground
+        )
+        self.gui_config.WA_TransparentForMouseEvents = (
+            QtCore.Qt.WidgetAttribute.WA_TransparentForMouseEvents
+            if USE_PYQT6
+            else QtCore.Qt.WA_TransparentForMouseEvents
+        )
+
+        # for draw_display
+        self.gui_config.format_rgb888 = (
+            QtGui.QImage.Format.Format_RGB888
+            if USE_PYQT6
+            else QtGui.QImage.Format_RGB888
+        )
+        self.gui_config.format_mono = (
+            QtGui.QImage.Format.Format_Mono if USE_PYQT6 else QtGui.QImage.Format_Mono
+        )
+        if self.config.display.has_color():
+            self.gui_config.format = self.gui_config.format_rgb888
+        else:
+            self.gui_config.format = self.gui_config.format_mono
 
     def init_window(self):
         self.app = QtWidgets.QApplication(sys.argv)

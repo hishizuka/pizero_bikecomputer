@@ -1,13 +1,5 @@
 from logger import app_logger
-
-try:
-    import PyQt6.QtCore as QtCore
-    import PyQt6.QtWidgets as QtWidgets
-except ImportError:
-    import PyQt5.QtCore as QtCore
-    import PyQt5.QtWidgets as QtWidgets
-
-from qasync import asyncSlot
+from modules._pyqt import QtCore, QtWidgets, qasync
 
 from .pyqt_item import Item
 
@@ -148,7 +140,7 @@ class ScreenWidget(QtWidgets.QWidget):
     def add_extra(self):
         pass
 
-    @asyncSlot()
+    @qasync.asyncSlot()
     async def update_display(self):
         if self.items is None:
             return
