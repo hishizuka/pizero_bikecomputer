@@ -347,10 +347,6 @@ class GUI_Config:
         if os.path.exists(self.config.G_LAYOUT_FILE):
             self.read_layout()
 
-        self.icon_dir = ""
-        if self.config.G_IS_RASPI:
-            self.icon_dir = self.config.G_INSTALL_PATH
-
     def get_screen_shape(self, p):
         remove_bytes = 0
         if self.config.display.has_color():

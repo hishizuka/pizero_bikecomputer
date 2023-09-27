@@ -308,8 +308,8 @@ class CourseListItemWidget(ListItemWidget):
         self.outer_layout.addStretch()
         self.outer_layout.addWidget(self.right_icon)
 
-    def set_info(self, **kargs):
-        self.list_info = kargs.copy()
+    def set_info(self, **kwargs):
+        self.list_info = kwargs.copy()
         self.title_label.setText(self.list_info["name"])
         if self.list_type == "Ride with GPS":
             self.detail_label.setText(
@@ -378,9 +378,7 @@ class CourseDetailWidget(MenuWidget):
 
     def enable_next_button(self):
         self.next_button.setEnabled(True)
-        self.next_button.setIcon(
-            QtGui.QIcon(self.config.gui.gui_config.icon_dir + "img/forward_white.svg")
-        )
+        self.next_button.setIcon(QtGui.QIcon("img/forward_white.svg"))
         self.next_button.setIconSize(QtCore.QSize(20, 20))
         self.next_button.setProperty("style", "menu")
         self.next_button.setStyleSheet(

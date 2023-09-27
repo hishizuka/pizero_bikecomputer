@@ -3,6 +3,7 @@ import time
 import datetime
 import shutil
 
+from modules.utils.cmd import exec_cmd
 from .logger import Logger
 
 
@@ -56,7 +57,7 @@ total_ascent,total_descent,pressure,temperature,heading,gps_track,motion,acc_x,a
                 + filename
             )
             sqlite3_cmd = ["sh", "-c", sql_cmd]
-            self.config.exec_cmd(sqlite3_cmd)
+            exec_cmd(sqlite3_cmd)
         else:
             f = open(filename, "w", encoding="UTF-8")
 

@@ -165,7 +165,6 @@ class ANTListWidget(ListWidget):
                     status=status,
                 )
                 self.add_list_item(ant_item)
-                # ant_item.set_icon('img/ant.png')
 
 
 class ANTListItemWidget(ListItemWidget):
@@ -185,8 +184,8 @@ class ANTListItemWidget(ListItemWidget):
         # self.enter_signal.connect(self.parentWidget().connect_ant_sensor)
         self.enter_signal.connect(self.parentWidget().button_func)
 
-    def set_info(self, **kargs):  # ant_id, ant_type):
-        self.list_info = kargs.copy()
+    def set_info(self, **kwargs):  # ant_id, ant_type):
+        self.list_info = kwargs.copy()
         self.detail_label.setText("   ID: " + self.list_info["id"])
         status_str = ""
         if self.list_info["status"]:

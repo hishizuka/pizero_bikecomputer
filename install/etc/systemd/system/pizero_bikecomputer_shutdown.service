@@ -1,9 +1,0 @@
-[Unit]
-Description = shutdown
-DefaultDependencies = no
-
-[Service]
-ExecStart = /usr/local/bin/pizero_bikecomputer_shutdown
-Type = oneshot
-RemainAfterExit = true
-

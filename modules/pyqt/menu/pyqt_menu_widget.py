@@ -14,17 +14,14 @@ class MenuWidget(QtWidgets.QWidget):
     button = {}
     menu_layout = None
 
+    icon_x = 40
+    icon_y = 32
     logo_size = 30
 
     def __init__(self, parent, page_name, config):
         QtWidgets.QWidget.__init__(self, parent=parent)
         self.config = config
         self.page_name = page_name
-        self.icon = QtGui.QIcon(
-            self.config.gui.gui_config.icon_dir + "img/back_white.svg"
-        )
-        self.icon_x = 40
-        self.icon_y = 32
 
         self.setup_ui()
 
@@ -35,8 +32,7 @@ class MenuWidget(QtWidgets.QWidget):
         self.top_bar = QtWidgets.QWidget(self)
         self.top_bar.setStyleSheet(self.config.gui.style.G_GUI_PYQT_menu_topbar)
 
-        self.back_button = QtWidgets.QPushButton()
-        self.back_button.setIcon(self.icon)
+        self.back_button = QtWidgets.QPushButton(QtGui.QIcon("img/back_white.svg"), "")
         self.back_button.setIconSize(QtCore.QSize(20, 20))
         self.back_button.setProperty("style", "menu")
         self.back_button.setStyleSheet(
@@ -181,10 +177,10 @@ class MenuWidget(QtWidgets.QWidget):
     def on_back_menu(self):
         pass
 
-    def change_page(self, page, preprocess=False, **kargs):
+    def change_page(self, page, preprocess=False, **kwargs):
         index = self.config.gui.gui_config.G_GUI_INDEX[page]
         if preprocess:
-            self.parentWidget().widget(index).preprocess(**kargs)
+            self.parentWidget().widget(index).preprocess(**kwargs)
         self.config.gui.change_menu_page(index)
 
     class MenuButton(QtWidgets.QPushButton):
@@ -526,9 +522,9 @@ class ListWidget(MenuWidget):
     def resize_extra(self):
         pass
 
-    def preprocess(self, **kargs):
-        self.list_type = kargs.get("list_type")
-        reset = kargs.get("reset", False)
+    def preprocess(self, **kwargs):
+        self.list_type = kwargs.get("list_type")
+        reset = kwargs.get("reset", False)
         if reset:
             self.selected_item = None
             self.list.clear()
@@ -601,15 +597,12 @@ class ListItemWidget(QtWidgets.QWidget):
             self.inner_layout, self.config.gui.gui_config.align_left
         )
 
-    def set_info(self, **kargs):
+    def set_info(self, **kwargs):
         pass
 
     def keyPressEvent(self, e):
         if e.key() == self.config.gui.gui_config.key_space:
             self.enter_signal.emit()
-
-    def set_icon(self, image_path):
-        self.icon.setPixmap(QtGui.QPixmap(image_path).scaled(30, 30))
 
     def resizeEvent(self, event):
         h = self.size().height()
