@@ -1,19 +1,16 @@
-import sqlite3
-import time
 import datetime
+import os
+import sqlite3
 import shutil
+import time
 
 from modules.utils.cmd import exec_cmd
 from .logger import Logger
 
 
 class config_local:
-    G_LOG_DB = "./log.db~"
-    G_LOG_DIR = "./"
-    G_PRODUCT = "Pizero BIKECOMPUTER"
-    G_VERSION_MAJOR = 0
-    G_VERSION_MINOR = 1
-    G_UNIT_ID = "0000000000000000"
+    G_LOG_DB = "log/log.db"
+    G_LOG_DIR = "log"
 
 
 class LoggerCsv(Logger):
@@ -36,7 +33,9 @@ class LoggerCsv(Logger):
         offset = time.localtime().tm_gmtoff
         startdate_local = start_date + datetime.timedelta(seconds=offset)
         self.config.G_LOG_START_DATE = startdate_local.strftime("%Y%m%d%H%M%S")
-        filename = self.config.G_LOG_DIR + self.config.G_LOG_START_DATE + ".csv"
+        filename = os.path.join(
+            self.config.G_LOG_DIR, f"{self.config.G_LOG_START_DATE}.csv"
+        )
 
         r = "\
 lap,timer,timestamp,total_timer_time,elapsed_time,heart_rate,speed,cadence,power,distance,accumulated_power,\

@@ -1,9 +1,11 @@
-import sqlite3
-import time
 import datetime
+import os
+import sqlite3
 import struct
+import time
 
 from logger import app_logger
+from modules.utils.date import datetime_myparser
 from .logger import Logger
 
 # cython
@@ -22,13 +24,12 @@ try:
 
     MODE = "Cython"
 except ImportError:
-    from .cython.crc16_p import crc16
+    pass
 
 
 class config_local:
-    G_LOG_DB = "./log/log.db~"
-    G_LOG_DIR = "./log/"
-    G_IS_DEBUG = True
+    G_LOG_DB = "log/log.db"
+    G_LOG_DIR = "log"
     G_UNIT_ID_HEX = 0x12345678
 
 
@@ -224,18 +225,25 @@ class LoggerFit(Logger):
 
     def write(self, out):
         self.fit_data.append(out)
-        # if self.config.G_IS_DEBUG: print(type(out),out)
 
     # referenced by https://opensource.quarq.us/fit_json/
     def write_log(self):
-        if MODE == "Cython":
-            if write_log_cython(self.config.G_LOG_DB):
-                self.config.G_UPLOAD_FILE = get_upload_file_name()
-                self.config.G_LOG_START_DATE = get_start_date_str()
-                return True
+        # try Cython if available/resolve to pure python if writing fails
+        if MODE == "Cython" and self.write_log_cython():
+            return True
         return self.write_log_python()
 
+    def write_log_cython(self):
+        res = write_log_cython(self.config.G_LOG_DB)
+        if res:
+            self.config.G_UPLOAD_FILE = get_upload_file_name()
+            self.config.G_LOG_START_DATE = get_start_date_str()
+        return res
+
     def write_log_python(self):
+        # make sure crc16 is imported is we resolve to using python code
+        from .cython.crc16_p import crc16
+
         ## SQLite
         con = sqlite3.connect(
             self.config.G_LOG_DB,
@@ -338,7 +346,6 @@ class LoggerFit(Logger):
                         )
                     )
 
-                # if self.config.G_IS_DEBUG: print(available_fields, available_data)
                 l_num = self.get_local_message_num(message_num, available_fields)
                 l_num_used = True
                 if l_num == -1:
@@ -406,7 +413,9 @@ class LoggerFit(Logger):
 
         startdate_local = start_date + datetime.timedelta(seconds=offset)
         self.config.G_LOG_START_DATE = startdate_local.strftime("%Y%m%d%H%M%S")
-        filename = self.config.G_LOG_DIR + self.config.G_LOG_START_DATE + ".fit"
+        filename = os.path.join(
+            self.config.G_LOG_DIR, f"{self.config.G_LOG_START_DATE}.fit"
+        )
         # filename = "test.fit"
         fd = open(filename, "wb")
         write_data = b"".join(self.fit_data)
@@ -428,11 +437,11 @@ class LoggerFit(Logger):
         # make crc
         crc = struct.pack("<H", crc16(file_header))
         fd.write(file_header)
-        # if self.config.G_IS_DEBUG: print("write crc", crc)
+
         fd.write(crc)
         fd.write(write_data)
         crc = struct.pack("<H", crc16(file_header + crc + write_data))
-        # if self.config.G_IS_DEBUG: print("write crc", crc)
+
         fd.write(crc)
         fd.close()
 
@@ -492,10 +501,7 @@ class LoggerFit(Logger):
             value = self.get_epoch_time(v[0])
         elif field[0] == "total_elapsed_time":  # message_num in [18, 19]
             value = field[2] * int(
-                (
-                    self.config.datetime_myparser(v[0])
-                    - self.config.datetime_myparser(v[1])
-                ).total_seconds()
+                (datetime_myparser(v[0]) - datetime_myparser(v[1])).total_seconds()
             )
         elif len(field) == 4:  # with scale and offset (altitude)
             value = field[2] * (v[0] + field[3])
@@ -577,14 +583,14 @@ class LoggerFit(Logger):
         return seconds
 
     def get_epoch_time_str(self, strtime):
-        return self.get_epoch_time(self.config.datetime_myparser(strtime))
+        return self.get_epoch_time(datetime_myparser(strtime))
 
 
 if __name__ == "__main__":
     # from line_profiler import LineProfiler
     c = config_local()
-    l = LoggerFit(c)
-    l.write_log()
+    d = LoggerFit(c)
+    d.write_log()
 
     # prf = LineProfiler()
     # prf.add_function(l.convertValue)
