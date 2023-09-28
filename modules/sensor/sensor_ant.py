@@ -306,4 +306,3 @@ class SensorANT(Sensor):
             self.device[
                 self.config.G_ANT["ID_TYPE"]["LGT"]
             ].send_light_setting_light_off_flash_low(auto)
-

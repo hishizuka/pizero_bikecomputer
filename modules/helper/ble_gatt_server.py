@@ -53,7 +53,7 @@ class GadgetbridgeService(Service):
 
     def atob(self, matchobj):
         r = base64.b64decode(matchobj.group(1)).decode()
-        return f"\"{r}\""
+        return f'"{r}"'
 
     # receive from central
     @characteristic(rx_characteristic_uuid, CharFlags.WRITE).setter

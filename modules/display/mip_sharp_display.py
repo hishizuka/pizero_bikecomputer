@@ -63,7 +63,9 @@ class MipSharpDisplay:
         self.img_buff_rgb8 = np.zeros(
             (self.config.G_HEIGHT, self.buff_width), dtype="uint8"
         )
-        self.pre_img = np.full((self.config.G_HEIGHT, self.buff_width), 255, dtype="uint8")
+        self.pre_img = np.full(
+            (self.config.G_HEIGHT, self.buff_width), 255, dtype="uint8"
+        )
         self.img_buff_rgb8[:, 0] = UPDATE_MODE
         # address is set in reversed bits
         self.img_buff_rgb8[:, 1] = [

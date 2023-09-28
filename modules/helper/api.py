@@ -635,9 +635,7 @@ class api:
 
         # close connection
         if self.config.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"]:
-            bt_pan_status = await self.config.bluetooth_tethering(
-                disconnect=True 
-            )
+            bt_pan_status = await self.config.bluetooth_tethering(disconnect=True)
             self.bt_cmd_lock = False
             network_status = self.config.detect_network()
             # print("[BT] {} disconnect, network status:{}".format(timestamp_str, network_status))
