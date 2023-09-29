@@ -11,6 +11,7 @@ import numpy as np
 from crdp import rdp
 
 from modules.utils.cmd import exec_cmd
+from modules.utils.date import datetime_myparser
 from logger import app_logger
 
 
@@ -815,7 +816,7 @@ class LoggerCore:
         first_row = self.cur.fetchone()
         if first_row[0] is not None:
             self.values["start_time"] = int(
-                self.config.datetime_myparser(first_row[0]).timestamp() - 1
+                datetime_myparser(first_row[0]).timestamp() - 1
             )
 
         # if not self.config.G_IS_RASPI and self.config.G_DUMMY_OUTPUT:
@@ -911,7 +912,7 @@ class LoggerCore:
             cur.execute("SELECT MAX(timestamp) FROM BIKECOMPUTER_LOG")
             first_row = cur.fetchone()
             if first_row[0] is not None:
-                timestamp_new = self.config.datetime_myparser(first_row[0])
+                timestamp_new = datetime_myparser(first_row[0])
 
             cur.close()
             con.close()
