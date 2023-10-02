@@ -9,19 +9,36 @@ class LocalConfig:
     G_LOG_DIR = "/tmp"  # nosec
     G_UNIT_ID_HEX = 0x12345678
 
+    G_LOG_START_DATE = None
 
-class TestLogger(unittest.TestCase):
-    def test_logger_fit_cython(self):
-        logger = LoggerFit(LocalConfig)
-        result = logger.write_log_cython()
-        self.assertTrue(result)
 
-    def test_logger_fit_python(self):
-        logger = LoggerFit(LocalConfig)
-        result = logger.write_log_python()
-        self.assertTrue(result)
-
-    def test_logger_fit_csv(self):
-        logger = LoggerCsv(LocalConfig)
+class TestLoggerCsv(unittest.TestCase):
+    def test_write_log(self):
+        config = LocalConfig()
+        logger = LoggerCsv(config)
         result = logger.write_log()
         self.assertTrue(result)
+        self.assertEqual(config.G_LOG_START_DATE, "20230928223913")
+
+
+class TestLoggerFit(unittest.TestCase):
+    def test_write_logs(self):
+        config = LocalConfig()
+        logger = LoggerFit(config)
+        result = logger.write_log_cython()
+        self.assertTrue(result)
+        self.assertEqual(config.G_LOG_START_DATE, "20230928223913")
+
+        filename = f"{config.G_LOG_DIR}/{config.G_LOG_START_DATE}.fit"
+
+        with open(filename, "rb") as f:
+            cython_data = f.read()
+
+        result = logger.write_log_python()
+        self.assertTrue(result)
+        self.assertEqual(config.G_LOG_START_DATE, "20230928223913")
+
+        with open(filename, "rb") as f:
+            python_data = f.read()
+
+        self.assertEqual(cython_data, python_data)
