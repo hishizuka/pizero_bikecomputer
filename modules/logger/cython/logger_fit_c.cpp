@@ -656,10 +656,8 @@ bool write_log_c(const char* db_file) {
 
   reset();
 
-  cfg.G_LOG_START_DATE = (char *)malloc(sizeof(char) * strlen(startdate_local));
-  strcpy(cfg.G_LOG_START_DATE, startdate_local);
-  cfg.G_UPLOAD_FILE = (char *)malloc(sizeof(char) * strlen(filename));
-  strcpy(cfg.G_UPLOAD_FILE, filename);
+  cfg.G_LOG_START_DATE = strdup(startdate_local);
+  cfg.G_UPLOAD_FILE = strdup(filename);
 
   return true;
 }
@@ -673,9 +671,7 @@ int main(int argc, char *argv[]) {
   
   cfg.G_UNIT_ID_HEX = 0;
   const char* log_dir = "./";
-  cfg.G_LOG_DIR = (char *)malloc(sizeof(char) * strlen(log_dir));
-  strncpy(cfg.G_LOG_DIR, log_dir, sizeof(*cfg.G_LOG_DIR)-1);
-  cfg.G_LOG_DIR[sizeof(*cfg.G_LOG_DIR) - 1] = '\0';
+  cfg.G_LOG_DIR = strdup(log_dir);
 
   bool res = !write_log_c(argv[1]);
 
