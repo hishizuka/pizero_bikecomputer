@@ -25,13 +25,9 @@ class Item(QtWidgets.QVBoxLayout):
         self.value = QtWidgets.QLabel()
         self.value.setAlignment(self.config.gui.gui_config.align_center)
         self.itemformat = self.config.gui.gui_config.G_ITEM_DEF[name][0]
-        if (
-            self.config.G_LANG in self.config.gui.gui_config.G_LANG
-            and name in self.config.gui.gui_config.G_LANG[self.config.G_LANG]
-        ):
-            self.label.setText(self.config.gui.gui_config.G_LANG["JA"][name])
-        else:
-            self.label.setText(name)
+
+        self.label.setText(name)
+
         self.name = name
 
         self.addWidget(self.label)

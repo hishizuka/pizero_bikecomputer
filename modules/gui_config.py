@@ -326,20 +326,6 @@ class GUI_Config:
         ),
     }
 
-    G_LANG = {
-        "JA": {
-            "Power": "パワー",
-            "Speed": "スピード",
-            "Dist.": "距離",
-            "Cad.": "ケイデンス",
-            "HR": "心拍",
-            "Work": "仕事量",
-            "Timer": "タイマー",
-            "Ascent": "獲得標高",
-            # "":"",
-        },
-    }
-
     def __init__(self, config):
         self.config = config
 
