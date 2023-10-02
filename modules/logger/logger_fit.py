@@ -396,7 +396,7 @@ class LoggerFit(Logger):
             struct.pack(
                 struct_def,
                 end_date_epochtime,
-                int((end_date - start_date).total_seconds()) * 1000,
+                (int(end_date.timestamp()) - int(start_date.timestamp())) * 1000,
                 1,  # num of sessions: 1(fix)
                 0,  # activity_type: general
                 26,  # event: activity

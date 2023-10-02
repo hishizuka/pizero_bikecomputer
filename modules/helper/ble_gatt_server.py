@@ -1,6 +1,7 @@
 import asyncio
 import json
 import re
+import base64
 import traceback
 import datetime
 
@@ -50,6 +51,10 @@ class GadgetbridgeService(Service):
     def send_message(self, value):
         self.tx_characteristic.changed(bytes(value + "\\n\n", "utf-8"))
 
+    def atob(self, matchobj):
+        r = base64.b64decode(matchobj.group(1)).decode()
+        return f"\"{r}\""
+
     # receive from central
     @characteristic(rx_characteristic_uuid, CharFlags.WRITE).setter
     def rx_characteristic(self, value, options):
@@ -90,19 +95,18 @@ class GadgetbridgeService(Service):
         ):
             # remove emoji
             text_mod = re.sub(":\w+:", "", self.value.decode().strip()[5:-2])
-            # add double quotation
-            text_mod = re.sub('(\w+):("?\w*"?)', '"\\1":\\2', text_mod)
+
+            # decode base64
+            b64_decode_ptn = re.compile(r"atob\(\"(\S+)\"\)")
+            text_mod = re.sub(b64_decode_ptn, self.atob, text_mod)
+
             message = {}
             try:
                 message = json.loads("{" + text_mod + "}", strict=False)
             except json.JSONDecodeError:
                 app_logger.exception("failed to load json")
-                app_logger.debug(self.value.decode().strip()[5:-2])
-                app_logger.debug(text_mod)
-                try:
-                    message = json.loads("{" + text_mod + '"}', strict=False)
-                except json.JSONDecodeError:
-                    app_logger.error("failed to load json (retry)")
+                app_logger.exception(self.value.decode().strip()[5:-2])
+                app_logger.exception(text_mod)
 
             if (
                 "t" in message
