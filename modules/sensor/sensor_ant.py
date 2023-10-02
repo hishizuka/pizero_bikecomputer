@@ -307,5 +307,3 @@ class SensorANT(Sensor):
                 self.config.G_ANT["ID_TYPE"]["LGT"]
             ].send_light_setting_light_off_flash_low(auto)
 
-
-print("CUBU ANT")

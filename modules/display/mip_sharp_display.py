@@ -52,6 +52,8 @@ class MipSharpDisplay:
         self.pi.write(GPIO_VCOMSEL, 1)
         time.sleep(0.1)
 
+        self.update(self.pre_img[:, 2:], direct_update=True)
+
     def start_coroutine(self):
         self.draw_queue = asyncio.Queue()
         asyncio.create_task(self.draw_worker())
@@ -61,7 +63,7 @@ class MipSharpDisplay:
         self.img_buff_rgb8 = np.zeros(
             (self.config.G_HEIGHT, self.buff_width), dtype="uint8"
         )
-        self.pre_img = np.zeros((self.config.G_HEIGHT, self.buff_width), dtype="uint8")
+        self.pre_img = np.full((self.config.G_HEIGHT, self.buff_width), 255, dtype="uint8")
         self.img_buff_rgb8[:, 0] = UPDATE_MODE
         # address is set in reversed bits
         self.img_buff_rgb8[:, 1] = [
@@ -119,7 +121,7 @@ class MipSharpDisplay:
             return
 
         # self.config.check_time("mip_sharp_update start")
-        self.img_buff_rgb8[:, 2:] = im_array
+        self.img_buff_rgb8[:, 2:] = ~im_array
 
         # differential update
         diff_lines = np.where(

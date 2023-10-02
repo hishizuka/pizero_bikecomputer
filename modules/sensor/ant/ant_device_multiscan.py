@@ -99,7 +99,7 @@ class ANT_Device_MultiScan(ant_device.ANT_Device):
                 if antIDType not in self.values:
                     self.values[antIDType] = {}
                 self.values[antIDType]["timestamp"] = datetime.datetime.now()
-                self.values[antIDType]["hr"] = data[7]
+                self.values[antIDType]["heart_rate"] = data[7]
         # Power
         elif antType in self.config.G_ANT["TYPES"]["PWR"]:
             if antIDType == self.config.G_ANT["ID_TYPE"]["PWR"]:

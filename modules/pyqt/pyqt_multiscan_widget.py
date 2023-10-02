@@ -76,8 +76,8 @@ class MultiScanWidget(ScreenWidget):
                 continue
 
             if ant_type in self.config.G_ANT["TYPES"]["HR"] and count["HR"] < 3:
-                if "hr" in values:
-                    self.values["HR"][count["HR"]] = values["hr"]
+                if "heart_rate" in values:
+                    self.values["HR"][count["HR"]] = values["heart_rate"]
                     self.values["HR_ID"][count["HR"]] = ant_id_type
                     count["HR"] += 1
             elif ant_type in self.config.G_ANT["TYPES"]["PWR"] and count["PWR"] < 3:

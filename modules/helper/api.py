@@ -548,7 +548,7 @@ class api:
         # open connection
         if self.config.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"]:
             self.bt_cmd_lock = True
-            bt_pan_status = await self.config.bluetooth_tethering(cmd_print=False)
+            bt_pan_status = await self.config.bluetooth_tethering()
             count = 0
 
             while (
@@ -564,9 +564,7 @@ class api:
                 or count == self.config.G_THINGSBOARD_API["TIMEOUT_SEC"]
             ):
                 if bt_pan_status:
-                    await self.config.bluetooth_tethering(
-                        disconnect=True, cmd_print=False
-                    )
+                    await self.config.bluetooth_tethering(disconnect=True)
                 await asyncio.sleep(5)
                 self.bt_cmd_lock = False
                 app_logger.error(
@@ -638,7 +636,7 @@ class api:
         # close connection
         if self.config.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"]:
             bt_pan_status = await self.config.bluetooth_tethering(
-                disconnect=True, cmd_print=False
+                disconnect=True 
             )
             self.bt_cmd_lock = False
             network_status = self.config.detect_network()

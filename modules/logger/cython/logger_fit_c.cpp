@@ -209,7 +209,8 @@ void reset() {
   base_type_size = {1,1,1,2,2,4,4,1,4,8,1,2,4,1};
 
   struct tm epoch_datetime = {0,0,0,31,11,1989-1900}; //"1989-12-31 00:00:00"
-  epoch_datetime_sec = mktime(&epoch_datetime);
+  epoch_datetime.tm_isdst = 0;
+  epoch_datetime_sec = timegm(&epoch_datetime);
 }
 
 bool exit_with_error(const char* message, sqlite3* db) {
@@ -265,7 +266,7 @@ unsigned int convert_value(const char* value_str, const int data_type) {
       atoi(s.substr(5,2).c_str())-1,
       atoi(s.substr(0,4).c_str())-1900,
     };
-    value = (unsigned int)int(difftime(mktime(&t), epoch_datetime_sec));
+    value = (unsigned int)int(difftime(timegm(&t), epoch_datetime_sec));
   }
   //altitude(2): with scale and offset
   else if (message_num == 20 and data_type == 2) {
@@ -610,12 +611,12 @@ bool write_log_c(const char* db_file) {
   sqlite3_close(db);
 
   //write fit file
-  time_t startdate_local_epoch = start_date_epoch+epoch_datetime_sec+lt.tm_gmtoff;
+  time_t startdate_local_epoch = start_date_epoch+epoch_datetime_sec;
   char startdate_local[15], filename[100], startdate_str[20];
   strftime(startdate_local, sizeof(startdate_local), "%Y%m%d%H%M%S", localtime(&startdate_local_epoch));
   strftime(startdate_str, sizeof(startdate_str), "%Y%m%d%H%M%S.fit", localtime(&startdate_local_epoch));
-  sprintf(filename, "%s%s", cfg.G_LOG_DIR, startdate_str);
-  
+  sprintf(filename, "%s/%s", cfg.G_LOG_DIR, startdate_str);
+
   //make file header
   std::vector<uint8_t> file_header, header_crc, total_crc;
   _data = {

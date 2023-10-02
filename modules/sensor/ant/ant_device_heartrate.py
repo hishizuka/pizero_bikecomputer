@@ -10,11 +10,11 @@ class ANT_Device_HeartRate(ant_device.ANT_Device):
         "transmission_type": 0x00,
         "channel_type": 0x00,  # Channel.Type.BIDIRECTIONAL_RECEIVE,
     }
-    elements = ("hr",)
+    elements = ("heart_rate",)
     pickle_key = "ant+_hr_values"
 
     def on_data(self, data):
-        self.values["hr"] = data[7]
+        self.values["heart_rate"] = data[7]
         self.values["timestamp"] = datetime.datetime.now()
         # self.channel.send_acknowledged_data(array.array('B',[0x46,0xFF,0xFF,0xFF,0xFF,0x88,0x06,0x01]))
         # if data[0] & 0b1111 == 0b000: # 0x00 or 0x80

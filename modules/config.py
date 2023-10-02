@@ -905,11 +905,7 @@ class Config:
     def check_map_dir(self):
         if not self.G_MAP_CONFIG[self.G_MAP]["use_mbtiles"]:
             os.makedirs(os.path.join("maptile", self.G_MAP), exist_ok=True)
-            # optional
-            os.makedirs(
-                os.path.join("maptile", self.G_HEATMAP_OVERLAY_MAP), exist_ok=True
-            )
-
+        os.makedirs(os.path.join("maptile", self.G_HEATMAP_OVERLAY_MAP), exist_ok=True)
         os.makedirs(os.path.join("maptile", self.G_RAIN_OVERLAY_MAP), exist_ok=True)
         os.makedirs(os.path.join("maptile", self.G_WIND_OVERLAY_MAP), exist_ok=True)
 
