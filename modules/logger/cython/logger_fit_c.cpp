@@ -2,9 +2,7 @@
 
 void set_config_c(const config& _cfg) {
   cfg.G_UNIT_ID_HEX = _cfg.G_UNIT_ID_HEX;
-  cfg.G_LOG_DIR = (char *)malloc(sizeof(char) * strlen(_cfg.G_LOG_DIR)+1);
-  strncpy(cfg.G_LOG_DIR, _cfg.G_LOG_DIR, strlen(_cfg.G_LOG_DIR));
-  cfg.G_LOG_DIR[strlen(_cfg.G_LOG_DIR)] = '\0';
+  cfg.G_LOG_DIR = strdup(_cfg.G_LOG_DIR);
 }
 
 char* get_upload_file_name_c() {
@@ -633,7 +631,7 @@ bool write_log_c(const char* db_file) {
   _data = {(unsigned int)crc16(file_header)};
   _size = {2};
   add_fit_data(header_crc, _data, _size);
-
+  
   FILE *fp;
   if((fp=fopen(filename,"w")) != NULL ) {
     fwrite(file_header.data(), sizeof(uint8_t), file_header.size(), fp);
