@@ -1,9 +1,12 @@
+from functools import partial
+
 from modules._pyqt import (
     QT_TEXTEDIT_NOWRAP,
     QT_SCROLLBAR_ALWAYSOFF,
     QtWidgets,
     qasync,
 )
+from modules.utils.network import detect_network
 from .pyqt_menu_widget import MenuWidget, ListWidget
 
 
@@ -45,6 +48,7 @@ class NetworkMenuWidget(MenuWidget):
         if self.config.G_IS_RASPI:
             wifi_bt_button_func_wifi = lambda: self.onoff_wifi_bt(True, "Wifi")
             wifi_bt_button_func_bt = lambda: self.onoff_wifi_bt(True, "Bluetooth")
+
         button_conf = (
             # Name(page_name), button_attribute, connected functions, layout
             ("Wifi", "toggle", wifi_bt_button_func_wifi),
@@ -56,7 +60,9 @@ class NetworkMenuWidget(MenuWidget):
         )
         self.add_buttons(button_conf)
 
-        if self.config.bt_pan is None or not len(self.config.G_BT_ADDRESS):
+        if (
+            not self.config.G_BT_ADDRESSES
+        ):  # if bt_pan is None there won't be any addresses
             self.buttons["BT Tethering"].disable()
 
         if self.config.ble_uart is None:
@@ -83,9 +89,9 @@ class NetworkMenuWidget(MenuWidget):
         self.change_page("BT Tethering", preprocess=True)
 
     def show_ip_address(self):
-        self.config.detect_network()
+        address = detect_network() or "No address"
         # Button is OK only
-        self.config.gui.show_dialog_ok_only(None, self.config.G_IP_ADDRESS)
+        self.config.gui.show_dialog_ok_only(None, address)
 
     @qasync.asyncSlot()
     async def onoff_ble_uart_service(self, change=True):
@@ -109,14 +115,16 @@ class DebugMenuWidget(MenuWidget):
                 "Disable Wifi/BT",
                 "dialog",
                 lambda: self.config.gui.show_dialog(
-                    self.config.hardware_wifi_bt_off, "Disable Wifi/BT\n(need reboot)"
+                    partial(self.config.hardware_wifi_bt, False),
+                    "Disable Wifi/BT\n(need reboot)",
                 ),
             ),
             (
                 "Enable Wifi/BT",
                 "dialog",
                 lambda: self.config.gui.show_dialog(
-                    self.config.hardware_wifi_bt_on, "Enable Wifi/BT\n(need reboot)"
+                    partial(self.config.hardware_wifi_bt, True),
+                    "Enable Wifi/BT\n(need reboot)",
                 ),
             ),
             (
@@ -139,9 +147,11 @@ class DebugMenuWidget(MenuWidget):
 
 
 class BluetoothTetheringListWidget(ListWidget):
+    run_bt_tethering = False
+
     def __init__(self, parent, page_name, config):
         # keys are used for item label
-        self.settings = config.G_BT_ADDRESS
+        self.settings = config.G_BT_ADDRESSES
         super().__init__(parent=parent, page_name=page_name, config=config)
 
     def preprocess(self, run_bt_tethering=True):
@@ -152,6 +162,7 @@ class BluetoothTetheringListWidget(ListWidget):
 
     async def button_func_extra(self):
         self.config.G_BT_USE_ADDRESS = self.selected_item.title_label.text()
+        # save for restart
         self.config.setting.set_config_pickle(
             "G_BT_USE_ADDRESS", self.config.G_BT_USE_ADDRESS
         )

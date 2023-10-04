@@ -10,6 +10,7 @@ from modules._pyqt import (
     qasync,
 )
 from modules.pyqt.components import icons, topbar
+from modules.utils.network import detect_network
 from .pyqt_menu_widget import (
     MenuWidget,
     ListWidget,
@@ -44,7 +45,7 @@ class CoursesMenuWidget(MenuWidget):
         self.add_buttons(button_conf)
 
         # if not self.config.G_GOOGLE_DIRECTION_API["HAVE_API_TOKEN"]:
-        #  self.button['Google Directions API mode'].disable()
+        #  self.buttons['Google Directions API mode'].disable()
 
         if not self.config.G_IS_RASPI or not os.path.isfile(self.config.G_OBEXD_CMD):
             self.buttons["Android Google Maps"].disable()
@@ -427,7 +428,7 @@ class CourseDetailWidget(MenuWidget):
             self.enable_next_button()
             return res
         # if no internet connection, stop timer and exit
-        elif not self.config.detect_network():
+        elif not detect_network():
             return True
         return False
 

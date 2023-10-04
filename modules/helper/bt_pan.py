@@ -26,7 +26,6 @@ except ImportError:
 
 class BTPan:
     bus = None
-    is_available = False
     devices = {}
 
     obj_bluez = "org.bluez"
@@ -45,10 +44,11 @@ class BTPanDbusNext(BTPan):
     async def check_dbus(self):
         try:
             self.bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
-            introspection = await self.bus.introspect(self.obj_bluez, self.path_bluez)
-            self.is_available = True
-        except:
-            pass
+            await self.bus.introspect(self.obj_bluez, self.path_bluez)
+            return True
+        except Exception as e:
+            app_logger.warning(f"DBus not available {e}")
+            return False
 
     async def find_bt_pan_devices(self):
         res = {}
@@ -123,10 +123,11 @@ class BTPanDbus(BTPan):
     async def check_dbus(self):
         try:
             self.bus = dbus.SystemBus()
-            proxy = self.bus.get_name_owner(self.obj_bluez)
-            self.is_available = True
-        except:
-            pass
+            self.bus.get_name_owner(self.obj_bluez)
+            return True
+        except Exception as e:
+            app_logger.warning(f"DBus not available {e}")
+            return False
 
     def get_managed_objects(self):
         manager = dbus.Interface(
