@@ -114,7 +114,7 @@ class LoaderTcx:
         if not len(self.latitude):
             return
 
-        app_logger.info(f"[logger] Loading course:")
+        app_logger.info("[logger] Loading course:")
         log_timers(timers, text_total="total               : {0:.3f} sec")
 
         if self.config.G_THINGSBOARD_API["STATUS"]:
@@ -159,13 +159,6 @@ class LoaderTcx:
             self.config.network.api.send_livetrack_course_load()
 
     def get_courses(self):
-        # pattern = {
-        #  "name": re.compile(r'<Name>(?P<text>[\s\S]*?)</Name>'),
-        #  "distance_meters": re.compile(r'<DistanceMeters>(?P<text>[\s\S]*?)</DistanceMeters>'),
-        #  #"track": re.compile(r'<Track>(?P<text>[\s\S]*?)</Track>'),
-        #  #"altitude": re.compile(r'<AltitudeMeters>(?P<text>[^<]*)</AltitudeMeters>'),
-        # }
-
         dir_list = sorted(
             glob.glob(os.path.join(self.config.G_COURSE_DIR, "*.tcx")),
             key=lambda f: os.stat(f).st_mtime,
@@ -184,16 +177,24 @@ class LoaderTcx:
                 "name": os.path.basename(c),
             }
             # heavy: delayed updates required
-            # with open(c, 'r', encoding="utf-8_sig") as f:
-            #  tcx = f.read()
-            #  match_name = pattern["name"].search(tcx)
-            #  if match_name:
-            #    info['name'] = match_name.group('text').strip()
+            # pattern = {
+            #     "name": re.compile(r"<Name>(?P<text>[\s\S]*?)</Name>"),
+            #     "distance_meters": re.compile(
+            #         r"<DistanceMeters>(?P<text>[\s\S]*?)</DistanceMeters>"
+            #     ),
+            #     # "track": re.compile(r'<Track>(?P<text>[\s\S]*?)</Track>'),
+            #     # "altitude": re.compile(r'<AltitudeMeters>(?P<text>[^<]*)</AltitudeMeters>'),
+            # }
+            # with open(c, "r", encoding="utf-8_sig") as f:
+            #     tcx = f.read()
+            #     match_name = pattern["name"].search(tcx)
+            #     if match_name:
+            #         info["name"] = match_name.group("text").strip()
             #
-            #  match_distance_meter = pattern["distance_meters"].search(tcx)
-            #  if match_distance_meter:
-            #    info['distance'] = float(match_distance_meter.group('text').strip())
-            #
+            #     match_distance_meter = pattern["distance_meters"].search(tcx)
+            #     if match_distance_meter:
+            #         info["distance"] = float(match_distance_meter.group("text").strip())
+
             courses.append(info)
 
         return courses

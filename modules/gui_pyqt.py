@@ -8,21 +8,64 @@ import numpy as np
 
 from logger import app_logger
 from modules.gui_config import GUI_Config
-from modules.pyqt.pyqt_style import PyQtStyle
-from modules._pyqt import USE_PYQT6, QtCore, QtWidgets, QtGui, qasync
+from modules._pyqt import (
+    QT_ALIGN_BOTTOM,
+    QT_ALIGN_LEFT,
+    QT_ALIGN_CENTER,
+    QT_STACKINGMODE_STACKALL,
+    QT_PE_WIDGET,
+    QT_STACKINGMODE_STACKONE,
+    QT_KEY_RELEASE,
+    QT_KEY_SPACE,
+    QT_KEY_PRESS,
+    QT_NO_MODIFIER,
+    QT_FORMAT_MONO,
+    QT_FORMAT_RGB888,
+    QtCore,
+    QtWidgets,
+    QtGui,
+    qasync,
+)
 from modules.utils.timer import Timer, log_timers
 
 
+class SplashScreen(QtWidgets.QWidget):
+    STYLES = """
+      background-color: black;
+    """
+
+    def __init__(self, *__args):
+        super().__init__(*__args)
+        self.setContentsMargins(0, 0, 0, 0)
+        self.setStyleSheet(self.STYLES)
+
+
+class BootStatus(QtWidgets.QLabel):
+    STYLES = """
+      color: white;
+      font-size: 20px;
+    """
+
+    def __init__(self, *__args):
+        super().__init__(*__args)
+        self.setStyleSheet(self.STYLES)
+        self.setAlignment(QT_ALIGN_CENTER)
+
+
 class MyWindow(QtWidgets.QMainWindow):
-    config = None
     gui = None
 
     def __init__(self, parent=None):
         super().__init__(parent=parent)
         app_logger.info(f"Qt version: {QtCore.QT_VERSION_STR}")
 
-    def set_config(self, config):
-        self.config = config
+    # TODO, daylight does not seem to be used at all,
+    #  Could/Should be replaced by setting stylesheet on init
+    def set_color(self, daylight=True):
+        if daylight:
+            self.setStyleSheet("color: black; background-color: white")
+        else:
+            self.setStyleSheet("color: white; background-color: #222222")
 
     def set_gui(self, gui):
         self.gui = gui
@@ -30,8 +73,7 @@ class MyWindow(QtWidgets.QMainWindow):
     # override from QtWidget
     @qasync.asyncClose
     async def closeEvent(self, event):
-        # await self.config.quit()
-        await self.config.gui.quit()
+        await self.gui.quit()
 
     # override from QtWidget
     def paintEvent(self, event):
@@ -70,6 +112,7 @@ class GUI_PyQt(QtCore.QObject):
     signal_draw_display = QtCore.pyqtSignal()
 
     # for draw_display
+    image_format = None
     screen_shape = None
     screen_image = None
     remove_bytes = 0
@@ -85,10 +128,13 @@ class GUI_PyQt(QtCore.QObject):
         self.config = config
         self.config.gui = self
 
-        self.gui_config = GUI_Config(config)
-        self.set_qt5_or_qt6_constants()
+        self.gui_config = GUI_Config(config.G_LAYOUT_FILE)
 
-        self.style = PyQtStyle()
+        if config.display.has_color():
+            self.image_format = QT_FORMAT_RGB888
+        else:
+            self.image_format = QT_FORMAT_MONO
+
         self.logger = self.config.logger
         try:
             signal.signal(signal.SIGTERM, self.quit_by_ctrl_c)
@@ -100,125 +146,6 @@ class GUI_PyQt(QtCore.QObject):
 
         self.init_window()
 
-    def set_qt5_or_qt6_constants(self):
-        self.gui_config.key_space = (
-            QtCore.Qt.Key.Key_Space if USE_PYQT6 else QtCore.Qt.Key_Space
-        )
-        self.gui_config.key_press = (
-            QtCore.QEvent.Type.KeyPress if USE_PYQT6 else QtCore.QEvent.KeyPress
-        )
-        self.gui_config.key_release = (
-            QtCore.QEvent.Type.KeyRelease if USE_PYQT6 else QtCore.QEvent.KeyRelease
-        )
-        self.gui_config.no_modifier = (
-            QtCore.Qt.KeyboardModifier.NoModifier if USE_PYQT6 else QtCore.Qt.NoModifier
-        )
-
-        self.gui_config.align_left = (
-            QtCore.Qt.AlignmentFlag.AlignLeft if USE_PYQT6 else QtCore.Qt.AlignLeft
-        )
-        self.gui_config.align_center = (
-            QtCore.Qt.AlignmentFlag.AlignCenter if USE_PYQT6 else QtCore.Qt.AlignCenter
-        )
-        self.gui_config.align_h_center = (
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            if USE_PYQT6
-            else QtCore.Qt.AlignHCenter
-        )
-        self.gui_config.align_v_center = (
-            QtCore.Qt.AlignmentFlag.AlignVCenter
-            if USE_PYQT6
-            else QtCore.Qt.AlignVCenter
-        )
-        self.gui_config.align_right = (
-            QtCore.Qt.AlignmentFlag.AlignRight if USE_PYQT6 else QtCore.Qt.AlignRight
-        )
-        self.gui_config.align_bottom = (
-            QtCore.Qt.AlignmentFlag.AlignBottom if USE_PYQT6 else QtCore.Qt.AlignBottom
-        )
-        self.gui_config.align_top = (
-            QtCore.Qt.AlignmentFlag.AlignTop if USE_PYQT6 else QtCore.Qt.AlignTop
-        )
-        self.gui_config.expanding = (
-            QtWidgets.QSizePolicy.Policy.Expanding
-            if USE_PYQT6
-            else QtWidgets.QSizePolicy.Expanding
-        )
-        self.gui_config.fixed = (
-            QtWidgets.QSizePolicy.Policy.Fixed
-            if USE_PYQT6
-            else QtWidgets.QSizePolicy.Fixed
-        )
-
-        self.gui_config.no_focus = (
-            QtCore.Qt.FocusPolicy.NoFocus if USE_PYQT6 else QtCore.Qt.NoFocus
-        )
-        self.gui_config.strong_focus = (
-            QtCore.Qt.FocusPolicy.StrongFocus if USE_PYQT6 else QtCore.Qt.StrongFocus
-        )
-        self.gui_config.tab_focus_reason = (
-            QtCore.Qt.FocusReason.TabFocusReason
-            if USE_PYQT6
-            else QtCore.Qt.TabFocusReason
-        )
-        self.gui_config.backtab_focus_reason = (
-            QtCore.Qt.FocusReason.BacktabFocusReason
-            if USE_PYQT6
-            else QtCore.Qt.BacktabFocusReason
-        )
-
-        self.gui_config.scrollbar_alwaysoff = (
-            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-            if USE_PYQT6
-            else QtCore.Qt.ScrollBarAlwaysOff
-        )
-        self.gui_config.qtextedit_nowrap = (
-            QtWidgets.QTextEdit.LineWrapMode.NoWrap
-            if USE_PYQT6
-            else QtWidgets.QTextEdit.NoWrap
-        )
-
-        self.gui_config.stackingmode_stackone = (
-            QtWidgets.QStackedLayout.StackingMode.StackOne
-            if USE_PYQT6
-            else QtWidgets.QStackedLayout.StackOne
-        )
-        self.gui_config.stackingmode_stackall = (
-            QtWidgets.QStackedLayout.StackingMode.StackAll
-            if USE_PYQT6
-            else QtWidgets.QStackedLayout.StackAll
-        )
-
-        self.gui_config.PE_Widget = (
-            QtWidgets.QStyle.PrimitiveElement.PE_Widget
-            if USE_PYQT6
-            else QtWidgets.QStyle.PE_Widget
-        )
-        self.gui_config.WA_TranslucentBackground = (
-            QtCore.Qt.WidgetAttribute.WA_TranslucentBackground
-            if USE_PYQT6
-            else QtCore.Qt.WA_TranslucentBackground
-        )
-        self.gui_config.WA_TransparentForMouseEvents = (
-            QtCore.Qt.WidgetAttribute.WA_TransparentForMouseEvents
-            if USE_PYQT6
-            else QtCore.Qt.WA_TransparentForMouseEvents
-        )
-
-        # for draw_display
-        self.gui_config.format_rgb888 = (
-            QtGui.QImage.Format.Format_RGB888
-            if USE_PYQT6
-            else QtGui.QImage.Format_RGB888
-        )
-        self.gui_config.format_mono = (
-            QtGui.QImage.Format.Format_Mono if USE_PYQT6 else QtGui.QImage.Format_Mono
-        )
-        if self.config.display.has_color():
-            self.gui_config.format = self.gui_config.format_rgb888
-        else:
-            self.gui_config.format = self.gui_config.format_mono
-
     def init_window(self):
         self.app = QtWidgets.QApplication(sys.argv)
         self.config.loop = qasync.QEventLoop(self.app)
@@ -226,36 +153,27 @@ class GUI_PyQt(QtCore.QObject):
         self.config.init_loop(call_from_gui=True)
 
         self.main_window = MyWindow()
-        self.main_window.set_config(self.config)
         self.main_window.set_gui(self)
         self.main_window.setWindowTitle(self.config.G_PRODUCT)
         self.main_window.setMinimumSize(self.config.G_WIDTH, self.config.G_HEIGHT)
         self.main_window.show()
-        self.set_color()
+        self.main_window.set_color()
 
         self.stack_widget = QtWidgets.QStackedWidget(self.main_window)
         self.main_window.setCentralWidget(self.stack_widget)
         self.stack_widget.setContentsMargins(0, 0, 0, 0)
 
         # stack_widget elements (splash)
-        self.splash_widget = QtWidgets.QWidget(self.stack_widget)
-        self.splash_widget.setContentsMargins(0, 0, 0, 0)
-        self.stack_widget.addWidget(self.splash_widget)
+        splash_widget = SplashScreen(self.stack_widget)
+        self.stack_widget.addWidget(splash_widget)
 
-        self.splash_layout = QtWidgets.QVBoxLayout(self.splash_widget)
-        self.splash_layout.setContentsMargins(0, 0, 0, 0)
-        self.splash_layout.setSpacing(0)
-        self.splash_widget.setStyleSheet(self.style.G_GUI_PYQT_splash_screen)
+        splash_layout = QtWidgets.QVBoxLayout(splash_widget)
+        splash_layout.setContentsMargins(0, 0, 0, 0)
+        splash_layout.setSpacing(0)
 
-        # self.splash_image = QtWidgets.QLabel()
-        # self.splash_image.setPixmap(QtGui.QPixmap("some_logo.png"))
-        # self.splash_layout.addWidget(self.splash_image)
-
-        self.boot_status = QtWidgets.QLabel()
-        self.signal_boot_status.connect(self.set_boot_status_internal)
-        self.boot_status.setStyleSheet(self.style.G_GUI_PYQT_splash_boot_text)
-        self.boot_status.setAlignment(self.gui_config.align_center)
-        self.splash_layout.addWidget(self.boot_status)
+        boot_status = BootStatus()
+        self.signal_boot_status.connect(boot_status.setText)
+        splash_layout.addWidget(boot_status)
 
         # for draw_display
         self.init_buffer()
@@ -268,9 +186,6 @@ class GUI_PyQt(QtCore.QObject):
         if not self.config.G_IS_RASPI:
             await asyncio.sleep(0.01)  # need for changing QLabel in the event loop
 
-    def set_boot_status_internal(self, text):
-        self.boot_status.setText(text)
-
     def delay_init(self):
         # ensure visually alignment for log
         timers = [
@@ -282,14 +197,6 @@ class GUI_PyQt(QtCore.QObject):
 
         with timers[0]:
             self.add_font()
-
-            # navi icon
-            self.navi_icon = {
-                "Default": QtGui.QIcon("img/navi_flag.png"),  # svg
-                "Left": QtGui.QIcon("img/navi_turn_left.svg"),
-                "Right": QtGui.QIcon("img/navi_turn_right.svg"),
-                "Summit": QtGui.QIcon("img/summit.png"),  # svg
-            }
 
             # physical button
             self.signal_next_button.connect(self.scroll)
@@ -372,9 +279,9 @@ class GUI_PyQt(QtCore.QObject):
             #    debug_log_viewer_widget
 
             # stack_widget elements (main)
-            self.main_widget = QtWidgets.QWidget(self.stack_widget)
-            self.main_widget.setContentsMargins(0, 0, 0, 0)
-            self.stack_widget.addWidget(self.main_widget)
+            main_widget = QtWidgets.QWidget(self.stack_widget)
+            main_widget.setContentsMargins(0, 0, 0, 0)
+            self.stack_widget.addWidget(main_widget)
 
             # reverse order (make children widget first, then make parent widget)
             menus = [
@@ -417,23 +324,23 @@ class GUI_PyQt(QtCore.QObject):
             self.stack_widget.setCurrentIndex(1)
 
             # main layout
-            self.main_layout = QtWidgets.QVBoxLayout(self.main_widget)
-            self.main_layout.setContentsMargins(0, 0, 0, 0)
-            self.main_layout.setSpacing(0)
+            main_layout = QtWidgets.QVBoxLayout(main_widget)
+            main_layout.setContentsMargins(0, 0, 0, 0)
+            main_layout.setSpacing(0)
 
             # main Widget
-            self.main_page = QtWidgets.QStackedWidget(self.main_widget)
+            self.main_page = QtWidgets.QStackedWidget(main_widget)
             self.main_page.setContentsMargins(0, 0, 0, 0)
 
-            for k in self.gui_config.G_LAYOUT:
-                if not self.gui_config.G_LAYOUT[k]["STATUS"]:
+            for k, v in self.gui_config.layout.items():
+                if not v["STATUS"]:
                     continue
-                if "LAYOUT" in self.gui_config.G_LAYOUT[k]:
+                if "LAYOUT" in v:
                     self.main_page.addWidget(
                         ValuesWidget(
                             self.main_page,
                             self.config,
-                            self.gui_config.G_LAYOUT[k]["LAYOUT"],
+                            v["LAYOUT"],
                         )
                     )
                 else:
@@ -485,7 +392,7 @@ class GUI_PyQt(QtCore.QObject):
                         k == "CUESHEET"
                         and len(self.config.logger.course.point_name)
                         and self.config.G_COURSE_INDEXING
-                        and self.config.G_CUESHEET_DISPLAY_NUM > 0
+                        and self.config.G_CUESHEET_DISPLAY_NUM
                     ):
                         self.cuesheet_widget = CueSheetWidget(
                             self.main_page, self.config
@@ -494,12 +401,12 @@ class GUI_PyQt(QtCore.QObject):
 
         with timers[3]:
             # integrate main_layout
-            self.main_layout.addWidget(self.main_page)
+            main_layout.addWidget(self.main_page)
             if self.config.display.has_touch():
                 from modules.pyqt.pyqt_button_box_widget import ButtonBoxWidget
 
-                self.button_box_widget = ButtonBoxWidget(self.main_widget, self.config)
-                self.main_layout.addWidget(self.button_box_widget)
+                self.button_box_widget = ButtonBoxWidget(main_widget, self.config)
+                main_layout.addWidget(self.button_box_widget)
 
             # fullscreen
             if self.config.G_FULLSCREEN:
@@ -510,21 +417,26 @@ class GUI_PyQt(QtCore.QObject):
         app_logger.info("Drawing components:")
         log_timers(timers, text_total="total : {0:.3f} sec")
 
+    def get_screen_shape(self, p):
+        remove_bytes = 0
+        if self.config.display.has_color():
+            screen_shape = (p.height(), p.width(), 3)
+        else:
+            screen_shape = (p.height(), int(p.width() / 8))
+            remove_bytes = p.bytesPerLine() - int(p.width() / 8)
+        return screen_shape, remove_bytes
+
     def init_buffer(self):
         if self.config.display.send_display:
-            p = (
-                self.stack_widget.grab()
-                .toImage()
-                .convertToFormat(self.gui_config.format)
-            )
+            p = self.stack_widget.grab().toImage().convertToFormat(self.image_format)
             # PyQt 5.11(Buster) or 5.15(Bullseye)
             qt_version = (QtCore.QT_VERSION_STR).split(".")
             if qt_version[0] == "5" and int(qt_version[1]) < 15:
                 self.bufsize = p.bytesPerLine() * p.height()  # PyQt 5.11(Buster)
             else:
-                self.bufsize = p.sizeInBytes()  # PyQt 5.15 or lator (Bullseye)
+                self.bufsize = p.sizeInBytes()  # PyQt 5.15 or later (Bullseye)
 
-            self.screen_shape, self.remove_bytes = self.gui_config.get_screen_shape(p)
+            self.screen_shape, self.remove_bytes = self.get_screen_shape(p)
 
     def exec(self):
         with self.config.loop:
@@ -580,12 +492,8 @@ class GUI_PyQt(QtCore.QObject):
         self.map_widget.reset_track()
 
     def press_key(self, key):
-        e_press = QtGui.QKeyEvent(
-            self.gui_config.key_press, key, self.gui_config.no_modifier, None
-        )
-        e_release = QtGui.QKeyEvent(
-            self.gui_config.key_release, key, self.gui_config.no_modifier, None
-        )
+        e_press = QtGui.QKeyEvent(QT_KEY_PRESS, key, QT_NO_MODIFIER, None)
+        e_release = QtGui.QKeyEvent(QT_KEY_RELEASE, key, QT_NO_MODIFIER, None)
         QtCore.QCoreApplication.postEvent(QtWidgets.QApplication.focusWidget(), e_press)
         QtCore.QCoreApplication.postEvent(
             QtWidgets.QApplication.focusWidget(), e_release
@@ -600,7 +508,7 @@ class GUI_PyQt(QtCore.QObject):
         # self.stack_widget.currentWidget().focusNextChild()
 
     def press_space(self):
-        self.press_key(self.gui_config.key_space)
+        self.press_key(QT_KEY_SPACE)
 
     def scroll_next(self):
         self.signal_next_button.emit(1)
@@ -659,12 +567,12 @@ class GUI_PyQt(QtCore.QObject):
 
     def reset_course(self):
         self.map_widget.reset_course()
-        if self.course_profile_graph_widget != None:
+        if self.course_profile_graph_widget is not None:
             self.course_profile_graph_widget.reset_course()
 
     def init_course(self):
         self.map_widget.init_course()
-        if self.course_profile_graph_widget != None:
+        if self.course_profile_graph_widget is not None:
             self.course_profile_graph_widget.init_course()
 
     def change_color_low(self):
@@ -718,7 +626,7 @@ class GUI_PyQt(QtCore.QObject):
             return
 
         # self.config.check_time("draw_display start")
-        p = self.stack_widget.grab().toImage().convertToFormat(self.gui_config.format)
+        p = self.stack_widget.grab().toImage().convertToFormat(self.image_format)
 
         # self.config.check_time("grab")
         ptr = p.constBits()
@@ -754,24 +662,22 @@ class GUI_PyQt(QtCore.QObject):
 
     def change_menu_page(self, page, focus_reset=True):
         self.stack_widget.setCurrentIndex(page)
-        # default focus
-        if not self.config.display.has_touch() and hasattr(
-            self.stack_widget.widget(page), "focus_widget"
-        ):
-            if focus_reset and self.stack_widget.widget(page).focus_widget is not None:
-                self.stack_widget.widget(page).focus_widget.setFocus()
+        # default focus, set only when has_touch is false
+        focus_widget = getattr(self.stack_widget.widget(page), "focus_widget", None)
+        if focus_widget:
+            if focus_reset:
+                focus_widget.setFocus()
+        elif self.config.display.has_touch():
+            # reset automatic focus there might not be one
+            focus_widget = QtWidgets.QApplication.focusWidget()
+            if focus_widget:
+                focus_widget.clearFocus()
 
     def change_menu_back(self):
         self.stack_widget.currentWidget().back()
 
     def goto_menu(self):
         self.change_menu_page(self.gui_config.G_GUI_INDEX["Menu"])
-
-    def set_color(self, daylight=True):
-        if daylight:
-            self.main_window.setStyleSheet("color: black; background-color: white")
-        else:
-            self.main_window.setStyleSheet("color: white; background-color: #222222")
 
     async def add_message_queue(self, title=None, message=None, fn=None):
         await self.msg_queue.put(message)
@@ -800,7 +706,7 @@ class GUI_PyQt(QtCore.QObject):
                 {
                     "title": title,
                     "button_num": 0,
-                    "position": self.gui_config.align_bottom,
+                    "position": QT_ALIGN_BOTTOM,
                 }
             )
         )
@@ -811,8 +717,8 @@ class GUI_PyQt(QtCore.QObject):
                 {
                     "title": title,
                     "message": message,
-                    "position": self.gui_config.align_bottom,
-                    "text_align": self.gui_config.align_left,
+                    "position": QT_ALIGN_BOTTOM,
+                    "text_align": QT_ALIGN_LEFT,
                 }
             )
         )
@@ -836,8 +742,8 @@ class GUI_PyQt(QtCore.QObject):
                     "title": t,
                     "message": m,
                     "button_num": 1,
-                    "position": self.gui_config.align_bottom,
-                    "text_align": self.gui_config.align_left,
+                    "position": QT_ALIGN_BOTTOM,
+                    "text_align": QT_ALIGN_LEFT,
                 }
             )
         )
@@ -850,7 +756,7 @@ class GUI_PyQt(QtCore.QObject):
             self.show_dialog_ok_only(None, msg)
 
     def show_navi_internal(self, title, title_icon=None):
-        # self.show_dialog_base(title=title, title_icon=title_icon, button_num=0, position=self.gui_config.align_bottom)
+        # self.show_dialog_base(title=title, title_icon=title_icon, button_num=0, position=QT_ALIGN_BOTTOM)
         pass
 
     def show_dialog(self, fn, title):
@@ -882,8 +788,8 @@ class GUI_PyQt(QtCore.QObject):
         button_num = msg.get("button_num", 0)  # 0: none, 1: OK, 2: OK+Cancel
         button_label = msg.get("button_label", None)  # button label for button_num = 1
         timeout = msg.get("timeout", 5)
-        position = msg.get("position", self.gui_config.align_center)
-        text_align = msg.get("text_align", self.gui_config.align_center)
+        position = msg.get("position", QT_ALIGN_CENTER)
+        text_align = msg.get("text_align", QT_ALIGN_CENTER)
         fn = msg.get("fn")  # use with OK button(button_num=2)
 
         self.display_dialog = True
@@ -913,6 +819,34 @@ class GUI_PyQt(QtCore.QObject):
                 opt.initFrom(self)
                 qp.drawPrimitive(self.pe_widget, opt)
 
+        class DialogBackground(QtWidgets.QWidget):
+            STYLES = """
+              #background {
+                /* transparent black */
+                background-color: rgba(0, 0, 0, 64);
+                /* transparent white */
+                /*
+                  background-color: rgba(255, 255, 255, 128);
+                */
+              }
+              Container {
+                border: 3px solid black;
+                border-radius: 5px;
+                padding: 15px;
+              }
+              Container DialogButton{
+                border: 2px solid #AAAAAA;
+                border-radius: 3px;
+                text-align: center;
+              }
+              Container DialogButton:pressed{background-color: black; }
+              Container DialogButton:focus{background-color: black; color: white; }
+            """
+
+            def __init__(self, *__args):
+                super().__init__(*__args, objectName="background")
+                self.setStyleSheet(self.STYLES)
+
         def back():
             if not self.display_dialog:
                 return
@@ -920,18 +854,13 @@ class GUI_PyQt(QtCore.QObject):
             background.deleteLater()
 
         self.stack_widget_current_index = self.stack_widget.currentIndex()
-        self.stack_widget.layout().setStackingMode(
-            self.gui_config.stackingmode_stackall
-        )
+        self.stack_widget.layout().setStackingMode(QT_STACKINGMODE_STACKALL)
 
-        background = QtWidgets.QWidget(
-            parent=self.stack_widget, objectName="background"
-        )
-        background.setStyleSheet(self.style.G_GUI_PYQT_dialog)
+        background = DialogBackground(self.stack_widget)
         background.back = back
         back_layout = QtWidgets.QVBoxLayout(background)
         container = Container(background)
-        container.pe_widget = self.gui_config.PE_Widget
+        container.pe_widget = QT_PE_WIDGET
 
         # position
         back_layout.addWidget(container, alignment=position)
@@ -1044,9 +973,7 @@ class GUI_PyQt(QtCore.QObject):
         )
 
     def close_dialog(self, index):
-        self.stack_widget.layout().setStackingMode(
-            self.gui_config.stackingmode_stackone
-        )
+        self.stack_widget.layout().setStackingMode(QT_STACKINGMODE_STACKONE)
         self.stack_widget.setCurrentIndex(index)
         self.display_dialog = False
         self.msg_event.set()

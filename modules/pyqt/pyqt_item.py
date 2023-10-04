@@ -2,7 +2,48 @@ import time
 
 import numpy as np
 
-from modules._pyqt import QtWidgets
+from modules._pyqt import QT_ALIGN_CENTER, QtWidgets
+
+
+class ItemLabel(QtWidgets.QLabel):
+    right = False
+
+    @property
+    def STYLES(self):
+        right_border_width = "0px" if self.right else "1px"
+        return f"""
+            border-width: 0px {right_border_width} 0px 0px;
+            border-style: solid;
+            border-color: #CCCCCC;
+        """
+
+    def __init__(self, right, *__args):
+        self.right = right
+        super().__init__(*__args)
+        self.setAlignment(QT_ALIGN_CENTER)
+        self.setStyleSheet(self.STYLES)
+
+
+class ItemValue(QtWidgets.QLabel):
+    bottom = False
+    right = False
+
+    @property
+    def STYLES(self):
+        bottom_border_width = "0px" if self.bottom else "1px"
+        right_border_width = "0px" if self.right else "1px"
+        return f"""
+            border-width: 0px {right_border_width} {bottom_border_width} 0px;
+            border-style: solid;
+            border-color: #CCCCCC;
+        """
+
+    def __init__(self, right, bottom, *__args):
+        self.right = right
+        self.bottom = bottom
+        super().__init__(*__args)
+        self.setAlignment(QT_ALIGN_CENTER)
+        self.setStyleSheet(self.STYLES)
 
 
 #################################
@@ -14,50 +55,22 @@ class Item(QtWidgets.QVBoxLayout):
     value = None
     name = ""
 
-    def set_init_value(self, config, name, font_size, bottom_flag, right_flag):
+    def __init__(self, config, name, font_size, bottom_flag, right_flag, *args):
+        super().__init__(*args)
         self.config = config
+        self.name = name
 
         self.setContentsMargins(0, 0, 0, 0)
         self.setSpacing(0)
 
-        self.label = QtWidgets.QLabel()
-        self.label.setAlignment(self.config.gui.gui_config.align_center)
-        self.value = QtWidgets.QLabel()
-        self.value.setAlignment(self.config.gui.gui_config.align_center)
+        self.label = ItemLabel(right_flag, name)
+        self.value = ItemValue(right_flag, bottom_flag)
+
         self.itemformat = self.config.gui.gui_config.G_ITEM_DEF[name][0]
-
-        self.label.setText(name)
-
-        self.name = name
 
         self.addWidget(self.label)
         self.addWidget(self.value)
 
-        bottom_border_width = "1px"
-        if bottom_flag:
-            bottom_border_width = "0px"
-        right_border_width = "1px"
-        if right_flag:
-            right_border_width = "0px"
-
-        self.label.setStyleSheet(
-            "\
-      border-width: 0px "
-            + right_border_width
-            + " 0px 0px; \
-      border-style: solid; \
-      border-color: #CCCCCC;"
-        )
-        self.value.setStyleSheet(
-            "\
-      border-width: 0px "
-            + right_border_width
-            + " "
-            + bottom_border_width
-            + " 0px; \
-      border-style: solid; \
-      border-color: #CCCCCC;"
-        )
         self.update_font_size(font_size)
         self.update_value(np.nan)
 
@@ -101,6 +114,6 @@ class Item(QtWidgets.QVBoxLayout):
         ):
             q = text.font()
             q.setPixelSize(fsize)
-            # q.setStyleStrategy(QtGui.QFont.NoSubpixelAntialias) #avoid subpixel antialiasing on the fonts if possible
-            # q.setStyleStrategy(QtGui.QFont.NoAntialias) #don't antialias the fonts
+            # q.setStyleStrategy(QtGui.QFont.NoSubpixelAntialias) # avoid subpixel antialiasing on the fonts if possible
+            # q.setStyleStrategy(QtGui.QFont.NoAntialias) # don't antialias the fonts
             text.setFont(q)

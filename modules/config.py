@@ -879,21 +879,25 @@ class Config:
                 self.logger.count_laps()
             elif key == "r":
                 self.logger.reset_count()
-            elif key == "n" and self.gui is not None:
+            elif key == "n" and self.gui:
                 self.gui.scroll_next()
-            elif key == "p" and self.gui is not None:
+            elif key == "p" and self.gui:
                 self.gui.scroll_prev()
-            elif key == "q" and self.gui is not None:
+            elif key == "q" and self.gui:
                 await self.quit()
             ##### temporary #####
             # test hardware key signals
-            elif key == "," and self.gui is not None:
+            elif key == "m" and self.gui:
+                self.gui.enter_menu()
+            elif key == "v" and self.gui:
+                self.gui.press_space()
+            elif key == "," and self.gui:
                 self.gui.press_tab()
-            elif key == "." and self.gui is not None:
+            elif key == "." and self.gui:
                 self.gui.press_shift_tab()
-            elif key == "b" and self.gui is not None:
+            elif key == "b" and self.gui:
                 self.gui.back_menu()
-            elif key == "c" and self.gui is not None:
+            elif key == "c" and self.gui:
                 self.gui.get_screenshot()
 
     def set_logger(self, logger):

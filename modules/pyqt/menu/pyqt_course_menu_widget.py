@@ -2,22 +2,34 @@ import asyncio
 import os
 import shutil
 
-from modules._pyqt import QtCore, QtWidgets, QtGui, qasync
-from .pyqt_menu_widget import MenuWidget, ListWidget, ListItemWidget
+from modules._pyqt import (
+    QT_ALIGN_CENTER,
+    QtCore,
+    QtWidgets,
+    QtGui,
+    qasync,
+)
+from modules.pyqt.components import icons, topbar
+from .pyqt_menu_widget import (
+    MenuWidget,
+    ListWidget,
+    ListItemWidget,
+)
 
 
 class CoursesMenuWidget(MenuWidget):
     def setup_menu(self):
-        self.button = {}
         button_conf = (
-            # Name(page_name), button_attribute, connected functions, layout
+            # Name(page_name), button_attribute, connected functions, icon
             ("Local Storage", "submenu", self.load_local_courses),
             (
                 "Ride with GPS",
                 "submenu",
                 self.load_rwgps_courses,
-                "./img/rwgps_logo.svg",
-                QtCore.QSize(self.logo_size * 4, self.logo_size),
+                (
+                    icons.RideWithGPSIcon(),
+                    (icons.BASE_LOGO_SIZE * 4, icons.BASE_LOGO_SIZE),
+                ),
             ),
             ("Android Google Maps", None, self.receive_route),
             # ('Google Directions API mode', 'submenu', self.google_directions_api_setting_menu),
@@ -29,53 +41,37 @@ class CoursesMenuWidget(MenuWidget):
                 ),
             ),
         )
-        self.add_buttons(button_conf, back_connect=False)
+        self.add_buttons(button_conf)
 
         # if not self.config.G_GOOGLE_DIRECTION_API["HAVE_API_TOKEN"]:
         #  self.button['Google Directions API mode'].disable()
 
         if not self.config.G_IS_RASPI or not os.path.isfile(self.config.G_OBEXD_CMD):
-            self.button["Android Google Maps"].disable()
-
-        # set back_index of child widget
-        self.child_page_name = "Courses List"
-        self.child_index = self.config.gui.gui_config.G_GUI_INDEX[self.child_page_name]
-        self.parentWidget().widget(self.child_index).back_index_key = self.page_name
-
-        # index = self.config.gui.gui_config.G_GUI_INDEX['Google Directions API mode']
-        # self.parentWidget().widget(index).back_index_key = self.page_name
+            self.buttons["Android Google Maps"].disable()
 
     def preprocess(self):
         self.onoff_course_cancel_button()
 
     @qasync.asyncSlot()
     async def load_local_courses(self):
-        await self.change_course_page("Local Storage")
-        await self.parentWidget().widget(self.child_index).list_local_courses()
+        widget = self.change_page(
+            "Courses List", preprocess=True, reset=True, list_type="Local Storage"
+        )
+        await widget.list_local_courses()
 
     @qasync.asyncSlot()
     async def load_rwgps_courses(self):
-        asyncio.gather(
-            self.change_course_page("Ride with GPS"),
-            self.parentWidget().widget(self.child_index).list_ride_with_gps(reset=True),
+        widget = self.change_page(
+            "Courses List", preprocess=True, reset=True, list_type="Ride with GPS"
         )
-
-    async def change_course_page(self, course_type):
-        self.change_page(
-            self.child_page_name, preprocess=True, reset=True, list_type=course_type
-        )
+        await widget.list_ride_with_gps(reset=True)
 
     def google_directions_api_setting_menu(self):
         self.change_page("Google Directions API mode", preprocess=True)
 
     def onoff_course_cancel_button(self):
-        if not len(self.config.logger.course.distance):
-            self.button["Cancel Course"].disable()
-        else:
-            self.button["Cancel Course"].enable()
-        self.button["Cancel Course"].setStyleSheet(
-            self.config.gui.style.G_GUI_PYQT_buttonStyle_menu
-        )
+        status = bool(len(self.config.logger.course.distance))
+        self.buttons["Cancel Course"].onoff_button(status)
 
     def cancel_course(self, replace=False):
         self.config.logger.reset_course(delete_course_file=True, replace=replace)
@@ -180,20 +176,18 @@ class CoursesMenuWidget(MenuWidget):
 
 
 class CourseListWidget(ListWidget):
-    def setup_menu_extra(self):
-        # set back_index of child widget
-        self.child_page_name = "Course Detail"
-        self.child_index = self.config.gui.gui_config.G_GUI_INDEX[self.child_page_name]
-        self.parentWidget().widget(self.child_index).back_index_key = self.page_name
-
+    def setup_menu(self):
+        super().setup_menu()
         self.vertical_scrollbar = self.list.verticalScrollBar()
         self.vertical_scrollbar.valueChanged.connect(self.detect_bottom)
 
     @qasync.asyncSlot(int)
     async def detect_bottom(self, value):
-        if self.list_type == "Ride with GPS":
-            if value == self.vertical_scrollbar.maximum():
-                await self.list_ride_with_gps(add=True)
+        if (
+            self.list_type == "Ride with GPS"
+            and value == self.vertical_scrollbar.maximum()
+        ):
+            await self.list_ride_with_gps(add=True)
 
     @qasync.asyncSlot()
     async def button_func(self):
@@ -206,12 +200,12 @@ class CourseListWidget(ListWidget):
     async def change_course_detail_page(self):
         if self.selected_item is None:
             return
-        self.change_page(
-            self.child_page_name,
+        widget = self.change_page(
+            "Course Detail",
             preprocess=True,
             course_info=self.selected_item.list_info,
         )
-        await self.parentWidget().widget(self.child_index).load_images()
+        await widget.load_images()
 
     def preprocess_extra(self):
         self.page_name_label.setText(self.list_type)
@@ -219,18 +213,14 @@ class CourseListWidget(ListWidget):
     async def list_local_courses(self):
         courses = self.config.logger.course.get_courses()
         for c in courses:
-            course_item = CourseListItemWidget(self, self.config, self.list_type)
-            course_item.set_info(**c)
+            course_item = CourseListItemWidget(self, self.list_type, c)
             self.add_list_item(course_item)
 
     async def list_ride_with_gps(self, add=False, reset=False):
         courses = await self.config.network.api.get_ridewithgps_route(add, reset)
-        if courses is None:
-            return
 
-        for c in reversed(courses):
-            course_item = CourseListItemWidget(self, self.config, self.list_type)
-            course_item.set_info(**c)
+        for c in reversed(courses or []):
+            course_item = CourseListItemWidget(self, self.list_type, c)
             self.add_list_item(course_item)
 
     def set_course(self, course_file=None):
@@ -266,49 +256,35 @@ class CourseListWidget(ListWidget):
 
 
 class CourseListItemWidget(ListItemWidget):
+    list_info = None
     list_type = None
     locality_text = ", {elevation_gain:.0f}m up, {locality}, {administrative_area}"
 
-    def __init__(self, parent, config, list_type=None):
-        super().__init__(parent=parent, config=config)
+    def __init__(self, parent, list_type, list_info):
         self.list_type = list_type
+        self.list_info = list_info.copy()
+
+        if self.list_type == "Ride with GPS":
+            detail = ("{:.1f}km" + self.locality_text).format(
+                self.list_info["distance"] / 1000,
+                **self.list_info,
+            )
+        else:
+            detail = None
+
+        super().__init__(parent=parent, title=list_info["name"], detail=detail)
 
         if self.list_type == "Local Storage":
-            self.enter_signal.connect(self.parentWidget().set_course)
-            self.set_simple_list_stylesheet(hide_detail_label=True)
+            self.enter_signal.connect(parent.set_course)
         elif self.list_type == "Ride with GPS":
-            self.enter_signal.connect(self.parentWidget().change_course_detail_page)
-            self.set_simple_list_stylesheet()
+            self.enter_signal.connect(parent.change_course_detail_page)
 
-    def add_extra(self):
-        self.right_icon = QtWidgets.QLabel()
-        icon_size = self.parentWidget().MenuButton.icon_size["submenu"]
-        right_icon_qsize = QtCore.QSize(icon_size, icon_size)
-        self.right_icon.setPixmap(
-            self.parentWidget().MenuButton.icon_img["submenu"].pixmap(right_icon_qsize)
-        )
-        self.right_icon.setStyleSheet(self.config.gui.style.G_GUI_PYQT_menu_list_border)
-
-        # outer layout (custom)
-        self.outer_layout.setContentsMargins(
-            0, 0, self.parentWidget().MenuButton.icon_margin["submenu"] + 1, 0
-        )
-        self.outer_layout.addLayout(
-            self.inner_layout, self.config.gui.gui_config.align_left
-        )
+    def setup_ui(self):
+        super().setup_ui()
+        right_icon = icons.CourseRightIcon()
+        self.outer_layout.setContentsMargins(0, 0, right_icon.margin, 0)
         self.outer_layout.addStretch()
-        self.outer_layout.addWidget(self.right_icon)
-
-    def set_info(self, **kwargs):
-        self.list_info = kwargs.copy()
-        self.title_label.setText(self.list_info["name"])
-        if self.list_type == "Ride with GPS":
-            self.detail_label.setText(
-                ("{:.1f}km" + self.locality_text).format(
-                    self.list_info["distance"] / 1000,
-                    **self.list_info,
-                )
-            )
+        self.outer_layout.addWidget(right_icon)
 
 
 class CourseDetailWidget(MenuWidget):
@@ -318,6 +294,7 @@ class CourseDetailWidget(MenuWidget):
     all_downloaded = False
     map_image_size = None
     profile_image_size = None
+    next_button = None
 
     address_format = "{locality}, {administrative_area}"
 
@@ -325,10 +302,10 @@ class CourseDetailWidget(MenuWidget):
         self.make_menu_layout(QtWidgets.QVBoxLayout)
 
         self.map_image = QtWidgets.QLabel()
-        self.map_image.setAlignment(self.config.gui.gui_config.align_center)
+        self.map_image.setAlignment(QT_ALIGN_CENTER)
 
         self.profile_image = QtWidgets.QLabel()
-        self.profile_image.setAlignment(self.config.gui.gui_config.align_center)
+        self.profile_image.setAlignment(QT_ALIGN_CENTER)
 
         self.distance_label = QtWidgets.QLabel()
         self.distance_label.setMargin(0)
@@ -343,34 +320,35 @@ class CourseDetailWidget(MenuWidget):
         self.locality_label.setContentsMargins(0, 0, 0, 0)
         self.locality_label.setWordWrap(True)
 
-        self.info_layout = QtWidgets.QVBoxLayout()
-        self.info_layout.setContentsMargins(5, 0, 0, 0)
-        self.info_layout.setSpacing(0)
-        self.info_layout.addWidget(self.distance_label)
-        self.info_layout.addWidget(self.elevation_label)
-        self.info_layout.addWidget(self.locality_label)
+        info_layout = QtWidgets.QVBoxLayout()
+        info_layout.setContentsMargins(5, 0, 0, 0)
+        info_layout.setSpacing(0)
+        info_layout.addWidget(self.distance_label)
+        info_layout.addWidget(self.elevation_label)
+        info_layout.addWidget(self.locality_label)
 
-        self.outer_layout = QtWidgets.QHBoxLayout()
-        self.outer_layout.setContentsMargins(0, 0, 0, 0)
-        self.outer_layout.setSpacing(0)
-        self.outer_layout.addWidget(self.map_image)
-        self.outer_layout.addLayout(self.info_layout)
+        outer_layout = QtWidgets.QHBoxLayout()
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(0)
+        outer_layout.addWidget(self.map_image)
+        outer_layout.addLayout(info_layout)
 
-        self.menu_layout.addLayout(self.outer_layout)
+        self.menu_layout.addLayout(outer_layout)
         self.menu_layout.addWidget(self.profile_image)
 
         # update panel for every 1 seconds
         self.timer = QtCore.QTimer(parent=self)
         self.timer.timeout.connect(self.update_display)
 
+        # also set extra button for topbar
+        self.next_button = topbar.TopBarNextButton((self.icon_x, self.icon_y))
+        self.next_button.setEnabled(False)
+
+        self.top_bar_layout.addWidget(self.next_button)
+
     def enable_next_button(self):
+        self.next_button.setVisible(True)
         self.next_button.setEnabled(True)
-        self.next_button.setIcon(QtGui.QIcon("img/forward_white.svg"))
-        self.next_button.setIconSize(QtCore.QSize(20, 20))
-        self.next_button.setProperty("style", "menu")
-        self.next_button.setStyleSheet(
-            self.config.gui.style.G_GUI_PYQT_buttonStyle_navi
-        )
 
     def connect_buttons(self):
         self.next_button.clicked.connect(self.set_course)
@@ -383,7 +361,7 @@ class CourseDetailWidget(MenuWidget):
 
         self.map_image.clear()
         self.profile_image.clear()
-        self.next_button.setIcon(QtGui.QIcon())
+        self.next_button.setVisible(False)
         self.next_button.setEnabled(False)
 
         self.page_name_label.setText(course_info["name"])
@@ -470,16 +448,15 @@ class CourseDetailWidget(MenuWidget):
                 + "preview-{route_id}.png"
             ).format(route_id=self.list_id)
             if self.map_image_size is None:
-                # self.map_image_size = Image.open(filename).size
                 self.map_image_size = QtGui.QImage(filename).size()
             if self.map_image_size.width() == 0:
                 return False
             scale = (self.menu.width() / 2) / self.map_image_size.width()
-            self.map_image_qsize = QtCore.QSize(
+            map_image_qsize = QtCore.QSize(
                 int(self.map_image_size.width() * scale),
                 int(self.map_image_size.height() * scale),
             )
-            self.map_image.setPixmap(QtGui.QIcon(filename).pixmap(self.map_image_qsize))
+            self.map_image.setPixmap(QtGui.QIcon(filename).pixmap(map_image_qsize))
 
         if draw_profile_image:
             filename = (
@@ -492,12 +469,12 @@ class CourseDetailWidget(MenuWidget):
             if self.profile_image_size.width() == 0:
                 return False
             scale = self.menu.width() / self.profile_image_size.width()
-            self.profile_image_qsize = QtCore.QSize(
+            profile_image_qsize = QtCore.QSize(
                 int(self.profile_image_size.width() * scale),
                 int(self.profile_image_size.height() * scale),
             )
             self.profile_image.setPixmap(
-                QtGui.QIcon(filename).pixmap(self.profile_image_qsize)
+                QtGui.QIcon(filename).pixmap(profile_image_qsize)
             )
         return True
 

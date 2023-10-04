@@ -3,40 +3,55 @@ import numpy as np
 from modules._pyqt import pg
 from modules.pyqt.pyqt_screen_widget import ScreenWidget
 
-pg.setConfigOptions(antialias=True)
-pg.setConfigOption("background", "w")
-pg.setConfigOption("foreground", "k")
-
 
 class PerformanceGraphWidget(ScreenWidget):
-    def init_extra(self):
-        self.display_item = self.config.G_GUI_PERFORMANCE_GRAPH_DISPLAY_ITEM
+    item_layout = {
+        "Power": (0, 0),
+        "HR": (0, 1),
+        "W'bal(Norm)": (0, 2),
+        "LapTime": (0, 3),
+    }
+    max_height = 1
+    max_width = 3
+
+    # for Power
+    # brush = pg.mkBrush(color=(0,160,255,64))
+    brush = pg.mkBrush(color=(0, 255, 255))
+    # pen2 = pg.mkPen(color=(255,255,255,0), width=0.01) #transparent and thin line
+    pen1 = pg.mkPen(color=(255, 255, 255), width=0.01)  # transparent and thin line
+    # for HR, wbal
+    pen2 = pg.mkPen(color=(255, 0, 0), width=2)
+
+    def __init__(self, parent, config):
+        self.display_item = config.G_GUI_PERFORMANCE_GRAPH_DISPLAY_ITEM
         self.item = {
             "POWER": {
                 "name": "POWER",
                 "graph_key": "power_graph",
-                "yrange": [self.config.G_GUI_MIN_POWER, self.config.G_GUI_MAX_POWER],
+                "yrange": [config.G_GUI_MIN_POWER, config.G_GUI_MAX_POWER],
             },
             "HR": {
                 "name": "HR",
                 "graph_key": "hr_graph",
-                "yrange": [self.config.G_GUI_MIN_HR, self.config.G_GUI_MAX_HR],
+                "yrange": [config.G_GUI_MIN_HR, config.G_GUI_MAX_HR],
             },
             "W_BAL": {
                 "name": "W_BAL",
                 "graph_key": "w_bal_graph",
-                "yrange": [self.config.G_GUI_MIN_W_BAL, self.config.G_GUI_MAX_W_BAL],
+                "yrange": [config.G_GUI_MIN_W_BAL, config.G_GUI_MAX_W_BAL],
             },
         }
         self.plot_data_x1 = []
-        for i in range(self.config.G_GUI_PERFORMANCE_GRAPH_DISPLAY_RANGE + 1):
+        for i in range(config.G_GUI_PERFORMANCE_GRAPH_DISPLAY_RANGE + 1):
             self.plot_data_x1.append(i)
+
+        super().__init__(parent, config)
 
     def setup_ui_extra(self):
         # 1st graph: POWER
-        self.plot = pg.PlotWidget()
-        self.plot.setBackground(None)
-        self.p1 = self.plot.plotItem
+        plot = pg.PlotWidget()
+        plot.setBackground(None)
+        self.p1 = plot.plotItem
 
         # 2nd graph: HR or W_BAL
         self.p2 = pg.ViewBox()
@@ -45,10 +60,10 @@ class PerformanceGraphWidget(ScreenWidget):
         self.p1.getAxis("right").linkToView(self.p2)
         self.p2.setXLink(self.p1)
 
-        self.plot.setXRange(0, self.config.G_GUI_PERFORMANCE_GRAPH_DISPLAY_RANGE)
+        plot.setXRange(0, self.config.G_GUI_PERFORMANCE_GRAPH_DISPLAY_RANGE)
         self.p1.setYRange(*self.item[self.display_item[0]]["yrange"])
         self.p2.setYRange(*self.item[self.display_item[1]]["yrange"])
-        self.plot.setMouseEnabled(x=False, y=False)
+        plot.setMouseEnabled(x=False, y=False)
 
         # self.p1.setLabels(left=self.item[self.display_item[0]]['name'])
         # self.p1.getAxis('right').setLabel(self.display_item[self.item[1]]['name'])
@@ -56,31 +71,7 @@ class PerformanceGraphWidget(ScreenWidget):
         # p2 on p1
         self.p1.setZValue(-100)
 
-        # for Power
-        # self.brush = pg.mkBrush(color=(0,160,255,64))
-        self.brush = pg.mkBrush(color=(0, 255, 255))
-        # self.pen2 = pg.mkPen(color=(255,255,255,0), width=0.01) #transparent and thin line
-        self.pen1 = pg.mkPen(
-            color=(255, 255, 255), width=0.01
-        )  # transparent and thin line
-        # for HR, wbal
-        self.pen2 = pg.mkPen(color=(255, 0, 0), width=2)
-
-    def make_item_layout(self):
-        # self.item_layout = {"Power":(0, 0), "HR":(0, 1), "Lap PWR":(0, 2), "LapTime":(0, 3)}
-        self.item_layout = {
-            "Power": (0, 0),
-            "HR": (0, 1),
-            "W'bal(Norm)": (0, 2),
-            "LapTime": (0, 3),
-        }
-
-    def add_extra(self):
-        self.layout.addWidget(self.plot, 1, 0, 2, 4)
-
-    def set_border(self):
-        self.max_height = 1
-        self.max_width = 3
+        self.layout.addWidget(plot, 1, 0, 2, 4)
 
     def set_font_size(self, length):
         self.font_size = int(length / 7)
@@ -147,13 +138,26 @@ class PerformanceGraphWidget(ScreenWidget):
 
 
 class AccelerationGraphWidget(ScreenWidget):
-    def init_extra(self):
-        pass
+    item_layout = {
+        "ACC_X": (0, 0),
+        "ACC_Y": (0, 1),
+        "ACC_Z": (0, 2),
+        "M_Stat": (0, 3),
+    }
+    max_height = 1
+    max_width = 3
+
+    # for acc
+    pen1 = pg.mkPen(color=(0, 0, 255), width=3)
+    pen2 = pg.mkPen(color=(255, 0, 0), width=3)
+    pen3 = pg.mkPen(color=(0, 0, 0), width=2)
+
+    g_range = 0.3
 
     def setup_ui_extra(self):
-        self.plot = pg.PlotWidget()
-        self.plot.setBackground(None)
-        self.p1 = self.plot.plotItem
+        plot = pg.PlotWidget()
+        plot.setBackground(None)
+        self.p1 = plot.plotItem
         self.p1.showGrid(y=True)
         # self.p1.setLabels(left='HR')
 
@@ -164,34 +168,13 @@ class AccelerationGraphWidget(ScreenWidget):
         self.p1.scene().addItem(self.p3)
         self.p3.setXLink(self.p1)
 
-        self.plot.setXRange(0, self.config.G_GUI_ACC_TIME_RANGE)
-        self.plot.setMouseEnabled(x=False, y=False)
-        # pg.setConfigOptions(antialias=True)
+        plot.setXRange(0, self.config.G_GUI_ACC_TIME_RANGE)
+        plot.setMouseEnabled(x=False, y=False)
 
-        # for acc
-        self.pen1 = pg.mkPen(color=(0, 0, 255), width=3)
-        self.pen2 = pg.mkPen(color=(255, 0, 0), width=3)
-        self.pen3 = pg.mkPen(color=(0, 0, 0), width=2)
-
-        self.g_range = 0.3
+        self.layout.addWidget(plot, 1, 0, 2, 4)
 
     def start(self):
         self.timer.start(self.config.G_REALTIME_GRAPH_INTERVAL)
-
-    def make_item_layout(self):
-        self.item_layout = {
-            "ACC_X": (0, 0),
-            "ACC_Y": (0, 1),
-            "ACC_Z": (0, 2),
-            "M_Stat": (0, 3),
-        }
-
-    def add_extra(self):
-        self.layout.addWidget(self.plot, 1, 0, 2, 4)
-
-    def set_border(self):
-        self.max_height = 1
-        self.max_width = 3
 
     def set_font_size(self, length):
         self.font_size = int(length / 7)
@@ -244,47 +227,42 @@ class AccelerationGraphWidget(ScreenWidget):
 
 
 class AltitudeGraphWidget(ScreenWidget):
-    def init_extra(self):
-        pass
-        # self.plot_data_x1 = []
-        # for i in range(self.config.G_GUI_PERFORMANCE_GRAPH_DISPLAY_RANGE):
-        #  self.plot_data_x1.append(i)
+    item_layout = {
+        "Grade": (0, 0),
+        "Grade(spd)": (0, 1),
+        "Altitude": (0, 2),
+        "Alt.(GPS)": (0, 3),
+    }
+    max_height = 1
+    max_width = 3
+
+    # for altitude_raw
+    pen1 = pg.mkPen(color=(0, 0, 0), width=2)
+    pen2 = pg.mkPen(color=(255, 0, 0), width=3)
+
+    # def __init__(self, parent, config):
+    #     super().__init__(parent, config)
+    #     self.plot_data_x1 = []
+    #     for i in range(self.config.G_GUI_PERFORMANCE_GRAPH_DISPLAY_RANGE):
+    #       self.plot_data_x1.append(i)
 
     def setup_ui_extra(self):
-        self.plot = pg.PlotWidget()
-        self.plot.setBackground(None)
-        self.p1 = self.plot.plotItem
+        plot = pg.PlotWidget()
+        plot.setBackground(None)
+        self.p1 = plot.plotItem
         self.p1.showGrid(y=True)
 
         self.p2 = pg.ViewBox()
         self.p1.scene().addItem(self.p2)
         self.p2.setXLink(self.p1)
 
-        self.plot.setXRange(0, self.config.G_GUI_PERFORMANCE_GRAPH_DISPLAY_RANGE)
-        self.plot.setMouseEnabled(x=False, y=False)
-        # pg.setConfigOptions(antialias=True)
-
-        # for altitude_raw
-        self.pen1 = pg.mkPen(color=(0, 0, 0), width=2)
-        self.pen2 = pg.mkPen(color=(255, 0, 0), width=3)
+        plot.setXRange(0, self.config.G_GUI_PERFORMANCE_GRAPH_DISPLAY_RANGE)
+        plot.setMouseEnabled(x=False, y=False)
 
         self.y_range = 15
         self.y_shift = 0  # self.y_ra  nge * 0.25
 
-    def make_item_layout(self):
-        self.item_layout = {
-            "Grade": (0, 0),
-            "Grade(spd)": (0, 1),
-            "Altitude": (0, 2),
-            "Alt.(GPS)": (0, 3),
-        }
-
-    def add_extra(self):
-        self.layout.addWidget(self.plot, 1, 0, 2, 4)
-
-    def set_border(self):
-        self.max_height = 1
-        self.max_width = 3
+        self.layout.addWidget(plot, 1, 0, 2, 4)
 
     def set_font_size(self, length):
         self.font_size = int(length / 7)

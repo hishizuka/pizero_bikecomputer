@@ -1,67 +1,61 @@
 from logger import app_logger
-from modules._pyqt import QtCore, QtWidgets, qasync
+from modules._pyqt import QT_EXPANDING, QtCore, QtWidgets, qasync
 
 from .pyqt_item import Item
-
-#################################
-# values only widget
-#################################
 
 
 class ScreenWidget(QtWidgets.QWidget):
     config = None
-    logger = None
-    sensor = None
-    items = None
+    layout_class = QtWidgets.QGridLayout
     item_layout = None
-    max_width = max_height = 0
-    font_size = 12
+    items = None
 
-    def __init__(self, parent, config):
+    font_size = 12
+    max_width = max_height = 0
+
+    def __init__(self, parent, config, item_layout=None):
         self.config = config
-        self.logger = self.config.logger
-        self.sensor = self.logger.sensor
+        self.items = []
+
+        if item_layout:
+            self.item_layout = item_layout
 
         QtWidgets.QWidget.__init__(self, parent=parent)
 
-        self.init_extra()
         self.setup_ui()
+
+    @property
+    def logger(self):
+        return self.config.logger
+
+    @property
+    def sensor(self):
+        return self.logger.sensor
 
     def resizeEvent(self, event):
         h = self.size().height()
         self.set_font_size(h)
         for i in self.items:
             i.update_font_size(self.font_size)
-        self.resize_extra()
-
-    def resize_extra(self):
-        pass
-
-    def init_extra(self):
-        pass
 
     def setup_ui(self):
-        self.setSizePolicy(
-            self.config.gui.gui_config.expanding, self.config.gui.gui_config.expanding
-        )
+        self.setSizePolicy(QT_EXPANDING, QT_EXPANDING)
 
         # update panel setting
         self.timer = QtCore.QTimer(parent=self)
         self.timer.timeout.connect(self.update_display)
 
         # layout
-        self.layout = QtWidgets.QGridLayout()
+        self.layout = self.layout_class(self)
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(0)
 
         self.setup_ui_extra()
 
-        self.make_item_layout()
-        self.set_border()
-        self.set_font_size(self.config.G_HEIGHT)
         self.add_items()
-        self.add_extra()
-        self.setLayout(self.layout)
+
+        # this depends on max_height so has to be done after add_items that recalculate it
+        self.set_font_size(self.config.G_HEIGHT)
 
     # call from on_change_main_page in gui_pyqt.py
     def start(self):
@@ -73,22 +67,6 @@ class ScreenWidget(QtWidgets.QWidget):
 
     def setup_ui_extra(self):
         pass
-
-    # if make make_item_layout by hard cording
-    def make_item_layout(self):
-        pass
-
-    def set_border(self):
-        for key, pos in self.item_layout.items():
-            if pos[0] > self.max_height:
-                self.max_height = pos[0]
-            if pos[1] > self.max_width:
-                self.max_width = pos[1]
-            if len(pos) == 4:
-                if pos[2] - 1 > self.max_height:
-                    self.max_height = pos[2]
-                if pos[3] - 1 > self.max_width:
-                    self.max_width = pos[3]
 
     def set_font_size(self, length):
         # need to modify for automation and scaling
@@ -108,37 +86,46 @@ class ScreenWidget(QtWidgets.QWidget):
             self.layout.setColumnMinimumWidth(i, w)
 
     def add_items(self):
-        self.items = []
-        for key, pos in self.item_layout.items():
-            bottom_flag = False
-            right_flag = False
-            if pos[0] == self.max_height:
-                bottom_flag = True
-            if pos[1] == self.max_width:
-                right_flag = True
-            if len(pos) == 4:
-                if pos[2] - 1 == self.max_height:
+        if self.item_layout:
+            # set borders
+            for key, pos in self.item_layout.items():
+                if pos[0] > self.max_height:
+                    self.max_height = pos[0]
+                if pos[1] > self.max_width:
+                    self.max_width = pos[1]
+                if len(pos) == 4:
+                    if pos[2] - 1 > self.max_height:
+                        self.max_height = pos[2]
+                    if pos[3] - 1 > self.max_width:
+                        self.max_width = pos[3]
+
+            for key, pos in self.item_layout.items():
+                bottom_flag = False
+                right_flag = False
+                if pos[0] == self.max_height:
                     bottom_flag = True
-                if pos[3] - 1 == self.max_width:
+                if pos[1] == self.max_width:
                     right_flag = True
+                if len(pos) == 4:
+                    if pos[2] - 1 == self.max_height:
+                        bottom_flag = True
+                    if pos[3] - 1 == self.max_width:
+                        right_flag = True
 
-            item = Item()
-            item.set_init_value(
-                config=self.config,
-                name=key,
-                font_size=self.font_size,
-                bottom_flag=bottom_flag,
-                right_flag=right_flag,
-            )
-            self.items.append(item)
+                item = Item(
+                    config=self.config,
+                    name=key,
+                    font_size=self.font_size,
+                    bottom_flag=bottom_flag,
+                    right_flag=right_flag,
+                )
 
-            if len(pos) == 4:
-                self.layout.addLayout(item, pos[0], pos[1], pos[2], pos[3])
-            else:
-                self.layout.addLayout(item, pos[0], pos[1])
+                self.items.append(item)
 
-    def add_extra(self):
-        pass
+                if len(pos) == 4:
+                    self.layout.addLayout(item, pos[0], pos[1], pos[2], pos[3])
+                else:
+                    self.layout.addLayout(item, pos[0], pos[1])
 
     @qasync.asyncSlot()
     async def update_display(self):

@@ -1,3 +1,5 @@
+import qasync
+
 from modules._pyqt import QtCore, QtWidgets, QtGui
 
 from .pyqt_screen_widget import ScreenWidget
@@ -9,6 +11,12 @@ from .pyqt_screen_widget import ScreenWidget
 
 # https://stackoverflow.com/questions/46505130/creating-a-marquee-effect-in-pyside/
 class MarqueeLabel(QtWidgets.QLabel):
+    STYLES = """
+      QLabel {
+        border-bottom: 1px solid #CCCCCC;
+      }
+    """
+
     def __init__(self, config, parent=None):
         QtWidgets.QLabel.__init__(self, parent)
         self.config = config
@@ -19,6 +27,8 @@ class MarqueeLabel(QtWidgets.QLabel):
         self.timer_interval = 200  # [ms]
         self._speed = 5
         self.textLength = 0
+        self.setWordWrap(False)
+        self.setStyleSheet(self.STYLES)
 
     def setText(self, text):
         super().setText(text)
@@ -40,9 +50,24 @@ class MarqueeLabel(QtWidgets.QLabel):
         self.px -= self._speed
 
 
+class DistanceLabel(QtWidgets.QLabel):
+    STYLES = """
+      QLabel {
+        padding: 0px 0px 0px 0px;
+      }
+    """
+
+    def __init__(self, *__args):
+        super().__init__(*__args)
+        self.setWordWrap(False)
+        self.setStyleSheet(self.STYLES)
+
+
 class CueSheetItem(QtWidgets.QVBoxLayout):
     dist = None
     name = None
+
+    dist_num = 0
 
     def __init__(self, parent, config):
         self.config = config
@@ -51,16 +76,15 @@ class CueSheetItem(QtWidgets.QVBoxLayout):
         self.setContentsMargins(0, 0, 0, 0)
         self.setSpacing(0)
 
-        self.dist = QtWidgets.QLabel()
-        self.dist.setWordWrap(False)
-        self.dist_num = 0
+        self.dist = DistanceLabel()
         self.name = MarqueeLabel(self.config)
-        self.name.setWordWrap(False)
-
-        self.dist.setStyleSheet("QLabel {padding: 0px 0px 0px 0px;}")
 
         self.addWidget(self.dist)
         self.addWidget(self.name)
+
+    def reset(self):
+        self.dist.setText("")
+        self.name.setText("")
 
     def update_font_size(self, font_size):
         for text, fsize in zip(
@@ -74,45 +98,34 @@ class CueSheetItem(QtWidgets.QVBoxLayout):
 
 
 class CueSheetWidget(ScreenWidget):
-    def init_extra(self):
-        self.gps_values = self.config.logger.sensor.values["GPS"]
+    STYLES = """
+      border-color: #000000;
+      border-style: solid;
+      border-width: 0px 0px 0px 1px;
+    """
 
-    def setup_ui(self):
-        self.setSizePolicy(
-            self.config.gui.gui_config.expanding, self.config.gui.gui_config.expanding
-        )
+    cuesheet = None
+    layout_class = QtWidgets.QVBoxLayout
 
-        # update panel setting
-        self.timer = QtCore.QTimer(parent=self)
-        self.timer.timeout.connect(self.update_extra)
+    @property
+    def gps_values(self):
+        return self.config.logger.sensor.values["GPS"]
 
+    def set_font_size(self, length):
+        self.font_size = int(length / 7)
+
+    def setup_ui_extra(self):
         self.cuesheet = []
+        self.setStyleSheet(self.STYLES)
+
         for i in range(self.config.G_CUESHEET_DISPLAY_NUM):
             cuesheet_point_layout = CueSheetItem(self, self.config)
             self.cuesheet.append(cuesheet_point_layout)
-
-        self.cuesheet_layout = QtWidgets.QVBoxLayout(self)
-        self.cuesheet_layout.setContentsMargins(0, 0, 0, 0)
-        self.cuesheet_layout.setSpacing(0)
-        for c in self.cuesheet:
-            self.cuesheet_layout.addLayout(c)
-
-        self.setStyleSheet(
-            "\
-        border-width: 0px 0px 0px 1px; \
-        border-style: solid; \
-        border-color: #000000;"
-        )
-        for i in range(len(self.cuesheet) - 1):
-            self.cuesheet[i].name.setStyleSheet(
-                self.cuesheet[i].name.styleSheet()
-                + " QLabel {border-bottom: 1px solid #CCCCCC;}"
-            )
+            self.layout.addLayout(cuesheet_point_layout)
 
     def reset(self):
-        for i in range(len(self.cuesheet)):
-            self.cuesheet[i].dist.setText("")
-            self.cuesheet[i].name.setText("")
+        for elem in self.cuesheet:
+            elem.reset()
 
     def resizeEvent(self, event):
         h = self.size().height()
@@ -120,33 +133,28 @@ class CueSheetWidget(ScreenWidget):
         for i in self.cuesheet:
             i.update_font_size(int(self.font_size))  # for 3 rows
 
-    def set_font_size(self, length):
-        self.font_size = int(length / 7)
-
-    async def update_extra(self):
+    @qasync.asyncSlot()
+    async def update_display(self):
         if (
             not len(self.config.logger.course.point_distance)
-            or self.config.G_CUESHEET_DISPLAY_NUM == 0
+            or not self.config.G_CUESHEET_DISPLAY_NUM
         ):
             return
 
         cp_i = self.gps_values["course_point_index"]
 
         # cuesheet
-        for j in range(len(self.cuesheet)):
-            if cp_i + j > len(self.config.logger.course.point_distance) - 1:
-                self.cuesheet[j].dist.setText("")
-                self.cuesheet[j].name.setText("")
+        for i, cuesheet_item in enumerate(self.cuesheet):
+            if cp_i + i > len(self.config.logger.course.point_distance) - 1:
+                cuesheet_item.reset()
                 continue
-            dist = self.cuesheet[j].dist_num = (
-                self.config.logger.course.point_distance[cp_i + j] * 1000
+            dist = cuesheet_item.dist_num = (
+                self.config.logger.course.point_distance[cp_i + i] * 1000
                 - self.gps_values["course_distance"]
             )
             if dist < 0:
                 continue
-            text = "{0:6.0f}m  ".format(dist)
-            if dist > 1000:
-                text = "{0:4.1f}km ".format(dist / 1000)
-            self.cuesheet[j].dist.setText(text)
-            text = self.config.logger.course.point_type[cp_i + j]
-            self.cuesheet[j].name.setText(text)
+            dist_text = f"{dist / 1000:4.1f}km " if dist > 1000 else f"{dist:6.0f}m  "
+            cuesheet_item.dist.setText(dist_text)
+            name_text = self.config.logger.course.point_type[cp_i + i]
+            cuesheet_item.name.setText(name_text)

@@ -12,11 +12,6 @@ from modules._pyqt import QtCore, QtGui, pg, qasync
 from modules.pyqt.pyqt_cuesheet_widget import CueSheetWidget
 from modules.pyqt.graph.pyqtgraph.CoursePlotItem import CoursePlotItem
 from modules.utils.timer import Timer, log_timers
-
-pg.setConfigOptions(antialias=True)
-pg.setConfigOption("background", "w")
-pg.setConfigOption("foreground", "k")
-
 from .pyqt_base_map import BaseMapWidget
 
 
@@ -153,6 +148,32 @@ class MapWidget(BaseMapWidget):
                 f"resume_track(init): {(datetime.datetime.utcnow() - t).total_seconds():.3f} sec"
             )
 
+        # map
+        self.layout.addWidget(self.plot, 0, 0, 4, 3)
+
+        if self.config.display.has_touch():
+            # zoom
+            self.layout.addWidget(self.buttons["zoomdown"], 0, 0)
+            self.layout.addWidget(self.buttons["lock"], 1, 0)
+            self.layout.addWidget(self.buttons["zoomup"], 2, 0)
+            # arrow
+            self.layout.addWidget(self.buttons["left"], 0, 2)
+            self.layout.addWidget(self.buttons["up"], 1, 2)
+            self.layout.addWidget(self.buttons["down"], 2, 2)
+            self.layout.addWidget(self.buttons["right"], 3, 2)
+
+            if self.config.G_GOOGLE_DIRECTION_API["HAVE_API_TOKEN"]:
+                self.layout.addWidget(self.buttons["go"], 3, 0)
+                self.buttons["go"].clicked.connect(self.search_route)
+
+        # cue sheet and instruction
+        self.init_cuesheet_and_instruction()
+
+        # for expanding column
+        self.layout.setColumnMinimumWidth(0, 40)
+        self.layout.setColumnStretch(1, 1)
+        self.layout.setColumnMinimumWidth(2, 40)
+
     def reset_map(self):
         # adjust zoom level for large tiles
         zoom_delta_from_tilesize = (
@@ -206,38 +227,11 @@ class MapWidget(BaseMapWidget):
         else:
             self.map_attribution.setZValue(100)
 
-    def add_extra(self):
-        # map
-        self.layout.addWidget(self.plot, 0, 0, 4, 3)
-
-        if self.config.display.has_touch():
-            # zoom
-            self.layout.addWidget(self.button["zoomdown"], 0, 0)
-            self.layout.addWidget(self.button["lock"], 1, 0)
-            self.layout.addWidget(self.button["zoomup"], 2, 0)
-            # arrow
-            self.layout.addWidget(self.button["left"], 0, 2)
-            self.layout.addWidget(self.button["up"], 1, 2)
-            self.layout.addWidget(self.button["down"], 2, 2)
-            self.layout.addWidget(self.button["right"], 3, 2)
-
-            if self.config.G_GOOGLE_DIRECTION_API["HAVE_API_TOKEN"]:
-                self.layout.addWidget(self.button["go"], 3, 0)
-                self.button["go"].clicked.connect(self.search_route)
-
-        # cue sheet and instruction
-        self.init_cuesheet_and_instruction()
-
-        # for expanding column
-        self.layout.setColumnMinimumWidth(0, 40)
-        self.layout.setColumnStretch(1, 1)
-        self.layout.setColumnMinimumWidth(2, 40)
-
     def init_cuesheet_and_instruction(self):
         # init cuesheet_widget
         if (
             len(self.config.logger.course.point_name)
-            and self.config.G_CUESHEET_DISPLAY_NUM > 0
+            and self.config.G_CUESHEET_DISPLAY_NUM
             and self.config.G_COURSE_INDEXING
         ):
             if self.cuesheet_widget is None:
@@ -259,11 +253,11 @@ class MapWidget(BaseMapWidget):
     def resizeEvent(self, event):
         if (
             not len(self.config.logger.course.point_name)
-            or self.config.G_CUESHEET_DISPLAY_NUM == 0
+            or not self.config.G_CUESHEET_DISPLAY_NUM
             or not self.config.G_COURSE_INDEXING
         ):
             self.map_cuesheet_ratio = 1.0
-        # if self.config.G_CUESHEET_DISPLAY_NUM > 0:
+        # if self.config.G_CUESHEET_DISPLAY_NUM:
         else:
             # self.cuesheet_widget.setFixedWidth(int(self.width()*(1-self.map_cuesheet_ratio)))
             # self.cuesheet_widget.setFixedHeight(self.height())
@@ -273,9 +267,9 @@ class MapWidget(BaseMapWidget):
 
     # override for long press
     def switch_lock(self):
-        if self.button["lock"].isDown():
-            if self.button["lock"]._state == 0:
-                self.button["lock"]._state = 1
+        if self.buttons["lock"].isDown():
+            if self.buttons["lock"]._state == 0:
+                self.buttons["lock"]._state = 1
             else:
                 self.button_press_count["lock"] += 1
                 # long press
@@ -284,8 +278,8 @@ class MapWidget(BaseMapWidget):
                     == self.config.button_config.G_BUTTON_LONG_PRESS
                 ):
                     self.change_move()
-        elif self.button["lock"]._state == 1:
-            self.button["lock"]._state = 0
+        elif self.buttons["lock"]._state == 1:
+            self.buttons["lock"]._state = 0
             self.button_press_count["lock"] = 0
         # short press
         else:
@@ -1005,11 +999,11 @@ class MapWidget(BaseMapWidget):
     ):
         if (
             not len(self.config.logger.course.point_name)
-            or self.config.G_CUESHEET_DISPLAY_NUM == 0
+            or not self.config.G_CUESHEET_DISPLAY_NUM
             or not self.config.G_COURSE_INDEXING
         ):
             return
-        await self.cuesheet_widget.update_extra()
+        await self.cuesheet_widget.update_display()
 
         if self.instruction is not None:
             self.plot.removeItem(self.instruction)

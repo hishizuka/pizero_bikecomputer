@@ -193,7 +193,7 @@ class LoggerCore:
     def init_db(self):
         self.create_table_sql = """CREATE TABLE BIKECOMPUTER_LOG(
       timestamp DATETIME,
-      lap INTEGER, 
+      lap INTEGER,
       timer INTEGER,
       total_timer_time INTEGER,
       elapsed_time INTEGER,

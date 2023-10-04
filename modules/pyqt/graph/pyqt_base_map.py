@@ -1,19 +1,17 @@
 import numpy as np
 
-from modules._pyqt import QtCore, QtWidgets, pg, qasync
+from modules._pyqt import QtCore, pg, qasync
 from modules.pyqt.pyqt_screen_widget import ScreenWidget
-
-pg.setConfigOptions(antialias=True)
-pg.setConfigOption("background", "w")
-pg.setConfigOption("foreground", "k")
+from .pyqt_map_button import MapButton
 
 
 class BaseMapWidget(ScreenWidget):
-    # map button
-    button = {}
-    button_name = ["lock", "zoomup", "zoomdown", "left", "right", "up", "down", "go"]
+    max_height = 1
+    max_width = 3
+
+    buttons = None
     lock_status = True
-    button_press_count = {}
+    button_press_count = None
 
     # show range from zoom
     zoom = 2000  # [m] #for CourseProfileGraphWidget
@@ -38,7 +36,11 @@ class BaseMapWidget(ScreenWidget):
     move_adjust_mode = False
     move_factor = 1.0
 
-    def init_extra(self):
+    def __init__(self, parent, config):
+        self.buttons = {}
+        self.button_press_count = {}
+        super().__init__(parent, config)
+
         self.gps_values = self.config.logger.sensor.values["GPS"]
         self.gps_sensor = self.config.logger.sensor.sensor_gps
 
@@ -60,9 +62,9 @@ class BaseMapWidget(ScreenWidget):
         # current point
         self.current_point = pg.ScatterPlotItem(pxMode=True)
         self.point_color = {
-            #'fix':pg.mkBrush(color=(0,0,160,128)),
+            # 'fix':pg.mkBrush(color=(0,0,160,128)),
             "fix": pg.mkBrush(color=(0, 0, 255)),
-            #'lost':pg.mkBrush(color=(96,96,96,128))
+            # 'lost':pg.mkBrush(color=(96,96,96,128))
             "lost": pg.mkBrush(color=(170, 170, 170)),
         }
         self.point = {
@@ -73,60 +75,45 @@ class BaseMapWidget(ScreenWidget):
         }
 
         # self.plot.setMouseEnabled(x=False, y=False)
-        # pg.setConfigOptions(antialias=True)
 
         # make buttons
-        self.button["lock"] = QtWidgets.QPushButton("L")
-        self.button["zoomup"] = QtWidgets.QPushButton("+")
-        self.button["zoomdown"] = QtWidgets.QPushButton("-")
-        self.button["left"] = QtWidgets.QPushButton("←")
-        self.button["right"] = QtWidgets.QPushButton("→")
-        self.button["up"] = QtWidgets.QPushButton("↑")
-        self.button["down"] = QtWidgets.QPushButton("↓")
-        self.button["go"] = QtWidgets.QPushButton("Go")
-        for b in self.button_name:
-            self.button[b].setStyleSheet(
-                self.config.gui.style.G_GUI_PYQT_buttonStyle_map
-            )
+        self.buttons["lock"] = MapButton("L")
+        self.buttons["zoomup"] = MapButton("+")
+        self.buttons["zoomdown"] = MapButton("-")
+        self.buttons["left"] = MapButton("←")
+        self.buttons["right"] = MapButton("→")
+        self.buttons["up"] = MapButton("↑")
+        self.buttons["down"] = MapButton("↓")
+        self.buttons["go"] = MapButton("Go")
 
-        self.button["lock"].clicked.connect(self.switch_lock)
-        self.button["right"].clicked.connect(self.move_x_plus)
-        self.button["left"].clicked.connect(self.move_x_minus)
-        self.button["up"].clicked.connect(self.move_y_plus)
-        self.button["down"].clicked.connect(self.move_y_minus)
-        self.button["zoomdown"].clicked.connect(self.zoom_minus)
-        self.button["zoomup"].clicked.connect(self.zoom_plus)
+        self.buttons["lock"].clicked.connect(self.switch_lock)
+        self.buttons["right"].clicked.connect(self.move_x_plus)
+        self.buttons["left"].clicked.connect(self.move_x_minus)
+        self.buttons["up"].clicked.connect(self.move_y_plus)
+        self.buttons["down"].clicked.connect(self.move_y_minus)
+        self.buttons["zoomdown"].clicked.connect(self.zoom_minus)
+        self.buttons["zoomup"].clicked.connect(self.zoom_plus)
 
         # long press
-        for key in ["lock"]:
-            self.button[key].setAutoRepeat(True)
-            self.button[key].setAutoRepeatDelay(1000)
-            self.button[key].setAutoRepeatInterval(1000)
-            self.button[key]._state = 0
-            self.button_press_count[key] = 0
+        self.buttons["lock"].setAutoRepeat(True)
+        self.buttons["lock"].setAutoRepeatDelay(1000)
+        self.buttons["lock"].setAutoRepeatInterval(1000)
+        self.buttons["lock"]._state = 0
+        self.button_press_count["lock"] = 0
 
         self.get_max_zoom()
-
-    def make_item_layout(self):
-        self.item_layout = {}
-
-    def add_extra(self):
-        pass
 
     # override disable
     def set_minimum_size(self):
         pass
 
-    # for expanding row
-    def resize_extra(self):
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        # for expanding row
         n = self.layout.rowCount()
         h = int(self.size().height() / n)
         for i in range(n):
             self.layout.setRowMinimumHeight(i, h)
-
-    def set_border(self):
-        self.max_height = 1
-        self.max_width = 3
 
     # def set_font_size(self):
     #  self.font_size = int(length / 8)
@@ -206,7 +193,4 @@ class BaseMapWidget(ScreenWidget):
         # print("MAX_ZOOM", self.config.G_MAX_ZOOM, dist)
 
     def load_course(self):
-        pass
-
-    async def update_extra(self):
         pass

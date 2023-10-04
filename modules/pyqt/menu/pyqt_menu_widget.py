@@ -1,4 +1,16 @@
-from modules._pyqt import QtCore, QtWidgets, QtGui, qasync
+from modules._pyqt import (
+    QT_ALIGN_LEFT,
+    QT_KEY_SPACE,
+    QT_NO_FOCUS,
+    QT_SCROLLBAR_ALWAYSOFF,
+    QT_STRONG_FOCUS,
+    QtCore,
+    QtWidgets,
+    qasync,
+)
+from modules.pyqt.components import icons, topbar
+
+from .pyqt_menu_button import MenuButton
 
 #################################
 # Menu
@@ -11,96 +23,57 @@ class MenuWidget(QtWidgets.QWidget):
     back_index_key = None
     focus_widget = None
 
-    button = {}
+    buttons = None
     menu_layout = None
 
     icon_x = 40
     icon_y = 32
-    logo_size = 30
 
     def __init__(self, parent, page_name, config):
         QtWidgets.QWidget.__init__(self, parent=parent)
         self.config = config
         self.page_name = page_name
 
+        self.buttons = {}
         self.setup_ui()
 
     def setup_ui(self):
         self.setContentsMargins(0, 0, 0, 0)
 
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
         # top bar
-        self.top_bar = QtWidgets.QWidget(self)
-        self.top_bar.setStyleSheet(self.config.gui.style.G_GUI_PYQT_menu_topbar)
+        self.top_bar = topbar.TopBar()
 
-        self.back_button = QtWidgets.QPushButton(QtGui.QIcon("img/back_white.svg"), "")
-        self.back_button.setIconSize(QtCore.QSize(20, 20))
-        self.back_button.setProperty("style", "menu")
-        self.back_button.setStyleSheet(
-            self.config.gui.style.G_GUI_PYQT_buttonStyle_navi
-        )
-        self.back_button.setFixedSize(self.icon_x, self.icon_y)
-        # self.back_button.setScaledContents(True) #valid for svg icon
-        if not self.config.G_IS_RASPI:
-            self.back_button.focusInEvent = self.delete_focus
+        self.back_button = topbar.TopBarBackButton((self.icon_x, self.icon_y))
+        self.page_name_label = topbar.TopBarLabel(self.page_name)
 
-        self.page_name_label = QtWidgets.QLabel(self.page_name)
-        self.page_name_label.setAlignment(self.config.gui.gui_config.align_center)
-        self.page_name_label.setStyleSheet(
-            self.config.gui.style.G_GUI_PYQT_menu_topbar_page_name_label
-        )
-
-        self.next_button = QtWidgets.QPushButton()
-        self.next_button.setEnabled(False)
-        self.next_button.setFixedSize(self.icon_x, self.icon_y)
-        self.next_button.setStyleSheet(
-            self.config.gui.style.G_GUI_PYQT_menu_topbar_next_button
-        )
-
-        self.top_bar_layout = QtWidgets.QHBoxLayout(self.top_bar)
+        self.top_bar_layout = QtWidgets.QHBoxLayout()
         self.top_bar_layout.setContentsMargins(5, 5, 5, 5)
         self.top_bar_layout.setSpacing(0)
         self.top_bar_layout.addWidget(self.back_button)
         self.top_bar_layout.addWidget(self.page_name_label)
-        self.top_bar_layout.addWidget(self.next_button)
 
         self.top_bar.setLayout(self.top_bar_layout)
 
-        # self.scroll_area = QtWidgets.QScrollArea(self)
-        # self.menu = QtWidgets.QWidget(self.scroll_area)
-        self.menu = QtWidgets.QWidget(self)
+        self.menu = QtWidgets.QWidget()
         self.setup_menu()
-        self.menu_layout.setContentsMargins(0, 0, 0, 0)
-        self.menu_layout.setSpacing(0)
 
-        # self.scroll_area.setWidgetResizable(True)
-        # self.scroll_area.setWidget(self.menu)
-        # self.scroll_area.setFocusPolicy(self.config.gui.gui_config.no_focus)
-        # self.scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-        # self.scroll_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-
-        layout = QtWidgets.QVBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
         layout.addWidget(self.top_bar)
         layout.addWidget(self.menu)
-        # layout.addWidget(self.scroll_area)
-        self.setLayout(layout)
 
-        self.connect_back_button()
+        # connect back button
+        self.back_button.clicked.connect(self.back)
         self.connect_buttons()
-
-    def delete_focus(self, event):
-        # fixed focus on PC or macOS
-        if event.reason() == 7 and self.focusWidget() == self.back_button:
-            self.back_button.clearFocus()
-        super().focusInEvent(event)
 
     def make_menu_layout(self, qt_layout):
         self.menu_layout = qt_layout(self.menu)
         self.menu_layout.setContentsMargins(0, 0, 0, 0)
         self.menu_layout.setSpacing(0)
 
-    def add_buttons(self, buttons, back_connect=True):
+    def add_buttons(self, buttons):
         n = len(buttons)
 
         if n <= 4:
@@ -111,40 +84,34 @@ class MenuWidget(QtWidgets.QWidget):
 
         i = 0
         for b in buttons:
-            self.button[b[0]] = self.MenuButton(b[0], self.config)
-            if b[1] == "submenu":
-                self.button[b[0]].set_submenu_icon(*b[3:])
-                # set back_index of child widget
-                if back_connect:
-                    index = self.config.gui.gui_config.G_GUI_INDEX[b[0]]
-                    self.parentWidget().widget(index).back_index_key = self.page_name
-            elif b[1] == "toggle":
-                self.button[b[0]].set_toggle_icon()
-            elif b[1] == "cloud_upload":
-                self.button[b[0]].set_cloud_upload_icon(*b[3:])
-            else:
-                self.button[b[0]].set_null_icon()
+            icon = None
+            name, button_type, func, *rest = b
+            if rest:
+                icon = rest[0]
 
-            if b[2] is not None:
-                self.button[b[0]].clicked.connect(b[2])
+            self.buttons[name] = MenuButton(button_type, name, self.config, icon=icon)
+
+            if func is not None:
+                self.buttons[name].clicked.connect(func)
             else:
-                self.button[b[0]].setEnabled(False)
-                self.button[b[0]].setProperty("style", "unavailable")
+                self.buttons[name].setEnabled(False)
+                self.buttons[name].setProperty("style", "unavailable")
 
             if layout_type == QtWidgets.QVBoxLayout:
-                self.menu_layout.addWidget(self.button[b[0]])
+                self.menu_layout.addWidget(self.buttons[name])
             else:
-                self.menu_layout.addWidget(self.button[b[0]], i % 4, i // 4)
+                self.menu_layout.addWidget(self.buttons[name], i % 4, i // 4)
                 i += 1
 
         # add dummy button
+        # TODO we should remove this but that's for later
         if n in (1, 2, 3):
             for j in range(4 - n):
-                self.menu_layout.addWidget(self.MenuButton("", self.config, dummy=True))
+                self.menu_layout.addWidget(MenuButton("dummy", "", self.config))
 
         # set first focus
         if not self.config.display.has_touch():
-            self.focus_widget = self.button[buttons[0][0]]
+            self.focus_widget = self.buttons[buttons[0][0]]
 
     def setup_menu(self):
         pass
@@ -161,16 +128,8 @@ class MenuWidget(QtWidgets.QWidget):
     def connect_buttons(self):
         pass
 
-    def connect_back_button(self):
-        self.back_button.clicked.connect(self.back)
-
     def back(self):
-        index = 0
-        if (
-            self.back_index_key is not None
-            and self.back_index_key in self.config.gui.gui_config.G_GUI_INDEX
-        ):
-            index = self.config.gui.gui_config.G_GUI_INDEX[self.back_index_key]
+        index = self.config.gui.gui_config.G_GUI_INDEX.get(self.back_index_key, 0)
         self.on_back_menu()
         self.config.gui.change_menu_page(index, focus_reset=False)
 
@@ -178,250 +137,21 @@ class MenuWidget(QtWidgets.QWidget):
         pass
 
     def change_page(self, page, preprocess=False, **kwargs):
+        # always set back index
         index = self.config.gui.gui_config.G_GUI_INDEX[page]
+        widget = self.parentWidget().widget(index)
+        widget.back_index_key = self.page_name
+
         if preprocess:
-            self.parentWidget().widget(index).preprocess(**kwargs)
+            widget.preprocess(**kwargs)
         self.config.gui.change_menu_page(index)
-
-    class MenuButton(QtWidgets.QPushButton):
-        config = None
-        button_type = None
-        status = False
-        first_button = False
-        last_button = False
-        icon_img = {
-            "null": QtGui.QIcon(),
-            "submenu": QtGui.QIcon("./img/forward_black_line.svg"),
-            #'submenu': QtGui.QIcon('./img/forward_black.svg'),
-            "toggle": QtGui.QIcon("./img/toggle_off.svg"),
-            "cloud_upload": QtGui.QIcon("./img/cloud_upload.svg"),
-            "background_task": QtGui.QIcon(),
-        }
-        toggle_img = {
-            "on": QtGui.QIcon("./img/toggle_on_blue.svg"),
-            "off": icon_img["toggle"],
-            "off_hover": QtGui.QIcon("./img/toggle_off_hover.svg"),
-        }
-        res_img = {
-            # True: QtGui.QIcon('./img/button_ok.svg'),
-            True: QtGui.QIcon("./img/cloud_upload_done.svg"),
-            False: QtGui.QIcon("./img/button_warning.svg"),
-        }
-        hover_img = {
-            "submenu": {
-                True: QtGui.QIcon("./img/forward_white_line.svg"),
-                # True: QtGui.QIcon('./img/forward_white.svg'),
-                False: icon_img["submenu"],
-            },
-            # toggle_off
-            "toggle": {
-                True: QtGui.QIcon("./img/toggle_off_hover.svg"),
-                False: icon_img["toggle"],
-            },
-        }
-        icon_size = {
-            "toggle": 36,
-            "submenu": 20,  # 24
-            "cloud_upload": 24,
-            "background_task": 24,
-            "null": 24,
-        }
-        icon_qsize = {}
-        icon_margin = {
-            "toggle": 5,
-            "submenu": 1,
-            "cloud_upload": 10,
-            "background_task": 10,
-            "null": 0,
-        }
-        loading_result = False
-
-        def __init__(self, text, config, dummy=False):
-            super().__init__(text=text)
-            self.config = config
-
-            self.setSizePolicy(
-                self.config.gui.gui_config.expanding,
-                self.config.gui.gui_config.expanding,
-            )
-            self.setStyleSheet(self.config.gui.style.G_GUI_PYQT_buttonStyle_menu)
-
-            for k, v in self.icon_size.items():
-                self.icon_qsize[k] = QtCore.QSize(v, v)
-
-            if dummy:
-                self.setEnabled(False)
-                self.setProperty("style", "dummy")
-
-        def setup_icon(self):
-            self.right_icon = QtWidgets.QLabel()
-            self.right_icon.setAttribute(
-                self.config.gui.gui_config.WA_TranslucentBackground
-            )
-            self.right_icon.setAttribute(
-                self.config.gui.gui_config.WA_TransparentForMouseEvents
-            )
-
-            self.icon_layout = QtWidgets.QHBoxLayout(self)
-            self.icon_layout.addWidget(
-                self.right_icon, alignment=self.config.gui.gui_config.align_right
-            )
-
-        def set_icon_with_size(self):
-            self.setup_icon()
-            self.icon_layout.setContentsMargins(
-                0, 0, self.icon_margin[self.button_type], 0
-            )
-            self.right_icon.setPixmap(
-                self.icon_img[self.button_type].pixmap(
-                    self.icon_qsize[self.button_type]
-                )
-            )
-
-        def set_service_icon(self, label_img, qsize):
-            self.setText("")
-            self.setIcon(QtGui.QIcon(QtGui.QPixmap(label_img)))
-            self.setIconSize(qsize)
-
-        def set_submenu_icon(self, label_img=None, qsize=None):
-            self.button_type = "submenu"
-            if label_img is not None and qsize is not None:
-                self.set_service_icon(label_img, qsize)
-            self.set_icon_with_size()
-
-        def set_toggle_icon(self):
-            self.button_type = "toggle"
-            self.set_icon_with_size()
-
-        def set_cloud_upload_icon(self, label_img, qsize):
-            self.button_type = "cloud_upload"
-            self.set_service_icon(label_img, qsize)
-            self.set_icon_with_size()
-            self.init_loading_icon()
-
-        def set_background_task_icon(self):
-            self.button_type = "background_task"
-            self.set_icon_with_size()
-            self.init_loading_icon()
-
-        def set_null_icon(self):
-            self.button_type = "null"
-            self.set_icon_with_size()
-
-        def onoff_button(self, status):
-            if status:
-                self.enable()
-            else:
-                self.disable()
-            self.setStyleSheet(self.config.gui.style.G_GUI_PYQT_buttonStyle_menu)
-
-        def disable(self):
-            self.setEnabled(False)
-            self.setProperty("style", "unavailable")
-
-        def enable(self):
-            self.setEnabled(True)
-            self.setProperty("style", None)
-
-        def resizeEvent(self, event):
-            # w = self.size().width()
-            h = self.size().height()
-            psize = int(h / 2.5) if int(h / 2.5) > 0 else 1
-
-            q = self.font()
-            q.setPixelSize(psize)
-            self.setFont(q)
-
-        def focusInEvent(self, event):
-            super().focusInEvent(event)
-            if self.button_type == "submenu" or (
-                self.button_type == "toggle" and not self.status
-            ):
-                self.change_icon_with_hover(True)
-            elif self.button_type == "null":
-                self.right_icon.setPixmap(
-                    self.icon_img["null"].pixmap(self.icon_qsize["null"])
-                )
-            # if self.first_button:
-            #  vs = self.scroll_area.verticalScrollBar()
-            #  vs.setValue(vs.minimum())
-            # elif self.last_button:
-            #  vs = self.scroll_area.verticalScrollBar()
-            #  vs.setValue(vs.maximum())
-
-        def focusOutEvent(self, event):
-            super().focusOutEvent(event)
-            if self.button_type == "submenu" or (
-                self.button_type == "toggle" and not self.status
-            ):
-                self.change_icon_with_hover(False)
-            elif self.button_type == "null":
-                self.right_icon.setPixmap(
-                    self.icon_img["null"].pixmap(self.icon_qsize["null"])
-                )
-
-        def change_icon_with_hover(self, status):
-            self.right_icon.setPixmap(
-                self.hover_img[self.button_type][status].pixmap(
-                    self.icon_qsize[self.button_type]
-                )
-            )
-
-        def change_toggle(self, status=False):
-            self.status = status
-            mode = "off"
-            if self.status:
-                mode = "on"
-            elif self.hasFocus():
-                mode = "off_hover"
-            self.right_icon.setPixmap(
-                self.toggle_img[mode].pixmap(self.icon_qsize[self.button_type])
-            )
-
-        @QtCore.pyqtSlot()
-        def loading_start(self):
-            if not self.status:
-                self.status = True
-                self.loading_movie.start()
-
-        @QtCore.pyqtSlot()
-        def loading_stop(self, res):
-            self.loading_movie.stop()
-            self.right_icon.setPixmap(
-                self.res_img[res].pixmap(self.icon_qsize[self.button_type])
-            )
-            self.status = False
-
-        def init_loading_icon(self):
-            self.loading_result = False
-            self.loading_movie = QtGui.QMovie(self)
-            self.loading_movie.setFileName("./img/loading.gif")
-            self.loading_movie.frameChanged.connect(self.on_frameChanged)
-            if self.loading_movie.loopCount() != -1:
-                self.loading_movie.finished.connect(self.start)
-
-        @QtCore.pyqtSlot(int)
-        def on_frameChanged(self, frameNumber):
-            self.right_icon.setPixmap(
-                QtGui.QIcon(self.loading_movie.currentPixmap()).pixmap(
-                    self.icon_qsize[self.button_type]
-                )
-            )
-
-        async def run(self, func):
-            if self.status:
-                return
-
-            self.loading_start()
-            self.loading_result = await func()
-            self.loading_stop(self.loading_result)
+        return widget
 
 
 class TopMenuWidget(MenuWidget):
     back_index_key = "Main"
 
     def setup_menu(self):
-        self.button = {}
         button_conf = (
             # Name(page_name), button_attribute, connected functions, layout
             ("Sensors", "submenu", self.sensors_menu),
@@ -457,6 +187,10 @@ class TopMenuWidget(MenuWidget):
 
 
 class ListWidget(MenuWidget):
+    STYLES = """
+      background-color: transparent;
+    """
+
     list_type = None
     selected_item = None
     size_hint = None
@@ -468,29 +202,18 @@ class ListWidget(MenuWidget):
         self.make_menu_layout(QtWidgets.QVBoxLayout)
 
         self.list = QtWidgets.QListWidget()
-        # self.list.setSortingEnabled(True)
-        self.list.setHorizontalScrollBarPolicy(
-            self.config.gui.gui_config.scrollbar_alwaysoff
-        )
-        self.list.setVerticalScrollBarPolicy(
-            self.config.gui.gui_config.scrollbar_alwaysoff
-        )
-        self.list.setFocusPolicy(self.config.gui.gui_config.no_focus)
-        self.list.setStyleSheet("background-color: transparent;")
+        self.list.setHorizontalScrollBarPolicy(QT_SCROLLBAR_ALWAYSOFF)
+        self.list.setVerticalScrollBarPolicy(QT_SCROLLBAR_ALWAYSOFF)
+        self.list.setFocusPolicy(QT_NO_FOCUS)
+        self.list.setStyleSheet(self.STYLES)
 
         self.menu_layout.addWidget(self.list)
 
-        self.setup_menu_extra()
-
-    # override for custom list
-    def setup_menu_extra(self):
-        # for simple list
-        for k in self.settings.keys():
-            api_mode_item = ListItemWidget(self, self.config)
-            api_mode_item.title_label.setText(k)
-            api_mode_item.set_simple_list_stylesheet(hide_detail_label=True)
-            api_mode_item.enter_signal.connect(self.button_func)
-            self.add_list_item(api_mode_item)
+        if self.settings and self.settings.keys():
+            for k in self.settings.keys():
+                item = ListItemWidget(self, k)
+                item.enter_signal.connect(self.button_func)
+                self.add_list_item(item)
 
     # override for custom list
     def connect_buttons(self):
@@ -517,10 +240,6 @@ class ListWidget(MenuWidget):
         self.size_hint = QtCore.QSize(self.top_bar.width(), h)
         for i in range(self.list.count()):
             self.list.item(i).setSizeHint(self.size_hint)
-        self.resize_extra()
-
-    def resize_extra(self):
-        pass
 
     def preprocess(self, **kwargs):
         self.list_type = kwargs.get("list_type")
@@ -540,6 +259,7 @@ class ListWidget(MenuWidget):
         for i, k in enumerate(self.settings):
             if k == default_value:
                 default_index = i
+                break
         if default_index is not None:
             self.list.setCurrentRow(default_index)
             self.list.itemWidget(self.list.currentItem()).setFocus()
@@ -549,131 +269,124 @@ class ListWidget(MenuWidget):
 
     def add_list_item(self, item):
         list_item = QtWidgets.QListWidgetItem(self.list)
-        if self.size_hint is not None:
+        if self.size_hint:
             list_item.setSizeHint(self.size_hint)
         self.list.setItemWidget(list_item, item)
 
 
 class ListItemWidget(QtWidgets.QWidget):
-    config = None
-    icon = None
-    list_info = {}
     enter_signal = QtCore.pyqtSignal()
+    title = ""
+    detail = ""
 
-    def __init__(self, parent, config):
+    def get_styles(self):
+        border_style = "border-bottom: 1px solid #AAAAAA;"
+        title_style = "padding-left: 10%; padding-top: 2%;"
+        detail_style = None
+
+        if self.detail:
+            detail_style = f"padding-left: 20%; padding-bottom: 2%; {border_style}"
+        else:
+            title_style = f"{title_style} {border_style}"
+        return title_style, detail_style
+
+    def __init__(self, parent, title, detail=None):
+        self.title = title
+        self.detail = detail
         QtWidgets.QWidget.__init__(self, parent=parent)
-        self.config = config
         self.setup_ui()
 
     def setup_ui(self):
         self.setContentsMargins(0, 0, 0, 0)
-        self.setFocusPolicy(self.config.gui.gui_config.strong_focus)
+        self.setFocusPolicy(QT_STRONG_FOCUS)
+
+        inner_layout = QtWidgets.QVBoxLayout()
+        inner_layout.setContentsMargins(0, 0, 0, 0)
+        inner_layout.setSpacing(0)
+
+        title_style, detail_style = self.get_styles()
 
         self.title_label = QtWidgets.QLabel()
         self.title_label.setMargin(0)
         self.title_label.setContentsMargins(0, 0, 0, 0)
+        self.title_label.setStyleSheet(title_style)
+        self.title_label.setText(self.title)
+        inner_layout.addWidget(self.title_label)
 
-        self.detail_label = QtWidgets.QLabel()
-        self.detail_label.setMargin(0)
-        self.detail_label.setContentsMargins(0, 0, 0, 0)
+        if self.detail:
+            self.detail_label = QtWidgets.QLabel()
+            self.detail_label.setMargin(0)
+            self.detail_label.setContentsMargins(0, 0, 0, 0)
+            self.detail_label.setStyleSheet(detail_style)
+            self.detail_label.setText(self.detail)
+            inner_layout.addWidget(self.detail_label)
 
-        self.inner_layout = QtWidgets.QVBoxLayout()
-        self.inner_layout.setContentsMargins(0, 0, 0, 0)
-        self.inner_layout.setSpacing(0)
-        self.inner_layout.addWidget(self.title_label)
-        self.inner_layout.addWidget(self.detail_label)
-
-        self.outer_layout = QtWidgets.QHBoxLayout()
+        self.outer_layout = QtWidgets.QHBoxLayout(self)
         self.outer_layout.setSpacing(0)
         self.outer_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.add_extra()
-
-        self.setLayout(self.outer_layout)
-
-    def add_extra(self):
-        # outer layout
-        self.outer_layout.addLayout(
-            self.inner_layout, self.config.gui.gui_config.align_left
-        )
-
-    def set_info(self, **kwargs):
-        pass
+        self.outer_layout.addLayout(inner_layout, QT_ALIGN_LEFT)
 
     def keyPressEvent(self, e):
-        if e.key() == self.config.gui.gui_config.key_space:
+        if e.key() == QT_KEY_SPACE:
             self.enter_signal.emit()
+
+    @staticmethod
+    def resize_label(label, font_size):
+        q = label.font()
+        q.setPixelSize(font_size)
+        label.setFont(q)
 
     def resizeEvent(self, event):
         h = self.size().height()
-        for text, fsize in zip(
-            [self.title_label, self.detail_label], [int(h * 0.45), int(h * 0.4)]
-        ):
-            q = text.font()
-            q.setPixelSize(fsize)
-            text.setFont(q)
-
-    def set_simple_list_stylesheet(self, hide_detail_label=False):
-        title_style = "padding-left: 10%; padding-top: 2%;"
-        detail_style = "padding-left: 20%; padding-bottom: 2%;"
-        if hide_detail_label:
-            self.detail_label.hide()
-            title_style = (
-                title_style + " " + self.config.gui.style.G_GUI_PYQT_menu_list_border
-            )
-        else:
-            detail_style = (
-                detail_style + " " + self.config.gui.style.G_GUI_PYQT_menu_list_border
-            )
-        self.title_label.setStyleSheet(title_style)
-        self.detail_label.setStyleSheet(detail_style)
+        self.resize_label(self.title_label, int(h * 0.45))
+        if self.detail:
+            self.resize_label(self.detail_label, int(h * 0.4))
 
 
 class UploadActivityMenuWidget(MenuWidget):
     def setup_menu(self):
-        self.button = {}
         button_conf = (
-            # Name(page_name), button_attribute, connected functions, layout
+            # Name(page_name), button_attribute, connected functions, icon
             (
                 "Strava",
                 "cloud_upload",
                 self.strava_upload,
-                "./img/strava_logo.svg",
-                QtCore.QSize(self.logo_size * 4, self.logo_size),
+                (icons.StravaIcon(), (icons.BASE_LOGO_SIZE * 4, icons.BASE_LOGO_SIZE)),
             ),
             (
                 "Garmin",
                 "cloud_upload",
                 self.garmin_upload,
-                "./img/garmin_logo.svg",
-                QtCore.QSize(self.logo_size * 5, self.logo_size),
+                (icons.GarminIcon(), (icons.BASE_LOGO_SIZE * 5, icons.BASE_LOGO_SIZE)),
             ),
             (
                 "Ride with GPS",
                 "cloud_upload",
                 self.rwgps_upload,
-                "./img/rwgps_logo.svg",
-                QtCore.QSize(self.logo_size * 4, self.logo_size),
+                (
+                    icons.RideWithGPSIcon(),
+                    (icons.BASE_LOGO_SIZE * 4, icons.BASE_LOGO_SIZE),
+                ),
             ),
         )
         self.add_buttons(button_conf)
 
     @qasync.asyncSlot()
     async def strava_upload(self):
-        await self.button["Strava"].run(self.config.network.api.strava_upload)
+        await self.buttons["Strava"].run(self.config.network.api.strava_upload)
 
     @qasync.asyncSlot()
     async def garmin_upload(self):
-        await self.button["Garmin"].run(self.config.network.api.garmin_upload)
+        await self.buttons["Garmin"].run(self.config.network.api.garmin_upload)
 
     @qasync.asyncSlot()
     async def rwgps_upload(self):
-        await self.button["Ride with GPS"].run(self.config.network.api.rwgps_upload)
+        await self.buttons["Ride with GPS"].run(self.config.network.api.rwgps_upload)
 
 
 class LiveTrackMenuWidget(MenuWidget):
     def setup_menu(self):
-        self.button = {}
         button_conf = (
             # Name(page_name), button_attribute, connected functions, layout
             ("Live Track", "toggle", lambda: self.onoff_live_track(True)),
@@ -684,29 +397,24 @@ class LiveTrackMenuWidget(MenuWidget):
             ),
             ("Select BT device", "submenu", self.bt_tething),
         )
-        self.add_buttons(button_conf, back_connect=False)
-
-        # set back_index of child widget
-        self.bt_page_name = "BT Tethering"
-        self.bt_index = self.config.gui.gui_config.G_GUI_INDEX[self.bt_page_name]
+        self.add_buttons(button_conf)
 
         if (
             self.config.network.api.thingsboard_check()
             and self.config.G_THINGSBOARD_API["HAVE_API_TOKEN"]
         ):
             if not self.config.G_IS_RASPI:
-                self.button["Auto upload via BT"].disable()
+                self.buttons["Auto upload via BT"].disable()
         else:
-            self.button["Live Track"].disable()
-            self.button["Auto upload via BT"].disable()
+            self.buttons["Live Track"].disable()
+            self.buttons["Auto upload via BT"].disable()
 
         if not self.config.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"]:
-            self.button["Select BT device"].disable()
+            self.buttons["Select BT device"].disable()
 
     def preprocess(self):
         # initialize toggle button status
         self.onoff_live_track(change=False)
-        self.parentWidget().widget(self.bt_index).back_index_key = self.page_name
 
     def onoff_live_track(self, change=True):
         if change:
@@ -716,7 +424,9 @@ class LiveTrackMenuWidget(MenuWidget):
             self.config.setting.set_config_pickle(
                 "G_THINGSBOARD_API_STATUS", self.config.G_THINGSBOARD_API["STATUS"]
             )
-        self.button["Live Track"].change_toggle(self.config.G_THINGSBOARD_API["STATUS"])
+        self.buttons["Live Track"].change_toggle(
+            self.config.G_THINGSBOARD_API["STATUS"]
+        )
 
     def onoff_auto_upload_via_BT(self, change=True):
         if change:
@@ -727,13 +437,13 @@ class LiveTrackMenuWidget(MenuWidget):
                 "AUTO_UPLOAD_VIA_BT",
                 self.config.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"],
             )
-        self.button["Auto upload via BT"].change_toggle(
+        self.buttons["Auto upload via BT"].change_toggle(
             self.config.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"]
         )
 
-        self.button["Select BT device"].onoff_button(
+        self.buttons["Select BT device"].onoff_button(
             self.config.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"]
         )
 
     def bt_tething(self):
-        self.change_page(self.bt_page_name, preprocess=True, run_bt_tethering=False)
+        self.change_page("BT Tethering", preprocess=True, run_bt_tethering=False)
