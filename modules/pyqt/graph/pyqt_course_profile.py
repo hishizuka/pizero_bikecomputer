@@ -49,7 +49,7 @@ class CourseProfileGraphWidget(BaseMapWidget):
 
     # load course profile and display
     def load_course(self):
-        if not len(self.config.logger.course.distance) or not len(
+        if not self.config.logger.course.is_set or not len(
             self.config.logger.course.altitude
         ):
             return
@@ -126,7 +126,7 @@ class CourseProfileGraphWidget(BaseMapWidget):
         self.resizeEvent(None)
 
     async def update_extra(self):
-        if not len(self.config.logger.course.distance) or not len(
+        if not self.config.logger.course.is_set or not len(
             self.config.logger.course.altitude
         ):
             return

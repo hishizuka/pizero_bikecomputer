@@ -2,6 +2,7 @@
 /log/
 /screenshots/
 /maptile/*
+/courses/.current
 /courses/ridewithgps/*
 /courses/*html*
 /fonts/*

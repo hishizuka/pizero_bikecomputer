@@ -175,7 +175,7 @@ class BaseMapWidget(ScreenWidget):
         await self.update_extra()
 
     def get_max_zoom(self):
-        if not len(self.config.logger.course.distance):
+        if not self.config.logger.course.is_set:
             return
 
         if self.config.G_MAX_ZOOM != 0:
@@ -190,7 +190,6 @@ class BaseMapWidget(ScreenWidget):
             while z / 1000 > dist:
                 z /= 2
         self.config.G_MAX_ZOOM = z
-        # print("MAX_ZOOM", self.config.G_MAX_ZOOM, dist)
 
     def load_course(self):
         pass
