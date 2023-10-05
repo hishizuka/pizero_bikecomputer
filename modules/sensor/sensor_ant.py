@@ -27,12 +27,12 @@ f = open(os.devnull, "w")
 sys.stdout = f
 try:
     from ant.easy.node import Node
-    from ant.base.driver import find_driver
+    from ant.base.driver import find_driver, DriverNotFound
 
     # device test
     _driver = find_driver()
     _SENSOR_ANT = True
-except ImportError:
+except (ImportError, DriverNotFound):
     pass
 f.close()
 sys.stdout = _sys_stdout
