@@ -40,6 +40,8 @@ pg.setConfigOption("background", "w")
 pg.setConfigOption("foreground", "k")
 
 
+QT_KEY_BACKTAB = QtCore.Qt.Key.Key_Backtab if USE_PYQT6 else QtCore.Qt.Key_Backtab
+QT_KEY_TAB = QtCore.Qt.Key.Key_Tab if USE_PYQT6 else QtCore.Qt.Key_Tab
 QT_KEY_SPACE = QtCore.Qt.Key.Key_Space if USE_PYQT6 else QtCore.Qt.Key_Space
 QT_KEY_PRESS = QtCore.QEvent.Type.KeyPress if USE_PYQT6 else QtCore.QEvent.KeyPress
 QT_KEY_RELEASE = (

@@ -90,7 +90,7 @@ class CoursesMenuWidget(MenuWidget):
             "-d",
             "-n",
             "-r",
-            self.config.G_COURSE_DIR,
+            os.path.abspath(self.config.G_COURSE_DIR),
             "-l",
             "-a",
             stdout=asyncio.subprocess.PIPE,
@@ -134,7 +134,9 @@ class CoursesMenuWidget(MenuWidget):
         # HTML from GoogleMap App
         if filename == self.config.G_RECEIVE_COURSE_FILE:
             await self.load_html_route(
-                self.config.G_COURSE_DIR + self.config.G_RECEIVE_COURSE_FILE
+                os.path.join(
+                    self.config.G_COURSE_DIR, self.config.G_RECEIVE_COURSE_FILE
+                )
             )
             self.onoff_course_cancel_button()
         # tcx file
@@ -162,10 +164,10 @@ class CoursesMenuWidget(MenuWidget):
 
     async def load_tcx_route(self, filename):
         self.cancel_course()
-        course_file = (
-            self.config.G_COURSE_DIR + filename[: filename.lower().find(".tcx") + 4]
+        course_file = os.path.join(
+            self.config.G_COURSE_DIR, filename[: filename.lower().find(".tcx") + 4]
         )
-        shutil.move(self.config.G_COURSE_DIR + filename, course_file)
+        shutil.move(os.path.join(self.config.G_COURSE_DIR, filename), course_file)
         self.set_new_course(course_file)
         self.config.gui.show_forced_message("Loading succeeded!")
 
@@ -369,7 +371,7 @@ class CourseDetailWidget(MenuWidget):
         self.elevation_label.setText("{:.0f}m up".format(course_info["elevation_gain"]))
         self.locality_label.setText(self.address_format.format(**course_info))
 
-        self.list_id = course_info["name"]
+        self.list_id = course_info["id"]
 
         self.timer.start(self.config.G_DRAW_INTERVAL)
 
