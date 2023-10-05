@@ -20,6 +20,13 @@
     - [Software button](#software-button)
     - [Hardware button](#hardware-button)
   - [Menu screen](#menu-screen)
+    - [Sensors](#sensors)
+    - [Courses](#courses)
+    - [Live Track](#live-track)
+    - [Upload Activity](#upload-activity)
+    - [Map](#map)
+    - [Profile](#profile)
+    - [System](#System)
   - [Settings](#settings)
     - [setting.conf](#settingconf)
     - [setting.pickle](#settingpickle)
@@ -477,11 +484,12 @@ Right side
 
 <img width="400" alt="menu-03-courses" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/35322fa8-e41e-4f8d-a922-fc86c8481cf5">
 
-
 - Local Storage
   - Select course .tcx file in `courses` folder.
 - Ride sith GPS
-  - If you set token in setting.conf, select course from Ride with GPS. Internet access is required. Sample image are shown as belows.
+  - If you [set token in setting.conf](#ridewithgps_api-section), select course from Ride with GPS. Internet access is required. Sample image are shown as belows.
+  - <img width="400" alt="RidewithGPS-01" src="https://user-images.githubusercontent.com/12926652/206076210-9c50f789-bac3-4bd0-8209-9dea3a61a132.png">
+  - <img width="400" alt="RidewithGPS-02" src="https://user-images.githubusercontent.com/12926652/206076212-8696ac34-c9e6-485f-b1ba-687c0d2a0061.png">
 - Android Google Maps
   - Receive routes from Google Maps on Android via Bluetooth. The result is parsed using [https://mapstogpx.com](https://mapstogpx.com).
   - To use this feature, pair the device with an Android smartphone with obexd activated. `bluez-obexd` and `dbus-x11` packages are required to be installed in advance.
@@ -489,9 +497,6 @@ Right side
   - If properly paired, Android Google Maps Directions route search results can be sent with 'Share Directions' > 'Bluetooth' > (your Raspberry Pi).
     - <img width="320" alt="mapstogpx-01" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/928a8ed5-82e7-4ba2-afc7-6b68150d9043"> <img width="320" alt="mapstogpx-02" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/d6fbfb22-5c93-47e5-920f-8ef4fc9c02de">
 
-Select 'Local Storage' or 'Ride sith GPS' to load a course from the list.
- 
-<img width="400" alt="RidewithGPS-01" src="https://user-images.githubusercontent.com/12926652/206076210-9c50f789-bac3-4bd0-8209-9dea3a61a132.png"> <img width="400" alt="RidewithGPS-02" src="https://user-images.githubusercontent.com/12926652/206076212-8696ac34-c9e6-485f-b1ba-687c0d2a0061.png">
 
 ### Live Track
  
@@ -705,7 +710,14 @@ If you want to use Strava HeatMap, set `email` and `password`.
 #### RIDEWITHGPS_API section
 
 If you want to use heatmap or upload activities to RidewithGPS, set your `token` of the Ride with GPS API.
-Apikey is assumed as `pizero_bikecomputer`.
+
+- Sign up for an account with [RideWithGPS](https://ridewithgps.com/signup).
+- Create an API key on [RWGPS API](https://ridewithgps.com/api).
+  - Apikey is assumed as `pizero_bikecomputer`.
+  - <img width="600" alt="rwgps_api" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/48269f97-04ec-43f8-b0e1-e4f802c42732">
+  - If you entered a valid email/password, you will see the auth_token parameter was filled in below.
+  - <img width="261" alt="rwgps_get_token" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/fcaf77a8-0531-4e87-a106-6cb3cc1f2c83">
+- Set your token.
 
 #### GARMINCONNECT_API section
 
