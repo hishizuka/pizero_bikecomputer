@@ -1,8 +1,13 @@
 from logger import app_logger
-from modules._pyqt import QtWidgets, QtGui
+from modules._pyqt import QtWidgets
+from modules.pyqt.components import box_buttons, icons
 
 
 class ButtonBoxWidget(QtWidgets.QWidget):
+    STYLES = """
+      background-color: #CCCCCC;
+    """
+
     config = None
 
     # for long press
@@ -11,70 +16,36 @@ class ButtonBoxWidget(QtWidgets.QWidget):
 
     def __init__(self, parent, config):
         self.config = config
-        QtWidgets.QWidget.__init__(self, parent=parent)
+        super().__init__(parent=parent)
         self.setup_ui()
-
-        self.start_button.clicked.connect(self.gui_start_and_stop_quit)
-        self.lap_button.clicked.connect(self.gui_lap_reset)
-        self.menu_button.clicked.connect(self.config.gui.goto_menu)
-        self.scrollnext_button.clicked.connect(self.config.gui.scroll_next)
-        self.scrollprev_button.clicked.connect(self.config.gui.scroll_prev)
 
     def setup_ui(self):
         self.setContentsMargins(0, 0, 0, 0)
-        self.setStyleSheet(self.config.gui.style.G_GUI_PYQT_button_box)
+        self.setStyleSheet(self.STYLES)
         self.show()
         self.setAutoFillBackground(True)
 
-        self.start_button = QtWidgets.QPushButton(QtGui.QIcon("img/next_white.png"), "")
-        self.lap_button = QtWidgets.QPushButton(QtGui.QIcon("img/lap_white.png"), "")
-        self.menu_button = QtWidgets.QPushButton(QtGui.QIcon("img/menu.png"), "")
-        self.scrollnext_button = QtWidgets.QPushButton(
-            QtGui.QIcon("img/forward_black.svg"), ""
-        )
-        self.scrollprev_button = QtWidgets.QPushButton(
-            QtGui.QIcon("img/back_black.svg"), ""
-        )
+        self.start_button = box_buttons.StartButton()
+        self.lap_button = box_buttons.LapButton()
+        menu_button = box_buttons.MenuButton()
+        scrollnext_button = box_buttons.ScrollNextButton()
+        scrollprev_button = box_buttons.ScrollPrevButton()
 
-        self.scrollprev_button.setFixedSize(60, 30)
-        self.lap_button.setFixedSize(50, 30)
-        self.menu_button.setFixedSize(50, 30)
-        self.start_button.setFixedSize(50, 30)
-        self.scrollnext_button.setFixedSize(60, 30)
+        self.start_button.clicked.connect(self.gui_start_and_stop_quit)
+        self.lap_button.clicked.connect(self.gui_lap_reset)
+        menu_button.clicked.connect(self.config.gui.goto_menu)
+        scrollnext_button.clicked.connect(self.config.gui.scroll_next)
+        scrollprev_button.clicked.connect(self.config.gui.scroll_prev)
 
-        # long press
-        for button in [self.start_button, self.lap_button]:
-            button.setAutoRepeat(True)
-            button.setAutoRepeatDelay(1000)
-            button.setAutoRepeatInterval(1000)
-            button._state = 0
-
-        self.start_button.setStyleSheet(
-            self.config.gui.style.G_GUI_PYQT_buttonStyle_timer
-        )
-        self.lap_button.setStyleSheet(
-            self.config.gui.style.G_GUI_PYQT_buttonStyle_timer
-        )
-        self.menu_button.setStyleSheet(
-            self.config.gui.style.G_GUI_PYQT_buttonStyle_gotoMenu
-        )
-        self.scrollnext_button.setStyleSheet(
-            self.config.gui.style.G_GUI_PYQT_buttonStyle_navi
-        )
-        self.scrollprev_button.setStyleSheet(
-            self.config.gui.style.G_GUI_PYQT_buttonStyle_navi
-        )
-
-        button_layout = QtWidgets.QHBoxLayout()
+        button_layout = QtWidgets.QHBoxLayout(self)
         button_layout.setContentsMargins(0, 5, 0, 5)
         button_layout.setSpacing(0)
-        button_layout.addWidget(self.scrollprev_button)
-        button_layout.addWidget(self.lap_button)
-        button_layout.addWidget(self.menu_button)
-        button_layout.addWidget(self.start_button)
-        button_layout.addWidget(self.scrollnext_button)
 
-        self.setLayout(button_layout)
+        button_layout.addWidget(scrollprev_button)
+        button_layout.addWidget(self.lap_button)
+        button_layout.addWidget(menu_button)
+        button_layout.addWidget(self.start_button)
+        button_layout.addWidget(scrollnext_button)
 
     def gui_lap_reset(self):
         if self.lap_button.isDown():
@@ -117,7 +88,5 @@ class ButtonBoxWidget(QtWidgets.QWidget):
             self.config.logger.start_and_stop_manual()
 
     def change_start_stop_button(self, status):
-        icon = QtGui.QIcon("img/next_white.png")
-        if status == "START":
-            icon = QtGui.QIcon("img/pause_white.png")
+        icon = icons.PauseIcon() if status == "START" else icons.NextIcon()
         self.start_button.setIcon(icon)

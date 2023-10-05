@@ -1,11 +1,14 @@
-from modules._pyqt import QtWidgets, QtGui, qasync
+from modules._pyqt import (
+    QT_TEXTEDIT_NOWRAP,
+    QT_SCROLLBAR_ALWAYSOFF,
+    QtWidgets,
+    qasync,
+)
 from .pyqt_menu_widget import MenuWidget, ListWidget
 
 
 class SystemMenuWidget(MenuWidget):
     def setup_menu(self):
-        self.button = {}
-
         button_conf = (
             # Name(page_name), button_attribute, connected functions, layout
             ("Network", "submenu", self.network),
@@ -31,16 +34,14 @@ class SystemMenuWidget(MenuWidget):
         self.change_page("Network", preprocess=True)
 
     def debug(self):
-        self.change_page("Debug", preprocess=True)
+        self.change_page("Debug")
 
 
 class NetworkMenuWidget(MenuWidget):
-    ble_msg_status = False
-
     def setup_menu(self):
-        self.button = {}
         wifi_bt_button_func_wifi = None
         wifi_bt_button_func_bt = None
+
         if self.config.G_IS_RASPI:
             wifi_bt_button_func_wifi = lambda: self.onoff_wifi_bt(True, "Wifi")
             wifi_bt_button_func_bt = lambda: self.onoff_wifi_bt(True, "Bluetooth")
@@ -55,17 +56,13 @@ class NetworkMenuWidget(MenuWidget):
         )
         self.add_buttons(button_conf)
 
-        # set back_index of child widget
-        self.bt_page_name = "BT Tethering"
-        self.bt_index = self.config.gui.gui_config.G_GUI_INDEX[self.bt_page_name]
-
         if self.config.bt_pan is None or not len(self.config.G_BT_ADDRESS):
-            self.button["BT Tethering"].disable()
+            self.buttons["BT Tethering"].disable()
 
         if self.config.ble_uart is None:
-            self.button["Gadgetbridge"].disable()
+            self.buttons["Gadgetbridge"].disable()
 
-        self.button["Get Location"].disable()
+        self.buttons["Get Location"].disable()
 
     def preprocess(self):
         # initialize toggle button status
@@ -74,14 +71,13 @@ class NetworkMenuWidget(MenuWidget):
             self.onoff_wifi_bt(change=False, key="Bluetooth")
         self.onoff_ble_uart_service(change=False)
         self.onoff_gadgetbridge_gps(change=False)
-        self.parentWidget().widget(self.bt_index).back_index_key = self.page_name
 
     def onoff_wifi_bt(self, change=True, key=None):
         if change:
             self.config.onoff_wifi_bt(key)
         status = {}
         status["Wifi"], status["Bluetooth"] = self.config.get_wifi_bt_status()
-        self.button[key].change_toggle(status[key])
+        self.buttons[key].change_toggle(status[key])
 
     def bt_tething(self):
         self.change_page("BT Tethering", preprocess=True)
@@ -95,18 +91,17 @@ class NetworkMenuWidget(MenuWidget):
     async def onoff_ble_uart_service(self, change=True):
         if change:
             await self.config.ble_uart.on_off_uart_service()
-            self.button["Gadgetbridge"].change_toggle(self.config.ble_uart.status)
-            self.button["Get Location"].onoff_button(self.config.ble_uart.status)
+            self.buttons["Gadgetbridge"].change_toggle(self.config.ble_uart.status)
+            self.buttons["Get Location"].onoff_button(self.config.ble_uart.status)
 
     def onoff_gadgetbridge_gps(self, change=True):
         if change:
             self.config.ble_uart.on_off_gadgetbridge_gps()
-            self.button["Get Location"].change_toggle(self.config.ble_uart.gps_status)
+            self.buttons["Get Location"].change_toggle(self.config.ble_uart.gps_status)
 
 
 class DebugMenuWidget(MenuWidget):
     def setup_menu(self):
-        self.button = {}
         button_conf = (
             # Name(page_name), button_attribute, connected functions, layout
             ("Debug Log", "submenu", self.debug_log),
@@ -138,9 +133,6 @@ class DebugMenuWidget(MenuWidget):
             ),
         )
         self.add_buttons(button_conf)
-
-    def preprocess(self):
-        pass
 
     def debug_log(self):
         self.change_page("Debug Log", preprocess=True)
@@ -174,25 +166,15 @@ class DebugLogViewerWidget(MenuWidget):
 
         # self.scroll_area = QtWidgets.QScrollArea()
         # self.scroll_area.setWidgetResizable(True)
-        try:
-            self.debug_log_screen = QtWidgets.QTextEdit()
-        except:
-            # for old Qt (5.11.3 buster PyQt5 Package)
-            QtGui.QTextEdit()
+        self.debug_log_screen = QtWidgets.QTextEdit()
         self.debug_log_screen.setReadOnly(True)
-        self.debug_log_screen.setLineWrapMode(
-            self.config.gui.gui_config.qtextedit_nowrap
-        )
-        self.debug_log_screen.setHorizontalScrollBarPolicy(
-            self.config.gui.gui_config.scrollbar_alwaysoff
-        )
-        # self.debug_log_screen.setVerticalScrollBarPolicy(self.config.gui.gui_config.scrollbar_alwaysoff)
+        self.debug_log_screen.setLineWrapMode(QT_TEXTEDIT_NOWRAP)
+        self.debug_log_screen.setHorizontalScrollBarPolicy(QT_SCROLLBAR_ALWAYSOFF)
+        # self.debug_log_screen.setVerticalScrollBarPolicy(QT_SCROLLBAR_ALWAYSOFF)
         # QtWidgets.QScroller.grabGesture(self, QtWidgets.QScroller.LeftMouseButtonGesture)
         # self.scroll_area.setWidget(self.debug_log_screen) if USE_PYQT6 else self.menu_layout.addWidget(self.debug_log_screen)
         # self.menu_layout.addWidget(self.scroll_area)
         self.menu_layout.addWidget(self.debug_log_screen)
-
-        self.menu.setLayout(self.menu_layout)
 
     def preprocess(self):
         try:

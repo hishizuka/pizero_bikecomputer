@@ -1,14 +1,9 @@
 import numpy as np
 
 from modules._pyqt import QtGui, pg
-
-pg.setConfigOptions(antialias=True)
-pg.setConfigOption("background", "w")
-pg.setConfigOption("foreground", "k")
-
-from .pyqt_base_map import BaseMapWidget
 from modules.pyqt.graph.pyqtgraph.CourseProfileGraphItem import CourseProfileGraphItem
 from modules.utils.timer import Timer
+from .pyqt_base_map import BaseMapWidget
 
 
 class CourseProfileGraphWidget(BaseMapWidget):
@@ -29,18 +24,20 @@ class CourseProfileGraphWidget(BaseMapWidget):
     point_color = {"fix": None, "lost": None}
 
     # remove button(up, down)
-    def add_extra(self):
+    def setup_ui_extra(self):
+        super().setup_ui_extra()
+
         # map
         self.layout.addWidget(self.plot, 0, 0, 3, 3)
 
         if self.config.display.has_touch():
             # zoom
-            self.layout.addWidget(self.button["zoomdown"], 0, 0)
-            self.layout.addWidget(self.button["lock"], 1, 0)
-            self.layout.addWidget(self.button["zoomup"], 2, 0)
+            self.layout.addWidget(self.buttons["zoomdown"], 0, 0)
+            self.layout.addWidget(self.buttons["lock"], 1, 0)
+            self.layout.addWidget(self.buttons["zoomup"], 2, 0)
             # arrow
-            self.layout.addWidget(self.button["left"], 0, 2)
-            self.layout.addWidget(self.button["right"], 1, 2)
+            self.layout.addWidget(self.buttons["left"], 0, 2)
+            self.layout.addWidget(self.buttons["right"], 1, 2)
 
         self.climb_detail = pg.TextItem(color=(0, 0, 0), anchor=(1.0, 1.0))
         self.climb_detail.setZValue(100)
@@ -118,9 +115,10 @@ class CourseProfileGraphWidget(BaseMapWidget):
             self.plot.addItem(self.climb_top_plot)
 
     def reset_course(self):
-        for p in [self.course_profile_plot, self.climb_top_plot, self.climb_detail]:
-            if p is not None:
-                self.plot.removeItem(p)
+        for p in filter(
+            None, [self.course_profile_plot, self.climb_top_plot, self.climb_detail]
+        ):
+            self.plot.removeItem(p)
         self.plot.removeItem(self.current_point)
 
     def init_course(self):

@@ -1,10 +1,71 @@
 from logger import app_logger
-from modules._pyqt import QtWidgets, qasync
+from modules._pyqt import (
+    QT_ALIGN_CENTER,
+    QT_ALIGN_RIGHT,
+    QT_NO_FOCUS,
+    QtWidgets,
+    qasync,
+)
 from .pyqt_menu_widget import MenuWidget
 
 ##################################
 # adjust widgets
 ##################################
+
+
+class UnitLabel(QtWidgets.QLabel):
+    STYLES = """
+      QLabel {
+        font-size: 25px;
+        padding: 5px;
+      }
+    """
+
+    def __init__(self, *__args):
+        super().__init__(*__args)
+        self.setStyleSheet(self.STYLES)
+        self.setAlignment(QT_ALIGN_CENTER)
+
+
+class AdjustButton(QtWidgets.QPushButton):
+    STYLES = """
+      QPushButton{
+        font-size: 15px;
+        padding: 2px;
+        margin: 1px
+      }
+
+      QPushButton:pressed{
+        background-color: black;
+      }
+
+      QPushButton:focus {
+        background-color: black;
+        color: white;
+      }
+    """
+
+    def __init__(self, *__args):
+        super().__init__(*__args)
+        self.setFixedSize(50, 30)
+        self.setStyleSheet(self.STYLES)
+
+
+class AdjustEdit(QtWidgets.QLineEdit):
+    STYLES = """
+      QLineEdit {
+        font-size: 35px;
+        padding: 5px;
+      }
+    """
+
+    def __init__(self, *__args):
+        super().__init__(*__args)
+        self.setReadOnly(True)
+        self.setAlignment(QT_ALIGN_RIGHT)
+        self.setMaxLength(6)  # need to specify init_extra in each class
+        self.setStyleSheet(self.STYLES)
+        self.setFocusPolicy(QT_NO_FOCUS)
 
 
 class AdjustWidget(MenuWidget):
@@ -13,57 +74,33 @@ class AdjustWidget(MenuWidget):
     def setup_menu(self):
         self.make_menu_layout(QtWidgets.QGridLayout)
 
-        self.display = QtWidgets.QLineEdit("")
-        self.display.setReadOnly(True)
-        self.display.setAlignment(self.config.gui.gui_config.align_right)
-        self.display.setMaxLength(6)  # need to specify init_extra in each class
-        self.display.setStyleSheet(
-            self.config.gui.style.G_GUI_PYQT_texteditStyle_adjustwidget
-        )
-        self.display.setFocusPolicy(self.config.gui.gui_config.no_focus)
+        self.display = AdjustEdit("")
         self.menu_layout.addWidget(self.display, 0, 0, 1, 5)
 
-        self.unitLabel = QtWidgets.QLabel(self.unit)
-        self.unitLabel.setStyleSheet(
-            self.config.gui.style.G_GUI_PYQT_labelStyle_adjustwidget
-        )
-        self.unitLabel.setAlignment(self.config.gui.gui_config.align_center)
-        self.menu_layout.addWidget(self.unitLabel, 0, 5)
+        unitLabel = UnitLabel(self.unit)
+        self.menu_layout.addWidget(unitLabel, 0, 5)
 
-        self.num_button = {}
+        num_buttons = {}
         for i in [1, 2, 3, 4, 5, 6, 7, 8, 9, 0]:
-            self.num_button[i] = QtWidgets.QPushButton(str(i))
-            self.num_button[i].setFixedSize(50, 30)
-            self.num_button[i].setStyleSheet(
-                self.config.gui.style.G_GUI_PYQT_buttonStyle_adjustwidget
-            )
-            self.num_button[i].clicked.connect(self.digit_clicked)
+            num_buttons[i] = AdjustButton(str(i))
+            num_buttons[i].clicked.connect(self.digit_clicked)
             if i == 0:
-                self.menu_layout.addWidget(self.num_button[i], 2, 4)
+                self.menu_layout.addWidget(num_buttons[i], 2, 4)
             else:
                 self.menu_layout.addWidget(
-                    self.num_button[i], 1 + (i - 1) // 5, (i - 1) % 5
+                    num_buttons[i], 1 + (i - 1) // 5, (i - 1) % 5
                 )
 
-        self.clear_button = QtWidgets.QPushButton("x")
-        self.clear_button.setFixedSize(50, 30)
-        self.clear_button.setStyleSheet(
-            self.config.gui.style.G_GUI_PYQT_buttonStyle_adjustwidget
-        )
-        self.clear_button.clicked.connect(self.clear)
-        self.menu_layout.addWidget(self.clear_button, 1, 5)
+        clear_button = AdjustButton("x")
+        clear_button.clicked.connect(self.clear)
+        self.menu_layout.addWidget(clear_button, 1, 5)
 
-        self.set_button = QtWidgets.QPushButton("Set")
-        self.set_button.setFixedSize(50, 30)
-        self.set_button.setStyleSheet(
-            self.config.gui.style.G_GUI_PYQT_buttonStyle_adjustwidget
-        )
-        self.menu_layout.addWidget(self.set_button, 2, 5)
-        self.set_button.clicked.connect(self.set_value)
+        set_button = AdjustButton("Set")
+        set_button.clicked.connect(self.set_value)
+        self.menu_layout.addWidget(set_button, 2, 5)
 
-        self.menu.setLayout(self.menu_layout)
         if not self.config.display.has_touch():
-            self.focus_widget = self.num_button[1]
+            self.focus_widget = num_buttons[1]
 
         self.init_extra()
 
@@ -84,19 +121,14 @@ class AdjustWidget(MenuWidget):
         value = self.display.text()
         if value == "":
             return
-        value = int(value)
-        index = self.config.gui.gui_config.G_GUI_INDEX[self.back_index_key]
-        self.config.gui.change_menu_page(index)
-        await self.set_value_extra(value)
+        self.back()
+        await self.set_value_extra(int(value))
 
     async def set_value_extra(self, value):
         pass
 
     def clear(self):
         self.display.setText("")
-
-    def print_value(self):
-        pass
 
 
 class AdjustAltitudeWidget(AdjustWidget):

@@ -1,13 +1,7 @@
-import os
-
 import oyaml as yaml
 
 
 class GUI_Config:
-    config = None
-
-    G_LAYOUT = {}
-
     G_GUI_INDEX = {
         "boot": 0,
         "Main": 1,
@@ -326,23 +320,12 @@ class GUI_Config:
         ),
     }
 
-    def __init__(self, config):
-        self.config = config
+    def __init__(self, layout_file):
+        self.layout = {}
 
-        # read layout
-        if os.path.exists(self.config.G_LAYOUT_FILE):
-            self.read_layout()
-
-    def get_screen_shape(self, p):
-        remove_bytes = 0
-        if self.config.display.has_color():
-            screen_shape = (p.height(), p.width(), 3)
-        else:
-            screen_shape = (p.height(), int(p.width() / 8))
-            remove_bytes = p.bytesPerLine() - int(p.width() / 8)
-        return screen_shape, remove_bytes
-
-    def read_layout(self):
-        with open(self.config.G_LAYOUT_FILE) as file:
-            text = file.read()
-            self.G_LAYOUT = yaml.safe_load(text)
+        try:
+            with open(layout_file) as file:
+                text = file.read()
+                self.layout = yaml.safe_load(text)
+        except FileNotFoundError:
+            pass

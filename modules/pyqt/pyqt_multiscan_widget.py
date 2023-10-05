@@ -20,6 +20,18 @@ class MultiScanWidget(ScreenWidget):
         "ID": struct.Struct("<HB"),
     }
 
+    item_layout = {
+        "Power": (0, 0),
+        "HR": (0, 1),
+        "Time": (0, 2),
+        "HR1": (1, 0),
+        "HR2": (1, 1),
+        "HR3": (1, 2),
+        "PWR1": (2, 0),
+        "PWR2": (2, 1),
+        "PWR3": (2, 2),
+    }
+
     def reset_values(self):
         self.values = {
             "HR": [0, 0, 0],
@@ -27,20 +39,6 @@ class MultiScanWidget(ScreenWidget):
             "PWR": [0, 0, 0],
             "PWR_ID": [0, 0, 0],
             "PWR_NAME": ["", "", ""],
-        }
-
-    # if make make_item_layout by hard cording
-    def make_item_layout(self):
-        self.item_layout = {
-            "Power": (0, 0),
-            "HR": (0, 1),
-            "Time": (0, 2),
-            "HR1": (1, 0),
-            "HR2": (1, 1),
-            "HR3": (1, 2),
-            "PWR1": (2, 0),
-            "PWR2": (2, 1),
-            "PWR3": (2, 2),
         }
 
     # call from on_change_main_page in gui_pyqt.py

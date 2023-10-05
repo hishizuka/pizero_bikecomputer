@@ -6,7 +6,6 @@ from .pyqt_menu_widget import MenuWidget, ListWidget, ListItemWidget
 
 class SensorMenuWidget(MenuWidget):
     def setup_menu(self):
-        self.button = {}
         button_conf = (
             # Name(page_name), button_attribute, connected functions, layout
             ("ANT+ Sensors", "submenu", self.ant_sensors_menu),
@@ -38,28 +37,21 @@ class SensorMenuWidget(MenuWidget):
 
 class ANTMenuWidget(MenuWidget):
     def setup_menu(self):
-        self.button = {}
         button_conf = []
+
         for antName in self.config.G_ANT["ORDER"]:
             # Name(page_name), button_attribute, connected functions, layout
             button_conf.append(
                 (antName, "submenu", eval("self.setting_ant_" + antName))
             )
-        self.add_buttons(button_conf, back_connect=False)
+        self.add_buttons(button_conf)
 
         # modify label from antName to self.get_button_state()
         for antName in self.config.G_ANT["ORDER"]:
-            self.button[antName].setText(self.get_button_state(antName))
+            self.buttons[antName].setText(self.get_button_state(antName))
 
         if not self.config.display.has_touch():
-            self.focus_widget = self.button[self.config.G_ANT["ORDER"][0]]
-        # self.button[self.config.G_ANT['ORDER'][0]].first_button = True
-        # self.button[self.config.G_ANT['ORDER'][-1]].last_button = True
-
-        # set back_index of child widget
-        self.child_page_name = "ANT+ Detail"
-        self.child_index = self.config.gui.gui_config.G_GUI_INDEX[self.child_page_name]
-        self.parentWidget().widget(self.child_index).back_index_key = self.page_name
+            self.focus_widget = self.buttons[self.config.G_ANT["ORDER"][0]]
 
     def get_button_state(self, antName):
         status = "OFF"
@@ -96,31 +88,36 @@ class ANTMenuWidget(MenuWidget):
         else:
             # search ANT+ sensor
             self.change_page(
-                self.child_page_name, preprocess=True, reset=True, list_type=ant_name
+                "ANT+ Detail", preprocess=True, reset=True, list_type=ant_name
             )
 
         self.update_button_label()
 
     def update_button_label(self):
-        for ant_name in self.button.keys():
-            self.button[ant_name].setText(self.get_button_state(ant_name))
+        for ant_name in self.buttons.keys():
+            self.buttons[ant_name].setText(self.get_button_state(ant_name))
 
 
 class ANTListWidget(ListWidget):
-    ant_sensor_types = {}
+    ant_sensor_types = None
 
-    def setup_menu_extra(self):
+    def __init__(self, parent, page_name, config):
+        self.ant_sensor_types = {}
+        super().__init__(parent, page_name, config)
+
+    def setup_menu(self):
+        super().setup_menu()
         # update panel for every 1 seconds
         self.timer = QtCore.QTimer(parent=self)
         self.timer.timeout.connect(self.update_display)
 
     async def button_func_extra(self):
-        app_logger.info(
-            f"connect {self.list_type}: {self.selected_item.list_info['id']}"
-        )
         if self.selected_item is None:
             return
-        ant_id = int(self.selected_item.list_info["id"])
+
+        app_logger.info(f"connect {self.list_type}: {self.selected_item.id}")
+
+        ant_id = int(self.selected_item.id)
         self.config.logger.sensor.sensor_ant.connect_ant_sensor(
             self.list_type,  # sensor type
             ant_id,  # ID
@@ -145,52 +142,39 @@ class ANTListWidget(ListWidget):
         detected_sensors = self.config.logger.sensor.sensor_ant.searcher.getSearchList()
 
         for ant_id, ant_type_array in detected_sensors.items():
-            ant_id_str = "{0:05d}".format(ant_id)
-            add = True
-            for i in range(self.list.count()):
-                if (
-                    ant_id_str
-                    == self.list.itemWidget(self.list.item(i)).list_info["id"]
-                ):
-                    add = False
+            ant_id_str = f"{ant_id:05d}"
+            add = ant_id not in self.ant_sensor_types
             if add:
                 self.ant_sensor_types[ant_id] = ant_type_array
-                ant_item = ANTListItemWidget(self, self.config)
-                status = False
-                if ant_type_array[1]:
-                    status = True
-                ant_item.set_info(
-                    id=ant_id_str,
-                    type=self.config.G_ANT["TYPE_NAME"][ant_type_array[0]],
-                    status=status,
-                )
+                status = ant_type_array[1]
+                status_str = " (connected)" if status else ""
+                sensor_type = self.config.G_ANT["TYPE_NAME"][ant_type_array[0]]
+                title = f"{sensor_type} {status_str}".strip()
+                ant_item = ANTListItemWidget(self, ant_id_str, title)
+
                 self.add_list_item(ant_item)
+
+                app_logger.debug(f"Adding ANT+ sensor: {title}")
 
 
 class ANTListItemWidget(ListItemWidget):
-    def add_extra(self):
-        self.dummy_px = QtGui.QPixmap(20, 20)
-        self.dummy_px.fill(QtGui.QColor("#008000"))
-        self.icon = QtWidgets.QLabel()
-        self.icon.setPixmap(self.dummy_px)
-        self.icon.setContentsMargins(5, 0, 10, 0)
+    id = None
+
+    def __init__(self, parent, ant_id, title):
+        self.id = ant_id
+        super().__init__(parent, title, detail=f"   ID: {ant_id}")
+
+    def setup_ui(self):
+        super().setup_ui()
+        dummy_px = QtGui.QPixmap(20, 20)
+        dummy_px.fill(QtGui.QColor("#008000"))
+        icon = QtWidgets.QLabel()
+        icon.setPixmap(dummy_px)
+        icon.setContentsMargins(5, 0, 10, 0)
 
         # outer layout (custom)
-        self.outer_layout.addWidget(self.icon)
-        self.outer_layout.addLayout(
-            self.inner_layout, self.config.gui.gui_config.align_left
-        )
-
-        # self.enter_signal.connect(self.parentWidget().connect_ant_sensor)
+        self.outer_layout.insertWidget(0, icon)
         self.enter_signal.connect(self.parentWidget().button_func)
-
-    def set_info(self, **kwargs):  # ant_id, ant_type):
-        self.list_info = kwargs.copy()
-        self.detail_label.setText("   ID: " + self.list_info["id"])
-        status_str = ""
-        if self.list_info["status"]:
-            status_str = " (connected)"
-        self.title_label.setText(self.list_info["type"] + status_str)
 
 
 class ANTMultiScanScreenWidget(MenuWidget):

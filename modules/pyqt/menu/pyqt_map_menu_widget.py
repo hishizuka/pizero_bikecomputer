@@ -5,7 +5,6 @@ from .pyqt_menu_widget import MenuWidget, ListWidget
 
 class MapMenuWidget(MenuWidget):
     def setup_menu(self):
-        self.button = {}
         button_conf = (
             # Name(page_name), button_attribute, connected functions, layout
             ("Select Map", "submenu", self.select_map),
@@ -39,8 +38,6 @@ class MapListWidget(ListWidget):
 
 class MapOverlayMenuWidget(MenuWidget):
     def setup_menu(self):
-        self.button = {}
-
         button_conf = (
             # Name(page_name), button_attribute, connected functions, layout
             ("Heatmap", "toggle", lambda: self.onoff_heatmap(True)),
@@ -77,10 +74,10 @@ class MapOverlayMenuWidget(MenuWidget):
                 self.config.G_USE_WIND_OVERLAY_MAP = not status
             status = not status
 
-        self.button[overlay_type].change_toggle(status)
+        self.buttons[overlay_type].change_toggle(status)
 
         # toggle list
-        self.button[list_key].onoff_button(status)
+        self.buttons[list_key].onoff_button(status)
 
         # OFF: remove overlay
         if self.config.gui.map_widget is not None:

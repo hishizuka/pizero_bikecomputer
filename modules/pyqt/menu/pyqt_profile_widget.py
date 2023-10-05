@@ -3,8 +3,6 @@ from .pyqt_menu_widget import MenuWidget
 
 class ProfileWidget(MenuWidget):
     def setup_menu(self):
-        self.button = {}
-
         button_conf = (
             # Name(page_name), button_attribute, connected functions, layout
             ("CP", "submenu", self.adjust_cp),
