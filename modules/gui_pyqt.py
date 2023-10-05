@@ -18,6 +18,8 @@ from modules._pyqt import (
     QT_KEY_RELEASE,
     QT_KEY_SPACE,
     QT_KEY_PRESS,
+    QT_KEY_BACKTAB,
+    QT_KEY_TAB,
     QT_NO_MODIFIER,
     QT_FORMAT_MONO,
     QT_FORMAT_RGB888,
@@ -500,11 +502,11 @@ class GUI_PyQt(QtCore.QObject):
         )
 
     def press_shift_tab(self):
-        self.press_key(QtCore.Qt.Key_Backtab)
+        self.press_key(QT_KEY_BACKTAB)
         # self.stack_widget.currentWidget().focusPreviousChild()
 
     def press_tab(self):
-        self.press_key(QtCore.Qt.Key_Tab)
+        self.press_key(QT_KEY_TAB)
         # self.stack_widget.currentWidget().focusNextChild()
 
     def press_space(self):
