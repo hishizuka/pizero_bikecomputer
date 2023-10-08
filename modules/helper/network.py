@@ -9,6 +9,7 @@ import aiofiles
 
 from logger import app_logger
 from modules.helper.api import api
+from modules.utils.network import detect_network
 
 
 class Network:
@@ -81,7 +82,7 @@ class Network:
     async def download_maptile(
         self, map_config, map_name, z, tiles, additional_download=False
     ):
-        if not self.config.detect_network() or map_config[map_name]["url"] is None:
+        if not detect_network() or map_config[map_name]["url"] is None:
             return False
 
         urls = []
@@ -242,7 +243,7 @@ class Network:
         return res
 
     async def download_demtile(self, z, x, y):
-        if not self.config.detect_network():
+        if not detect_network():
             return False
         header = {}
         try:

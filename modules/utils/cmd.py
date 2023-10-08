@@ -28,8 +28,10 @@ def exec_cmd_return_value(cmd, cmd_print=True):
         app_logger.exception(f"Failed executing {cmd}")
 
 
+def is_service_running(service):
+    return not exec_cmd(["systemctl", "is-active", "--quiet", service], cmd_print=False)
+
+
 # TODO we might want to compare pid, because it might be running as a service AND manually
 def is_running_as_service():
-    return not exec_cmd(
-        ["sudo", "systemctl", "is-active", "--quiet", "pizero_bikecomputer"]
-    )
+    return is_service_running("pizero_bikecomputer")

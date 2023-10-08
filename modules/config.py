@@ -1,10 +1,9 @@
-import os
-import datetime
 import argparse
+import asyncio
+import datetime
 import json
 import logging
-import socket
-import asyncio
+import os
 import shutil
 import traceback
 import math
@@ -26,8 +25,15 @@ except ImportError:
 from logger import CustomRotatingFileHandler, app_logger
 from modules.helper.setting import Setting
 from modules.button_config import Button_Config
-from modules.utils.cmd import exec_cmd, exec_cmd_return_value, is_running_as_service
+from modules.utils.cmd import (
+    exec_cmd,
+    exec_cmd_return_value,
+    is_running_as_service,
+)
 from modules.utils.timer import Timer
+
+
+BOOT_FILE = "/boot/config.txt"
 
 
 class Config:
@@ -331,9 +337,6 @@ class Config:
     # for read load average in sensor_core
     G_PID = os.getpid()
 
-    # IP ADDRESS
-    G_IP_ADDRESS = ""
-
     # stopwatch state
     G_MANUAL_STATUS = "INIT"
     G_STOPWATCH_STATUS = "INIT"  # with Auto Pause
@@ -631,7 +634,7 @@ class Config:
     G_IMU_MAG_DECLINATION = 0.0
 
     # Bluetooth tethering
-    G_BT_ADDRESS = {}
+    G_BT_ADDRESSES = {}
     G_BT_USE_ADDRESS = ""
 
     # for track
@@ -818,16 +821,16 @@ class Config:
             elif HAS_DBUS:
                 self.bt_pan = BTPanDbus()
             if HAS_DBUS_NEXT or HAS_DBUS:
-                await self.bt_pan.check_dbus()
-                if self.bt_pan.is_available:
-                    self.G_BT_ADDRESS = await self.bt_pan.find_bt_pan_devices()
+                is_available = await self.bt_pan.check_dbus()
+                if is_available:
+                    self.G_BT_ADDRESSES = await self.bt_pan.find_bt_pan_devices()
 
             try:
                 from modules.helper.ble_gatt_server import GadgetbridgeService
 
                 self.ble_uart = GadgetbridgeService(self)
-            except:
-                pass
+            except Exception as e:  # noqa
+                app_logger.info(f"Gadgetbridge service not initialized: {e}")
 
         # logger, sensor
         await self.gui.set_boot_status("initialize sensor...")
@@ -853,10 +856,9 @@ class Config:
             ] = self.setting.get_config_pickle(
                 "AUTO_UPLOAD_VIA_BT", self.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"]
             )
-
             # resume BT tethering
             if (
-                self.G_BT_USE_ADDRESS != ""
+                self.G_BT_USE_ADDRESS
                 and not self.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"]
             ):
                 await self.bluetooth_tethering()
@@ -1013,14 +1015,6 @@ class Config:
         if self.G_IS_RASPI:
             exec_cmd(["sudo", "reboot"])
 
-    def hardware_wifi_bt_on(self):
-        if self.G_IS_RASPI:
-            exec_cmd(["scripts/comment_out.sh"])
-
-    def hardware_wifi_bt_off(self):
-        if self.G_IS_RASPI:
-            exec_cmd(["scripts/uncomment.sh"])
-
     def update_application(self):
         if self.G_IS_RASPI:
             exec_cmd(["git", "pull", "origin", "master"])
@@ -1030,16 +1024,47 @@ class Config:
         if self.G_IS_RASPI:
             exec_cmd(["sudo", "systemctl", "restart", "pizero_bikecomputer"])
 
-    def detect_network(self):
-        try:
-            socket.setdefaulttimeout(3)
-            connect_interface = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            connect_interface.connect(("8.8.8.8", 53))
-            self.G_IP_ADDRESS = connect_interface.getsockname()[0]
-            return True
-        except socket.error:
-            self.G_IP_ADDRESS = "No address"
-            return False
+    def hardware_wifi_bt(self, status):
+        app_logger.info(f"Hardware Wifi/BT: {status}")
+        if self.G_IS_RASPI:
+            with open(BOOT_FILE, "r") as f:
+                data = f.read()
+            for dev in ["wifi", "bt"]:
+                disable = f"dtoverlay=disable-{dev}"
+                if status:
+                    if disable in data and f"#{disable}" not in data:
+                        # comment it
+                        exec_cmd(
+                            [
+                                "sudo",
+                                "sed",
+                                "-i",
+                                f"s/^dtoverlay\=disable\-{dev}/\#dtoverlay\=disable\-{dev}/",
+                                BOOT_FILE,
+                            ],
+                            False,
+                        )
+                    # else nothing to do it's not disabled then (not present or commented)
+                else:
+                    if f"#{disable}" in data:
+                        # uncomment it, so it's disabled
+                        exec_cmd(
+                            [
+                                "sudo",
+                                "sed",
+                                "-i",
+                                f"s/^\#dtoverlay\=disable\-{dev}/dtoverlay\=disable\-{dev}/",
+                                BOOT_FILE,
+                            ],
+                            False,
+                        )
+                    elif disable in data:
+                        # do nothing it's already the proper state...
+                        pass
+                    else:
+                        exec_cmd(
+                            ["sudo", "sed", "-i", f"$a{disable}", BOOT_FILE], False
+                        )
 
     def get_wifi_bt_status(self):
         if not self.G_IS_RASPI:
@@ -1048,15 +1073,15 @@ class Config:
         status = {"wlan": False, "bluetooth": False}
         try:
             # json option requires raspbian buster
-            raw_status = exec_cmd_return_value(["rfkill", "--json"], cmd_print=False)
+            raw_status = exec_cmd_return_value(["sudo", "rfkill", "--json"], cmd_print=False)
             json_status = json.loads(raw_status)
-            for l in json_status[""]:
-                if "type" not in l or l["type"] not in ["wlan", "bluetooth"]:
+            for device in json_status["rfkilldevices"]:
+                if "type" not in device or device["type"] not in ["wlan", "bluetooth"]:
                     continue
-                if l["soft"] == "unblocked":
-                    status[l["type"]] = True
-        except:
-            pass
+                if device["soft"] == "unblocked" and device["hard"] == "unblocked":
+                    status[device["type"]] = True
+        except Exception as e:
+            app_logger.warning(f"Exception occurred trying to get wifi/bt status: {e}")
         return status["wlan"], status["bluetooth"]
 
     def onoff_wifi_bt(self, key=None):
@@ -1066,12 +1091,12 @@ class Config:
 
         onoff_cmd = {
             "Wifi": {
-                True: ["rfkill", "block", "wifi"],
-                False: ["rfkill", "unblock", "wifi"],
+                True: ["sudo", "rfkill", "block", "wifi"],
+                False: ["sudo"", rfkill", "unblock", "wifi"],
             },
             "Bluetooth": {
-                True: ["rfkill", "block", "bluetooth"],
-                False: ["rfkill", "unblock", "bluetooth"],
+                True: ["sudo", "rfkill", "block", "bluetooth"],
+                False: ["sudo", "rfkill", "unblock", "bluetooth"],
             },
         }
         status = {}
@@ -1079,20 +1104,16 @@ class Config:
         exec_cmd(onoff_cmd[key][status[key]])
 
     async def bluetooth_tethering(self, disconnect=False):
-        if not self.G_IS_RASPI:
-            return
-        if self.G_BT_USE_ADDRESS == "":
-            return
-        if self.bt_pan is None:
+        if not self.G_IS_RASPI or not self.G_BT_USE_ADDRESS or not self.bt_pan:
             return
 
         if not disconnect:
             res = await self.bt_pan.connect_tethering(
-                self.G_BT_ADDRESS[self.G_BT_USE_ADDRESS]
+                self.G_BT_ADDRESSES[self.G_BT_USE_ADDRESS]
             )
         else:
             res = await self.bt_pan.disconnect_tethering(
-                self.G_BT_ADDRESS[self.G_BT_USE_ADDRESS]
+                self.G_BT_ADDRESSES[self.G_BT_USE_ADDRESS]
             )
         return bool(res)
 

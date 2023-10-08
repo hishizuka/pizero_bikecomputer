@@ -10,6 +10,7 @@ import aiofiles
 
 import numpy as np
 
+from modules.utils.network import detect_network
 from logger import app_logger
 
 _IMPORT_GARMINCONNECT = False
@@ -59,11 +60,8 @@ class api:
             self.course_send_status = "RESET"
             self.bt_cmd_lock = False
 
-    async def get_google_route(self, x1, y1, x2, y2):
-        if (
-            not self.config.detect_network()
-            or self.config.G_GOOGLE_DIRECTION_API["TOKEN"] == ""
-        ):
+    async def get_google_routes(self, x1, y1, x2, y2):
+        if not detect_network() or self.config.G_GOOGLE_DIRECTION_API["TOKEN"] == "":
             return None
         if np.any(np.isnan([x1, y1, x2, y2])):
             return None
@@ -101,10 +99,7 @@ class api:
         return response
 
     async def get_openweathermap_data(self, x, y):
-        if (
-            not self.config.detect_network()
-            or self.config.G_OPENWEATHERMAP_API["TOKEN"] == ""
-        ):
+        if detect_network() or self.config.G_OPENWEATHERMAP_API["TOKEN"] == "":
             return None
         if np.any(np.isnan([x, y])):
             return None
@@ -120,7 +115,7 @@ class api:
 
     async def get_ridewithgps_route(self, add=False, reset=False):
         if (
-            not self.config.detect_network()
+            detect_network()
             or self.config.G_RIDEWITHGPS_API["APIKEY"] == ""
             or self.config.G_RIDEWITHGPS_API["TOKEN"] == ""
         ):
@@ -287,7 +282,7 @@ class api:
 
     def upload_check(self, blank_check, blank_msg, file_check=True):
         # network check
-        if not self.config.detect_network():
+        if not detect_network():
             app_logger.warning("No Internet connection")
             return False
 
@@ -448,7 +443,7 @@ class api:
 
     async def get_scw_list(self, wind_config, mode=None):
         # network check
-        if not self.config.detect_network():
+        if not detect_network():
             app_logger.warning("No Internet connection")
             return None
 
@@ -482,7 +477,7 @@ class api:
             app_logger.warning("Install stravacookies")
             return
 
-        if not self.config.detect_network():
+        if not detect_network():
             return None
 
         strava_cookie = StravaCookieFetcher()
@@ -520,7 +515,7 @@ class api:
             return False
         # network check
         if (
-            not self.config.detect_network()
+            not detect_network()
             and not self.config.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"]
         ):
             # print("No Internet connection")
@@ -553,7 +548,7 @@ class api:
 
             while (
                 bt_pan_status
-                and not self.config.detect_network()
+                and not detect_network()
                 and count < self.config.G_THINGSBOARD_API["TIMEOUT_SEC"]
             ):
                 await asyncio.sleep(1)
@@ -568,7 +563,7 @@ class api:
                 await asyncio.sleep(5)
                 self.bt_cmd_lock = False
                 app_logger.error(
-                    f"[BT] {timestamp_str} connect error, network status: {self.config.detect_network()}"
+                    f"[BT] {timestamp_str} connect error, network status: {detect_network()}"
                 )
                 self.config.logger.sensor.values["integrated"]["send_time"] = (
                     datetime.datetime.now().strftime("%H:%M") + "CE"
@@ -637,7 +632,7 @@ class api:
         if self.config.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"]:
             bt_pan_status = await self.config.bluetooth_tethering(disconnect=True)
             self.bt_cmd_lock = False
-            network_status = self.config.detect_network()
+            network_status = detect_network()
             # print("[BT] {} disconnect, network status:{}".format(timestamp_str, network_status))
             if network_status:
                 self.config.logger.sensor.values["integrated"]["send_time"] = (

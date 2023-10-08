@@ -4,6 +4,7 @@ import asyncio
 
 import numpy as np
 
+from modules.utils.network import detect_network
 from logger import app_logger
 from .sensor import Sensor
 
@@ -775,7 +776,7 @@ class SensorI2C(Sensor):
             _SENSOR_MAG_DECLINATION
             and not self.is_mag_declination_modified
             and self.config.logger is not None
-            and self.config.detect_network()
+            and detect_network()
         ):
             v = self.config.logger.sensor.values["GPS"]
             if not np.any(np.isnan([v["lat"], v["lon"]])):
