@@ -264,7 +264,11 @@ class LoggerCore:
         )
         res = self.cur.fetchone()
         replace_flg = False
-        if res is not None and len(res) >= 5 and res[4] != self.create_table_sql:
+        if (
+            res is not None 
+            and len(res) >= 5 
+            and res[4].replace(" ", "") != self.create_table_sql.replace(" ", "")
+        ):
             log_db_moved = self.config.G_LOG_DB + "-old_layout"
             self.cur.close()
             self.con.close()
