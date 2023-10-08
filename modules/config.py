@@ -1075,14 +1075,25 @@ class Config:
             # json option requires raspbian buster
             raw_status = exec_cmd_return_value(["sudo", "rfkill", "--json"], cmd_print=False)
             json_status = json.loads(raw_status)
-            for device in json_status["rfkilldevices"]:
+            # "": Raspberry Pi OS, "rfkilldevices": 
+            self.parse_wifi_bt_json(json_status, status, ["", "rfkilldevices"])
+        except Exception as e:
+            app_logger.warning(f"Exception occurred trying to get wifi/bt status: {e}")
+        return status["wlan"], status["bluetooth"]
+
+    def parse_wifi_bt_json(self, json_status, status, keys):
+        get_status = False
+        for k in keys:
+            if k not in json_status:
+                continue
+            for device in json_status[k]:
                 if "type" not in device or device["type"] not in ["wlan", "bluetooth"]:
                     continue
                 if device["soft"] == "unblocked" and device["hard"] == "unblocked":
                     status[device["type"]] = True
-        except Exception as e:
-            app_logger.warning(f"Exception occurred trying to get wifi/bt status: {e}")
-        return status["wlan"], status["bluetooth"]
+                    get_status = True
+            if get_status:
+                return
 
     def onoff_wifi_bt(self, key=None):
         # in the future, manage with pycomman
