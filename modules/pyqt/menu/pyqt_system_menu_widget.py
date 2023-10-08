@@ -44,17 +44,10 @@ class SystemMenuWidget(MenuWidget):
 
 class NetworkMenuWidget(MenuWidget):
     def setup_menu(self):
-        wifi_bt_button_func_wifi = None
-        wifi_bt_button_func_bt = None
-
-        if self.config.G_IS_RASPI:
-            wifi_bt_button_func_wifi = lambda: self.onoff_wifi_bt(True, "Wifi")
-            wifi_bt_button_func_bt = lambda: self.onoff_wifi_bt(True, "Bluetooth")
-
         button_conf = (
             # Name(page_name), button_attribute, connected functions, layout
-            ("Wifi", "toggle", wifi_bt_button_func_wifi),
-            ("Bluetooth", "toggle", wifi_bt_button_func_bt),
+            ("Wifi", "toggle", self.onoff_wifi),
+            ("Bluetooth", "toggle", self.onoff_bt),
             ("BT Tethering", "submenu", self.bt_tething),
             ("IP Address", "dialog", self.show_ip_address),
             ("Gadgetbridge", "toggle", lambda: self.onoff_ble_uart_service(True)),
@@ -74,18 +67,26 @@ class NetworkMenuWidget(MenuWidget):
 
     def preprocess(self):
         # initialize toggle button status
-        if self.config.G_IS_RASPI:
-            self.onoff_wifi_bt(change=False, key="Wifi")
-            self.onoff_wifi_bt(change=False, key="Bluetooth")
+        self.buttons["Bluetooth"].change_toggle(self.config.get_bluetooth_status())
+        self.buttons["Wifi"].change_toggle(self.config.get_wifi_status())
         self.onoff_ble_uart_service(change=False)
         self.onoff_gadgetbridge_gps(change=False)
 
-    def onoff_wifi_bt(self, change=True, key=None):
-        if change:
-            self.config.onoff_wifi_bt(key)
-        status = {}
-        status["Wifi"], status["Bluetooth"] = self.config.get_wifi_bt_status()
-        self.buttons[key].change_toggle(status[key])
+    def onoff_bt(self):
+        try:
+            new_status = not self.buttons["Bluetooth"].status
+            self.config.onoff_bt(new_status)
+            self.buttons["Bluetooth"].change_toggle(new_status)
+        except Exception as e:
+            app_logger.warning(f"Could not change bluetooth status: {e}")
+
+    def onoff_wifi(self):
+        try:
+            new_status = not self.buttons["Wifi"].status
+            self.config.onoff_wifi(new_status)
+            self.buttons["Wifi"].change_toggle(new_status)
+        except Exception as e:
+            app_logger.warning(f"Could not change wifi status: {e}")
 
     def bt_tething(self):
         self.change_page("BT Tethering", preprocess=True)
