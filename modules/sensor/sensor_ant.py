@@ -32,8 +32,11 @@ try:
     # device test
     _driver = find_driver()
     _SENSOR_ANT = True
-except (ImportError, DriverNotFound):
+except ImportError:
     pass
+except DriverNotFound:
+    pass
+
 f.close()
 sys.stdout = _sys_stdout
 

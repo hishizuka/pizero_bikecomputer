@@ -4,6 +4,7 @@
 /maptile/*
 /courses/ridewithgps/*
 /courses/*html*
+/fonts/*
 /.idea/
 /.vscode/
 /.venv/

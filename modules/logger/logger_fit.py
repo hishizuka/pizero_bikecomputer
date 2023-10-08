@@ -489,7 +489,10 @@ class LoggerFit(Logger):
         field = self.profile[message_num]["field"][defnum]
         value = v[0]
         if field[0] in ["position_lat", "position_long"]:
-            value = v[0] / 180 * (2**31)
+            try:
+                value = v[0] / 180 * (2**31)
+            except:
+                value = 0
         elif message_num in [18, 19] and field[0] in [
             "timestamp",
             "local_timestamp",

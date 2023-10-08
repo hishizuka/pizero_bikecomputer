@@ -58,6 +58,7 @@ class GadgetbridgeService(Service):
     # receive from central
     @characteristic(rx_characteristic_uuid, CharFlags.WRITE).setter
     def rx_characteristic(self, value, options):
+        app_logger.debug(value)
         if value[0] == 0x10:
             self.value = bytearray()
             self.value_extend = True
