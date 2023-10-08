@@ -332,11 +332,11 @@ Another button mode
 
 | Button | Short press | Long press |
 |:-|:-|:-|
-| A | Move left | None |
+| A | Left (<) | None |
 | B | Zoom out | None |
 | C | Restore button mode | None |
 | D | Zoom in | None |
-| E | Move right | None |
+| E | Right (>) | None |
 
 Another button mode
 
