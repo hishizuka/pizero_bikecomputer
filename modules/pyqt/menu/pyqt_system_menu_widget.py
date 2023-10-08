@@ -1,5 +1,7 @@
 from functools import partial
+import logging
 
+from logger import app_logger
 from modules._pyqt import (
     QT_TEXTEDIT_NOWRAP,
     QT_SCROLLBAR_ALWAYSOFF,
@@ -107,10 +109,13 @@ class NetworkMenuWidget(MenuWidget):
 
 
 class DebugMenuWidget(MenuWidget):
+    is_log_lebel_debug = False
+
     def setup_menu(self):
         button_conf = (
             # Name(page_name), button_attribute, connected functions, layout
             ("Debug Log", "submenu", self.debug_log),
+            ("Debug Level Log", "toggle", lambda: self.set_log_level_to_debug(True)),
             (
                 "Disable Wifi/BT",
                 "dialog",
@@ -142,8 +147,26 @@ class DebugMenuWidget(MenuWidget):
         )
         self.add_buttons(button_conf)
 
+    def preprocess(self):
+        # initialize toggle button status
+        self.set_log_level_to_debug(change=False)
+
     def debug_log(self):
         self.change_page("Debug Log", preprocess=True)
+    
+    def set_log_level_to_debug(self, change=True):
+        # assume the initial log level is INFO.
+        # Future support for multiple log levels.
+        if change:
+            if app_logger.level == logging.DEBUG:
+                app_logger.setLevel(level=logging.INFO)
+                self.is_log_lebel_debug = False
+            else:
+                app_logger.setLevel(level=logging.DEBUG)
+                self.is_log_lebel_debug = True
+        self.buttons["Debug Level Log"].change_toggle(
+            self.is_log_lebel_debug
+        )
 
 
 class BluetoothTetheringListWidget(ListWidget):
