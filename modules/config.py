@@ -1065,6 +1065,54 @@ class Config:
                         exec_cmd(
                             ["sudo", "sed", "-i", f"$a{disable}", BOOT_FILE], False
                         )
+            # UART configuration will change if we disable bluetooth
+            # https://www.raspberrypi.com/documentation/computers/configuration.html#primary-and-secondary-uart
+            if status:
+                exec_cmd(
+                    [
+                        "sudo",
+                        "sed",
+                        "-i",
+                        "-e",
+                        's/^\#DEVICES\="\/dev\/ttyS0"/DEVICES\="\/dev\/ttyS0"/',
+                        "/etc/default/gpsd",
+                    ],
+                    False,
+                )
+                exec_cmd(
+                    [
+                        "sudo",
+                        "sed",
+                        "-i",
+                        "-e",
+                        's/^DEVICES\="\/dev\/ttyAMA0"/\#DEVICES\="\/dev\/ttyAMA0"/',
+                        "/etc/default/gpsd",
+                    ],
+                    False,
+                )
+            else:
+                exec_cmd(
+                    [
+                        "sudo",
+                        "sed",
+                        "-i",
+                        "-e",
+                        's/^DEVICES\="\/dev\/ttyS0"/\#DEVICES\="\/dev\/ttyS0"/',
+                        "/etc/default/gpsd",
+                    ],
+                    False,
+                )
+                exec_cmd(
+                    [
+                        "sudo",
+                        "sed",
+                        "-i",
+                        "-e",
+                        's/^\#DEVICES\="\/dev\/ttyAMA0"/DEVICES\="\/dev\/ttyAMA0"/',
+                        "/etc/default/gpsd",
+                    ],
+                    False,
+                )
 
     def get_wifi_bt_status(self):
         if not self.G_IS_RASPI:
@@ -1073,9 +1121,11 @@ class Config:
         status = {"wlan": False, "bluetooth": False}
         try:
             # json option requires raspbian buster
-            raw_status = exec_cmd_return_value(["sudo", "rfkill", "--json"], cmd_print=False)
+            raw_status = exec_cmd_return_value(
+                ["sudo", "rfkill", "--json"], cmd_print=False
+            )
             json_status = json.loads(raw_status)
-            # "": Raspberry Pi OS, "rfkilldevices": 
+            # "": Raspberry Pi OS, "rfkilldevices":
             self.parse_wifi_bt_json(json_status, status, ["", "rfkilldevices"])
         except Exception as e:
             app_logger.warning(f"Exception occurred trying to get wifi/bt status: {e}")
@@ -1103,7 +1153,7 @@ class Config:
         onoff_cmd = {
             "Wifi": {
                 True: ["sudo", "rfkill", "block", "wifi"],
-                False: ["sudo"", rfkill", "unblock", "wifi"],
+                False: ["sudo", "rfkill", "unblock", "wifi"],
             },
             "Bluetooth": {
                 True: ["sudo", "rfkill", "block", "bluetooth"],
