@@ -897,8 +897,8 @@ class LoggerCore:
             shutil.copy(self.config.G_LOG_DB, db_file)
 
             query = (
-                'SELECT distance,position_lat,position_long FROM BIKECOMPUTER_LOG '
-                + 'WHERE position_lat is not null AND position_long is not null '
+                "SELECT distance,position_lat,position_long FROM BIKECOMPUTER_LOG "
+                + "WHERE position_lat is not null AND position_long is not null "
                 + 'and typeof(position_lat) = "real" and typeof(position_long) = "real"'
             )
             if timestamp is not None:

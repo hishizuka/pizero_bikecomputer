@@ -1,5 +1,6 @@
 -r min.in
 
+dbus-next==0.2.3
 garminconnect==0.1.55
 polyline==2.0.0
 stravacookies==1.3

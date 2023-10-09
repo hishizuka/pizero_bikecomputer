@@ -4,6 +4,7 @@ import datetime
 import json
 import logging
 import os
+import re
 import shutil
 import traceback
 import math
@@ -29,6 +30,7 @@ from modules.utils.cmd import (
     exec_cmd,
     exec_cmd_return_value,
     is_running_as_service,
+    is_service_running,
 )
 from modules.utils.timer import Timer
 
@@ -806,25 +808,29 @@ class Config:
         self.network = Network(self)
 
         # bluetooth
+        await self.gui.set_boot_status("initialize bluetooth modules...")
+
+        from modules.helper.bt_pan import (
+            BTPanDbus,
+            BTPanDbusNext,
+            HAS_DBUS_NEXT,
+            HAS_DBUS,
+        )
+
+        if HAS_DBUS_NEXT:
+            self.bt_pan = BTPanDbusNext()
+        elif HAS_DBUS:
+            self.bt_pan = BTPanDbus()
+        if HAS_DBUS_NEXT or HAS_DBUS:
+            is_available = await self.bt_pan.check_dbus()
+            if is_available:
+                self.G_BT_ADDRESSES = await self.bt_pan.find_bt_pan_devices()
+
+        # make sure the bluebooth status is set accordingly to AutoEnable
+        self.onoff_bt_on_init()
+
+        # gadgetbridge
         if self.G_IS_RASPI:
-            await self.gui.set_boot_status("initialize bluetooth modules...")
-
-            from modules.helper.bt_pan import (
-                BTPanDbus,
-                BTPanDbusNext,
-                HAS_DBUS_NEXT,
-                HAS_DBUS,
-            )
-
-            if HAS_DBUS_NEXT:
-                self.bt_pan = BTPanDbusNext()
-            elif HAS_DBUS:
-                self.bt_pan = BTPanDbus()
-            if HAS_DBUS_NEXT or HAS_DBUS:
-                is_available = await self.bt_pan.check_dbus()
-                if is_available:
-                    self.G_BT_ADDRESSES = await self.bt_pan.find_bt_pan_devices()
-
             try:
                 from modules.helper.ble_gatt_server import GadgetbridgeService
 
@@ -843,25 +849,18 @@ class Config:
         if self.G_HEADLESS:
             asyncio.create_task(self.keyboard_check())
 
-        # resume BT and thingsboard setting
-        if self.G_IS_RASPI:
-            self.G_BT_USE_ADDRESS = self.setting.get_config_pickle(
-                "G_BT_USE_ADDRESS", self.G_BT_USE_ADDRESS
-            )
-            self.G_THINGSBOARD_API["STATUS"] = self.setting.get_config_pickle(
-                "G_THINGSBOARD_API_STATUS", self.G_THINGSBOARD_API["STATUS"]
-            )
-            self.G_THINGSBOARD_API[
-                "AUTO_UPLOAD_VIA_BT"
-            ] = self.setting.get_config_pickle(
-                "AUTO_UPLOAD_VIA_BT", self.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"]
-            )
-            # resume BT tethering
-            if (
-                self.G_BT_USE_ADDRESS
-                and not self.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"]
-            ):
-                await self.bluetooth_tethering()
+        self.G_BT_USE_ADDRESS = self.setting.get_config_pickle(
+            "G_BT_USE_ADDRESS", self.G_BT_USE_ADDRESS
+        )
+        self.G_THINGSBOARD_API["STATUS"] = self.setting.get_config_pickle(
+            "G_THINGSBOARD_API_STATUS", self.G_THINGSBOARD_API["STATUS"]
+        )
+        self.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"] = self.setting.get_config_pickle(
+            "AUTO_UPLOAD_VIA_BT", self.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"]
+        )
+        # resume BT tethering
+        if self.G_BT_USE_ADDRESS and not self.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"]:
+            await self.bluetooth_tethering()
 
         delta = t.stop()
         self.boot_time += delta
@@ -1066,56 +1065,133 @@ class Config:
                             ["sudo", "sed", "-i", f"$a{disable}", BOOT_FILE], False
                         )
 
-    def get_wifi_bt_status(self):
-        if not self.G_IS_RASPI:
-            return False, False
+    @staticmethod
+    def get_bluetooth_status():
+        # make sure bluetooth service is running (+ hciuart ??)
+        # hciuart_running = is_service_running("hciuart")
+        bluetooth_running = is_service_running("bluetooth")
+        status = False
+        if bluetooth_running:
+            # also make sure bluetooth is not powered off (through bluetoothctl)
+            raw_status = exec_cmd_return_value(["bluetoothctl", "show"], False)
+            try:
+                status = [
+                    x.strip()
+                    for x in raw_status.splitlines()
+                    if x.strip().startswith("Powered:")
+                ][0]
+                m = re.search(r"Powered: (?P<value>yes|no)", status)
+                status = True if m.group("value") == "yes" else False
+            except IndexError:
+                app_logger.warning(
+                    "Could not get bluetooth power status, assume it's off then"
+                )
+        return bluetooth_running and status
 
-        status = {"wlan": False, "bluetooth": False}
+    @staticmethod
+    def get_wifi_status():
+        status = False
+        # that won't work if we have multiple Wi-Fi devices ?
         try:
-            # json option requires raspbian buster
-            raw_status = exec_cmd_return_value(["sudo", "rfkill", "--json"], cmd_print=False)
+            raw_status = exec_cmd_return_value(
+                ["sudo", "rfkill", "--json"], cmd_print=False
+            )
             json_status = json.loads(raw_status)
-            # "": Raspberry Pi OS, "rfkilldevices": 
-            self.parse_wifi_bt_json(json_status, status, ["", "rfkilldevices"])
-        except Exception as e:
-            app_logger.warning(f"Exception occurred trying to get wifi/bt status: {e}")
-        return status["wlan"], status["bluetooth"]
-
-    def parse_wifi_bt_json(self, json_status, status, keys):
-        get_status = False
-        for k in keys:
-            if k not in json_status:
-                continue
-            for device in json_status[k]:
-                if "type" not in device or device["type"] not in ["wlan", "bluetooth"]:
+            # "": Raspberry Pi OS, "rfkilldevices":
+            status = False
+            for k in ["", "rfkilldevices"]:
+                if k not in json_status:
                     continue
-                if device["soft"] == "unblocked" and device["hard"] == "unblocked":
-                    status[device["type"]] = True
-                    get_status = True
-            if get_status:
-                return
+                for device in json_status[k]:
+                    if device.get("type") != "wlan":
+                        continue
+                    if device["soft"] == "unblocked" and device["hard"] == "unblocked":
+                        status = True
+                        break
+        except Exception as e:
+            app_logger.warning(f"Exception occurred trying to get wifi status: {e}")
+        return status
 
-    def onoff_wifi_bt(self, key=None):
-        # in the future, manage with pycomman
-        if not self.G_IS_RASPI:
-            return
+    def onoff_bt_on_init(self):
+        # read /etc/bluetooth/main.conf and make sure the current bluetooth status is set accordingly to AutoEnable
+        # we do this only if we run as a service
+        if is_running_as_service():
+            status = True  # default to true (since  bluez 5.65..)
+            with open("/etc/bluetooth/main.conf", "r") as f:
+                try:
+                    data = [
+                        x.strip() for x in f.read().splitlines() if "AutoEnable=" in x
+                    ][0]
+                    # ignore if commented or missed. then it's default
+                    if not data.startswith("#"):
+                        m = re.search(r"^AutoEnable=(?P<value>true|false)", data)
+                        status = True if m.group("value") == "true" else False
+                except IndexError as e:
+                    pass
+                current_status = self.get_bluetooth_status()
+                if status != current_status:
+                    app_logger.warning(
+                        f"Incorrect status found: {current_status}. We wanted: {status}"
+                    )
+                    self.onoff_bt(status)
 
-        onoff_cmd = {
-            "Wifi": {
-                True: ["sudo", "rfkill", "block", "wifi"],
-                False: ["sudo"", rfkill", "unblock", "wifi"],
-            },
-            "Bluetooth": {
-                True: ["sudo", "rfkill", "block", "bluetooth"],
-                False: ["sudo", "rfkill", "unblock", "bluetooth"],
-            },
-        }
-        status = {}
-        status["Wifi"], status["Bluetooth"] = self.get_wifi_bt_status()
-        exec_cmd(onoff_cmd[key][status[key]])
+    def onoff_bt(self, new_status):
+        # We will just use power off/on, on the adapter using bluetoothctl
+        # but to do this bluetooth service has to run, so check that first
+        # If the service is stopped/was disabled, this will re-enable and restart it.
+        # One other way would be to disable/enable the bluetooth service (but then it's fairly slow to start on demand
+        # OR having dtoverlay=disable-bt in /boot/config.txt (not sure how to re-enable the service then without reboot)
+        # The tradeoff is most likely a slower boot since bluetooth is always started
+
+        # unfortunately the setting AutoEnable does not seem to be respected on reboot
+        # (might depend on other packages installed)
+        # cf. https://discussion.fedoraproject.org/t/bluetooth-always-on-on-boot/65545/10
+        # so, we have the application check on start up the value of AutoEnable and switch it accordingly
+        auto_enable_status = f"s/AutoEnable={str(not new_status).lower()}/AutoEnable={str(new_status).lower()}/"
+
+        if not is_service_running("bluetooth"):
+            if new_status:
+                # make sure we have autoEnable on and reenable/start the service
+                exec_cmd(
+                    [
+                        "sudo",
+                        "sed",
+                        "-i",
+                        auto_enable_status,
+                        "/etc/bluetooth/main.conf",
+                    ],
+                    False,
+                )
+                exec_cmd(["sudo", "systemctl", "enable", "bluetooth"], False)
+                exec_cmd(["sudo", "systemctl", "start", "bluetooth"], False)
+            else:
+                # Nothing to do, it's off already
+                pass
+        else:
+            # edit /etc/bluetooth/main.conf AutoEnable, so it keeps state after reboot
+            exec_cmd(
+                [
+                    "sudo",
+                    "sed",
+                    "-i",
+                    auto_enable_status,
+                    "/etc/bluetooth/main.conf",
+                ],
+                False,
+            )
+            exec_cmd(["bluetoothctl", "power", "on" if new_status else "off"], False)
+
+    def onoff_wifi(self, new_status):
+        return_code = exec_cmd(
+            ["sudo", "rfkill", "unblock" if new_status else "block", "wifi"], False
+        )
+
+        if return_code:
+            # TODO custom exception
+            raise OSError("Rfkill command failed")
 
     async def bluetooth_tethering(self, disconnect=False):
-        if not self.G_IS_RASPI or not self.G_BT_USE_ADDRESS or not self.bt_pan:
+        if not self.G_BT_USE_ADDRESS or not self.bt_pan:
             return
 
         if not disconnect:
