@@ -265,8 +265,8 @@ class LoggerCore:
         res = self.cur.fetchone()
         replace_flg = False
         if (
-            res is not None 
-            and len(res) >= 5 
+            res is not None
+            and len(res) >= 5
             and res[4].replace(" ", "") != self.create_table_sql.replace(" ", "")
         ):
             log_db_moved = self.config.G_LOG_DB + "-old_layout"
@@ -897,8 +897,8 @@ class LoggerCore:
             shutil.copy(self.config.G_LOG_DB, db_file)
 
             query = (
-                'SELECT distance,position_lat,position_long FROM BIKECOMPUTER_LOG '
-                + 'WHERE position_lat is not null AND position_long is not null '
+                "SELECT distance,position_lat,position_long FROM BIKECOMPUTER_LOG "
+                + "WHERE position_lat is not null AND position_long is not null "
                 + 'and typeof(position_lat) = "real" and typeof(position_long) = "real"'
             )
             if timestamp is not None:

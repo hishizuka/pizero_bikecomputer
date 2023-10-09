@@ -153,7 +153,7 @@ class DebugMenuWidget(MenuWidget):
 
     def debug_log(self):
         self.change_page("Debug Log", preprocess=True)
-    
+
     def set_log_level_to_debug(self, change=True):
         # assume the initial log level is INFO.
         # Future support for multiple log levels.
@@ -164,9 +164,7 @@ class DebugMenuWidget(MenuWidget):
             else:
                 app_logger.setLevel(level=logging.DEBUG)
                 self.is_log_lebel_debug = True
-        self.buttons["Debug Level Log"].change_toggle(
-            self.is_log_lebel_debug
-        )
+        self.buttons["Debug Level Log"].change_toggle(self.is_log_lebel_debug)
 
 
 class BluetoothTetheringListWidget(ListWidget):
