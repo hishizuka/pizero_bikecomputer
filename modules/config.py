@@ -14,15 +14,6 @@ import oyaml as yaml
 from PIL import Image
 
 
-_IS_RASPI = False
-try:
-    import RPi.GPIO as GPIO
-
-    GPIO.setmode(GPIO.BCM)
-    _IS_RASPI = True
-except ImportError:
-    pass
-
 from logger import CustomRotatingFileHandler, app_logger
 from modules.helper.setting import Setting
 from modules.button_config import Button_Config
@@ -35,6 +26,14 @@ from modules.utils.timer import Timer
 
 
 BOOT_FILE = "/boot/config.txt"
+_IS_RASPI = False
+try:
+    import RPi.GPIO as GPIO
+
+    GPIO.setmode(GPIO.BCM)
+    _IS_RASPI = True
+except ImportError:
+    pass
 
 
 class Config:
@@ -694,9 +693,8 @@ class Config:
             self.G_FULLSCREEN = True
         if args.demo:
             self.G_DUMMY_OUTPUT = True
-        if args.layout:
-            if os.path.exists(args.layout):
-                self.G_LAYOUT_FILE = args.layout
+        if args.layout and os.path.exists(args.layout):
+            self.G_LAYOUT_FILE = args.layout
         if args.headless:
             self.G_HEADLESS = True
         # show options
@@ -996,9 +994,6 @@ class Config:
         self.logger.remove_handler()
         app_logger.info("quit done")
 
-        if self.G_GUI_MODE != "PyQt":
-            self.loop.close()
-
     def poweroff(self):
         # TODO
         #  should be replaced by quit() with power_off option
@@ -1040,7 +1035,7 @@ class Config:
                                 "sudo",
                                 "sed",
                                 "-i",
-                                f"s/^dtoverlay\=disable\-{dev}/\#dtoverlay\=disable\-{dev}/",
+                                rf"s/^dtoverlay\=disable\-{dev}/\#dtoverlay\=disable\-{dev}/",
                                 BOOT_FILE,
                             ],
                             False,
@@ -1054,7 +1049,7 @@ class Config:
                                 "sudo",
                                 "sed",
                                 "-i",
-                                f"s/^\#dtoverlay\=disable\-{dev}/dtoverlay\=disable\-{dev}/",
+                                rf"s/^\#dtoverlay\=disable\-{dev}/dtoverlay\=disable\-{dev}/",
                                 BOOT_FILE,
                             ],
                             False,
@@ -1075,7 +1070,7 @@ class Config:
                         "sed",
                         "-i",
                         "-e",
-                        's/^\#DEVICES\="\/dev\/ttyS0"/DEVICES\="\/dev\/ttyS0"/',
+                        r's/^\#DEVICES\="\/dev\/ttyS0"/DEVICES\="\/dev\/ttyS0"/',
                         "/etc/default/gpsd",
                     ],
                     False,
@@ -1086,7 +1081,7 @@ class Config:
                         "sed",
                         "-i",
                         "-e",
-                        's/^DEVICES\="\/dev\/ttyAMA0"/\#DEVICES\="\/dev\/ttyAMA0"/',
+                        r's/^DEVICES\="\/dev\/ttyAMA0"/\#DEVICES\="\/dev\/ttyAMA0"/',
                         "/etc/default/gpsd",
                     ],
                     False,
@@ -1275,7 +1270,7 @@ class Config:
 
     @staticmethod
     def get_maptile_filename(map_name, z, x, y):
-        return "maptile/" + map_name + "/{0}/{1}/{2}.png".format(z, x, y)
+        return f"maptile/{map_name}/{z}/{x}/{y}.png"
 
     async def get_altitude_from_tile(self, pos):
         if np.isnan(pos[0]) or np.isnan(pos[1]):

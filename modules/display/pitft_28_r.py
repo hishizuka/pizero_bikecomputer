@@ -1,5 +1,5 @@
-from modules.utils.cmd import exec_cmd
 from logger import app_logger
+from modules.utils.cmd import exec_cmd
 
 _SENSOR_DISPLAY = True
 

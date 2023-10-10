@@ -1,5 +1,5 @@
 aiohttp==3.8.5
-aiofiles==23.2.
+aiofiles==23.2.1
 git+https://github.com/hishizuka/crdp.git
 numpy==1.25.2
 oyaml==1.0

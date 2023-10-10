@@ -129,9 +129,7 @@ class Network:
             request_header["User-Agent"] = map_config[map_name]["user_agent"]
 
         for tile in tiles:
-            os.makedirs(
-                "maptile/" + map_name + "/{0}/{1}/".format(z, tile[0]), exist_ok=True
-            )
+            os.makedirs(f"maptile/{map_name}/{z}/{tile[0]}/", exist_ok=True)
             url = map_config[map_name]["url"].format(
                 z=z, x=tile[0], y=tile[1], **additional_var
             )
@@ -143,29 +141,28 @@ class Network:
             {"urls": urls, "headers": request_header, "save_paths": save_paths}
         )
 
-        max_zoom_cond = True
-        if (
-            "max_zoomlevel" in map_config[map_name]
-            and z + 1 >= map_config[map_name]["max_zoomlevel"]
-        ):
-            max_zoom_cond = False
-        min_zoom_cond = True
-        if (
-            "min_zoomlevel" in map_config[map_name]
-            and z - 1 <= map_config[map_name]["min_zoomlevel"]
-        ):
-            min_zoom_cond = False
-
         if additional_download:
             additional_urls = []
             additional_save_paths = []
+
+            max_zoom_cond = True
+            if (
+                "max_zoomlevel" in map_config[map_name]
+                and z + 1 >= map_config[map_name]["max_zoomlevel"]
+            ):
+                max_zoom_cond = False
+            min_zoom_cond = True
+            if (
+                "min_zoomlevel" in map_config[map_name]
+                and z - 1 <= map_config[map_name]["min_zoomlevel"]
+            ):
+                min_zoom_cond = False
+
             for tile in tiles:
                 if max_zoom_cond:
                     for i in range(2):
                         os.makedirs(
-                            "maptile/"
-                            + map_name
-                            + "/{0}/{1}/".format(z + 1, 2 * tile[0] + i),
+                            f"maptile/{map_name}/{z + 1}/{2 * tile[0] + i}",
                             exist_ok=True,
                         )
                         for j in range(2):
@@ -173,7 +170,7 @@ class Network:
                                 z=z + 1,
                                 x=2 * tile[0] + i,
                                 y=2 * tile[1] + j,
-                                **additional_var
+                                **additional_var,
                             )
                             save_path = self.config.get_maptile_filename(
                                 map_name, z + 1, 2 * tile[0] + i, 2 * tile[1] + j
@@ -186,16 +183,14 @@ class Network:
 
                 if min_zoom_cond:
                     os.makedirs(
-                        "maptile/"
-                        + map_name
-                        + "/{0}/{1}/".format(z - 1, int(tile[0] / 2)),
+                        f"maptile/{map_name}/{z - 1}/{int(tile[0] / 2)}",
                         exist_ok=True,
                     )
                     zoomout_url = map_config[map_name]["url"].format(
                         z=z - 1,
                         x=int(tile[0] / 2),
                         y=int(tile[1] / 2),
-                        **additional_var
+                        **additional_var,
                     )
                     if zoomout_url not in additional_urls:
                         additional_urls.append(zoomout_url)
@@ -205,7 +200,7 @@ class Network:
                             )
                         )
 
-            if len(additional_urls):
+            if additional_urls:
                 await self.download_queue.put(
                     {
                         "urls": additional_urls,
@@ -248,7 +243,7 @@ class Network:
         header = {}
         try:
             os.makedirs(
-                "maptile/" + self.config.G_DEM_MAP + "/{0}/{1}/".format(z, x),
+                f"maptile/{self.config.G_DEM_MAP}/{z}/{x}/",
                 exist_ok=True,
             )
             await self.download_queue.put(

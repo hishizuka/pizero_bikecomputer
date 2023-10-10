@@ -4,8 +4,8 @@ import asyncio
 
 import numpy as np
 
-from modules.utils.network import detect_network
 from logger import app_logger
+from modules.utils.network import detect_network
 from .sensor import Sensor
 
 # I2C

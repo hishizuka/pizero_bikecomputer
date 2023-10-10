@@ -20,9 +20,6 @@ class BaseMapWidget(ScreenWidget):
     # load course
     course_loaded = False
 
-    # course points
-    course_points_label = []
-
     # signal for physical button
     signal_move_x_plus = QtCore.pyqtSignal()
     signal_move_x_minus = QtCore.pyqtSignal()

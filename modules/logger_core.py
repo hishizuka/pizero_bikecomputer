@@ -10,9 +10,9 @@ import traceback
 import numpy as np
 from crdp import rdp
 
+from logger import app_logger
 from modules.utils.cmd import exec_cmd
 from modules.utils.date import datetime_myparser
-from logger import app_logger
 
 
 class LoggerCore:
@@ -99,8 +99,7 @@ class LoggerCore:
 
     def delay_init(self):
         from .course import Course
-        from .logger import logger_csv
-        from .logger import logger_fit
+        from .logger import logger_csv, logger_fit
         from . import sensor_core
 
         self.sensor = sensor_core.SensorCore(self.config)
@@ -424,7 +423,7 @@ class LoggerCore:
             if not self.logger_fit.write_log():
                 return
             app_logger.info(
-                f"Write Fit({self.logger_fit.mode}) : {(datetime.datetime.now() - t).total_seconds()} sec"
+                f"Write fit({self.logger_fit.mode}) : {(datetime.datetime.now() - t).total_seconds()} sec"
             )
 
         # backup and reset database

@@ -66,9 +66,9 @@ class api:
         if np.any(np.isnan([x1, y1, x2, y2])):
             return None
 
-        origin = "origin={},{}".format(y1, x1)
-        destination = "destination={},{}".format(y2, x2)
-        language = "language={}".format(self.config.G_LANG)
+        origin = f"origin={y1},{x1}"
+        destination = f"destination={y2},{x2}"
+        language = f"language={self.config.G_LANG}"
         url = "{}&{}&key={}&{}&{}&{}".format(
             self.config.G_GOOGLE_DIRECTION_API["URL"],
             self.config.G_GOOGLE_DIRECTION_API["API_MODE"][
@@ -504,7 +504,7 @@ class api:
             return
 
         if self.config.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"] and self.bt_cmd_lock:
-            # print("[BT] {} locked, network status:{}, quick_send:{}".format(datetime.datetime.now().strftime("%H:%M:%S"), self.config.detect_network(), quick_send))
+            # print("[BT] {} locked, network status:{}, quick_send:{}".format(datetime.datetime.now().strftime("%H:%M:%S"), detect_network(), quick_send))
             return
 
         asyncio.create_task(self.send_livetrack_data_internal(quick_send))
@@ -539,7 +539,7 @@ class api:
             timestamp_str_log = datetime.datetime.fromtimestamp(t).strftime(
                 "%m/%d %H:%M"
             )
-        # print("[BT] {} start, network status:{}".format(timestamp_str, self.config.detect_network()))
+        # print("[BT] {} start, network status:{}".format(timestamp_str, detect_network()))
 
         # open connection
         if self.config.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"]:
@@ -570,7 +570,7 @@ class api:
                     datetime.datetime.now().strftime("%H:%M") + "CE"
                 )
                 return
-            # print("[BT] {} connect, network status:{} {}".format(timestamp_str, self.config.detect_network(), count))
+            # print("[BT] {} connect, network status:{} {}".format(timestamp_str, detect_network(), count))
 
         await asyncio.sleep(5)
 
@@ -597,11 +597,11 @@ class api:
                     self.config.logger.sensor.values["integrated"]["accumulated_power"]
                     / 1000
                 ),
-                #'w_prime_balance': self.config.logger.sensor.values['integrated']['w_prime_balance_normalized'],
+                # 'w_prime_balance': self.config.logger.sensor.values['integrated']['w_prime_balance_normalized'],
                 "temperature": self.config.logger.sensor.values["integrated"][
                     "temperature"
                 ],
-                #'altitude': self.config.logger.sensor.values['I2C']['altitude'],
+                # 'altitude': self.config.logger.sensor.values['I2C']['altitude'],
                 "latitude": self.config.logger.sensor.values["GPS"]["lat"],
                 "longitude": self.config.logger.sensor.values["GPS"]["lon"],
             },
