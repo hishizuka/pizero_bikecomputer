@@ -1,5 +1,5 @@
-from functools import partial
 import logging
+from functools import partial
 
 from logger import app_logger
 from modules._pyqt import (

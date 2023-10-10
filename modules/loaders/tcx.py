@@ -6,14 +6,6 @@ import numpy as np
 
 from logger import app_logger
 
-POLYLINE_DECODER = False
-try:
-    import polyline
-
-    POLYLINE_DECODER = True
-except ImportError:
-    pass
-
 patterns = {
     "name": re.compile(r"<Name>(?P<text>[\s\S]*?)</Name>"),
     "distance_meters": re.compile(
@@ -95,10 +87,12 @@ class TcxLoader:
 
             if match_course_point:
                 course_point = match_course_point.group("text")
-                course_points["name"] = [
-                    m.group("text").strip()
-                    for m in patterns["course_name"].finditer(course_point)
-                ]
+                course_points["name"] = np.array(
+                    [
+                        m.group("text").strip()
+                        for m in patterns["course_name"].finditer(course_point)
+                    ]
+                )
                 course_points["latitude"] = np.array(
                     [
                         float(m.group("text").strip())
@@ -111,14 +105,18 @@ class TcxLoader:
                         for m in patterns["longitude"].finditer(course_point)
                     ]
                 )
-                course_points["type"] = [
-                    m.group("text").strip()
-                    for m in patterns["course_point_type"].finditer(course_point)
-                ]
-                course_points["notes"] = [
-                    m.group("text").strip()
-                    for m in patterns["course_notes"].finditer(course_point)
-                ]
+                course_points["type"] = np.array(
+                    [
+                        m.group("text").strip()
+                        for m in patterns["course_point_type"].finditer(course_point)
+                    ]
+                )
+                course_points["notes"] = np.array(
+                    [
+                        m.group("text").strip()
+                        for m in patterns["course_notes"].finditer(course_point)
+                    ]
+                )
 
         valid_course = True
         if len(course["latitude"]) != len(course["longitude"]):
@@ -147,22 +145,15 @@ class TcxLoader:
             course["altitude"] = np.array([])
             course["latitude"] = np.array([])
             course["longitude"] = np.array([])
-            course_points = defaultdict(list)
+            course_points = defaultdict(lambda x: np.array([]))
         else:
             # delete 'Straight' from course points
             if len(course_points["type"]):
-                ptype = np.array(course_points["type"])
-                not_straight_cond = np.where(ptype != "Straight", True, False)
-                course_points["type"] = list(ptype[not_straight_cond])
+                not_straight_cond = np.where(
+                    course_points["type"] != "Straight", True, False
+                )
 
-                for key in ["name", "latitude", "longitude", "notes"]:
-                    if len(course_points[key]):
-                        # TODO, probably not necessary but kept so logic is 1-1
-                        #  we should avoid to mix data types here (or using typings)
-                        course_points[key] = np.array(course_points[key])[
-                            not_straight_cond
-                        ]
-                        if key in ["name", "notes"]:
-                            course_points[key] = list(course_points[key])
+                for key in ["name", "latitude", "longitude", "notes", "type"]:
+                    course_points[key] = course_points[key][not_straight_cond]
 
         return course, course_points
