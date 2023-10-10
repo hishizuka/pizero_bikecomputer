@@ -43,13 +43,13 @@ class CoursePoints:
         return bool(len(self.name))
 
     def reset(self):
-        self.name = []
-        self.type = []
-        self.altitude = []
-        self.distance = []
-        self.latitude = []
-        self.longitude = []
-        self.notes = []
+        self.name = np.array([])
+        self.type = np.array([])
+        self.altitude = np.array([])
+        self.distance = np.array([])
+        self.latitude = np.array([])
+        self.longitude = np.array([])
+        self.notes = np.array([])
 
 
 # we have mutable attributes but course is supposed to be a singleton anyway
@@ -292,14 +292,14 @@ class Course:
         point_name[0] = "Start"
         point_name[-1] = "End"
 
-        # print(self.point_name)
-        # print(self.point_type)
-        # print(self.point_notes)
-        # print(self.point_distance)
+        # print(point_name)
+        # print(point_type)
+        # print(point_notes)
+        # print(point_distance)
 
-        self.course_points.name = point_name
-        self.course_points.type = point_type
-        self.course_points.notes = point_notes
+        self.course_points.name = np.array(point_name)
+        self.course_points.type = np.array(point_type)
+        self.course_points.notes = np.array(point_notes)
         self.course_points.latitude = np.array(point_latitude)
         self.course_points.longitude = np.array(point_longitude)
         self.course_points.distance = np.array(point_distance)
@@ -357,21 +357,23 @@ class Course:
                 turn_str = "Left"
             elif turn_str[-5:] == "right":
                 turn_str = "Right"
-            self.course_points.type.append(turn_str)
-            self.course_points.latitude.append(step["start_location"]["lat"])
-            self.course_points.longitude.append(step["start_location"]["lng"])
-            self.course_points.distance.append(dist)
-            self.course_points.notes.append(
-                self.remove_html_tag(step["html_instructions"])
+            self.course_points.type = np.append(self.course_points.type, turn_str)
+            self.course_points.latitude = np.append(
+                self.course_points.latitude, step["start_location"]["lat"]
             )
-            self.course_points.name.append(turn_str)
+            self.course_points.longitude = np.append(
+                self.course_points.longitude, step["start_location"]["lng"]
+            )
+            self.course_points.distance = np.append(self.course_points.distance, dist)
+            self.course_points.notes = np.append(
+                self.course_points.notes,
+                self.remove_html_tag(step["html_instructions"]),
+            )
+            self.course_points.name = np.append(self.course_points.name, turn_str)
         points_detail = np.array(points_detail)
 
         self.latitude = np.array(points_detail)[:, 0]
         self.longitude = np.array(points_detail)[:, 1]
-        self.course_points.latitude = np.array(self.course_points.latitude)
-        self.course_points.longitude = np.array(self.course_points.longitude)
-        self.course_points.distance = np.array(self.course_points.distance)
 
     def remove_html_tag(self, text):
         res = text.replace("&nbsp;", "")
@@ -733,15 +735,15 @@ class Course:
             # TODO do not use float
             and course_points.distance[0] != 0.0
         ):
-            course_points.name.insert(0, "Start")
+            course_points.name = np.insert(course_points.name, 0, "Start")
             course_points.latitude = np.insert(
                 course_points.latitude, 0, self.latitude[0]
             )
             course_points.longitude = np.insert(
                 course_points.longitude, 0, self.longitude[0]
             )
-            course_points.type.insert(0, "")
-            course_points.notes.insert(0, "")
+            course_points.type = np.insert(course_points.type, 0, "")
+            course_points.notes = np.insert(course_points.notes, 0, "")
             if len_pnt_dist and len_dist:
                 course_points.distance = np.insert(course_points.distance, 0, 0.0)
             if len_pnt_alt and len_alt:
@@ -764,15 +766,15 @@ class Course:
             and end_distance is not None
             and end_distance > 5
         ):
-            course_points.name.append("End")
+            course_points.name = np.append(course_points.name, "End")
             course_points.latitude = np.append(
                 course_points.latitude, self.latitude[-1]
             )
             course_points.longitude = np.append(
                 course_points.longitude, self.longitude[-1]
             )
-            course_points.type.append("")
-            course_points.notes.append("")
+            course_points.type = np.append(course_points.type, "")
+            course_points.notes = np.append(course_points.notes, "")
             if len_pnt_dist and len_dist:
                 course_points.distance = np.append(
                     course_points.distance, self.distance[-1]
@@ -781,9 +783,6 @@ class Course:
                 course_points.altitude = np.append(
                     course_points.altitude, self.altitude[-1]
                 )
-
-        course_points.name = np.array(course_points.name)
-        course_points.type = np.array(course_points.type)
 
     @staticmethod
     def savitzky_golay(y, window_size, order, deriv=0, rate=1):
