@@ -99,7 +99,7 @@ class api:
         return response
 
     async def get_openweathermap_data(self, x, y):
-        if detect_network() or self.config.G_OPENWEATHERMAP_API["TOKEN"] == "":
+        if not detect_network() or self.config.G_OPENWEATHERMAP_API["TOKEN"] == "":
             return None
         if np.any(np.isnan([x, y])):
             return None
@@ -115,10 +115,11 @@ class api:
 
     async def get_ridewithgps_route(self, add=False, reset=False):
         if (
-            detect_network()
+            not detect_network()
             or self.config.G_RIDEWITHGPS_API["APIKEY"] == ""
             or self.config.G_RIDEWITHGPS_API["TOKEN"] == ""
         ):
+            print("return")
             return None
 
         if reset:
