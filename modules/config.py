@@ -7,6 +7,7 @@ import os
 import shutil
 import traceback
 import math
+from glob import glob
 
 import numpy as np
 import oyaml as yaml
@@ -93,7 +94,7 @@ class Config:
 
     # courses
     G_COURSE_DIR = "courses"
-    G_COURSE_FILE_PATH = os.path.join(G_COURSE_DIR, "course.tcx")
+    G_COURSE_FILE_PATH = os.path.join(G_COURSE_DIR, ".current")
     G_CUESHEET_DISPLAY_NUM = 3  # max: 5
     G_CUESHEET_SCROLL = False
     G_OBEXD_CMD = "/usr/libexec/bluetooth/obexd"
@@ -1327,3 +1328,42 @@ class Config:
         lat = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * y / n))))
 
         return lon, lat
+
+    def get_courses(self):
+        dirs = sorted(
+            glob(os.path.join(self.G_COURSE_DIR, "*.tcx")),
+            key=lambda f: os.stat(f).st_mtime,
+            reverse=True,
+        )
+
+        # heavy: delayed updates required
+        # def get_course_info(c):
+        #   pattern = {
+        #       "name": re.compile(r"<Name>(?P<text>[\s\S]*?)</Name>"),
+        #       "distance_meters": re.compile(
+        #           r"<DistanceMeters>(?P<text>[\s\S]*?)</DistanceMeters>"
+        #       ),
+        #       # "track": re.compile(r'<Track>(?P<text>[\s\S]*?)</Track>'),
+        #       # "altitude": re.compile(r'<AltitudeMeters>(?P<text>[^<]*)</AltitudeMeters>'),
+        #   }
+        #   info = {}
+        #   with open(c, "r", encoding="utf-8_sig") as f:
+        #       tcx = f.read()
+        #       match_name = pattern["name"].search(tcx)
+        #       if match_name:
+        #           info["name"] = match_name.group("text").strip()
+        #
+        #       match_distance_meter = pattern["distance_meters"].search(tcx)
+        #       if match_distance_meter:
+        #           info["distance"] = float(match_distance_meter.group("text").strip())
+        #   return info
+
+        return [
+            {
+                "path": f,
+                "name": os.path.basename(f),
+                # **get_course_info(f)
+            }
+            for f in dirs
+            if os.path.isfile(f) and f != self.G_COURSE_FILE_PATH
+        ]

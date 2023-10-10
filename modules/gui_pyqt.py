@@ -392,7 +392,7 @@ class GUI_PyQt(QtCore.QObject):
                         self.main_page.addWidget(self.map_widget)
                     elif (
                         k == "CUESHEET"
-                        and len(self.config.logger.course.point_name)
+                        and self.config.logger.course.course_points.is_set
                         and self.config.G_COURSE_INDEXING
                         and self.config.G_CUESHEET_DISPLAY_NUM
                     ):

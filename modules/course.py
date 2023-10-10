@@ -1,15 +1,16 @@
 import os
-import glob
 import json
-import shutil
 import re
+import shutil
 
 from math import factorial
+
+import oyaml
+import numpy as np
 from crdp import rdp
 
-import numpy as np
-
 from logger import app_logger
+from modules.loaders import TcxLoader
 from modules.utils.timer import Timer, log_timers
 
 POLYLINE_DECODER = False
@@ -20,8 +21,39 @@ try:
 except ImportError:
     pass
 
+LOADERS = {"tcx": TcxLoader}
 
-class LoaderTcx:
+
+class CoursePoints:
+    name = None
+    type = None
+    altitude = None
+    distance = None
+    latitude = None
+    longitude = None
+    notes = None
+
+    def __init__(self):
+        self.reset()
+
+    @property
+    def is_set(self):
+        # https://developer.garmin.com/fit/file-types/course/
+        # no field is mandatory, but they will be zeroes/empty anyway so len will not be 0 is coursePoints are set
+        return bool(len(self.name))
+
+    def reset(self):
+        self.name = []
+        self.type = []
+        self.altitude = []
+        self.distance = []
+        self.latitude = []
+        self.longitude = []
+        self.notes = []
+
+
+# we have mutable attributes but course is supposed to be a singleton anyway
+class Course:
     config = None
 
     # for course
@@ -31,21 +63,16 @@ class LoaderTcx:
     latitude = np.array([])
     longitude = np.array([])
 
+    course_points = None
+
+    # calculated
     points_diff = np.array([])
     azimuth = np.array([])
     slope = np.array([])
     slope_smoothing = np.array([])
     colored_altitude = np.array([])
+    # [start_index, end_index, distance, average_grade, volume(=dist*average), cat]
     climb_segment = []
-
-    # for course points
-    point_name = np.array([])
-    point_latitude = np.array([])
-    point_longitude = np.array([])
-    point_type = np.array([])
-    point_notes = np.array([])
-    point_distance = np.array([])
-    point_altitude = np.array([])
 
     html_remove_pattern = [
         re.compile(r"\<div.+?\<\/div\>"),
@@ -55,6 +82,16 @@ class LoaderTcx:
     def __init__(self, config):
         super().__init__()
         self.config = config
+        self.course_points = CoursePoints()
+
+    def __str__(self):
+        return f"Course:\n" f"{oyaml.dump(self.info, allow_unicode=True)}\n"
+
+    @property
+    def is_set(self):
+        # we keep checking distance as it's how it was done in the original code,
+        # but we can load tcx file with no distance in it load (it gets populated as np.zeros in load)
+        return bool(len(self.distance))
 
     def reset(self, delete_course_file=False, replace=False):
         # for course
@@ -70,18 +107,10 @@ class LoaderTcx:
         self.slope = np.array([])
         self.slope_smoothing = np.array([])
         self.colored_altitude = np.array([])
-        self.climb_segment = (
-            []
-        )  # [start_index, end_index, distance, average_grade, volume(=dist*average), cat]
+        self.climb_segment = []
 
-        # for course points
-        self.point_name = np.array([])
-        self.point_latitude = np.array([])
-        self.point_longitude = np.array([])
-        self.point_type = np.array([])
-        self.point_notes = np.array([])
-        self.point_distance = np.array([])
-        self.point_altitude = np.array([])
+        if self.course_points:
+            self.course_points.reset()
 
         if delete_course_file:
             if os.path.exists(self.config.G_COURSE_FILE_PATH):
@@ -89,19 +118,52 @@ class LoaderTcx:
             if not replace and self.config.G_THINGSBOARD_API["STATUS"]:
                 self.config.network.api.send_livetrack_course_reset()
 
-    def load(self):
+    def load(self, file=None):
+        # if file is given, copy it to self.config.G_COURSE_FILE_PATH firsthand, we are loading a new course
+        if file:
+            _, ext = os.path.splitext(file)
+            shutil.copy2(file, self.config.G_COURSE_FILE_PATH)
+            if ext:
+                os.setxattr(
+                    self.config.G_COURSE_FILE_PATH, "user.ext", ext[1:].encode()
+                )
+
         self.reset()
 
         timers = [
-            Timer(auto_start=False, text="read_tcx            : {0:.3f} sec"),
+            Timer(auto_start=False, text="read_file           : {0:.3f} sec"),
             Timer(auto_start=False, text="downsample          : {0:.3f} sec"),
             Timer(auto_start=False, text="calc_slope_smoothing: {0:.3f} sec"),
             Timer(auto_start=False, text="modify_course_points: {0:.3f} sec"),
         ]
 
         with timers[0]:
-            self.read_tcx()
-
+            # get loader based on the extension
+            if os.path.exists(self.config.G_COURSE_FILE_PATH):
+                # get file extension in order to find the correct loader
+                # extension was set in custom attributes as the current course is always
+                # loaded from '.current'
+                try:
+                    ext = os.getxattr(
+                        self.config.G_COURSE_FILE_PATH, "user.ext"
+                    ).decode()
+                    if ext in LOADERS:
+                        course_data, course_points_data = LOADERS[ext].load_file(
+                            self.config.G_COURSE_FILE_PATH
+                        )
+                        if course_data:
+                            for k, v in course_data.items():
+                                setattr(self, k, v)
+                        if course_points_data:
+                            for k, v in course_points_data.items():
+                                setattr(self.course_points, k, v)
+                    else:
+                        app_logger.warning(f".{ext} files are not handled")
+                except (AttributeError, OSError) as e:
+                    app_logger.error(
+                        f"Incorrect course file: {e}. Please reload the course and make sure your file"
+                        f"has a proper extension set"
+                    )
         with timers[1]:
             self.downsample()
 
@@ -110,9 +172,6 @@ class LoaderTcx:
 
         with timers[3]:
             self.modify_course_points()
-
-        if not len(self.latitude):
-            return
 
         app_logger.info("[logger] Loading course:")
         log_timers(timers, text_total="total               : {0:.3f} sec")
@@ -158,199 +217,19 @@ class LoaderTcx:
         if self.config.G_THINGSBOARD_API["STATUS"]:
             self.config.network.api.send_livetrack_course_load()
 
-    def get_courses(self):
-        dir_list = sorted(
-            glob.glob(os.path.join(self.config.G_COURSE_DIR, "*.tcx")),
-            key=lambda f: os.stat(f).st_mtime,
-            reverse=True,
-        )
-        file_list = [
-            f
-            for f in dir_list
-            if os.path.isfile(f) and f != self.config.G_COURSE_FILE_PATH
-        ]
-
-        courses = []
-        for c in file_list:
-            info = {
-                "path": c,
-                "name": os.path.basename(c),
-            }
-            # heavy: delayed updates required
-            # pattern = {
-            #     "name": re.compile(r"<Name>(?P<text>[\s\S]*?)</Name>"),
-            #     "distance_meters": re.compile(
-            #         r"<DistanceMeters>(?P<text>[\s\S]*?)</DistanceMeters>"
-            #     ),
-            #     # "track": re.compile(r'<Track>(?P<text>[\s\S]*?)</Track>'),
-            #     # "altitude": re.compile(r'<AltitudeMeters>(?P<text>[^<]*)</AltitudeMeters>'),
-            # }
-            # with open(c, "r", encoding="utf-8_sig") as f:
-            #     tcx = f.read()
-            #     match_name = pattern["name"].search(tcx)
-            #     if match_name:
-            #         info["name"] = match_name.group("text").strip()
-            #
-            #     match_distance_meter = pattern["distance_meters"].search(tcx)
-            #     if match_distance_meter:
-            #         info["distance"] = float(match_distance_meter.group("text").strip())
-
-            courses.append(info)
-
-        return courses
-
     def get_ridewithgps_privacycode(self, route_id):
         privacy_code = None
         filename = (
             self.config.G_RIDEWITHGPS_API["URL_ROUTE_DOWNLOAD_DIR"]
             + "course-{route_id}.json"
         ).format(route_id=route_id)
+
         with open(filename, "r") as json_file:
             json_contents = json.load(json_file)
             if "privacy_code" in json_contents["route"]:
                 privacy_code = json_contents["route"]["privacy_code"]
+
         return privacy_code
-
-    def set_course(self, file):
-        shutil.copy(file, self.config.G_COURSE_FILE_PATH)
-        self.load()
-
-    def read_tcx(self):
-        if not os.path.exists(self.config.G_COURSE_FILE_PATH):
-            return
-        app_logger.info(f"loading {self.config.G_COURSE_FILE_PATH}")
-
-        # read with regex
-        pattern = {
-            "name": re.compile(r"<Name>(?P<text>[\s\S]*?)</Name>"),
-            "distance_meters": re.compile(
-                r"<DistanceMeters>(?P<text>[\s\S]*?)</DistanceMeters>"
-            ),
-            "track": re.compile(r"<Track>(?P<text>[\s\S]*?)</Track>"),
-            "latitude": re.compile(
-                r"<LatitudeDegrees>(?P<text>[^<]*)</LatitudeDegrees>"
-            ),
-            "longitude": re.compile(
-                r"<LongitudeDegrees>(?P<text>[^<]*)</LongitudeDegrees>"
-            ),
-            "altitude": re.compile(r"<AltitudeMeters>(?P<text>[^<]*)</AltitudeMeters>"),
-            "distance": re.compile(r"<DistanceMeters>(?P<text>[^<]*)</DistanceMeters>"),
-            "course_point": re.compile(r"<CoursePoint>(?P<text>[\s\S]+)</CoursePoint>"),
-            "course_name": re.compile(r"<Name>(?P<text>[^<]*)</Name>"),
-            "course_point_type": re.compile(r"<PointType>(?P<text>[^<]*)</PointType>"),
-            "course_notes": re.compile(r"<Notes>(?P<text>[^<]*)</Notes>"),
-        }
-
-        with open(self.config.G_COURSE_FILE_PATH, "r", encoding="utf-8_sig") as f:
-            tcx = f.read()
-
-            match_name = pattern["name"].search(tcx)
-            if match_name:
-                self.info["Name"] = match_name.group("text").strip()
-
-            match_distance_meter = pattern["distance_meters"].search(tcx)
-            if match_distance_meter:
-                self.info["DistanceMeters"] = round(
-                    float(match_distance_meter.group("text").strip()) / 1000, 1
-                )
-
-            match_track = pattern["track"].search(tcx)
-            if match_track:
-                track = match_track.group("text")
-                self.latitude = np.array(
-                    [
-                        float(m.group("text").strip())
-                        for m in pattern["latitude"].finditer(track)
-                    ]
-                )
-                self.longitude = np.array(
-                    [
-                        float(m.group("text").strip())
-                        for m in pattern["longitude"].finditer(track)
-                    ]
-                )
-                self.altitude = np.array(
-                    [
-                        float(m.group("text").strip())
-                        for m in pattern["altitude"].finditer(track)
-                    ]
-                )
-                self.distance = np.array(
-                    [
-                        float(m.group("text").strip())
-                        for m in pattern["distance"].finditer(track)
-                    ]
-                )
-
-            match_course = pattern["course_point"].search(tcx)
-            if match_course:
-                course_point = match_course.group("text")
-                self.point_name = [
-                    m.group("text").strip()
-                    for m in pattern["course_name"].finditer(course_point)
-                ]
-                self.point_latitude = np.array(
-                    [
-                        float(m.group("text").strip())
-                        for m in pattern["latitude"].finditer(course_point)
-                    ]
-                )
-                self.point_longitude = np.array(
-                    [
-                        float(m.group("text").strip())
-                        for m in pattern["longitude"].finditer(course_point)
-                    ]
-                )
-                self.point_type = [
-                    m.group("text").strip()
-                    for m in pattern["course_point_type"].finditer(course_point)
-                ]
-                self.point_notes = [
-                    m.group("text").strip()
-                    for m in pattern["course_notes"].finditer(course_point)
-                ]
-
-        check_course = False
-        if not (
-            len(self.latitude)
-            == len(self.longitude)
-            == len(self.altitude)
-            == len(self.distance)
-        ):
-            app_logger.error("Can not parse course")
-            check_course = True
-        if not (
-            len(self.point_name)
-            == len(self.point_latitude)
-            == len(self.point_longitude)
-            == len(self.point_type)
-        ):
-            app_logger.error("Can not parse course point")
-            check_course = True
-        if check_course:
-            self.distance = np.array([])
-            self.altitude = np.array([])
-            self.latitude = np.array([])
-            self.longitude = np.array([])
-            self.point_name = np.array([])
-            self.point_latitude = np.array([])
-            self.point_longitude = np.array([])
-            self.point_type = np.array([])
-            return
-
-        # delete 'Straight' of course points
-        if len(self.point_type):
-            ptype = np.array(self.point_type)
-            not_straight_cond = np.where(ptype != "Straight", True, False)
-            self.point_type = list(ptype[not_straight_cond])
-            if len(self.point_name):
-                self.point_name = list(np.array(self.point_name)[not_straight_cond])
-            if len(self.point_latitude):
-                self.point_latitude = np.array(self.point_latitude)[not_straight_cond]
-            if len(self.point_longitude):
-                self.point_longitude = np.array(self.point_longitude)[not_straight_cond]
-            if len(self.point_notes):
-                self.point_notes = list(np.array(self.point_notes)[not_straight_cond])
 
     async def get_google_route_from_mapstogpx(self, url):
         json_routes = await self.config.network.api.get_google_route_from_mapstogpx(url)
@@ -361,76 +240,79 @@ class LoaderTcx:
         self.latitude = np.array([p["lat"] for p in json_routes["points"]])
         self.longitude = np.array([p["lng"] for p in json_routes["points"]])
 
-        self.point_name = []
-        self.point_latitude = []
-        self.point_longitude = []
-        self.point_distance = []
-        self.point_type = []
-        self.point_notes = []
+        point_name = []
+        point_latitude = []
+        point_longitude = []
+        point_distance = []
+        point_type = []
+        point_notes = []
 
-        self.point_distance.append(0)
+        point_distance.append(0)
 
         cp = [p for p in json_routes["points"] if len(p) > 2]
 
         cp_n = len(cp) - 1
         cp_i = -1
+
         for p in cp:
             cp_i += 1
             # skip
             if ("step" in p and p["step"] in ["straight", "merge", "keep"]) or (
                 "step" not in p and cp_i not in [0, cp_n]
             ):
-                self.point_distance[-1] = round(p["dist"]["total"] / 1000, 1)
+                point_distance[-1] = round(p["dist"]["total"] / 1000, 1)
                 continue
 
-            self.point_latitude.append(p["lat"])
-            self.point_longitude.append(p["lng"])
+            point_latitude.append(p["lat"])
+            point_longitude.append(p["lng"])
 
             if "dist" in p:
                 dist = round(p["dist"]["total"] / 1000, 1)
-                self.point_distance.append(dist)
+                point_distance.append(dist)
 
             turn_str = ""
+
             if "step" in p:
                 turn_str = p["step"]
                 if turn_str[-4:] == "left":
                     turn_str = "Left"
                 elif turn_str[-5:] == "right":
                     turn_str = "Right"
-            self.point_name.append(turn_str)
-            self.point_type.append(turn_str)
+
+            point_name.append(turn_str)
+            point_type.append(turn_str)
 
             text = ""
+
             if "dir" in p:
                 text = self.remove_html_tag(p["dir"])
-            self.point_notes.append(text)
 
-        self.point_name[0] = "Start"
-        self.point_name[-1] = "End"
+            point_notes.append(text)
+
+        point_name[0] = "Start"
+        point_name[-1] = "End"
 
         # print(self.point_name)
         # print(self.point_type)
         # print(self.point_notes)
         # print(self.point_distance)
 
-        self.point_latitude = np.array(self.point_latitude)
-        self.point_longitude = np.array(self.point_longitude)
-        self.point_distance = np.array(self.point_distance)
+        self.course_points.name = point_name
+        self.course_points.type = point_type
+        self.course_points.notes = point_notes
+        self.course_points.latitude = np.array(point_latitude)
+        self.course_points.longitude = np.array(point_longitude)
+        self.course_points.distance = np.array(point_distance)
 
         check_course = False
         if not (len(self.latitude) == len(self.longitude)):
-            print("ERROR parse course")
+            app_logger.warning("ERROR parse course")
             check_course = True
 
         if check_course:
             self.latitude = np.array([])
             self.longitude = np.array([])
-            self.point_name = np.array([])
-            self.point_latitude = np.array([])
-            self.point_longitude = np.array([])
-            self.point_distance = np.array([])
-            self.point_type = np.array([])
-            self.point_notes = []
+            self.course_points.reset()
             return
 
     async def get_google_route(self, x1, y1, x2, y2):
@@ -446,12 +328,7 @@ class LoaderTcx:
 
         # points = np.array(polyline.decode(json_routes["routes"][0]["overview_polyline"]["points"]))
         points_detail = []
-        self.point_name = []
-        self.point_latitude = []
-        self.point_longitude = []
-        self.point_distance = []
-        self.point_type = []
-        self.point_notes = []
+        self.course_points.reset()
 
         dist = 0
         pre_dist = 0
@@ -480,19 +357,21 @@ class LoaderTcx:
                 turn_str = "Left"
             elif turn_str[-5:] == "right":
                 turn_str = "Right"
-            self.point_type.append(turn_str)
-            self.point_latitude.append(step["start_location"]["lat"])
-            self.point_longitude.append(step["start_location"]["lng"])
-            self.point_distance.append(dist)
-            self.point_notes.append(self.remove_html_tag(step["html_instructions"]))
-            self.point_name.append(turn_str)
+            self.course_points.type.append(turn_str)
+            self.course_points.latitude.append(step["start_location"]["lat"])
+            self.course_points.longitude.append(step["start_location"]["lng"])
+            self.course_points.distance.append(dist)
+            self.course_points.notes.append(
+                self.remove_html_tag(step["html_instructions"])
+            )
+            self.course_points.name.append(turn_str)
         points_detail = np.array(points_detail)
 
         self.latitude = np.array(points_detail)[:, 0]
         self.longitude = np.array(points_detail)[:, 1]
-        self.point_latitude = np.array(self.point_latitude)
-        self.point_longitude = np.array(self.point_longitude)
-        self.point_distance = np.array(self.point_distance)
+        self.course_points.latitude = np.array(self.course_points.latitude)
+        self.course_points.longitude = np.array(self.course_points.longitude)
+        self.course_points.distance = np.array(self.course_points.distance)
 
     def remove_html_tag(self, text):
         res = text.replace("&nbsp;", "")
@@ -580,6 +459,7 @@ class LoaderTcx:
 
         app_logger.info(f"downsampling:{len_lat} -> {len(self.latitude)}")
 
+    # make route colors by slope for MapWidget, CourseProfileWidget
     def calc_slope_smoothing(self):
         # parameters
         course_n = len(self.distance)
@@ -738,26 +618,26 @@ class LoaderTcx:
         self.colored_altitude = np.array(self.config.G_SLOPE_COLOR)[slope_smoothing_cat]
 
     def modify_course_points(self):
-        # make route colors by slope for MapWidget, CourseProfileWidget
+        course_points = self.course_points
 
-        len_pnt_lat = len(self.point_latitude)
-        len_pnt_dist = len(self.point_distance)
-        len_pnt_alt = len(self.point_altitude)
+        len_pnt_lat = len(course_points.latitude)
+        len_pnt_dist = len(course_points.distance)
+        len_pnt_alt = len(course_points.altitude)
         len_dist = len(self.distance)
         len_alt = len(self.altitude)
 
         # calculate course point distance
         if not len_pnt_dist and len_dist:
-            self.point_distance = np.empty(len_pnt_lat)
+            course_points.distance = np.empty(len_pnt_lat)
         if not len_pnt_alt and len_alt:
-            self.point_altitude = np.zeros(len_pnt_lat)
+            course_points.altitude = np.zeros(len_pnt_lat)
 
         min_index = 0
         for i in range(len_pnt_lat):
             b_a_x = self.points_diff[0][min_index:]
             b_a_y = self.points_diff[1][min_index:]
-            lon_diff = self.point_longitude[i] - self.longitude[min_index:]
-            lat_diff = self.point_latitude[i] - self.latitude[min_index:]
+            lon_diff = course_points.longitude[i] - self.longitude[min_index:]
+            lat_diff = course_points.latitude[i] - self.latitude[min_index:]
             p_a_x = lon_diff[:-1]
             p_a_y = lat_diff[:-1]
             inner_p = (b_a_x * p_a_x + b_a_y * p_a_y) / self.points_diff_sum_of_squares[
@@ -784,7 +664,10 @@ class LoaderTcx:
                     * inner_p[j]
                 )
                 dist_diff_h = self.config.get_dist_on_earth(
-                    h_lon, h_lat, self.point_longitude[i], self.point_latitude[i]
+                    h_lon,
+                    h_lat,
+                    course_points.longitude[i],
+                    course_points.latitude[i],
                 )
 
                 if (
@@ -822,47 +705,57 @@ class LoaderTcx:
             min_index = min_index + min_j
 
             if not len_pnt_dist and len_dist:
-                self.point_distance[i] = self.distance[min_index] + min_dist_delta
+                course_points.distance[i] = self.distance[min_index] + min_dist_delta
             if not len_pnt_alt and len_alt:
-                self.point_altitude[i] = self.altitude[min_index] + min_alt_delta
+                course_points.altitude[i] = self.altitude[min_index] + min_alt_delta
 
         # add climb tops
         # if len(self.climb_segment):
         #  min_index = 0
         #  for i in range(len(self.climb_segment)):
-        #    diff_dist = np.abs(self.point_distance - self.climb_segment[i]['course_point_distance'])
+        #    diff_dist = np.abs(course_points.distance - self.climb_segment[i]['course_point_distance'])
         #    min_index = np.where(diff_dist == np.min(diff_dist))[0][0]+1
-        #    self.point_name.insert(min_index, "Top of Climb")
-        #    self.point_latitude = np.insert(self.point_latitude, min_index, self.climb_segment[i]['course_point_latitude'])
-        #    self.point_longitude = np.insert(self.point_longitude, min_index, self.climb_segment[i]['course_point_longitude'])
-        #    self.point_type.insert(min_index, "Summit")
-        #    self.point_distance = np.insert(self.point_distance, min_index, self.climb_segment[i]['course_point_distance'])
-        #    self.point_altitude = np.insert(self.point_altitude, min_index, self.climb_segment[i]['course_point_altitude'])
+        #    course_points.name.insert(min_index, "Top of Climb")
+        #    course_points.latitude = np.insert(course_points._latitude, min_index, self.climb_segment[i]['course_point_latitude'])
+        #    course_points.longitude = np.insert(course_points.longitude, min_index, self.climb_segment[i]['course_point_longitude'])
+        #    course_points.type.insert(min_index, "Summit")
+        #    course_points.distance = np.insert(course_points.distance, min_index, self.climb_segment[i]['course_point_distance'])
+        #    course_points.altitude = np.insert(course_points.altitude, min_index, self.climb_segment[i]['course_point_altitude'])
 
-        len_pnt_dist = len(self.point_distance)
-        len_pnt_alt = len(self.point_altitude)
+        len_pnt_dist = len(course_points.distance)
+        len_pnt_alt = len(course_points.latitude)
 
         # add start course point
-        if len_pnt_lat and len_pnt_dist and len_dist and self.point_distance[0] != 0.0:
-            self.point_name.insert(0, "Start")
-            self.point_latitude = np.insert(self.point_latitude, 0, self.latitude[0])
-            self.point_longitude = np.insert(self.point_longitude, 0, self.longitude[0])
-            self.point_type.insert(0, "")
+        if (
+            len_pnt_lat
+            and len_pnt_dist
+            and len_dist
+            # TODO do not use float
+            and course_points.distance[0] != 0.0
+        ):
+            course_points.name.insert(0, "Start")
+            course_points.latitude = np.insert(
+                course_points.latitude, 0, self.latitude[0]
+            )
+            course_points.longitude = np.insert(
+                course_points.longitude, 0, self.longitude[0]
+            )
+            course_points.type.insert(0, "")
+            course_points.notes.insert(0, "")
             if len_pnt_dist and len_dist:
-                self.point_distance = np.insert(self.point_distance, 0, 0.0)
+                course_points.distance = np.insert(course_points.distance, 0, 0.0)
             if len_pnt_alt and len_alt:
-                self.point_altitude = np.insert(
-                    self.point_altitude, 0, self.altitude[0]
+                course_points.altitude = np.insert(
+                    course_points.altitude, 0, self.altitude[0]
                 )
         # add end course point
-        # print(self.point_latitude, self.latitude, self.point_longitude, self.longitude)
         end_distance = None
-        if len(self.latitude) and len(self.point_longitude):
+        if len(self.latitude) and len(course_points.longitude):
             end_distance = self.config.get_dist_on_earth_array(
                 self.longitude[-1],
                 self.latitude[-1],
-                self.point_longitude[-1],
-                self.point_latitude[-1],
+                course_points.longitude[-1],
+                course_points.latitude[-1],
             )
         if (
             len_pnt_lat
@@ -871,18 +764,26 @@ class LoaderTcx:
             and end_distance is not None
             and end_distance > 5
         ):
-            self.point_name.append("End")
-            self.point_latitude = np.append(self.point_latitude, self.latitude[-1])
-            self.point_longitude = np.append(self.point_longitude, self.longitude[-1])
-            self.point_type.append("")
+            course_points.name.append("End")
+            course_points.latitude = np.append(
+                course_points.latitude, self.latitude[-1]
+            )
+            course_points.longitude = np.append(
+                course_points.longitude, self.longitude[-1]
+            )
+            course_points.type.append("")
+            course_points.notes.append("")
             if len_pnt_dist and len_dist:
-                self.point_distance = np.append(self.point_distance, self.distance[-1])
+                course_points.distance = np.append(
+                    course_points.distance, self.distance[-1]
+                )
             if len_pnt_alt and len_alt:
-                self.point_altitude = np.append(self.point_altitude, self.altitude[-1])
+                course_points.altitude = np.append(
+                    course_points.altitude, self.altitude[-1]
+                )
 
-        self.point_name = np.array(self.point_name)
-        self.point_type = np.array(self.point_type)
-        self.point_name = np.array(self.point_name)
+        course_points.name = np.array(course_points.name)
+        course_points.type = np.array(course_points.type)
 
     @staticmethod
     def savitzky_golay(y, window_size, order, deriv=0, rate=1):

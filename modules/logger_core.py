@@ -98,13 +98,13 @@ class LoggerCore:
             traceback.print_exc()
 
     def delay_init(self):
-        from . import sensor_core
-        from .logger import loader_tcx
+        from .course import Course
         from .logger import logger_csv
         from .logger import logger_fit
+        from . import sensor_core
 
         self.sensor = sensor_core.SensorCore(self.config)
-        self.course = loader_tcx.LoaderTcx(self.config)
+        self.course = Course(self.config)
         self.logger_csv = logger_csv.LoggerCsv(self.config)
         self.logger_fit = logger_fit.LoggerFit(self.config)
 
@@ -477,7 +477,7 @@ class LoggerCore:
         self.sensor.sensor_gps.reset_course_index()
 
     def set_new_course(self, course_file):
-        self.course.set_course(course_file)
+        self.course.load(course_file)
 
     async def record_log(self):
         # need to detect location delta for smart recording

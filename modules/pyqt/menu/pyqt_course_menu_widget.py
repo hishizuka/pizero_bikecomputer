@@ -71,7 +71,7 @@ class CoursesMenuWidget(MenuWidget):
         self.change_page("Google Directions API mode", preprocess=True)
 
     def onoff_course_cancel_button(self):
-        status = bool(len(self.config.logger.course.distance))
+        status = self.config.logger.course.is_set
         self.buttons["Cancel Course"].onoff_button(status)
 
     def cancel_course(self, replace=False):
@@ -214,7 +214,7 @@ class CourseListWidget(ListWidget):
         self.page_name_label.setText(self.list_type)
 
     async def list_local_courses(self):
-        courses = self.config.logger.course.get_courses()
+        courses = self.config.get_courses()
         for c in courses:
             course_item = CourseListItemWidget(self, self.list_type, c)
             self.add_list_item(course_item)
@@ -238,7 +238,7 @@ class CourseListWidget(ListWidget):
             self.course_file = course_file
 
         # exist course: cancel and set new course
-        if len(self.config.logger.course.distance):
+        if self.config.logger.course.is_set:
             self.config.gui.show_dialog(
                 self.cancel_and_set_new_course, "Replace this course?"
             )

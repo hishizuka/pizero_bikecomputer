@@ -135,26 +135,24 @@ class CueSheetWidget(ScreenWidget):
 
     @qasync.asyncSlot()
     async def update_display(self):
-        if (
-            not len(self.config.logger.course.point_distance)
-            or not self.config.G_CUESHEET_DISPLAY_NUM
-        ):
+        course_points = self.config.logger.course.course_points
+        if not course_points.is_set or not self.config.G_CUESHEET_DISPLAY_NUM:
             return
 
         cp_i = self.gps_values["course_point_index"]
 
         # cuesheet
         for i, cuesheet_item in enumerate(self.cuesheet):
-            if cp_i + i > len(self.config.logger.course.point_distance) - 1:
+            if cp_i + i > len(course_points.distance) - 1:
                 cuesheet_item.reset()
                 continue
             dist = cuesheet_item.dist_num = (
-                self.config.logger.course.point_distance[cp_i + i] * 1000
+                course_points.distance[cp_i + i] * 1000
                 - self.gps_values["course_distance"]
             )
             if dist < 0:
                 continue
             dist_text = f"{dist / 1000:4.1f}km " if dist > 1000 else f"{dist:6.0f}m  "
             cuesheet_item.dist.setText(dist_text)
-            name_text = self.config.logger.course.point_type[cp_i + i]
+            name_text = course_points.type[cp_i + i]
             cuesheet_item.name.setText(name_text)
