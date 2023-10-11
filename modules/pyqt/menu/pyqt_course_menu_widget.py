@@ -395,9 +395,8 @@ class CourseDetailWidget(MenuWidget):
 
         # sequentially draw with download
         # 1st download check
-        if (
-            self.privacy_code is None
-            and self.config.api.check_ridewithgps_files(self.list_id, "1st")
+        if self.privacy_code is None and self.config.api.check_ridewithgps_files(
+            self.list_id, "1st"
         ):
             self.draw_images(draw_map_image=True, draw_profile_image=False)
             self.privacy_code = self.config.logger.course.get_ridewithgps_privacycode(
@@ -409,9 +408,8 @@ class CourseDetailWidget(MenuWidget):
                     self.list_id, self.privacy_code
                 )
         # 2nd download with privacy_code check
-        elif (
-            self.privacy_code is not None
-            and self.config.api.check_ridewithgps_files(self.list_id, "2nd")
+        elif self.privacy_code is not None and self.config.api.check_ridewithgps_files(
+            self.list_id, "2nd"
         ):
             self.draw_images(draw_map_image=False, draw_profile_image=True)
             self.enable_next_button()

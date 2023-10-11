@@ -850,38 +850,41 @@ class Config:
         await self.logger.resume_start_stop()
 
     async def keyboard_check(self):
-        while not self.G_QUIT:
-            app_logger.info(
-                "s:start/stop, l: lap, r:reset, p: previous screen, n: next screen, q: quit"
-            )
-            key = await self.loop.run_in_executor(None, input, "> ")
+        try:
+            while True:
+                app_logger.info(
+                    "s:start/stop, l: lap, r:reset, p: previous screen, n: next screen, q: quit"
+                )
+                key = await self.loop.run_in_executor(None, input, "> ")
 
-            if key == "s":
-                self.logger.start_and_stop_manual()
-            elif key == "l":
-                self.logger.count_laps()
-            elif key == "r":
-                self.logger.reset_count()
-            elif key == "n" and self.gui:
-                self.gui.scroll_next()
-            elif key == "p" and self.gui:
-                self.gui.scroll_prev()
-            elif key == "q" and self.gui:
-                await self.quit()
-            ##### temporary #####
-            # test hardware key signals
-            elif key == "m" and self.gui:
-                self.gui.enter_menu()
-            elif key == "v" and self.gui:
-                self.gui.press_space()
-            elif key == "," and self.gui:
-                self.gui.press_tab()
-            elif key == "." and self.gui:
-                self.gui.press_shift_tab()
-            elif key == "b" and self.gui:
-                self.gui.back_menu()
-            elif key == "c" and self.gui:
-                self.gui.get_screenshot()
+                if key == "s":
+                    self.logger.start_and_stop_manual()
+                elif key == "l":
+                    self.logger.count_laps()
+                elif key == "r":
+                    self.logger.reset_count()
+                elif key == "n" and self.gui:
+                    self.gui.scroll_next()
+                elif key == "p" and self.gui:
+                    self.gui.scroll_prev()
+                elif key == "q" and self.gui:
+                    await self.quit()
+                ##### temporary #####
+                # test hardware key signals
+                elif key == "m" and self.gui:
+                    self.gui.enter_menu()
+                elif key == "v" and self.gui:
+                    self.gui.press_space()
+                elif key == "," and self.gui:
+                    self.gui.press_tab()
+                elif key == "." and self.gui:
+                    self.gui.press_shift_tab()
+                elif key == "b" and self.gui:
+                    self.gui.back_menu()
+                elif key == "c" and self.gui:
+                    self.gui.get_screenshot()
+        except asyncio.CancelledError:
+            pass
 
     def set_logger(self, logger):
         self.logger = logger

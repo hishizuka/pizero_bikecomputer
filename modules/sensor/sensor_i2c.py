@@ -435,10 +435,13 @@ class SensorI2C(Sensor):
         asyncio.create_task(self.start())
 
     async def start(self):
-        while not self.config.G_QUIT:
-            await self.sleep()
-            await self.update()
-            self.get_sleep_time(self.config.G_I2C_INTERVAL)
+        try:
+            while True:
+                await self.sleep()
+                await self.update()
+                self.get_sleep_time(self.config.G_I2C_INTERVAL)
+        except asyncio.CancelledError:
+            pass
 
     async def update(self):
         # timestamp
