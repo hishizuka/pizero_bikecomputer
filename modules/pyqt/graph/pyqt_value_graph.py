@@ -84,7 +84,7 @@ class PerformanceGraphWidget(ScreenWidget):
             self.item[self.display_item[1]]["graph_key"]: True,
         }
         for key in all_nan.keys():
-            chk = np.isnan(self.config.logger.sensor.values["integrated"][key])
+            chk = np.isnan(self.sensor.values["integrated"][key])
             if False in chk:
                 all_nan[key] = False
 
@@ -96,7 +96,7 @@ class PerformanceGraphWidget(ScreenWidget):
                 power_max = 100 * (
                     int(
                         np.nanmax(
-                            self.config.logger.sensor.values["integrated"][
+                            self.sensor.values["integrated"][
                                 self.item[self.display_item[0]]["graph_key"]
                             ]
                         )
@@ -112,7 +112,7 @@ class PerformanceGraphWidget(ScreenWidget):
                 pg.BarGraphItem(
                     x0=self.plot_data_x1[:-1],
                     x1=self.plot_data_x1[1:],
-                    height=self.config.logger.sensor.values["integrated"][
+                    height=self.sensor.values["integrated"][
                         self.item[self.display_item[0]]["graph_key"]
                     ],
                     brush=self.brush,
@@ -128,8 +128,8 @@ class PerformanceGraphWidget(ScreenWidget):
             # for HR
             self.p2.addItem(
                 pg.PlotCurveItem(
-                    # self.config.logger.sensor.values['integrated']['hr_graph'],
-                    self.config.logger.sensor.values["integrated"][
+                    # self.sensor.values['integrated']['hr_graph'],
+                    self.sensor.values["integrated"][
                         self.item[self.display_item[1]]["graph_key"]
                     ],
                     pen=self.pen2,
@@ -185,7 +185,7 @@ class AccelerationGraphWidget(ScreenWidget):
         Y = 1
         Z = 2
 
-        v = self.config.logger.sensor.sensor_i2c.graph_values["g_acc"]
+        v = self.sensor.sensor_i2c.graph_values["g_acc"]
         all_nan = {X: True, Y: True, Z: True}
         for key in all_nan.keys():
             chk = np.isnan(v[key])
@@ -269,7 +269,7 @@ class AltitudeGraphWidget(ScreenWidget):
         self.set_minimum_size()
 
     async def update_extra(self):
-        v = self.config.logger.sensor.values["integrated"]
+        v = self.sensor.values["integrated"]
         all_nan = {"altitude_graph": True, "altitude_gps_graph": True}
         for key in all_nan.keys():
             chk = np.isnan(v[key])

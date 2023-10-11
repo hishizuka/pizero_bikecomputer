@@ -33,13 +33,19 @@ class BaseMapWidget(ScreenWidget):
     move_adjust_mode = False
     move_factor = 1.0
 
+    point_color = {
+        # 'fix':pg.mkBrush(color=(0,0,160,128)),
+        "fix": pg.mkBrush(color=(0, 0, 255)),
+        # 'lost':pg.mkBrush(color=(96,96,96,128))
+        "lost": pg.mkBrush(color=(170, 170, 170)),
+    }
+
     def __init__(self, parent, config):
         self.buttons = {}
         self.button_press_count = {}
         super().__init__(parent, config)
 
-        self.gps_values = self.config.logger.sensor.values["GPS"]
-        self.gps_sensor = self.config.logger.sensor.sensor_gps
+        self.gps_sensor = self.sensor.sensor_gps
 
         self.signal_move_x_plus.connect(self.move_x_plus)
         self.signal_move_x_minus.connect(self.move_x_minus)
@@ -58,12 +64,6 @@ class BaseMapWidget(ScreenWidget):
 
         # current point
         self.current_point = pg.ScatterPlotItem(pxMode=True)
-        self.point_color = {
-            # 'fix':pg.mkBrush(color=(0,0,160,128)),
-            "fix": pg.mkBrush(color=(0, 0, 255)),
-            # 'lost':pg.mkBrush(color=(96,96,96,128))
-            "lost": pg.mkBrush(color=(170, 170, 170)),
-        }
         self.point = {
             "pos": [np.nan, np.nan],
             "size": 20,
@@ -172,13 +172,15 @@ class BaseMapWidget(ScreenWidget):
         await self.update_extra()
 
     def get_max_zoom(self):
-        if not self.config.logger.course.is_set:
+        if not self.course.is_set:
             return
 
         if self.config.G_MAX_ZOOM != 0:
             return
+
         z = self.zoom
-        dist = self.config.logger.course.distance[-1]
+        dist = self.course.distance[-1]
+
         if z / 1000 < dist:
             while z / 1000 < dist:
                 z *= 2

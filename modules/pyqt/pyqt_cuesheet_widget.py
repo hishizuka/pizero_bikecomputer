@@ -107,10 +107,6 @@ class CueSheetWidget(ScreenWidget):
     cuesheet = None
     layout_class = QtWidgets.QVBoxLayout
 
-    @property
-    def gps_values(self):
-        return self.config.logger.sensor.values["GPS"]
-
     def set_font_size(self, length):
         self.font_size = int(length / 7)
 
@@ -135,24 +131,23 @@ class CueSheetWidget(ScreenWidget):
 
     @qasync.asyncSlot()
     async def update_display(self):
-        course_points = self.config.logger.course.course_points
-        if not course_points.is_set or not self.config.G_CUESHEET_DISPLAY_NUM:
+        if not self.course_points.is_set or not self.config.G_CUESHEET_DISPLAY_NUM:
             return
 
         cp_i = self.gps_values["course_point_index"]
 
         # cuesheet
         for i, cuesheet_item in enumerate(self.cuesheet):
-            if cp_i + i > len(course_points.distance) - 1:
+            if cp_i + i > len(self.course_points.distance) - 1:
                 cuesheet_item.reset()
                 continue
             dist = cuesheet_item.dist_num = (
-                course_points.distance[cp_i + i] * 1000
+                self.course_points.distance[cp_i + i] * 1000
                 - self.gps_values["course_distance"]
             )
             if dist < 0:
                 continue
             dist_text = f"{dist / 1000:4.1f}km " if dist > 1000 else f"{dist:6.0f}m  "
             cuesheet_item.dist.setText(dist_text)
-            name_text = course_points.type[cp_i + i]
+            name_text = self.course_points.type[cp_i + i]
             cuesheet_item.name.setText(name_text)

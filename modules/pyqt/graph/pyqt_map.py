@@ -38,7 +38,6 @@ class MapWidget(BaseMapWidget):
 
     # current point
     location = []
-    point_color = {"fix": None, "lost": None}
 
     # tracks
     tracks_lat = np.array([])
@@ -264,7 +263,7 @@ class MapWidget(BaseMapWidget):
 
     def resizeEvent(self, event):
         if (
-            not self.config.logger.course.course_points.is_set
+            not self.course_points.is_set
             or not self.config.G_CUESHEET_DISPLAY_NUM
             or not self.config.G_COURSE_INDEXING
         ):
@@ -302,18 +301,17 @@ class MapWidget(BaseMapWidget):
             Timer(auto_start=False, text="course plot  : {0:.3f} sec"),
             Timer(auto_start=False, text="course points: {0:.3f} sec"),
         ]
-        course = self.config.logger.course
 
         with timers[0]:
             if self.course_plot is not None:
                 self.plot.removeItem(self.course_plot)
-            if not len(course.latitude):
+            if not len(self.course.latitude):
                 app_logger.warning("Course has no points")
             else:
                 self.course_plot = CoursePlotItem(
-                    x=course.longitude,
-                    y=get_mod_lat_np(course.latitude),
-                    brushes=course.colored_altitude,
+                    x=self.course.longitude,
+                    y=get_mod_lat_np(self.course.latitude),
+                    brushes=self.course.colored_altitude,
                     width=6,
                 )
                 self.course_plot.setZValue(20)
@@ -326,11 +324,11 @@ class MapWidget(BaseMapWidget):
                     self.plot_verification = pg.ScatterPlotItem(pxMode=True)
                     self.plot_verification.setZValue(25)
                     test_points = []
-                    for i in range(len(course.longitude)):
+                    for i in range(len(self.course.longitude)):
                         p = {
                             "pos": [
-                                course.longitude[i],
-                                get_mod_lat(course.latitude[i]),
+                                self.course.longitude[i],
+                                get_mod_lat(self.course.latitude[i]),
                             ],
                             "size": 2,
                             "pen": {"color": "w", "width": 1},
@@ -341,13 +339,10 @@ class MapWidget(BaseMapWidget):
                     self.plot.addItem(self.plot_verification)
 
         with timers[1]:
-            # course points
-            course_points = course.course_points
-
             if self.course_points_plot is not None:
                 self.plot.removeItem(self.course_points_plot)
 
-            if not len(course_points.longitude):
+            if not len(self.course_points.longitude):
                 app_logger.warning("No course points found")
 
             else:
@@ -357,17 +352,17 @@ class MapWidget(BaseMapWidget):
                 self.course_points_plot.setZValue(40)
                 formatted_course_points = []
 
-                for i in reversed(range(len(course_points.longitude))):
+                for i in reversed(range(len(self.course_points.longitude))):
                     color = (255, 0, 0)
                     symbol = "t"
-                    if course_points.type[i] == "Left":
+                    if self.course_points.type[i] == "Left":
                         symbol = "t3"
-                    elif course_points.type[i] == "Right":
+                    elif self.course_points.type[i] == "Right":
                         symbol = "t2"
                     cp = {
                         "pos": [
-                            course_points.longitude[i],
-                            get_mod_lat(course_points.latitude[i]),
+                            self.course_points.longitude[i],
+                            get_mod_lat(self.course_points.latitude[i]),
                         ],
                         "pen": {"color": color, "width": 1},
                         "symbol": symbol,
@@ -381,8 +376,6 @@ class MapWidget(BaseMapWidget):
         log_timers(timers, text_total=f"total        : {0:.3f} sec")
 
     async def update_extra(self):
-        course = self.config.logger.course
-
         # display current position
         if len(self.location):
             self.plot.removeItem(self.current_point)
@@ -399,10 +392,10 @@ class MapWidget(BaseMapWidget):
             # recent point(from log or pre_point) / course start / dummy
             if len(self.tracks_lon) and len(self.tracks_lat):
                 self.point["pos"] = [self.tracks_lon_pos, self.tracks_lat_pos]
-            elif len(course.longitude) and len(course.latitude):
+            elif len(self.course.longitude) and len(self.course.latitude):
                 self.point["pos"] = [
-                    course.longitude[0],
-                    course.latitude[0],
+                    self.course.longitude[0],
+                    self.course.latitude[0],
                 ]
             else:
                 self.point["pos"] = [
@@ -431,7 +424,7 @@ class MapWidget(BaseMapWidget):
         x_move = y_move = 0
         if (
             self.lock_status
-            and len(course.distance)
+            and len(self.course.distance)
             and self.gps_values["on_course_status"]
         ):
             index = self.gps_sensor.get_index_with_distance_cutoff(
@@ -439,8 +432,8 @@ class MapWidget(BaseMapWidget):
                 # get some forward distance [m]
                 get_width_distance(self.map_pos["y"], self.map_area["w"]) / 1000,
             )
-            x2 = course.longitude[index]
-            y2 = course.latitude[index]
+            x2 = self.course.longitude[index]
+            y2 = self.course.latitude[index]
             x_delta = x2 - self.map_pos["x"]
             y_delta = y2 - self.map_pos["y"]
             # slide from center
@@ -537,7 +530,7 @@ class MapWidget(BaseMapWidget):
     def get_track(self):
         # get track from SQL
         # not good (input & output)    #conversion coordinate
-        (self.tracks_timestamp, lon, lat) = self.config.logger.update_track(
+        (self.tracks_timestamp, lon, lat) = self.logger.update_track(
             self.tracks_timestamp
         )
         if len(lon) and len(lat):
@@ -573,7 +566,7 @@ class MapWidget(BaseMapWidget):
         if self.lock_status:
             return
 
-        await self.config.logger.course.search_route(
+        await self.course.search_route(
             self.point["pos"][0],
             self.point["pos"][1] / self.y_mod,
             self.map_pos["x"],
@@ -997,7 +990,7 @@ class MapWidget(BaseMapWidget):
         self, x_start, x_end, y_start, y_end, auto_zoom=False
     ):
         if (
-            not self.config.logger.course.course_points.is_set
+            not self.course_points.is_set
             or not self.config.G_CUESHEET_DISPLAY_NUM
             or not self.config.G_COURSE_INDEXING
         ):

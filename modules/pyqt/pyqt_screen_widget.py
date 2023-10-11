@@ -32,6 +32,18 @@ class ScreenWidget(QtWidgets.QWidget):
     def sensor(self):
         return self.logger.sensor
 
+    @property
+    def course(self):
+        return self.logger.course
+
+    @property
+    def course_points(self):
+        return self.course.course_points
+
+    @property
+    def gps_values(self):
+        return self.sensor.values["GPS"]
+
     def resizeEvent(self, event):
         h = self.size().height()
         self.set_font_size(h)
