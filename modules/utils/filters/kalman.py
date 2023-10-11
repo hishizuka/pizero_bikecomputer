@@ -1,9 +1,9 @@
-# simplify filterpy
+# simplify filterpy/kalman/kalman_filter
 
-import sys
-from math import log
 from copy import deepcopy
-
+from math import log
+import sys
+import numpy as np
 from numpy import dot, zeros, eye, isscalar, linalg, array, atleast_2d
 
 
@@ -364,8 +364,6 @@ class KalmanFilter(object):
 
 
 class KalmanFilter_pitch:
-    import numpy as np
-
     theta_variance = 0
     theta_dot_variance = 0
     theta_update_interval = 0.1

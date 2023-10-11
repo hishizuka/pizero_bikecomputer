@@ -1,8 +1,8 @@
-import os
 import datetime
-import sqlite3
 import io
 import math
+import os
+import sqlite3
 
 import numpy as np
 from PIL import Image
@@ -11,6 +11,18 @@ from logger import app_logger
 from modules._pyqt import QtCore, QtGui, pg, qasync
 from modules.pyqt.pyqt_cuesheet_widget import CueSheetWidget
 from modules.pyqt.graph.pyqtgraph.CoursePlotItem import CoursePlotItem
+from modules.utils.geo import (
+    calc_y_mod,
+    get_mod_lat,
+    get_mod_lat_np,
+    get_width_distance,
+)
+from modules.utils.map import (
+    get_maptile_filename,
+    get_lon_lat_from_tile_xy,
+    get_tilexy_and_xy_in_tile,
+    remove_maptiles,
+)
 from modules.utils.timer import Timer, log_timers
 from .pyqt_base_map import BaseMapWidget
 
@@ -90,6 +102,7 @@ class MapWidget(BaseMapWidget):
             color=(0, 0, 0),
         )
         self.map_attribution.setZValue(100)
+
         self.plot.addItem(self.map_attribution)
 
         # current point
@@ -237,9 +250,8 @@ class MapWidget(BaseMapWidget):
             if self.cuesheet_widget is None:
                 self.cuesheet_widget = CueSheetWidget(self, self.config)
                 self.cuesheet_widget.hide()  # adhoc
-            # self.map_cuesheet_ratio = 0.7
+
             self.map_cuesheet_ratio = 1.0
-            # self.layout.addWidget(self.cuesheet_widget, 0, 3, 4, 4)
 
             # init instruction
             self.instruction = pg.TextItem(
@@ -300,7 +312,7 @@ class MapWidget(BaseMapWidget):
             else:
                 self.course_plot = CoursePlotItem(
                     x=course.longitude,
-                    y=self.get_mod_lat_np(course.latitude),
+                    y=get_mod_lat_np(course.latitude),
                     brushes=course.colored_altitude,
                     width=6,
                 )
@@ -318,7 +330,7 @@ class MapWidget(BaseMapWidget):
                         p = {
                             "pos": [
                                 course.longitude[i],
-                                self.get_mod_lat(course.latitude[i]),
+                                get_mod_lat(course.latitude[i]),
                             ],
                             "size": 2,
                             "pen": {"color": "w", "width": 1},
@@ -355,7 +367,7 @@ class MapWidget(BaseMapWidget):
                     cp = {
                         "pos": [
                             course_points.longitude[i],
-                            self.get_mod_lat(course_points.latitude[i]),
+                            get_mod_lat(course_points.latitude[i]),
                         ],
                         "pen": {"color": color, "width": 1},
                         "symbol": symbol,
@@ -398,7 +410,7 @@ class MapWidget(BaseMapWidget):
                     self.config.G_DUMMY_POS_Y,
                 ]
         # update y_mod (adjust for lat:lon=1:1)
-        self.y_mod = self.calc_y_mod(self.point["pos"][1])
+        self.y_mod = calc_y_mod(self.point["pos"][1])
         # add position circle to map
         if self.gps_values["mode"] == 3:
             self.point["brush"] = self.point_color["fix"]
@@ -425,7 +437,7 @@ class MapWidget(BaseMapWidget):
             index = self.gps_sensor.get_index_with_distance_cutoff(
                 self.gps_values["course_index"],
                 # get some forward distance [m]
-                self.get_width_distance(self.map_pos["y"], self.map_area["w"]) / 1000,
+                get_width_distance(self.map_pos["y"], self.map_area["w"]) / 1000,
             )
             x2 = course.longitude[index]
             y2 = course.latitude[index]
@@ -485,7 +497,7 @@ class MapWidget(BaseMapWidget):
             else:
                 self.center_point_data["size"] = 15
             self.center_point_data["pos"][0] = self.map_pos["x"]
-            self.center_point_data["pos"][1] = self.get_mod_lat(self.map_pos["y"])
+            self.center_point_data["pos"][1] = get_mod_lat(self.map_pos["y"])
             self.center_point_location.append(self.center_point_data)
             self.center_point.setData(self.center_point_location)
             self.plot.addItem(self.center_point)
@@ -499,9 +511,7 @@ class MapWidget(BaseMapWidget):
         if not np.isnan(x_start) and not np.isnan(x_end):
             self.plot.setXRange(x_start, x_end, padding=0)
         if not np.isnan(y_start) and not np.isnan(y_end):
-            self.plot.setYRange(
-                self.get_mod_lat(y_start), self.get_mod_lat(y_end), padding=0
-            )
+            self.plot.setYRange(get_mod_lat(y_start), get_mod_lat(y_end), padding=0)
 
         if not np.any(np.isnan([x_start, x_end, y_start, y_end])):
             await self.draw_map_tile(x_start, x_end, y_start, y_end)
@@ -534,9 +544,7 @@ class MapWidget(BaseMapWidget):
             self.tracks_lon_pos = lon[-1]
             self.tracks_lat_pos = lat[-1]
             self.tracks_lon = np.append(self.tracks_lon, np.array(lon))
-            self.tracks_lat = np.append(
-                self.tracks_lat, self.get_mod_lat_np(np.array(lat))
-            )
+            self.tracks_lat = np.append(self.tracks_lat, get_mod_lat_np(np.array(lat)))
 
     def reset_track(self):
         self.tracks_lon = np.array([])
@@ -585,7 +593,7 @@ class MapWidget(BaseMapWidget):
             self.zoomlevel,
             p0,
             p1,
-            overley=False,
+            overlay=False,
             use_mbtiles=self.config.G_MAP_CONFIG[self.config.G_MAP]["use_mbtiles"],
         )
 
@@ -686,7 +694,7 @@ class MapWidget(BaseMapWidget):
             self.drawn_tile[map_name] = {}
             self.existing_tiles[map_name] = {}
             self.pre_zoomlevel[map_name] = np.nan
-            self.config.remove_maptiles(map_name)
+            remove_maptiles(map_name)
 
             config["nowtime"] = nowtime_mod
             return True
@@ -712,12 +720,12 @@ class MapWidget(BaseMapWidget):
             <= map_config[map_name]["max_zoomlevel"]
         ):
             await self.draw_map_tile_by_overlay(
-                map_config, map_name, z, p0, p1, overley=True
+                map_config, map_name, z, p0, p1, overlay=True
             )
         # above maximum zoom level: expand max zoomlevel tiles
         elif z > map_config[map_name]["max_zoomlevel"]:
             await self.draw_map_tile_by_overlay(
-                map_config, map_name, z, p0, p1, overley=True, expand=True
+                map_config, map_name, z, p0, p1, overlay=True, expand=True
             )
         else:
             self.pre_zoomlevel[map_name] = z
@@ -729,7 +737,7 @@ class MapWidget(BaseMapWidget):
         z,
         p0,
         p1,
-        overley=False,
+        overlay=False,
         expand=False,
         use_mbtiles=False,
     ):
@@ -755,7 +763,7 @@ class MapWidget(BaseMapWidget):
         # tile check
         if use_mbtiles:
             self.con = sqlite3.connect(
-                "file:./maptile/{0:^s}.mbtiles?mode=ro".format(map_name), uri=True
+                f"file:./maptile/{map_name}.mbtiles?mode=ro", uri=True
             )
             self.cur = self.con.cursor()
 
@@ -793,12 +801,12 @@ class MapWidget(BaseMapWidget):
                 )
 
             imgitem = pg.ImageItem(imgarray)
-            if overley:
+            if overlay:
                 imgitem.setCompositionMode(QtGui.QPainter.CompositionMode_Darken)
-            imgarray_min_x, imgarray_max_y = self.config.get_lon_lat_from_tile_xy(
+            imgarray_min_x, imgarray_max_y = get_lon_lat_from_tile_xy(
                 z, keys[0], keys[1]
             )
-            imgarray_max_x, imgarray_min_y = self.config.get_lon_lat_from_tile_xy(
+            imgarray_max_x, imgarray_min_y = get_lon_lat_from_tile_xy(
                 z, keys[0] + 1, keys[1] + 1
             )
 
@@ -807,9 +815,9 @@ class MapWidget(BaseMapWidget):
             imgitem.setRect(
                 pg.QtCore.QRectF(
                     imgarray_min_x,
-                    self.get_mod_lat(imgarray_min_y),
+                    get_mod_lat(imgarray_min_y),
                     imgarray_max_x - imgarray_min_x,
-                    self.get_mod_lat(imgarray_max_y) - self.get_mod_lat(imgarray_min_y),
+                    get_mod_lat(imgarray_max_y) - get_mod_lat(imgarray_min_y),
                 )
             )
         if use_mbtiles:
@@ -818,7 +826,8 @@ class MapWidget(BaseMapWidget):
 
         return True
 
-    def init_draw_map(self, map_config, map_name, z, p0, p1, expand, tile_size):
+    @staticmethod
+    def init_draw_map(map_config, map_name, z, p0, p1, expand, tile_size):
         z_draw = z
         z_conv_factor = 1
         if expand:
@@ -830,8 +839,8 @@ class MapWidget(BaseMapWidget):
             z_conv_factor = 2 ** (z - z_draw)
 
         # tile range
-        t0 = self.config.get_tilexy_and_xy_in_tile(z, p0["x"], p0["y"], tile_size)
-        t1 = self.config.get_tilexy_and_xy_in_tile(z, p1["x"], p1["y"], tile_size)
+        t0 = get_tilexy_and_xy_in_tile(z, p0["x"], p0["y"], tile_size)
+        t1 = get_tilexy_and_xy_in_tile(z, p1["x"], p1["y"], tile_size)
         tile_x = sorted([t0[0], t1[0]])
         tile_y = sorted([t0[1], t1[1]])
         return z_draw, z_conv_factor, tile_x, tile_y
@@ -866,7 +875,7 @@ class MapWidget(BaseMapWidget):
     async def download_tiles(self, tiles, map_config, map_name, z_draw):
         download_tile = []
         for tile in tiles:
-            filename = self.config.get_maptile_filename(map_name, z_draw, *tile)
+            filename = get_maptile_filename(map_name, z_draw, *tile)
             key = "{0}-{1}".format(*tile)
 
             if os.path.exists(filename) and os.path.getsize(filename) > 0:
@@ -930,8 +939,9 @@ class MapWidget(BaseMapWidget):
             if (exist_tile_key, True) in self.existing_tiles[map_name][z_draw].items():
                 cond = True
         else:
-            sql = "select count(*) from tiles where zoom_level={} and tile_column={} and tile_row={}".format(
-                z_draw, key[0], 2**z_draw - 1 - key[1]
+            sql = (
+                f"select count(*) from tiles where "
+                f"zoom_level={z_draw} and tile_column={key[0]} and tile_row={2**z_draw - 1 - key[1]}"
             )
             if (self.cur.execute(sql).fetchone())[0] == 1:
                 cond = True
@@ -939,10 +949,11 @@ class MapWidget(BaseMapWidget):
 
     def get_image_file(self, use_mbtiles, map_name, z_draw, x, y):
         if not use_mbtiles:
-            img_file = self.config.get_maptile_filename(map_name, z_draw, x, y)
+            img_file = get_maptile_filename(map_name, z_draw, x, y)
         else:
-            sql = "select tile_data from tiles where zoom_level={} and tile_column={} and tile_row={}".format(
-                z_draw, x, 2**z_draw - 1 - y
+            sql = (
+                f"select tile_data from tiles where "
+                f"zoom_level={z_draw} and tile_column={x} and tile_row={2 ** z_draw - 1 - y}"
             )
             img_file = io.BytesIO((self.cur.execute(sql).fetchone())[0])
         return img_file
@@ -950,7 +961,7 @@ class MapWidget(BaseMapWidget):
     def draw_scale(self, x_start, y_start):
         # draw scale at left bottom
         scale_factor = 10
-        scale_dist = self.get_width_distance(y_start, self.map_area["w"]) / scale_factor
+        scale_dist = get_width_distance(y_start, self.map_area["w"]) / scale_factor
         num = scale_dist / (10 ** int(np.log10(scale_dist)))
         modify = 1
         if 1 < num < 2:
@@ -963,8 +974,8 @@ class MapWidget(BaseMapWidget):
         scale_x2 = scale_x1 + self.map_area["w"] / scale_factor * modify
         scale_y1 = y_start + self.map_area["h"] / 25
         scale_y2 = scale_y1 + self.map_area["h"] / 30
-        scale_y1 = self.get_mod_lat(scale_y1)
-        scale_y2 = self.get_mod_lat(scale_y2)
+        scale_y1 = get_mod_lat(scale_y1)
+        scale_y2 = get_mod_lat(scale_y2)
         self.scale_plot.setData(
             [scale_x1, scale_x1, scale_x2, scale_x2],
             [scale_y2, scale_y1, scale_y1, scale_y2],
@@ -975,16 +986,12 @@ class MapWidget(BaseMapWidget):
         if scale_label >= 1000:
             scale_label = int(scale_label / 1000)
             scale_unit = "km"
-        self.scale_text.setPlainText(
-            "{0}{1}\n(z{2})".format(scale_label, scale_unit, self.zoomlevel)
-        )
+        self.scale_text.setPlainText(f"{scale_label}{scale_unit}\n(z{self.zoomlevel})")
         self.scale_text.setPos((scale_x1 + scale_x2) / 2, scale_y2)
 
     def draw_map_attribution(self, x_start, y_start):
         # draw map attribution at right bottom
-        self.map_attribution.setPos(
-            x_start + self.map_area["w"], self.get_mod_lat(y_start)
-        )
+        self.map_attribution.setPos(x_start + self.map_area["w"], get_mod_lat(y_start))
 
     async def update_cuesheet_and_instruction(
         self, x_start, x_end, y_start, y_end, auto_zoom=False
@@ -1015,10 +1022,7 @@ class MapWidget(BaseMapWidget):
         )
         self.instruction.setPos(
             (x_end + x_start) / 2,
-            (
-                self.get_mod_lat(y_start)
-                + (self.get_mod_lat(y_end) - self.get_mod_lat(y_start)) * 0.85
-            ),
+            (get_mod_lat(y_start) + (get_mod_lat(y_end) - get_mod_lat(y_start)) * 0.85),
         )
         self.plot.addItem(self.instruction)
 
@@ -1042,43 +1046,17 @@ class MapWidget(BaseMapWidget):
                     # print("zoom out", self.auto_zoomlevel_back, self.zoomlevel)
                 self.auto_zoomlevel_back = None
 
-    def calc_y_mod(self, lat):
-        if np.isnan(lat):
-            return np.nan
-        return self.config.GEO_R2 / (self.config.GEO_R1 * math.cos(lat / 180 * np.pi))
-
-    def get_width_distance(self, lat, w):
-        return (
-            w
-            * self.config.GEO_R1
-            * 1000
-            * 2
-            * np.pi
-            * math.cos(lat / 180 * np.pi)
-            / 360
-        )
-
-    def get_mod_lat(self, lat):
-        return lat * self.calc_y_mod(lat)
-
-    def get_mod_lat_np(self, lat):
-        return (
-            lat * self.config.GEO_R2 / (self.config.GEO_R1 * np.cos(lat / 180 * np.pi))
-        )
-
     def get_geo_area(self, x, y):
         if np.isnan(x) or np.isnan(y):
             return np.nan, np.nan
-        tile_x, tile_y, _, _ = self.config.get_tilexy_and_xy_in_tile(
+        tile_x, tile_y, _, _ = get_tilexy_and_xy_in_tile(
             self.zoomlevel,
             x,
             y,
             self.config.G_MAP_CONFIG[self.config.G_MAP]["tile_size"],
         )
-        pos_x0, pos_y0 = self.config.get_lon_lat_from_tile_xy(
-            self.zoomlevel, tile_x, tile_y
-        )
-        pos_x1, pos_y1 = self.config.get_lon_lat_from_tile_xy(
+        pos_x0, pos_y0 = get_lon_lat_from_tile_xy(self.zoomlevel, tile_x, tile_y)
+        pos_x1, pos_y1 = get_lon_lat_from_tile_xy(
             self.zoomlevel, tile_x + 1, tile_y + 1
         )
         return (

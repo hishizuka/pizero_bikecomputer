@@ -104,7 +104,7 @@ class SensorCore:
         for s in self.average_secs:
             for v in self.average_values:
                 self.average_values[v][s] = []
-                self.values["integrated"]["ave_{}_{}s".format(v, s)] = np.nan
+                self.values["integrated"][f"ave_{v}_{s}s"] = np.nan
         if _IMPORT_PSUTIL:
             self.process = psutil.Process(self.config.G_PID)
 

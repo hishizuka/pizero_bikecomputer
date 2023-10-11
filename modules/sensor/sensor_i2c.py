@@ -5,6 +5,8 @@ import asyncio
 import numpy as np
 
 from logger import app_logger
+from modules.utils.filters import KalmanFilter, KalmanFilter_pitch
+from modules.utils.geo import get_track_str
 from modules.utils.network import detect_network
 from .sensor import Sensor
 
@@ -33,9 +35,6 @@ Y = 1
 Z = 2
 
 G = 9.80665
-
-# kalman filter
-from .kalman_filter import KalmanFilter, KalmanFilter_pitch
 
 
 class SensorI2C(Sensor):
@@ -796,7 +795,7 @@ class SensorI2C(Sensor):
         self.values["heading"] = (
             int(math.degrees(tilt_heading)) - self.config.G_IMU_MAG_DECLINATION
         )
-        self.values["heading_str"] = self.config.get_track_str(self.values["heading"])
+        self.values["heading_str"] = get_track_str(self.values["heading"])
 
     @staticmethod
     def get_pitch_roll(acc):

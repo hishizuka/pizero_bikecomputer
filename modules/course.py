@@ -3,14 +3,14 @@ import json
 import re
 import shutil
 
-from math import factorial
-
 import oyaml
 import numpy as np
 from crdp import rdp
 
 from logger import app_logger
 from modules.loaders import TcxLoader
+from modules.utils.filters import savitzky_golay
+from modules.utils.geo import calc_azimuth, get_dist_on_earth, get_dist_on_earth_array
 from modules.utils.timer import Timer, log_timers
 
 POLYLINE_DECODER = False
@@ -413,11 +413,12 @@ class Course:
                 self.altitude = self.altitude[cond]  # [m]
             if len_dist:
                 self.distance = self.distance[cond] / 1000  # [km]
-        except:
+        except Exception as e:  # noqa
+            app_logger.warning(f"Error during downsampling: {e}")
             self.distance = self.distance / 1000  # [km]
 
         # for sensor_gps
-        self.azimuth = self.config.calc_azimuth(self.latitude, self.longitude)
+        self.azimuth = calc_azimuth(self.latitude, self.longitude)
         self.points_diff = np.array([np.diff(self.longitude), np.diff(self.latitude)])
         self.points_diff_sum_of_squares = (
             self.points_diff[0] ** 2 + self.points_diff[1] ** 2
@@ -426,7 +427,7 @@ class Course:
 
         if not len_dist:
             self.distance = (
-                self.config.get_dist_on_earth_array(
+                get_dist_on_earth_array(
                     self.longitude[0:-1],
                     self.latitude[0:-1],
                     self.longitude[1:],
@@ -439,7 +440,7 @@ class Course:
         dist_diff = 1000 * np.diff(self.distance)  # [m]
 
         if len_alt:
-            modified_altitude = self.savitzky_golay(self.altitude, 53, 3)
+            modified_altitude = savitzky_golay(self.altitude, 53, 3)
             # do not apply if length is different (occurs when too short course)
             if len(self.altitude) == len(modified_altitude):
                 self.altitude = modified_altitude
@@ -456,8 +457,10 @@ class Course:
 
         diff_dist_max = int(np.max(dist_diff)) * 2 / 1000  # [m->km]
         if diff_dist_max > self.config.G_GPS_SEARCH_RANGE:  # [km]
+            app_logger.info(
+                f"G_GPS_SEARCH_RANGE[km]: {self.config.G_GPS_SEARCH_RANGE} -> {diff_dist_max}"
+            )
             self.config.G_GPS_SEARCH_RANGE = diff_dist_max
-        # print("G_GPS_SEARCH_RANGE[km]:", self.config.G_GPS_SEARCH_RANGE, diff_dist_max)
 
         app_logger.info(f"downsampling:{len_lat} -> {len(self.latitude)}")
 
@@ -481,6 +484,7 @@ class Course:
         dist_diff[0, 1:] = self.distance[1:] - self.distance[0:-1]
         alt_diff[0, 1:] = self.altitude[1:] - self.altitude[0:-1]
         grade[0, 1:] = alt_diff[0, 1:] / (dist_diff[0, 1:] * 1000) * 100
+
         for i in range(1, diff_num):
             dist_diff[i, i:-i] = self.distance[2 * i :] - self.distance[0 : -2 * i]
             dist_diff[i, 0:i] = self.distance[i : 2 * i] - self.distance[0]
@@ -492,11 +496,13 @@ class Course:
 
         grade_mod = np.zeros(course_n)
         cond_all = np.full(course_n, False)
+
         for i in range(diff_num - 1):
             cond = dist_diff[i] >= self.config.G_CLIMB_DISTANCE_CUTOFF
             cond_diff = cond ^ cond_all
             grade_mod[cond_diff] = grade[i][cond_diff]
             cond_all = cond
+
         cond = np.full(course_n, True)
         cond_diff = cond ^ cond_all
         grade_mod[cond_diff] = grade[3][cond_diff]
@@ -505,11 +511,13 @@ class Course:
         self.slope_smoothing = np.zeros(course_n)
         self.slope_smoothing[0] = grade_mod[0]
         self.slope_smoothing[-1] = grade_mod[-1]
+
         # forward
         for i in range(1, course_n - 1):
             self.slope_smoothing[i] = grade_mod[
                 i
             ] * LP_coefficient + self.slope_smoothing[i - 1] * (1 - LP_coefficient)
+
         # backward
         for i in reversed(range(course_n - 1)):
             self.slope_smoothing[i] = self.slope_smoothing[
@@ -518,6 +526,7 @@ class Course:
 
         # detect climbs
         slope_smoothing_cat = np.zeros(course_n).astype("uint8")
+
         for i in range(i, len(self.config.G_SLOPE_CUTOFF) - 1):
             slope_smoothing_cat = np.where(
                 (self.config.G_SLOPE_CUTOFF[i - 1] < self.slope_smoothing)
@@ -525,6 +534,7 @@ class Course:
                 i,
                 slope_smoothing_cat,
             )
+
         slope_smoothing_cat = np.where(
             (self.config.G_SLOPE_CUTOFF[-1] < self.slope_smoothing),
             len(self.config.G_SLOPE_CUTOFF) - 1,
@@ -534,6 +544,7 @@ class Course:
         climb_search_state = False
         climb_start_cutoff = 2
         climb_end_cutoff = 1
+
         if slope_smoothing_cat[0] >= climb_start_cutoff:
             self.climb_segment.append(
                 {
@@ -543,6 +554,7 @@ class Course:
                 }
             )
             climb_search_state = True
+
         for i in range(1, course_n):
             # search climb end (detect top of climb)
             if (
@@ -665,7 +677,7 @@ class Course:
                     + (self.latitude[min_index + j + 1] - self.latitude[min_index + j])
                     * inner_p[j]
                 )
-                dist_diff_h = self.config.get_dist_on_earth(
+                dist_diff_h = get_dist_on_earth(
                     h_lon,
                     h_lat,
                     course_points.longitude[i],
@@ -681,7 +693,7 @@ class Course:
                     min_j = j
                     min_dist_diff_h = dist_diff_h
                     min_dist_delta = (
-                        self.config.get_dist_on_earth(
+                        get_dist_on_earth(
                             self.longitude[min_index + j],
                             self.latitude[min_index + j],
                             h_lon,
@@ -753,7 +765,7 @@ class Course:
         # add end course point
         end_distance = None
         if len(self.latitude) and len(course_points.longitude):
-            end_distance = self.config.get_dist_on_earth_array(
+            end_distance = get_dist_on_earth_array(
                 self.longitude[-1],
                 self.latitude[-1],
                 course_points.longitude[-1],
@@ -783,31 +795,3 @@ class Course:
                 course_points.altitude = np.append(
                     course_points.altitude, self.altitude[-1]
                 )
-
-    @staticmethod
-    def savitzky_golay(y, window_size, order, deriv=0, rate=1):
-        try:
-            window_size = np.abs(np.intc(window_size))
-            order = np.abs(np.intc(order))
-        except ValueError:
-            raise ValueError("window_size and order have to be of type int")
-        if window_size % 2 != 1 or window_size < 1:
-            raise TypeError("window_size size must be a positive odd number")
-        if window_size < order + 2:
-            raise TypeError("window_size is too small for the polynomials order")
-        order_range = range(order + 1)
-        half_window = (window_size - 1) // 2
-        # precompute coefficients
-        b = np.mat(
-            [
-                [k**i for i in order_range]
-                for k in range(-half_window, half_window + 1)
-            ]
-        )
-        m = np.linalg.pinv(b).A[deriv] * rate**deriv * factorial(deriv)
-        # pad the signal at the extremes with
-        # values taken from the signal itself
-        firstvals = y[0] - np.abs(y[1 : half_window + 1][::-1] - y[0])
-        lastvals = y[-1] + np.abs(y[-half_window - 1 : -1][::-1] - y[-1])
-        y = np.concatenate((firstvals, y, lastvals))
-        return np.convolve(m[::-1], y, mode="valid")
