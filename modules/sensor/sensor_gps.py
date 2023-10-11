@@ -5,6 +5,7 @@ import re
 import numpy as np
 
 from modules.utils.cmd import exec_cmd, exec_cmd_return_value
+from modules.utils.geo import calc_azimuth, get_dist_on_earth, get_track_str
 from logger import app_logger
 from .sensor import Sensor
 
@@ -245,9 +246,7 @@ class SensorGPS(Sensor):
                     course_i = course_i % course_n
                 lat_points = np.array([self.values["pre_lat"], self.values["lat"]])
                 lon_points = np.array([self.values["pre_lon"], self.values["lon"]])
-                self.values["track"] = int(
-                    (self.config.calc_azimuth(lat_points, lon_points))[0]
-                )
+                self.values["track"] = int((calc_azimuth(lat_points, lon_points))[0])
 
             # calculate course_index separately
             # t2 = datetime.datetime.utcnow()
@@ -505,7 +504,7 @@ class SensorGPS(Sensor):
             )
         ):
             # 2D distance : (x1, y1), (x2, y2)
-            dist = self.config.get_dist_on_earth(
+            dist = get_dist_on_earth(
                 self.values["pre_lon"],
                 self.values["pre_lat"],
                 self.values["lon"],
@@ -531,7 +530,7 @@ class SensorGPS(Sensor):
             and self.values["speed"] > self.config.G_GPS_SPEED_CUTOFF
         ):
             self.values["track"] = int(track)
-            self.values["track_str"] = self.config.get_track_str(self.values["track"])
+            self.values["track_str"] = get_track_str(self.values["track"])
         else:
             self.values["track"] = self.values["pre_track"]
 
@@ -804,7 +803,7 @@ class SensorGPS(Sensor):
                 course.latitude[m]
                 + (course.latitude[m + 1] - course.latitude[m]) * inner_p[m]
             )
-            dist_diff_h = self.config.get_dist_on_earth(
+            dist_diff_h = get_dist_on_earth(
                 h_lon, h_lat, self.values["lon"], self.values["lat"]
             )
 
@@ -833,7 +832,7 @@ class SensorGPS(Sensor):
                 continue
 
             self.values["on_course_status"] = True
-            dist_diff_course = self.config.get_dist_on_earth(
+            dist_diff_course = get_dist_on_earth(
                 course.longitude[m],
                 course.latitude[m],
                 self.values["lon"],

@@ -1,9 +1,9 @@
-# simplify filterpy
+# simplify filterpy/kalman/kalman_filter
 
-import sys
-from math import log
 from copy import deepcopy
-
+from math import log
+import sys
+import numpy as np
 from numpy import dot, zeros, eye, isscalar, linalg, array, atleast_2d
 
 
@@ -13,7 +13,7 @@ def reshape_z(z, dim_z, ndim):
     if z.shape[1] == dim_z:
         z = z.T
     if z.shape != (dim_z, 1):
-        raise ValueError("z must be convertible to shape ({}, 1)".format(dim_z))
+        raise ValueError(f"z must be convertible to shape ({dim_z}, 1)")
     if ndim == 1:
         z = z[:, 0]
     if ndim == 0:
@@ -364,8 +364,6 @@ class KalmanFilter(object):
 
 
 class KalmanFilter_pitch:
-    import numpy as np
-
     theta_variance = 0
     theta_dot_variance = 0
     theta_update_interval = 0.1

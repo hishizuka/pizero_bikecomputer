@@ -1,8 +1,8 @@
-import datetime
 import os
 import sqlite3
 import struct
 import time
+from datetime import datetime, timedelta
 
 from logger import app_logger
 from modules.utils.date import datetime_myparser
@@ -35,7 +35,7 @@ class config_local:
 
 class LoggerFit(Logger):
     mode = None
-    epoch_datetime = datetime.datetime(1989, 12, 31, 0, 0, 0, 0)
+    epoch_datetime = datetime(1989, 12, 31, 0, 0, 0, 0)
     profile = {
         0: {
             "name": "file_id",
@@ -350,7 +350,7 @@ class LoggerFit(Logger):
                 l_num_used = True
                 if l_num == -1:
                     l_num_used = False
-                    # write header if need
+                    # write header if needed
                     local_message_num = (local_message_num + 1) % 16
                     self.local_num[local_message_num] = {
                         "message_num": message_num,
@@ -411,7 +411,7 @@ class LoggerFit(Logger):
         # write fit file
         ################
 
-        startdate_local = start_date + datetime.timedelta(seconds=offset)
+        startdate_local = start_date + timedelta(seconds=offset)
         self.config.G_LOG_START_DATE = startdate_local.strftime("%Y%m%d%H%M%S")
         filename = os.path.join(
             self.config.G_LOG_DIR, f"{self.config.G_LOG_START_DATE}.fit"

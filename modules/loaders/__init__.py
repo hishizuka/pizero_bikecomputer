@@ -1,1 +1,1 @@
-from .tcx import TcxLoader
+from .tcx import TcxLoader  # noqa

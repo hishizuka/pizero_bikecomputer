@@ -220,7 +220,7 @@ class CourseListWidget(ListWidget):
             self.add_list_item(course_item)
 
     async def list_ride_with_gps(self, add=False, reset=False):
-        courses = await self.config.network.api.get_ridewithgps_route(add, reset)
+        courses = await self.config.api.get_ridewithgps_route(add, reset)
 
         for c in reversed(courses or []):
             course_item = CourseListItemWidget(self, self.list_type, c)
@@ -382,7 +382,7 @@ class CourseDetailWidget(MenuWidget):
             return
         else:
             # 1st download
-            await self.config.network.api.get_ridewithgps_files(self.list_id)
+            await self.config.api.get_ridewithgps_files(self.list_id)
 
     def on_back_menu(self):
         self.timer.stop()
@@ -395,9 +395,8 @@ class CourseDetailWidget(MenuWidget):
 
         # sequentially draw with download
         # 1st download check
-        if (
-            self.privacy_code is None
-            and self.config.network.api.check_ridewithgps_files(self.list_id, "1st")
+        if self.privacy_code is None and self.config.api.check_ridewithgps_files(
+            self.list_id, "1st"
         ):
             self.draw_images(draw_map_image=True, draw_profile_image=False)
             self.privacy_code = self.config.logger.course.get_ridewithgps_privacycode(
@@ -405,13 +404,12 @@ class CourseDetailWidget(MenuWidget):
             )
             if self.privacy_code is not None:
                 # download files with privacy code (2nd download)
-                await self.config.network.api.get_ridewithgps_files_with_privacy_code(
+                await self.config.api.get_ridewithgps_files_with_privacy_code(
                     self.list_id, self.privacy_code
                 )
         # 2nd download with privacy_code check
-        elif (
-            self.privacy_code is not None
-            and self.config.network.api.check_ridewithgps_files(self.list_id, "2nd")
+        elif self.privacy_code is not None and self.config.api.check_ridewithgps_files(
+            self.list_id, "2nd"
         ):
             self.draw_images(draw_map_image=False, draw_profile_image=True)
             self.enable_next_button()
@@ -419,8 +417,8 @@ class CourseDetailWidget(MenuWidget):
 
     def check_all_image_and_draw(self):
         # if all files exists, reload images and buttons, stop timer and exit
-        if not self.all_downloaded and self.config.network is not None:
-            self.all_downloaded = self.config.network.api.check_ridewithgps_files(
+        if not self.all_downloaded and self.config.api is not None:
+            self.all_downloaded = self.config.api.check_ridewithgps_files(
                 self.list_id, "ALL"
             )
         if self.all_downloaded:

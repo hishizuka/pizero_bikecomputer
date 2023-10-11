@@ -8,7 +8,7 @@ import aiohttp
 import aiofiles
 
 from logger import app_logger
-from modules.helper.api import api
+from modules.utils.map import get_maptile_filename
 from modules.utils.network import detect_network
 
 
@@ -17,13 +17,30 @@ class Network:
 
     def __init__(self, config):
         self.config = config
-        self.api = api(self.config)
 
         self.download_queue = asyncio.Queue()
         asyncio.create_task(self.download_worker())
 
     async def quit(self):
         await self.download_queue.put(None)
+
+    @staticmethod
+    async def get_http_request(session, url, save_path, headers, params):
+        try:
+            async with session.get(url, headers=headers, params=params) as dl_file:
+                if dl_file.status == 200:
+                    async with aiofiles.open(save_path, mode="wb") as f:
+                        await f.write(await dl_file.read())
+                    return True
+                else:
+                    app_logger.info(
+                        f"dl_file status {dl_file.status}: {dl_file.reason}\n{url}"
+                    )
+                    return False
+        except asyncio.CancelledError:
+            return False
+        except:
+            return False
 
     @staticmethod
     async def get_json(url, params=None, headers=None, timeout=10):
@@ -42,6 +59,17 @@ class Network:
             ) as res:
                 json = await res.json()
                 return json
+
+    async def download_files(self, urls, save_paths, headers=None, params=None):
+        tasks = []
+        async with asyncio.Semaphore(self.config.G_COROUTINE_SEM):
+            async with aiohttp.ClientSession() as session:
+                for url, save_path in zip(urls, save_paths):
+                    tasks.append(
+                        self.get_http_request(session, url, save_path, headers, params)
+                    )
+                res = await asyncio.gather(*tasks)
+        return res
 
     async def download_worker(self):
         failed = []
@@ -79,6 +107,7 @@ class Network:
                     q["save_paths"] = retry_save_paths
                     await self.download_queue.put(q)
 
+    # tiles functions
     async def download_maptile(
         self, map_config, map_name, z, tiles, additional_download=False
     ):
@@ -129,13 +158,11 @@ class Network:
             request_header["User-Agent"] = map_config[map_name]["user_agent"]
 
         for tile in tiles:
-            os.makedirs(
-                "maptile/" + map_name + "/{0}/{1}/".format(z, tile[0]), exist_ok=True
-            )
+            os.makedirs(f"maptile/{map_name}/{z}/{tile[0]}/", exist_ok=True)
             url = map_config[map_name]["url"].format(
                 z=z, x=tile[0], y=tile[1], **additional_var
             )
-            save_path = self.config.get_maptile_filename(map_name, z, *tile)
+            save_path = get_maptile_filename(map_name, z, *tile)
             urls.append(url)
             save_paths.append(save_path)
 
@@ -143,29 +170,28 @@ class Network:
             {"urls": urls, "headers": request_header, "save_paths": save_paths}
         )
 
-        max_zoom_cond = True
-        if (
-            "max_zoomlevel" in map_config[map_name]
-            and z + 1 >= map_config[map_name]["max_zoomlevel"]
-        ):
-            max_zoom_cond = False
-        min_zoom_cond = True
-        if (
-            "min_zoomlevel" in map_config[map_name]
-            and z - 1 <= map_config[map_name]["min_zoomlevel"]
-        ):
-            min_zoom_cond = False
-
         if additional_download:
             additional_urls = []
             additional_save_paths = []
+
+            max_zoom_cond = True
+            if (
+                "max_zoomlevel" in map_config[map_name]
+                and z + 1 >= map_config[map_name]["max_zoomlevel"]
+            ):
+                max_zoom_cond = False
+            min_zoom_cond = True
+            if (
+                "min_zoomlevel" in map_config[map_name]
+                and z - 1 <= map_config[map_name]["min_zoomlevel"]
+            ):
+                min_zoom_cond = False
+
             for tile in tiles:
                 if max_zoom_cond:
                     for i in range(2):
                         os.makedirs(
-                            "maptile/"
-                            + map_name
-                            + "/{0}/{1}/".format(z + 1, 2 * tile[0] + i),
+                            f"maptile/{map_name}/{z + 1}/{2 * tile[0] + i}",
                             exist_ok=True,
                         )
                         for j in range(2):
@@ -173,9 +199,9 @@ class Network:
                                 z=z + 1,
                                 x=2 * tile[0] + i,
                                 y=2 * tile[1] + j,
-                                **additional_var
+                                **additional_var,
                             )
-                            save_path = self.config.get_maptile_filename(
+                            save_path = get_maptile_filename(
                                 map_name, z + 1, 2 * tile[0] + i, 2 * tile[1] + j
                             )
                             additional_urls.append(url)
@@ -186,26 +212,24 @@ class Network:
 
                 if min_zoom_cond:
                     os.makedirs(
-                        "maptile/"
-                        + map_name
-                        + "/{0}/{1}/".format(z - 1, int(tile[0] / 2)),
+                        f"maptile/{map_name}/{z - 1}/{int(tile[0] / 2)}",
                         exist_ok=True,
                     )
                     zoomout_url = map_config[map_name]["url"].format(
                         z=z - 1,
                         x=int(tile[0] / 2),
                         y=int(tile[1] / 2),
-                        **additional_var
+                        **additional_var,
                     )
                     if zoomout_url not in additional_urls:
                         additional_urls.append(zoomout_url)
                         additional_save_paths.append(
-                            self.config.get_maptile_filename(
+                            get_maptile_filename(
                                 map_name, z - 1, int(tile[0] / 2), int(tile[1] / 2)
                             )
                         )
 
-            if len(additional_urls):
+            if additional_urls:
                 await self.download_queue.put(
                     {
                         "urls": additional_urls,
@@ -216,39 +240,12 @@ class Network:
 
         return True
 
-    @staticmethod
-    async def get_http_request(session, url, save_path, headers, params):
-        try:
-            async with session.get(url, headers=headers, params=params) as dl_file:
-                if dl_file.status == 200:
-                    async with aiofiles.open(save_path, mode="wb") as f:
-                        await f.write(await dl_file.read())
-                    return True
-                else:
-                    return False
-        except asyncio.CancelledError:
-            return False
-        except:
-            return False
-
-    async def download_files(self, urls, save_paths, headers=None, params=None):
-        tasks = []
-        async with asyncio.Semaphore(self.config.G_COROUTINE_SEM):
-            async with aiohttp.ClientSession() as session:
-                for url, save_path in zip(urls, save_paths):
-                    tasks.append(
-                        self.get_http_request(session, url, save_path, headers, params)
-                    )
-                res = await asyncio.gather(*tasks)
-        return res
-
     async def download_demtile(self, z, x, y):
         if not detect_network():
             return False
-        header = {}
         try:
             os.makedirs(
-                "maptile/" + self.config.G_DEM_MAP + "/{0}/{1}/".format(z, x),
+                f"maptile/{self.config.G_DEM_MAP}/{z}/{x}/",
                 exist_ok=True,
             )
             await self.download_queue.put(
@@ -258,11 +255,8 @@ class Network:
                             "url"
                         ].format(z=z, x=x, y=y),
                     ],
-                    "headers": header,
                     "save_paths": [
-                        self.config.get_maptile_filename(
-                            self.config.G_DEM_MAP, z, x, y
-                        ),
+                        get_maptile_filename(self.config.G_DEM_MAP, z, x, y),
                     ],
                 }
             )
