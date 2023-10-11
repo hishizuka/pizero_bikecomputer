@@ -116,7 +116,7 @@ class Course:
             if os.path.exists(self.config.G_COURSE_FILE_PATH):
                 os.remove(self.config.G_COURSE_FILE_PATH)
             if not replace and self.config.G_THINGSBOARD_API["STATUS"]:
-                self.config.network.api.send_livetrack_course_reset()
+                self.config.api.send_livetrack_course_reset()
 
     def load(self, file=None):
         # if file is given, copy it to self.config.G_COURSE_FILE_PATH firsthand, we are loading a new course
@@ -177,7 +177,7 @@ class Course:
         log_timers(timers, text_total="total               : {0:.3f} sec")
 
         if self.config.G_THINGSBOARD_API["STATUS"]:
-            self.config.network.api.send_livetrack_course_load()
+            self.config.api.send_livetrack_course_load()
 
     async def load_google_map_route(self, load_html=False, html_file=None):
         self.reset()
@@ -198,7 +198,7 @@ class Course:
         self.modify_course_points()
 
         if self.config.G_THINGSBOARD_API["STATUS"]:
-            self.config.network.api.send_livetrack_course_load()
+            self.config.api.send_livetrack_course_load()
 
         self.config.gui.init_course()
 
@@ -215,7 +215,7 @@ class Course:
         self.modify_course_points()
 
         if self.config.G_THINGSBOARD_API["STATUS"]:
-            self.config.network.api.send_livetrack_course_load()
+            self.config.api.send_livetrack_course_load()
 
     def get_ridewithgps_privacycode(self, route_id):
         privacy_code = None
@@ -232,7 +232,7 @@ class Course:
         return privacy_code
 
     async def get_google_route_from_mapstogpx(self, url):
-        json_routes = await self.config.network.api.get_google_route_from_mapstogpx(url)
+        json_routes = await self.config.api.get_google_route_from_mapstogpx(url)
 
         self.info["Name"] = "Google routes"
         self.info["DistanceMeters"] = round(json_routes["totaldist"] / 1000, 1)
@@ -316,7 +316,7 @@ class Course:
             return
 
     async def get_google_route(self, x1, y1, x2, y2):
-        json_routes = await self.config.network.api.get_google_routes(x1, y1, x2, y2)
+        json_routes = await self.config.api.get_google_routes(x1, y1, x2, y2)
 
         if not POLYLINE_DECODER or json_routes is None or json_routes["status"] != "OK":
             return

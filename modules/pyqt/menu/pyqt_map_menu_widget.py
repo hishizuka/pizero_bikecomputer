@@ -110,7 +110,7 @@ class HeatmapListWidget(ListWidget):
         # update strava cookie
         if "strava_heatmap" in self.config.G_HEATMAP_OVERLAY_MAP:
             asyncio.get_running_loop().run_in_executor(
-                None, self.config.network.api.get_strava_cookie
+                None, self.config.api.get_strava_cookie
             )
 
 

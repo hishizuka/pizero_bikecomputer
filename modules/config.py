@@ -642,6 +642,7 @@ class Config:
     logger = None
     display = None
     network = None
+    api = None
     bt_pan = None
     ble_uart = None
     setting = None
@@ -779,8 +780,10 @@ class Config:
 
         # network
         await self.gui.set_boot_status("initialize network modules...")
+        from modules.helper.api import api
         from modules.helper.network import Network
 
+        self.api = api(self)
         self.network = Network(self)
 
         # bluetooth

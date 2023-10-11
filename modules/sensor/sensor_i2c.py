@@ -1104,7 +1104,7 @@ class SensorI2C(Sensor):
         else:
             v = self.config.logger.sensor.values["GPS"]
             try:
-                api_data = await self.config.network.api.get_openweathermap_data(
+                api_data = await self.config.api.get_openweathermap_data(
                     v["lon"], v["lat"]
                 )
                 if api_data is None:

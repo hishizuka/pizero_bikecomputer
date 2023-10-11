@@ -8,7 +8,6 @@ import aiohttp
 import aiofiles
 
 from logger import app_logger
-from modules.helper.api import api
 from modules.utils.map import get_maptile_filename
 from modules.utils.network import detect_network
 
@@ -18,7 +17,6 @@ class Network:
 
     def __init__(self, config):
         self.config = config
-        self.api = api(self.config)
 
         self.download_queue = asyncio.Queue()
         asyncio.create_task(self.download_worker())

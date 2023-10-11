@@ -644,13 +644,13 @@ class MapWidget(BaseMapWidget):
         if self.update_overlay_basetime(map_config, map_name):
             # basetime update
             if "jpn_scw" in map_name:
-                init_time_list = await self.config.network.api.get_scw_list(
+                init_time_list = await self.config.api.get_scw_list(
                     map_config[map_name], "inittime"
                 )
                 if init_time_list is not None:
                     map_config[map_name]["basetime"] = init_time_list[0]["it"]
 
-                timeline = await self.config.network.api.get_scw_list(
+                timeline = await self.config.api.get_scw_list(
                     map_config[map_name], "fl"
                 )
                 if timeline is not None:

@@ -374,15 +374,15 @@ class UploadActivityMenuWidget(MenuWidget):
 
     @qasync.asyncSlot()
     async def strava_upload(self):
-        await self.buttons["Strava"].run(self.config.network.api.strava_upload)
+        await self.buttons["Strava"].run(self.config.api.strava_upload)
 
     @qasync.asyncSlot()
     async def garmin_upload(self):
-        await self.buttons["Garmin"].run(self.config.network.api.garmin_upload)
+        await self.buttons["Garmin"].run(self.config.api.garmin_upload)
 
     @qasync.asyncSlot()
     async def rwgps_upload(self):
-        await self.buttons["Ride with GPS"].run(self.config.network.api.rwgps_upload)
+        await self.buttons["Ride with GPS"].run(self.config.api.rwgps_upload)
 
 
 class LiveTrackMenuWidget(MenuWidget):
@@ -400,7 +400,7 @@ class LiveTrackMenuWidget(MenuWidget):
         self.add_buttons(button_conf)
 
         if (
-            self.config.network.api.thingsboard_check()
+            self.config.api.thingsboard_check()
             and self.config.G_THINGSBOARD_API["HAVE_API_TOKEN"]
         ):
             if not self.config.G_IS_RASPI:

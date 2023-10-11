@@ -342,7 +342,7 @@ class LoggerCore:
 
         # send online
         if self.config.G_THINGSBOARD_API["STATUS"]:
-            self.config.network.api.send_livetrack_data(quick_send=True)
+            self.config.api.send_livetrack_data(quick_send=True)
 
         # show message
         self.config.gui.show_popup(self.config.G_MANUAL_STATUS + popup_extra)
@@ -658,7 +658,7 @@ class LoggerCore:
 
         # send online
         if self.config.G_THINGSBOARD_API["STATUS"]:
-            self.config.network.api.send_livetrack_data(quick_send=False)
+            self.config.api.send_livetrack_data(quick_send=False)
 
     def calc_gross(self):
         # elapsed_time
