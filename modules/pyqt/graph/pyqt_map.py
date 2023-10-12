@@ -946,7 +946,7 @@ class MapWidget(BaseMapWidget):
         else:
             sql = (
                 f"select tile_data from tiles where "
-                f"zoom_level={z_draw} and tile_column={x} and tile_row={2 ** z_draw - 1 - y}"
+                f"zoom_level={z_draw} and tile_column={x} and tile_row={2**z_draw - 1 - y}"
             )
             img_file = io.BytesIO((self.cur.execute(sql).fetchone())[0])
         return img_file

@@ -564,13 +564,13 @@ class api:
                 await asyncio.sleep(5)
                 self.bt_cmd_lock = False
                 app_logger.error(
-                    f"[BT] {timestamp_str} connect error, network status: {detect_network()}"
+                    f"[BT] {timestamp_str} connect error, network status: {bool(detect_network())}"
                 )
                 self.config.logger.sensor.values["integrated"]["send_time"] = (
                     datetime.datetime.now().strftime("%H:%M") + "CE"
                 )
                 return
-            # print("[BT] {} connect, network status:{} {}".format(timestamp_str, detect_network(), count))
+            # print(f"[BT] {timestamp_str} connect, network status:{bool(detect_network())} {count}")
 
         await asyncio.sleep(5)
 

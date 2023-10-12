@@ -16,10 +16,12 @@ patterns = {
     "longitude": re.compile(r"<LongitudeDegrees>(?P<text>[^<]*)</LongitudeDegrees>"),
     "altitude": re.compile(r"<AltitudeMeters>(?P<text>[^<]*)</AltitudeMeters>"),
     "distance": re.compile(r"<DistanceMeters>(?P<text>[^<]*)</DistanceMeters>"),
+    "time": re.compile(r"<Time>(?P<text>[^<]*)</Time>"),
     "course_point": re.compile(r"<CoursePoint>(?P<text>[\s\S]+)</CoursePoint>"),
     "course_name": re.compile(r"<Name>(?P<text>[^<]*)</Name>"),
     "course_point_type": re.compile(r"<PointType>(?P<text>[^<]*)</PointType>"),
     "course_notes": re.compile(r"<Notes>(?P<text>[^<]*)</Notes>"),
+    "course_time": re.compile(r"<Time>(?P<text>[^<]*)</Time>"),
 }
 
 
@@ -39,8 +41,9 @@ class TcxLoader:
             "longitude": None,
             "altitude": None,
             "distance": None,
+            "time": None,
         }
-        course_points = defaultdict(list)
+        course_points = defaultdict(lambda: np.array([]))
 
         with open(file, "r", encoding="utf-8_sig") as f:
             tcx = f.read()
@@ -82,6 +85,9 @@ class TcxLoader:
                         for m in patterns["distance"].finditer(track)
                     ]
                 )
+                course["time"] = np.array(
+                    [m.group("text").strip() for m in patterns["time"].finditer(track)]
+                )
 
             match_course_point = patterns["course_point"].search(tcx)
 
@@ -117,6 +123,12 @@ class TcxLoader:
                         for m in patterns["course_notes"].finditer(course_point)
                     ]
                 )
+                course_points["time"] = np.array(
+                    [
+                        m.group("text").strip()
+                        for m in patterns["course_time"].finditer(course_point)
+                    ]
+                )
 
         valid_course = True
         if len(course["latitude"]) != len(course["longitude"]):
@@ -145,7 +157,7 @@ class TcxLoader:
             course["altitude"] = np.array([])
             course["latitude"] = np.array([])
             course["longitude"] = np.array([])
-            course_points = defaultdict(lambda x: np.array([]))
+            course_points = defaultdict(lambda: np.array([]))
         else:
             # delete 'Straight' from course points
             if len(course_points["type"]):
@@ -155,5 +167,46 @@ class TcxLoader:
 
                 for key in ["name", "latitude", "longitude", "notes", "type"]:
                     course_points[key] = course_points[key][not_straight_cond]
+
+        # if time is given in the field, try to set the course point distance/altitude directly from there
+        # if a point can not be found, let's fail and modify_course_point will try to compute it instead
+        if (
+            course["time"] is not None
+            and len(course["time"])
+            and len(course_points["time"])
+        ):
+            distance_error = False
+            altitude_error = False
+
+            for point_time in course_points["time"]:
+                try:
+                    index = np.where(course["time"] == point_time)[0][0]
+                except Exception:  # noqa
+                    # Point time not found in trackpoint reset and break
+                    course_points.distance = np.array([])
+                    course_points.altitude = np.array([])
+                    break
+                if not distance_error:
+                    try:
+                        # course_point distance is set in [km]
+                        course_points["distance"] = np.append(
+                            course_points["distance"], course["distance"][index] / 1000
+                        )
+                    except IndexError:
+                        distance_error = True
+                        course_points.distance = np.array([])
+                if not altitude_error:
+                    try:
+                        # course_point altitude is set in [m]
+                        course_points["altitude"] = np.append(
+                            course_points["altitude"], course["altitude"][index]
+                        )
+                    except IndexError:
+                        altitude_error = True
+                        course_points.altitude = np.array([])
+
+        # do not keep these in memory
+        del course["time"]
+        del course_points["time"]
 
         return course, course_points

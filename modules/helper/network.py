@@ -175,12 +175,15 @@ class Network:
             additional_save_paths = []
 
             max_zoom_cond = True
+
             if (
                 "max_zoomlevel" in map_config[map_name]
                 and z + 1 >= map_config[map_name]["max_zoomlevel"]
             ):
                 max_zoom_cond = False
+
             min_zoom_cond = True
+
             if (
                 "min_zoomlevel" in map_config[map_name]
                 and z - 1 <= map_config[map_name]["min_zoomlevel"]
@@ -243,6 +246,7 @@ class Network:
     async def download_demtile(self, z, x, y):
         if not detect_network():
             return False
+
         try:
             os.makedirs(
                 f"maptile/{self.config.G_DEM_MAP}/{z}/{x}/",
