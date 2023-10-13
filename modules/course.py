@@ -790,7 +790,7 @@ class Course:
         # add end course point
         end_distance = None
         if len(self.latitude) and len(course_points.longitude):
-            end_distance = get_dist_on_earth_array(
+            end_distance = get_dist_on_earth(
                 self.longitude[-1],
                 self.latitude[-1],
                 course_points.longitude[-1],
