@@ -122,11 +122,12 @@ class Course:
         # if file is given, copy it to self.config.G_COURSE_FILE_PATH firsthand, we are loading a new course
         if file:
             _, ext = os.path.splitext(file)
-            shutil.copy2(file, self.config.G_COURSE_FILE_PATH)
-            if ext:
-                os.setxattr(
-                    self.config.G_COURSE_FILE_PATH, "user.ext", ext[1:].encode()
-                )
+            shutil.copy(file, self.config.G_COURSE_FILE_PATH)
+            #shutil.copy2(file, self.config.G_COURSE_FILE_PATH)
+            #if ext:
+            #    os.setxattr(
+            #        self.config.G_COURSE_FILE_PATH, "user.ext", ext[1:].encode()
+            #    )
 
         self.reset()
 
@@ -144,9 +145,10 @@ class Course:
                 # extension was set in custom attributes as the current course is always
                 # loaded from '.current'
                 try:
-                    ext = os.getxattr(
-                        self.config.G_COURSE_FILE_PATH, "user.ext"
-                    ).decode()
+                    #ext = os.getxattr(
+                    #    self.config.G_COURSE_FILE_PATH, "user.ext"
+                    #).decode()
+                    ext = "tcx"
                     if ext in LOADERS:
                         course_data, course_points_data = LOADERS[ext].load_file(
                             self.config.G_COURSE_FILE_PATH
@@ -641,95 +643,104 @@ class Course:
             len_dist = len(self.distance)
             len_alt = len(self.altitude)
 
-            # calculate course point distance
-            if not len_pnt_dist and len_dist:
-                course_points.distance = np.empty(len_pnt_lat)
-            if not len_pnt_alt and len_alt:
-                course_points.altitude = np.zeros(len_pnt_lat)
-
-            min_index = 0
-            for i in range(len_pnt_lat):
-                b_a_x = self.points_diff[0][min_index:]
-                b_a_y = self.points_diff[1][min_index:]
-                lon_diff = course_points.longitude[i] - self.longitude[min_index:]
-                lat_diff = course_points.latitude[i] - self.latitude[min_index:]
-                p_a_x = lon_diff[:-1]
-                p_a_y = lat_diff[:-1]
-                inner_p = (
-                    b_a_x * p_a_x + b_a_y * p_a_y
-                ) / self.points_diff_sum_of_squares[min_index:]
-                inner_p_check = np.where(
-                    (0.0 <= inner_p) & (inner_p <= 1.0), True, False
-                )
-
-                min_j = None
-                min_dist_diff_h = np.inf
-                min_dist_delta = 0
-                min_alt_delta = 0
-                for j in list(*np.where(inner_p_check == True)):
-                    h_lon = (
-                        self.longitude[min_index + j]
-                        + (
-                            self.longitude[min_index + j + 1]
-                            - self.longitude[min_index + j]
-                        )
-                        * inner_p[j]
-                    )
-                    h_lat = (
-                        self.latitude[min_index + j]
-                        + (
-                            self.latitude[min_index + j + 1]
-                            - self.latitude[min_index + j]
-                        )
-                        * inner_p[j]
-                    )
-                    dist_diff_h = get_dist_on_earth(
-                        h_lon,
-                        h_lat,
-                        course_points.longitude[i],
-                        course_points.latitude[i],
-                    )
-
-                    if (
-                        dist_diff_h < self.config.G_GPS_ON_ROUTE_CUTOFF
-                        and dist_diff_h < min_dist_diff_h
-                    ):
-                        if min_j is not None and j - min_j > 2:
-                            continue
-                        min_j = j
-                        min_dist_diff_h = dist_diff_h
-                        min_dist_delta = (
-                            get_dist_on_earth(
-                                self.longitude[min_index + j],
-                                self.latitude[min_index + j],
-                                h_lon,
-                                h_lat,
-                            )
-                            / 1000
-                        )
-                        if len_alt:
-                            min_alt_delta = (
-                                (
-                                    self.altitude[min_index + j + 1]
-                                    - self.altitude[min_index + j]
-                                )
-                                / (
-                                    self.distance[min_index + j + 1]
-                                    - self.distance[min_index + j]
-                                )
-                                * min_dist_delta
-                            )
-
-                if min_j is None:
-                    min_j = 0
-                min_index = min_index + min_j
-
+            # calculate course point distance/altitude if not both already set
+            # If one is already set, it's not going to be overwritten
+            # But if both are already set there's no need to recalculate anything
+            if not len_pnt_dist or not len_pnt_alt:
                 if not len_pnt_dist and len_dist:
-                    course_points.distance[i] = (
-                        self.distance[min_index] + min_dist_delta
-                    )
+                    course_points.distance = np.empty(len_pnt_lat)
                 if not len_pnt_alt and len_alt:
-                    course_points.altitude[i] = self.altitude[min_index] + min_alt_delta
+                    course_points.altitude = np.zeros(len_pnt_lat)
+
+                min_index = 0
+
+                for i in range(len_pnt_lat):
+                    b_a_x = self.points_diff[0][min_index:]
+                    b_a_y = self.points_diff[1][min_index:]
+                    lon_diff = course_points.longitude[i] - self.longitude[min_index:]
+                    lat_diff = course_points.latitude[i] - self.latitude[min_index:]
+                    p_a_x = lon_diff[:-1]
+                    p_a_y = lat_diff[:-1]
+                    inner_p = (
+                        b_a_x * p_a_x + b_a_y * p_a_y
+                    ) / self.points_diff_sum_of_squares[min_index:]
+                    inner_p_check = np.where(
+                        (0.0 <= inner_p) & (inner_p <= 1.0), True, False
+                    )
+
+                    min_j = None
+                    min_dist_diff_h = np.inf
+                    min_dist_delta = 0
+                    min_alt_delta = 0
+
+                    for j in list(*np.where(inner_p_check == True)):
+                        h_lon = (
+                            self.longitude[min_index + j]
+                            + (
+                                self.longitude[min_index + j + 1]
+                                - self.longitude[min_index + j]
+                            )
+                            * inner_p[j]
+                        )
+                        h_lat = (
+                            self.latitude[min_index + j]
+                            + (
+                                self.latitude[min_index + j + 1]
+                                - self.latitude[min_index + j]
+                            )
+                            * inner_p[j]
+                        )
+                        dist_diff_h = get_dist_on_earth(
+                            h_lon,
+                            h_lat,
+                            course_points.longitude[i],
+                            course_points.latitude[i],
+                        )
+
+                        if (
+                            dist_diff_h < self.config.G_GPS_ON_ROUTE_CUTOFF
+                            and dist_diff_h < min_dist_diff_h
+                        ):
+                            if min_j is not None and j - min_j > 2:
+                                continue
+
+                            min_j = j
+                            min_dist_diff_h = dist_diff_h
+                            min_dist_delta = (
+                                get_dist_on_earth(
+                                    self.longitude[min_index + j],
+                                    self.latitude[min_index + j],
+                                    h_lon,
+                                    h_lat,
+                                )
+                                / 1000
+                            )
+                            if len_alt:
+                                min_alt_delta = (
+                                    (
+                                        self.altitude[min_index + j + 1]
+                                        - self.altitude[min_index + j]
+                                    )
+                                    / (
+                                        self.distance[min_index + j + 1]
+                                        - self.distance[min_index + j]
+                                    )
+                                    * min_dist_delta
+                                )
+
+                    if min_j is None:
+                        min_j = 0
+
+                    min_index = min_index + min_j
+
+                    if not len_pnt_dist and len_dist:
+                        course_points.distance[i] = (
+                            self.distance[min_index] + min_dist_delta
+                        )
+                    if not len_pnt_alt and len_alt:
+                        course_points.altitude[i] = (
+                            self.altitude[min_index] + min_alt_delta
+                        )
 
             # add climb tops
             # if len(self.climb_segment):
@@ -755,6 +766,9 @@ class Course:
                 # TODO do not use float
                 and course_points.distance[0] != 0.0
             ):
+                app_logger.info(
+                    f"Missing start of the course point, first value is {course_points.distance[0]}, inserting"
+                )
                 course_points.name = np.insert(course_points.name, 0, "Start")
                 course_points.latitude = np.insert(
                     course_points.latitude, 0, self.latitude[0]
@@ -770,6 +784,7 @@ class Course:
                     course_points.altitude = np.insert(
                         course_points.altitude, 0, self.altitude[0]
                     )
+
             # add end course point
             end_distance = None
             if len(self.latitude) and len(course_points.longitude):
@@ -786,6 +801,9 @@ class Course:
                 and end_distance is not None
                 and end_distance > 5
             ):
+                app_logger.info(
+                    f"Missing end of the course point last distance is {end_distance}, inserting"
+                )
                 course_points.name = np.append(course_points.name, "End")
                 course_points.latitude = np.append(
                     course_points.latitude, self.latitude[-1]
