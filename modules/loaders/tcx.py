@@ -165,7 +165,7 @@ class TcxLoader:
                     course_points["type"] != "Straight", True, False
                 )
 
-                for key in ["name", "latitude", "longitude", "notes", "type"]:
+                for key in ["name", "latitude", "longitude", "notes", "type", "time"]:
                     course_points[key] = course_points[key][not_straight_cond]
 
         # if time is given in the field, try to set the course point distance/altitude directly from there
