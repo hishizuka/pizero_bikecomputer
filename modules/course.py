@@ -122,11 +122,12 @@ class Course:
         # if file is given, copy it to self.config.G_COURSE_FILE_PATH firsthand, we are loading a new course
         if file:
             _, ext = os.path.splitext(file)
-            shutil.copy2(file, self.config.G_COURSE_FILE_PATH)
-            if ext:
-                os.setxattr(
-                    self.config.G_COURSE_FILE_PATH, "user.ext", ext[1:].encode()
-                )
+            shutil.copy(file, self.config.G_COURSE_FILE_PATH)
+            #shutil.copy2(file, self.config.G_COURSE_FILE_PATH)
+            #if ext:
+            #    os.setxattr(
+            #        self.config.G_COURSE_FILE_PATH, "user.ext", ext[1:].encode()
+            #    )
 
         self.reset()
 
@@ -144,9 +145,10 @@ class Course:
                 # extension was set in custom attributes as the current course is always
                 # loaded from '.current'
                 try:
-                    ext = os.getxattr(
-                        self.config.G_COURSE_FILE_PATH, "user.ext"
-                    ).decode()
+                    #ext = os.getxattr(
+                    #    self.config.G_COURSE_FILE_PATH, "user.ext"
+                    #).decode()
+                    ext = "tcx"
                     if ext in LOADERS:
                         course_data, course_points_data = LOADERS[ext].load_file(
                             self.config.G_COURSE_FILE_PATH
