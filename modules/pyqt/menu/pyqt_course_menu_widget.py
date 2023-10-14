@@ -134,12 +134,15 @@ class CoursesMenuWidget(MenuWidget):
     async def load_file(self, filename):
         # HTML from GoogleMap App
         if filename == self.config.G_RECEIVE_COURSE_FILE:
-            await self.load_html_route(
-                os.path.join(
-                    self.config.G_COURSE_DIR, self.config.G_RECEIVE_COURSE_FILE
+            if not detect_network():
+                self.config.gui.change_dialog(title="Requires network connection.", button_label="Return")
+            else:
+                await self.load_html_route(
+                    os.path.join(
+                        self.config.G_COURSE_DIR, self.config.G_RECEIVE_COURSE_FILE
+                    )
                 )
-            )
-            self.onoff_course_cancel_button()
+                self.onoff_course_cancel_button()
         # tcx file
         elif filename.lower().find(".tcx") >= 0:
             await self.load_tcx_route(filename)
