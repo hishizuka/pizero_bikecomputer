@@ -131,6 +131,14 @@ class GadgetbridgeService(Service):
                 asyncio.create_task(
                     self.config.logger.sensor.sensor_gps.update_GB(message)
                 )
+            elif (
+                "t" in message
+                and message["t"] == "nav"
+                and "instr" in message
+                and "distance" in message
+                and "action" in message
+            ):
+                app_logger.info(f"{message['instr']}, {message['distance']}, {message['action']},")
 
             self.value_extend = False
 
