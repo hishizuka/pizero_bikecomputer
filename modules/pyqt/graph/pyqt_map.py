@@ -1,6 +1,5 @@
 import datetime
 import io
-import math
 import os
 import sqlite3
 
@@ -54,6 +53,11 @@ class MapWidget(BaseMapWidget):
     cuesheet_widget = None
 
     # misc
+    arrow_direction_num = 16
+    # calculate these ony once
+    arrow_direction_angle_unit = 360 / arrow_direction_num
+    arrow_direction_angle_unit_half = arrow_direction_angle_unit / 2
+
     y_mod = 1.22  # 31/25 at Tokyo(N35)
     pre_zoomlevel = {}
 
@@ -69,47 +73,48 @@ class MapWidget(BaseMapWidget):
     # signal for physical button
     signal_search_route = QtCore.pyqtSignal()
 
+    track_pen = pg.mkPen(color=(0, 170, 255), width=4)
+    scale_pen = pg.mkPen(color=(0, 0, 0), width=3)
+
+    scale_text = pg.TextItem(
+        text="",
+        anchor=(0.5, 1),
+        angle=0,
+        border=(255, 255, 255, 255),
+        fill=(255, 255, 255, 255),
+        color=(0, 0, 0),
+    )
+
+    map_attribution = pg.TextItem(
+        anchor=(1, 1),
+        angle=0,
+        border=(255, 255, 255, 255),
+        fill=(255, 255, 255, 255),
+        color=(0, 0, 0),
+    )
+
     def setup_ui_extra(self):
         super().setup_ui_extra()
 
         self.map_pos["x"] = self.config.G_DUMMY_POS_X
         self.map_pos["y"] = self.config.G_DUMMY_POS_Y
-        self.current_point.setZValue(40)
 
         # self.plot.showGrid(x=True, y=True, alpha=1)
-        self.track_plot = self.plot.plot(pen=pg.mkPen(color=(0, 170, 255), width=4))
+        self.track_plot = self.plot.plot(pen=self.track_pen)
+        self.scale_plot = self.plot.plot(pen=self.scale_pen)
+
+        self.current_point.setZValue(40)
         self.track_plot.setZValue(30)
-        # self.track_plot = self.plot.plot(pen=pg.mkPen(color=(0,192,255,128), width=8))
-
-        self.scale_plot = self.plot.plot(pen=pg.mkPen(color=(0, 0, 0), width=3))
-        self.scale_text = pg.TextItem(
-            text="",
-            anchor=(0.5, 1),
-            angle=0,
-            border=(255, 255, 255, 255),
-            fill=(255, 255, 255, 255),
-            color=(0, 0, 0),
-        )
         self.scale_text.setZValue(100)
-        self.plot.addItem(self.scale_text)
-
-        self.map_attribution = pg.TextItem(
-            anchor=(1, 1),
-            angle=0,
-            border=(255, 255, 255, 255),
-            fill=(255, 255, 255, 255),
-            color=(0, 0, 0),
-        )
         self.map_attribution.setZValue(100)
 
         self.plot.addItem(self.map_attribution)
+        self.plot.addItem(self.scale_text)
 
         # current point
         self.point["size"] = 29
-        self.arrow_direction_num = 16
-        self.arrow_direction_angle_unit = 360 / self.arrow_direction_num
-        self.arrow_direction_angle_unit_half = self.arrow_direction_angle_unit / 2
-        self.direction_arrow = []
+
+        self.direction_arrows = []
         array_symbol_base = np.array(
             [
                 [-0.45, -0.5],
@@ -119,19 +124,19 @@ class MapWidget(BaseMapWidget):
                 [-0.45, -0.5],
             ]
         )  # 0 or 360 degree
-        self.direction_arrow.append(
+        self.direction_arrows.append(
             pg.arrayToQPath(
                 array_symbol_base[:, 0], -array_symbol_base[:, 1], connect="all"
             )
         )
-        self.current_point.setSymbol(self.direction_arrow[0])
+        self.current_point.setSymbol(self.direction_arrows[0])
         for i in range(1, self.arrow_direction_num):
             rad = np.deg2rad(i * 360 / self.arrow_direction_num)
             cos_rad = np.cos(rad)
             sin_rad = np.sin(rad)
             R = np.array([[cos_rad, sin_rad], [-sin_rad, cos_rad]])
             array_symbol_conv = np.dot(R, array_symbol_base.T).T
-            self.direction_arrow.append(
+            self.direction_arrows.append(
                 pg.arrayToQPath(
                     array_symbol_conv[:, 0], -array_symbol_conv[:, 1], connect="all"
                 )
@@ -375,7 +380,8 @@ class MapWidget(BaseMapWidget):
         app_logger.info("Plotting course:")
         log_timers(timers, text_total=f"total        : {0:.3f} sec")
 
-    async def update_extra(self):
+    @qasync.asyncSlot()
+    async def update_display(self):
         # display current position
         if len(self.location):
             self.plot.removeItem(self.current_point)
@@ -392,7 +398,7 @@ class MapWidget(BaseMapWidget):
             # recent point(from log or pre_point) / course start / dummy
             if len(self.tracks_lon) and len(self.tracks_lat):
                 self.point["pos"] = [self.tracks_lon_pos, self.tracks_lat_pos]
-            elif len(self.course.longitude) and len(self.course.latitude):
+            elif self.course.is_set:
                 self.point["pos"] = [
                     self.course.longitude[0],
                     self.course.latitude[0],
@@ -405,7 +411,7 @@ class MapWidget(BaseMapWidget):
         # update y_mod (adjust for lat:lon=1:1)
         self.y_mod = calc_y_mod(self.point["pos"][1])
         # add position circle to map
-        if self.gps_values["mode"] == 3:
+        if self.gps_values["mode"] == 3:  # NMEA_MODE_3D
             self.point["brush"] = self.point_color["fix"]
         else:
             self.point["brush"] = self.point_color["lost"]
@@ -425,10 +431,10 @@ class MapWidget(BaseMapWidget):
         if (
             self.lock_status
             and len(self.course.distance)
-            and self.gps_values["on_course_status"]
+            and self.course.index.on_course_status
         ):
-            index = self.gps_sensor.get_index_with_distance_cutoff(
-                self.gps_values["course_index"],
+            index = self.course.get_index_with_distance_cutoff(
+                self.course.index.value,
                 # get some forward distance [m]
                 get_width_distance(self.map_pos["y"], self.map_area["w"]) / 1000,
             )
@@ -475,7 +481,7 @@ class MapWidget(BaseMapWidget):
 
         if not np.isnan(self.gps_values["track"]):
             self.current_point.setSymbol(
-                self.direction_arrow[
+                self.direction_arrows[
                     self.get_arrow_angle_index(self.gps_values["track"])
                 ]
             )
@@ -522,10 +528,11 @@ class MapWidget(BaseMapWidget):
         self.get_track()
         self.track_plot.setData(self.tracks_lon, self.tracks_lat)
 
-        # draw scale
-        self.draw_scale(x_start, y_start)
-        # draw map attribution
-        self.draw_map_attribution(x_start, y_start)
+        if not np.any(np.isnan([x_start, y_start])):
+            # draw scale
+            self.draw_scale(x_start, y_start)
+            # draw map attribution
+            self.draw_map_attribution(x_start, y_start)
 
     def get_track(self):
         # get track from SQL

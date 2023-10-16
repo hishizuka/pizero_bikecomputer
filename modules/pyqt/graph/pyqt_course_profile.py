@@ -1,4 +1,5 @@
 import numpy as np
+import qasync
 
 from modules._pyqt import QtGui, pg
 from modules.pyqt.graph.pyqtgraph.CourseProfileGraphItem import CourseProfileGraphItem
@@ -54,7 +55,7 @@ class CourseProfileGraphWidget(BaseMapWidget):
         with Timer(
             auto_start=False, auto_log=True, text="Plotting course profile: {0:.3f} sec"
         ):
-            if not self.sensor.sensor_gps.hasGPS():
+            if not self.sensor.sensor_gps.is_real:
                 self.zoom = self.config.G_MAX_ZOOM
 
             self.plot.showGrid(x=True, y=True, alpha=1)
@@ -112,7 +113,8 @@ class CourseProfileGraphWidget(BaseMapWidget):
         self.course_loaded = False
         self.resizeEvent(None)
 
-    async def update_extra(self):
+    @qasync.asyncSlot()
+    async def update_display(self):
         if not self.course.is_set or not len(self.course.altitude):
             return
 
@@ -121,7 +123,7 @@ class CourseProfileGraphWidget(BaseMapWidget):
             self.course_loaded = True
 
         if self.zoom == self.config.G_MAX_ZOOM:
-            self.zoom_plus()
+            await self.zoom_plus()
             return
 
         # remove current position for reloading
@@ -132,11 +134,10 @@ class CourseProfileGraphWidget(BaseMapWidget):
         # initialize
         x_width = self.zoom / 1000
         dist_end = self.course.distance[-1]
-        self.graph_index = self.gps_values["course_index"]
-        x_start = self.course.distance[self.graph_index]
+        graph_index = self.course.index.value
+        x_start = self.course.distance[graph_index]
 
-        # get x,y from current position or start(temporary) without GPS
-        if self.gps_values["on_course_status"]:
+        if self.course.index.on_course_status:
             self.point["brush"] = self.point_color["fix"]
         else:
             self.point["brush"] = self.point_color["lost"]
@@ -146,7 +147,7 @@ class CourseProfileGraphWidget(BaseMapWidget):
             self.map_pos["x"] = x_start - x_width / 10
             if self.map_pos["x"] < 0:
                 self.map_pos["x"] = 0
-            self.map_pos["x_index"] = self.graph_index
+            self.map_pos["x_index"] = graph_index
         else:  # no lock (scroll is available)
             self.map_pos["x"] += self.move_pos["x"] / 1000
             if self.map_pos["x"] <= 0:
@@ -154,20 +155,18 @@ class CourseProfileGraphWidget(BaseMapWidget):
             elif self.map_pos["x"] >= dist_end:
                 self.map_pos["x_index"] = len(self.course.distance) - 1
             elif self.move_pos["x"] != 0:
-                self.map_pos[
-                    "x_index"
-                ] = self.gps_sensor.get_index_with_distance_cutoff(
+                self.map_pos["x_index"] = self.course.get_index_with_distance_cutoff(
                     self.map_pos["x_index"], self.move_pos["x"] / 1000
                 )
 
         x_end = self.map_pos["x"] + x_width
         if x_end >= dist_end:
             x_end_index = len(self.course.distance) - 1
-            self.map_pos["x_index"] = self.gps_sensor.get_index_with_distance_cutoff(
+            self.map_pos["x_index"] = self.course.get_index_with_distance_cutoff(
                 x_end_index, -x_width
             )
         else:
-            x_end_index = self.gps_sensor.get_index_with_distance_cutoff(
+            x_end_index = self.course.get_index_with_distance_cutoff(
                 self.map_pos["x_index"], x_width
             )
 
@@ -185,11 +184,11 @@ class CourseProfileGraphWidget(BaseMapWidget):
                 self.map_pos["x"] = 0
                 x_end = x_width
 
-        if 0 <= self.graph_index < len(self.course.distance) and not np.isnan(
-            self.gps_values["course_altitude"]
+        if 0 <= graph_index < len(self.course.distance) and not np.isnan(
+            self.course.index.altitude
         ):
-            self.point["pos"][0] = self.gps_values["course_distance"] / 1000
-            self.point["pos"][1] = self.gps_values["course_altitude"]
+            self.point["pos"][0] = self.course.index.distance / 1000
+            self.point["pos"][1] = self.course.index.altitude
             self.location.append(self.point)
             self.current_point.setData(self.location)
             self.plot.addItem(self.current_point)
@@ -215,7 +214,7 @@ class CourseProfileGraphWidget(BaseMapWidget):
         for i in range(len(self.course.climb_segment)):
             if (
                 self.course.climb_segment[i]["start"]
-                <= self.graph_index
+                <= graph_index
                 <= self.course.climb_segment[i]["end"]
             ):
                 climb_index = i
@@ -228,12 +227,12 @@ class CourseProfileGraphWidget(BaseMapWidget):
             altitude_up_img = '<img src="img/altitude_up.png">'
             rest_distance = (
                 self.course.climb_segment[climb_index]["course_point_distance"]
-                - self.gps_values["course_distance"] / 1000
+                - self.course.index.distance / 1000
             )
             rest_distance_str = "{:.1f}km<br />".format(rest_distance)
             rest_altitude = (
                 self.course.climb_segment[climb_index]["course_point_altitude"]
-                - self.gps_values["course_altitude"]
+                - self.course.index.altitude
             )
             rest_altitude_str = "{:.0f}m".format(rest_altitude)
             # rest

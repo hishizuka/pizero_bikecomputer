@@ -23,7 +23,6 @@ from modules.utils.cmd import (
 from modules.utils.map import get_maptile_filename, get_tilexy_and_xy_in_tile
 from modules.utils.timer import Timer
 
-
 BOOT_FILE = "/boot/config.txt"
 _IS_RASPI = False
 try:
@@ -806,16 +805,20 @@ class Config:
                 if is_available:
                     self.G_BT_ADDRESSES = await self.bt_pan.find_bt_pan_devices()
 
-            try:
-                from modules.helper.ble_gatt_server import GadgetbridgeService
-
-                self.ble_uart = GadgetbridgeService(self)
-            except Exception as e:  # noqa
-                app_logger.info(f"Gadgetbridge service not initialized: {e}")
-
         # logger, sensor
         await self.gui.set_boot_status("initialize sensor...")
         self.logger.delay_init()
+
+        # gadgetbridge (has to be before gui but after sensors for proper init state of buttons)
+        if self.G_IS_RASPI:
+            try:
+                from modules.helper.ble_gatt_server import GadgetbridgeService
+
+                self.ble_uart = GadgetbridgeService(
+                    self.G_PRODUCT, self.logger.sensor.sensor_gps, self.gui
+                )
+            except Exception as e:  # noqa
+                app_logger.info(f"Gadgetbridge service not initialized: {e}")
 
         # gui
         await self.gui.set_boot_status("initialize screens...")

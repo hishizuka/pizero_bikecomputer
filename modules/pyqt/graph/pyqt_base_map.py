@@ -45,8 +45,6 @@ class BaseMapWidget(ScreenWidget):
         self.button_press_count = {}
         super().__init__(parent, config)
 
-        self.gps_sensor = self.sensor.sensor_gps
-
         self.signal_move_x_plus.connect(self.move_x_plus)
         self.signal_move_x_minus.connect(self.move_x_minus)
         self.signal_move_y_plus.connect(self.move_y_plus)
@@ -112,9 +110,6 @@ class BaseMapWidget(ScreenWidget):
         for i in range(n):
             self.layout.setRowMinimumHeight(i, h)
 
-    # def set_font_size(self):
-    #  self.font_size = int(length / 8)
-
     def lock_off(self):
         self.lock_status = False
 
@@ -153,23 +148,23 @@ class BaseMapWidget(ScreenWidget):
 
     async def move_x(self, delta):
         self.move_pos["x"] += delta
-        await self.update_extra()
+        await self.update_display()
 
     async def move_y(self, delta):
         self.move_pos["y"] += delta
-        await self.update_extra()
+        await self.update_display()
 
     @qasync.asyncSlot()
     async def zoom_plus(self):
         self.zoom /= 2
         self.zoomlevel += 1
-        await self.update_extra()
+        await self.update_display()
 
     @qasync.asyncSlot()
     async def zoom_minus(self):
         self.zoom *= 2
         self.zoomlevel -= 1
-        await self.update_extra()
+        await self.update_display()
 
     def get_max_zoom(self):
         if not self.course.is_set:
@@ -189,6 +184,3 @@ class BaseMapWidget(ScreenWidget):
             while z / 1000 > dist:
                 z /= 2
         self.config.G_MAX_ZOOM = z
-
-    def load_course(self):
-        pass

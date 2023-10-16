@@ -24,6 +24,34 @@ except ImportError:
 LOADERS = {"tcx": TcxLoader}
 
 
+class CourseIndex:
+    # current index value
+    value = 0
+    # also store the course_points index (TODO, should be moved though)
+    course_points_index = 0
+
+    on_course_status = False
+
+    altitude = np.nan
+    distance = 0
+
+    check = None
+
+    cutoff = None
+
+    def __init__(self, cutoff):
+        self.cutoff = cutoff
+        self.reset()
+
+    def reset(self):
+        self.value = 0
+        self.course_points_index = 0
+        self.distance = 0
+        self.altitude = np.nan
+        self.on_course_status = False
+        self.check = [True] * self.cutoff
+
+
 class CoursePoints:
     name = None
     type = None
@@ -64,6 +92,7 @@ class Course:
     longitude = np.array([])
 
     course_points = None
+    index = None
 
     # calculated
     points_diff = np.array([])
@@ -83,6 +112,7 @@ class Course:
         super().__init__()
         self.config = config
         self.course_points = CoursePoints()
+        self.index = CourseIndex(config.G_GPS_KEEP_ON_COURSE_CUTOFF)
 
     def __str__(self):
         return f"Course:\n" f"{oyaml.dump(self.info, allow_unicode=True)}\n"
@@ -123,8 +153,8 @@ class Course:
         if file:
             _, ext = os.path.splitext(file)
             shutil.copy(file, self.config.G_COURSE_FILE_PATH)
-            #shutil.copy2(file, self.config.G_COURSE_FILE_PATH)
-            #if ext:
+            # shutil.copy2(file, self.config.G_COURSE_FILE_PATH)
+            # if ext:
             #    os.setxattr(
             #        self.config.G_COURSE_FILE_PATH, "user.ext", ext[1:].encode()
             #    )
@@ -145,9 +175,9 @@ class Course:
                 # extension was set in custom attributes as the current course is always
                 # loaded from '.current'
                 try:
-                    #ext = os.getxattr(
+                    # ext = os.getxattr(
                     #    self.config.G_COURSE_FILE_PATH, "user.ext"
-                    #).decode()
+                    # ).decode()
                     ext = "tcx"
                     if ext in LOADERS:
                         course_data, course_points_data = LOADERS[ext].load_file(
@@ -419,14 +449,6 @@ class Course:
             app_logger.warning(f"Error during downsampling: {e}")
             self.distance = self.distance / 1000  # [km]
 
-        # for sensor_gps
-        self.azimuth = calc_azimuth(self.latitude, self.longitude)
-        self.points_diff = np.array([np.diff(self.longitude), np.diff(self.latitude)])
-        self.points_diff_sum_of_squares = (
-            self.points_diff[0] ** 2 + self.points_diff[1] ** 2
-        )
-        self.points_diff_dist = np.sqrt(self.points_diff_sum_of_squares)
-
         if not len_dist:
             self.distance = (
                 get_dist_on_earth_array(
@@ -636,7 +658,14 @@ class Course:
     def modify_course_points(self):
         if not self.config.G_COURSE_INDEXING:
             return
-        
+
+        self.azimuth = calc_azimuth(self.latitude, self.longitude)
+        self.points_diff = np.array([np.diff(self.longitude), np.diff(self.latitude)])
+        self.points_diff_sum_of_squares = (
+            self.points_diff[0] ** 2 + self.points_diff[1] ** 2
+        )
+        self.points_diff_dist = np.sqrt(self.points_diff_sum_of_squares)
+
         course_points = self.course_points
 
         len_pnt_lat = len(course_points.latitude)
@@ -717,6 +746,7 @@ class Course:
                             )
                             / 1000
                         )
+
                         if len_alt:
                             min_alt_delta = (
                                 (
@@ -740,9 +770,7 @@ class Course:
                         self.distance[min_index] + min_dist_delta
                     )
                 if not len_pnt_alt and len_alt:
-                    course_points.altitude[i] = (
-                        self.altitude[min_index] + min_alt_delta
-                    )
+                    course_points.altitude[i] = self.altitude[min_index] + min_alt_delta
 
         # add climb tops
         # if len(self.climb_segment):
@@ -823,3 +851,265 @@ class Course:
                 course_points.altitude = np.append(
                     course_points.altitude, self.altitude[-1]
                 )
+
+    def get_index(self, lat, lon, track, search_range, on_route_cutoff, azimuth_cutoff):
+        if not self.config.G_COURSE_INDEXING:
+            self.index.on_course_status = False
+            return
+
+        if np.isnan(lat) or np.isnan(lat):
+            return
+
+        # not running
+        if self.config.G_IS_RASPI and self.config.G_STOPWATCH_STATUS != "START":
+            return
+
+        course_n = len(self.longitude)
+
+        if not course_n:
+            return
+
+        start = self.index.value
+
+        # 1st search index(a little ahead)
+        forward_search_index = min(start + 5, course_n - 1)
+        # 2nd search index(a several kilometers ahead: weak GPS signal, long tunnel)
+        forward_search_index_next = max(
+            self.get_index_with_distance_cutoff(start, search_range),
+            forward_search_index,
+        )
+        # 3rd search index(backward)
+        backward_search_index = self.get_index_with_distance_cutoff(
+            start, -search_range
+        )
+
+        b_a_x = self.points_diff[0]
+        b_a_y = self.points_diff[1]
+        lon_diff = lon - self.longitude
+        lat_diff = lat - self.latitude
+        p_a_x = lon_diff[0:-1]
+        p_a_y = lat_diff[0:-1]
+        p_b_x = lon_diff[1:]
+        p_b_y = lat_diff[1:]
+        inner_p = (b_a_x * p_a_x + b_a_y * p_a_y) / self.points_diff_sum_of_squares
+
+        azimuth_diff = np.full(len(self.azimuth), np.nan)
+
+        if not np.isnan(track) and track is not None:
+            azimuth_diff = (track - self.azimuth) % 360
+
+        dist_diff = np.where(
+            inner_p <= 0.0,
+            np.sqrt(p_a_x**2 + p_a_y**2),
+            np.where(
+                inner_p >= 1.0,
+                np.sqrt(p_b_x**2 + p_b_y**2),
+                np.abs(b_a_x * p_a_y - b_a_y * p_a_x) / self.points_diff_dist,
+            ),
+        )
+
+        # search with no penalty
+        # 1st start -> forward_search_index
+        # 2nd forward_search_index -> forward_search_index_next
+        # with penalty (continue running while G_GPS_KEEP_ON_COURSE_CUTOFF seconds, then change course_index)
+        # 3rd backward_search_index -> start
+        # 4th forward_search_index -> end of course
+        # 5th start of course -> backward_search_index
+        search_indexes = [
+            [start, forward_search_index],
+            [forward_search_index, forward_search_index_next],
+            [backward_search_index, start],
+            [forward_search_index_next, course_n - 1],
+            [0, backward_search_index],
+        ]
+        s_state = ["forward(close)", "forward(far)", "back", "end", "start"]
+        penalty_index = 2
+
+        for i, s in enumerate(search_indexes):
+            if s[0] < 0:
+                continue
+            elif s[0] == s[1]:
+                continue
+
+            m = s[0]
+
+            dist_diff_mod = np.where(
+                ((0 <= azimuth_diff) & (azimuth_diff <= azimuth_cutoff[0]))
+                | ((azimuth_cutoff[1] <= azimuth_diff) & (azimuth_diff <= 360)),
+                dist_diff,
+                np.inf,
+            )
+            # app_logger.debug(dist_diff_mod)
+            # app_logger.debug(inner_p)
+
+            if s[1] >= course_n - 1:
+                m += dist_diff_mod[s[0] :].argmin()
+            else:
+                m += dist_diff_mod[s[0] : s[1]].argmin()
+
+            # check azimuth
+            # print("i:{}, s:{}, m:{}, azimuth_diff:{}".format(i, s, m, azimuth_diff[m]))
+            # print("self.values['track']:{}, m:{}".format(self.values['track'], m))
+            # print(course.azimuth)
+            # print("azimuth_diff:{}".format(azimuth_diff))
+            if np.isnan(azimuth_diff[m]):
+                # GPS is lost(return start finally)
+                continue
+            if (
+                0 <= azimuth_diff[m] <= azimuth_cutoff[0]
+                or azimuth_cutoff[1] <= azimuth_diff[m] <= 360
+            ):
+                # go forward
+                pass
+            else:
+                # go backward
+                # print("track:{}, m:{}".format(track, m))
+                # print(course.azimuth)
+                # print("azimuth_diff:{}".format(azimuth_diff))
+                continue
+            # print("i:{}, s:{}, m:{}, azimuth_diff:{}, course_index:{}, course_point_index:{}".format(i, s, m, azimuth_diff[m], self.values['course_index'], self.values['course_point_index']))
+            # print("\t lat_lon: {}, {}".format(self.values['lat'], self.values['lon']))
+            # print("\t course: {}, {}".format(course.latitude[self.values['course_index']], course.longitude[self.values['course_index']]))
+            # print("\t course_point: {}, {}".format(course.course_points.latitude[self.values['course_point_index']], course.course_points.longitude[self.values['course_point_index']]))
+
+            # grade check if available
+            grade = self.config.logger.sensor.values["integrated"]["grade"]
+            if not np.isnan(grade) and (grade > self.config.G_SLOPE_CUTOFF[0]) != (
+                self.slope_smoothing[m] > self.config.G_SLOPE_CUTOFF[0]
+            ):
+                continue
+
+            if m == 0 and inner_p[0] <= 0.0:
+                app_logger.info(f"before start of course: {start} -> {m}")
+                app_logger.info(
+                    f"\t {lat} {lon} / {self.latitude[m]} {self.longitude[m]}"
+                )
+                self.index.on_course_status = False
+                self.index.distance = 0
+                self.index.altitude = np.nan
+                self.index.value = m
+                return
+            elif m == len(dist_diff) - 1 and inner_p[-1] >= 1.0:
+                app_logger.info(f"after end of course {start} -> {m}")
+                app_logger.info(
+                    f"\t {lat} {lon} / {self.latitude[m]} {self.longitude[m]}",
+                )
+                self.index.on_course_status = False
+                m = course_n - 1
+                self.index.distance = self.distance[-1] * 1000
+                self.index.altitude = np.nan
+                self.index.value = m
+                return
+
+            h_lon = (
+                self.longitude[m]
+                + (self.longitude[m + 1] - self.longitude[m]) * inner_p[m]
+            )
+            h_lat = (
+                self.latitude[m]
+                + (self.latitude[m + 1] - self.latitude[m]) * inner_p[m]
+            )
+            dist_diff_h = get_dist_on_earth(h_lon, h_lat, lon, lat)
+
+            if dist_diff_h > on_route_cutoff:
+                app_logger.debug(
+                    f"dist_diff_h: {dist_diff_h:.0f} > cutoff {on_route_cutoff}[m]"
+                )
+                app_logger.debug(
+                    f"\ti:{i}, s:{s}, m:{m}, azimuth_diff:{azimuth_diff[m]}, "
+                    f"course_point_index:{self.index.course_points_index}, "
+                    f"inner_p[m]:{inner_p[m]}"
+                )
+                app_logger.debug(
+                    f"\th_lat/h_lon: {h_lat}, {h_lon}, lat_lon: {lat}, {lon}"
+                )
+                app_logger.debug(
+                    f"\tcourse[m]: {self.latitude[m]}, {self.longitude[m]}"
+                )
+                app_logger.debug(
+                    f"\tcourse[m+1]: {self.latitude[m+1]}, {self.longitude[m+1]}"
+                )
+                continue
+
+            # stay forward while self.config.G_GPS_KEEP_ON_COURSE_CUTOFF if search_indexes is except forward
+            # prevent from changing course index quickly
+            self.index.check[:-1] = self.index.check[1:]
+            if i < penalty_index:
+                self.index.check[-1] = True
+            else:
+                self.index.check[-1] = False
+            if self.index.check[-1] is False and np.sum(self.index.check) != 0:
+                # print("course_index_check failed, self.course_index_check[-1]:{}, np.sum(self.course_index_check):{}".format(self.course_index_check[-1], np.sum(self.course_index_check)))
+                # print("\t i:{}, s:{}, m:{}, azimuth_diff:{}, course_point_index:{}".format(i, s, m, azimuth_diff[m+1], self.values['course_point_index']))
+                # print("\t {}, {}, {:.2f}m".format(self.values['lat'], self.values['lon'], self.values['course_distance']/1000))
+                continue
+
+            self.index.on_course_status = True
+            dist_diff_course = get_dist_on_earth(
+                self.longitude[m],
+                self.latitude[m],
+                lon,
+                lat,
+            )
+            self.index.distance = self.distance[m] * 1000 + dist_diff_course
+
+            if len(self.altitude):
+                alt_diff_course = 0
+                if m + 1 < len(self.altitude):
+                    alt_diff_course = (
+                        (self.altitude[m + 1] - self.altitude[m])
+                        / ((self.distance[m + 1] - self.distance[m]) * 1000)
+                        * dist_diff_course
+                    )
+                self.index.altitude = self.altitude[m] + alt_diff_course
+
+            # print("search: ", (datetime.utcnow()-t).total_seconds(), "sec, index:", m)
+
+            self.index.value = m
+
+            if len(self.course_points.distance):
+                cp_m = np.abs(
+                    self.course_points.distance - self.index.distance / 1000
+                ).argmin()
+                # specify next points for displaying in cuesheet widget
+                if self.course_points.distance[cp_m] < self.index.distance / 1000:
+                    cp_m += 1
+                if cp_m >= len(self.course_points.distance):
+                    cp_m = len(self.course_points.distance) - 1
+                self.index.course_points_index = cp_m
+
+            if i >= penalty_index:
+                app_logger.info(f"{s_state[i]} {start} -> {m}")
+                app_logger.info(
+                    f"\t {lat} {lon} / {self.latitude[m]} {self.longitude[m]}"
+                )
+                app_logger.info(f"\t azimuth_diff: {azimuth_diff[m]}")
+
+            return
+
+        was_on_course = self.index.on_course_status
+        self.index.on_course_status = False
+        if was_on_course:
+            quit()
+
+    def get_index_with_distance_cutoff(self, start, search_range):
+        if not self.is_set:
+            return 0
+
+        dist_to = self.distance[start] + search_range
+        # print("----get_index_with_distance_cutoff------")
+        # print("start:", start, "course_distance[start]:", self.distance[start], "search_range:", search_range)
+        # print("dist_to:", dist_to, "dist[-1]:", course.distance[-1])
+        # print("----------------------------------------")
+        if dist_to >= self.distance[-1]:
+            return len(self.distance) - 1
+        elif dist_to <= 0:
+            return 0
+
+        min_index = 0
+        if search_range > 0:
+            min_index = start + np.abs((self.distance[start:] - dist_to)).argmin()
+        elif search_range < 0:
+            min_index = np.abs((self.distance[0:start] - dist_to)).argmin()
+
+        return min_index
