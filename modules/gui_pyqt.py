@@ -150,9 +150,9 @@ class GUI_PyQt(QtCore.QObject):
 
     def init_window(self):
         self.app = QtWidgets.QApplication(sys.argv)
-        self.config.loop = qasync.QEventLoop(self.app)
-        self.config.loop.set_debug(True)
-        self.config.init_loop(call_from_gui=True)
+        loop = qasync.QEventLoop(self.app)
+        loop.set_debug(True)
+        self.config.init_loop(loop)
 
         self.main_window = MyWindow()
         self.main_window.set_gui(self)
@@ -180,7 +180,7 @@ class GUI_PyQt(QtCore.QObject):
         # for draw_display
         self.init_buffer()
 
-        self.exec()
+        self.exec(loop)
 
     async def set_boot_status(self, text):
         self.signal_boot_status.emit(text)
@@ -440,9 +440,9 @@ class GUI_PyQt(QtCore.QObject):
 
             self.screen_shape, self.remove_bytes = self.get_screen_shape(p)
 
-    def exec(self):
-        with self.config.loop:
-            self.config.loop.run_forever()
+    def exec(self, loop):
+        with loop:
+            loop.run_forever()
             # loop is stopped
         # loop is closed
 

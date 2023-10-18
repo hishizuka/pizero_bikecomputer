@@ -479,9 +479,6 @@ class Config:
     G_USE_AUTO_BACKLIGHT = True
     G_AUTO_BACKLIGHT_CUTOFF = 30
 
-    # GUI mode
-    G_GUI_MODE = "PyQt"
-
     # PerformanceGraph:
     # 1st: POWER
     # 2nd: HR or W_BAL_PLIME
@@ -751,20 +748,14 @@ class Config:
         else:
             self.G_ANT["INTERVAL"] = 2
 
-        # coroutine loop
-        self.init_loop()
-
         self.log_time = datetime.datetime.now()
 
         self.button_config = Button_Config(self)
 
-    def init_loop(self, call_from_gui=False):
-        if self.G_GUI_MODE == "PyQt":
-            if call_from_gui:
-                asyncio.set_event_loop(self.loop)
-                self.start_coroutine()
-        else:
-            self.loop = asyncio.get_event_loop()
+    def init_loop(self, loop):
+        self.loop = loop
+        asyncio.set_event_loop(loop)
+        self.start_coroutine()
 
     def start_coroutine(self):
         self.logger.start_coroutine()
@@ -940,12 +931,11 @@ class Config:
         tasks = asyncio.all_tasks()
         current_task = asyncio.current_task()
         for task in tasks:
-            if self.G_GUI_MODE == "PyQt":
-                if task == current_task or task.get_coro().__name__ in [
-                    "update_display"
-                ]:
-                    continue
+            if task == current_task or task.get_coro().__name__ in ["update_display"]:
+                continue
+
             task.cancel()
+
             try:
                 await task
             except asyncio.CancelledError:
