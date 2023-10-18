@@ -146,7 +146,7 @@ class Button_Config:
     G_BUTTON_MODE_IS_CHANGE = False
     G_BUTTON_MODE_PAGES = {
         "MAIN": ["MAIN", "MAIN_1"],
-        #'MAP': ['MAP','MAP_1','MAP_2'],
+        # 'MAP': ['MAP','MAP_1','MAP_2'],
         "MAP": ["MAP", "MAP_1"],
         "COURSE_PROFILE": ["COURSE_PROFILE", "COURSE_PROFILE_1"],
     }

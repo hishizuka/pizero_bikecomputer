@@ -1,5 +1,4 @@
 import asyncio
-import time
 
 from logger import app_logger
 from .base import AbstractSensorGPS

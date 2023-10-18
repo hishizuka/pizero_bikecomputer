@@ -1,16 +1,12 @@
 import abc
 import asyncio
-import re
-from datetime import datetime, time, timedelta
+from datetime import datetime, time
 
 import numpy as np
-from dateutil import parser, tz
-from timezonefinder import TimezoneFinder
 
 from modules.sensor.sensor import Sensor
-from modules.utils.cmd import exec_cmd, exec_cmd_return_value
 from modules.utils.geo import get_dist_on_earth, get_track_str
-from logger import app_logger
+from modules.utils.time import set_time, set_timezone
 
 USED_SAT_CUTOFF = 3
 HDOP_CUTOFF_MODERATE = 10.0
@@ -232,7 +228,7 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
 
         # timezone
         if not self.is_fixed and valid_pos and mode == NMEA_MODE_3D:
-            self.is_fixed = self.set_timezone(lat, lon)
+            self.is_fixed = set_timezone(lat, lon)
 
         # modify altitude with course
         if (
@@ -299,59 +295,4 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
             return
 
         if not self.is_time_modified:
-            self.is_time_modified = self.set_time(gps_time)
-
-    @staticmethod
-    def set_time(gps_time):
-        app_logger.info(f"try to modify time by gps to {gps_time}")
-
-        # TODO, we probably only get iso format now so this could be replaced by fromisoformat
-        #  (and we can drop the requirement on dateutil)
-        l_time = parser.parse(gps_time)
-
-        # kernel version date
-        kernel_date = datetime(2019, 1, 1, 0, 0, 0, 0, tz.tzutc())
-        kernel_date_str = exec_cmd_return_value(["uname", "-v"], cmd_print=False)
-
-        # "#1253 Thu Aug 15 11:37:30 BST 2019"
-        if len(kernel_date_str) >= 34:
-            m = re.search(r"^.+(\w{3}) (\d+).+(\d{4})$", kernel_date_str)
-
-            if m:
-                time_str = f"{m.group(3)} {m.group(1)} {m.group(2)} 00:00:00 UTC"
-                kernel_date = parser.parse(time_str)
-
-        if l_time < kernel_date:
-            return False
-
-        exec_cmd(
-            ["sudo", "date", "-u", "--set", l_time.strftime("%Y/%m/%d %H:%M:%S")],
-            cmd_print=False,
-        )
-        return True
-
-    def set_timezone(self, lat, lon):
-        app_logger.info("try to modify timezone by gps...")
-
-        tz_finder = TimezoneFinder()
-
-        try:
-            tz_str = tz_finder.timezone_at(lng=lon, lat=lat)
-
-            if tz_str is None:
-                # certain_timezone_at is deprecated since timezonefinder 6.2.0
-                tz_str = tz_finder.certain_timezone_at(lng=lon, lat=lat)
-
-            if tz_str is not None:
-                ret_code = exec_cmd(
-                    ["sudo", "timedatectl", "set-timezone", tz_str], cmd_print=False
-                )
-                if not ret_code:  # 0 = success
-                    self.config.G_TIMEZONE = tz_str
-            return True
-        except TypeError as e:
-            app_logger.exception(f"Incorrect lat, lon passed: {e}")
-            return False
-        except Exception as e:
-            app_logger.warning(f"Could not set timezone: {e}")
-            return False
+            self.is_time_modified = set_time(gps_time)
