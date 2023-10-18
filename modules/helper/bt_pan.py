@@ -46,9 +46,9 @@ class BTPanDbusNext(BTPan):
             self.bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
             await self.bus.introspect(self.obj_bluez, self.path_bluez)
             return True
-        except Exception as e:
-            app_logger.warning(f"DBus not available {e}")
-            return False
+        except Exception as e:  # noqa
+            app_logger.warning(f"Check dbus failed {e}")
+        return False
 
     async def find_bt_pan_devices(self):
         res = {}
@@ -125,9 +125,9 @@ class BTPanDbus(BTPan):
             self.bus = dbus.SystemBus()
             self.bus.get_name_owner(self.obj_bluez)
             return True
-        except Exception as e:
-            app_logger.warning(f"DBus not available {e}")
-            return False
+        except Exception as e:  # noqa
+            app_logger.warning(f"Check dbus failed {e}")
+        return False
 
     def get_managed_objects(self):
         manager = dbus.Interface(
@@ -172,7 +172,7 @@ class BTPanDbus(BTPan):
 
         for n in range(2):
             try:
-                iface = self.interface.Connect(self.service_uuid)
+                self.interface.Connect(self.service_uuid)
             except dbus.exceptions.DBusException as e:
                 app_logger.error(e.get_dbus_name())
                 await asyncio.sleep(1)

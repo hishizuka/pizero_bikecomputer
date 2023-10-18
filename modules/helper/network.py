@@ -88,7 +88,7 @@ class Network:
             if not any(res) or res is None:
                 failed.append((datetime.datetime.now(), q))
                 app_logger.error("failed download")
-                app_logger.error(q["urls"])
+                app_logger.debug(q["urls"])
             # retry
             elif (
                 not all(res)

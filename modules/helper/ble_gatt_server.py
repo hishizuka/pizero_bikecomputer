@@ -1,20 +1,33 @@
 import asyncio
+import base64
 import json
 import re
-import base64
-import traceback
-import datetime
+from datetime import datetime, timedelta, timezone
 
-from bluez_peripheral.gatt.service import Service
-from bluez_peripheral.gatt.characteristic import (
-    characteristic,
-    CharacteristicFlags as CharFlags,
+try:
+    from bluez_peripheral.gatt.service import Service
+    from bluez_peripheral.gatt.characteristic import (
+        characteristic,
+        CharacteristicFlags as CharFlags,
+    )
+    from bluez_peripheral.util import *
+    from bluez_peripheral.advert import Advertisement
+    from bluez_peripheral.agent import NoIoAgent
+except ImportError:
+    raise ImportError("Missing bluez requirements")
+
+from modules.sensor.gps.base import (
+    HDOP_CUTOFF_FAIR,
+    HDOP_CUTOFF_MODERATE,
+    NMEA_MODE_2D,
+    NMEA_MODE_3D,
+    NMEA_MODE_NO_FIX,
 )
-from bluez_peripheral.util import *
-from bluez_peripheral.advert import Advertisement
-from bluez_peripheral.agent import NoIoAgent
-
 from logger import app_logger
+
+# Message first and last byte markers
+F_BYTE_MARKER = 0x10
+L_BYTE_MARKER = 0x0A  # ord("\n")
 
 
 class GadgetbridgeService(Service):
@@ -22,20 +35,30 @@ class GadgetbridgeService(Service):
     rx_characteristic_uuid = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
     tx_characteristic_uuid = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
 
-    config = None
+    product = None
+    sensor = None
+    gui = None
     bus = None
 
     status = False
     gps_status = False
-    value = bytearray()
-    value_extend = False
 
-    timestamp_bytes = bytearray()
-    timestamp_extend = False
+    # TODO this has become useless. AFAIU it's preventing to handle more than once the setTime message during the \
+    #  lifetime of the service, with current changes it time would be set each time the message is received
     timestamp_done = False
 
-    def __init__(self, config):
-        self.config = config
+    message = None
+
+    # TODO,
+    #  if we want to be precise we should account the time of sending/receiving message for the setTime command
+    #  it is sent through 8 messages (should still be less than 1s)
+    time_correction = 0  # seconds
+    timediff_from_utc = timedelta(hours=0)
+
+    def __init__(self, product, sensor, gui):
+        self.product = product
+        self.sensor = sensor
+        self.gui = gui
         super().__init__(self.service_uuid, True)
 
     async def quit(self):
@@ -45,112 +68,33 @@ class GadgetbridgeService(Service):
     # direct access from central
     @characteristic(tx_characteristic_uuid, CharFlags.NOTIFY | CharFlags.READ)
     def tx_characteristic(self, options):
-        return bytes(self.config.G_PRODUCT, "utf-8")
+        return bytes(self.product, "utf-8")
 
     # notice to central
     def send_message(self, value):
         self.tx_characteristic.changed(bytes(value + "\\n\n", "utf-8"))
 
-    def atob(self, matchobj):
-        try:
-            r = base64.b64decode(matchobj.group(1)).decode("utf-8", "ignore")
-        except:
-            r = ""
-        return f'"{r}"'
-
     # receive from central
     @characteristic(rx_characteristic_uuid, CharFlags.WRITE).setter
     def rx_characteristic(self, value, options):
-        app_logger.debug(value)
-
-        # initialize
-        if value.startswith(b'\x10GB({"') and not len(self.value):
-            self.value_extend = True
-        elif value.startswith(b'\x10setTime') and not self.timestamp_done and not len(self.timestamp_bytes):
-            self.timestamp_extend = True
-
-        # expand
-        if self.timestamp_extend:
-            self.timestamp_bytes.extend(bytearray(value))
-        elif self.value_extend:
-            self.value.extend(bytearray(value))
-       
-        # finalize: timestamp
-        if self.timestamp_extend:
-            res = re.match(
-                "^setTime\((\d+)\);E.setTimeZone\((\S+)\)", self.timestamp_bytes.decode("utf-8", "ignore")[1:]
-            )
-            if res is not None:
-                time_diff = datetime.timedelta(hours=float(res.group(2)))
-                self.config.logger.sensor.sensor_gps.set_timediff_from_utc(time_diff)
-                utctime = datetime.datetime.fromtimestamp(int(res.group(1))) - time_diff
-                self.config.logger.sensor.sensor_gps.get_utc_time_from_datetime(utctime)
-                self.timestamp_done = True
-                self.timestamp_extend = False
-                self.timestamp_bytes = bytearray()
-
-        # finalize: gadgetbridge JSON message
-        elif len(self.value) > 8 and self.value.endswith(b'})\n'):
-            # remove emoji
-            text_mod = re.sub(":\w+:", "", self.value.decode("utf-8", "ignore").strip()[5:-2])
-
-            # decode base64
-            b64_decode_ptn = re.compile(r"atob\(\"(\S+)\"\)")
-            text_mod = re.sub(b64_decode_ptn, self.atob, text_mod)
-
-            message = {}
-            try:
-                message = json.loads("{" + text_mod + "}", strict=False)
-            except json.JSONDecodeError:
-                app_logger.exception("failed to load json")
-                app_logger.exception(self.value)
-                app_logger.exception(text_mod)
-
-            if (
-                "t" in message
-                and message["t"] == "notify"
-                and "title" in message
-                and "body" in message
-            ):
-                self.config.gui.show_message(
-                    message["title"], message["body"], limit_length=True
+        # GB messages handler/decoder
+        # messages are sent as \x10<content>\n (https://www.espruino.com/Gadgetbridge)
+        # They are mostly \x10GB<content>\n but the setTime message which does not have the GB prefix
+        if value[0] == F_BYTE_MARKER:
+            if self.message:
+                app_logger.warning(
+                    f"Previous message was not received fully and got discarded: {self.message}"
                 )
-                app_logger.info(message)
-            elif (
-                "t" in message
-                and len(message["t"]) >= 4
-                and message["t"][0:4] == "find"
-                and "n" in message
-                and message["n"]
-            ):
-                self.config.gui.show_dialog_ok_only(fn=None, title="Gadgetbridge")
-            elif "t" in message and message["t"] == "gps":
-                asyncio.create_task(
-                    self.config.logger.sensor.sensor_gps.update_GB(message)
-                )
-            elif (
-                "t" in message
-                and message["t"] == "nav"
-                and "instr" in message
-                and "distance" in message
-                and "action" in message
-            ):
-                # action
-                # "","continue",
-                # "left", "left_slight", "left_sharp",  "right", "right_slight", "right_sharp", 
-                # "keep_left", "keep_right", "uturn_left", "uturn_right",
-                # "offroute", 
-                # "roundabout_right", "roundabout_left", "roundabout_straight", "roundabout_uturn", 
-                # "finish"
-                app_logger.info(message)
-                # blank distance: skip
-                # eta?
-                app_logger.info(f"{len(self.value)}, {len(self.timestamp_bytes)}")
-                #msg = f"{message['distance']}, {message['action']}\n{message['instr']}"
-                #self.config.gui.show_forced_message(msg)
+            self.message = bytearray(value)
+        else:
+            self.message.extend(bytearray(value))
 
-            self.value_extend = False
-            self.value = bytearray()
+        if self.message[-1] == L_BYTE_MARKER:
+            # full message received, we can decode it
+            message_str = self.message.decode("utf-8", "ignore")
+            app_logger.debug(f"Received message: {message_str}")
+            self.decode_message(message_str)
+            self.message = None
 
     async def on_off_uart_service(self):
         if self.status:
@@ -161,7 +105,7 @@ class GadgetbridgeService(Service):
             agent = NoIoAgent()
             await agent.register(self.bus)
             adapter = await Adapter.get_first(self.bus)
-            advert = Advertisement(self.config.G_PRODUCT, [self.service_uuid], 0, 60)
+            advert = Advertisement(self.product, [self.service_uuid], 0, 60)
             await advert.register(self.bus, adapter)
 
         self.status = not self.status
@@ -172,3 +116,110 @@ class GadgetbridgeService(Service):
         else:
             self.send_message('{t:"gps_power", status:false}')
         self.gps_status = not self.gps_status
+
+    @staticmethod
+    def decode_b64(match_object):
+        return f'"{base64.b64decode(match_object.group(1)).decode()}"'
+
+    def decode_message(self, message: str):
+        message = message.lstrip(chr(F_BYTE_MARKER)).rstrip(chr(L_BYTE_MARKER))
+
+        if message.startswith("setTime"):
+            res = re.match(r"^setTime\((\d+)\);E.setTimeZone\((\S+)\);", message)
+
+            if res is not None:
+                time_diff = timedelta(hours=float(res.group(2)))
+                utctime = (
+                    datetime.fromtimestamp(int(res.group(1)))
+                    - time_diff
+                    + timedelta(seconds=self.time_correction)
+                ).replace(tzinfo=timezone.utc)
+                self.timediff_from_utc = time_diff
+                self.sensor.get_utc_time(utctime)
+
+        elif message.startswith("GB("):
+            message = message.lstrip("GB(").rstrip(")")
+            # GadgetBridge uses a json-ish message format ('{t:"is_gps_active"}'), so we need to add "" to keys
+            # It can also encode value in base64-ish using {key: atob("...")}
+            try:
+                message = re.sub(r'(\w+):("?\w*"?)', '"\\1":\\2', message)
+                message = re.sub(r"atob\(\"(\S+)\"\)", self.decode_b64, message)
+
+                message = json.loads(message, strict=False)
+
+                m_type = message.get("t")
+
+                if m_type == "notify" and "title" in message and "body" in message:
+                    self.gui.show_message(
+                        message["title"], message["body"], limit_length=True
+                    )
+                    app_logger.info(message)
+                elif m_type.startswith("find") and message.get("n", False):
+                    self.gui.show_dialog_ok_only(fn=None, title="Gadgetbridge")
+                elif m_type == "gps":
+                    # encode gps message
+                    lat = (
+                        lon
+                    ) = (
+                        alt
+                    ) = speed = track = hdop = mode = timestamp = self.sensor.NULL_VALUE
+                    if "lat" in message and "lon" in message:
+                        lat = float(message["lat"])
+                        lon = float(message["lon"])
+                    if "alt" in message:
+                        alt = float(message["alt"])
+                    if "speed" in message:
+                        speed = float(message["speed"])  # m/s
+                    if "course" in message:
+                        track = int(message["course"])
+                    if "time" in message:
+                        timestamp = (
+                            datetime.fromtimestamp(message["time"] // 1000)
+                            - self.timediff_from_utc
+                        ).replace(tzinfo=timezone.utc)
+                    if "hdop" in message:
+                        hdop = float(message["hdop"])
+                        if hdop < HDOP_CUTOFF_MODERATE:
+                            mode = NMEA_MODE_3D
+                        elif hdop < HDOP_CUTOFF_FAIR:
+                            mode = NMEA_MODE_2D
+                        else:
+                            mode = NMEA_MODE_NO_FIX
+
+                    asyncio.create_task(
+                        self.sensor.get_basic_values(
+                            lat,
+                            lon,
+                            alt,
+                            speed,
+                            track,
+                            mode,
+                            None,
+                            [hdop, hdop, hdop],
+                            (int(message.get("satellites", 0)), None),
+                            timestamp,
+                        )
+                    )
+                elif m_type == "nav" and all(
+                    [x in message for x in ["instr", "distance", "action"]]
+                ):
+                    # action
+                    # "","continue",
+                    # "left", "left_slight", "left_sharp",  "right", "right_slight", "right_sharp",
+                    # "keep_left", "keep_right", "uturn_left", "uturn_right",
+                    # "offroute",
+                    # "roundabout_right", "roundabout_left", "roundabout_straight", "roundabout_uturn",
+                    # "finish"
+                    app_logger.info(message)
+                    # blank distance: skip
+                    # eta?
+                    # app_logger.info(f"{len(self.value)}, {len(self.timestamp_bytes)}")
+                    # msg = f"{message['distance']}, {message['action']}\n{message['instr']}"
+                    # self.gui.show_forced_message(msg)
+
+            except json.JSONDecodeError:
+                app_logger.exception(f"Failed to load message as json {message}")
+            except Exception:  # noqa
+                app_logger.exception(f"Failure during message {message} handling")
+        else:
+            app_logger.warning(f"{message} unknown message received")

@@ -447,6 +447,8 @@ class LoggerCore:
 
         # reset accumulated values
         self.sensor.reset()
+        # reset course index
+        self.course.index.reset()
 
     def reset(self):
         # clear lap
@@ -473,7 +475,7 @@ class LoggerCore:
     def reset_course(self, delete_course_file=False, replace=False):
         self.config.gui.reset_course()
         self.course.reset(delete_course_file=delete_course_file, replace=replace)
-        self.sensor.sensor_gps.reset_course_index()
+        self.course.index.reset()
 
     def set_new_course(self, course_file):
         self.course.load(course_file)
@@ -487,7 +489,7 @@ class LoggerCore:
         # update lap stats if value is not Null
         for k, v in value.items():
             # skip when null value(np.nan)
-            if v in [self.config.G_GPS_NULLVALUE, self.config.G_ANT_NULLVALUE]:
+            if v in [self.config.G_ANT_NULLVALUE]:
                 continue
             # get average
             if k in ["heart_rate", "cadence", "speed", "power"]:
@@ -604,7 +606,7 @@ class LoggerCore:
                 self.sensor.values["I2C"]["pressure"],
                 self.sensor.values["I2C"]["humidity"],
                 self.sensor.values["I2C"]["altitude"],
-                self.sensor.values["GPS"]["course_altitude"],
+                self.course.index.altitude,
                 value["dem_altitude"],
                 self.sensor.values["I2C"]["heading"],
                 self.sensor.values["I2C"]["m_stat"],

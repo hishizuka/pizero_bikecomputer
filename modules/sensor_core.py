@@ -17,7 +17,7 @@ from logger import app_logger
 app_logger.info("detected sensor modules:")
 
 from modules.utils.timer import Timer, log_timers
-from .sensor.sensor_gps import SensorGPS
+from .sensor.gps import SensorGPS
 from .sensor.sensor_ant import SensorANT
 from .sensor.sensor_gpio import SensorGPIO
 from .sensor.sensor_i2c import SensorI2C
@@ -108,7 +108,8 @@ class SensorCore:
         if _IMPORT_PSUTIL:
             self.process = psutil.Process(self.config.G_PID)
 
-        self.sensor_gps = SensorGPS(config, self.values["GPS"])
+        if SensorGPS:
+            self.sensor_gps = SensorGPS(config, self.values["GPS"])
 
         timers = [
             Timer(auto_start=False, text="ANT+ : {0:.3f} sec"),

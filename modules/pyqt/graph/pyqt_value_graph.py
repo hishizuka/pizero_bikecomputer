@@ -1,6 +1,6 @@
 import numpy as np
 
-from modules._pyqt import pg
+from modules._pyqt import pg, qasync
 from modules.pyqt.pyqt_screen_widget import ScreenWidget
 
 
@@ -77,7 +77,8 @@ class PerformanceGraphWidget(ScreenWidget):
         self.font_size = int(length / 7)
         self.set_minimum_size()
 
-    async def update_extra(self):
+    @qasync.asyncSlot()
+    async def update_display(self):
         # all_nan = {'hr_graph': True, 'power_graph': True}
         all_nan = {
             self.item[self.display_item[0]]["graph_key"]: True,
@@ -180,7 +181,8 @@ class AccelerationGraphWidget(ScreenWidget):
         self.font_size = int(length / 7)
         self.set_minimum_size()
 
-    async def update_extra(self):
+    @qasync.asyncSlot()
+    async def update_display(self):
         X = 0
         Y = 1
         Z = 2
@@ -268,7 +270,8 @@ class AltitudeGraphWidget(ScreenWidget):
         self.font_size = int(length / 7)
         self.set_minimum_size()
 
-    async def update_extra(self):
+    @qasync.asyncSlot()
+    async def update_display(self):
         v = self.sensor.values["integrated"]
         all_nan = {"altitude_graph": True, "altitude_gps_graph": True}
         for key in all_nan.keys():

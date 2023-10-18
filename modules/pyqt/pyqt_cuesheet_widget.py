@@ -134,7 +134,7 @@ class CueSheetWidget(ScreenWidget):
         if not self.course_points.is_set or not self.config.G_CUESHEET_DISPLAY_NUM:
             return
 
-        cp_i = self.gps_values["course_point_index"]
+        cp_i = self.course.index.course_points_index
 
         # cuesheet
         for i, cuesheet_item in enumerate(self.cuesheet):
@@ -143,7 +143,7 @@ class CueSheetWidget(ScreenWidget):
                 continue
             dist = cuesheet_item.dist_num = (
                 self.course_points.distance[cp_i + i] * 1000
-                - self.gps_values["course_distance"]
+                - self.course.index.distance
             )
             if dist < 0:
                 continue

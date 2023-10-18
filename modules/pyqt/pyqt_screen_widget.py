@@ -139,11 +139,9 @@ class ScreenWidget(QtWidgets.QWidget):
                 else:
                     self.layout.addLayout(item, pos[0], pos[1])
 
+    # This handles by default items displays, but each screen can implement its own logic
     @qasync.asyncSlot()
     async def update_display(self):
-        if self.items is None:
-            return
-
         for item in self.items:
             try:
                 item.update_value(
@@ -159,7 +157,3 @@ class ScreenWidget(QtWidgets.QWidget):
                 app_logger.exception(
                     f"###update_display### : {item.name} {eval(self.config.gui.gui_config.G_ITEM_DEF[item.name][1])}",
                 )
-        await self.update_extra()
-
-    async def update_extra(self):
-        pass

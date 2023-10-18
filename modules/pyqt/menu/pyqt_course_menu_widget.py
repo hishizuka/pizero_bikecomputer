@@ -135,7 +135,9 @@ class CoursesMenuWidget(MenuWidget):
         # HTML from GoogleMap App
         if filename == self.config.G_RECEIVE_COURSE_FILE:
             if not detect_network():
-                self.config.gui.change_dialog(title="Requires network connection.", button_label="Return")
+                self.config.gui.change_dialog(
+                    title="Requires network connection.", button_label="Return"
+                )
             else:
                 await self.load_html_route(
                     os.path.join(
