@@ -18,7 +18,7 @@ class TestLoggerCsv(unittest.TestCase):
         logger = LoggerCsv(config)
         result = logger.write_log()
         self.assertTrue(result)
-        self.assertEqual(config.G_LOG_START_DATE, "20230928223913")
+        self.assertEqual(config.G_LOG_START_DATE, "2023-09-28_22-39-13")
 
 
 class TestLoggerFit(unittest.TestCase):
@@ -27,7 +27,7 @@ class TestLoggerFit(unittest.TestCase):
         logger = LoggerFit(config)
         result = logger.write_log_cython()
         self.assertTrue(result)
-        self.assertEqual(config.G_LOG_START_DATE, "20230928223913")
+        self.assertEqual(config.G_LOG_START_DATE, "2023-09-28_22-39-13")
 
         filename = f"{config.G_LOG_DIR}/{config.G_LOG_START_DATE}.fit"
 
@@ -36,7 +36,7 @@ class TestLoggerFit(unittest.TestCase):
 
         result = logger.write_log_python()
         self.assertTrue(result)
-        self.assertEqual(config.G_LOG_START_DATE, "20230928223913")
+        self.assertEqual(config.G_LOG_START_DATE, "2023-09-28_22-39-13")
 
         with open(filename, "rb") as f:
             python_data = f.read()

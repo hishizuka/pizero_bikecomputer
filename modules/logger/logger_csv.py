@@ -32,7 +32,7 @@ class LoggerCsv(Logger):
 
         offset = time.localtime().tm_gmtoff
         startdate_local = start_date + datetime.timedelta(seconds=offset)
-        self.config.G_LOG_START_DATE = startdate_local.strftime("%Y%m%d%H%M%S")
+        self.config.G_LOG_START_DATE = startdate_local.strftime("%Y-%m-%d_%H-%M-%S")
         filename = os.path.join(
             self.config.G_LOG_DIR, f"{self.config.G_LOG_START_DATE}.csv"
         )

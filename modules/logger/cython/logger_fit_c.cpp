@@ -610,9 +610,9 @@ bool write_log_c(const char* db_file) {
 
   //write fit file
   time_t startdate_local_epoch = start_date_epoch+epoch_datetime_sec;
-  char startdate_local[15], filename[100], startdate_str[20];
-  strftime(startdate_local, sizeof(startdate_local), "%Y%m%d%H%M%S", localtime(&startdate_local_epoch));
-  strftime(startdate_str, sizeof(startdate_str), "%Y%m%d%H%M%S.fit", localtime(&startdate_local_epoch));
+  char startdate_local[20], filename[100], startdate_str[25];
+  strftime(startdate_local, sizeof(startdate_local), "%Y-%m-%d_%H-%M-%S", localtime(&startdate_local_epoch));
+  strftime(startdate_str, sizeof(startdate_str), "%Y-%m-%d_%H-%M-%S.fit", localtime(&startdate_local_epoch));
   sprintf(filename, "%s/%s", cfg.G_LOG_DIR, startdate_str);
 
   //make file header
@@ -652,7 +652,7 @@ bool write_log_c(const char* db_file) {
     fprintf(stderr, "file write error\n");
     return false;
   }
-  printf("%s %s %d\n", startdate_local, filename, _data[0]);
+  printf("%s %d\n", filename, _data[0]);
 
   reset();
 

@@ -24,7 +24,9 @@ class StreamToLogger:
 
 
 class CustomRotatingFileHandler(RotatingFileHandler):
+    
     def doRollover(self):
+        format = "%Y-%m-%d_%H-%M-%S"
         if self.stream:
             self.stream.close()
             self.stream = None
@@ -38,7 +40,7 @@ class CustomRotatingFileHandler(RotatingFileHandler):
                     match = re.match(regex, f)
                     if match:
                         try:
-                            date = datetime.fromisoformat(match.group(1))
+                            date = datetime.strptime(match.group(1), format)
                             if date < cut_out_date:
                                 os.remove(f)
                         except Exception:
@@ -51,7 +53,7 @@ class CustomRotatingFileHandler(RotatingFileHandler):
 
             self.rotate(
                 self.baseFilename,
-                f"{base_filename_no_ext}-{last_date.isoformat()}{ext}",
+                f"{base_filename_no_ext}-{last_date.strftime(format)}{ext}",
             )
         if not self.delay:
             self.stream = self._open()
