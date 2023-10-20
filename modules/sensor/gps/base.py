@@ -228,7 +228,8 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
 
         # timezone
         if not self.is_fixed and valid_pos and mode == NMEA_MODE_3D:
-            self.is_fixed = set_timezone(lat, lon)
+            asyncio.create_task(set_timezone(lat, lon))
+            self.is_fixed = True
 
         # modify altitude with course
         if (

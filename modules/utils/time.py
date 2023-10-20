@@ -30,7 +30,7 @@ def set_time(time_info):
     return True
 
 
-def set_timezone(lat, lon):
+async def set_timezone(lat, lon):
     app_logger.info("try to modify timezone by gps...")
 
     tz_finder = TimezoneFinder()
@@ -47,6 +47,8 @@ def set_timezone(lat, lon):
             )
             if ret_code:  # 0 = success
                 app_logger.warning(f"Timezone {tz_str} be could not set: {ret_code}")
+            else:
+                app_logger.info(f"success: {tz_str}")
         return True
     except TypeError as e:
         app_logger.exception(f"Incorrect lat, lon passed: {e}")
