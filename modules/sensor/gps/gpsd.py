@@ -1,5 +1,6 @@
 import asyncio
 import os
+from datetime import datetime, timezone
 
 from logger import app_logger
 from .base import AbstractSensorGPS
@@ -55,6 +56,9 @@ class GPSD(AbstractSensorGPS):
             while True:
                 await self.sleep()
                 total, used = satellites_used(g.satellites)
+                gps_time = self.NULL_VALUE
+                if g.time != self.NULL_VALUE:
+                    gps_time = datetime.strptime(g.time, "%Y-%m-%dT%X.%fZ").replace(tzinfo=timezone.utc)
                 await self.get_basic_values(
                     g.lat,
                     g.lon,
@@ -65,7 +69,7 @@ class GPSD(AbstractSensorGPS):
                     [g.epx, g.epy, g.epv],
                     [g.pdop, g.hdop, g.vdop],
                     (used, total),
-                    g.time,
+                    gps_time,
                 )
                 self.get_sleep_time()
         except asyncio.CancelledError:
