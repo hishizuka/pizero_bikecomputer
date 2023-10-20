@@ -704,7 +704,7 @@ class Course:
                 min_dist_delta = 0
                 min_alt_delta = 0
 
-                for j in list(*np.where(inner_p_check == True)):
+                for j in list(*np.where(inner_p_check)):
                     h_lon = (
                         self.longitude[min_index + j]
                         + (
