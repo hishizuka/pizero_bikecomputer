@@ -430,8 +430,6 @@ class Config:
     G_GPS_NULLVALUE = "n/a"
     # GPS speed cutoff (the distance in 1 seconds at 0.36km/h is 10cm)
     G_GPS_SPEED_CUTOFF = G_AUTOSTOP_CUTOFF  # m/s
-    # timezone (not use, get from GPS position)
-    G_TIMEZONE = None
     # GPSd error handling
     G_GPSD_PARAM = {
         "EPX_EPY_CUTOFF": 100.0,
@@ -1072,7 +1070,7 @@ class Config:
                         "sed",
                         "-i",
                         "-e",
-                        's/^DEVICES\="\/dev\/ttyS0"/\#DEVICES\="\/dev\/ttyS0"/',
+                        r's/^DEVICES\="\/dev\/ttyS0"/\#DEVICES\="\/dev\/ttyS0"/',
                         "/etc/default/gpsd",
                     ],
                     False,
@@ -1083,7 +1081,7 @@ class Config:
                         "sed",
                         "-i",
                         "-e",
-                        's/^\#DEVICES\="\/dev\/ttyAMA0"/DEVICES\="\/dev\/ttyAMA0"/',
+                        r's/^\#DEVICES\="\/dev\/ttyAMA0"/DEVICES\="\/dev\/ttyAMA0"/',
                         "/etc/default/gpsd",
                     ],
                     False,

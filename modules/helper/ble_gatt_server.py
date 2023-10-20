@@ -23,6 +23,7 @@ from modules.sensor.gps.base import (
     NMEA_MODE_3D,
     NMEA_MODE_NO_FIX,
 )
+from modules.utils.time import set_time
 from logger import app_logger
 
 # Message first and last byte markers
@@ -43,16 +44,8 @@ class GadgetbridgeService(Service):
     status = False
     gps_status = False
 
-    # TODO this has become useless. AFAIU it's preventing to handle more than once the setTime message during the \
-    #  lifetime of the service, with current changes it time would be set each time the message is received
-    timestamp_done = False
-
     message = None
 
-    # TODO,
-    #  if we want to be precise we should account the time of sending/receiving message for the setTime command
-    #  it is sent through 8 messages (should still be less than 1s)
-    time_correction = 0  # seconds
     timediff_from_utc = timedelta(hours=0)
 
     def __init__(self, product, sensor, gui):
@@ -97,7 +90,9 @@ class GadgetbridgeService(Service):
             self.message = None
 
     async def on_off_uart_service(self):
-        if self.status:
+        self.status = not self.status
+
+        if not self.status:
             self.bus.disconnect()
         else:
             self.bus = await get_message_bus()
@@ -108,14 +103,17 @@ class GadgetbridgeService(Service):
             advert = Advertisement(self.product, [self.service_uuid], 0, 60)
             await advert.register(self.bus, adapter)
 
-        self.status = not self.status
+        return self.status
 
     def on_off_gadgetbridge_gps(self):
-        if not self.gps_status:
+        self.gps_status = not self.gps_status
+
+        if self.gps_status:
             self.send_message('{t:"gps_power", status:true}')
         else:
             self.send_message('{t:"gps_power", status:false}')
-        self.gps_status = not self.gps_status
+
+        return self.gps_status
 
     @staticmethod
     def decode_b64(match_object):
@@ -129,13 +127,18 @@ class GadgetbridgeService(Service):
 
             if res is not None:
                 time_diff = timedelta(hours=float(res.group(2)))
-                utctime = (
-                    datetime.fromtimestamp(int(res.group(1)))
-                    - time_diff
-                    + timedelta(seconds=self.time_correction)
-                ).replace(tzinfo=timezone.utc)
                 self.timediff_from_utc = time_diff
-                self.sensor.get_utc_time(utctime)
+                # we have a known time fix, we can use it to set the time of the system before we get gps fix
+                utctime = (
+                    (
+                        datetime.fromtimestamp(int(res.group(1)))
+                        - time_diff
+                        # we could also account for the time of message reception
+                    )
+                    .replace(tzinfo=timezone.utc)
+                    .isoformat()
+                )
+                set_time(utctime)
 
         elif message.startswith("GB("):
             message = message.lstrip("GB(").rstrip(")")

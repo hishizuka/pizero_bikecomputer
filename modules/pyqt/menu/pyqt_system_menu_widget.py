@@ -57,8 +57,8 @@ class NetworkMenuWidget(MenuWidget):
             ("Bluetooth", "toggle", wifi_bt_button_func_bt),
             ("BT Tethering", "submenu", self.bt_tething),
             ("IP Address", "dialog", self.show_ip_address),
-            ("Gadgetbridge", "toggle", lambda: self.onoff_ble_uart_service(True)),
-            ("Get Location", "toggle", lambda: self.onoff_gadgetbridge_gps(True)),
+            ("Gadgetbridge", "toggle", self.onoff_ble_uart_service),
+            ("Get Location", "toggle", self.onoff_gadgetbridge_gps),
         )
         self.add_buttons(button_conf)
 
@@ -77,8 +77,6 @@ class NetworkMenuWidget(MenuWidget):
         if self.config.G_IS_RASPI:
             self.onoff_wifi_bt(change=False, key="Wifi")
             self.onoff_wifi_bt(change=False, key="Bluetooth")
-        self.onoff_ble_uart_service(change=False)
-        self.onoff_gadgetbridge_gps(change=False)
 
     def onoff_wifi_bt(self, change=True, key=None):
         if change:
@@ -96,20 +94,18 @@ class NetworkMenuWidget(MenuWidget):
         self.config.gui.show_dialog_ok_only(None, address)
 
     @qasync.asyncSlot()
-    async def onoff_ble_uart_service(self, change=True):
-        if change:
-            await self.config.ble_uart.on_off_uart_service()
-            self.buttons["Gadgetbridge"].change_toggle(self.config.ble_uart.status)
-            self.buttons["Get Location"].onoff_button(self.config.ble_uart.status)
+    async def onoff_ble_uart_service(self):
+        status = await self.config.ble_uart.on_off_uart_service()
+        self.buttons["Gadgetbridge"].change_toggle(status)
+        self.buttons["Get Location"].onoff_button(status)
 
-    def onoff_gadgetbridge_gps(self, change=True):
-        if change:
-            self.config.ble_uart.on_off_gadgetbridge_gps()
-            self.buttons["Get Location"].change_toggle(self.config.ble_uart.gps_status)
+    def onoff_gadgetbridge_gps(self):
+        status = self.config.ble_uart.on_off_gadgetbridge_gps()
+        self.buttons["Get Location"].change_toggle(status)
 
 
 class DebugMenuWidget(MenuWidget):
-    is_log_lebel_debug = False
+    is_log_level_debug = False
 
     def setup_menu(self):
         button_conf = (
@@ -160,11 +156,11 @@ class DebugMenuWidget(MenuWidget):
         if change:
             if app_logger.level == logging.DEBUG:
                 app_logger.setLevel(level=logging.INFO)
-                self.is_log_lebel_debug = False
+                self.is_log_level_debug = False
             else:
                 app_logger.setLevel(level=logging.DEBUG)
-                self.is_log_lebel_debug = True
-        self.buttons["Debug Level Log"].change_toggle(self.is_log_lebel_debug)
+                self.is_log_level_debug = True
+        self.buttons["Debug Level Log"].change_toggle(self.is_log_level_debug)
 
 
 class BluetoothTetheringListWidget(ListWidget):

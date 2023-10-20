@@ -4,7 +4,6 @@ git+https://github.com/hishizuka/crdp.git
 numpy==1.25.2
 oyaml==1.0
 pillow===10.0.0
-python-dateutil==2.8.2
 pyqtgraph==0.13.3
 qasync==0.24.0
 timezonefinder==6.2.0

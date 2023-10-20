@@ -86,7 +86,7 @@ $ cd pizero_bikecomputer
 Assume Serial interface is on and login shell is off in raspi-config and GPS device is connected as /dev/ttyS0. If GPS device is /dev/ttyAMA0, modify gpsd config file(/etc/default/gpsd).
 
 ```
-$ sudo apt-get install gpsd gpsd-clients python3-dateutil
+$ sudo apt-get install gpsd gpsd-clients
 $ sudo pip3 install gps3 timezonefinder 
 $ sudo cp install/etc/default/gpsd /etc/default/gpsd
 $ sudo systemctl enable gpsd
@@ -99,7 +99,6 @@ Check with `cgps` or `gpsmon` command.
 Assume I2C interface is on in raspi-config.
 
 ```
-$ sudo apt-get install python3-dateutil
 $ sudo pip3 install timezonefinder pa1010d
 ```
 
