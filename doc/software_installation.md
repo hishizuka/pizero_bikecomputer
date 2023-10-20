@@ -209,6 +209,8 @@ If you use Raspberry Pi OS with desktop, starting on X Window (or using VNC) at 
 $ python3 pizero_bikecomputer.py
 ```
 
+If you use MIP Reflective color LCD module, SHARP Memory Display or E-Ink displays, run with [`QT_QPA_PLATFORM=offscreen`](#mip-reflective-color-lcd-module-sharp-memory-display-or-e-ink-displays)
+
 ### PiTFT
 
 see [hardware_installation_pitft.md](./hardware_installation_pitft.md#run-on-x-window)
