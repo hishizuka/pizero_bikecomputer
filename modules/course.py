@@ -1087,10 +1087,7 @@ class Course:
 
             return
 
-        was_on_course = self.index.on_course_status
         self.index.on_course_status = False
-        if was_on_course:
-            quit()
 
     def get_index_with_distance_cutoff(self, start, search_range):
         if not self.is_set:
