@@ -489,7 +489,7 @@ class LoggerCore:
         # update lap stats if value is not Null
         for k, v in value.items():
             # skip when null value(np.nan)
-            if v in [self.config.G_ANT_NULLVALUE]:
+            if np.isnan(v):
                 continue
             # get average
             if k in ["heart_rate", "cadence", "speed", "power"]:
@@ -834,7 +834,7 @@ class LoggerCore:
     def store_short_log_for_update_track(self, dist, lat, lon, timestamp):
         if not self.short_log_available:
             return
-        if lat == self.config.G_GPS_NULLVALUE or lon == self.config.G_GPS_NULLVALUE:
+        if np.isnan(lat) or np.isnan(lon):
             return
         if len(self.short_log_dist) and self.short_log_dist[-1] == dist:
             return
