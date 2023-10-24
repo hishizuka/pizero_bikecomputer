@@ -324,11 +324,6 @@ class Course:
         point_name[0] = "Start"
         point_name[-1] = "End"
 
-        # print(point_name)
-        # print(point_type)
-        # print(point_notes)
-        # print(point_distance)
-
         self.course_points.name = np.array(point_name)
         self.course_points.type = np.array(point_type)
         self.course_points.notes = np.array(point_notes)
@@ -624,7 +619,7 @@ class Course:
                     or self.climb_segment[-1]["volume"]
                     < self.config.G_CLIMB_CATEGORY[0]["volume"]
                 ):
-                    # print(self.climb_segment[-1]['distance'], self.climb_segment[-1]['volume'], self.climb_segment[-1]['distance'], self.climb_segment[-1]['average_grade'])
+                    # app_logger.debug(f"{self.climb_segment[-1]['distance']}, {self.climb_segment[-1]['volume']}, {self.climb_segment[-1]['distance']}, {self.climb_segment[-1]['average_grade']}")
                     self.climb_segment.pop()
                 else:
                     for j in reversed(range(len(self.config.G_CLIMB_CATEGORY))):
@@ -652,7 +647,7 @@ class Course:
                 )
                 climb_search_state = True
 
-        # print(self.climb_segment)
+        # app_logger.debug(self.climb_segment)
         self.colored_altitude = np.array(self.config.G_SLOPE_COLOR)[slope_smoothing_cat]
 
     def modify_course_points(self):
@@ -939,8 +934,9 @@ class Course:
                 dist_diff,
                 np.inf,
             )
-            # app_logger.debug(dist_diff_mod)
-            # app_logger.debug(inner_p)
+            # app_logger.debug(f"azimuth_diff: {azimuth_diff[s[0]:s[1]]}")
+            # app_logger.debug(f"dist_diff_mod: {dist_diff_mod[s[0]:s[1]]}")
+            # app_logger.debug(f"inner_p: {inner_p[s[0]:s[1]]}")
 
             if s[1] >= course_n - 1:
                 m += dist_diff_mod[s[0] :].argmin()
@@ -948,10 +944,10 @@ class Course:
                 m += dist_diff_mod[s[0] : s[1]].argmin()
 
             # check azimuth
-            # print("i:{}, s:{}, m:{}, azimuth_diff:{}".format(i, s, m, azimuth_diff[m]))
-            # print("self.values['track']:{}, m:{}".format(self.values['track'], m))
-            # print(course.azimuth)
-            # print("azimuth_diff:{}".format(azimuth_diff))
+            # app_logger.debug(f"i:{i}, s:{s}, m:{m}, azimuth_diff:{azimuth_diff[m]}, {len(azimuth_diff)}")
+            # app_logger.debug(f"track:{track}, m:{m}")
+            # app_logger.debug(f"self.azimuth:{self.azimuth}, {len(self.azimuth)}")
+            # app_logger.debug(f"azimuth_diff:{azimuth_diff}")
             if np.isnan(azimuth_diff[m]):
                 # GPS is lost(return start finally)
                 continue
@@ -963,14 +959,14 @@ class Course:
                 pass
             else:
                 # go backward
-                # print("track:{}, m:{}".format(track, m))
-                # print(course.azimuth)
-                # print("azimuth_diff:{}".format(azimuth_diff))
+                # app_logger.debug(f"track:{track}, m:{m}")
+                # app_logger.debug(course.azimuth)
+                # app_logger.debug(f"azimuth_diff:{azimuth_diff}")
                 continue
-            # print("i:{}, s:{}, m:{}, azimuth_diff:{}, course_index:{}, course_point_index:{}".format(i, s, m, azimuth_diff[m], self.values['course_index'], self.values['course_point_index']))
-            # print("\t lat_lon: {}, {}".format(self.values['lat'], self.values['lon']))
-            # print("\t course: {}, {}".format(course.latitude[self.values['course_index']], course.longitude[self.values['course_index']]))
-            # print("\t course_point: {}, {}".format(course.course_points.latitude[self.values['course_point_index']], course.course_points.longitude[self.values['course_point_index']]))
+            app_logger.debug(f"i:{i}, s:{s}, m:{m}, azimuth_diff:{azimuth_diff[m]}, course_index:{self.index.value}, course_point_index:{self.index.course_points_index}")
+            # app_logger.debug(f"\t lat_lon: {lat}, {lon}")
+            # app_logger.debug(f"\t course: {self.latitude[self.index.value]}, {self.longitude[self.index.value]}")
+            # app_logger.debug(f"\t course_point: {self.course_points.latitude[self.index.course_points_index]}, {self.course_points.longitude[self.index.course_points_index]}")
 
             # grade check if available
             grade = self.config.logger.sensor.values["integrated"]["grade"]
@@ -980,15 +976,7 @@ class Course:
                 continue
 
             if m == 0 and inner_p[0] <= 0.0:
-                app_logger.info(f"before start of course: {start} -> {m}")
-                app_logger.info(
-                    f"\t {lat} {lon} / {self.latitude[m]} {self.longitude[m]}"
-                )
-                self.index.on_course_status = False
-                self.index.distance = 0
-                self.index.altitude = np.nan
-                self.index.value = m
-                return
+                continue
             elif m == len(dist_diff) - 1 and inner_p[-1] >= 1.0:
                 app_logger.info(f"after end of course {start} -> {m}")
                 app_logger.info(
@@ -1000,7 +988,7 @@ class Course:
                 self.index.altitude = np.nan
                 self.index.value = m
                 return
-
+                
             h_lon = (
                 self.longitude[m]
                 + (self.longitude[m + 1] - self.longitude[m]) * inner_p[m]
@@ -1039,9 +1027,9 @@ class Course:
             else:
                 self.index.check[-1] = False
             if self.index.check[-1] is False and np.sum(self.index.check) != 0:
-                # print("course_index_check failed, self.course_index_check[-1]:{}, np.sum(self.course_index_check):{}".format(self.course_index_check[-1], np.sum(self.course_index_check)))
-                # print("\t i:{}, s:{}, m:{}, azimuth_diff:{}, course_point_index:{}".format(i, s, m, azimuth_diff[m+1], self.values['course_point_index']))
-                # print("\t {}, {}, {:.2f}m".format(self.values['lat'], self.values['lon'], self.values['course_distance']/1000))
+                # app_logger.debug(f"course_index_check failed, self.index.check[-1]:{self.index.check[-1]}, np.sum(self.course_index_check):{np.sum(self.index.check)}")
+                # app_logger.debug(f"\t i:{i}, s:{s}, m:{m}, azimuth_diff:{azimuth_diff[m+1]}, course_point_index:{self.index.course_points_index}")
+                # app_logger.debug(f"\t {lat}, {lon}, {round(self.index.distance/1000,2)}m")
                 continue
 
             self.index.on_course_status = True
@@ -1063,8 +1051,7 @@ class Course:
                     )
                 self.index.altitude = self.altitude[m] + alt_diff_course
 
-            # print("search: ", (datetime.utcnow()-t).total_seconds(), "sec, index:", m)
-
+            # app_logger.debug(f"index: {m}")
             self.index.value = m
 
             if len(self.course_points.distance):
@@ -1094,10 +1081,6 @@ class Course:
             return 0
 
         dist_to = self.distance[start] + search_range
-        # print("----get_index_with_distance_cutoff------")
-        # print("start:", start, "course_distance[start]:", self.distance[start], "search_range:", search_range)
-        # print("dist_to:", dist_to, "dist[-1]:", course.distance[-1])
-        # print("----------------------------------------")
         if dist_to >= self.distance[-1]:
             return len(self.distance) - 1
         elif dist_to <= 0:
