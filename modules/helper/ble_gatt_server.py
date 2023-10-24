@@ -89,30 +89,45 @@ class GadgetbridgeService(Service):
             self.decode_message(message_str)
             self.message = None
 
-    async def on_off_uart_service(self):
+    def on_off_uart_service(self):
         self.status = not self.status
 
         if not self.status:
             self.bus.disconnect()
         else:
-            self.bus = await get_message_bus()
-            await self.register(self.bus)
-            agent = NoIoAgent()
-            await agent.register(self.bus)
-            adapter = await Adapter.get_first(self.bus)
-            advert = Advertisement(self.product, [self.service_uuid], 0, 60)
-            await advert.register(self.bus, adapter)
+            asyncio.create_task(self.start_uart_service())
 
         return self.status
 
+    async def start_uart_service(self):
+        self.bus = await get_message_bus()
+        await self.register(self.bus)
+        agent = NoIoAgent()
+        await agent.register(self.bus)
+        adapter = await Adapter.get_first(self.bus)
+        advert = Advertisement(self.product, [self.service_uuid], 0, 60)
+        await advert.register(self.bus, adapter)
+
     def on_off_gadgetbridge_gps(self):
         self.gps_status = not self.gps_status
-
+        self.on_off_gadgetbridge_gps_internal()
+        return self.gps_status
+    
+    def on_off_gadgetbridge_gps_internal(self):
         if self.gps_status:
             self.send_message('{t:"gps_power", status:true}')
         else:
             self.send_message('{t:"gps_power", status:false}')
 
+    async def on_off_gadgetbridge_gps_delay(self):
+        self.gps_status = not self.gps_status
+        await asyncio.sleep(5)
+        self.on_off_gadgetbridge_gps_internal()
+
+    def get_uart_service_status(self):
+        return self.status
+    
+    def get_gadgetbridge_gps_status(self):
         return self.gps_status
 
     @staticmethod
@@ -160,6 +175,7 @@ class GadgetbridgeService(Service):
                 elif m_type.startswith("find") and message.get("n", False):
                     self.gui.show_dialog_ok_only(fn=None, title="Gadgetbridge")
                 elif m_type == "gps":
+                    print(message)
                     # encode gps message
                     lat = (
                         lon

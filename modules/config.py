@@ -807,7 +807,7 @@ class Config:
         await self.gui.set_boot_status("initialize sensor...")
         self.logger.delay_init()
 
-        # gadgetbridge (has to be before gui but after sensors for proper init state of buttons)
+        # GadgetBridge (has to be before gui but after sensors for proper init state of buttons)
         if self.G_IS_RASPI:
             try:
                 from modules.helper.ble_gatt_server import GadgetbridgeService
@@ -825,7 +825,7 @@ class Config:
         if self.G_HEADLESS:
             asyncio.create_task(self.keyboard_check())
 
-        # resume BT and thingsboard setting
+        # resume BT / thingsboard / GadgetBridge setting
         if self.G_IS_RASPI:
             self.G_BT_USE_ADDRESS = self.setting.get_config_pickle(
                 "G_BT_USE_ADDRESS", self.G_BT_USE_ADDRESS
@@ -844,6 +844,13 @@ class Config:
                 and not self.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"]
             ):
                 await self.bluetooth_tethering()
+
+            ble_uart_status = self.setting.get_config_pickle("GB", False)
+            ble_uart_gps_status = self.setting.get_config_pickle("GB_gps", False)
+            if ble_uart_status and self.ble_uart:
+                self.ble_uart.on_off_uart_service()
+                if ble_uart_gps_status:
+                    asyncio.create_task(self.ble_uart.on_off_gadgetbridge_gps_delay())
 
         delta = t.stop()
         self.boot_time += delta

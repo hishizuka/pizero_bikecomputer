@@ -340,6 +340,7 @@ class Setting:
             return default_value
 
     # reset
+    #   mag_min, mag_max: keep until power is turned off
     def reset_config_pickle(self):
         for k, v in list(self.config_pickle.items()):
             if "mag" in k:
@@ -348,10 +349,14 @@ class Setting:
         with open(self.config_pickle_file, "wb") as f:
             pickle.dump(self.config_pickle, f)
 
-    # quit
+    # quit (poweroff)
+    #   ant+_sc_values, ant+_spd_values,
+    #   ant+_power_values_16, ant+_power_values_17, ant+_power_values_18
+    #   GB_status, GB_gps:
+    #   keep in case of sudden shutdown or killed (not via quit()). erase on reset.
     def delete_config_pickle(self):
         for k, v in list(self.config_pickle.items()):
-            if "ant+" in k:
+            if "ant+" in k or k.startswith("GB"):
                 del self.config_pickle[k]
         with open(self.config_pickle_file, "wb") as f:
             pickle.dump(self.config_pickle, f)

@@ -57,8 +57,8 @@ class NetworkMenuWidget(MenuWidget):
             ("Bluetooth", "toggle", wifi_bt_button_func_bt),
             ("BT Tethering", "submenu", self.bt_tething),
             ("IP Address", "dialog", self.show_ip_address),
-            ("Gadgetbridge", "toggle", self.onoff_ble_uart_service),
-            ("Get Location", "toggle", self.onoff_gadgetbridge_gps),
+            ("Gadgetbridge", "toggle", lambda: self.onoff_ble_uart_service(True)),
+            ("Get Location", "toggle", lambda: self.onoff_gadgetbridge_gps(True)),
         )
         self.add_buttons(button_conf)
 
@@ -77,6 +77,9 @@ class NetworkMenuWidget(MenuWidget):
         if self.config.G_IS_RASPI:
             self.onoff_wifi_bt(change=False, key="Wifi")
             self.onoff_wifi_bt(change=False, key="Bluetooth")
+            if self.config.ble_uart:
+                self.onoff_ble_uart_service(change=False)
+                self.onoff_gadgetbridge_gps(change=False)
 
     def onoff_wifi_bt(self, change=True, key=None):
         if change:
@@ -93,14 +96,21 @@ class NetworkMenuWidget(MenuWidget):
         # Button is OK only
         self.config.gui.show_dialog_ok_only(None, address)
 
-    @qasync.asyncSlot()
-    async def onoff_ble_uart_service(self):
-        status = await self.config.ble_uart.on_off_uart_service()
+    def onoff_ble_uart_service(self, change=True):
+        if change:
+            status = self.config.ble_uart.on_off_uart_service()
+            self.config.setting.set_config_pickle("GB", status, quick_apply=True)
+        else:
+            status = self.config.ble_uart.get_uart_service_status()
         self.buttons["Gadgetbridge"].change_toggle(status)
         self.buttons["Get Location"].onoff_button(status)
 
-    def onoff_gadgetbridge_gps(self):
-        status = self.config.ble_uart.on_off_gadgetbridge_gps()
+    def onoff_gadgetbridge_gps(self, change=True):
+        if change:
+            status = self.config.ble_uart.on_off_gadgetbridge_gps()
+            self.config.setting.set_config_pickle("GB_gps", status, quick_apply=True)
+        else:
+            status = self.config.ble_uart.get_gadgetbridge_gps_status()
         self.buttons["Get Location"].change_toggle(status)
 
 
