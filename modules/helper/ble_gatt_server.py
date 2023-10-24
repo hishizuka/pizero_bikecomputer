@@ -112,7 +112,7 @@ class GadgetbridgeService(Service):
         self.gps_status = not self.gps_status
         self.on_off_gadgetbridge_gps_internal()
         return self.gps_status
-    
+
     def on_off_gadgetbridge_gps_internal(self):
         if self.gps_status:
             self.send_message('{t:"gps_power", status:true}')
@@ -126,7 +126,7 @@ class GadgetbridgeService(Service):
 
     def get_uart_service_status(self):
         return self.status
-    
+
     def get_gadgetbridge_gps_status(self):
         return self.gps_status
 
