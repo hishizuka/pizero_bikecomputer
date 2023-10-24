@@ -23,6 +23,7 @@ from modules.sensor.gps.base import (
     NMEA_MODE_3D,
     NMEA_MODE_NO_FIX,
 )
+from modules.utils.asyncio import call_with_delay
 from modules.utils.time import set_time
 from logger import app_logger
 
@@ -43,16 +44,21 @@ class GadgetbridgeService(Service):
 
     status = False
     gps_status = False
+    auto_connect_gps = False
 
     message = None
 
     timediff_from_utc = timedelta(hours=0)
 
-    def __init__(self, product, sensor, gui):
+    def __init__(self, product, sensor, gui, init_statuses=False):
+        init_statuses = init_statuses or []
         self.product = product
         self.sensor = sensor
         self.gui = gui
         super().__init__(self.service_uuid, True)
+        if init_statuses and init_statuses[0]:
+            asyncio.create_task(self.on_off_uart_service())
+            self.auto_connect_gps = init_statuses[1]
 
     async def quit(self):
         if not self.status and self.bus is not None:
@@ -89,45 +95,30 @@ class GadgetbridgeService(Service):
             self.decode_message(message_str)
             self.message = None
 
-    def on_off_uart_service(self):
+    async def on_off_uart_service(self):
         self.status = not self.status
 
         if not self.status:
             self.bus.disconnect()
         else:
-            asyncio.create_task(self.start_uart_service())
+            self.bus = await get_message_bus()
+            await self.register(self.bus)
+            agent = NoIoAgent()
+            await agent.register(self.bus)
+            adapter = await Adapter.get_first(self.bus)
+            advert = Advertisement(self.product, [self.service_uuid], 0, 60)
+            await advert.register(self.bus, adapter)
 
         return self.status
 
-    async def start_uart_service(self):
-        self.bus = await get_message_bus()
-        await self.register(self.bus)
-        agent = NoIoAgent()
-        await agent.register(self.bus)
-        adapter = await Adapter.get_first(self.bus)
-        advert = Advertisement(self.product, [self.service_uuid], 0, 60)
-        await advert.register(self.bus, adapter)
-
     def on_off_gadgetbridge_gps(self):
         self.gps_status = not self.gps_status
-        self.on_off_gadgetbridge_gps_internal()
-        return self.gps_status
 
-    def on_off_gadgetbridge_gps_internal(self):
         if self.gps_status:
             self.send_message('{t:"gps_power", status:true}')
         else:
             self.send_message('{t:"gps_power", status:false}')
 
-    async def on_off_gadgetbridge_gps_delay(self):
-        self.gps_status = not self.gps_status
-        await asyncio.sleep(5)
-        self.on_off_gadgetbridge_gps_internal()
-
-    def get_uart_service_status(self):
-        return self.status
-
-    def get_gadgetbridge_gps_status(self):
         return self.gps_status
 
     @staticmethod
@@ -175,7 +166,6 @@ class GadgetbridgeService(Service):
                 elif m_type.startswith("find") and message.get("n", False):
                     self.gui.show_dialog_ok_only(fn=None, title="Gadgetbridge")
                 elif m_type == "gps":
-                    print(message)
                     # encode gps message
                     lat = (
                         lon
@@ -219,6 +209,9 @@ class GadgetbridgeService(Service):
                             timestamp,
                         )
                     )
+                elif m_type == "is_gps_active" and self.auto_connect_gps:
+                    self.auto_connect_gps = False
+                    call_with_delay(self.on_off_gadgetbridge_gps)
                 elif m_type == "nav" and all(
                     [x in message for x in ["instr", "distance", "action"]]
                 ):
