@@ -813,8 +813,15 @@ class Config:
                 from modules.helper.ble_gatt_server import GadgetbridgeService
 
                 self.ble_uart = GadgetbridgeService(
-                    self.G_PRODUCT, self.logger.sensor.sensor_gps, self.gui
+                    self.G_PRODUCT,
+                    self.logger.sensor.sensor_gps,
+                    self.gui,
+                    (
+                        self.setting.get_config_pickle("GB", False),
+                        self.setting.get_config_pickle("GB_gps", False),
+                    ),
                 )
+
             except Exception as e:  # noqa
                 app_logger.info(f"Gadgetbridge service not initialized: {e}")
 
@@ -825,7 +832,7 @@ class Config:
         if self.G_HEADLESS:
             asyncio.create_task(self.keyboard_check())
 
-        # resume BT / thingsboard / GadgetBridge setting
+        # resume BT / thingsboard
         if self.G_IS_RASPI:
             self.G_BT_USE_ADDRESS = self.setting.get_config_pickle(
                 "G_BT_USE_ADDRESS", self.G_BT_USE_ADDRESS
@@ -844,13 +851,6 @@ class Config:
                 and not self.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"]
             ):
                 await self.bluetooth_tethering()
-
-            ble_uart_status = self.setting.get_config_pickle("GB", False)
-            ble_uart_gps_status = self.setting.get_config_pickle("GB_gps", False)
-            if ble_uart_status and self.ble_uart:
-                self.ble_uart.on_off_uart_service()
-                if ble_uart_gps_status:
-                    asyncio.create_task(self.ble_uart.on_off_gadgetbridge_gps_delay())
 
         delta = t.stop()
         self.boot_time += delta

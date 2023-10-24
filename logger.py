@@ -24,7 +24,6 @@ class StreamToLogger:
 
 
 class CustomRotatingFileHandler(RotatingFileHandler):
-    
     def doRollover(self):
         format = "%Y-%m-%d_%H-%M-%S"
         if self.stream:

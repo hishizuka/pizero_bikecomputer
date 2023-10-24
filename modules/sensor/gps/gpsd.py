@@ -58,7 +58,9 @@ class GPSD(AbstractSensorGPS):
                 total, used = satellites_used(g.satellites)
                 gps_time = self.NULL_VALUE
                 if g.time != self.NULL_VALUE:
-                    gps_time = datetime.strptime(g.time, "%Y-%m-%dT%X.%fZ").replace(tzinfo=timezone.utc)
+                    gps_time = datetime.strptime(g.time, "%Y-%m-%dT%X.%fZ").replace(
+                        tzinfo=timezone.utc
+                    )
                 await self.get_basic_values(
                     g.lat,
                     g.lon,
