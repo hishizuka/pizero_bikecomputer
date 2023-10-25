@@ -489,7 +489,14 @@ class LoggerCore:
         # update lap stats if value is not Null
         for k, v in value.items():
             # skip when null value(np.nan)
-            if k not in ["heart_rate", "cadence", "speed", "power", "distance", "accumulated_power"]:
+            if k not in [
+                "heart_rate",
+                "cadence",
+                "speed",
+                "power",
+                "distance",
+                "accumulated_power",
+            ]:
                 continue
             if np.isnan(v):
                 continue

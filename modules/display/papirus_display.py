@@ -1,6 +1,7 @@
 from PIL import Image
 
 from logger import app_logger
+from .display_core import Display
 
 _SENSOR_DISPLAY = False
 try:
@@ -14,21 +15,23 @@ except ImportError:
 app_logger.info(f"PAPIRUS E-INK DISPLAY: {_SENSOR_DISPLAY}")
 
 
-class PapirusDisplay:
-    config = None
+class PapirusDisplay(Display):
     papirus = None
 
-    def __init__(self, config):
-        self.config = config
+    has_color = False
+    has_touch = False
 
-        if _SENSOR_DISPLAY:
-            self.papirus = Papirus(rotation=180)
-            self.clear()
+    size = (264, 176)
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.papirus = Papirus(rotation=180)
+        self.clear()
 
     def clear(self):
         self.papirus.clear()
 
-    def update(self, im_array):
+    def update(self, im_array, direct_update=False):
         self.papirus.display(
             Image.frombytes(
                 "1", (im_array.shape[1] * 8, im_array.shape[0]), (~im_array).tobytes()
@@ -37,5 +40,4 @@ class PapirusDisplay:
         self.papirus.fast_update()
 
     def quit(self):
-        if _SENSOR_DISPLAY:
-            self.clear()
+        self.clear()

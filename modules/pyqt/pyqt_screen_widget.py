@@ -67,7 +67,7 @@ class ScreenWidget(QtWidgets.QWidget):
         self.add_items()
 
         # this depends on max_height so has to be done after add_items that recalculate it
-        self.set_font_size(self.config.G_HEIGHT)
+        self.set_font_size(self.config.display.resolution[1])
 
     # call from on_change_main_page in gui_pyqt.py
     def start(self):

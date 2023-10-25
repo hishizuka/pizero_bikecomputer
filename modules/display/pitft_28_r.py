@@ -1,17 +1,13 @@
 from logger import app_logger
 from modules.utils.cmd import exec_cmd
+from .display_core import Display
 
 _SENSOR_DISPLAY = True
 
 app_logger.info(f"PiTFT 2.8(r): {_SENSOR_DISPLAY}")
 
-# SCREEN
-SCREEN_WIDTH = 320
-SCREEN_HEIGHT = 240
 
-
-class PiTFT28r:
-    config = None
+class PiTFT28r(Display):
     spi = None
 
     # brightness
@@ -26,23 +22,23 @@ class PiTFT28r:
     # brightness_cmd_init = ["/usr/bin/gpio", "-g", "mode", "18", "pwm"]
     # brightness_cmd_base = ["/usr/bin/gpio", "-g", "pwm", "18"]
 
-    def __init__(self, config):
-        self.config = config
+    size = (320, 240)
 
-        if _SENSOR_DISPLAY:
-            self.clear()
+    send = False
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.clear()
 
     def clear(self):
         pass
 
     def quit(self):
-        if _SENSOR_DISPLAY:
-            self.clear()
-            # GPIO.output(GPIO_DISP, 1)
-            # time.sleep(0.1)
+        self.clear()
+        # GPIO.output(GPIO_DISP, 1)
+        # time.sleep(0.1)
 
     def change_brightness(self):
-        if _SENSOR_DISPLAY:
-            self.brightness_index = not self.brightness_index
-            cmd = self.brightness_cmd[int(self.brightness_index)]
-            exec_cmd(cmd)
+        self.brightness_index = not self.brightness_index
+        cmd = self.brightness_cmd[int(self.brightness_index)]
+        exec_cmd(cmd)

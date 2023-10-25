@@ -4,6 +4,7 @@ import asyncio
 import numpy as np
 
 from logger import app_logger
+from .display_core import Display
 
 _SENSOR_DISPLAY = False
 try:
@@ -27,21 +28,25 @@ GPIO_VCOMSEL = 17  # 11 in GPIO.BOARD
 UPDATE_MODE = 0x80
 
 
-class MipSharpDisplay:
-    config = None
+class MipSharpDisplay(Display):
     pi = None
     spi = None
     interval = 0.25
 
-    def __init__(self, config):
-        self.config = config
+    has_color = False
+    has_touch = False
+
+    size = (400, 240)
+
+    def __init__(self, config, size=None):
+        super().__init__(config)
+        if size:
+            self.size = size
+
         self.init_buffer()
 
-        if not _SENSOR_DISPLAY:
-            return
-
         self.pi = pigpio.pi()
-        self.spi = self.pi.spi_open(0, self.config.G_DISPLAY_PARAM["SPI_CLOCK"], 0)
+        self.spi = self.pi.spi_open(0, config.G_DISPLAY_PARAM["SPI_CLOCK"], 0)
 
         self.pi.set_mode(GPIO_DISP, pigpio.OUTPUT)
         self.pi.set_mode(GPIO_SCS, pigpio.OUTPUT)
@@ -59,17 +64,13 @@ class MipSharpDisplay:
         asyncio.create_task(self.draw_worker())
 
     def init_buffer(self):
-        self.buff_width = int(self.config.G_WIDTH / 8) + 2
-        self.img_buff_rgb8 = np.zeros(
-            (self.config.G_HEIGHT, self.buff_width), dtype="uint8"
-        )
-        self.pre_img = np.full(
-            (self.config.G_HEIGHT, self.buff_width), 255, dtype="uint8"
-        )
+        self.buff_width = int(self.size[0] / 8) + 2
+        self.img_buff_rgb8 = np.zeros((self.size[1], self.buff_width), dtype="uint8")
+        self.pre_img = np.full((self.size[1], self.buff_width), 255, dtype="uint8")
         self.img_buff_rgb8[:, 0] = UPDATE_MODE
         # address is set in reversed bits
         self.img_buff_rgb8[:, 1] = [
-            int("{:08b}".format(a)[::-1], 2) for a in range(self.config.G_HEIGHT)
+            int("{:08b}".format(a)[::-1], 2) for a in range(self.size[1])
         ]
 
     def clear(self):
@@ -80,8 +81,6 @@ class MipSharpDisplay:
         time.sleep(0.000006)
 
     def inversion(self, sec):
-        if not _SENSOR_DISPLAY:
-            return
         s = sec
         state = True
         while s > 0:
@@ -119,7 +118,7 @@ class MipSharpDisplay:
             self.draw_queue.task_done()
 
     def update(self, im_array, direct_update):
-        if not _SENSOR_DISPLAY or self.config.G_QUIT:
+        if self.config.G_QUIT:
             return
 
         # self.config.check_time("mip_sharp_update start")
@@ -129,11 +128,12 @@ class MipSharpDisplay:
         diff_lines = np.where(
             np.sum((self.img_buff_rgb8 == self.pre_img), axis=1) != self.buff_width
         )[0]
-        # print("diff ", int(len(diff_lines)/self.config.G_HEIGHT*100), "%")
+        # print("diff ", int(len(diff_lines)/self.size[1]*100), "%")
         # print(" ")
 
         if not len(diff_lines):
             return
+
         self.pre_img[diff_lines] = self.img_buff_rgb8[diff_lines]
         # self.config.check_time("diff_lines")
 
@@ -157,3 +157,9 @@ class MipSharpDisplay:
 
         self.pi.spi_close(self.spi)
         self.pi.stop()
+
+    def screen_flash_long(self):
+        return self.inversion(0.8)
+
+    def screen_flash_short(self):
+        return self.inversion(0.3)

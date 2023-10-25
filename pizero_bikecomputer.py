@@ -25,10 +25,10 @@ def main():
 
     # display
     with timers[2]:
-        from modules.display.display_core import Display
+        from modules.display.display_core import init_display
 
     with timers[3]:
-        config.set_display(Display(config, {}))
+        config.set_display(init_display(config))
 
     # minimal gui
     with timers[4]:
