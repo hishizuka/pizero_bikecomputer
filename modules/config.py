@@ -759,7 +759,9 @@ class Config:
     def init_loop(self, call_from_gui=False):
         if self.G_GUI_MODE == "PyQt":
             if call_from_gui:
-                asyncio.set_event_loop(self.loop)
+                #asyncio.set_event_loop(self.loop)
+                # workaround for latest qasync and older version(~0.24.0)
+                asyncio.events._set_running_loop(self.loop)
                 self.start_coroutine()
         else:
             self.loop = asyncio.get_event_loop()

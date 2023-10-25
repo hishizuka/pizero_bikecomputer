@@ -6,7 +6,7 @@ An open-source bike computer based on  Raspberry Pi Zero (W, WH, 2 W) with GPS a
 https://github.com/hishizuka/pizero_bikecomputer
 
 # News
-- 2023/10/20 The program has now been substantially modified with significant contributions from [Ptosiek](https://github.com/Ptosiek) . `timezonefinder` is now required. Also, `qasync` does not work with the latest version, so install version 0.24.0.
+- 2023/10/20 The program has now been substantially modified with significant contributions from [Ptosiek](https://github.com/Ptosiek) . `timezonefinder` is now required. ~~Also, `qasync` does not work with the latest version, so install version 0.24.0.~~
 - 2023/9/15 Add [receiving route from Android Google Maps](./doc/software_installation.md#courses) with Bluetooth File Transfer Protocol. So, install bluez-obexd and dbus-x11 package.
 - 2023/6/26 Replace hishizuka/pyqtgraph with original pyqtgraph. So uninstall and re-install pyqtgraph.
 - 2023/6/26 Add GadgetBridge documents in [software_installation.md](./doc/software_installation.md#network).
@@ -15,7 +15,7 @@ https://github.com/hishizuka/pizero_bikecomputer
 ```
 2023/10/20 update
 $ sudo pip3 install timezonefinder
-$ sudo pip3 install qasync==0.24.0
+$ sudo pip3 install qasync --upgrade
 
 2023/9/15 update
 #For Android only
