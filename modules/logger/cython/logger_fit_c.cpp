@@ -2,14 +2,6 @@
 
 void set_config_c(const config& _cfg) {
   cfg.G_UNIT_ID_HEX = _cfg.G_UNIT_ID_HEX;
-  cfg.G_LOG_DIR = strdup(_cfg.G_LOG_DIR);
-}
-
-char* get_upload_file_name_c() {
-  return cfg.G_UPLOAD_FILE;
-}
-char* get_start_date_str_c() {
-  return cfg.G_LOG_START_DATE;
 }
 
 void reset() {
@@ -414,7 +406,7 @@ bool get_summary(int lap_num, sqlite3 *db) {
   std::vector<unsigned int> available_data;
   _ret_data[0].reserve(profile_indexes[message_num].size());
   _ret_data[1].reserve(profile_indexes[message_num].size());
-  
+
   char _sql_ave[strlen(base_sql[message_num][0].c_str())+strlen(sql_items[message_num][0].c_str())+10];
   char _sql_MAX_MIN[strlen(base_sql[message_num][1].c_str())+strlen(sql_items[message_num][1].c_str())+10];
   if(message_num == 19) {
@@ -454,9 +446,9 @@ bool get_summary(int lap_num, sqlite3 *db) {
         break;
       }
     }
-    
+
     if(_ret_data[ave_or_MAX_MIN][index].is_null) continue;
-    
+
     available_fields.push_back(i);
     available_data.push_back(convert_value(_ret_data[ave_or_MAX_MIN][index].data.c_str(), i));
   }
@@ -485,11 +477,10 @@ bool get_summary(int lap_num, sqlite3 *db) {
   return true;
 }
 
-bool write_log_c(const char* db_file) {
+bool write_log_c(const char* db_file, const char* filename, const char* start_date, const char* end_date) {
   sqlite3 *db;
   char *zErrMsg = 0;
   int rc, max_lap, rows, lap_lows;
-  char start_date[30], end_date[30];
   std::vector<int> _size;
   std::vector<unsigned int> _data;
   reset();
@@ -502,13 +493,14 @@ bool write_log_c(const char* db_file) {
   rc = sqlite3_open(db_file, &db);
   if(rc) { return exit_with_error("Can't open database", db); }
 
-  //get start_date and end_date
-  message_num = 0;
-  rc = sqlite3_exec(db, "SELECT MIN(timestamp) FROM BIKECOMPUTER_LOG", parse_single_str, &start_date, &zErrMsg);
-  if(rc) { return exit_with_error("SQL error(start_date)", db); }
+  // we could have start/end made optional and.or validate they are correct here
+  // char start_date[30], end_date[30];
+  // rc = sqlite3_exec(db, "SELECT MIN(timestamp) FROM BIKECOMPUTER_LOG", parse_single_str, &start_date, &zErrMsg);
+  // if(rc) { return exit_with_error("SQL error(start_date)", db); }
+  // rc = sqlite3_exec(db, "SELECT MAX(timestamp) FROM BIKECOMPUTER_LOG", parse_single_str, &end_date, &zErrMsg);
+  // if(rc) { return exit_with_error("SQL error(end_date)", db); }
+
   time_t start_date_epoch = convert_value(start_date, 4);
-  rc = sqlite3_exec(db, "SELECT MAX(timestamp) FROM BIKECOMPUTER_LOG", parse_single_str, &end_date, &zErrMsg);
-  if(rc) { return exit_with_error("SQL error(end_date)", db); }
   time_t end_date_epoch = convert_value(end_date, 4);
 
   //file_id (message_num:0)
@@ -575,22 +567,21 @@ bool write_log_c(const char* db_file) {
     if(!get_summary(lap_num, db)) return false;
     //printf("lap: %d\n", (int)crc16(fit_data));
   }
-  
-  //make sesson summary
+
+  //make session summary
   message_num = 18;
   if(!get_summary(0, db)) return false;
   //printf("session: %d\n", (int)crc16(fit_data));
-  
+
   //make activity
   message_num = 34;
   local_message_num = (local_message_num + 1)%16;
   local_num[local_message_num] = message_num;
   local_num_field[local_message_num] = {253,0,1,2,3,4,5};
-  
+
   //get offset of localtime (use lt.tm_gmtoff)
-  time_t lt_t = time(NULL);
   struct tm lt = {0};
-  localtime_r(&lt_t, &lt);
+  localtime_r(&end_date_epoch, &lt);
 
   write_definition();
   get_struct_def(_size, local_message_num, false);
@@ -605,15 +596,10 @@ bool write_log_c(const char* db_file) {
   };
   add_fit_data(fit_data, _data, _size);
   //printf("footer: %d\n", (int)crc16(fit_data));
-  
+
   sqlite3_close(db);
 
   //write fit file
-  time_t startdate_local_epoch = start_date_epoch+epoch_datetime_sec;
-  char startdate_local[20], filename[100], startdate_str[25];
-  strftime(startdate_local, sizeof(startdate_local), "%Y-%m-%d_%H-%M-%S", localtime(&startdate_local_epoch));
-  strftime(startdate_str, sizeof(startdate_str), "%Y-%m-%d_%H-%M-%S.fit", localtime(&startdate_local_epoch));
-  sprintf(filename, "%s/%s", cfg.G_LOG_DIR, startdate_str);
 
   //make file header
   std::vector<uint8_t> file_header, header_crc, total_crc;
@@ -631,7 +617,7 @@ bool write_log_c(const char* db_file) {
   _data = {(unsigned int)crc16(file_header)};
   _size = {2};
   add_fit_data(header_crc, _data, _size);
-  
+
   FILE *fp;
   if((fp=fopen(filename,"w")) != NULL ) {
     fwrite(file_header.data(), sizeof(uint8_t), file_header.size(), fp);
@@ -656,25 +642,5 @@ bool write_log_c(const char* db_file) {
 
   reset();
 
-  cfg.G_LOG_START_DATE = strdup(startdate_local);
-  cfg.G_UPLOAD_FILE = strdup(filename);
-
   return true;
 }
-
-int main(int argc, char *argv[]) {
-
-  if( argc!=2 ){
-    fprintf(stderr, "Usage: %s DATABASE\n", argv[0]);
-    exit(1);
-  }
-  
-  cfg.G_UNIT_ID_HEX = 0;
-  const char* log_dir = "./";
-  cfg.G_LOG_DIR = strdup(log_dir);
-
-  bool res = !write_log_c(argv[1]);
-
-  return (int)res;
-}
-

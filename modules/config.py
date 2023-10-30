@@ -101,7 +101,6 @@ class Config:
     G_LOG_DIR = "log"
     G_LOG_DB = os.path.join(G_LOG_DIR, "log.db")
     G_LOG_DEBUG_FILE = os.path.join(G_LOG_DIR, "debug.log")
-    G_LOG_START_DATE = None
 
     # asyncio semaphore
     G_COROUTINE_SEM = 100
@@ -759,7 +758,7 @@ class Config:
     def init_loop(self, call_from_gui=False):
         if self.G_GUI_MODE == "PyQt":
             if call_from_gui:
-                #asyncio.set_event_loop(self.loop)
+                # asyncio.set_event_loop(self.loop)
                 # workaround for latest qasync and older version(~0.24.0)
                 asyncio.events._set_running_loop(self.loop)
                 self.start_coroutine()
