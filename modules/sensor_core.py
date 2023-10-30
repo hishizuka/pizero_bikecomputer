@@ -580,9 +580,9 @@ class SensorCore:
                         v["I2C"]["light"]
                     ):
                         if v["I2C"]["light"] <= self.config.G_AUTO_BACKLIGHT_CUTOFF:
-                            self.config.display.display.set_brightness(3)
+                            self.config.display.set_brightness(3)
                         else:
-                            self.config.display.display.set_brightness(0)
+                            self.config.display.set_brightness(0)
                     if self.config.G_MANUAL_STATUS == "START":
                         if v["I2C"]["light"] <= self.config.G_AUTO_BACKLIGHT_CUTOFF:
                             self.sensor_ant.set_light_mode("FLASH_LOW", auto=True)
