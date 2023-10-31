@@ -213,17 +213,14 @@ class SensorI2C(Sensor):
 
         self.reset()
 
-        # store temporary values
-        self.sealevel_pa = self.config.setting.get_config_pickle(
-            "sealevel_pa", self.sealevel_pa
-        )
-        self.sealevel_temp = self.config.setting.get_config_pickle(
+        self.sealevel_pa = self.config.state.get_value("sealevel_pa", self.sealevel_pa)
+        self.sealevel_temp = self.config.state.get_value(
             "sealevel_temp", self.sealevel_temp
         )
-        self.values_mod["mag_min"] = self.config.setting.get_config_pickle(
+        self.values_mod["mag_min"] = self.config.state.get_value(
             "mag_min" + "_" + self.sensor_label["MAG"], self.values_mod["mag_min"]
         )
-        self.values_mod["mag_max"] = self.config.setting.get_config_pickle(
+        self.values_mod["mag_max"] = self.config.state.get_value(
             "mag_max" + "_" + self.sensor_label["MAG"], self.values_mod["mag_max"]
         )
 
@@ -670,11 +667,11 @@ class SensorI2C(Sensor):
         )
         # store
         if np.any(pre_min != self.values_mod["mag_min"]):
-            self.config.setting.set_config_pickle(
+            self.config.state.set_value(
                 "mag_min" + "_" + self.sensor_label["MAG"], self.values_mod["mag_min"]
             )
         if np.any(pre_max != self.values_mod["mag_max"]):
-            self.config.setting.set_config_pickle(
+            self.config.state.set_value(
                 "mag_max" + "_" + self.sensor_label["MAG"], self.values_mod["mag_max"]
             )
         # hard iron distortion
@@ -1121,11 +1118,9 @@ class SensorI2C(Sensor):
         self.sealevel_pa = self.values["pressure"] * pow(
             (self.sealevel_temp - 0.0065 * alt) / self.sealevel_temp, -5.257
         )
-        self.config.setting.set_config_pickle(
-            "sealevel_pa", self.sealevel_pa, quick_apply=False
-        )
-        self.config.setting.set_config_pickle(
-            "sealevel_temp", self.sealevel_temp, quick_apply=True
+        self.config.state.set_value("sealevel_pa", self.sealevel_pa)
+        self.config.state.set_value(
+            "sealevel_temp", self.sealevel_temp, force_apply=True
         )
 
         # reset historical altitude

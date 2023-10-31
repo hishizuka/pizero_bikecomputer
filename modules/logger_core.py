@@ -138,7 +138,7 @@ class LoggerCore:
             return
 
         # resume START/STOP status if temporary values exist
-        self.config.G_MANUAL_STATUS = self.config.setting.get_config_pickle(
+        self.config.G_MANUAL_STATUS = self.config.state.get_value(
             "G_MANUAL_STATUS", self.config.G_MANUAL_STATUS
         )
         if self.config.G_MANUAL_STATUS == "START":
@@ -337,8 +337,8 @@ class LoggerCore:
             if self.config.gui is not None:
                 self.config.gui.change_start_stop_button(self.config.G_MANUAL_STATUS)
 
-        self.config.setting.set_config_pickle(
-            "G_MANUAL_STATUS", self.config.G_MANUAL_STATUS, quick_apply=True
+        self.config.state.set_value(
+            "G_MANUAL_STATUS", self.config.G_MANUAL_STATUS, force_apply=True
         )
 
         # send online
@@ -486,7 +486,7 @@ class LoggerCore:
             self.init_db()
 
         # reset temporary values
-        self.config.setting.reset_config_pickle()
+        self.config.state.reset()
 
         # reset accumulated values
         self.sensor.reset()

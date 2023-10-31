@@ -102,12 +102,12 @@ class NetworkMenuWidget(MenuWidget):
         status = await self.config.ble_uart.on_off_uart_service()
         self.buttons["Gadgetbridge"].change_toggle(status)
         self.buttons["Get Location"].onoff_button(status)
-        self.config.setting.set_config_pickle("GB", status, quick_apply=True)
+        self.config.state.set_value("GB", status, force_apply=True)
 
     def onoff_gadgetbridge_gps(self):
         status = self.config.ble_uart.on_off_gadgetbridge_gps()
         self.buttons["Get Location"].change_toggle(status)
-        self.config.setting.set_config_pickle("GB_gps", status, quick_apply=True)
+        self.config.state.set_value("GB_gps", status, force_apply=True)
 
 
 class DebugMenuWidget(MenuWidget):
@@ -186,9 +186,7 @@ class BluetoothTetheringListWidget(ListWidget):
     async def button_func_extra(self):
         self.config.G_BT_USE_ADDRESS = self.selected_item.title_label.text()
         # save for restart
-        self.config.setting.set_config_pickle(
-            "G_BT_USE_ADDRESS", self.config.G_BT_USE_ADDRESS
-        )
+        self.config.state.set_value("G_BT_USE_ADDRESS", self.config.G_BT_USE_ADDRESS)
 
         if self.run_bt_tethering:
             await self.config.bluetooth_tethering()

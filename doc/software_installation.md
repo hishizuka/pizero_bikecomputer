@@ -29,7 +29,7 @@
     - [System](#System)
   - [Settings](#settings)
     - [setting.conf](#settingconf)
-    - [setting.pickle](#settingpickle)
+    - [state.pickle](#statepickle)
     - [layout.yaml](#layoutyaml)
     - [map.yaml](#mapyaml)
     - [config.py](#configpy)
@@ -737,7 +737,7 @@ If you want to correct the altitude using a barometric pressure sensor, set your
 If you want to use ThingsBoard dashboard, set your `token` of the Thingboard device access token.
 
 
-### setting.pickle
+### state.pickle
 
 It stores temporary variables such as values for quick recovery in the event of a power failure and sensor calibration results.
 

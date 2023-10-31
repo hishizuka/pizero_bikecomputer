@@ -21,7 +21,7 @@ __pycache__/
 *.so
 a.out
 setting.conf
-setting.pickle
+state.pickle
 layout.yaml
 map.yaml
 nohup.out

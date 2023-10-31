@@ -15,6 +15,7 @@ from PIL import Image
 from logger import CustomRotatingFileHandler, app_logger
 from modules.helper.setting import Setting
 from modules.button_config import Button_Config
+from modules.state import AppState
 from modules.utils.cmd import (
     exec_cmd,
     exec_cmd_return_value,
@@ -624,6 +625,7 @@ class Config:
     bt_pan = None
     ble_uart = None
     setting = None
+    state = None
     gui = None
     gui_config = None
     boot_time = 0
@@ -659,9 +661,9 @@ class Config:
             app_logger.setLevel(logging.DEBUG)
             app_logger.debug(args)
 
-        # read setting.conf and settings.pickle
+        # read setting.conf and state.pickle
         self.setting = Setting(self)
-        self.setting.read()
+        self.state = AppState()
 
         # make sure all folders exist
         os.makedirs(self.G_SCREENSHOT_DIR, exist_ok=True)
@@ -800,8 +802,8 @@ class Config:
                     self.logger.sensor.sensor_gps,
                     self.gui,
                     (
-                        self.setting.get_config_pickle("GB", False),
-                        self.setting.get_config_pickle("GB_gps", False),
+                        self.state.get_value("GB", False),
+                        self.state.get_value("GB_gps", False),
                     ),
                 )
 
@@ -817,15 +819,13 @@ class Config:
 
         # resume BT / thingsboard
         if self.G_IS_RASPI:
-            self.G_BT_USE_ADDRESS = self.setting.get_config_pickle(
+            self.G_BT_USE_ADDRESS = self.state.get_value(
                 "G_BT_USE_ADDRESS", self.G_BT_USE_ADDRESS
             )
-            self.G_THINGSBOARD_API["STATUS"] = self.setting.get_config_pickle(
+            self.G_THINGSBOARD_API["STATUS"] = self.state.get_value(
                 "G_THINGSBOARD_API_STATUS", self.G_THINGSBOARD_API["STATUS"]
             )
-            self.G_THINGSBOARD_API[
-                "AUTO_UPLOAD_VIA_BT"
-            ] = self.setting.get_config_pickle(
+            self.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"] = self.state.get_value(
                 "AUTO_UPLOAD_VIA_BT", self.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"]
             )
             # resume BT tethering
@@ -954,7 +954,7 @@ class Config:
 
         await self.logger.quit()
         self.setting.write_config()
-        self.setting.delete_config_pickle()
+        self.state.delete()
 
         await asyncio.sleep(0.5)
         await self.kill_tasks()

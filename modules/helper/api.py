@@ -371,9 +371,7 @@ class api:
             return False
 
         try:
-            saved_session = self.config.setting.get_config_pickle(
-                "garmin_session", None
-            )
+            saved_session = self.config.state.get_value("garmin_session", None)
             garmin_api = Garmin(session_data=saved_session)
             garmin_api.login()
         except (FileNotFoundError, GarminConnectAuthenticationError):
@@ -383,8 +381,8 @@ class api:
                     self.config.G_GARMINCONNECT_API["PASSWORD"],
                 )
                 garmin_api.login()
-                self.config.set_config_pickle(
-                    "garmin_session", garmin_api.session_data, quick_apply=True
+                self.config.state.set_value(
+                    "garmin_session", garmin_api.session_data, force_apply=True
                 )
             except (
                 GarminConnectConnectionError,
