@@ -441,25 +441,7 @@ class Config:
     G_FULLSCREEN = False
 
     # display type (overwritten with setting.conf)
-    G_DISPLAY = "None"  # PiTFT, MIP, Papirus, MIP_Sharp
-
-    # screen size (need to add when adding new device)
-    G_AVAILABLE_DISPLAY = {
-        "None": {"size": (400, 240), "touch": True, "color": True},
-        "PiTFT": {"size": (320, 240), "touch": True, "color": True},
-        "MIP": {
-            "size": (400, 240),
-            "touch": False,
-            "color": True,
-        },  # LPM027M128C, LPM027M128B
-        "MIP_640": {"size": (640, 480), "touch": False, "color": True},  # LPM044M141A
-        "MIP_Sharp": {"size": (400, 240), "touch": False, "color": False},
-        "MIP_Sharp_320": {"size": (320, 240), "touch": False, "color": False},
-        "Papirus": {"size": (264, 176), "touch": False, "color": False},
-        "DFRobot_RPi_Display": {"size": (250, 122), "touch": False, "color": False},
-    }
-    G_WIDTH = 400
-    G_HEIGHT = 240
+    G_DISPLAY = "None"  # PiTFT, MIP, MIP_640, Papirus, MIP_Sharp, MIP_Sharp_320, DFRobot_RPi_Display
 
     G_DISPLAY_PARAM = {
         "SPI_CLOCK": 2000000,
@@ -758,9 +740,9 @@ class Config:
     def init_loop(self, call_from_gui=False):
         if self.G_GUI_MODE == "PyQt":
             if call_from_gui:
-                # asyncio.set_event_loop(self.loop)
                 # workaround for latest qasync and older version(~0.24.0)
                 asyncio.events._set_running_loop(self.loop)
+                asyncio.set_event_loop(self.loop)
                 self.start_coroutine()
         else:
             self.loop = asyncio.get_event_loop()

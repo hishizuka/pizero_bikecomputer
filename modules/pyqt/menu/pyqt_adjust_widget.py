@@ -99,7 +99,7 @@ class AdjustWidget(MenuWidget):
         set_button.clicked.connect(self.set_value)
         self.menu_layout.addWidget(set_button, 2, 5)
 
-        if not self.config.display.has_touch():
+        if not self.config.display.has_touch:
             self.focus_widget = num_buttons[1]
 
         self.init_extra()

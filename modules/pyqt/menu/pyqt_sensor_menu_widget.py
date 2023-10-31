@@ -50,7 +50,7 @@ class ANTMenuWidget(MenuWidget):
         for antName in self.config.G_ANT["ORDER"]:
             self.buttons[antName].setText(self.get_button_state(antName))
 
-        if not self.config.display.has_touch():
+        if not self.config.display.has_touch:
             self.focus_widget = self.buttons[self.config.G_ANT["ORDER"][0]]
 
     def get_button_state(self, antName):

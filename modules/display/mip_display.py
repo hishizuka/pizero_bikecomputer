@@ -4,6 +4,7 @@ import asyncio
 import numpy as np
 
 from logger import app_logger
+from .display_core import Display
 
 _SENSOR_DISPLAY = False
 MODE = "Python"
@@ -42,8 +43,7 @@ UPDATE_MODE = 0x80
 GPIO_BACKLIGHT_FREQ = 64
 
 
-class MipDisplay:
-    config = None
+class MipDisplay(Display):
     pi = None
     spi = None
     interval = 0.25
@@ -52,21 +52,22 @@ class MipDisplay:
     brightness = 0
     mip_display_cpp = None
 
-    def __init__(self, config):
-        self.config = config
+    has_touch = False
+    send = True
 
-        if not _SENSOR_DISPLAY:
-            return
+    size = (400, 240)
+
+    def __init__(self, config, size=None):
+        super().__init__(config)
+
+        if size:
+            self.size = size
 
         if MODE == "Cython":
             self.conv_color = conv_3bit_color
         elif MODE == "Cython_full":
-            self.mip_display_cpp = MipDisplay_CPP(
-                self.config.G_DISPLAY_PARAM["SPI_CLOCK"]
-            )
-            self.mip_display_cpp.set_screen_size(
-                self.config.G_WIDTH, self.config.G_HEIGHT
-            )
+            self.mip_display_cpp = MipDisplay_CPP(config.G_DISPLAY_PARAM["SPI_CLOCK"])
+            self.mip_display_cpp.set_screen_size(self.size[0], self.size[1])
             self.update = self.mip_display_cpp.update
             self.set_brightness = self.mip_display_cpp.set_brightness
             self.inversion = self.mip_display_cpp.inversion
@@ -79,7 +80,7 @@ class MipDisplay:
 
         # spi
         self.pi = pigpio.pi()
-        self.spi = self.pi.spi_open(0, self.config.G_DISPLAY_PARAM["SPI_CLOCK"], 0)
+        self.spi = self.pi.spi_open(0, config.G_DISPLAY_PARAM["SPI_CLOCK"], 0)
 
         self.pi.set_mode(GPIO_DISP, pigpio.OUTPUT)
         self.pi.set_mode(GPIO_SCS, pigpio.OUTPUT)
@@ -93,22 +94,20 @@ class MipDisplay:
         # backlight
         self.pi.set_mode(GPIO_BACKLIGHT, pigpio.OUTPUT)
         self.pi.hardware_PWM(GPIO_BACKLIGHT, GPIO_BACKLIGHT_FREQ, 0)
-        if self.config.G_USE_AUTO_BACKLIGHT:
+        if config.G_USE_AUTO_BACKLIGHT:
             self.brightness_index = len(self.brightness_table)
         else:
             self.brightness_index = 0
 
     def init_buffer(self):
-        self.buff_width = int(self.config.G_WIDTH * 3 / 8) + 2  # for 3bit update mode
-        self.img_buff_rgb8 = np.empty(
-            (self.config.G_HEIGHT, self.buff_width), dtype="uint8"
-        )
-        self.pre_img = np.zeros((self.config.G_HEIGHT, self.buff_width), dtype="uint8")
+        self.buff_width = int(self.size[0] * 3 / 8) + 2  # for 3bit update mode
+        self.img_buff_rgb8 = np.empty((self.size[1], self.buff_width), dtype="uint8")
+        self.pre_img = np.zeros((self.size[1], self.buff_width), dtype="uint8")
         self.img_buff_rgb8[:, 0] = UPDATE_MODE
-        self.img_buff_rgb8[:, 1] = np.arange(self.config.G_HEIGHT)
+        self.img_buff_rgb8[:, 1] = np.arange(self.size[1])
         # for MIP_640
         self.img_buff_rgb8[:, 0] = self.img_buff_rgb8[:, 0] + (
-            np.arange(self.config.G_HEIGHT) >> 8
+            np.arange(self.size[1]) >> 8
         )
 
     def start_coroutine(self):
@@ -131,8 +130,6 @@ class MipDisplay:
         time.sleep(0.000006)
 
     def blink(self, sec):
-        if not _SENSOR_DISPLAY:
-            return
         s = sec
         state = True
         while s > 0:
@@ -149,8 +146,6 @@ class MipDisplay:
         self.no_update()
 
     def inversion(self, sec):
-        if not _SENSOR_DISPLAY:
-            return
         s = sec
         state = True
         while s > 0:
@@ -185,8 +180,9 @@ class MipDisplay:
             self.draw_queue.task_done()
 
     def update(self, im_array, direct_update):
-        if not _SENSOR_DISPLAY or self.config.G_QUIT:
-            return
+        # direct update not yet supported for MPI_640
+        if direct_update and self.config.G_DISPLAY in ("MIP_640",):
+            direct_update = False
 
         # self.config.check_time("mip_update start")
         self.img_buff_rgb8[:, 2:] = self.conv_color(im_array)
@@ -196,7 +192,7 @@ class MipDisplay:
         diff_lines = np.where(
             np.sum((self.img_buff_rgb8 == self.pre_img), axis=1) != self.buff_width
         )[0]
-        # print("diff ", int(len(diff_lines)/self.config.G_HEIGHT*100), "%")
+        # print("diff ", int(len(diff_lines)/self.size[1]*100), "%")
         # print(" ")
 
         if not len(diff_lines):
@@ -230,7 +226,7 @@ class MipDisplay:
 
     def conv_2bit_color_py(self, im_array):
         return np.packbits(
-            (im_array >= 128).reshape(self.config.G_HEIGHT, self.config.G_WIDTH * 3),
+            (im_array >= 128).reshape(self.size[1], self.size[0] * 3),
             axis=1,
         )
 
@@ -271,9 +267,7 @@ class MipDisplay:
             ]
         ] = 1
 
-        return np.packbits(
-            im_array_bin.reshape(self.config.G_HEIGHT, self.config.G_WIDTH * 3), axis=1
-        )
+        return np.packbits(im_array_bin.reshape(self.size[1], self.size[0] * 3), axis=1)
 
     def change_brightness(self):
         # brightness is changing as following,
@@ -290,14 +284,12 @@ class MipDisplay:
             self.set_brightness(b)
 
     def set_brightness(self, b):
-        if not _SENSOR_DISPLAY or b == self.brightness or self.config.G_QUIT:
+        if b == self.brightness or self.config.G_QUIT:
             return
         self.pi.hardware_PWM(GPIO_BACKLIGHT, GPIO_BACKLIGHT_FREQ, b * 10000)
         self.brightness = b
 
     def backlight_blink(self):
-        if not _SENSOR_DISPLAY:
-            return
         for x in range(2):
             for pw in range(0, 100, 1):
                 self.pi.hardware_PWM(GPIO_BACKLIGHT, GPIO_BACKLIGHT_FREQ, pw * 10000)
@@ -307,9 +299,6 @@ class MipDisplay:
                 time.sleep(0.05)
 
     def quit(self):
-        if not _SENSOR_DISPLAY:
-            return
-
         asyncio.create_task(self.draw_queue.put(None))
         self.set_brightness(0)
         self.clear()
@@ -319,3 +308,9 @@ class MipDisplay:
 
         self.pi.spi_close(self.spi)
         self.pi.stop()
+
+    def screen_flash_long(self):
+        return self.inversion(0.8)
+
+    def screen_flash_short(self):
+        return self.inversion(0.3)
