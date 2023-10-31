@@ -35,6 +35,7 @@ class MipSharpDisplay(Display):
 
     has_color = False
     has_touch = False
+    send = True
 
     size = (400, 240)
 

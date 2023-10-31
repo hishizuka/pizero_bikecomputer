@@ -27,6 +27,7 @@ class DFRobotRPiDisplay(Display):
 
     has_color = False
     has_touch = False
+    send = True
 
     size = (250, 122)
 

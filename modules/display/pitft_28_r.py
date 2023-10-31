@@ -24,8 +24,6 @@ class PiTFT28r(Display):
 
     size = (320, 240)
 
-    send = False
-
     def __init__(self, config):
         super().__init__(config)
         self.clear()

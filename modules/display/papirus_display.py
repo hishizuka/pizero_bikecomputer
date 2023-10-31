@@ -20,6 +20,7 @@ class PapirusDisplay(Display):
 
     has_color = False
     has_touch = False
+    send = True
 
     size = (264, 176)
 

@@ -53,6 +53,7 @@ class MipDisplay(Display):
     mip_display_cpp = None
 
     has_touch = False
+    send = True
 
     size = (400, 240)
 

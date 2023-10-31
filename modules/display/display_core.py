@@ -21,7 +21,7 @@ SUPPORTED_DISPLAYS = {
 class Display:
     has_color = True
     has_touch = True
-    send = True
+    send = False
 
     def __init__(self, config):
         self.config = config
