@@ -421,7 +421,7 @@ class LiveTrackMenuWidget(MenuWidget):
             self.config.G_THINGSBOARD_API["STATUS"] = not self.config.G_THINGSBOARD_API[
                 "STATUS"
             ]
-            self.config.setting.set_config_pickle(
+            self.config.state.set_value(
                 "G_THINGSBOARD_API_STATUS", self.config.G_THINGSBOARD_API["STATUS"]
             )
         self.buttons["Live Track"].change_toggle(
@@ -433,7 +433,7 @@ class LiveTrackMenuWidget(MenuWidget):
             self.config.G_THINGSBOARD_API[
                 "AUTO_UPLOAD_VIA_BT"
             ] = not self.config.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"]
-            self.config.setting.set_config_pickle(
+            self.config.state.set_value(
                 "AUTO_UPLOAD_VIA_BT",
                 self.config.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"],
             )

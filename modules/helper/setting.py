@@ -1,9 +1,7 @@
 import configparser
-import pickle
 import json
 import os
 import struct
-import datetime
 
 import numpy as np
 
@@ -15,23 +13,14 @@ class Setting:
     # config file (store user specified values. readable and editable.)
     config_file = "setting.conf"
 
-    # config file (store temporary values. unreadable and uneditable.)
-    config_pickle_file = "setting.pickle"
-    config_pickle = {}
-    config_pickle_write_time = datetime.datetime.utcnow()
-    config_pickle_interval = 10  # [s]
-
     def __init__(self, config):
         self.config = config
         self.config_parser = configparser.ConfigParser()
 
-    def read(self):
         if os.path.exists(self.config_file):
-            self.read_config()
-        if os.path.exists(self.config_pickle_file):
-            self.read_config_pickle()
+            self.read()
 
-    def read_config(self):
+    def read(self):
         self.config_parser.read(self.config_file)
 
         if "GENERAL" in self.config_parser:
@@ -318,45 +307,3 @@ class Setting:
 
         with open(self.config_file, "w") as file:
             self.config_parser.write(file)
-
-    def read_config_pickle(self):
-        with open(self.config_pickle_file, "rb") as f:
-            self.config_pickle = pickle.load(f)
-
-    def set_config_pickle(self, key, value, quick_apply=False):
-        self.config_pickle[key] = value
-        # write with config_pickle_interval
-        t = (datetime.datetime.utcnow() - self.config_pickle_write_time).total_seconds()
-        if not quick_apply and t < self.config_pickle_interval:
-            return
-        with open(self.config_pickle_file, "wb") as f:
-            pickle.dump(self.config_pickle, f)
-        self.config_pickle_write_time = datetime.datetime.utcnow()
-
-    def get_config_pickle(self, key, default_value):
-        if key in self.config_pickle:
-            return self.config_pickle[key]
-        else:
-            return default_value
-
-    # reset
-    #   mag_min, mag_max: keep until power is turned off
-    def reset_config_pickle(self):
-        for k, v in list(self.config_pickle.items()):
-            if "mag" in k:
-                continue
-            del self.config_pickle[k]
-        with open(self.config_pickle_file, "wb") as f:
-            pickle.dump(self.config_pickle, f)
-
-    # quit (poweroff)
-    #   ant+_sc_values, ant+_spd_values,
-    #   ant+_power_values_16, ant+_power_values_17, ant+_power_values_18
-    #   GB_status, GB_gps:
-    #   keep in case of sudden shutdown or killed (not via quit()). erase on reset.
-    def delete_config_pickle(self):
-        for k, v in list(self.config_pickle.items()):
-            if "ant+" in k or k.startswith("GB"):
-                del self.config_pickle[k]
-        with open(self.config_pickle_file, "wb") as f:
-            pickle.dump(self.config_pickle, f)
