@@ -43,9 +43,6 @@ struct lap_summary_data{
 
 struct config {
   unsigned int G_UNIT_ID_HEX = 0;
-  char* G_LOG_START_DATE;
-  char* G_LOG_DIR;
-  char* G_UPLOAD_FILE;
 };
 static config cfg;
 
@@ -54,8 +51,6 @@ constexpr double LAT_LON_CONST = ((unsigned int)(1 << 31))/180.0; //pow(2,31) / 
 
 void set_config_c(const config& _cfg);
 void reset();
-char* get_upload_file_name_c();
-char* get_start_date_str_c();
 
 inline uint8_t base_type_id_from_string(std::string base_type_name) {
   return base_type_id[base_type_name];
@@ -82,8 +77,6 @@ static int parse_records_message_num_20(void *user_data, int argc, char **argv, 
 
 bool get_summary(int lap_num, sqlite3 *db);
 
-bool write_log_c(const char* db_file);
-
-int main(int argc, char *argv[]);
+bool write_log_c(const char* db_file, const char* filename, const char* start_date, const char* end_date);
 
 #endif

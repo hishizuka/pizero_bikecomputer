@@ -101,7 +101,6 @@ class Config:
     G_LOG_DIR = "log"
     G_LOG_DB = os.path.join(G_LOG_DIR, "log.db")
     G_LOG_DEBUG_FILE = os.path.join(G_LOG_DIR, "debug.log")
-    G_LOG_START_DATE = None
 
     # asyncio semaphore
     G_COROUTINE_SEM = 100

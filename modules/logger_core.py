@@ -1,11 +1,11 @@
 import os
 import sqlite3
 import signal
-import datetime
 import shutil
 import time
 import asyncio
 import traceback
+from datetime import datetime, timedelta, timezone
 
 import numpy as np
 from crdp import rdp
@@ -13,6 +13,7 @@ from crdp import rdp
 from logger import app_logger
 from modules.utils.cmd import exec_cmd
 from modules.utils.date import datetime_myparser
+from modules.utils.timer import Timer
 
 
 class LoggerCore:
@@ -156,10 +157,10 @@ class LoggerCore:
 
         if not self.sensor.sensor_gps.is_time_modified:
             delta = count + int(self.config.boot_time * 1.25)
-            utctime = datetime.datetime.strptime(
+            utctime = datetime.strptime(
                 self.last_timestamp, "%Y-%m-%d %H:%M:%S.%f"
-            ) + datetime.timedelta(seconds=delta)
-            if utctime > datetime.datetime.utcnow():
+            ) + timedelta(seconds=delta)
+            if utctime > datetime.utcnow():
                 datecmd = [
                     "sudo",
                     "date",
@@ -302,7 +303,7 @@ class LoggerCore:
         self.count_up_lock = False
 
     def start_and_stop_manual(self):
-        time_str = datetime.datetime.now().strftime("%Y%m%d %H:%M:%S")
+        time_str = datetime.now().strftime("%Y%m%d %H:%M:%S")
         popup_extra = ""
         pre_status = self.config.G_MANUAL_STATUS
 
@@ -314,7 +315,7 @@ class LoggerCore:
             if self.config.gui is not None:
                 self.config.gui.change_start_stop_button(self.config.G_MANUAL_STATUS)
             if self.values["start_time"] is None:
-                self.values["start_time"] = int(datetime.datetime.utcnow().timestamp())
+                self.values["start_time"] = int(datetime.utcnow().timestamp())
 
             if pre_status == "INIT" and not np.isnan(
                 self.sensor.values["integrated"]["dem_altitude"]
@@ -350,7 +351,7 @@ class LoggerCore:
     def start_and_stop(self, status=None):
         if status is not None:
             self.config.G_STOPWATCH_STATUS = status
-        time_str = datetime.datetime.now().strftime("%Y%m%d %H:%M:%S")
+        time_str = datetime.now().strftime("%Y%m%d %H:%M:%S")
         if self.config.G_STOPWATCH_STATUS != "START":
             self.config.G_STOPWATCH_STATUS = "START"
             app_logger.info(f"->START   {time_str}")
@@ -374,7 +375,7 @@ class LoggerCore:
             self.average["lap"][k2]["count"] = 0
             self.average["lap"][k2]["sum"] = 0
         asyncio.create_task(self.record_log())
-        time_str = datetime.datetime.now().strftime("%Y%m%d %H:%M:%S")
+        time_str = datetime.now().strftime("%Y%m%d %H:%M:%S")
         app_logger.info(f"->LAP:{self.values['lap']}   {time_str}")
 
         # show message
@@ -401,6 +402,32 @@ class LoggerCore:
             ),
         )
 
+    def get_start_end_dates(self):
+        # get start date and end_date of the current log
+        start_date = end_date = None  # UTC time
+
+        con = sqlite3.connect(
+            self.config.G_LOG_DB,
+            detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES,
+        )
+        sqlite3.dbapi2.converters["DATETIME"] = sqlite3.dbapi2.converters["TIMESTAMP"]
+        cur = con.cursor()
+        cur.execute(
+            'SELECT MIN(timestamp) as "ts [timestamp]", MAX(timestamp) as "ts [timestamp]" FROM BIKECOMPUTER_LOG'
+        )
+        first_row = cur.fetchone()
+
+        if first_row is not None:
+            start_date, end_date = first_row
+
+            start_date = start_date.replace(tzinfo=timezone.utc)
+            end_date = end_date.replace(tzinfo=timezone.utc)
+
+        cur.close()
+        con.close()
+
+        return start_date, end_date
+
     def reset_count(self):
         if self.config.G_MANUAL_STATUS == "START" or self.values["count"] == 0:
             return
@@ -412,35 +439,51 @@ class LoggerCore:
         self.cur.close()
         self.con.close()
 
-        t = datetime.datetime.now()
+        # get start date and end_date of the current log
+        start_date, end_date = self.get_start_end_dates()
+
+        if start_date is None and end_date is None:
+            app_logger.info("No log found, nothing to write")
+            return
+
+        start_date_local = start_date.astimezone().strftime("%Y-%m-%d_%H-%M-%S")
+
+        filename = os.path.join(self.config.G_LOG_DIR, start_date_local)
+        fit_text = f"Write fit({self.logger_fit.mode}):"
+        csv_text = f"Write csv{' ' * (len(self.logger_fit.mode) + 2)}:"
+
+        timers = [
+            Timer(auto_start=False, auto_log=True, text=f"{csv_text} {{:0.4f}} sec"),
+            Timer(auto_start=False, auto_log=True, text=f"{fit_text} {{:0.4f}} sec"),
+            Timer(auto_start=False, auto_log=True, text="DELETE : {:0.4f} sec"),
+        ]
+
         if self.config.G_LOG_WRITE_CSV:
-            if not self.logger_csv.write_log():
-                return
-            app_logger.info(
-                f"Write csv : {(datetime.datetime.now() - t).total_seconds()} sec"
-            )
+            with timers[0]:
+                if not self.logger_csv.write_log(f"{filename}.csv"):
+                    return
+
         if self.config.G_LOG_WRITE_FIT:
-            if not self.logger_fit.write_log():
-                return
-            app_logger.info(
-                f"Write fit({self.logger_fit.mode}) : {(datetime.datetime.now() - t).total_seconds()} sec"
-            )
+            with timers[1]:
+                if not self.logger_fit.write_log(
+                    f"{filename}.fit", start_date, end_date
+                ):
+                    return
 
         # backup and reset database
-        t = datetime.datetime.now()
-        shutil.move(
-            self.config.G_LOG_DB,
-            self.config.G_LOG_DB + "-" + self.config.G_LOG_START_DATE,
-        )
+        with timers[2]:
+            shutil.move(
+                self.config.G_LOG_DB,
+                f"{self.config.G_LOG_DB}-{start_date_local}",
+            )
 
-        self.reset()
+            self.reset()
 
-        # restart db connect
-        # usage of sqlite3 is "insert" only, so check_same_thread=False
-        self.con = sqlite3.connect(self.config.G_LOG_DB, check_same_thread=False)
-        self.cur = self.con.cursor()
-        self.init_db()
-        app_logger.info(f"DELETE : {(datetime.datetime.now() - t).total_seconds()} sec")
+            # restart db connect
+            # usage of sqlite3 is "insert" only, so check_same_thread=False
+            self.con = sqlite3.connect(self.config.G_LOG_DB, check_same_thread=False)
+            self.cur = self.con.cursor()
+            self.init_db()
 
         # reset temporary values
         self.config.setting.reset_config_pickle()
@@ -566,7 +609,7 @@ class LoggerCore:
             self.record_stats["lap_max"][k] = x2
 
         ## SQLite
-        now_time = datetime.datetime.utcnow()
+        now_time = datetime.utcnow()
         # self.cur.execute("""\
         sql = (
             """\
@@ -677,7 +720,7 @@ class LoggerCore:
             return
         # [s]
         self.values["elapsed_time"] = int(
-            datetime.datetime.utcnow().timestamp() - self.values["start_time"]
+            datetime.utcnow().timestamp() - self.values["start_time"]
         )
 
         # gross_ave_spd
@@ -878,11 +921,11 @@ class LoggerCore:
         lon = np.array([])
         lat = np.array([])
         timestamp_new = timestamp
-        # t = datetime.datetime.utcnow()
+        # t = datetime.utcnow()
 
         timestamp_delta = None
         if timestamp is not None:
-            timestamp_delta = (datetime.datetime.utcnow() - timestamp).total_seconds()
+            timestamp_delta = (datetime.utcnow() - timestamp).total_seconds()
 
         # make_tmp_db = False
         lat_raw = np.array([])
@@ -952,8 +995,8 @@ class LoggerCore:
                 lon = lon_raw
 
         if timestamp is None:
-            timestamp_new = datetime.datetime.utcnow()
+            timestamp_new = datetime.utcnow()
 
-        # print("\tlogger_core : update_track(new) ", (datetime.datetime.utcnow()-t).total_seconds(), "sec")
+        # print("\tlogger_core : update_track(new) ", (datetime.utcnow()-t).total_seconds(), "sec")
 
         return timestamp_new, lon, lat

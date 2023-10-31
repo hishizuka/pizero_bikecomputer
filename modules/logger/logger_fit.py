@@ -1,8 +1,6 @@
-import os
 import sqlite3
 import struct
-import time
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 
 from logger import app_logger
 from modules.utils.date import datetime_myparser
@@ -16,10 +14,8 @@ try:
 
     pyximport.install()
     from .cython.logger_fit import (
-        write_log_cython,
         set_config,
-        get_upload_file_name,
-        get_start_date_str,
+        write_log_cython,
     )
 
     MODE = "Cython"
@@ -227,46 +223,33 @@ class LoggerFit(Logger):
         self.fit_data.append(out)
 
     # referenced by https://opensource.quarq.us/fit_json/
-    def write_log(self):
+    def write_log(self, filename, start_date, end_date):
         # try Cython if available/resolve to pure python if writing fails
-        if MODE == "Cython" and self.write_log_cython():
+        if MODE == "Cython" and self.write_log_cython(filename, start_date, end_date):
             return True
-        return self.write_log_python()
+        return self.write_log_python(filename, start_date, end_date)
 
-    def write_log_cython(self):
-        res = write_log_cython(self.config.G_LOG_DB)
+    def write_log_cython(self, filename, start_date, end_date):
+        res = write_log_cython(
+            self.config.G_LOG_DB,
+            filename,
+            start_date.strftime("%Y-%m-%d_%H-%M-%S"),
+            end_date.strftime("%Y-%m-%d_%H-%M-%S"),
+        )
         if res:
-            self.config.G_UPLOAD_FILE = get_upload_file_name()
-            self.config.G_LOG_START_DATE = get_start_date_str()
+            self.config.G_UPLOAD_FILE = filename
         return res
 
-    def write_log_python(self):
+    def write_log_python(self, filename, start_date, end_date):
         # make sure crc16 is imported is we resolve to using python code
         from .cython.crc16_p import crc16
 
-        ## SQLite
         con = sqlite3.connect(
             self.config.G_LOG_DB,
             detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES,
         )
         sqlite3.dbapi2.converters["DATETIME"] = sqlite3.dbapi2.converters["TIMESTAMP"]
         cur = con.cursor()
-
-        # get start_date
-        # get datetime object (timestamp)
-        cur.execute("SELECT timestamp, MIN(timestamp) FROM BIKECOMPUTER_LOG")
-        first_row = cur.fetchone()
-        if first_row is not None:
-            start_date = first_row[0]
-        else:
-            return False
-        # get end_date
-        cur.execute("SELECT timestamp, MAX(timestamp) FROM BIKECOMPUTER_LOG")
-        first_row = cur.fetchone()
-        if first_row is not None:
-            end_date = first_row[0]
-        else:
-            return False
 
         local_message_num = 0
 
@@ -302,6 +285,7 @@ class LoggerFit(Logger):
         message_num = 20
         record_row = []
         record_index = []
+
         for k, v in self.profile[message_num]["field"].items():
             record_row.append(v[0])
             record_index.append(k)
@@ -390,8 +374,14 @@ class LoggerFit(Logger):
         }
         self.write_definition(local_message_num)
         struct_def = self.get_struct_def(local_message_num)
-        offset = time.localtime().tm_gmtoff
+        offset = int(
+            end_date.replace(tzinfo=timezone.utc)
+            .astimezone()
+            .utcoffset()
+            .total_seconds()
+        )
         end_date_epochtime = self.get_epoch_time(end_date)
+
         self.write(
             struct.pack(
                 struct_def,
@@ -410,13 +400,6 @@ class LoggerFit(Logger):
         ################
         # write fit file
         ################
-
-        startdate_local = start_date + timedelta(seconds=offset)
-        self.config.G_LOG_START_DATE = startdate_local.strftime("%Y-%m-%d_%H-%M-%S")
-        filename = os.path.join(
-            self.config.G_LOG_DIR, f"{self.config.G_LOG_START_DATE}.fit"
-        )
-        # filename = "test.fit"
         fd = open(filename, "wb")
         write_data = b"".join(self.fit_data)
 
@@ -583,6 +566,11 @@ class LoggerFit(Logger):
         return local_message_num
 
     def get_epoch_time(self, nowdate):
+        if nowdate.tzinfo:
+            if nowdate.tzinfo == timezone.utc:
+                nowdate = nowdate.replace(tzinfo=None)
+            else:
+                raise ValueError(f"Incorrect date passed {nowdate}")
         seconds = int((nowdate - self.epoch_datetime).total_seconds())
         return seconds
 
