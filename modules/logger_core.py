@@ -420,8 +420,8 @@ class LoggerCore:
         if first_row is not None:
             start_date, end_date = first_row
 
-            start_date.replace(tzinfo=timezone.utc)
-            end_date.replace(tzinfo=timezone.utc)
+            start_date = start_date.replace(tzinfo=timezone.utc)
+            end_date = end_date.replace(tzinfo=timezone.utc)
 
         cur.close()
         con.close()
@@ -448,7 +448,7 @@ class LoggerCore:
 
         start_date_local = start_date.astimezone().strftime("%Y-%m-%d_%H-%M-%S")
 
-        filename = os.path.join(self.config.G_LOG_DB, start_date_local)
+        filename = os.path.join(self.config.G_LOG_DIR, start_date_local)
         fit_text = f"Write fit({self.logger_fit.mode}):"
         csv_text = f"Write csv{' ' * (len(self.logger_fit.mode) + 2)}:"
 
