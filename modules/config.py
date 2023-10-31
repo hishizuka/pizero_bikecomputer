@@ -338,8 +338,6 @@ class Config:
     # stopwatch state
     G_MANUAL_STATUS = "INIT"
     G_STOPWATCH_STATUS = "INIT"  # with Auto Pause
-    # quit status variable
-    G_QUIT = False
 
     # Auto Pause Cutoff [m/s] (overwritten with setting.conf)
     # G_AUTOSTOP_CUTOFF = 0
@@ -454,8 +452,7 @@ class Config:
     G_DITHERING_CUTOFF_LOW_INDEX = 2
     G_DITHERING_CUTOFF_HIGH_INDEX = 1
 
-    # auto backlight with spi mip display
-    # (PiTFT actually needs max brightness under sunlights, so there are no implementation with PiTFT)
+    # auto backlight
     G_USE_AUTO_BACKLIGHT = True
     G_AUTO_BACKLIGHT_CUTOFF = 30
 
@@ -950,7 +947,6 @@ class Config:
         if self.G_MANUAL_STATUS == "START":
             self.logger.start_and_stop_manual()
         self.display.quit()
-        self.G_QUIT = True
 
         await self.logger.quit()
         self.setting.write_config()

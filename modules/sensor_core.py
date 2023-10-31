@@ -575,18 +575,19 @@ class SensorCore:
                 # time.sleep(1)
 
                 # auto backlight
-                if self.config.G_IS_RASPI and self.config.G_USE_AUTO_BACKLIGHT:
-                    if self.config.G_DISPLAY in ("MIP", "MIP_640") and not np.isnan(
-                        v["I2C"]["light"]
-                    ):
-                        if v["I2C"]["light"] <= self.config.G_AUTO_BACKLIGHT_CUTOFF:
-                            self.config.display.set_brightness(3)
-                        else:
-                            self.config.display.set_brightness(0)
-                    if self.config.G_MANUAL_STATUS == "START":
-                        if v["I2C"]["light"] <= self.config.G_AUTO_BACKLIGHT_CUTOFF:
+                if self.config.display.auto_brightness and not np.isnan(
+                    v["I2C"]["light"]
+                ):
+                    if v["I2C"]["light"] <= self.config.G_AUTO_BACKLIGHT_CUTOFF:
+                        self.config.display.set_brightness(3)
+
+                        if self.config.G_MANUAL_STATUS == "START":
                             self.sensor_ant.set_light_mode("FLASH_LOW", auto=True)
-                        else:
+
+                    else:
+                        self.config.display.set_brightness(0)
+
+                        if self.config.G_MANUAL_STATUS == "START":
                             self.sensor_ant.set_light_mode("OFF", auto=True)
 
                 # cpu and memory

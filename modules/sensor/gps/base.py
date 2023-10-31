@@ -214,7 +214,7 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
         ):
             self.values["track"] = int(track)
             self.values["track_str"] = get_track_str(self.values["track"])
-        # for 
+        # for
         elif (
             track is None
             and speed is not None
