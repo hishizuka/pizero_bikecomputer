@@ -110,7 +110,7 @@ class MenuWidget(QtWidgets.QWidget):
                 self.menu_layout.addWidget(MenuButton("dummy", "", self.config))
 
         # set first focus
-        if not self.config.display.has_touch():
+        if not self.config.display.has_touch:
             self.focus_widget = self.buttons[buttons[0][0]]
 
     def setup_menu(self):

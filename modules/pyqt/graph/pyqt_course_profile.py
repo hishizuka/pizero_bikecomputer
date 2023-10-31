@@ -30,7 +30,7 @@ class CourseProfileGraphWidget(BaseMapWidget):
         # map
         self.layout.addWidget(self.plot, 0, 0, 3, 3)
 
-        if self.config.display.has_touch():
+        if self.config.display.has_touch:
             # zoom
             self.layout.addWidget(self.buttons["zoomdown"], 0, 0)
             self.layout.addWidget(self.buttons["lock"], 1, 0)

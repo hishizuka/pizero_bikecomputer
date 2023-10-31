@@ -54,12 +54,15 @@ class BootStatus(QtWidgets.QLabel):
         self.setAlignment(QT_ALIGN_CENTER)
 
 
-class MyWindow(QtWidgets.QMainWindow):
+class MainWindow(QtWidgets.QMainWindow):
     gui = None
 
-    def __init__(self, parent=None):
+    def __init__(self, title, size, parent=None):
         super().__init__(parent=parent)
         app_logger.info(f"Qt version: {QtCore.QT_VERSION_STR}")
+        self.setWindowTitle(title)
+        self.setMinimumSize(*size)
+        self.set_color()
 
     # TODO, daylight does not seem to be used at all,
     #  Could/Should be replaced by setting stylesheet on init
@@ -79,16 +82,13 @@ class MyWindow(QtWidgets.QMainWindow):
 
     # override from QtWidget
     def paintEvent(self, event):
-        if self.gui is not None:
-            self.gui.draw_display()
+        self.gui.draw_display()
 
 
 class GUI_PyQt(QtCore.QObject):
     config = None
     gui_config = None
-    logger = None
     app = None
-    style = None
 
     stack_widget = None
     button_box_widget = None
@@ -118,11 +118,14 @@ class GUI_PyQt(QtCore.QObject):
     screen_shape = None
     screen_image = None
     remove_bytes = 0
-    old_pyqt = False
     bufsize = 0
 
     # for dialog
     display_dialog = False
+
+    @property
+    def logger(self):
+        return self.config.logger
 
     def __init__(self, config):
         super().__init__()
@@ -132,12 +135,6 @@ class GUI_PyQt(QtCore.QObject):
 
         self.gui_config = GUI_Config(config.G_LAYOUT_FILE)
 
-        if config.display.has_color():
-            self.image_format = QT_FORMAT_RGB888
-        else:
-            self.image_format = QT_FORMAT_MONO
-
-        self.logger = self.config.logger
         try:
             signal.signal(signal.SIGTERM, self.quit_by_ctrl_c)
             signal.signal(signal.SIGINT, self.quit_by_ctrl_c)
@@ -154,12 +151,11 @@ class GUI_PyQt(QtCore.QObject):
         self.config.loop.set_debug(True)
         self.config.init_loop(call_from_gui=True)
 
-        self.main_window = MyWindow()
+        self.main_window = MainWindow(
+            self.config.G_PRODUCT, self.config.display.resolution
+        )
         self.main_window.set_gui(self)
-        self.main_window.setWindowTitle(self.config.G_PRODUCT)
-        self.main_window.setMinimumSize(self.config.G_WIDTH, self.config.G_HEIGHT)
         self.main_window.show()
-        self.main_window.set_color()
 
         self.stack_widget = QtWidgets.QStackedWidget(self.main_window)
         self.main_window.setCentralWidget(self.stack_widget)
@@ -178,7 +174,7 @@ class GUI_PyQt(QtCore.QObject):
         splash_layout.addWidget(boot_status)
 
         # for draw_display
-        self.init_buffer()
+        self.init_buffer(self.config.display)
 
         self.exec()
 
@@ -404,7 +400,7 @@ class GUI_PyQt(QtCore.QObject):
         with timers[3]:
             # integrate main_layout
             main_layout.addWidget(self.main_page)
-            if self.config.display.has_touch():
+            if self.config.display.has_touch:
                 from modules.pyqt.pyqt_button_box_widget import ButtonBoxWidget
 
                 self.button_box_widget = ButtonBoxWidget(main_widget, self.config)
@@ -419,26 +415,62 @@ class GUI_PyQt(QtCore.QObject):
         app_logger.info("Drawing components:")
         log_timers(timers, text_total="total : {0:.3f} sec")
 
-    def get_screen_shape(self, p):
-        remove_bytes = 0
-        if self.config.display.has_color():
-            screen_shape = (p.height(), p.width(), 3)
-        else:
-            screen_shape = (p.height(), int(p.width() / 8))
-            remove_bytes = p.bytesPerLine() - int(p.width() / 8)
-        return screen_shape, remove_bytes
+    def init_buffer(self, display):
+        if display.send:
+            has_color = display.has_color
 
-    def init_buffer(self):
-        if self.config.display.send_display:
+            # set image format
+            if has_color:
+                self.image_format = QT_FORMAT_RGB888
+            else:
+                self.image_format = QT_FORMAT_MONO
+
             p = self.stack_widget.grab().toImage().convertToFormat(self.image_format)
+
             # PyQt 5.11(Buster) or 5.15(Bullseye)
-            qt_version = (QtCore.QT_VERSION_STR).split(".")
+            qt_version = QtCore.QT_VERSION_STR.split(".")
+
             if qt_version[0] == "5" and int(qt_version[1]) < 15:
                 self.bufsize = p.bytesPerLine() * p.height()  # PyQt 5.11(Buster)
             else:
                 self.bufsize = p.sizeInBytes()  # PyQt 5.15 or later (Bullseye)
 
-            self.screen_shape, self.remove_bytes = self.get_screen_shape(p)
+            if has_color:
+                self.screen_shape = (p.height(), p.width(), 3)
+            else:
+                self.screen_shape = (p.height(), int(p.width() / 8))
+                self.remove_bytes = p.bytesPerLine() - int(p.width() / 8)
+
+    def draw_display(self, direct_update=False):
+        if not self.bufsize:
+            return
+
+        # self.config.check_time("draw_display start")
+        p = self.stack_widget.grab().toImage().convertToFormat(self.image_format)
+
+        if self.screen_image is not None and p == self.screen_image:
+            return
+
+        # self.config.check_time("grab")
+        ptr = p.constBits()
+
+        if ptr is None:
+            return
+
+        self.screen_image = p
+
+        ptr.setsize(self.bufsize)
+
+        if self.remove_bytes > 0:
+            buf = np.frombuffer(ptr, dtype=np.uint8).reshape(
+                (p.height(), self.remove_bytes + int(p.width() / 8))
+            )
+            buf = buf[:, : -self.remove_bytes]
+        else:
+            buf = np.frombuffer(ptr, dtype=np.uint8).reshape(self.screen_shape)
+
+        self.config.display.update(buf, direct_update)
+        # self.config.check_time("draw_display end")
 
     def exec(self):
         with self.config.loop:
@@ -493,7 +525,8 @@ class GUI_PyQt(QtCore.QObject):
         self.logger.reset_count()
         self.map_widget.reset_track()
 
-    def press_key(self, key):
+    @staticmethod
+    def press_key(key):
         e_press = QtGui.QKeyEvent(QT_KEY_PRESS, key, QT_NO_MODIFIER, None)
         e_release = QtGui.QKeyEvent(QT_KEY_RELEASE, key, QT_NO_MODIFIER, None)
         QtCore.QCoreApplication.postEvent(QtWidgets.QApplication.focusWidget(), e_press)
@@ -603,9 +636,6 @@ class GUI_PyQt(QtCore.QObject):
             f"HIGH: {self.config.G_DITHERING_CUTOFF['HIGH'][self.config.G_DITHERING_CUTOFF_HIGH_INDEX]}"
         )
 
-    def dummy(self):
-        pass
-
     def scroll(self, delta):
         mod_index = (
             self.main_page.currentIndex() + delta + self.main_page.count()
@@ -623,41 +653,12 @@ class GUI_PyQt(QtCore.QObject):
         p = self.stack_widget.grab()
         p.save(os.path.join(self.config.G_SCREENSHOT_DIR, filename), "png")
 
-    def draw_display(self, direct_update=False):
-        if not self.config.display.send_display or self.stack_widget is None:
-            return
-
-        # self.config.check_time("draw_display start")
-        p = self.stack_widget.grab().toImage().convertToFormat(self.image_format)
-
-        # self.config.check_time("grab")
-        ptr = p.constBits()
-        if ptr is None:
-            return
-
-        if self.screen_image is not None and p == self.screen_image:
-            return
-        self.screen_image = p
-
-        ptr.setsize(self.bufsize)
-
-        if self.remove_bytes > 0:
-            buf = np.frombuffer(ptr, dtype=np.uint8).reshape(
-                (p.height(), self.remove_bytes + int(p.width() / 8))
-            )
-            buf = buf[:, : -self.remove_bytes]
-        else:
-            buf = np.frombuffer(ptr, dtype=np.uint8).reshape(self.screen_shape)
-
-        self.config.display.update(buf, direct_update)
-        # self.config.check_time("draw_display end")
-
     def change_start_stop_button(self, status):
         if self.button_box_widget is not None:
             self.button_box_widget.change_start_stop_button(status)
 
     def brightness_control(self):
-        self.config.display.brightness_control()
+        self.config.display.change_brightness()
 
     def turn_on_off_light(self):
         self.config.logger.sensor.sensor_ant.set_light_mode("ON_OFF_FLASH_LOW")
@@ -669,7 +670,7 @@ class GUI_PyQt(QtCore.QObject):
         if focus_widget:
             if focus_reset:
                 focus_widget.setFocus()
-        elif self.config.display.has_touch():
+        elif self.config.display.has_touch:
             # reset automatic focus there might not be one
             focus_widget = QtWidgets.QApplication.focusWidget()
             if focus_widget:
@@ -756,10 +757,6 @@ class GUI_PyQt(QtCore.QObject):
             self.change_dialog(title=msg, button_label="OK")
         else:
             self.show_dialog_ok_only(None, msg)
-
-    def show_navi_internal(self, title, title_icon=None):
-        # self.show_dialog_base(title=title, title_icon=title_icon, button_num=0, position=QT_ALIGN_BOTTOM)
-        pass
 
     def show_dialog(self, fn, title):
         asyncio.create_task(

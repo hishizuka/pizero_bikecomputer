@@ -1,4 +1,5 @@
 from logger import app_logger
+from .display_core import Display
 
 _SENSOR_DISPLAY = False
 
@@ -21,29 +22,33 @@ RASPBERRY_PIN_BUSY = 4
 # e-ink Display Module for Raspberry Pi 4B/3B+/Zero W version 1.0
 
 
-class DFRobotRPiDisplay:
-    config = None
+class DFRobotRPiDisplay(Display):
     epaper = None
 
-    def __init__(self, config):
-        self.config = config
+    has_color = False
+    has_touch = False
+    send = True
 
-        if _SENSOR_DISPLAY:
-            self.epaper = DFRobot_Epaper_SPI(
-                RASPBERRY_SPI_BUS,
-                RASPBERRY_SPI_DEV,
-                RASPBERRY_PIN_CS,
-                RASPBERRY_PIN_CD,
-                RASPBERRY_PIN_BUSY,
-            )
-            self.epaper.begin()
-            self.clear()
+    size = (250, 122)
+
+    def __init__(self, config):
+        super().__init__(config)
+
+        self.epaper = DFRobot_Epaper_SPI(
+            RASPBERRY_SPI_BUS,
+            RASPBERRY_SPI_DEV,
+            RASPBERRY_PIN_CS,
+            RASPBERRY_PIN_CD,
+            RASPBERRY_PIN_BUSY,
+        )
+        self.epaper.begin()
+        self.clear()
 
     def clear(self):
         self.epaper.clear(self.epaper.WHITE)
         self.epaper.flush(self.epaper.FULL)
 
-    def update(self, im_array):
+    def update(self, im_array, direct_update=False):
         self.epaper.bitmap(
             0,
             0,  # start X and Y
@@ -56,5 +61,4 @@ class DFRobotRPiDisplay:
         self.epaper.flush(self.epaper.PART)
 
     def quit(self):
-        if _SENSOR_DISPLAY:
-            self.clear()
+        self.clear()
