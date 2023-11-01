@@ -142,3 +142,9 @@ QT_COMPOSITION_MODE_SOURCEIN = (
     if USE_PYQT6
     else QtGui.QPainter.CompositionMode_SourceIn
 )
+
+QT_COMPOSITION_MODE_DARKEN = (
+    QtGui.QPainter.CompositionMode.CompositionMode_Darken
+    if USE_PYQT6
+    else QtGui.QPainter.CompositionMode_Darken
+)

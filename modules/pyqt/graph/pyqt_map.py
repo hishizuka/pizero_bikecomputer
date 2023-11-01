@@ -7,7 +7,7 @@ import numpy as np
 from PIL import Image
 
 from logger import app_logger
-from modules._pyqt import QtCore, QtGui, pg, qasync
+from modules._pyqt import QT_COMPOSITION_MODE_DARKEN, QtCore, pg, qasync
 from modules.pyqt.pyqt_cuesheet_widget import CueSheetWidget
 from modules.pyqt.graph.pyqtgraph.CoursePlotItem import CoursePlotItem
 from modules.utils.geo import (
@@ -802,7 +802,7 @@ class MapWidget(BaseMapWidget):
 
             imgitem = pg.ImageItem(imgarray)
             if overlay:
-                imgitem.setCompositionMode(QtGui.QPainter.CompositionMode_Darken)
+                imgitem.setCompositionMode(QT_COMPOSITION_MODE_DARKEN)
             imgarray_min_x, imgarray_max_y = get_lon_lat_from_tile_xy(
                 z, keys[0], keys[1]
             )
