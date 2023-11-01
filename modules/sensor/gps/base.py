@@ -5,7 +5,7 @@ from datetime import datetime, time
 import numpy as np
 
 from modules.sensor.sensor import Sensor
-from modules.utils.geo import get_dist_on_earth, get_track_str
+from modules.utils.geo import get_dist_on_earth, get_track_str, calc_azimuth
 from modules.utils.time import set_time, set_timezone
 
 USED_SAT_CUTOFF = 3
@@ -213,6 +213,22 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
             and speed > self.config.G_GPS_SPEED_CUTOFF
         ):
             self.values["track"] = int(track)
+            self.values["track_str"] = get_track_str(self.values["track"])
+        # for 
+        elif (
+            track is None
+            and speed is not None
+            and speed > self.config.G_GPS_SPEED_CUTOFF
+            and valid_pos
+        ):
+            self.values["track"] = int(
+                (
+                    calc_azimuth(
+                        [self.values["pre_lat"], self.values["lat"]],
+                        [self.values["pre_lon"], self.values["lon"]],
+                    )
+                )[0]
+            )
             self.values["track_str"] = get_track_str(self.values["track"])
         else:
             self.values["track"] = self.values["pre_track"]
