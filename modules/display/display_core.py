@@ -19,12 +19,26 @@ SUPPORTED_DISPLAYS = {
 
 # default display (X window)
 class Display:
+    has_auto_brightness = False
     has_color = True
     has_touch = True
     send = False
 
+    # current auto brightness status (on/off)
+    auto_brightness = False
+    brightness_index = 0
+    brightness_table = None
+
     def __init__(self, config):
         self.config = config
+
+        if self.has_auto_brightness:
+            # set initial status
+            self.auto_brightness = config.G_USE_AUTO_BACKLIGHT
+
+            # set index properly if on
+            if self.auto_brightness:
+                self.brightness_index = len(self.brightness_table)
 
     @property
     def resolution(self):
@@ -45,7 +59,31 @@ class Display:
     def screen_flash_short(self):
         pass
 
+    # We can not have auto brightness and an empty brightness table
     def change_brightness(self):
+        if self.brightness_table:
+            # brightness is changing as following if the display has auto_brightness feature
+            # [*self.brightness_table, self.auto_brightness]
+            if self.has_auto_brightness:
+                self.brightness_index = (self.brightness_index + 1) % (
+                    len(self.brightness_table) + 1
+                )
+
+                # switch on auto_brightness
+                if self.brightness_index == len(self.brightness_table):
+                    self.auto_brightness = True
+                # switch off auto_brightness and set requested brightness
+                else:
+                    self.auto_brightness = False
+                    self.set_brightness(self.brightness_table[self.brightness_index])
+            else:
+                # else we just loop over the brightness table
+                self.brightness_index = (self.brightness_index + 1) % len(
+                    self.brightness_table
+                )
+                self.set_brightness(self.brightness_table[self.brightness_index])
+
+    def set_brightness(self, b):
         pass
 
 

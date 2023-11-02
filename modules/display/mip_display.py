@@ -47,13 +47,14 @@ class MipDisplay(Display):
     pi = None
     spi = None
     interval = 0.25
-    brightness_index = 0
-    brightness_table = [0, 10, 100]
-    brightness = 0
     mip_display_cpp = None
 
+    has_auto_brightness = True
     has_touch = False
     send = True
+
+    brightness_table = [0, 1, 2, 3, 5, 7, 10, 25, 50, 100]
+    brightness = 0
 
     size = (400, 240)
 
@@ -94,10 +95,6 @@ class MipDisplay(Display):
         # backlight
         self.pi.set_mode(GPIO_BACKLIGHT, pigpio.OUTPUT)
         self.pi.hardware_PWM(GPIO_BACKLIGHT, GPIO_BACKLIGHT_FREQ, 0)
-        if config.G_USE_AUTO_BACKLIGHT:
-            self.brightness_index = len(self.brightness_table)
-        else:
-            self.brightness_index = 0
 
     def init_buffer(self):
         self.buff_width = int(self.size[0] * 3 / 8) + 2  # for 3bit update mode
@@ -269,22 +266,8 @@ class MipDisplay(Display):
 
         return np.packbits(im_array_bin.reshape(self.size[1], self.size[0] * 3), axis=1)
 
-    def change_brightness(self):
-        # brightness is changing as following,
-        # [self.brightness_table(0, b1, b2, ..., bmax), self.display.G_USE_AUTO_BACKLIGHT]
-        self.brightness_index = (self.brightness_index + 1) % (
-            len(self.brightness_table) + 1
-        )
-
-        if self.brightness_index == len(self.brightness_table):
-            self.config.G_USE_AUTO_BACKLIGHT = True
-        else:
-            self.config.G_USE_AUTO_BACKLIGHT = False
-            b = self.brightness_table[self.brightness_index]
-            self.set_brightness(b)
-
     def set_brightness(self, b):
-        if b == self.brightness or self.config.G_QUIT:
+        if b == self.brightness:
             return
         self.pi.hardware_PWM(GPIO_BACKLIGHT, GPIO_BACKLIGHT_FREQ, b * 10000)
         self.brightness = b

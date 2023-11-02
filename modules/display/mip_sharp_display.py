@@ -119,9 +119,6 @@ class MipSharpDisplay(Display):
             self.draw_queue.task_done()
 
     def update(self, im_array, direct_update):
-        if self.config.G_QUIT:
-            return
-
         # self.config.check_time("mip_sharp_update start")
         self.img_buff_rgb8[:, 2:] = ~im_array
 

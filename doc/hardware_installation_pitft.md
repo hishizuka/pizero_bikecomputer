@@ -74,21 +74,6 @@ It is more reliable to solder the PiTFT directly to the header of Raspberry Pi Z
 
 Follow [official setup guide](https://learn.adafruit.com/adafruit-2-4-pitft-hat-with-resistive-touchscreen-mini-kit/overview) of Adafruit, or [my setup guide (Japanese)](https://qiita.com/hishi/items/bdd630666277e4f8162a).
 
-Additionally, install programs which to turn the PiTFT 2.4 backlight on and off.
-
-```
-$ sudo cp install/usr/local/bin/disable-pitft /usr/local/bin/
-$ sudo cp install/usr/local/bin/enable-pitft /usr/local/bin/
-```
-
-Install the program which turns off the backlight at shutdown.
-
-```
-$ sudo cp install/etc/systemd/system/disable-pitft.service /etc/systemd/system/
-$ sudo systemctl daemon-reload
-$ sudo systemctl enable disable-pitft.service
-```
-
 If you run the program in a console, you need to build Qt5 and PyQt5 because the package python3-pyqt5 provided with Raspbian OS does not include a touchscreen library(tslib).
 
 Note:
