@@ -12,6 +12,8 @@ class CourseProfileGraphWidget(BaseMapWidget):
     climb_top_plot = None
     climb_detail = None
 
+    max_zoom = 0
+
     # map position
     map_area = {
         "w": np.nan,
@@ -52,11 +54,13 @@ class CourseProfileGraphWidget(BaseMapWidget):
         if not self.course.is_set or not len(self.course.altitude):
             return
 
+        self.get_max_zoom()
+
         with Timer(
             auto_start=False, auto_log=True, text="Plotting course profile: {0:.3f} sec"
         ):
             if not self.sensor.sensor_gps.is_real:
-                self.zoom = self.config.G_MAX_ZOOM
+                self.zoom = self.max_zoom
 
             self.plot.showGrid(x=True, y=True, alpha=1)
             self.plot.showAxis("left")
@@ -122,7 +126,7 @@ class CourseProfileGraphWidget(BaseMapWidget):
             self.load_course()
             self.course_loaded = True
 
-        if self.zoom == self.config.G_MAX_ZOOM:
+        if self.zoom == self.max_zoom:
             await self.zoom_plus()
             return
 
@@ -261,3 +265,22 @@ class CourseProfileGraphWidget(BaseMapWidget):
 
         # reset move_pos
         self.move_pos["x"] = self.move_pos["y"] = 0
+
+    def get_max_zoom(self):
+        if not self.course.is_set:
+            return
+
+        if self.max_zoom != 0:
+            return
+
+        z = self.zoom
+        dist = self.course.distance[-1]
+
+        if z / 1000 < dist:
+            while z / 1000 < dist:
+                z *= 2
+            z *= 2
+        else:
+            while z / 1000 > dist:
+                z /= 2
+        self.max_zoom = z

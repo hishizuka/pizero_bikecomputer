@@ -320,9 +320,6 @@ class Config:
     # screenshot dir
     G_SCREENSHOT_DIR = "screenshots"
 
-    # debug switch (change with --debug option)
-    G_IS_DEBUG = False
-
     # dummy sampling value output (change with --demo option)
     G_DUMMY_OUTPUT = False
 
@@ -331,9 +328,6 @@ class Config:
 
     # Raspberry Pi detection (detect in __init__())
     G_IS_RASPI = False
-
-    # for read load average in sensor_core
-    G_PID = os.getpid()
 
     # stopwatch state
     G_MANUAL_STATUS = "INIT"
@@ -424,8 +418,6 @@ class Config:
         "ORDER": ["HR", "SPD", "CDC", "PWR", "LGT", "CTRL", "TEMP"],
     }
 
-    # GPS Null value
-    G_GPS_NULLVALUE = "n/a"
     # GPS speed cutoff (the distance in 1 seconds at 0.36km/h is 10cm)
     G_GPS_SPEED_CUTOFF = G_AUTOSTOP_CUTOFF  # m/s
     # GPSd error handling
@@ -495,8 +487,6 @@ class Config:
     ]
 
     # map widgets
-    # max zoom
-    G_MAX_ZOOM = 0
     # for map dummy center: Tokyo station in Japan
     G_DUMMY_POS_X = 139.764710814819
     G_DUMMY_POS_Y = 35.68188106919333
@@ -644,7 +634,8 @@ class Config:
         args = parser.parse_args()
 
         if args.debug:
-            self.G_IS_DEBUG = True
+            app_logger.setLevel(logging.DEBUG)
+            app_logger.debug(args)
         if args.fullscreen:
             self.G_FULLSCREEN = True
         if args.demo:
@@ -653,10 +644,6 @@ class Config:
             self.G_LAYOUT_FILE = args.layout
         if args.headless:
             self.G_HEADLESS = True
-        # show options
-        if self.G_IS_DEBUG:
-            app_logger.setLevel(logging.DEBUG)
-            app_logger.debug(args)
 
         # read setting.conf and state.pickle
         self.setting = Setting(self)
@@ -694,20 +681,11 @@ class Config:
             for key in map_config:
                 if "tile_size" not in map_config[key]:
                     map_config[key]["tile_size"] = 256
-                if "referer" not in map_config[key]:
-                    map_config[key]["referer"] = None
-                if "use_mbtiles" not in map_config[key]:
-                    map_config[key]["use_mbtiles"] = False
-
-                if "user_agent" in map_config[key] and map_config[key]["user_agent"]:
-                    map_config[key]["user_agent"] = self.G_PRODUCT
-                else:
-                    map_config[key]["user_agent"] = None
 
         if self.G_MAP not in self.G_MAP_CONFIG:
             app_logger.error(f"{self.G_MAP} does not exist in {self.G_MAP_LIST}")
             self.G_MAP = "toner"
-        if self.G_MAP_CONFIG[self.G_MAP]["use_mbtiles"] and not os.path.exists(
+        if self.G_MAP_CONFIG[self.G_MAP].get("use_mbtiles") and not os.path.exists(
             os.path.join("maptile", f"{self.G_MAP}.mbtiles")
         ):
             self.G_MAP_CONFIG[self.G_MAP]["use_mbtiles"] = False
@@ -881,7 +859,7 @@ class Config:
         self.display = display
 
     def check_map_dir(self):
-        if not self.G_MAP_CONFIG[self.G_MAP]["use_mbtiles"]:
+        if not self.G_MAP_CONFIG[self.G_MAP].get("use_mbtiles"):
             os.makedirs(os.path.join("maptile", self.G_MAP), exist_ok=True)
         os.makedirs(os.path.join("maptile", self.G_HEATMAP_OVERLAY_MAP), exist_ok=True)
         os.makedirs(os.path.join("maptile", self.G_RAIN_OVERLAY_MAP), exist_ok=True)
@@ -1156,6 +1134,7 @@ class Config:
     async def get_altitude_from_tile(self, pos):
         if np.isnan(pos[0]) or np.isnan(pos[1]):
             return np.nan
+
         z = self.G_DEM_MAP_CONFIG[self.G_DEM_MAP]["fix_zoomlevel"]
         f_x, f_y, p_x, p_y = get_tilexy_and_xy_in_tile(z, pos[0], pos[1], 256)
         filename = get_maptile_filename(self.G_DEM_MAP, z, f_x, f_y)

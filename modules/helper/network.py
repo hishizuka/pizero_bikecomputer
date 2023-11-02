@@ -146,16 +146,11 @@ class Network:
                 additional_var["subdomain"] = map_config[map_name]["subdomain"]
 
         # make header
-        if (
-            "referer" in map_config[map_name]
-            and map_config[map_name]["referer"] is not None
-        ):
+        if map_config[map_name].get("referer"):
             request_header["Referer"] = map_config[map_name]["referer"]
-        if (
-            "user_agent" in map_config[map_name]
-            and map_config[map_name]["user_agent"] is not None
-        ):
-            request_header["User-Agent"] = map_config[map_name]["user_agent"]
+
+        if map_config[map_name].get("user_agent"):
+            request_header["User-Agent"] = self.config.G_PRODUCT
 
         for tile in tiles:
             os.makedirs(f"maptile/{map_name}/{z}/{tile[0]}/", exist_ok=True)

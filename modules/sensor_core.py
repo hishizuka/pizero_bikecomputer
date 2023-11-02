@@ -1,6 +1,7 @@
-import datetime
-import math
 import asyncio
+import math
+import os
+from datetime import datetime
 
 import numpy as np
 
@@ -106,7 +107,7 @@ class SensorCore:
                 self.average_values[v][s] = []
                 self.values["integrated"][f"ave_{v}_{s}s"] = np.nan
         if _IMPORT_PSUTIL:
-            self.process = psutil.Process(self.config.G_PID)
+            self.process = psutil.Process(os.getgid())
 
         if SensorGPS:
             self.sensor_gps = SensorGPS(config, self.values["GPS"])
@@ -159,7 +160,7 @@ class SensorCore:
         try:
             while True:
                 await asyncio.sleep(self.wait_time)
-                start_time = datetime.datetime.now()
+                start_time = datetime.now()
                 # print(start_time, self.wait_time)
 
                 time_profile = [
@@ -173,12 +174,12 @@ class SensorCore:
                 dst_diff_spd = {"ANT+": 0}
                 alt_diff_spd = {"ANT+": 0}
                 grade_use = {"ANT+": False, "GPS": False}
-                time_profile.append(datetime.datetime.now())
+                time_profile.append(datetime.now())
                 # self.sensor_i2c.update()
                 # self.sensor_gps.update()
                 self.sensor_ant.update()  # for dummy
 
-                now_time = datetime.datetime.now()
+                now_time = datetime.now()
                 time_profile.append(now_time)
 
                 ant_id_type = self.config.G_ANT["ID_TYPE"]
@@ -524,7 +525,7 @@ class SensorCore:
                         * 100
                     )
 
-                time_profile.append(datetime.datetime.now())
+                time_profile.append(datetime.now())
 
                 # toggle auto stop
                 # ANT+ or GPS speed is available
@@ -607,7 +608,7 @@ class SensorCore:
                     )
 
                 # adjust loop time
-                time_profile.append(datetime.datetime.now())
+                time_profile.append(datetime.now())
                 sec_diff = []
                 time_progile_sec = 0
                 for i in range(len(time_profile)):
@@ -623,10 +624,10 @@ class SensorCore:
                     ).total_seconds()
                 if time_progile_sec > 1.5 * self.config.G_SENSOR_INTERVAL:
                     app_logger.warning(
-                        f"too long loop time: {datetime.datetime.now().strftime('%Y%m%d %H:%M:%S')}, sec_diff: {sec_diff}"
+                        f"too long loop time: {datetime.now().strftime('%Y%m%d %H:%M:%S')}, sec_diff: {sec_diff}"
                     )
 
-                loop_time = (datetime.datetime.now() - start_time).total_seconds()
+                loop_time = (datetime.now() - start_time).total_seconds()
                 d1, d2 = divmod(loop_time, self.config.G_SENSOR_INTERVAL)
                 if d1 > self.config.G_SENSOR_INTERVAL * 10:  # [s]
                     app_logger.warning(
