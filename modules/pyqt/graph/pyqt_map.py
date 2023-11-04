@@ -594,7 +594,7 @@ class MapWidget(BaseMapWidget):
             p0,
             p1,
             overlay=False,
-            use_mbtiles=self.config.G_MAP_CONFIG[self.config.G_MAP]["use_mbtiles"],
+            use_mbtiles=self.config.G_MAP_CONFIG[self.config.G_MAP].get("use_mbtiles"),
         )
 
         await self.overlay_heatmap(drawn_main_map, p0, p1)
@@ -1049,23 +1049,22 @@ class MapWidget(BaseMapWidget):
     def get_geo_area(self, x, y):
         if np.isnan(x) or np.isnan(y):
             return np.nan, np.nan
+
+        tile_size = self.config.G_MAP_CONFIG[self.config.G_MAP]["tile_size"]
+
         tile_x, tile_y, _, _ = get_tilexy_and_xy_in_tile(
             self.zoomlevel,
             x,
             y,
-            self.config.G_MAP_CONFIG[self.config.G_MAP]["tile_size"],
+            tile_size,
         )
         pos_x0, pos_y0 = get_lon_lat_from_tile_xy(self.zoomlevel, tile_x, tile_y)
         pos_x1, pos_y1 = get_lon_lat_from_tile_xy(
             self.zoomlevel, tile_x + 1, tile_y + 1
         )
         return (
-            abs(pos_x1 - pos_x0)
-            / self.config.G_MAP_CONFIG[self.config.G_MAP]["tile_size"]
-            * (self.width() * self.map_cuesheet_ratio),
-            abs(pos_y1 - pos_y0)
-            / self.config.G_MAP_CONFIG[self.config.G_MAP]["tile_size"]
-            * self.height(),
+            abs(pos_x1 - pos_x0) / tile_size * (self.width() * self.map_cuesheet_ratio),
+            abs(pos_y1 - pos_y0) / tile_size * self.height(),
         )
 
     def get_arrow_angle_index(self, angle):

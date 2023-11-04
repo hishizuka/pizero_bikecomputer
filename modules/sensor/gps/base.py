@@ -61,10 +61,8 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
         return True  # only dummy is not a real GPS
 
     def sensor_init(self):
-        # TODO, we set a global variable, this should be proscribed !!
-        self.config.G_GPS_NULLVALUE = self.NULL_VALUE
-
         self.reset()
+
         for element in self.elements:
             self.values[element] = np.nan
 

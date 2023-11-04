@@ -14,7 +14,7 @@ class BaseMapWidget(ScreenWidget):
     button_press_count = None
 
     # show range from zoom
-    zoom = 2000  # [m] #for CourseProfileGraphWidget
+    zoom = 2000  # [m]
     zoomlevel = 13  # for MapWidget
 
     # load course
@@ -96,8 +96,6 @@ class BaseMapWidget(ScreenWidget):
         self.buttons["lock"]._state = 0
         self.button_press_count["lock"] = 0
 
-        self.get_max_zoom()
-
     # override disable
     def set_minimum_size(self):
         pass
@@ -165,22 +163,3 @@ class BaseMapWidget(ScreenWidget):
         self.zoom *= 2
         self.zoomlevel -= 1
         await self.update_display()
-
-    def get_max_zoom(self):
-        if not self.course.is_set:
-            return
-
-        if self.config.G_MAX_ZOOM != 0:
-            return
-
-        z = self.zoom
-        dist = self.course.distance[-1]
-
-        if z / 1000 < dist:
-            while z / 1000 < dist:
-                z *= 2
-            z *= 2
-        else:
-            while z / 1000 > dist:
-                z /= 2
-        self.config.G_MAX_ZOOM = z

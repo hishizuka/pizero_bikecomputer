@@ -207,6 +207,8 @@ class TcxLoader:
 
         # do not keep these in memory
         del course["time"]
-        del course_points["time"]
+
+        if "time" in course_points:
+            del course_points["time"]
 
         return course, course_points
