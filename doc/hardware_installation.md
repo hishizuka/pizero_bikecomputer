@@ -6,7 +6,7 @@
   - [Display](#display)
   - [GPS module](#gps-module)
   - [I2C sensors](#i2c-sensors)
-  - [ANT+ USB dongle](#ant+-usb-dongle)
+  - [ANT+ USB dongle](#ant-usb-dongle)
   - [SD card](#sd-card)
   - [Case](#case)
 - [Hardware Assembly](#hardware-assembly)
