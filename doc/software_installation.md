@@ -611,6 +611,8 @@ There are five different configuration files. You need to edit at the first "set
 
 The settings are dependent on the user environment.
 
+Set the value before starting the program. If the value is set during running, it will not be read.
+
 #### GENERAL section
 
 - `display`
