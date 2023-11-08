@@ -654,9 +654,9 @@ class MapWidget(BaseMapWidget):
                     map_config[map_name], "fl"
                 )
                 if timeline is not None:
-                    map_config[map_name]["fl"] = timeline
+                    map_config[map_name]["timeline"] = timeline
                     time_str = map_config[map_name]["nowtime"].strftime("%H%M")
-                    for tl in map_config[map_name]["fl"]:
+                    for tl in map_config[map_name]["timeline"]:
                         if tl["it"][0:4] == time_str:
                             map_config[map_name]["validtime"] = tl["it"]
                             map_config[map_name]["subdomain"] = tl["sd"]
