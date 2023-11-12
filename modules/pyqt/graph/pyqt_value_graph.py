@@ -79,6 +79,8 @@ class PerformanceGraphWidget(ScreenWidget):
 
     @qasync.asyncSlot()
     async def update_display(self):
+        super().update_display()
+        
         # all_nan = {'hr_graph': True, 'power_graph': True}
         all_nan = {
             self.item[self.display_item[0]]["graph_key"]: True,
@@ -183,6 +185,8 @@ class AccelerationGraphWidget(ScreenWidget):
 
     @qasync.asyncSlot()
     async def update_display(self):
+        super().update_display()
+
         X = 0
         Y = 1
         Z = 2
@@ -272,6 +276,8 @@ class AltitudeGraphWidget(ScreenWidget):
 
     @qasync.asyncSlot()
     async def update_display(self):
+        super().update_display()
+
         v = self.sensor.values["integrated"]
         all_nan = {"altitude_graph": True, "altitude_gps_graph": True}
         for key in all_nan.keys():
