@@ -2,11 +2,11 @@
 # original map(example is "toner") is called from setting.conf -> GENERAL -> map
 
 # toner: 
-#   url: https://stamen-tiles.a.ssl.fastly.net/toner/{z}/{x}/{y}.png
+#   url: https://tiles.stadiamaps.com/tiles/stamen_toner/{z}/{x}/{y}.png?api_key=YOUR_API_KEY
 #   attribution: Map tiles by Stamen Design, under CC BY 3.0.<br />Data by OpenStreetMap, under ODbL
 
 #toner_2x: 
-#  url: https://stamen-tiles.a.ssl.fastly.net/toner/{z}/{x}/{y}@2x.png
+#  url: https://tiles.stadiamaps.com/tiles/stamen_toner/{z}/{x}/{y}@2x.png?api_key=YOUR_API_KEY
 #  attribution: Map tiles by Stamen Design, under CC BY 3.0.<br />Data by OpenStreetMap, under ODbL
 #  tile_size: 512
 
