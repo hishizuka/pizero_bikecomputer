@@ -122,7 +122,11 @@ class Course:
         # we keep checking distance as it's how it was done in the original code,
         # but we can load tcx file with no distance in it load (it gets populated as np.zeros in load)
         return bool(len(self.distance))
-
+    
+    @property
+    def has_altitude(self):
+        return bool(len(self.altitude))
+    
     def reset(self, delete_course_file=False, replace=False):
         # for course
         self.info = {}
@@ -234,35 +238,6 @@ class Course:
 
         self.config.gui.init_course()
 
-    async def search_route(self, x1, y1, x2, y2):
-        if np.any(np.isnan([x1, y1, x2, y2])):
-            return
-
-        self.reset()
-
-        await self.get_google_route(x1, y1, x2, y2)
-
-        self.downsample()
-        self.calc_slope_smoothing()
-        self.modify_course_points()
-
-        if self.config.G_THINGSBOARD_API["STATUS"]:
-            self.config.api.send_livetrack_course_load()
-
-    def get_ridewithgps_privacycode(self, route_id):
-        privacy_code = None
-        filename = (
-            self.config.G_RIDEWITHGPS_API["URL_ROUTE_DOWNLOAD_DIR"]
-            + "course-{route_id}.json"
-        ).format(route_id=route_id)
-
-        with open(filename, "r") as json_file:
-            json_contents = json.load(json_file)
-            if "privacy_code" in json_contents["route"]:
-                privacy_code = json_contents["route"]["privacy_code"]
-
-        return privacy_code
-
     async def get_google_route_from_mapstogpx(self, url):
         json_routes = await self.config.api.get_google_route_from_mapstogpx(url)
 
@@ -342,6 +317,21 @@ class Course:
             self.course_points.reset()
             return
 
+    async def search_route(self, x1, y1, x2, y2):
+        if np.any(np.isnan([x1, y1, x2, y2])):
+            return
+
+        self.reset()
+
+        await self.get_google_route(x1, y1, x2, y2)
+
+        self.downsample()
+        self.calc_slope_smoothing()
+        self.modify_course_points()
+
+        if self.config.G_THINGSBOARD_API["STATUS"]:
+            self.config.api.send_livetrack_course_load()
+
     async def get_google_route(self, x1, y1, x2, y2):
         json_routes = await self.config.api.get_google_routes(x1, y1, x2, y2)
 
@@ -408,6 +398,20 @@ class Course:
             res = re.subn(r, "", res)[0]
         return res
 
+    def get_ridewithgps_privacycode(self, route_id):
+        privacy_code = None
+        filename = (
+            self.config.G_RIDEWITHGPS_API["URL_ROUTE_DOWNLOAD_DIR"]
+            + "course-{route_id}.json"
+        ).format(route_id=route_id)
+
+        with open(filename, "r") as json_file:
+            json_contents = json.load(json_file)
+            if "privacy_code" in json_contents["route"]:
+                privacy_code = json_contents["route"]["privacy_code"]
+
+        return privacy_code
+    
     def downsample(self):
         len_lat = len(self.latitude)
         len_lon = len(self.longitude)
