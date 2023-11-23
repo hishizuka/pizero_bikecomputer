@@ -4,10 +4,95 @@ class Button_Config:
     # long press threshold of buttons [sec]
     G_BUTTON_LONG_PRESS = 1
 
-    # GPIO button action (short press / long press) from gui_pyqt
-    # call from SensorGPIO.my_callback(self, channel)
-    # number is from GPIO.setmode(GPIO.BCM)
     G_BUTTON_DEF = {
+        # call from ButtonShim
+        "Button_Shim": {
+            "MAIN": {
+                "A": ("scroll_prev", ""),
+                "B": ("count_laps", "reset_count"),
+                #"C": ("get_screenshot", ""),
+                "C": ("multiscan", ""),
+                "D": ("start_and_stop_manual", ""),
+                "E": ("scroll_next", "enter_menu"),
+            },
+            "MENU": {
+                "A": ("back_menu", ""),
+                "B": ("brightness_control", ""),
+                "C": ("press_space", ""),
+                "D": ("press_shift_tab", ""),
+                "E": ("press_tab", ""),
+            },
+            "MAP": {
+                "A": ("scroll_prev", ""),
+                "B": ("map_zoom_minus", ""),
+                "C": ("change_map_overlays", "change_mode"),
+                "D": ("map_zoom_plus", ""),
+                "E": ("scroll_next", "enter_menu"),
+            },
+            "MAP_1": {
+                "A": ("map_move_x_minus", ""),
+                "B": ("map_move_y_minus", "map_zoom_minus"),
+                "C": ("change_map_overlays", "change_mode"),
+                "D": ("map_move_y_plus", "map_zoom_plus"),
+                "E": ("map_move_x_plus", "map_search_route"),
+            },
+            "COURSE_PROFILE": {
+                "A": ("scroll_prev", ""),
+                "B": ("map_zoom_minus", ""),
+                "C": ("change_mode", ""),
+                "D": ("map_zoom_plus", ""),
+                "E": ("scroll_next", "enter_menu"),
+            },
+            "COURSE_PROFILE_1": {
+                "A": ("map_move_x_minus", ""),
+                "B": ("map_zoom_minus", ""),
+                "C": ("change_mode", ""),
+                "D": ("map_zoom_plus", ""),
+                "E": ("map_move_x_plus", ""),
+            },
+        },
+        # call from sensor_ant
+        "Edge_Remote": {
+            "MAIN": {
+                "PAGE": ("scroll_prev", "scroll_next"),
+                "CUSTOM": ("change_mode", "enter_menu"),
+                #"CUSTOM": ("multiscan", "enter_menu"),
+                "LAP": ("count_laps",),
+            },
+            "MAIN_1": {
+                "PAGE": ("turn_on_off_light", "brightness_control"),
+                "CUSTOM": ("change_mode", ""),
+                "LAP": ("start_and_stop_manual",),
+            },
+            "MENU": {
+                "PAGE": ("press_tab", ""),
+                "CUSTOM": ("press_shift_tab", "back_menu"),
+                "LAP": ("press_space",),
+            },
+            "MAP": {
+                "PAGE": ("scroll_prev", "scroll_next"),
+                "CUSTOM": ("change_mode", "map_zoom_minus"),
+                "LAP": ("map_zoom_plus",),
+            },
+            "MAP_1": {
+                "PAGE": ("", ""),  # go along the route / back along the route
+                "CUSTOM": ("change_mode", "map_zoom_minus"),
+                "LAP": ("map_zoom_plus",),
+            },
+            "COURSE_PROFILE": {
+                "PAGE": ("scroll_prev", "scroll_next"),
+                "CUSTOM": ("change_mode", "map_zoom_minus"),
+                "LAP": ("map_zoom_plus",),
+            },
+            "COURSE_PROFILE_1": {
+                "PAGE": ("", ""),  # go along the route / back along the route
+                "CUSTOM": ("change_mode", "map_move_x_minus"),
+                "LAP": ("map_move_x_plus",),
+            },
+        },
+        # GPIO button action (short press / long press) from gui_pyqt
+        # call from SensorGPIO.my_callback(self, channel)
+        # number is from GPIO.setmode(GPIO.BCM)
         "PiTFT": {
             "MAIN": {
                 5: ("scroll_prev", ""),
@@ -46,96 +131,6 @@ class Button_Config:
             "MENU": {
                 21: ("press_space", ""),
                 20: ("press_tab", "back_menu"),
-            },
-        },
-        # call from ButtonShim
-        "Button_Shim": {
-            "MAIN": {
-                "A": ("scroll_prev", ""),
-                "B": ("count_laps", "reset_count"),
-                "C": ("get_screenshot", ""),
-                "D": ("start_and_stop_manual", ""),
-                "E": ("scroll_next", "enter_menu"),
-            },
-            "MENU": {
-                "A": ("back_menu", ""),
-                "B": ("brightness_control", ""),
-                "C": ("press_space", ""),
-                "D": ("press_shift_tab", ""),
-                "E": ("press_tab", ""),
-            },
-            "MAP": {
-                "A": ("scroll_prev", ""),
-                "B": ("map_zoom_minus", ""),
-                "C": ("change_mode", ""),
-                "D": ("map_zoom_plus", ""),
-                "E": ("scroll_next", "enter_menu"),
-            },
-            "MAP_1": {
-                "A": ("map_move_x_minus", ""),
-                "B": ("map_move_y_minus", "map_zoom_minus"),
-                "C": ("change_mode", "map_change_move"),
-                "D": ("map_move_y_plus", "map_zoom_plus"),
-                "E": ("map_move_x_plus", "map_search_route"),
-            },
-            "MAP_2": {
-                "A": ("", ""),
-                "B": ("change_color_low", ""),
-                "C": ("change_mode", ""),
-                "D": ("change_color_high", ""),
-                "E": ("", ""),
-            },
-            "COURSE_PROFILE": {
-                "A": ("scroll_prev", ""),
-                "B": ("map_zoom_minus", ""),
-                "C": ("change_mode", ""),
-                "D": ("map_zoom_plus", ""),
-                "E": ("scroll_next", "enter_menu"),
-            },
-            "COURSE_PROFILE_1": {
-                "A": ("map_move_x_minus", ""),
-                "B": ("map_zoom_minus", ""),
-                "C": ("change_mode", ""),
-                "D": ("map_zoom_plus", ""),
-                "E": ("map_move_x_plus", ""),
-            },
-        },
-        # call from sensor_ant
-        "Edge_Remote": {
-            "MAIN": {
-                "PAGE": ("scroll_prev", "scroll_next"),
-                "CUSTOM": ("change_mode", "enter_menu"),
-                "LAP": ("count_laps",),
-            },
-            "MAIN_1": {
-                "PAGE": ("turn_on_off_light", "brightness_control"),
-                "CUSTOM": ("change_mode", ""),
-                "LAP": ("start_and_stop_manual",),
-            },
-            "MENU": {
-                "PAGE": ("press_tab", ""),
-                "CUSTOM": ("press_shift_tab", "back_menu"),
-                "LAP": ("press_space",),
-            },
-            "MAP": {
-                "PAGE": ("scroll_prev", "scroll_next"),
-                "CUSTOM": ("change_mode", "map_zoom_minus"),
-                "LAP": ("map_zoom_plus",),
-            },
-            "MAP_1": {
-                "PAGE": ("", ""),  # go along the route / back along the route
-                "CUSTOM": ("change_mode", "map_zoom_minus"),
-                "LAP": ("map_zoom_plus",),
-            },
-            "COURSE_PROFILE": {
-                "PAGE": ("scroll_prev", "scroll_next"),
-                "CUSTOM": ("change_mode", "map_zoom_minus"),
-                "LAP": ("map_zoom_plus",),
-            },
-            "COURSE_PROFILE_1": {
-                "PAGE": ("", ""),  # go along the route / back along the route
-                "CUSTOM": ("change_mode", "map_move_x_minus"),
-                "LAP": ("map_move_x_plus",),
             },
         },
     }
