@@ -77,6 +77,11 @@ class CoursesMenuWidget(MenuWidget):
     def cancel_course(self, replace=False):
         self.config.logger.reset_course(delete_course_file=True, replace=replace)
         self.onoff_course_cancel_button()
+    
+    def set_new_course(self, course_file):
+        self.config.logger.set_new_course(course_file)
+        self.config.gui.init_course()
+        self.onoff_course_cancel_button()
 
     @qasync.asyncSlot()
     async def receive_route(self):
@@ -176,11 +181,6 @@ class CoursesMenuWidget(MenuWidget):
         shutil.move(os.path.join(self.config.G_COURSE_DIR, filename), course_file)
         self.set_new_course(course_file)
         self.config.gui.show_forced_message("Loading succeeded!")
-
-    def set_new_course(self, course_file):
-        self.config.logger.set_new_course(course_file)
-        self.config.gui.init_course()
-        self.onoff_course_cancel_button()
 
 
 class CourseListWidget(ListWidget):
