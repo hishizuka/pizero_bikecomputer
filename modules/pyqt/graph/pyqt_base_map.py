@@ -2,7 +2,15 @@ import numpy as np
 
 from modules._pyqt import QtCore, pg, qasync
 from modules.pyqt.pyqt_screen_widget import ScreenWidget
-from .pyqt_map_button import MapButton
+from .pyqt_map_button import (
+    ZoomInButton,
+    ZoomOutButton,
+    LockButton,
+    ArrowNorthButton,
+    ArrowSouthButton,
+    ArrowWestButton,
+    ArrowEastButton,
+)
 
 
 class BaseMapWidget(ScreenWidget):
@@ -72,15 +80,13 @@ class BaseMapWidget(ScreenWidget):
         # self.plot.setMouseEnabled(x=False, y=False)
 
         # make buttons
-        self.buttons["lock"] = MapButton("L")
-        self.buttons["zoomup"] = MapButton("+")
-        self.buttons["zoomdown"] = MapButton("-")
-        self.buttons["left"] = MapButton("←")
-        self.buttons["right"] = MapButton("→")
-        self.buttons["up"] = MapButton("↑")
-        self.buttons["down"] = MapButton("↓")
-        self.buttons["go"] = MapButton("Go")
-
+        self.buttons["lock"] = LockButton()
+        self.buttons["zoomup"] = ZoomInButton()
+        self.buttons["zoomdown"] = ZoomOutButton()
+        self.buttons["left"] = ArrowWestButton()
+        self.buttons["right"] = ArrowEastButton()
+        self.buttons["up"] = ArrowNorthButton()
+        self.buttons["down"] = ArrowSouthButton()
         self.buttons["lock"].clicked.connect(self.switch_lock)
         self.buttons["right"].clicked.connect(self.move_x_plus)
         self.buttons["left"].clicked.connect(self.move_x_minus)
@@ -110,9 +116,11 @@ class BaseMapWidget(ScreenWidget):
 
     def lock_off(self):
         self.lock_status = False
+        self.buttons["lock"].change_status(self.lock_status)
 
     def lock_on(self):
         self.lock_status = True
+        self.buttons["lock"].change_status(self.lock_status)
 
     def switch_lock(self):
         if self.lock_status:

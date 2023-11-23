@@ -73,6 +73,46 @@ class CloudIcon(_QIconWithPath):
     path = "img/cloud_upload.svg"
 
 
+class ZoomInIcon(_QIconWithPath):
+    path = "img/zoom_in.svg"
+
+
+class ZoomOutIcon(_QIconWithPath):
+    path = "img/zoom_out.svg"
+
+
+class LockIcon(_QIconWithPath):
+    path = "img/lock.svg"
+
+
+class LockOpenIcon(_QIconWithPath):
+    path = "img/lock_open.svg"
+
+
+class ArrowNorthIcon(_QIconWithPath):
+    path = "img/arrow_north.svg"
+
+
+class ArrowSouthIcon(_QIconWithPath):
+    path = "img/arrow_south.svg"
+
+
+class ArrowWestIcon(_QIconWithPath):
+    path = "img/arrow_west.svg"
+
+
+class ArrowEastIcon(_QIconWithPath):
+    path = "img/arrow_east.svg"
+
+
+class DirectionsIcon(_QIconWithPath):
+    path = "img/directions.svg"
+
+
+class MapLayersIcon(_QIconWithPath):
+    path = "img/map_layers.svg"
+
+
 # "Icons label"
 class BaseMenuIcon(QtWidgets.QLabel):
     icon = None  # icon class
