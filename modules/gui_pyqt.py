@@ -108,10 +108,11 @@ class GUI_PyQt(QtCore.QObject):
     signal_menu_button = QtCore.pyqtSignal(int)
     signal_menu_back_button = QtCore.pyqtSignal()
     signal_get_screenshot = QtCore.pyqtSignal()
+    signal_multiscan = QtCore.pyqtSignal()
     signal_start_and_stop_manual = QtCore.pyqtSignal()
     signal_count_laps = QtCore.pyqtSignal()
     signal_boot_status = QtCore.pyqtSignal(str)
-    signal_draw_display = QtCore.pyqtSignal()
+    signal_change_overlay = QtCore.pyqtSignal()
 
     # for draw_display
     image_format = None
@@ -203,13 +204,14 @@ class GUI_PyQt(QtCore.QObject):
             self.signal_menu_back_button.connect(self.change_menu_back)
             # other
             self.signal_get_screenshot.connect(self.screenshot)
+            self.signal_multiscan.connect(self.multiscan_internal)
 
             self.signal_start_and_stop_manual.connect(
                 self.start_and_stop_manual_internal
             )
             self.signal_count_laps.connect(self.count_laps_internal)
 
-            self.signal_draw_display.connect(self.draw_display)
+            self.signal_change_overlay.connect(self.change_map_overlays_internal)
 
             self.msg_queue = asyncio.Queue()
             self.msg_event = asyncio.Event()
@@ -244,7 +246,8 @@ class GUI_PyQt(QtCore.QObject):
                 CoursesMenuWidget,
                 CourseListWidget,
                 CourseDetailWidget,
-            )  # , GoogleDirectionsAPISettingMenuWidget
+                #GoogleDirectionsAPISettingMenuWidget
+            ) 
             from modules.pyqt.menu.pyqt_map_menu_widget import (
                 MapMenuWidget,
                 MapListWidget,
@@ -260,6 +263,7 @@ class GUI_PyQt(QtCore.QObject):
                 AdjustWPrimeBalanceWidget,
             )
             from modules.pyqt.pyqt_cuesheet_widget import CueSheetWidget
+            from modules.pyqt.pyqt_multiscan_widget import MultiScanWidget
 
         with timers[2]:
             # self.main_window
@@ -370,11 +374,7 @@ class GUI_PyQt(QtCore.QObject):
                             )
                         )
                         self.main_page.addWidget(self.performance_graph_widget)
-                    elif (
-                        k == "COURSE_PROFILE_GRAPH"
-                        and os.path.exists(self.config.G_COURSE_FILE_PATH)
-                        and self.config.G_COURSE_INDEXING
-                    ):
+                    elif k == "COURSE_PROFILE_GRAPH":
                         self.course_profile_graph_widget = (
                             pyqt_course_profile.CourseProfileGraphWidget(
                                 self.main_page, self.config
@@ -388,14 +388,16 @@ class GUI_PyQt(QtCore.QObject):
                         self.main_page.addWidget(self.map_widget)
                     elif (
                         k == "CUESHEET"
-                        and self.config.logger.course.course_points.is_set
-                        and self.config.G_COURSE_INDEXING
-                        and self.config.G_CUESHEET_DISPLAY_NUM
                     ):
                         self.cuesheet_widget = CueSheetWidget(
                             self.main_page, self.config
                         )
                         self.main_page.addWidget(self.cuesheet_widget)
+                    
+            self.multi_scan_widget = MultiScanWidget(self.main_page, self.config)
+            self.main_page.addWidget(self.multi_scan_widget)
+            self.multiscan_index = self.main_page.count() - 1
+            self.multiscan_back_index = self.multiscan_index
 
         with timers[3]:
             # integrate main_layout
@@ -569,6 +571,13 @@ class GUI_PyQt(QtCore.QObject):
             return
         self.config.change_mode()
 
+    def change_map_overlays(self):
+        if self.map_widget is not None:
+            self.signal_change_overlay.emit()
+    
+    def change_map_overlays_internal(self):
+        self.map_widget.change_map_overlays()
+
     def map_move_x_plus(self):
         self.map_method("move_x_plus")
 
@@ -610,38 +619,53 @@ class GUI_PyQt(QtCore.QObject):
         if self.course_profile_graph_widget is not None:
             self.course_profile_graph_widget.init_course()
 
-    def change_color_low(self):
-        if (
-            self.config.G_DITHERING_CUTOFF_LOW_INDEX
-            == len(self.config.G_DITHERING_CUTOFF["LOW"]) - 1
-        ):
-            self.config.G_DITHERING_CUTOFF_LOW_INDEX = 0
-        else:
-            self.config.G_DITHERING_CUTOFF_LOW_INDEX += 1
-        self.signal_draw_display.emit()
-        app_logger.info(
-            f"LOW: {self.config.G_DITHERING_CUTOFF['LOW'][self.config.G_DITHERING_CUTOFF_LOW_INDEX]}"
-        )
-
-    def change_color_high(self):
-        if (
-            self.config.G_DITHERING_CUTOFF_HIGH_INDEX
-            == len(self.config.G_DITHERING_CUTOFF["HIGH"]) - 1
-        ):
-            self.config.G_DITHERING_CUTOFF_HIGH_INDEX = 0
-        else:
-            self.config.G_DITHERING_CUTOFF_HIGH_INDEX += 1
-        self.signal_draw_display.emit()
-        app_logger.info(
-            f"HIGH: {self.config.G_DITHERING_CUTOFF['HIGH'][self.config.G_DITHERING_CUTOFF_HIGH_INDEX]}"
-        )
-
     def scroll(self, delta):
-        mod_index = (
-            self.main_page.currentIndex() + delta + self.main_page.count()
-        ) % self.main_page.count()
+        n = self.main_page.count()
+        d = delta
+        mod_index = self.main_page.currentIndex()
+        while d != 0:
+            mod_index = (mod_index + d + n) % n
+            w = self.main_page.widget(mod_index)
+
+            if (
+                (
+                    w == self.course_profile_graph_widget
+                    and (
+                        not self.config.logger.course.is_set
+                        or not self.config.logger.course.has_altitude
+                        or not self.config.G_COURSE_INDEXING
+                    )
+                )
+                or (
+                    w == self.cuesheet_widget
+                    and (                
+                            not self.config.logger.course.course_points.is_set
+                            or not self.config.G_COURSE_INDEXING
+                            or not self.config.G_CUESHEET_DISPLAY_NUM
+                    ) 
+                )
+                or (
+                    w == self.multi_scan_widget
+                )
+            ):
+                d = delta
+            else:
+                d = 0
+
         self.on_change_main_page(mod_index)
         self.main_page.setCurrentIndex(mod_index)
+
+    def multiscan(self):
+        self.signal_multiscan.emit()
+
+    def multiscan_internal(self):
+        if self.main_page.currentWidget() != self.multi_scan_widget:
+            self.multiscan_back_index = self.main_page.currentIndex()
+            self.on_change_main_page(self.multiscan_index)
+            self.main_page.setCurrentIndex(self.multiscan_index)
+        else:
+            self.on_change_main_page(self.multiscan_back_index)
+            self.main_page.setCurrentIndex(self.multiscan_back_index)
 
     def get_screenshot(self):
         self.signal_get_screenshot.emit()
