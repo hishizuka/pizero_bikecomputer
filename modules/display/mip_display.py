@@ -56,6 +56,13 @@ class MipDisplay(Display):
     brightness_table = [0, 1, 2, 3, 5, 7, 10, 25, 50, 100]
     brightness = 0
 
+    dithering_cutoff = {
+        "LOW": [128, 150, 170],
+        "HIGH": [170, 193, 216],
+    }
+    dithering_cutoff_low_index = 0
+    dithering_cutoff_high_index = 2
+
     size = (400, 240)
 
     def __init__(self, config, size=None):
@@ -241,26 +248,26 @@ class MipDisplay(Display):
         im_array_bin = np.zeros(im_array.shape).astype("bool")
         im_array_bin[0::2, 0::2, :][
             im_array[0::2, 0::2, :]
-            >= self.config.G_DITHERING_CUTOFF["LOW"][
-                self.config.G_DITHERING_CUTOFF_LOW_INDEX
+            >= self.dithering_cutoff["LOW"][
+                self.dithering_cutoff_low_index
             ]
         ] = 1
         im_array_bin[1::2, 1::2, :][
             im_array[1::2, 1::2, :]
-            >= self.config.G_DITHERING_CUTOFF["LOW"][
-                self.config.G_DITHERING_CUTOFF_LOW_INDEX
+            >= self.dithering_cutoff["LOW"][
+                self.dithering_cutoff_low_index
             ]
         ] = 1
         im_array_bin[0::2, 1::2, :][
             im_array[0::2, 1::2, :]
-            > self.config.G_DITHERING_CUTOFF["HIGH"][
-                self.config.G_DITHERING_CUTOFF_HIGH_INDEX
+            > self.dithering_cutoff["HIGH"][
+                self.dithering_cutoff_high_index
             ]
         ] = 1
         im_array_bin[1::2, 0::2, :][
             im_array[1::2, 0::2, :]
-            > self.config.G_DITHERING_CUTOFF["HIGH"][
-                self.config.G_DITHERING_CUTOFF_HIGH_INDEX
+            > self.dithering_cutoff["HIGH"][
+                self.dithering_cutoff_high_index
             ]
         ] = 1
 
