@@ -73,15 +73,12 @@ class MapOverlayMenuWidget(MenuWidget):
             elif overlay_type == "Wind map":
                 self.config.G_USE_WIND_OVERLAY_MAP = not status
             status = not status
+            self.config.gui.map_widget.enable_overlay_button()
 
         self.buttons[overlay_type].change_toggle(status)
 
         # toggle list
         self.buttons[list_key].onoff_button(status)
-
-        # OFF: remove overlay
-        if self.config.gui.map_widget is not None:
-            self.config.gui.map_widget.reset_map()
 
     def select_heatmap(self):
         self.change_page("Heatmap List", preprocess=True)
