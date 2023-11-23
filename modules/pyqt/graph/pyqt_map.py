@@ -24,6 +24,10 @@ from modules.utils.map import (
 )
 from modules.utils.timer import Timer, log_timers
 from .pyqt_base_map import BaseMapWidget
+from .pyqt_map_button import (
+    DirectionButton,
+    MapLayersButton,
+)
 
 
 class MapWidget(BaseMapWidget):
@@ -92,6 +96,14 @@ class MapWidget(BaseMapWidget):
         fill=(255, 255, 255, 255),
         color=(0, 0, 0),
     )
+
+    overlay_order = ["NONE", "WIND", "RAIN", "HEATMAP"]
+    overlay_order_index = {
+        "WIND":1,
+        "RAIN":2,
+        "HEATMAP":3,
+    }
+    overlay_index = 0
 
     def setup_ui_extra(self):
         super().setup_ui_extra()
@@ -166,7 +178,10 @@ class MapWidget(BaseMapWidget):
             )
 
         # map
-        self.layout.addWidget(self.plot, 0, 0, 4, 3)
+        max_height = 4
+        if self.config.display.has_touch and self.config.G_GOOGLE_DIRECTION_API["HAVE_API_TOKEN"]:
+            max_height += 1
+        self.layout.addWidget(self.plot, 0, 0, max_height, 3)
 
         if self.config.display.has_touch:
             # zoom
@@ -178,10 +193,16 @@ class MapWidget(BaseMapWidget):
             self.layout.addWidget(self.buttons["up"], 1, 2)
             self.layout.addWidget(self.buttons["down"], 2, 2)
             self.layout.addWidget(self.buttons["right"], 3, 2)
-
+            
             if self.config.G_GOOGLE_DIRECTION_API["HAVE_API_TOKEN"]:
-                self.layout.addWidget(self.buttons["go"], 3, 0)
+                self.buttons["go"] = DirectionButton()
+                self.layout.addWidget(self.buttons["go"], max_height-2, 0)
                 self.buttons["go"].clicked.connect(self.search_route)
+
+            self.buttons["layers"] = MapLayersButton()
+            self.layout.addWidget(self.buttons["layers"], max_height-1, 0)
+            self.buttons["layers"].clicked.connect(self.change_map_overlays)
+            self.enable_overlay_button()
 
         # cue sheet and instruction
         self.init_cuesheet_and_instruction()
@@ -213,21 +234,21 @@ class MapWidget(BaseMapWidget):
             self.pre_zoomlevel[key] = np.nan
 
         attribution_text = self.config.G_MAP_CONFIG[self.config.G_MAP]["attribution"]
-        if self.config.G_USE_HEATMAP_OVERLAY_MAP:
+        if self.overlay_index == self.overlay_order_index["HEATMAP"]:
             attribution_text += (
                 "<br />"
                 + self.config.G_HEATMAP_OVERLAY_MAP_CONFIG[
                     self.config.G_HEATMAP_OVERLAY_MAP
                 ]["attribution"]
             )
-        if self.config.G_USE_RAIN_OVERLAY_MAP:
+        elif self.overlay_index == self.overlay_order_index["RAIN"]:
             attribution_text += (
                 "<br />"
                 + self.config.G_RAIN_OVERLAY_MAP_CONFIG[self.config.G_RAIN_OVERLAY_MAP][
                     "attribution"
                 ]
             )
-        if self.config.G_USE_WIND_OVERLAY_MAP:
+        elif self.overlay_index == self.overlay_order_index["WIND"]:
             attribution_text += (
                 "<br />"
                 + self.config.G_WIND_OVERLAY_MAP_CONFIG[self.config.G_WIND_OVERLAY_MAP][
@@ -573,6 +594,7 @@ class MapWidget(BaseMapWidget):
         if self.lock_status:
             return
 
+        self.config.logger.reset_course(delete_course_file=True, replace=False)
         await self.course.search_route(
             self.point["pos"][0],
             self.point["pos"][1] / self.y_mod,
@@ -597,13 +619,14 @@ class MapWidget(BaseMapWidget):
             use_mbtiles=self.config.G_MAP_CONFIG[self.config.G_MAP].get("use_mbtiles"),
         )
 
-        await self.overlay_heatmap(drawn_main_map, p0, p1)
-        await self.overlay_rainmap(drawn_main_map, p0, p1)
-        await self.overlay_windmap(drawn_main_map, p0, p1)
+        if self.overlay_index == self.overlay_order_index["HEATMAP"]:
+            await self.overlay_heatmap(drawn_main_map, p0, p1)
+        elif self.overlay_index == self.overlay_order_index["RAIN"]:
+            await self.overlay_rainmap(drawn_main_map, p0, p1)
+        elif self.overlay_index == self.overlay_order_index["WIND"]:
+            await self.overlay_windmap(drawn_main_map, p0, p1)
 
     async def overlay_heatmap(self, drawn_main_map, p0, p1):
-        if not self.config.G_USE_HEATMAP_OVERLAY_MAP:
-            return
         await self.overlay_map(
             drawn_main_map,
             p0,
@@ -613,9 +636,6 @@ class MapWidget(BaseMapWidget):
         )
 
     async def overlay_rainmap(self, drawn_main_map, p0, p1):
-        if not self.config.G_USE_RAIN_OVERLAY_MAP:
-            return
-
         map_config = self.config.G_RAIN_OVERLAY_MAP_CONFIG
         map_name = self.config.G_RAIN_OVERLAY_MAP
         if self.update_overlay_basetime(map_config, map_name):
@@ -636,9 +656,6 @@ class MapWidget(BaseMapWidget):
         await self.overlay_map(drawn_main_map, p0, p1, map_config, map_name)
 
     async def overlay_windmap(self, drawn_main_map, p0, p1):
-        if not self.config.G_USE_WIND_OVERLAY_MAP:
-            return
-
         map_config = self.config.G_WIND_OVERLAY_MAP_CONFIG
         map_name = self.config.G_WIND_OVERLAY_MAP
         if self.update_overlay_basetime(map_config, map_name):
@@ -800,7 +817,7 @@ class MapWidget(BaseMapWidget):
                     -1,
                 )
 
-            imgitem = pg.ImageItem(imgarray)
+            imgitem = pg.ImageItem(imgarray, levels=(0,255))
             if overlay:
                 imgitem.setCompositionMode(QT_COMPOSITION_MODE_DARKEN)
             imgarray_min_x, imgarray_max_y = get_lon_lat_from_tile_xy(
@@ -1075,3 +1092,33 @@ class MapWidget(BaseMapWidget):
             )
             % self.arrow_direction_num
         )
+    
+    def change_map_overlays(self):
+        while self.overlay_index < len(self.overlay_order):
+            self.overlay_index += 1
+
+            if self.overlay_index == len(self.overlay_order):
+                self.overlay_index = 0
+                break
+            
+            m = self.overlay_order[self.overlay_index]
+            if (
+                (m == "WIND" and self.config.G_USE_WIND_OVERLAY_MAP)
+                or (m == "RAIN" and self.config.G_USE_RAIN_OVERLAY_MAP)
+                or (m == "HEATMAP" and self.config.G_USE_HEATMAP_OVERLAY_MAP)
+            ):
+                break
+
+        self.reset_map()
+    
+    def enable_overlay_button(self):
+        if (
+            not self.config.G_USE_HEATMAP_OVERLAY_MAP
+            and not self.config.G_USE_RAIN_OVERLAY_MAP
+            and not self.config.G_USE_WIND_OVERLAY_MAP
+        ):
+            self.buttons["layers"].setEnabled(False)
+        else:
+            self.buttons["layers"].setEnabled(True)
+
+        
