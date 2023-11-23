@@ -110,31 +110,14 @@ class Config:
     # default map (can overwrite in settings.conf)
     G_MAP = "toner"
     G_MAP_CONFIG = {
+        # toner is deleted because API key is now needed.
+        # "toner": {
+        #    "url": "https://tiles.stadiamaps.com/tiles/stamen_toner/{z}/{x}/{y}.png?api_key=YOUR_API_KEY"
+        #    "attribution": "Map tiles by Stamen Design, under CC BY 3.0.<br />Data by OpenStreetMap, under ODbL",
+        #    "tile_size": 256,
+        #},
+
         # basic map
-        "toner": {
-            # 0:z(zoom), 1:tile_x, 2:tile_y
-            "url": "https://stamen-tiles.a.ssl.fastly.net/toner/{z}/{x}/{y}.png",
-            "attribution": "Map tiles by Stamen Design, under CC BY 3.0.<br />Data by OpenStreetMap, under ODbL",
-            "tile_size": 256,
-        },
-        "toner-lite": {
-            # 0:z(zoom), 1:tile_x, 2:tile_y
-            "url": "https://stamen-tiles.a.ssl.fastly.net/toner-lite/{z}/{x}/{y}.png",
-            "attribution": "Map tiles by Stamen Design, under CC BY 3.0.<br />Data by OpenStreetMap, under ODbL",
-            "tile_size": 256,
-        },
-        "toner_2x": {
-            # 0:z(zoom), 1:tile_x, 2:tile_y
-            "url": "https://stamen-tiles.a.ssl.fastly.net/toner/{z}/{x}/{y}@2x.png",
-            "attribution": "Map tiles by Stamen Design, under CC BY 3.0.<br />Data by OpenStreetMap, under ODbL",
-            "tile_size": 512,
-        },
-        "toner-terrain": {
-            # 0:z(zoom), 1:tile_x, 2:tile_y
-            "url": "https://stamen-tiles.a.ssl.fastly.net/terrain/{z}/{x}/{y}.png",
-            "attribution": "Map tiles by Stamen Design, under CC BY 3.0.<br />Data by OpenStreetMap, under ODbL",
-            "tile_size": 256,
-        },
         "wikimedia": {
             "url": "https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png",
             "attribution": "© OpenStreetMap contributors",
@@ -437,12 +420,6 @@ class Config:
     G_DISPLAY_PARAM = {
         "SPI_CLOCK": 2000000,
     }
-    G_DITHERING_CUTOFF = {
-        "LOW": [128, 150, 170],
-        "HIGH": [170, 193, 216],
-    }
-    G_DITHERING_CUTOFF_LOW_INDEX = 2
-    G_DITHERING_CUTOFF_HIGH_INDEX = 1
 
     # auto backlight
     G_USE_AUTO_BACKLIGHT = True
@@ -684,7 +661,7 @@ class Config:
 
         if self.G_MAP not in self.G_MAP_CONFIG:
             app_logger.error(f"{self.G_MAP} does not exist in {self.G_MAP_LIST}")
-            self.G_MAP = "toner"
+            self.G_MAP = "wikimedia"
         if self.G_MAP_CONFIG[self.G_MAP].get("use_mbtiles") and not os.path.exists(
             os.path.join("maptile", f"{self.G_MAP}.mbtiles")
         ):
