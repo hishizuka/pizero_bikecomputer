@@ -125,8 +125,8 @@ class GadgetbridgeService(Service):
     def decode_b64(match_object):
         return f'"{base64.b64decode(match_object.group(1)).decode()}"'
 
-    def decode_message(self, message: str):
-        message = message.lstrip(chr(F_BYTE_MARKER)).rstrip(chr(L_BYTE_MARKER))
+    def decode_message(self, raw_message: str):
+        message = raw_message.lstrip(chr(F_BYTE_MARKER)).rstrip(chr(L_BYTE_MARKER))
 
         if message.startswith("setTime"):
             res = re.match(r"^setTime\((\d+)\);E.setTimeZone\((\S+)\);", message)
@@ -162,7 +162,6 @@ class GadgetbridgeService(Service):
                     self.gui.show_message(
                         message["title"], message["body"], limit_length=True
                     )
-                    app_logger.info(message)
                 elif m_type.startswith("find") and message.get("n", False):
                     self.gui.show_dialog_ok_only(fn=None, title="Gadgetbridge")
                 elif m_type == "gps":
@@ -230,8 +229,8 @@ class GadgetbridgeService(Service):
                     # self.gui.show_forced_message(msg)
 
             except json.JSONDecodeError:
-                app_logger.exception(f"Failed to load message as json {message}")
+                app_logger.exception(f"Failed to load message as json {raw_message}")
             except Exception:  # noqa
-                app_logger.exception(f"Failure during message {message} handling")
+                app_logger.exception(f"Failure during message {raw_message} handling")
         else:
-            app_logger.warning(f"{message} unknown message received")
+            app_logger.warning(f"{raw_message} unknown message received")
