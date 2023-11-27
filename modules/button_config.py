@@ -186,8 +186,9 @@ class Button_Config:
             self.G_PAGE_MODE = "MENU"
 
         func_str = self.G_BUTTON_DEF[button_hard][self.G_PAGE_MODE][press_button][index]
-        if func_str == "":
-            func_str = "dummy"
+        if func_str in ("", "dummy"):
+            return
+        
         func = eval("self.config.gui." + func_str)
         func()
 
