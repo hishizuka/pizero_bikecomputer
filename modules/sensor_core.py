@@ -1,6 +1,5 @@
 import asyncio
 import math
-import os
 from datetime import datetime
 
 import numpy as np
@@ -140,6 +139,24 @@ class SensorCore:
         await self.sensor_gps.quit()
         self.sensor_gpio.quit()
 
+    # reset accumulated values
+    def reset(self):
+        self.sensor_gps.reset()
+        self.sensor_ant.reset()
+        self.sensor_i2c.reset()
+        self.reset_internal()
+
+    def reset_internal(self):
+        self.values["integrated"]["distance"] = 0
+        self.values["integrated"]["accumulated_power"] = 0
+        self.values["integrated"]["w_prime_balance"] = self.config.G_POWER_W_PRIME
+        self.values["integrated"]["w_prime_power_sum"] = 0
+        self.values["integrated"]["w_prime_power_count"] = 0
+        self.values["integrated"]["w_prime_t"] = 0
+        self.values["integrated"]["w_prime_sum"] = 0
+        self.values["integrated"]["pwr_mean_under_cp"] = 0
+        self.values["integrated"]["tau"] = 546 * np.exp(-0.01 * (self.config.G_POWER_CP - 0)) + 316
+
     async def integrate(self):
         pre_dst = {"ANT+": 0, "GPS": 0}
         pre_ttlwork = {"ANT+": 0}
@@ -149,8 +166,6 @@ class SensorCore:
         diff_sum = {"alt_diff": 0, "dst_diff": 0, "alt_diff_spd": 0, "dst_diff_spd": 0}
 
         # for w_prime_balance
-        pwr_mean_under_cp = 0
-        tau = 546 * np.exp(-0.01 * (self.config.G_POWER_CP - pwr_mean_under_cp)) + 316
         # alias for self.values
         v = {"GPS": self.values["GPS"], "I2C": self.values["I2C"]}
         # loop control
@@ -163,9 +178,7 @@ class SensorCore:
                 start_time = datetime.now()
                 # print(start_time, self.wait_time)
 
-                time_profile = [
-                    start_time,
-                ]
+                time_profile = [start_time,]
                 hr = spd = cdc = pwr = temperature = self.config.G_ANT_NULLVALUE
                 grade = grade_spd = glide = self.config.G_ANT_NULLVALUE
                 ttlwork_diff = 0
@@ -440,11 +453,13 @@ class SensorCore:
                 self.values["integrated"]["grade_spd"] = grade_spd
                 self.values["integrated"]["glide_ratio"] = glide
                 self.values["integrated"]["temperature"] = temperature
+                
+                #set self.values["integrated"]["w_prime_balance_normalized"] etc
+                if self.config.G_ANT["USE"]["PWR"]:
+                    self.calc_w_prime_balance(pwr)
 
                 for g in self.graph_keys:
-                    self.values["integrated"][g][0:-1] = self.values["integrated"][g][
-                        1:
-                    ]
+                    self.values["integrated"][g][:-1] = self.values["integrated"][g][1:]
                 self.values["integrated"]["hr_graph"][-1] = hr
                 self.values["integrated"]["power_graph"][-1] = pwr
                 self.values["integrated"]["w_bal_graph"][-1] = self.values[
@@ -458,72 +473,6 @@ class SensorCore:
                     self.get_ave_values("power", pwr)
                 if self.config.G_ANT["USE"]["HR"] and not np.isnan(hr):
                     self.get_ave_values("heart_rate", hr)
-
-                if self.config.G_ANT["USE"]["PWR"]:
-                    # w_prime_balance
-                    # https://medium.com/critical-powers/comparison-of-wbalance-algorithms-8838173e2c15
-
-                    # Waterworth algorighm
-                    if self.config.G_POWER_W_PRIME_ALGORITHM == "WATERWORTH":
-                        pwr_cp_diff = pwr - self.config.G_POWER_CP
-                        if self.config.G_POWER_CP < 0:
-                            self.values["integrated"]["w_prime_power_sum"] = (
-                                self.values["integrated"]["w_prime_power_sum"] + pwr
-                            )
-                            self.values["integrated"]["w_prime_power_count"] = (
-                                self.values["integrated"]["w_prime_power_count"] + 1
-                            )
-                            pwr_mean_under_cp = (
-                                self.values["integrated"]["w_prime_power_sum"]
-                                / self.values["integrated"]["w_prime_power_count"]
-                            )
-                            tau = (
-                                546
-                                * np.exp(
-                                    -0.01 * (self.config.G_POWER_CP - pwr_mean_under_cp)
-                                )
-                                + 316
-                            )
-                        self.values["integrated"]["w_prime_sum"] = self.values[
-                            "integrated"
-                        ]["w_prime_sum"] + max(0, pwr_cp_diff) * np.exp(
-                            self.values["integrated"]["w_prime_t"] / tau
-                        )
-                        self.values["integrated"][
-                            "w_prime_balance"
-                        ] = self.config.G_POWER_W_PRIME - self.values["integrated"][
-                            "w_prime_sum"
-                        ] * np.exp(
-                            -1 * self.values["integrated"]["w_prime_t"] / tau
-                        )
-                        self.values["integrated"]["w_prime_t"] = (
-                            self.values["integrated"]["w_prime_t"]
-                            + self.config.G_SENSOR_INTERVAL
-                        )
-
-                    # Differential algorithm
-                    elif self.config.G_POWER_W_PRIME_ALGORITHM == "DIFFERENTIAL":
-                        cp_pwr_diff = self.config.G_POWER_CP - pwr
-                        w_bal_t = self.values["integrated"]["w_prime_balance"]
-                        if cp_pwr_diff < 0:
-                            # consume
-                            self.values["integrated"]["w_prime_balance"] = (
-                                w_bal_t + cp_pwr_diff
-                            )
-                        else:
-                            # recovery
-                            self.values["integrated"]["w_prime_balance"] = (
-                                w_bal_t
-                                + cp_pwr_diff
-                                * (self.config.G_POWER_W_PRIME - w_bal_t)
-                                / self.config.G_POWER_W_PRIME
-                            )
-
-                    self.values["integrated"]["w_prime_balance_normalized"] = int(
-                        self.values["integrated"]["w_prime_balance"]
-                        / self.config.G_POWER_W_PRIME
-                        * 100
-                    )
 
                 time_profile.append(datetime.now())
 
@@ -573,7 +522,6 @@ class SensorCore:
                         and self.config.logger is not None
                     ):
                         self.config.logger.start_and_stop()
-                # time.sleep(1)
 
                 # auto backlight
                 if self.config.display.auto_brightness and not np.isnan(
@@ -660,24 +608,49 @@ class SensorCore:
             if len(self.average_values[k][sec]) < sec:
                 self.average_values[k][sec].append(v)
             else:
-                self.average_values[k][sec][0:-1] = self.average_values[k][sec][1:]
+                self.average_values[k][sec][:-1] = self.average_values[k][sec][1:]
                 self.average_values[k][sec][-1] = v
             self.values["integrated"]["ave_{}_{}s".format(k, sec)] = int(
                 np.mean(self.average_values[k][sec])
             )
 
-    # reset accumulated values
-    def reset(self):
-        self.sensor_gps.reset()
-        self.sensor_ant.reset()
-        self.sensor_i2c.reset()
-        self.reset_internal()
+    def calc_w_prime_balance(self, pwr):
+        # https://medium.com/critical-powers/comparison-of-wbalance-algorithms-8838173e2c15
 
-    def reset_internal(self):
-        self.values["integrated"]["distance"] = 0
-        self.values["integrated"]["accumulated_power"] = 0
-        self.values["integrated"]["w_prime_balance"] = self.config.G_POWER_W_PRIME
-        self.values["integrated"]["w_prime_power_sum"] = 0
-        self.values["integrated"]["w_prime_power_count"] = 0
-        self.values["integrated"]["w_prime_t"] = 0
-        self.values["integrated"]["w_prime_sum"] = 0
+        v = self.values["integrated"]
+        pwr_cp_diff = pwr - self.config.G_POWER_CP
+        # Waterworth algorighm
+        if self.config.G_POWER_W_PRIME_ALGORITHM == "WATERWORTH":
+            if pwr < self.config.G_POWER_CP:
+                v["w_prime_power_sum"] = v["w_prime_power_sum"] + pwr
+                v["w_prime_power_count"] = v["w_prime_power_count"] + 1
+                v["pwr_mean_under_cp"] = v["w_prime_power_sum"] / v["w_prime_power_count"]
+                v["tau"] = (
+                    546
+                    * np.exp(-0.01 * (self.config.G_POWER_CP - v["pwr_mean_under_cp"]))
+                    + 316
+                )
+            v["w_prime_sum"] += max(0, pwr_cp_diff) * np.exp(v["w_prime_t"] / v["tau"])
+            v["w_prime_t"] += self.config.G_SENSOR_INTERVAL
+            v["w_prime_balance"] = (
+                self.config.G_POWER_W_PRIME
+                 - v["w_prime_sum"]*np.exp(-v["w_prime_t"] / v["tau"])
+            )
+
+        # Differential algorithm
+        elif self.config.G_POWER_W_PRIME_ALGORITHM == "DIFFERENTIAL":
+            cp_pwr_diff = -pwr_cp_diff
+            if cp_pwr_diff < 0:
+                # consume
+                v["w_prime_balance"] += cp_pwr_diff
+            else:
+                # recovery
+                v["w_prime_balance"] += (
+                    cp_pwr_diff
+                    * (self.config.G_POWER_W_PRIME - v["w_prime_balance"])
+                    / self.config.G_POWER_W_PRIME
+                )
+
+        v["w_prime_balance_normalized"] = int(
+            v["w_prime_balance"] / self.config.G_POWER_W_PRIME*100
+        )
