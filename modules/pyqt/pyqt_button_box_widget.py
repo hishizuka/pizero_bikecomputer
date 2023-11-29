@@ -59,14 +59,13 @@ class ButtonBoxWidget(QtWidgets.QWidget):
                     == self.config.button_config.G_BUTTON_LONG_PRESS
                 ):
                     app_logger.info("reset")
-                    self.config.logger.reset_count()
-                    self.config.gui.map_widget.reset_track()
+                    self.config.gui.reset_count()
                     self.lap_button_count = 0
         elif self.lap_button._state == 1:
             self.lap_button._state = 0
             self.lap_button_count = 0
         else:
-            self.config.logger.count_laps()
+            self.config.gui.count_laps()
 
     def gui_start_and_stop_quit(self):
         if self.start_button.isDown():
@@ -85,7 +84,7 @@ class ButtonBoxWidget(QtWidgets.QWidget):
             self.start_button._state = 0
             self.start_button_count = 0
         else:
-            self.config.logger.start_and_stop_manual()
+            self.config.gui.start_and_stop_manual()
 
     def change_start_stop_button(self, status):
         icon = icons.PauseIcon() if status == "START" else icons.NextIcon()
