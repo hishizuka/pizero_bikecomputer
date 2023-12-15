@@ -2,6 +2,7 @@
 /log/
 /screenshots/
 /maptile/*
+/modules/test_code/
 /courses/.current
 /courses/ridewithgps/*
 /courses/*html*
@@ -28,4 +29,4 @@ nohup.out
 !.gitkeep
 screenlog.*
 gmon.out
-
+.DS_Store

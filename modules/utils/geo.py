@@ -119,6 +119,8 @@ def get_mod_lat_np(lat):
 
 
 def get_track_str(drc):
+    if np.isnan(drc):
+        return None
     track_int = int((drc + 22.5) / 45.0)
     return TRACK_STR[track_int]
 

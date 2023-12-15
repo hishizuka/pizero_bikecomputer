@@ -47,7 +47,7 @@ class ANT_Device_CTRL(ant_device.ANT_Device):
     def on_data(self, data):
         (self.values["ctrl_cmd"],) = self.structPattern[self.name].unpack(data[0:8])
         if self.values["ctrl_cmd"] in self.ctrl_cmd.keys():
-            self.config.press_button(
+            self.config.button_config.press_button(
                 "Edge_Remote", *(self.ctrl_cmd[self.values["ctrl_cmd"]])
             )
         else:

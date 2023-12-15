@@ -47,7 +47,7 @@ class ButtonShim:
         _FUNC["E_LONG"] = self.press_E_LONG
 
     def press_button(self, button, index):
-        self.config.press_button("Button_Shim", button, index)
+        self.config.button_config.press_button("Button_Shim", button, index)
 
     def press_A(self):
         self.press_button("A", 0)

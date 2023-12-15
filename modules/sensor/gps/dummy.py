@@ -3,7 +3,7 @@ from datetime import datetime
 
 import numpy as np
 
-from modules.utils.geo import calc_azimuth
+from modules.utils.geo import calc_azimuth, get_track_str
 from .base import AbstractSensorGPS
 
 
@@ -25,6 +25,7 @@ class Dummy_GPS(AbstractSensorGPS):
             self.values["lon"] = np.nan
         if self.values["track"] is None:
             self.values["track"] = self.values["pre_track"]
+            self.values["track_str"] = get_track_str(self.values["track"])
 
     def set_position_from_course(self, course, idx):
         lat = course.latitude
@@ -49,6 +50,8 @@ class Dummy_GPS(AbstractSensorGPS):
                 )
             )[0]
         )
+        if not np.isnan(self.values["track"]):
+            self.values["track_str"] = get_track_str(self.values["track"])
 
     async def update(self):
         if self.config.G_DUMMY_OUTPUT:

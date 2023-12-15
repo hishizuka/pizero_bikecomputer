@@ -81,7 +81,7 @@ class Item(QtWidgets.QVBoxLayout):
             self.value.setText(value)
         elif np.isnan(value):
             self.value.setText("-")
-        elif "Speed" in self.name:
+        elif self.name.startswith("Speed"):
             self.value.setText(self.itemformat.format(value * 3.6))  # m/s to km/h
         elif "SPD" in self.name:
             self.value.setText(self.itemformat.format(value * 3.6))  # m/s to km/h

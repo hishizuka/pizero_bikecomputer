@@ -52,12 +52,12 @@ class SensorGPIO(Sensor):
                     sw_counter
                     >= self.config.button_config.G_BUTTON_LONG_PRESS * self.interval_inv
                 ):
-                    self.config.press_button(
+                    self.config.button_config.press_button(
                         self.config.G_DISPLAY, channel, 1
                     )  # long press
                     break
             else:
-                self.config.press_button(self.config.G_DISPLAY, channel, 0)
+                self.config.button_config.press_button(self.config.G_DISPLAY, channel, 0)
                 break
             time.sleep(self.interval)
 
