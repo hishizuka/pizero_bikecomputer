@@ -17,4 +17,4 @@ elif _SENSOR_GPS_ADAFRUIT_UART:
 else:
     SensorGPS = Dummy_GPS
 
-app_logger.info(f"{SensorGPS.__name__} chosen")
+app_logger.info(f"GPS ({SensorGPS.__name__})")

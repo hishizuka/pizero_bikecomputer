@@ -18,9 +18,6 @@ except:
     except:
         pass
 
-if _SENSOR_GPS_ADAFRUIT_UART:
-    app_logger.info("GPS_ADAFRUIT_UART")
-
 
 class Adafruit_GPS(AbstractSensorGPS):
     NULL_VALUE = None
@@ -41,6 +38,10 @@ class Adafruit_GPS(AbstractSensorGPS):
 
     # experimental code
     async def update(self):
+        if self.config.G_DUMMY_OUTPUT:
+            await self.output_dummy()
+            return
+        
         g = self.adafruit_gps
 
         try:

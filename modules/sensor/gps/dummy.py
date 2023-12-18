@@ -9,6 +9,7 @@ from .base import AbstractSensorGPS
 
 class Dummy_GPS(AbstractSensorGPS):
     LOG_SPEED = 5
+    COURSE_DIVIDE_FACTOR = 500
     COURSE_RAND_FACTOR = 0.5  # np.random.randint(0,10)/10
 
     @property
@@ -54,70 +55,70 @@ class Dummy_GPS(AbstractSensorGPS):
             self.values["track_str"] = get_track_str(self.values["track"])
 
     async def update(self):
-        if self.config.G_DUMMY_OUTPUT:
-            course_i = pre_course_i = 0
+        if not self.config.G_DUMMY_OUTPUT:
+            return
+        course_i = pre_course_i = 0
 
-            try:
-                while True:
-                    await self.sleep()
+        try:
+            while True:
+                await self.sleep()
 
-                    if self.config.logger is None or (
-                        not self.config.logger.course.is_set
-                        and self.config.logger.position_log.shape[0] == 0
-                    ):
-                        continue
+                if self.config.logger is None or (
+                    not self.config.logger.course.is_set
+                    and self.config.logger.position_log.shape[0] == 0
+                ):
+                    continue
 
-                    # self.values['track_str'] = "-"
-                    # unit: m/s
-                    # self.values['speed'] = random.randint(1,6) * 3.6
-                    self.values["speed"] = np.random.randint(13, 83) / 10  # 5 - 30km/h
+                # unit: m/s
+                # self.values['speed'] = random.randint(1,6) * 3.6
+                self.values["speed"] = np.random.randint(13, 83) / 10  # 5 - 30km/h
 
-                    self.values["pre_lat"] = self.values["lat"]
-                    self.values["pre_lon"] = self.values["lon"]
-                    self.values["pre_track"] = self.values["track"]
+                self.values["pre_lat"] = self.values["lat"]
+                self.values["pre_lon"] = self.values["lon"]
+                self.values["pre_track"] = self.values["track"]
 
-                    # generate dummy position from log
-                    if self.config.logger.position_log.shape[0] > 0:
-                        self.set_position_from_log(
-                            self.config.logger.position_log[course_i]
-                        )
-
-                        if course_i == pre_course_i:
-                            course_i += 1 * self.LOG_SPEED
-                            continue
-                        else:
-                            pre_course_i = course_i
-                            course_i += 1 * self.LOG_SPEED
-                            if course_i >= len(self.config.logger.position_log):
-                                course_i = pre_course_i = 0
-                                continue
-
-                    # from course
-                    else:
-                        # TODO No need to do this for each loop, unless the course can be changed in between  ?
-                        course_n = len(self.config.logger.course.latitude)
-
-                        self.set_position_from_course(
-                            self.config.logger.course, course_i
-                        )
-
-                        pre_course_i = course_i
-                        course_i += int(course_n / 200) + 1
-                        if course_i >= course_n:
-                            pre_course_i = 0
-                            course_i = course_i % course_n
-
-                    self.config.logger.course.get_index(
-                        self.values["lat"],
-                        self.values["lon"],
-                        self.values["track"],
-                        self.config.G_GPS_SEARCH_RANGE,
-                        self.config.G_GPS_ON_ROUTE_CUTOFF,
-                        self.azimuth_cutoff,
+                # generate dummy position from log
+                if self.config.logger.position_log.shape[0] > 0:
+                    self.set_position_from_log(
+                        self.config.logger.position_log[course_i]
                     )
 
-                    self.values["timestamp"] = datetime.now()
-                    self.get_sleep_time(self.config.G_GPS_INTERVAL)
+                    if course_i == pre_course_i:
+                        course_i += 1 * self.LOG_SPEED
+                        continue
+                    else:
+                        pre_course_i = course_i
+                        course_i += 1 * self.LOG_SPEED
+                        if course_i >= len(self.config.logger.position_log):
+                            course_i = pre_course_i = 0
+                            continue
 
-            except asyncio.CancelledError:
-                pass
+                # from course
+                else:
+                    # TODO No need to do this for each loop, unless the course can be changed in between  ?
+                    course_n = len(self.config.logger.course.latitude)
+
+                    self.set_position_from_course(
+                        self.config.logger.course, course_i
+                    )
+
+                    pre_course_i = course_i
+                    course_i += int(course_n / self.COURSE_DIVIDE_FACTOR) + 1
+                    if course_i >= course_n:
+                        pre_course_i = 0
+                        course_i = course_i % course_n
+
+                self.config.logger.course.get_index(
+                    self.values["lat"],
+                    self.values["lon"],
+                    self.values["track"],
+                    self.config.G_GPS_SEARCH_RANGE,
+                    self.config.G_GPS_ON_ROUTE_CUTOFF,
+                    self.azimuth_cutoff,
+                )
+
+                self.values["timestamp"] = datetime.now()
+                self.get_sleep_time(self.config.G_GPS_INTERVAL)
+
+        except asyncio.CancelledError:
+            pass

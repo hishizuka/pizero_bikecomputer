@@ -22,9 +22,6 @@ except Exception:  # noqa
     except:
         pass
 
-if _SENSOR_GPS_GPSD:
-    app_logger.info("GPS")
-
 
 class GPSD(AbstractSensorGPS):
     gps_thread = None
@@ -51,6 +48,10 @@ class GPSD(AbstractSensorGPS):
         self.gps_thread.stop()
 
     async def update(self):
+        if self.config.G_DUMMY_OUTPUT:
+            await self.output_dummy()
+            return
+
         g = self.gps_thread.data_stream
         try:
             while True:

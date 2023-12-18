@@ -311,3 +311,7 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
 
         if not self.is_time_modified:
             self.is_time_modified = set_time(gps_time)
+
+    async def output_dummy(self):
+        from .dummy import Dummy_GPS
+        await Dummy_GPS(self.config, self.values).update()
