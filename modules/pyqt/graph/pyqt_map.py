@@ -20,13 +20,17 @@ from modules.utils.map import (
     get_maptile_filename,
     get_lon_lat_from_tile_xy,
     get_tilexy_and_xy_in_tile,
-    remove_maptiles,
 )
 from modules.utils.timer import Timer, log_timers
 from .pyqt_base_map import BaseMapWidget
 from .pyqt_map_button import (
     DirectionButton,
     MapLayersButton,
+)
+from modules.helper.maptile import (
+    conv_image,
+    update_overlay_rainmap_timeline,
+    update_overlay_windmap_timeline,
 )
 
 
@@ -97,11 +101,15 @@ class MapWidget(BaseMapWidget):
         color=(0, 0, 0),
     )
 
+    overlay_current_time = {
+        "RAIN": None,
+        "WIND": None,
+    }
     overlay_order = ["NONE", "WIND", "RAIN", "HEATMAP"]
     overlay_order_index = {
-        "WIND":1,
-        "RAIN":2,
-        "HEATMAP":3,
+        "WIND": 1,
+        "RAIN": 2,
+        "HEATMAP": 3,
     }
     overlay_index = 0
 
@@ -230,31 +238,36 @@ class MapWidget(BaseMapWidget):
             self.config.G_WIND_OVERLAY_MAP,
         ]:
             self.drawn_tile[key] = {}
-            self.existing_tiles[key] = {}
             self.pre_zoomlevel[key] = np.nan
 
+        self.set_attribution()
+
+    def set_attribution(self):
+
         attribution_text = self.config.G_MAP_CONFIG[self.config.G_MAP]["attribution"]
+        # map_settings = None
+        # basetime_str = validtime_str = ""
+        # break_str = " "
         if self.overlay_index == self.overlay_order_index["HEATMAP"]:
-            attribution_text += (
-                "<br />"
-                + self.config.G_HEATMAP_OVERLAY_MAP_CONFIG[
-                    self.config.G_HEATMAP_OVERLAY_MAP
-                ]["attribution"]
-            )
+            map_settings = self.config.G_HEATMAP_OVERLAY_MAP_CONFIG[self.config.G_HEATMAP_OVERLAY_MAP]
         elif self.overlay_index == self.overlay_order_index["RAIN"]:
-            attribution_text += (
-                "<br />"
-                + self.config.G_RAIN_OVERLAY_MAP_CONFIG[self.config.G_RAIN_OVERLAY_MAP][
-                    "attribution"
-                ]
-            )
+            map_settings = self.config.G_RAIN_OVERLAY_MAP_CONFIG[self.config.G_RAIN_OVERLAY_MAP]
+        #     if self.config.G_RAIN_OVERLAY_MAP == "jpn_jma_bousai" and map_settings['basetime'] is not None:
+        #         basetime_str = map_settings['basetime'][-6:]
+        #         validtime_str = map_settings['validtime'][-6:]
+        #         break_str = "<br />"
         elif self.overlay_index == self.overlay_order_index["WIND"]:
-            attribution_text += (
-                "<br />"
-                + self.config.G_WIND_OVERLAY_MAP_CONFIG[self.config.G_WIND_OVERLAY_MAP][
-                    "attribution"
-                ]
-            )
+            map_settings = self.config.G_WIND_OVERLAY_MAP_CONFIG[self.config.G_WIND_OVERLAY_MAP]
+        #     if self.config.G_WIND_OVERLAY_MAP.startswith("jpn_scw") and map_settings['basetime'] is not None:
+        #         basetime_str = map_settings['basetime'][:4]
+        #         validtime_str = map_settings['validtime'][:4]
+        # if map_settings is not None:
+        #     attribution_text += f"<br />{map_settings['attribution']}"
+        #     if basetime_str != "":
+        #         attribution_text += f"{break_str}<font size='+1'>{basetime_str}</font>"
+        #     if validtime_str != "": 
+        #         attribution_text += f"<font size='+1'> / {validtime_str}</font>"
+
         self.map_attribution.setHtml(
             '<div style="text-align: right;"><span style="color: #000; font-size: 10px;">'
             + attribution_text
@@ -638,85 +651,33 @@ class MapWidget(BaseMapWidget):
     async def overlay_rainmap(self, drawn_main_map, p0, p1):
         map_config = self.config.G_RAIN_OVERLAY_MAP_CONFIG
         map_name = self.config.G_RAIN_OVERLAY_MAP
-        if self.update_overlay_basetime(map_config, map_name):
-            # basetime update
-            if map_config[map_name]["time_format"] == "unix_timestamp":
-                basetime_str = str(int(map_config[map_name]["nowtime"].timestamp()))
-            else:
-                basetime_str = map_config[map_name]["nowtime"].strftime(
-                    map_config[map_name]["time_format"]
-                )
 
-            map_config[map_name]["basetime"] = basetime_str
-            map_config[map_name]["validtime"] = map_config[map_name]["basetime"]
-
-            # re-draw from self.config.G_MAP
-            return
-
-        await self.overlay_map(drawn_main_map, p0, p1, map_config, map_name)
+        await update_overlay_rainmap_timeline(map_config[map_name], map_name)
+        if self.overlay_current_time["RAIN"] != map_config[map_name]["current_time"]:
+            self.overlay_current_time["RAIN"] = map_config[map_name]["current_time"]
+            self.reset_overlay(map_name)
+            # re-draw from self.config.G_MAP first
+        else:
+            await self.overlay_map(drawn_main_map, p0, p1, map_config, map_name)
 
     async def overlay_windmap(self, drawn_main_map, p0, p1):
         map_config = self.config.G_WIND_OVERLAY_MAP_CONFIG
         map_name = self.config.G_WIND_OVERLAY_MAP
-        if self.update_overlay_basetime(map_config, map_name):
-            # basetime update
-            if "jpn_scw" in map_name:
-                init_time_list = await self.config.api.get_scw_list(
-                    map_config[map_name], "inittime"
-                )
-                if init_time_list is not None:
-                    map_config[map_name]["basetime"] = init_time_list[0]["it"]
 
-                timeline = await self.config.api.get_scw_list(
-                    map_config[map_name], "fl"
-                )
-                if timeline is not None:
-                    map_config[map_name]["timeline"] = timeline
-                    time_str = map_config[map_name]["nowtime"].strftime("%H%M")
-                    for tl in map_config[map_name]["timeline"]:
-                        if tl["it"][0:4] == time_str:
-                            map_config[map_name]["validtime"] = tl["it"]
-                            map_config[map_name]["subdomain"] = tl["sd"]
-                            break
-            else:
-                basetime_str = map_config[map_name]["nowtime"].strftime(
-                    map_config[map_name]["time_format"]
-                )
-                map_config[map_name]["basetime"] = basetime_str
-                map_config[map_name]["validtime"] = map_config[map_name]["basetime"]
+        await update_overlay_windmap_timeline(map_config[map_name], map_name)
+        if self.overlay_current_time["WIND"] != map_config[map_name]["current_time"]:
+            self.overlay_current_time["WIND"] = map_config[map_name]["current_time"]
+            self.reset_overlay(map_name)
+            # re-draw from self.config.G_MAP first
+        else:
+            await self.overlay_map(drawn_main_map, p0, p1, map_config, map_name)
 
-            # re-draw from self.config.G_MAP
-            return
-
-        await self.overlay_map(drawn_main_map, p0, p1, map_config, map_name)
-
-    def update_overlay_basetime(self, map_config, map_name):
-        config = map_config[map_name]
-
-        # update basetime
-        nowtime = config["nowtime_func"]()
-        delta_minutes = nowtime.minute % config["time_interval"]
-        delta_seconds = delta_minutes * 60 + nowtime.second
-        delta_seconds_cutoff = config["update_minutes"] * 60 + 15
-
-        if delta_seconds < delta_seconds_cutoff:
-            delta_minutes = delta_minutes + config["time_interval"]
-        nowtime_mod = (nowtime + datetime.timedelta(minutes=-delta_minutes)).replace(
-            second=0, microsecond=0
-        )
-
-        if config["nowtime"] != nowtime_mod:
-            # clear tile
-            self.drawn_tile[self.config.G_MAP] = {}
-            self.drawn_tile[map_name] = {}
-            self.existing_tiles[map_name] = {}
-            self.pre_zoomlevel[map_name] = np.nan
-            remove_maptiles(map_name)
-
-            config["nowtime"] = nowtime_mod
-            return True
-
-        return False
+    def reset_overlay(self, map_name):
+        # clear tile because overlay map changes over time
+        self.drawn_tile[self.config.G_MAP] = {}
+        self.drawn_tile[map_name] = {}
+        self.pre_zoomlevel[map_name] = np.nan
+        self.set_attribution()
 
     async def overlay_map(self, drawn_main_map, p0, p1, map_config, map_name):
         if drawn_main_map:
@@ -773,8 +734,6 @@ class MapWidget(BaseMapWidget):
             tiles = self.get_tiles_for_drawing(tile_x, tile_y, z_conv_factor, expand)
 
             # download
-            if z not in self.existing_tiles[map_name]:
-                self.existing_tiles[map_name][z_draw] = {}
             await self.download_tiles(tiles, map_config, map_name, z_draw)
 
         # tile check
@@ -785,7 +744,7 @@ class MapWidget(BaseMapWidget):
             self.cur = self.con.cursor()
 
         draw_flag, add_keys, expand_keys = self.check_drawn_tile(
-            use_mbtiles, map_name, z, z_draw, z_conv_factor, tile_x, tile_y, expand
+            use_mbtiles, map_config, map_name, z, z_draw, z_conv_factor, tile_x, tile_y, expand
         )
 
         self.pre_zoomlevel[map_name] = z
@@ -799,23 +758,28 @@ class MapWidget(BaseMapWidget):
         w_h = int(tile_size / z_conv_factor) if expand else 0
         for keys in add_keys:
             x, y = keys[0:2] if not expand else expand_keys[keys][0:2]
-            img_file = self.get_image_file(use_mbtiles, map_name, z_draw, x, y)
+            img_file = self.get_image_file(use_mbtiles, map_config, map_name, z_draw, x, y)
             if not expand:
-                imgarray = np.rot90(
-                    np.asarray(Image.open(img_file).convert("RGBA")), -1
-                )
+                img_pil = Image.open(img_file).convert("RGBA")
             else:
                 x_start, y_start = int(w_h * expand_keys[keys][2]), int(
                     w_h * expand_keys[keys][3]
                 )
-                imgarray = np.rot90(
-                    np.asarray(
-                        Image.open(img_file)
-                        .crop((x_start, y_start, x_start + w_h, y_start + w_h))
-                        .convert("RGBA")
-                    ),
-                    -1,
+                img_pil = Image.open(img_file).crop((
+                    x_start, y_start, x_start + w_h, y_start + w_h
+                )).convert("RGBA")
+
+            if (
+                self.config.G_DISPLAY in ("MIP", "MIP_640")
+                and (
+                    map_name.startswith("jpn_scw")
+                    or map_name.startswith("jpn_jma_bousai")
                 )
+            ):
+                imgarray = conv_image(img_pil, map_name)
+            else:
+                imgarray = np.asarray(img_pil)
+            imgarray = np.rot90(imgarray, -1)
 
             imgitem = pg.ImageItem(imgarray, levels=(0,255))
             if overlay:
@@ -891,20 +855,24 @@ class MapWidget(BaseMapWidget):
 
     async def download_tiles(self, tiles, map_config, map_name, z_draw):
         download_tile = []
+        basetime = map_config[map_name].get("basetime", None)
+        validtime = map_config[map_name].get("validtime", None)
+
         for tile in tiles:
-            filename = get_maptile_filename(map_name, z_draw, *tile)
-            key = "{0}-{1}".format(*tile)
+            filename = get_maptile_filename(
+                map_name, z_draw, *tile, basetime=basetime, validtime=validtime
+            )
 
             if os.path.exists(filename) and os.path.getsize(filename) > 0:
-                self.existing_tiles[map_name][z_draw][key] = True
+                self.existing_tiles[filename] = True
                 continue
 
             # download is in progress
-            if key in self.existing_tiles[map_name][z_draw]:
+            if filename in self.existing_tiles:
                 continue
 
             # entry to download tiles
-            self.existing_tiles[map_name][z_draw][key] = False
+            self.existing_tiles[filename] = False
             download_tile.append(tile)
 
         # start downloading
@@ -914,16 +882,20 @@ class MapWidget(BaseMapWidget):
             ):
                 # failed to put queue, then retry
                 for tile in download_tile:
-                    key = "{0}-{1}".format(*tile)
-                    if key in self.existing_tiles[map_name][z_draw]:
-                        self.existing_tiles[map_name][z_draw].pop(key)
+                    filename = get_maptile_filename(
+                        map_name, z_draw, *tile, basetime=basetime, validtime=validtime
+                    )
+                    if filename in self.existing_tiles:
+                        self.existing_tiles.pop(filename)
 
     def check_drawn_tile(
-        self, use_mbtiles, map_name, z, z_draw, z_conv_factor, tile_x, tile_y, expand
+        self, use_mbtiles, map_config, map_name, z, z_draw, z_conv_factor, tile_x, tile_y, expand
     ):
         draw_flag = False
         add_keys = {}
         expand_keys = {}
+        basetime = map_config[map_name].get("basetime", None)
+        validtime = map_config[map_name].get("validtime", None)
 
         if z not in self.drawn_tile[map_name] or self.pre_zoomlevel[map_name] != z:
             self.drawn_tile[map_name][z] = {}
@@ -938,9 +910,12 @@ class MapWidget(BaseMapWidget):
                     pixel_y, y_start = divmod(j, z_conv_factor)
                     exist_tile_key = (pixel_x, pixel_y)
 
-                if drawn_tile_key not in self.drawn_tile[map_name][
-                    z
-                ] and self.check_tile(use_mbtiles, map_name, z_draw, exist_tile_key):
+                if (
+                    drawn_tile_key not in self.drawn_tile[map_name][z] 
+                    and self.check_tile(
+                        use_mbtiles, map_name, z_draw, exist_tile_key, basetime, validtime
+                    )
+                ):
                     self.drawn_tile[map_name][z][drawn_tile_key] = True
                     add_keys[(i, j)] = True
                     draw_flag = True
@@ -949,24 +924,29 @@ class MapWidget(BaseMapWidget):
 
         return draw_flag, add_keys, expand_keys
 
-    def check_tile(self, use_mbtiles, map_name, z_draw, key):
-        cond = False
+    def check_tile(self, use_mbtiles, map_name, z_draw, key, basetime, validtime):
         if not use_mbtiles:
-            exist_tile_key = "{0}-{1}".format(*key)  # (z_draw, i, j)
-            if (exist_tile_key, True) in self.existing_tiles[map_name][z_draw].items():
-                cond = True
+            filename = get_maptile_filename(
+                map_name, z_draw, *key, basetime=basetime, validtime=validtime
+            )
+            if (filename, True) in self.existing_tiles.items():
+                return True
         else:
             sql = (
                 f"select count(*) from tiles where "
                 f"zoom_level={z_draw} and tile_column={key[0]} and tile_row={2**z_draw - 1 - key[1]}"
             )
             if (self.cur.execute(sql).fetchone())[0] == 1:
-                cond = True
-        return cond
+                return True
+        return False
 
-    def get_image_file(self, use_mbtiles, map_name, z_draw, x, y):
+    def get_image_file(self, use_mbtiles, map_config, map_name, z_draw, x, y):
         if not use_mbtiles:
-            img_file = get_maptile_filename(map_name, z_draw, x, y)
+            basetime = map_config[map_name].get("basetime", None)
+            validtime = map_config[map_name].get("validtime", None)
+            img_file = get_maptile_filename(
+                map_name, z_draw, x, y, basetime=basetime, validtime=validtime
+            )
         else:
             sql = (
                 f"select tile_data from tiles where "
@@ -1110,6 +1090,11 @@ class MapWidget(BaseMapWidget):
                 break
 
         self.reset_map()
+    
+    def remove_overlay(self):
+        if self.overlay_index != 0:
+            self.overlay_index = 0
+            self.reset_map()
     
     def enable_overlay_button(self):
         if (
