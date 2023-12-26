@@ -48,11 +48,9 @@ class AppState:
     # quit (poweroff)
     #   ant+_sc_values, ant+_spd_values,
     #   ant+_power_values_16, ant+_power_values_17, ant+_power_values_18
-    #   GB_status, GB_gps:
-    #   keep in case of sudden shutdown or killed (not via quit()). erase on reset.
     def delete(self):
         for k, v in list(self.values.items()):
-            if "ant+" in k or k.startswith("GB"):
+            if "ant+" in k:
                 del self.values[k]
         with open(self.pickle_file, "wb") as f:
             pickle.dump(self.values, f)
