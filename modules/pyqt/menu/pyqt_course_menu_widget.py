@@ -33,6 +33,7 @@ class CoursesMenuWidget(MenuWidget):
                 ),
             ),
             ("Android Google Maps", None, self.receive_route),
+            ("", None, None),
             # ('Google Directions API mode', 'submenu', self.google_directions_api_setting_menu),
             (
                 "Cancel Course",
@@ -41,6 +42,7 @@ class CoursesMenuWidget(MenuWidget):
                     self.cancel_course, "Cancel Course"
                 ),
             ),
+            ("Course Calc", "toggle", lambda: self.onoff_course_calc(True)),
         )
         self.add_buttons(button_conf)
 
@@ -49,9 +51,16 @@ class CoursesMenuWidget(MenuWidget):
 
         if not self.config.G_IS_RASPI or not os.path.isfile(self.config.G_OBEXD_CMD):
             self.buttons["Android Google Maps"].disable()
+        
+        self.onoff_course_calc(False)
 
     def preprocess(self):
         self.onoff_course_cancel_button()
+
+    def onoff_course_calc(self, change=True):
+        if change:
+            self.config.G_COURSE_INDEXING = not self.config.G_COURSE_INDEXING
+        self.buttons["Course Calc"].change_toggle(self.config.G_COURSE_INDEXING)
 
     @qasync.asyncSlot()
     async def load_local_courses(self):

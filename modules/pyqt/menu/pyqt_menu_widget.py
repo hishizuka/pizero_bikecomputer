@@ -156,9 +156,9 @@ class TopMenuWidget(MenuWidget):
             # Name(page_name), button_attribute, connected functions, layout
             ("Sensors", "submenu", self.sensors_menu),
             ("Courses", "submenu", self.courses_menu),
-            ("Live Track", "submenu", self.livetrack_menu),
+            ("Connectivity", "submenu", self.livetrack_menu),
             ("Upload Activity", "submenu", self.cloud_services_menu),
-            ("Map", "submenu", self.map_menu),
+            ("Map and Data", "submenu", self.map_menu),
             ("Profile", "submenu", self.profile_menu),
             ("System", "submenu", self.setting_menu),
         )
@@ -174,10 +174,10 @@ class TopMenuWidget(MenuWidget):
         self.change_page("Courses", preprocess=True)
 
     def livetrack_menu(self):
-        self.change_page("Live Track", preprocess=True)
+        self.change_page("Connectivity", preprocess=True)
 
     def map_menu(self):
-        self.change_page("Map")
+        self.change_page("Map and Data")
 
     def profile_menu(self):
         self.change_page("Profile")
@@ -385,36 +385,50 @@ class UploadActivityMenuWidget(MenuWidget):
         await self.buttons["Ride with GPS"].run(self.config.api.rwgps_upload)
 
 
-class LiveTrackMenuWidget(MenuWidget):
+class ConnectivityMenuWidget(MenuWidget):
     def setup_menu(self):
         button_conf = (
             # Name(page_name), button_attribute, connected functions, layout
-            ("Live Track", "toggle", lambda: self.onoff_live_track(True)),
             (
-                "Auto upload via BT",
+                "Auto BT Tethering",
                 "toggle",
-                lambda: self.onoff_auto_upload_via_BT(True),
+                lambda: self.bt_auto_tethering(True),
             ),
             ("Select BT device", "submenu", self.bt_tething),
+            ("Live Track", "toggle", lambda: self.onoff_live_track(True)),
+            ("", None, None),
+            ("Gadgetbridge", "toggle", self.onoff_ble_uart_service),
+            ("Get Location", "toggle", self.onoff_gadgetbridge_gps),
         )
         self.add_buttons(button_conf)
 
-        if (
-            self.config.api.thingsboard_check()
-            and self.config.G_THINGSBOARD_API["HAVE_API_TOKEN"]
-        ):
-            if not self.config.G_IS_RASPI:
-                self.buttons["Auto upload via BT"].disable()
-        else:
-            self.buttons["Live Track"].disable()
-            self.buttons["Auto upload via BT"].disable()
-
-        if not self.config.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"]:
+        # Auto BT Tethering
+        if not self.config.G_IS_RASPI:
+            self.buttons["Auto BT Tethering"].disable()
             self.buttons["Select BT device"].disable()
 
-    def preprocess(self):
+        # ThingsBoard
+        if (
+            not self.config.api.thingsboard_check()
+            or not self.config.G_THINGSBOARD_API["HAVE_API_TOKEN"]
+        ):
+            self.buttons["Live Track"].disable()
+        
+        #GadgetBridge
+        if self.config.ble_uart is None:
+            self.buttons["Gadgetbridge"].disable()
+            self.buttons["Get Location"].disable()
+
         # initialize toggle button status
         self.onoff_live_track(change=False)
+        self.bt_auto_tethering(change=False)
+
+    def preprocess(self):
+        if self.config.ble_uart:
+            status = self.config.ble_uart.status
+            self.buttons["Gadgetbridge"].change_toggle(status)
+            self.buttons["Get Location"].change_toggle(self.config.ble_uart.gps_status)
+            self.buttons["Get Location"].onoff_button(status)
 
     def onoff_live_track(self, change=True):
         if change:
@@ -422,28 +436,35 @@ class LiveTrackMenuWidget(MenuWidget):
                 "STATUS"
             ]
             self.config.state.set_value(
-                "G_THINGSBOARD_API_STATUS", self.config.G_THINGSBOARD_API["STATUS"]
+                "G_THINGSBOARD_API_STATUS",
+                self.config.G_THINGSBOARD_API["STATUS"],
+                force_apply=True
             )
         self.buttons["Live Track"].change_toggle(
             self.config.G_THINGSBOARD_API["STATUS"]
         )
 
-    def onoff_auto_upload_via_BT(self, change=True):
+    def bt_auto_tethering(self, change=True):
         if change:
-            self.config.G_THINGSBOARD_API[
-                "AUTO_UPLOAD_VIA_BT"
-            ] = not self.config.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"]
+            self.config.G_AUTO_BT_TETHERING = not self.config.G_AUTO_BT_TETHERING
             self.config.state.set_value(
-                "AUTO_UPLOAD_VIA_BT",
-                self.config.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"],
+                "G_AUTO_BT_TETHERING", self.config.G_AUTO_BT_TETHERING, force_apply=True
             )
-        self.buttons["Auto upload via BT"].change_toggle(
-            self.config.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"]
-        )
+        self.buttons["Auto BT Tethering"].change_toggle(self.config.G_AUTO_BT_TETHERING)
 
-        self.buttons["Select BT device"].onoff_button(
-            self.config.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"]
-        )
+        self.buttons["Select BT device"].onoff_button(self.config.G_AUTO_BT_TETHERING)
 
     def bt_tething(self):
         self.change_page("BT Tethering", preprocess=True, run_bt_tethering=False)
+    
+    @qasync.asyncSlot()
+    async def onoff_ble_uart_service(self):
+        status = await self.config.ble_uart.on_off_uart_service()
+        self.buttons["Gadgetbridge"].change_toggle(status)
+        self.buttons["Get Location"].onoff_button(status)
+        self.config.state.set_value("GB", status, force_apply=True)
+
+    def onoff_gadgetbridge_gps(self):
+        status = self.config.ble_uart.on_off_gadgetbridge_gps()
+        self.buttons["Get Location"].change_toggle(status)
+        self.config.state.set_value("GB_gps", status, force_apply=True)

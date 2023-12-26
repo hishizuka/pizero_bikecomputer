@@ -57,8 +57,6 @@ class NetworkMenuWidget(MenuWidget):
             ("Bluetooth", "toggle", wifi_bt_button_func_bt),
             ("BT Tethering", "submenu", self.bt_tething),
             ("IP Address", "dialog", self.show_ip_address),
-            ("Gadgetbridge", "toggle", self.onoff_ble_uart_service),
-            ("Get Location", "toggle", self.onoff_gadgetbridge_gps),
         )
         self.add_buttons(button_conf)
 
@@ -67,26 +65,17 @@ class NetworkMenuWidget(MenuWidget):
         ):  # if bt_pan is None there won't be any addresses
             self.buttons["BT Tethering"].disable()
 
-        if self.config.ble_uart is None:
-            self.buttons["Gadgetbridge"].disable()
-            self.buttons["Get Location"].disable()
-
     def preprocess(self):
         # initialize toggle button status
         if self.config.G_IS_RASPI:
             self.onoff_wifi_bt(change=False, key="Wifi")
             self.onoff_wifi_bt(change=False, key="Bluetooth")
-        if self.config.ble_uart:
-            status = self.config.ble_uart.status
-            self.buttons["Gadgetbridge"].change_toggle(status)
-            self.buttons["Get Location"].change_toggle(self.config.ble_uart.gps_status)
-            self.buttons["Get Location"].onoff_button(status)
 
     def onoff_wifi_bt(self, change=True, key=None):
         if change:
-            self.config.onoff_wifi_bt(key)
+            self.config.network.onoff_wifi_bt(key)
         status = {}
-        status["Wifi"], status["Bluetooth"] = self.config.get_wifi_bt_status()
+        status["Wifi"], status["Bluetooth"] = self.config.network.get_wifi_bt_status()
         self.buttons[key].change_toggle(status[key])
 
     def bt_tething(self):
@@ -96,18 +85,6 @@ class NetworkMenuWidget(MenuWidget):
         address = detect_network() or "No address"
         # Button is OK only
         self.config.gui.show_dialog_ok_only(None, address)
-
-    @qasync.asyncSlot()
-    async def onoff_ble_uart_service(self):
-        status = await self.config.ble_uart.on_off_uart_service()
-        self.buttons["Gadgetbridge"].change_toggle(status)
-        self.buttons["Get Location"].onoff_button(status)
-        self.config.state.set_value("GB", status, force_apply=True)
-
-    def onoff_gadgetbridge_gps(self):
-        status = self.config.ble_uart.on_off_gadgetbridge_gps()
-        self.buttons["Get Location"].change_toggle(status)
-        self.config.state.set_value("GB_gps", status, force_apply=True)
 
 
 class DebugMenuWidget(MenuWidget):
@@ -122,7 +99,7 @@ class DebugMenuWidget(MenuWidget):
                 "Disable Wifi/BT",
                 "dialog",
                 lambda: self.config.gui.show_dialog(
-                    partial(self.config.hardware_wifi_bt, False),
+                    partial(self.config.network.hardware_wifi_bt, False),
                     "Disable Wifi/BT\n(need reboot)",
                 ),
             ),
@@ -130,7 +107,7 @@ class DebugMenuWidget(MenuWidget):
                 "Enable Wifi/BT",
                 "dialog",
                 lambda: self.config.gui.show_dialog(
-                    partial(self.config.hardware_wifi_bt, True),
+                    partial(self.config.network.hardware_wifi_bt, True),
                     "Enable Wifi/BT\n(need reboot)",
                 ),
             ),
@@ -185,11 +162,12 @@ class BluetoothTetheringListWidget(ListWidget):
 
     async def button_func_extra(self):
         self.config.G_BT_USE_ADDRESS = self.selected_item.title_label.text()
-        # save for restart
-        self.config.state.set_value("G_BT_USE_ADDRESS", self.config.G_BT_USE_ADDRESS)
+        self.config.state.set_value(
+            "G_BT_USE_ADDRESS", self.config.G_BT_USE_ADDRESS, force_apply=True
+        )
 
         if self.run_bt_tethering:
-            await self.config.bluetooth_tethering()
+            await self.config.network.bluetooth_tethering()
 
 
 class DebugLogViewerWidget(MenuWidget):
