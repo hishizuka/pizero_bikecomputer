@@ -226,6 +226,9 @@ class LoggerCore:
       altitude FLOAT,
       course_altitude FLOAT,
       dem_altitude FLOAT,
+      wind_speed FLOAT,
+      wind_direction INT,
+      headwind FLOAT,
       heading INTEGER,
       motion INTEGER,
       acc_x FLOAT,
@@ -306,9 +309,9 @@ class LoggerCore:
         time_str = datetime.now().strftime("%Y%m%d %H:%M:%S")
         popup_extra = ""
         pre_status = self.config.G_MANUAL_STATUS
+        display_flash_short = True
 
         if self.config.G_MANUAL_STATUS != "START":
-            self.config.display.screen_flash_short()
             app_logger.info(f"->M START {time_str}")
             self.start_and_stop("STOP")
             self.config.G_MANUAL_STATUS = "START"
@@ -330,7 +333,7 @@ class LoggerCore:
                 )
 
         elif self.config.G_MANUAL_STATUS == "START":
-            self.config.display.screen_flash_long()
+            display_flash_short = False
             app_logger.info(f"->M STOP  {time_str}")
             self.start_and_stop("START")
             self.config.G_MANUAL_STATUS = "STOP"
@@ -346,7 +349,11 @@ class LoggerCore:
             self.config.api.send_livetrack_data(quick_send=True)
 
         # show message
-        self.config.gui.show_popup(self.config.G_MANUAL_STATUS + popup_extra)
+        self.config.gui.show_popup(self.config.G_MANUAL_STATUS + popup_extra, 3)
+        if display_flash_short:
+            self.config.display.screen_flash_short()
+        else:
+            self.config.display.screen_flash_long()
 
     def start_and_stop(self, status=None):
         if status is not None:
@@ -362,7 +369,6 @@ class LoggerCore:
     def count_laps(self):
         if self.values["count"] == 0 or self.values["count_lap"] == 0:
             return
-        self.config.display.screen_flash_short()
         lap_time = self.values["count_lap"]
         self.values["lap"] += 1
         self.values["count_lap"] = 0
@@ -400,7 +406,9 @@ class LoggerCore:
                 self.record_stats["pre_lap_avg"]["heart_rate"],
                 self.record_stats["pre_lap_avg"]["power"],
             ),
+            10
         )
+        self.config.display.screen_flash_short()
 
     def get_start_end_dates(self):
         # get start date and end_date of the current log
@@ -617,7 +625,7 @@ class LoggerCore:
         ?,?,?,?,?,\
         ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,\
         ?,?,?,?,?,?,\
-        ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,\
+        ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,\
         ?,?,?,?,?,?,?,?,\
         ?,?,?,?,\
         ?,?,?,?,?,?,?,?\
@@ -660,6 +668,9 @@ class LoggerCore:
                 self.sensor.values["I2C"]["altitude"],
                 self.course.index.altitude,
                 value["dem_altitude"],
+                value["wind_speed"],
+                value["wind_direction"],
+                value["headwind"],
                 self.sensor.values["I2C"]["heading"],
                 self.sensor.values["I2C"]["m_stat"],
                 # self.sensor.values['I2C']['acc'][0],

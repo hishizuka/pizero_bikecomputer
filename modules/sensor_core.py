@@ -22,6 +22,7 @@ from .sensor.sensor_ant import SensorANT
 from .sensor.sensor_gpio import SensorGPIO
 from .sensor.sensor_i2c import SensorI2C
 
+
 # Todo: BLE
 
 
@@ -49,6 +50,10 @@ class SensorCore:
         "grade_spd",
         "glide_ratio",
         "dem_altitude",
+        "wind_speed",
+        "wind_direction",
+        "wind_direction_str",
+        "headwind",
         "temperature",
         "cpu_percent",
         "send_time",
@@ -374,12 +379,24 @@ class SensorCore:
                         if dst_diff["ANT+"] > 0:
                             alt_diff_spd["ANT+"] = alt - pre_alt_spd["ANT+"]
                         pre_alt_spd["ANT+"] = alt
+
                 # dem_altitude
-                if self.config.G_LOG_ALTITUDE_FROM_DATA_SOURCE:
+                if self.config.G_USE_DEM_TILE:
                     self.values["integrated"][
                         "dem_altitude"
-                    ] = await self.config.get_altitude_from_tile(
+                    ] = await self.config.api.get_altitude(
                         [v["GPS"]["lon"], v["GPS"]["lat"]]
+                    )
+
+                # wind
+                if self.config.G_USE_WIND_OVERLAY_MAP:
+                    (
+                        self.values["integrated"]["wind_speed"], 
+                        self.values["integrated"]["wind_direction"],
+                        self.values["integrated"]["wind_direction_str"],
+                        self.values["integrated"]["headwind"]
+                    ) = await self.config.api.get_wind(
+                        [v["GPS"]["lon"], v["GPS"]["lat"]], v["GPS"]["track"]
                     )
 
                 # grade (distance base)

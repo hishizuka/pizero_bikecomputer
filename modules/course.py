@@ -2,6 +2,8 @@ import os
 import json
 import re
 import shutil
+from datetime import datetime, timedelta
+import asyncio
 
 import oyaml
 import numpy as np
@@ -11,6 +13,7 @@ from logger import app_logger
 from modules.loaders import TcxLoader
 from modules.utils.filters import savitzky_golay
 from modules.utils.geo import calc_azimuth, get_dist_on_earth, get_dist_on_earth_array
+from modules.utils.network import detect_network
 from modules.utils.timer import Timer, log_timers
 
 POLYLINE_DECODER = False
@@ -103,6 +106,13 @@ class Course:
     # [start_index, end_index, distance, average_grade, volume(=dist*average), cat]
     climb_segment = []
 
+    # for wind
+    #wind_distance = []
+    wind_coordinates = []
+    wind_timeline = []
+    wind_speed = []
+    wind_direction = []
+
     html_remove_pattern = [
         re.compile(r"\<div.+?\<\/div\>"),
         re.compile(r"\<.+?\>"),
@@ -142,6 +152,11 @@ class Course:
         self.slope_smoothing = np.array([])
         self.colored_altitude = np.array([])
         self.climb_segment = []
+        #self.wind_distance = []
+        self.wind_coordinates = []
+        self.wind_timeline = []
+        self.wind_speed = []
+        self.wind_direction = []
 
         if self.course_points:
             self.course_points.reset()
@@ -170,6 +185,7 @@ class Course:
             Timer(auto_start=False, text="downsample          : {0:.3f} sec"),
             Timer(auto_start=False, text="calc_slope_smoothing: {0:.3f} sec"),
             Timer(auto_start=False, text="modify_course_points: {0:.3f} sec"),
+            Timer(auto_start=False, text="get_course_wind     : {0:.3f} sec"),
         ]
 
         with timers[0]:
@@ -208,6 +224,9 @@ class Course:
 
         with timers[3]:
             self.modify_course_points()
+
+        with timers[4]:
+            asyncio.create_task(self.get_course_wind())
 
         app_logger.info("[logger] Loading course:")
         log_timers(timers, text_total="total               : {0:.3f} sec")
@@ -333,9 +352,12 @@ class Course:
             self.config.api.send_livetrack_course_load()
 
     async def get_google_route(self, x1, y1, x2, y2):
+        if not POLYLINE_DECODER:
+            return
+
         json_routes = await self.config.api.get_google_routes(x1, y1, x2, y2)
 
-        if not POLYLINE_DECODER or json_routes is None or json_routes["status"] != "OK":
+        if json_routes is None or json_routes["status"] != "OK":
             return
 
         self.info["Name"] = "Google routes"
@@ -475,7 +497,7 @@ class Course:
             # output dem altitude
             # alt_dem = np.zeros(len(self.altitude))
             # for i in range(len(self.altitude)):
-            #  alt_dem[i] = self.config.get_altitude_from_tile([self.longitude[i], self.latitude[i]])
+            #  alt_dem[i] = self.config.api.get_altitude([self.longitude[i], self.latitude[i]])
             # np.savetxt('log/course_altitude_dem.csv', alt_dem, fmt='%.3f')
 
         diff_dist_max = int(np.max(dist_diff)) * 2 / 1000  # [m->km]
@@ -850,6 +872,38 @@ class Course:
                 course_points.altitude = np.append(
                     course_points.altitude, self.altitude[-1]
                 )
+
+    async def get_course_wind(self):
+        if not self.is_set or not detect_network():
+            return
+        
+        current_time = datetime.utcnow()
+        self.wind_coordinates.append([self.longitude[0], self.latitude[0]])
+        self.wind_timeline.append(current_time)
+
+        dist = self.config.G_GROSS_AVE_SPEED
+        index = 0
+        while dist < self.distance[-1]:
+            index += np.argmin(np.abs(self.distance[index:] - dist))
+            self.wind_coordinates.append([self.longitude[index], self.latitude[index]])
+            current_time += timedelta(hours=1)
+            self.wind_timeline.append(current_time)
+            dist += self.config.G_GROSS_AVE_SPEED
+        
+        rest_dist = int(self.distance[-1]%self.config.G_GROSS_AVE_SPEED)
+        if rest_dist > 0:
+            self.wind_coordinates.append([self.longitude[-1], self.latitude[-1]])
+            current_time += timedelta(hours=rest_dist/self.config.G_GROSS_AVE_SPEED)
+            self.wind_timeline.append(current_time)
+
+        #self.wind_speed, self.wind_direction = await self.config.logger.sensor.maptile_with_values.get_wind(
+        #    self.wind_coordinates, 
+        #    self.wind_timeline,
+        #    self.config.G_WIND_OVERLAY_MAP_CONFIG[
+        #        self.config.G_WIND_OVERLAY_MAP
+        #    ],
+        #    self.config.G_WIND_OVERLAY_MAP,
+        #)
 
     def get_index(self, lat, lon, track, search_range, on_route_cutoff, azimuth_cutoff):
         if not self.config.G_COURSE_INDEXING:

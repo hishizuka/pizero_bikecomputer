@@ -57,6 +57,12 @@ class GUI_Config:
             G_UNIT["Power"],
             "self.sensor.values['integrated']['ave_power_60s']",
         ),
+        "WindSpeed": ("{:.1f}m/s", "self.sensor.values['integrated']['wind_speed']"),
+        "WindDir": (
+            G_UNIT["String"], 
+            "self.sensor.values['integrated']['wind_direction_str']"
+        ),
+        "HeadWind": ("{:.1f}m/s", "self.sensor.values['integrated']['headwind']"),
         # GPS raw
         "Latitude": (G_UNIT["Position"], "self.sensor.values['GPS']['lat']"),
         "Longitude": (G_UNIT["Position"], "self.sensor.values['GPS']['lon']"),
