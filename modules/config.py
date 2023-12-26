@@ -1,7 +1,6 @@
 import argparse
 import asyncio
-import datetime
-import json
+from datetime import datetime
 import logging
 import os
 import shutil
@@ -9,22 +8,22 @@ from glob import glob
 
 import numpy as np
 import oyaml as yaml
-from PIL import Image
 
 
 from logger import CustomRotatingFileHandler, app_logger
+from modules.map_config import add_map_config
 from modules.helper.setting import Setting
 from modules.button_config import Button_Config
 from modules.state import AppState
 from modules.utils.cmd import (
     exec_cmd,
-    exec_cmd_return_value,
     is_running_as_service,
 )
-from modules.utils.map import get_maptile_filename, get_tilexy_and_xy_in_tile
+from modules.utils.map import (
+    remove_maptiles
+)
 from modules.utils.timer import Timer
 
-BOOT_FILE = "/boot/config.txt"
 _IS_RASPI = False
 try:
     import RPi.GPIO as GPIO
@@ -55,9 +54,6 @@ class Config:
 
     # average including ZERO when logging
     G_AVERAGE_INCLUDING_ZERO = {"cadence": False, "power": True}
-
-    # log several altitudes (from DEM and course file)
-    G_LOG_ALTITUDE_FROM_DATA_SOURCE = False
 
     # calculate index on course
     G_COURSE_INDEXING = True
@@ -101,204 +97,35 @@ class Config:
     # log setting
     G_LOG_DIR = "log"
     G_LOG_DB = os.path.join(G_LOG_DIR, "log.db")
+    G_LOG_OUTPUT_FILE = False
     G_LOG_DEBUG_FILE = os.path.join(G_LOG_DIR, "debug.log")
-
-    # asyncio semaphore
-    G_COROUTINE_SEM = 100
 
     # map setting
     # default map (can overwrite in settings.conf)
-    G_MAP = "toner"
-    G_MAP_CONFIG = {
-        # toner is deleted because API key is now needed.
-        # "toner": {
-        #    "url": "https://tiles.stadiamaps.com/tiles/stamen_toner/{z}/{x}/{y}.png?api_key=YOUR_API_KEY"
-        #    "attribution": "Map tiles by Stamen Design, under CC BY 3.0.<br />Data by OpenStreetMap, under ODbL",
-        #    "tile_size": 256,
-        #},
-
-        # basic map
-        "wikimedia": {
-            "url": "https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png",
-            "attribution": "© OpenStreetMap contributors",
-            "referer": "https://maps.wikimedia.org/",
-            "tile_size": 256,
-        },
-        "wikimedia_2x": {
-            "url": "https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}@2x.png",
-            "attribution": "© OpenStreetMap contributors",
-            "referer": "https://maps.wikimedia.org/",
-            "tile_size": 512,
-        },
-        # japanese tile
-        "jpn_kokudo_chiri_in": {
-            "url": "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
-            "attribution": "国土地理院",
-            "tile_size": 256,
-        },
-    }
-
-    G_HEATMAP_OVERLAY_MAP_CONFIG = {
-        "rwg_heatmap": {
-            # start_color: low, white(FFFFFF) is recommended.
-            # end_color: high, any color you like.
-            "url": "https://heatmap.ridewithgps.com/normalized/{z}/{x}/{y}.png?start_color=%23FFFFFF&end_color=%23FF8800",
-            "attribution": "Ride with GPS",
-            "tile_size": 256,
-            "max_zoomlevel": 16,
-            "min_zoomlevel": 10,
-        },
-        # strava heatmap
-        # https://wiki.openstreetmap.org/wiki/Strava
-        # bluered / hot / blue / purple / gray
-        "strava_heatmap_bluered": {
-            "url": "https://heatmap-external-b.strava.com/tiles-auth/ride/bluered/{z}/{x}/{y}.png?px=256&Key-Pair-Id={key_pair_id}&Policy={policy}&Signature={signature}",
-            "attribution": "STRAVA",
-            "tile_size": 256,
-            "max_zoomlevel": 16,
-            "min_zoomlevel": 10,
-        },
-        "strava_heatmap_hot": {
-            "url": "https://heatmap-external-b.strava.com/tiles-auth/ride/hot/{z}/{x}/{y}.png?px=256&Key-Pair-Id={key_pair_id}&Policy={policy}&Signature={signature}",
-            "attribution": "STRAVA",
-            "tile_size": 256,
-            "max_zoomlevel": 16,
-            "min_zoomlevel": 10,
-        },
-        "strava_heatmap_blue": {
-            "url": "https://heatmap-external-b.strava.com/tiles-auth/ride/blue/{z}/{x}/{y}.png?px=256&Key-Pair-Id={key_pair_id}&Policy={policy}&Signature={signature}",
-            "attribution": "STRAVA",
-            "tile_size": 256,
-            "max_zoomlevel": 16,
-            "min_zoomlevel": 10,
-        },
-        "strava_heatmap_purple": {
-            "url": "https://heatmap-external-b.strava.com/tiles-auth/ride/purple/{z}/{x}/{y}.png?px=256&Key-Pair-Id={key_pair_id}&Policy={policy}&Signature={signature}",
-            "attribution": "STRAVA",
-            "tile_size": 256,
-            "max_zoomlevel": 16,
-            "min_zoomlevel": 10,
-        },
-        "strava_heatmap_gray": {
-            "url": "https://heatmap-external-b.strava.com/tiles-auth/ride/gray/{z}/{x}/{y}.png?px=256&Key-Pair-Id={key_pair_id}&Policy={policy}&Signature={signature}",
-            "attribution": "STRAVA",
-            "tile_size": 256,
-            "max_zoomlevel": 16,
-            "min_zoomlevel": 10,
-        },
-    }
-
-    G_RAIN_OVERLAY_MAP_CONFIG = {
-        # worldwide rain tile
-        "rainviewer": {
-            "url": "https://tilecache.rainviewer.com/v2/radar/{basetime}/256/{z}/{x}/{y}/6/1_1.png",
-            "attribution": "RainViewer",
-            "tile_size": 256,
-            "max_zoomlevel": 18,
-            "min_zoomlevel": 1,
-            "time_list": "https://api.rainviewer.com/public/weather-maps.json",
-            "nowtime": None,
-            "nowtime_func": datetime.datetime.now,  # local?
-            "basetime": None,
-            "time_interval": 10,  # [minutes]
-            "update_minutes": 1,  # typically int(time_interval/2) [minutes]
-            "time_format": "unix_timestamp",
-        },
-        # japanese rain tile
-        "jpn_jma_bousai": {
-            "url": "https://www.jma.go.jp/bosai/jmatile/data/nowc/{basetime}/none/{validtime}/surf/hrpns/{z}/{x}/{y}.png",
-            "attribution": "Japan Meteorological Agency",
-            "tile_size": 256,
-            "max_zoomlevel": 10,
-            "min_zoomlevel": 4,
-            "past_time_list": "https://www.jma.go.jp/bosai/jmatile/data/nowc/targetTimes_N1.json",
-            "forcast_time_list": "https://www.jma.go.jp/bosai/jmatile/data/nowc/targetTimes_N2.json",
-            "nowtime": None,
-            "nowtime_func": datetime.datetime.utcnow,
-            "basetime": None,
-            "validtime": None,
-            "time_interval": 5,  # [minutes]
-            "update_minutes": 1,  # [minutes]
-            "time_format": "%Y%m%d%H%M%S",
-        },
-    }
-
-    G_WIND_OVERLAY_MAP_CONFIG = {
-        # worldwide wind tile
-        # https://weather.openportguide.de/index.php/en/weather-forecasts/weather-tiles
-        "openportguide": {
-            "url": "https://weather.openportguide.de/tiles/actual/wind_stream/0h/{z}/{x}/{y}.png",
-            "attribution": "openportguide",
-            "tile_size": 256,
-            "max_zoomlevel": 7,
-            "min_zoomlevel": 0,
-            "nowtime": None,
-            "nowtime_func": datetime.datetime.utcnow,
-            "basetime": None,
-            "validtime": None,
-            "time_interval": 60,  # [minutes]
-            "update_minutes": 30,  # [minutes]
-            "time_format": "%H%MZ%d%b%Y",
-        },
-        # japanese wind tile
-        "jpn_scw": {
-            "url": "https://{subdomain}.supercweather.com/tl/msm/{basetime}/{validtime}/wa/{z}/{x}/{y}.png",
-            "attribution": "SCW",
-            "tile_size": 256,
-            "max_zoomlevel": 8,
-            "min_zoomlevel": 8,
-            "inittime": "https://k2.supercweather.com/tl/msm/initime.json?rand={rand}",
-            "fl": "https://k2.supercweather.com/tl/msm/{basetime}/fl.json?rand={rand}",
-            "nowtime": None,
-            "nowtime_func": datetime.datetime.utcnow,
-            "timeline": None,
-            "basetime": None,
-            "validtime": None,
-            "subdomain": None,
-            "time_interval": 60,  # [minutes]
-            "update_minutes": 30,  # [minutes]
-            "time_format": "%H%MZ%d%b%Y",  # need upper()
-            "referer": "https://supercweather.com/",
-        },
-    }
-
-    G_DEM_MAP_CONFIG = {
-        # worldwide DEM(Digital Elevation Model) map
-        # japanese DEM(Digital Elevation Model) map
-        "jpn_kokudo_chiri_in_DEM5A": {
-            "url": "https://cyberjapandata.gsi.go.jp/xyz/dem5a_png/{z}/{x}/{y}.png",  # DEM5A
-            "attribution": "国土地理院",
-            "fix_zoomlevel": 15,
-        },
-        "jpn_kokudo_chiri_in_DEM5B": {
-            "url": "https://cyberjapandata.gsi.go.jp/xyz/dem5b_png/{z}/{x}/{y}.png",  # DEM5B
-            "attribution": "国土地理院",
-            "fix_zoomlevel": 15,
-        },
-        "jpn_kokudo_chiri_in_DEM5C": {
-            "url": "https://cyberjapandata.gsi.go.jp/xyz/dem5c_png/{z}/{x}/{y}.png",  # DEM5C
-            "attribution": "国土地理院",
-            "fix_zoomlevel": 15,
-        },
-        "jpn_kokudo_chiri_in_DEM10B": {
-            "url": "https://cyberjapandata.gsi.go.jp/xyz/dem_png/{z}/{x}/{y}.png",  # DEM10B
-            "attribution": "国土地理院",
-            "fix_zoomlevel": 14,
-        },
-    }
+    G_MAP = "wikimedia"
+    G_MAP_CONFIG = {}
     # external input of G_MAP_CONFIG
     G_MAP_LIST = "map.yaml"
 
     # overlay map
     G_USE_HEATMAP_OVERLAY_MAP = False
     G_HEATMAP_OVERLAY_MAP = "rwg_heatmap"
+    G_HEATMAP_OVERLAY_MAP_CONFIG = {}
     G_USE_RAIN_OVERLAY_MAP = False
     G_RAIN_OVERLAY_MAP = "rainviewer"
+    G_RAIN_OVERLAY_MAP_CONFIG = {}
     G_USE_WIND_OVERLAY_MAP = False
     G_WIND_OVERLAY_MAP = "openportguide"
+    G_WIND_OVERLAY_MAP_CONFIG = {}
 
     # DEM tile (Digital Elevation Model)
-    G_DEM_MAP = "jpn_kokudo_chiri_in_DEM5A"
+    G_USE_DEM_TILE = False
+    G_DEM_MAP = "jpn_kokudo_chiri_in_DEM5A" #mapbox_terrain_rgb, jpn_kokudo_chiri_in_DEM5A
+    G_DEM_MAP_CONFIG = {}
+
+    # wind speed, direction and headwind
+    G_USE_WIND_DATA_SOURCE = True
+    G_WIND_DATA_SOURCE = "openmeteo" #openmeteo(worldwide), jpn_scw(japan)
 
     # screenshot dir
     G_SCREENSHOT_DIR = "screenshots"
@@ -352,31 +179,13 @@ class Config:
             "TEMP": "Temperature",
         },
         "ID": {
-            "HR": 0,
-            "SPD": 0,
-            "CDC": 0,
-            "PWR": 0,
-            "LGT": 0,
-            "CTRL": 0,
-            "TEMP": 0,
+            "HR": 0, "SPD": 0, "CDC": 0, "PWR": 0, "LGT": 0, "CTRL": 0, "TEMP": 0,
         },
         "TYPE": {
-            "HR": 0,
-            "SPD": 0,
-            "CDC": 0,
-            "PWR": 0,
-            "LGT": 0,
-            "CTRL": 0,
-            "TEMP": 0,
+            "HR": 0, "SPD": 0, "CDC": 0, "PWR": 0, "LGT": 0, "CTRL": 0, "TEMP": 0,
         },
         "ID_TYPE": {
-            "HR": 0,
-            "SPD": 0,
-            "CDC": 0,
-            "PWR": 0,
-            "LGT": 0,
-            "CTRL": 0,
-            "TEMP": 0,
+            "HR": 0, "SPD": 0, "CDC": 0, "PWR": 0, "LGT": 0, "CTRL": 0, "TEMP": 0,
         },
         "TYPES": {
             "HR": (0x78,),
@@ -479,6 +288,7 @@ class Config:
     # for keeping on course seconds
     G_GPS_KEEP_ON_COURSE_CUTOFF = int(60 / G_GPS_INTERVAL)  # [s]
 
+    G_UPLOAD_FILE = ""
     # STRAVA token (need to write setting.conf manually)
     G_STRAVA_API_URL = {
         "OAUTH": "https://www.strava.com/oauth/token",
@@ -498,32 +308,6 @@ class Config:
         "POLICY": "",
         "SIGNATURE": "",
     }
-    G_UPLOAD_FILE = ""
-
-    G_GOOGLE_DIRECTION_API = {
-        "TOKEN": "",
-        "HAVE_API_TOKEN": False,
-        "URL": "https://maps.googleapis.com/maps/api/directions/json?units=metric",
-        "API_MODE": {
-            "bicycling": "mode=bicycling",
-            "driving": "mode=driving&avoid=tolls|highways",
-        },
-        "API_MODE_SETTING": "bicycling",
-    }
-
-    G_MAPSTOGPX = {
-        "URL": "https://mapstogpx.com/load.php?d=default&elev=off&tmode=off&pttype=fixed&o=json&cmt=off&desc=off&descasname=off&w=on",
-        "HEADER": {"Referer": "https://mapstogpx.com/index.php"},
-        "ROUTE_URL": "",
-        "TIMEOUT": 30,
-    }
-
-    G_OPENWEATHERMAP_API = {
-        "TOKEN": "",
-        "HAVE_API_TOKEN": False,
-        "URL": "http://api.openweathermap.org/data/2.5/weather",
-    }
-
     G_RIDEWITHGPS_API = {
         "APIKEY": "pizero_bikecomputer",
         "TOKEN": "",
@@ -543,11 +327,32 @@ class Config:
             "auth_token": None,
         },
     }
-
     G_GARMINCONNECT_API = {
         "EMAIL": "",
         "PASSWORD": "",
         "URL_UPLOAD_DIFF": "proxy/upload-service/upload/.fit",  # https://connect.garmin.com/modern/proxy/upload-service/upload/.fit
+    }
+
+    G_GOOGLE_DIRECTION_API = {
+        "TOKEN": "",
+        "HAVE_API_TOKEN": False,
+        "URL": "https://maps.googleapis.com/maps/api/directions/json?units=metric",
+        "API_MODE": {
+            "bicycling": "mode=bicycling",
+            "driving": "mode=driving&avoid=tolls|highways",
+        },
+        "API_MODE_SETTING": "bicycling",
+    }
+    G_MAPSTOGPX = {
+        "URL": "https://mapstogpx.com/load.php?d=default&elev=off&tmode=off&pttype=fixed&o=json&cmt=off&desc=off&descasname=off&w=on",
+        "HEADER": {"Referer": "https://mapstogpx.com/index.php"},
+        "ROUTE_URL": "",
+        "TIMEOUT": 30,
+    }
+
+    G_OPENMETEO_API = {
+        "URL" : "https://api.open-meteo.com/v1/forecast",
+        "INTERVAL_SEC": 300,
     }
 
     G_THINGSBOARD_API = {
@@ -556,8 +361,6 @@ class Config:
         "SERVER": "demo.thingsboard.io",
         "TOKEN": "",
         "INTERVAL_SEC": 120,
-        "TIMEOUT_SEC": 15,
-        "AUTO_UPLOAD_VIA_BT": False,
     }
 
     # IMU axis conversion
@@ -578,6 +381,7 @@ class Config:
     # Bluetooth tethering
     G_BT_ADDRESSES = {}
     G_BT_USE_ADDRESS = ""
+    G_AUTO_BT_TETHERING = False
 
     #######################
     # class objects       #
@@ -607,6 +411,7 @@ class Config:
         parser.add_argument("--version", action="version", version="%(prog)s 0.1")
         parser.add_argument("--layout")
         parser.add_argument("--headless", action="store_true", default=False)
+        parser.add_argument("--output_log", action="store_true", default=False)
 
         args = parser.parse_args()
 
@@ -621,20 +426,34 @@ class Config:
             self.G_LAYOUT_FILE = args.layout
         if args.headless:
             self.G_HEADLESS = True
+        if args.output_log:
+            self.G_LOG_OUTPUT_FILE = True
 
         # read setting.conf and state.pickle
         self.setting = Setting(self)
         self.state = AppState()
 
+        #add map settings
+        add_map_config(self)
+
+        # add test settings
+        try:
+            from modules.test_code.test_code import add_test_config
+            add_test_config(self)
+        except:
+            pass
+
         # make sure all folders exist
         os.makedirs(self.G_SCREENSHOT_DIR, exist_ok=True)
         os.makedirs(self.G_LOG_DIR, exist_ok=True)
 
-        if self.G_LOG_DEBUG_FILE:
+        if self.G_LOG_OUTPUT_FILE and self.G_LOG_DEBUG_FILE:
             delay = not os.path.exists(self.G_LOG_DEBUG_FILE)
             fh = CustomRotatingFileHandler(self.G_LOG_DEBUG_FILE, delay=delay)
             fh.doRollover()
-            fh_formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+            fh_formatter = logging.Formatter(
+                "%(asctime)s %(levelname)s %(message)s", "%Y-%m-%d %H:%M:%S"
+            )
             fh.setFormatter(fh_formatter)
             app_logger.addHandler(fh)
 
@@ -666,7 +485,6 @@ class Config:
             os.path.join("maptile", f"{self.G_MAP}.mbtiles")
         ):
             self.G_MAP_CONFIG[self.G_MAP]["use_mbtiles"] = False
-        self.loaded_dem = None
 
         self.check_map_dir()
 
@@ -687,7 +505,7 @@ class Config:
         # coroutine loop
         self.init_loop()
 
-        self.log_time = datetime.datetime.now()
+        self.log_time = datetime.now()
 
         self.button_config = Button_Config(self)
 
@@ -740,6 +558,21 @@ class Config:
                 if is_available:
                     self.G_BT_ADDRESSES = await self.bt_pan.find_bt_pan_devices()
 
+            # resume BT tethering
+            self.G_BT_USE_ADDRESS = self.state.get_value(
+                "G_BT_USE_ADDRESS", self.G_BT_USE_ADDRESS
+            )
+            self.G_AUTO_BT_TETHERING = self.state.get_value(
+                "G_AUTO_BT_TETHERING", self.G_AUTO_BT_TETHERING
+            )
+            if self.G_BT_USE_ADDRESS and not self.G_AUTO_BT_TETHERING:
+                await self.network.bluetooth_tethering()
+
+        # resume ThingsBoard
+        self.G_THINGSBOARD_API["STATUS"] = self.state.get_value(
+            "G_THINGSBOARD_API_STATUS", self.G_THINGSBOARD_API["STATUS"]
+        )
+
         # logger, sensor
         await self.gui.set_boot_status("initialize sensor...")
         self.logger.delay_init()
@@ -768,24 +601,6 @@ class Config:
 
         if self.G_HEADLESS:
             asyncio.create_task(self.keyboard_check())
-
-        # resume BT / thingsboard
-        if self.G_IS_RASPI:
-            self.G_BT_USE_ADDRESS = self.state.get_value(
-                "G_BT_USE_ADDRESS", self.G_BT_USE_ADDRESS
-            )
-            self.G_THINGSBOARD_API["STATUS"] = self.state.get_value(
-                "G_THINGSBOARD_API_STATUS", self.G_THINGSBOARD_API["STATUS"]
-            )
-            self.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"] = self.state.get_value(
-                "AUTO_UPLOAD_VIA_BT", self.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"]
-            )
-            # resume BT tethering
-            if (
-                self.G_BT_USE_ADDRESS
-                and not self.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"]
-            ):
-                await self.bluetooth_tethering()
 
         delta = t.stop()
         self.boot_time += delta
@@ -842,8 +657,18 @@ class Config:
         os.makedirs(os.path.join("maptile", self.G_RAIN_OVERLAY_MAP), exist_ok=True)
         os.makedirs(os.path.join("maptile", self.G_WIND_OVERLAY_MAP), exist_ok=True)
 
-        if self.G_LOG_ALTITUDE_FROM_DATA_SOURCE:
+        if self.G_USE_DEM_TILE:
             os.makedirs(os.path.join("maptile", self.G_DEM_MAP), exist_ok=True)
+    
+    def delete_weather_overlay_tiles(self):
+        remove_maptiles(
+            self.G_RAIN_OVERLAY_MAP,
+            self.G_RAIN_OVERLAY_MAP_CONFIG[self.G_RAIN_OVERLAY_MAP]["basetime"]
+        )
+        remove_maptiles(
+            self.G_WIND_OVERLAY_MAP,
+            self.G_WIND_OVERLAY_MAP_CONFIG[self.G_WIND_OVERLAY_MAP]["basetime"]
+        )
 
     def get_serial(self):
         if not self.G_IS_RASPI:
@@ -869,12 +694,6 @@ class Config:
         app_logger.info(
             f"{self.G_UNIT_MODEL}({self.G_UNIT_HARDWARE}), serial:{hex(self.G_UNIT_ID_HEX)}"
         )
-
-    def press_button(self, button_hard, press_button, index):
-        self.button_config.press_button(button_hard, press_button, index)
-
-    def change_mode(self):
-        self.button_config.change_mode()
 
     async def kill_tasks(self):
         tasks = asyncio.all_tasks()
@@ -907,6 +726,8 @@ class Config:
         self.setting.write_config()
         self.state.delete()
 
+        self.delete_weather_overlay_tiles()
+
         await asyncio.sleep(0.5)
         await self.kill_tasks()
         self.logger.remove_handler()
@@ -938,163 +759,9 @@ class Config:
         if self.G_IS_RASPI:
             exec_cmd(["sudo", "systemctl", "restart", "pizero_bikecomputer"])
 
-    def hardware_wifi_bt(self, status):
-        app_logger.info(f"Hardware Wifi/BT: {status}")
-        if self.G_IS_RASPI:
-            with open(BOOT_FILE, "r") as f:
-                data = f.read()
-            for dev in ["wifi", "bt"]:
-                disable = f"dtoverlay=disable-{dev}"
-                if status:
-                    if disable in data and f"#{disable}" not in data:
-                        # comment it
-                        exec_cmd(
-                            [
-                                "sudo",
-                                "sed",
-                                "-i",
-                                rf"s/^dtoverlay\=disable\-{dev}/\#dtoverlay\=disable\-{dev}/",
-                                BOOT_FILE,
-                            ],
-                            False,
-                        )
-                    # else nothing to do it's not disabled then (not present or commented)
-                else:
-                    if f"#{disable}" in data:
-                        # uncomment it, so it's disabled
-                        exec_cmd(
-                            [
-                                "sudo",
-                                "sed",
-                                "-i",
-                                rf"s/^\#dtoverlay\=disable\-{dev}/dtoverlay\=disable\-{dev}/",
-                                BOOT_FILE,
-                            ],
-                            False,
-                        )
-                    elif disable in data:
-                        # do nothing it's already the proper state...
-                        pass
-                    else:
-                        exec_cmd(
-                            ["sudo", "sed", "-i", f"$a{disable}", BOOT_FILE], False
-                        )
-            # UART configuration will change if we disable bluetooth
-            # https://www.raspberrypi.com/documentation/computers/configuration.html#primary-and-secondary-uart
-            if status:
-                exec_cmd(
-                    [
-                        "sudo",
-                        "sed",
-                        "-i",
-                        "-e",
-                        r's/^\#DEVICES\="\/dev\/ttyS0"/DEVICES\="\/dev\/ttyS0"/',
-                        "/etc/default/gpsd",
-                    ],
-                    False,
-                )
-                exec_cmd(
-                    [
-                        "sudo",
-                        "sed",
-                        "-i",
-                        "-e",
-                        r's/^DEVICES\="\/dev\/ttyAMA0"/\#DEVICES\="\/dev\/ttyAMA0"/',
-                        "/etc/default/gpsd",
-                    ],
-                    False,
-                )
-            else:
-                exec_cmd(
-                    [
-                        "sudo",
-                        "sed",
-                        "-i",
-                        "-e",
-                        r's/^DEVICES\="\/dev\/ttyS0"/\#DEVICES\="\/dev\/ttyS0"/',
-                        "/etc/default/gpsd",
-                    ],
-                    False,
-                )
-                exec_cmd(
-                    [
-                        "sudo",
-                        "sed",
-                        "-i",
-                        "-e",
-                        r's/^\#DEVICES\="\/dev\/ttyAMA0"/DEVICES\="\/dev\/ttyAMA0"/',
-                        "/etc/default/gpsd",
-                    ],
-                    False,
-                )
-
-    def get_wifi_bt_status(self):
-        if not self.G_IS_RASPI:
-            return False, False
-
-        status = {"wlan": False, "bluetooth": False}
-        try:
-            # json option requires raspbian buster
-            raw_status = exec_cmd_return_value(
-                ["sudo", "rfkill", "--json"], cmd_print=False
-            )
-            json_status = json.loads(raw_status)
-            # "": Raspberry Pi OS, "rfkilldevices":
-            self.parse_wifi_bt_json(json_status, status, ["", "rfkilldevices"])
-        except Exception as e:
-            app_logger.warning(f"Exception occurred trying to get wifi/bt status: {e}")
-        return status["wlan"], status["bluetooth"]
-
-    def parse_wifi_bt_json(self, json_status, status, keys):
-        get_status = False
-        for k in keys:
-            if k not in json_status:
-                continue
-            for device in json_status[k]:
-                if "type" not in device or device["type"] not in ["wlan", "bluetooth"]:
-                    continue
-                if device["soft"] == "unblocked" and device["hard"] == "unblocked":
-                    status[device["type"]] = True
-                    get_status = True
-            if get_status:
-                return
-
-    def onoff_wifi_bt(self, key=None):
-        # in the future, manage with pycomman
-        if not self.G_IS_RASPI:
-            return
-
-        onoff_cmd = {
-            "Wifi": {
-                True: ["sudo", "rfkill", "block", "wifi"],
-                False: ["sudo", "rfkill", "unblock", "wifi"],
-            },
-            "Bluetooth": {
-                True: ["sudo", "rfkill", "block", "bluetooth"],
-                False: ["sudo", "rfkill", "unblock", "bluetooth"],
-            },
-        }
-        status = {}
-        status["Wifi"], status["Bluetooth"] = self.get_wifi_bt_status()
-        exec_cmd(onoff_cmd[key][status[key]])
-
-    async def bluetooth_tethering(self, disconnect=False):
-        if not self.G_IS_RASPI or not self.G_BT_USE_ADDRESS or not self.bt_pan:
-            return
-
-        if not disconnect:
-            res = await self.bt_pan.connect_tethering(
-                self.G_BT_ADDRESSES[self.G_BT_USE_ADDRESS]
-            )
-        else:
-            res = await self.bt_pan.disconnect_tethering(
-                self.G_BT_ADDRESSES[self.G_BT_USE_ADDRESS]
-            )
-        return bool(res)
-
     def check_time(self, log_str):
-        t = datetime.datetime.now()
-        print("###", log_str, (t - self.log_time).total_seconds())
+        t = datetime.now()
+        app_logger.info(f"### {log_str}, {(t - self.log_time).total_seconds()}")
         self.log_time = t
 
     def read_map_list(self):
@@ -1107,35 +774,6 @@ class Config:
                 if map_list[key]["attribution"] is None:
                     map_list[key]["attribution"] = ""
             self.G_MAP_CONFIG.update(map_list)
-
-    async def get_altitude_from_tile(self, pos):
-        if np.isnan(pos[0]) or np.isnan(pos[1]):
-            return np.nan
-
-        z = self.G_DEM_MAP_CONFIG[self.G_DEM_MAP]["fix_zoomlevel"]
-        f_x, f_y, p_x, p_y = get_tilexy_and_xy_in_tile(z, pos[0], pos[1], 256)
-        filename = get_maptile_filename(self.G_DEM_MAP, z, f_x, f_y)
-
-        if not os.path.exists(filename):
-            await self.network.download_demtile(z, f_x, f_y)
-            return np.nan
-        if os.path.getsize(filename) == 0:
-            return np.nan
-
-        if self.loaded_dem != (f_x, f_y):
-            self.dem_array = np.asarray(Image.open(filename))
-            self.loaded_dem = (f_x, f_y)
-        rgb_pos = self.dem_array[p_y, p_x]
-        altitude = rgb_pos[0] * (2**16) + rgb_pos[1] * (2**8) + rgb_pos[2]
-        if altitude < 2**23:
-            altitude = altitude * 0.01
-        elif altitude == 2**23:
-            altitude = np.nan
-        else:
-            altitude = (altitude - 2**24) * 0.01
-
-        # print(altitude, filename, p_x, p_y, pos[1], pos[0])
-        return altitude
 
     def get_courses(self):
         dirs = sorted(
