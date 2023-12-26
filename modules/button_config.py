@@ -10,8 +10,8 @@ class Button_Config:
             "MAIN": {
                 "A": ("scroll_prev", ""),
                 "B": ("count_laps", "reset_count"),
-                #"C": ("get_screenshot", ""),
-                "C": ("multiscan", ""),
+                "C": ("get_screenshot", ""),
+                #"C": ("multiscan", ""),
                 "D": ("start_and_stop_manual", ""),
                 "E": ("scroll_next", "enter_menu"),
             },
@@ -36,6 +36,13 @@ class Button_Config:
                 "D": ("map_move_y_plus", "map_zoom_plus"),
                 "E": ("map_move_x_plus", "map_search_route"),
             },
+            #"MAP_2": {
+            #    "A": ("timeline_past", ""),
+            #    "B": ("map_zoom_minus", ""),
+            #    "C": ("timeline_reset", "change_mode"),
+            #    "D": ("map_zoom_plus", ""),
+            #    "E": ("timeline_future", ""),
+            #},
             "COURSE_PROFILE": {
                 "A": ("scroll_prev", ""),
                 "B": ("map_zoom_minus", ""),
@@ -55,7 +62,8 @@ class Button_Config:
         "Edge_Remote": {
             "MAIN": {
                 "PAGE": ("scroll_prev", "scroll_next"),
-                "CUSTOM": ("change_mode", "enter_menu"),
+                "CUSTOM": ("get_screenshot", "enter_menu"),
+                #"CUSTOM": ("change_mode", "enter_menu"),
                 #"CUSTOM": ("multiscan", "enter_menu"),
                 "LAP": ("count_laps",),
             },
@@ -71,7 +79,8 @@ class Button_Config:
             },
             "MAP": {
                 "PAGE": ("scroll_prev", "scroll_next"),
-                "CUSTOM": ("change_mode", "map_zoom_minus"),
+                #"CUSTOM": ("change_mode", "map_zoom_minus"),
+                "CUSTOM": ("get_screenshot", "map_zoom_minus"),
                 "LAP": ("map_zoom_plus",),
             },
             "MAP_1": {

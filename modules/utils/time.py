@@ -7,7 +7,7 @@ from logger import app_logger
 
 
 def set_time(time_info):
-    app_logger.info(f"try to modify time to {time_info}")
+    app_logger.info(f"modify time to {time_info}")
 
     last_known_date = exec_cmd_return_value(
         [

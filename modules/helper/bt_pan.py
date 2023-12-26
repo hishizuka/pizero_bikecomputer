@@ -85,7 +85,7 @@ class BTPanDbusNext(BTPan):
                 self.interface = proxy_object.get_interface(self.obj_service)
                 self.remote_addr = remote_addr
         except Exception:  # noqa
-            app_logger.exception("failed to initialize_device")
+            app_logger.exception("[BT] failed to initialize_device")
             return False
         return True
 
@@ -97,7 +97,7 @@ class BTPanDbusNext(BTPan):
             try:
                 await self.interface.call_connect(self.service_uuid)
             except DBusError as e:
-                app_logger.error(e)
+                app_logger.error(f"[BT] {e}")
                 await asyncio.sleep(1)
             else:
                 break
@@ -112,7 +112,7 @@ class BTPanDbusNext(BTPan):
         try:
             await self.interface.call_disconnect()
         except DBusError as e:
-            app_logger.error(e)
+            app_logger.error(f"[BT] {e}")
         connected = await self.interface.get_connected()
 
         return connected
@@ -126,7 +126,7 @@ class BTPanDbus(BTPan):
             self.bus.get_name_owner(self.obj_bluez)
             return True
         except Exception as e:  # noqa
-            app_logger.warning(f"Check dbus failed {e}")
+            app_logger.warning(f"[BT] Check dbus failed {e}")
         return False
 
     def get_managed_objects(self):
@@ -162,7 +162,7 @@ class BTPanDbus(BTPan):
                 )
                 self.remote_addr = remote_addr
         except Exception:  # noqa
-            app_logger.exception("failed to initialize_device")
+            app_logger.exception("[BT] failed to initialize_device")
             return False
         return True
 
@@ -174,7 +174,7 @@ class BTPanDbus(BTPan):
             try:
                 self.interface.Connect(self.service_uuid)
             except dbus.exceptions.DBusException as e:
-                app_logger.error(e.get_dbus_name())
+                app_logger.error(f"[BT] {e.get_dbus_name()}")
                 await asyncio.sleep(1)
             else:
                 break
@@ -189,7 +189,7 @@ class BTPanDbus(BTPan):
         try:
             self.interface.Disconnect()
         except dbus.exceptions.DBusException as e:
-            app_logger.error(e.get_dbus_name())
+            app_logger.error(f"[BT] {e.get_dbus_name()}")
         connected = self.prop_get(self.interface, "Connected")
 
         return connected
