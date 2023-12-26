@@ -1,8 +1,7 @@
 import os
 import traceback
-import random
 import time
-import datetime
+from datetime import datetime
 import socket
 import urllib.parse
 import asyncio
@@ -11,6 +10,15 @@ import aiofiles
 import numpy as np
 
 from modules.utils.network import detect_network
+from modules.helper.network import (
+    post,
+    get_json,
+)
+from modules.helper.maptile import (
+    MapTileWithValues,
+    get_headwind
+)
+from modules.utils.geo import get_track_str
 from logger import app_logger
 
 _IMPORT_GARMINCONNECT = False
@@ -45,10 +53,22 @@ except ImportError:
 
 class api:
     config = None
+
     thingsboard_client = None
+    course_send_status = "RESET"
+    
+    maptile_with_values = None
+
+    send_time = {}
+    pre_value = {
+        "OPENMETEO_WIND": [np.nan, np.nan]
+    }
 
     def __init__(self, config):
         self.config = config
+
+        t = int(time.time())
+        self.send_time["OPENMETEO_WIND"] = t
 
         if _IMPORT_THINGSBOARD:
             self.thingsboard_client = TBDeviceMqttClient(
@@ -56,9 +76,9 @@ class api:
                 1883,
                 self.config.G_THINGSBOARD_API["TOKEN"],
             )
-            self.send_time = int(time.time())
-            self.course_send_status = "RESET"
-            self.bt_cmd_lock = False
+            self.send_time["THINGSBOARD"] = t
+
+        self.maptile_with_values = MapTileWithValues(self.config)
 
     async def get_google_routes(self, x1, y1, x2, y2):
         if not detect_network() or self.config.G_GOOGLE_DIRECTION_API["TOKEN"] == "":
@@ -80,16 +100,16 @@ class api:
             language,
         )
         # print(url)
-        response = await self.config.network.get_json(url)
+        response = await get_json(url)
         # print(response)
         return response
 
     async def get_google_route_from_mapstogpx(self, url):
-        response = await self.config.network.get_json(
+        response = await get_json(
             self.config.G_MAPSTOGPX["URL"]
             + "&lang={}&dtstr={}&gdata={}".format(
                 self.config.G_LANG.lower(),
-                datetime.datetime.now().strftime("%Y%m%d_%H%M%S"),
+                datetime.now().strftime("%Y%m%d_%H%M%S"),
                 urllib.parse.quote(url, safe=""),
             ),
             headers=self.config.G_MAPSTOGPX["HEADER"],
@@ -98,19 +118,72 @@ class api:
 
         return response
 
-    async def get_openweathermap_data(self, x, y):
-        if not detect_network() or self.config.G_OPENWEATHERMAP_API["TOKEN"] == "":
+    async def get_openmeteo_temperature_data(self, x, y):
+        if not detect_network():
             return None
         if np.any(np.isnan([x, y])):
             return None
 
-        url = "{}?lat={}&lon={}&appid={}".format(
-            self.config.G_OPENWEATHERMAP_API["URL"],
+        vars_str = "temperature_2m,pressure_msl,surface_pressure"
+        url = "{}?latitude={}&longitude={}&current={}".format(
+            self.config.G_OPENMETEO_API["URL"],
             y,
             x,
-            self.config.G_OPENWEATHERMAP_API["TOKEN"],
+            vars_str
         )
-        response = await self.config.network.get_json(url)
+        response = await get_json(url)
+        # response["elevation"], response["current"][{vars}]
+        return response
+
+    async def get_openmeteo_current_wind_data(self, pos):
+
+        if np.any(np.isnan(pos)):
+            return [np.nan, np.nan]
+
+        if not self.check_time_interval(
+            "OPENMETEO_WIND",
+            self.config.G_OPENMETEO_API["INTERVAL_SEC"],
+            False
+        ):
+            return self.pre_value["OPENMETEO_WIND"]
+
+        # open connection
+        f_name = self.send_livetrack_data_internal.__name__
+        if not await self.config.network.open_bt_tethering(f_name):
+            return self.pre_value["OPENMETEO_WIND"]
+
+        if not detect_network():
+            return [np.nan, np.nan]
+
+        res = await self.get_openmeteo_current_wind_data_internal(pos)
+
+        # close connection
+        await self.config.network.close_bt_tethering(f_name)
+        
+        if "current" in res:
+            self.pre_value["OPENMETEO_WIND"] = [
+                res["current"]["wind_speed_10m"],
+                res["current"]["wind_direction_10m"]
+            ]
+
+        return self.pre_value["OPENMETEO_WIND"]
+    
+    async def get_openmeteo_current_wind_data_internal(self, pos):
+        if not detect_network():
+            return None
+        if np.any(np.isnan(pos)):
+            return None
+
+        vars_str = "wind_speed_10m,wind_direction_10m,wind_gusts_10m"
+        url = "{}?latitude={}&longitude={}&current={}&wind_speed_unit=ms".format(
+            self.config.G_OPENMETEO_API["URL"],
+            pos[1],
+            pos[0],
+            vars_str
+        )
+        response = await get_json(url)
+        # response["elevation"], response["current"][{vars}]
+        
         return response
 
     async def get_ridewithgps_route(self, add=False, reset=False):
@@ -119,7 +192,6 @@ class api:
             or self.config.G_RIDEWITHGPS_API["APIKEY"] == ""
             or self.config.G_RIDEWITHGPS_API["TOKEN"] == ""
         ):
-            print("return")
             return None
 
         if reset:
@@ -127,7 +199,7 @@ class api:
 
         # get user id
         if self.config.G_RIDEWITHGPS_API["USER_ID"] == "":
-            response = await self.config.network.get_json(
+            response = await get_json(
                 self.config.G_RIDEWITHGPS_API["URL_USER_DETAIL"],
                 params=self.config.G_RIDEWITHGPS_API["PARAMS"],
             )
@@ -139,7 +211,7 @@ class api:
 
         # get user route (total_num)
         if self.config.G_RIDEWITHGPS_API["USER_ROUTES_NUM"] is None:
-            response = await self.config.network.get_json(
+            response = await get_json(
                 self.config.G_RIDEWITHGPS_API["URL_USER_ROUTES"].format(
                     user=self.config.G_RIDEWITHGPS_API["USER_ID"], offset=0, limit=0
                 ),
@@ -171,7 +243,7 @@ class api:
             ] = self.config.G_RIDEWITHGPS_API["USER_ROUTES_NUM"]
 
         # get user route
-        response = await self.config.network.get_json(
+        response = await get_json(
             self.config.G_RIDEWITHGPS_API["URL_USER_ROUTES"].format(
                 user=self.config.G_RIDEWITHGPS_API["USER_ID"],
                 offset=offset,
@@ -320,7 +392,7 @@ class api:
             "grant_type": "refresh_token",
             "refresh_token": self.config.G_STRAVA_API["REFRESH_TOKEN"],
         }
-        tokens = await self.config.network.post(
+        tokens = await post(
             self.config.G_STRAVA_API_URL["OAUTH"], data=data
         )
 
@@ -343,7 +415,7 @@ class api:
         data = {"data_type": "fit"}
         async with aiofiles.open(self.config.G_UPLOAD_FILE, "rb"):
             data["file"] = open(self.config.G_UPLOAD_FILE, "rb")
-            upload_result = await self.config.network.post(
+            upload_result = await post(
                 self.config.G_STRAVA_API_URL["UPLOAD"], headers=headers, data=data
             )
             if "status" in upload_result:
@@ -430,7 +502,7 @@ class api:
         }
 
         async with aiofiles.open(self.config.G_UPLOAD_FILE, "rb") as file:
-            response = await self.config.network.post(
+            response = await post(
                 self.config.G_RIDEWITHGPS_API["URL_UPLOAD"],
                 params=params,
                 data={"file": file},
@@ -439,28 +511,6 @@ class api:
                 return False
 
         return True
-
-    async def get_scw_list(self, wind_config, mode=None):
-        # network check
-        if not detect_network():
-            app_logger.warning("No Internet connection")
-            return None
-
-        url = None
-        if mode == "inittime":
-            url = wind_config["inittime"].format(rand=random.random())
-        elif mode == "fl":
-            url = wind_config["fl"].format(
-                basetime=wind_config["basetime"], rand=random.random()
-            )
-
-        try:
-            response = await self.config.network.get_json(
-                url, headers={"referer": wind_config["referer"]}
-            )
-        except:
-            response = None
-        return response
 
     def get_strava_cookie(self):
         blank_check = [
@@ -492,19 +542,11 @@ class api:
             traceback.print_exc()
 
     def thingsboard_check(self):
-        if self.thingsboard_client is not None:
-            return True
-        else:
-            return False
+        return (self.thingsboard_client is not None)
 
     def send_livetrack_data(self, quick_send=False):
         if not self.check_livetrack():
             return
-
-        if self.config.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"] and self.bt_cmd_lock:
-            # print("[BT] {} locked, network status:{}, quick_send:{}".format(datetime.datetime.now().strftime("%H:%M:%S"), detect_network(), quick_send))
-            return
-
         asyncio.create_task(self.send_livetrack_data_internal(quick_send))
 
     def check_livetrack(self):
@@ -513,95 +555,54 @@ class api:
             # print("Install tb-mqtt-client")
             return False
         # network check
-        if (
-            not detect_network()
-            and not self.config.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"]
-        ):
+        if not detect_network() and not self.config.G_AUTO_BT_TETHERING:
             # print("No Internet connection")
             return False
         return True
 
     async def send_livetrack_data_internal(self, quick_send=False):
-        t = int(time.time())
 
-        if (
-            not quick_send
-            and t - self.send_time < self.config.G_THINGSBOARD_API["INTERVAL_SEC"]
+        if not self.check_time_interval(
+            "THINGSBOARD",
+            self.config.G_THINGSBOARD_API["INTERVAL_SEC"],
+            quick_send
         ):
             return
-        self.send_time = t
 
-        timestamp_str = datetime.datetime.fromtimestamp(t).strftime("%H:%M:%S")
-        timestamp_str_log = ""
+        f_name = self.send_livetrack_data_internal.__name__
+        timestamp_str = ""
+        t = int(time.time())
         if not self.config.G_DUMMY_OUTPUT:
-            timestamp_str_log = datetime.datetime.fromtimestamp(t).strftime(
-                "%m/%d %H:%M"
-            )
-        # print("[BT] {} start, network status:{}".format(timestamp_str, detect_network()))
+            timestamp_str = datetime.fromtimestamp(t).strftime("%m/%d %H:%M")
+        # app_logger.info(f"[TB] start, network: {bool(detect_network())}")
 
         # open connection
-        if self.config.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"]:
-            self.bt_cmd_lock = True
-            bt_pan_status = await self.config.bluetooth_tethering()
-            count = 0
+        v = self.config.logger.sensor.values
+        if not await self.config.network.open_bt_tethering(f_name):
+            v["integrated"]["send_time"] = (datetime.now().strftime("%H:%M") + "OE")
+            return
 
-            while (
-                bt_pan_status
-                and not detect_network()
-                and count < self.config.G_THINGSBOARD_API["TIMEOUT_SEC"]
-            ):
-                await asyncio.sleep(1)
-                count += 1
-
-            if (
-                not bt_pan_status
-                or count == self.config.G_THINGSBOARD_API["TIMEOUT_SEC"]
-            ):
-                if bt_pan_status:
-                    await self.config.bluetooth_tethering(disconnect=True)
-                await asyncio.sleep(5)
-                self.bt_cmd_lock = False
-                app_logger.error(
-                    f"[BT] {timestamp_str} connect error, network status: {bool(detect_network())}"
-                )
-                self.config.logger.sensor.values["integrated"]["send_time"] = (
-                    datetime.datetime.now().strftime("%H:%M") + "CE"
-                )
-                return
-            # print(f"[BT] {timestamp_str} connect, network status:{bool(detect_network())} {count}")
-
-        await asyncio.sleep(5)
-
-        speed = self.config.logger.sensor.values["integrated"]["speed"]
+        speed = v["integrated"]["speed"]
         if not np.isnan(speed):
             speed = int(speed * 3.6)
-        distance = self.config.logger.sensor.values["integrated"]["distance"]
+        distance = v["integrated"]["distance"]
         if not np.isnan(distance):
             distance = round(distance / 1000, 1)
 
         data = {
             "ts": t * 1000,
             "values": {
-                "timestamp": timestamp_str_log,
+                "timestamp": timestamp_str,
                 "speed": speed,
                 "distance": distance,
-                "heartrate": self.config.logger.sensor.values["integrated"][
-                    "ave_heart_rate_60s"
-                ],
-                "power": self.config.logger.sensor.values["integrated"][
-                    "ave_power_60s"
-                ],
-                "work": int(
-                    self.config.logger.sensor.values["integrated"]["accumulated_power"]
-                    / 1000
-                ),
-                # 'w_prime_balance': self.config.logger.sensor.values['integrated']['w_prime_balance_normalized'],
-                "temperature": self.config.logger.sensor.values["integrated"][
-                    "temperature"
-                ],
-                # 'altitude': self.config.logger.sensor.values['I2C']['altitude'],
-                "latitude": self.config.logger.sensor.values["GPS"]["lat"],
-                "longitude": self.config.logger.sensor.values["GPS"]["lon"],
+                "heartrate": v["integrated"]["ave_heart_rate_60s"],
+                "power": v["integrated"]["ave_power_60s"],
+                "work": int(v["integrated"]["accumulated_power"] / 1000),
+                # 'w_prime_balance': v["integrated"]["w_prime_balance_normalized"],
+                "temperature": v["integrated"]["temperature"],
+                # 'altitude': v["I2C"]["altitude"],
+                "latitude": v["GPS"]["lat"],
+                "longitude": v["GPS"]["lon"],
             },
         }
 
@@ -611,9 +612,7 @@ class api:
             if res != TBPublishInfo.TB_ERR_SUCCESS:
                 app_logger.error(f"[BT] thingsboard upload error: {res}")
             else:
-                self.config.logger.sensor.values["integrated"][
-                    "send_time"
-                ] = datetime.datetime.now().strftime("%H:%M")
+                v["integrated"]["send_time"] = datetime.now().strftime("%H:%M")
         except socket.timeout as e:
             app_logger.error(f"[BT] socket timeout: {e}")
         except socket.error as e:
@@ -628,16 +627,9 @@ class api:
             self.send_livetrack_course(reset=True)
 
         # close connection
-        if self.config.G_THINGSBOARD_API["AUTO_UPLOAD_VIA_BT"]:
-            bt_pan_status = await self.config.bluetooth_tethering(disconnect=True)
-            self.bt_cmd_lock = False
-            network_status = detect_network()
-            # print("[BT] {} disconnect, network status:{}".format(timestamp_str, network_status))
-            if network_status:
-                self.config.logger.sensor.values["integrated"]["send_time"] = (
-                    datetime.datetime.now().strftime("%H:%M") + "DE"
-                )
-            await asyncio.sleep(5)
+        if await self.config.network.close_bt_tethering(f_name):
+            v["integrated"]["send_time"] = (datetime.now().strftime("%H:%M") + "CE")
+        # app_logger.info(f"[TB] end, network: {bool(detect_network())}")
 
     def send_livetrack_course(self, reset=False):
         if not reset and (
@@ -681,3 +673,28 @@ class api:
         asyncio.get_running_loop().run_in_executor(
             None, self.send_livetrack_course, True
         )
+    
+    def check_time_interval(self, time_key, interval_sec, quick_send):
+        t = int(time.time())
+
+        if not quick_send and t - self.send_time[time_key] < interval_sec:
+            return False
+        self.send_time[time_key] = t
+        return True
+
+    async def get_wind(self, pos, track):
+        if self.config.G_WIND_DATA_SOURCE.startswith("jpn_scw"):
+            w_spd, w_dir = await self.maptile_with_values.get_wind(pos)
+        else:
+            [w_spd, w_dir] = await self.get_openmeteo_current_wind_data(pos)
+        
+        w_dir_str = get_track_str(w_dir)
+        
+        headwind = get_headwind(w_spd, w_dir, track)
+        
+        # app_logger.info(f"pos:[{pos[0]:.5f},{pos[1]:.5f}], w_spd:{w_spd}, w_dir:{w_dir}, w_dir_str:{w_dir_str}, headwind:{headwind}")
+        return w_spd, w_dir, w_dir_str, headwind
+    
+    async def get_altitude(self, pos):
+        return await self.maptile_with_values.get_altitude_from_tile(pos)
+
