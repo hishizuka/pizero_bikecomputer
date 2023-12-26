@@ -1100,18 +1100,16 @@ class SensorI2C(Sensor):
             temperature = ant_value
             self.sealevel_temp = 273.15 + ant_value + 0.0065 * alt
 
-        # from OpenWeatherMap API with current point
+        # from Open-Meteo API with current point
         else:
             v = self.config.logger.sensor.values["GPS"]
             try:
-                api_data = await self.config.api.get_openweathermap_data(
+                api_data = await self.config.api.get_openmeteo_temperature_data(
                     v["lon"], v["lat"]
                 )
-                if api_data is None:
-                    raise Exception()
-                if "temp" in api_data["main"]:
-                    temperature = api_data["main"]["temp"] - 273.15
-                    self.sealevel_temp = api_data["main"]["temp"] + 0.0065 * alt
+                if api_data is not None and "current" in api_data:
+                    temperature = api_data["current"]["temperature_2m"]
+                    self.sealevel_temp = temperature + 273.15 + 0.0065 * alt
             except:
                 pass
 
