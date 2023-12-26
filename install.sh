@@ -12,7 +12,7 @@ read -p "Using TFT/XWindow? [y/n] (n): " use_x
 #read -p "Use current virtualenv? [y/n] (y): " use_venv
 
 if [[ -n "$VIRTUAL_ENV" ]]; then
-  script="$VIRTUAL_ENV/bin/python $script"
+  script="$VIRTUAL_ENV/bin/python $script --output_log"
 else
   echo "No virtualenv used/activated. Default python will be used"
 fi
@@ -23,7 +23,7 @@ if [[ "$use_x" == "y" ]]; then
   envs="Environment=\"QT_QPA_PLATFORM=xcb\"\\nEnvironment=\"DISPLAY=:0\"\\nEnvironment=\"XAUTHORITY=/home/$USER/.Xauthority\"\\n"
   after="After=display-manager.service\\n"
 else
-  envs="Environment=\"QT_QPA_PLATFORM=offscreen\"\\nEnvironment=\"PYUSB_DEBUG=critical\"\\n"
+  envs="Environment=\"QT_QPA_PLATFORM=offscreen\"\\n"
   after=""
 fi
 
