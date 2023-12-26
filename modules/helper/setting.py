@@ -24,33 +24,51 @@ class Setting:
         self.config_parser.read(self.config_file)
 
         if "GENERAL" in self.config_parser:
-            if "AUTOSTOP_CUTOFF" in self.config_parser["GENERAL"]:
-                self.config.G_AUTOSTOP_CUTOFF = (
-                    int(self.config_parser["GENERAL"]["AUTOSTOP_CUTOFF"]) / 3.6
-                )
+            c = self.config_parser["GENERAL"]
+            if "AUTOSTOP_CUTOFF" in c:
+                self.config.G_AUTOSTOP_CUTOFF = (int(c["AUTOSTOP_CUTOFF"]) / 3.6)
                 self.config.G_GPS_SPEED_CUTOFF = self.config.G_AUTOSTOP_CUTOFF
-            if "WHEEL_CIRCUMFERENCE" in self.config_parser["GENERAL"]:
+            if "WHEEL_CIRCUMFERENCE" in c:
                 self.config.G_WHEEL_CIRCUMFERENCE = (
-                    int(self.config_parser["GENERAL"]["WHEEL_CIRCUMFERENCE"]) / 1000
+                    int(c["WHEEL_CIRCUMFERENCE"]) / 1000
                 )
-            if "GROSS_AVE_SPEED" in self.config_parser["GENERAL"]:
-                self.config.G_GROSS_AVE_SPEED = int(
-                    self.config_parser["GENERAL"]["GROSS_AVE_SPEED"]
-                )
-            if "DISPLAY" in self.config_parser["GENERAL"]:
-                self.config.G_DISPLAY = self.config_parser["GENERAL"][
-                    "DISPLAY"
-                ]  # store temporary
-            if "AUTO_BACKLIGHT_CUTOFF" in self.config_parser["GENERAL"]:
-                self.config.G_AUTO_BACKLIGHT_CUTOFF = int(
-                    self.config_parser["GENERAL"]["AUTO_BACKLIGHT_CUTOFF"]
-                )  # store temporary
-            if "LANG" in self.config_parser["GENERAL"]:
-                self.config.G_LANG = self.config_parser["GENERAL"]["LANG"].upper()
-            if "FONT_FILE" in self.config_parser["GENERAL"]:
-                self.config.G_FONT_FILE = self.config_parser["GENERAL"]["FONT_FILE"]
-            if "MAP" in self.config_parser["GENERAL"]:
-                self.config.G_MAP = self.config_parser["GENERAL"]["MAP"].lower()
+            if "GROSS_AVE_SPEED" in c:
+                self.config.G_GROSS_AVE_SPEED = int(c["GROSS_AVE_SPEED"])
+            if "DISPLAY" in c:
+                # store temporary
+                self.config.G_DISPLAY = c["DISPLAY"]
+            if "AUTO_BACKLIGHT_CUTOFF" in c:
+                # store temporary
+                self.config.G_AUTO_BACKLIGHT_CUTOFF = int(c["AUTO_BACKLIGHT_CUTOFF"])
+            if "LANG" in c:
+                self.config.G_LANG = c["LANG"].upper()
+            if "FONT_FILE" in c:
+                self.config.G_FONT_FILE = c["FONT_FILE"]
+
+        if "MAP_AND_DATA" in self.config_parser:
+            c = self.config_parser["MAP_AND_DATA"]
+            if "MAP" in c:
+                self.config.G_MAP = c["MAP"]
+            if "USE_HEATMAP_OVERLAY_MAP" in c:
+                self.config.G_USE_HEATMAP_OVERLAY_MAP = c.getboolean("USE_HEATMAP_OVERLAY_MAP")
+            if "HEATMAP_OVERLAY_MAP" in c:
+                self.config.G_HEATMAP_OVERLAY_MAP = c["HEATMAP_OVERLAY_MAP"]
+            if "USE_RAIN_OVERLAY_MAP" in c:
+                self.config.G_USE_RAIN_OVERLAY_MAP = c.getboolean("USE_RAIN_OVERLAY_MAP")
+            if "RAIN_OVERLAY_MAP" in c:
+                self.config.G_RAIN_OVERLAY_MAP = c["RAIN_OVERLAY_MAP"]
+            if "USE_WIND_OVERLAY_MAP" in c:
+                self.config.G_USE_WIND_OVERLAY_MAP = c.getboolean("USE_WIND_OVERLAY_MAP")
+            if "WIND_OVERLAY_MAP" in c:
+                self.config.G_WIND_OVERLAY_MAP = c["WIND_OVERLAY_MAP"]
+            if "USE_WIND_DATA_SOURCE" in c:
+                self.config.G_USE_WIND_DATA_SOURCE = c.getboolean("USE_WIND_DATA_SOURCE")
+            if "WIND_DATA_SOURCE" in c:
+                self.config.G_WIND_DATA_SOURCE = c["WIND_DATA_SOURCE"]
+            if "USE_DEM_TILE" in c:
+                self.config.G_USE_DEM_TILE = c.getboolean("USE_DEM_TILE")
+            if "DEM_MAP" in c:
+                self.config.G_DEM_MAP = c["DEM_MAP"]
 
         if "POWER" in self.config_parser:
             if "CP" in self.config_parser["POWER"]:
@@ -181,7 +199,6 @@ class Setting:
 
         for token in (
             "GOOGLE_DIRECTION",
-            "OPENWEATHERMAP",
             "RIDEWITHGPS",
             "THINGSBOARD",
         ):
@@ -203,22 +220,28 @@ class Setting:
 
     def write_config(self):
         self.config_parser["GENERAL"] = {}
-        self.config_parser["GENERAL"]["DISPLAY"] = self.config.G_DISPLAY
-        self.config_parser["GENERAL"]["AUTOSTOP_CUTOFF"] = str(
-            int(self.config.G_AUTOSTOP_CUTOFF * 3.6)
-        )
-        self.config_parser["GENERAL"]["WHEEL_CIRCUMFERENCE"] = str(
-            int(self.config.G_WHEEL_CIRCUMFERENCE * 1000)
-        )
-        self.config_parser["GENERAL"]["GROSS_AVE_SPEED"] = str(
-            int(self.config.G_GROSS_AVE_SPEED)
-        )
-        self.config_parser["GENERAL"]["AUTO_BACKLIGHT_CUTOFF"] = str(
-            int(self.config.G_AUTO_BACKLIGHT_CUTOFF)
-        )
-        self.config_parser["GENERAL"]["LANG"] = self.config.G_LANG
-        self.config_parser["GENERAL"]["FONT_FILE"] = self.config.G_FONT_FILE
-        self.config_parser["GENERAL"]["MAP"] = self.config.G_MAP
+        c = self.config_parser["GENERAL"]
+        c["DISPLAY"] = self.config.G_DISPLAY
+        c["AUTOSTOP_CUTOFF"] = str(int(self.config.G_AUTOSTOP_CUTOFF * 3.6))
+        c["WHEEL_CIRCUMFERENCE"] = str(int(self.config.G_WHEEL_CIRCUMFERENCE * 1000))
+        c["GROSS_AVE_SPEED"] = str(int(self.config.G_GROSS_AVE_SPEED))
+        c["AUTO_BACKLIGHT_CUTOFF"] = str(int(self.config.G_AUTO_BACKLIGHT_CUTOFF))
+        c["LANG"] = self.config.G_LANG
+        c["FONT_FILE"] = self.config.G_FONT_FILE
+
+        self.config_parser["MAP_AND_DATA"] = {}
+        c = self.config_parser["MAP_AND_DATA"]
+        c["MAP"] = self.config.G_MAP
+        c["USE_HEATMAP_OVERLAY_MAP"] = str(self.config.G_USE_HEATMAP_OVERLAY_MAP)
+        c["HEATMAP_OVERLAY_MAP"] = self.config.G_HEATMAP_OVERLAY_MAP
+        c["USE_RAIN_OVERLAY_MAP"] = str(self.config.G_USE_RAIN_OVERLAY_MAP)
+        c["RAIN_OVERLAY_MAP"] = self.config.G_RAIN_OVERLAY_MAP
+        c["USE_WIND_OVERLAY_MAP"] = str(self.config.G_USE_WIND_OVERLAY_MAP)
+        c["WIND_OVERLAY_MAP"] = self.config.G_WIND_OVERLAY_MAP
+        c["USE_WIND_DATA_SOURCE"] = str(self.config.G_USE_WIND_DATA_SOURCE)
+        c["WIND_DATA_SOURCE"] = self.config.G_WIND_DATA_SOURCE
+        c["USE_DEM_TILE"] = str(self.config.G_USE_DEM_TILE)
+        c["DEM_MAP"] = self.config.G_DEM_MAP
 
         self.config_parser["POWER"] = {}
         self.config_parser["POWER"]["CP"] = str(int(self.config.G_POWER_CP))
@@ -288,7 +311,6 @@ class Setting:
 
         for token in (
             "GOOGLE_DIRECTION",
-            "OPENWEATHERMAP",
             "RIDEWITHGPS",
             "THINGSBOARD",
         ):
