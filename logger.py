@@ -10,14 +10,36 @@ from logging.handlers import RotatingFileHandler
 class StreamToLogger:
     logger = None
     level = None
+    buffer = ""
+    error_char = 0
 
     def __init__(self, logger, level):
         self.logger = logger
         self.level = level
 
     def write(self, buf):
-        for line in buf.rstrip().splitlines():
-            self.logger.log(self.level, line.rstrip())
+
+        for line in buf.splitlines():
+            if line.startswith("<class 'usb.core.USBError'>"):
+                continue
+            elif line == "" :
+                if self.error_char > 0:
+                    self.logger.log(self.level, self.buffer)
+                    self.buffer = ""
+                self.error_char += 1
+                if self.error_char == 3:
+                    self.error_char = 0
+                continue
+
+            if self.error_char == 0:
+                if line.isspace():
+                    self.buffer += line
+                else:
+                    self.logger.log(self.level, self.buffer+line)
+                    self.buffer = ""
+            else:
+                self.buffer += line
+            
 
     def flush(self):
         pass
