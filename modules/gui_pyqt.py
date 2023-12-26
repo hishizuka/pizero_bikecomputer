@@ -33,8 +33,13 @@ from modules.utils.timer import Timer, log_timers
 
 class SplashScreen(QtWidgets.QWidget):
     STYLES = """
-      background-color: black;
+        background: black;
     """
+    # gradient style
+    #    qlineargradient(
+    #        x1:0 y1:0, x2:0 y2:1.0, 
+    #        stop:0 blue, stop:0.19 blue, stop:0.2 red, stop:0.39 red, stop:0.4 black, stop:0.59 black, stop:0.6 yellow, stop:0.79 yellow, stop:0.8 green
+    #    );
 
     def __init__(self, *__args):
         super().__init__(*__args)
@@ -225,7 +230,7 @@ class GUI_PyQt(QtCore.QObject):
 
             from modules.pyqt.menu.pyqt_menu_widget import (
                 TopMenuWidget,
-                LiveTrackMenuWidget,
+                ConnectivityMenuWidget,
                 UploadActivityMenuWidget,
             )
             from modules.pyqt.menu.pyqt_system_menu_widget import (
@@ -255,6 +260,9 @@ class GUI_PyQt(QtCore.QObject):
                 HeatmapListWidget,
                 RainmapListWidget,
                 WindmapListWidget,
+                ExternalDataSourceMenuWidget,
+                WindSourceListWidget,
+                DEMTileListWidget,
             )
             from modules.pyqt.menu.pyqt_adjust_widget import (
                 AdjustAltitudeWidget,
@@ -301,14 +309,17 @@ class GUI_PyQt(QtCore.QObject):
                 ("CP", AdjustCPWidget),
                 ("W Prime Balance", AdjustWPrimeBalanceWidget),
                 ("Profile", ProfileWidget),
-                ("Live Track", LiveTrackMenuWidget),
+                ("Connectivity", ConnectivityMenuWidget),
                 ("Upload Activity", UploadActivityMenuWidget),
+                ("DEM Tile source", DEMTileListWidget),
+                ("Wind Source", WindSourceListWidget),
+                ("External Data Sources", ExternalDataSourceMenuWidget),
                 ("Wind map List", WindmapListWidget),
                 ("Rain map List", RainmapListWidget),
                 ("Heatmap List", HeatmapListWidget),
                 ("Map Overlay", MapOverlayMenuWidget),
                 ("Select Map", MapListWidget),
-                ("Map", MapMenuWidget),
+                ("Map and Data", MapMenuWidget),
                 # ("Google Directions API mode", GoogleDirectionsAPISettingMenuWidget),
                 ("Course Detail", CourseDetailWidget),
                 ("Courses List", CourseListWidget),
@@ -526,6 +537,10 @@ class GUI_PyQt(QtCore.QObject):
     def reset_count(self):
         self.logger.reset_count()
         self.map_widget.reset_track()
+        #self.show_dialog(self.upload_activity, "Upload Activity?")
+    
+    def upload_activity(self):
+        pass
 
     @staticmethod
     def press_key(key):
@@ -569,7 +584,7 @@ class GUI_PyQt(QtCore.QObject):
         # check MAIN
         if self.stack_widget.currentIndex() != 1:
             return
-        self.config.change_mode()
+        self.config.button_config.change_mode()
 
     def change_map_overlays(self):
         if self.map_widget is not None:
@@ -676,6 +691,7 @@ class GUI_PyQt(QtCore.QObject):
         app_logger.info(f"screenshot: {filename}")
         p = self.stack_widget.grab()
         p.save(os.path.join(self.config.G_SCREENSHOT_DIR, filename), "png")
+        self.config.display.screen_flash_short()
 
     def change_start_stop_button(self, status):
         if self.button_box_widget is not None:
@@ -727,18 +743,19 @@ class GUI_PyQt(QtCore.QObject):
         if self.display_dialog:
             self.signal_menu_back_button.emit()
 
-    def show_popup(self, title):
+    def show_popup(self, title, timeout=None):
         asyncio.create_task(
             self.msg_queue.put(
                 {
                     "title": title,
                     "button_num": 0,
                     "position": QT_ALIGN_BOTTOM,
+                    "timeout": timeout,
                 }
             )
         )
 
-    def show_popup_multiline(self, title, message):
+    def show_popup_multiline(self, title, message, timeout=None):
         asyncio.create_task(
             self.msg_queue.put(
                 {
@@ -746,6 +763,7 @@ class GUI_PyQt(QtCore.QObject):
                     "message": message,
                     "position": QT_ALIGN_BOTTOM,
                     "text_align": QT_ALIGN_LEFT,
+                    "timeout": timeout,
                 }
             )
         )
@@ -810,11 +828,15 @@ class GUI_PyQt(QtCore.QObject):
         message = msg.get("message")
         button_num = msg.get("button_num", 0)  # 0: none, 1: OK, 2: OK+Cancel
         button_label = msg.get("button_label", None)  # button label for button_num = 1
-        timeout = msg.get("timeout", 5)
         position = msg.get("position", QT_ALIGN_CENTER)
         text_align = msg.get("text_align", QT_ALIGN_CENTER)
         fn = msg.get("fn")  # use with OK button(button_num=2)
 
+        default_timeout = 5
+        timeout = msg.get("timeout", default_timeout)
+        if timeout is None:
+            timeout = default_timeout
+            
         self.display_dialog = True
 
         class DialogButton(QtWidgets.QPushButton):
