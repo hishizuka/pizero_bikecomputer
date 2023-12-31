@@ -242,27 +242,19 @@ class MapWidget(BaseMapWidget):
 
         attribution_text = self.config.G_MAP_CONFIG[self.config.G_MAP]["attribution"]
         map_settings = None
-        #basetime_str = validtime_str = ""
-        #break_str = " "
         if self.overlay_index == self.overlay_order_index["HEATMAP"]:
             map_settings = self.config.G_HEATMAP_OVERLAY_MAP_CONFIG[self.config.G_HEATMAP_OVERLAY_MAP]
         elif self.overlay_index == self.overlay_order_index["RAIN"]:
             map_settings = self.config.G_RAIN_OVERLAY_MAP_CONFIG[self.config.G_RAIN_OVERLAY_MAP]
-            #if self.config.G_RAIN_OVERLAY_MAP == "jpn_jma_bousai" and map_settings['basetime'] is not None:
-            #    basetime_str = map_settings['basetime'][-6:]
-            #    validtime_str = map_settings['validtime'][-6:]
-            #    break_str = "<br />"
         elif self.overlay_index == self.overlay_order_index["WIND"]:
             map_settings = self.config.G_WIND_OVERLAY_MAP_CONFIG[self.config.G_WIND_OVERLAY_MAP]
-            #if self.config.G_WIND_OVERLAY_MAP.startswith("jpn_scw") and map_settings['basetime'] is not None:
-            #    basetime_str = map_settings['basetime'][:4]
-            #    validtime_str = map_settings['validtime'][:4]
         if map_settings is not None:
             attribution_text += f"<br />{map_settings['attribution']}"
-            #if basetime_str != "":
-            #    attribution_text += f"{break_str}<font size='+1'>{basetime_str}</font>"
-            #if validtime_str != "": 
-            #    attribution_text += f"<font size='+1'> / {validtime_str}</font>"
+            # b, v = self.add_attribution_extra_text(map_settings)
+            # if b != "":
+            #     attribution_text += f"<br /><font size='+1'>{b}</font>"
+            # if v != "": 
+            #     attribution_text += f"<font size='+1'> / {v}</font>"
 
         self.map_attribution.setHtml(
             '<div style="text-align: right;"><span style="color: #000; font-size: 10px;">'
@@ -273,6 +265,18 @@ class MapWidget(BaseMapWidget):
             self.map_attribution.setZValue(-100)
         else:
             self.map_attribution.setZValue(100)
+
+    def add_attribution_extra_text(self, map_settings):
+        basetime_str = validtime_str = break_str = ""
+        if self.overlay_index == self.overlay_order_index["RAIN"]:
+            if self.config.G_RAIN_OVERLAY_MAP == "jpn_jma_bousai" and map_settings['basetime'] is not None:
+                basetime_str = map_settings['basetime'][-6:]
+                validtime_str = map_settings['validtime'][-6:]
+        elif self.overlay_index == self.overlay_order_index["WIND"]:
+            if self.config.G_WIND_OVERLAY_MAP.startswith("jpn_scw") and map_settings['basetime'] is not None:
+                basetime_str = map_settings['basetime'][:4]
+                validtime_str = map_settings['validtime'][:4]
+        return basetime_str, validtime_str
 
     def init_cuesheet_and_instruction(self):
         # init cuesheet_widget
