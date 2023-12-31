@@ -20,7 +20,10 @@ class StreamToLogger:
     def write(self, buf):
 
         for line in buf.splitlines():
-            if line.startswith("<class 'usb.core.USBError'>"):
+            if line.startswith((
+                "<class 'usb.core.USBError'>",
+                "<class 'usb.core.USBTimeoutError'>",
+            )):
                 continue
             elif line == "" :
                 if self.error_char > 0:

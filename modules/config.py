@@ -565,8 +565,6 @@ class Config:
             self.G_AUTO_BT_TETHERING = self.state.get_value(
                 "G_AUTO_BT_TETHERING", self.G_AUTO_BT_TETHERING
             )
-            if self.G_BT_USE_ADDRESS and not self.G_AUTO_BT_TETHERING:
-                await self.network.bluetooth_tethering()
 
         # resume ThingsBoard
         self.G_THINGSBOARD_API["STATUS"] = self.state.get_value(

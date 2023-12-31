@@ -148,7 +148,7 @@ class api:
             return self.pre_value["OPENMETEO_WIND"]
 
         # open connection
-        f_name = self.send_livetrack_data_internal.__name__
+        f_name = self.get_openmeteo_current_wind_data.__name__
         if not await self.config.network.open_bt_tethering(f_name):
             return self.pre_value["OPENMETEO_WIND"]
 
@@ -627,7 +627,7 @@ class api:
             self.send_livetrack_course(reset=True)
 
         # close connection
-        if await self.config.network.close_bt_tethering(f_name):
+        if not await self.config.network.close_bt_tethering(f_name):
             v["integrated"]["send_time"] = (datetime.now().strftime("%H:%M") + "CE")
         # app_logger.info(f"[TB] end, network: {bool(detect_network())}")
 
