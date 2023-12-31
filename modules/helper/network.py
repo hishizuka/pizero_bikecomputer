@@ -71,7 +71,6 @@ async def download_files(urls, save_paths, headers=None, params=None):
 
 class Network:
     config = None
-    bt_cmd_lock = False
     bt_tethering_status = {}
     bt_tethering_last_close_time = None
 
@@ -268,15 +267,17 @@ class Network:
 
         if not self.config.G_AUTO_BT_TETHERING:
             return True
-
-        if self.bt_cmd_lock:
-            return detect_network()
         
         if detect_network():
-            self.bt_tethering_status[f_name] = True
+            if bool(self.bt_tethering_status):
+                self.bt_tethering_status[f_name] = True
             return True
+        
+        if any(self.bt_tethering_status.values()):
+            self.bt_tethering_status[f_name] = True
+            return
 
-        self.bt_cmd_lock = True
+        self.bt_tethering_status[f_name] = True
         bt_pan_status = await self.bluetooth_tethering()
         count = 0
 
@@ -292,12 +293,11 @@ class Network:
             if bt_pan_status:
                 await self.bluetooth_tethering(disconnect=True)
             await asyncio.sleep(5)
-            self.bt_cmd_lock = False
+            self.bt_tethering_status[f_name] = False
             app_logger.error(f"[BT] connect error, network: {bool(detect_network())}({count}s), f_name: {f_name}")
             return False
 
         await asyncio.sleep(5)
-        self.bt_tethering_status[f_name] = True
         app_logger.info(f"[BT] connect, network: {bool(detect_network())}({count}s), f_name: {f_name}")
         
         return True
@@ -308,12 +308,15 @@ class Network:
             return True
 
         self.bt_tethering_status[f_name] = False
-        if any(self.bt_tethering_status.values()):
+        if (
+            not bool(self.bt_tethering_status)
+            or any(self.bt_tethering_status.values())
+        ):
             return True
 
         await self.bluetooth_tethering(disconnect=True)
         await asyncio.sleep(5)
-        self.bt_cmd_lock = False
+        self.bt_tethering_status[f_name] = False
         self.bt_tethering_last_close_time = datetime.now()
         network_status = bool(detect_network())
         app_logger.info(f"[BT] disconnect, network: {network_status}, f_name: {f_name}")

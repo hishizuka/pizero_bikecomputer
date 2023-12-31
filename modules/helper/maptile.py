@@ -2,6 +2,7 @@ import os
 from datetime import datetime, timedelta #datetime is necessary for map_config["current_time_func"]()
 from random import random
 import math
+import asyncio
 
 import numpy as np
 from PIL import Image
@@ -125,7 +126,6 @@ JMA_RAIN_COLOR_CONV = np.array([
 async def get_scw_list(url, referer):
     # network check
     if not detect_network():
-        # app_logger.warning("No Internet connection")
         return None
 
     try:
@@ -186,111 +186,6 @@ def conv_image_internal(image, orig_colors, conv_colors):
             res_array[np.all(im_array == w, axis=2)] = conv_colors[i]
 
     return res_array
-
-
-async def update_jpn_scw_timeline(map_settings, update_basetime):
-    update_basetime(map_settings)
-    if map_settings["timeline_update_date"] == map_settings["current_time"]:
-        return
-    
-    url = map_settings["inittime"].format(rand=random())
-    init_time_list = await get_scw_list(url, map_settings["referer"])
-    if init_time_list is None:
-        return
-    basetime = init_time_list[0]["it"]
-
-    url = map_settings["fl"].format(basetime=basetime, rand=random())
-    timeline = await get_scw_list(url, map_settings["referer"])
-    if timeline is None:
-        return
-    map_settings["timeline"] = timeline
-    if len(timeline) < 21:
-        app_logger.warning("lack of timeline")
-        app_logger.warning(timeline)
-    time_str = map_settings["current_time"].strftime("%H%MZ%d")
-    for tl in map_settings["timeline"]:
-        if tl["it"].startswith(time_str):
-            map_settings["basetime"] = basetime
-            map_settings["validtime"] = tl["it"]
-            map_settings["subdomain"] = tl["sd"]
-            map_settings["timeline_update_date"] = map_settings["current_time"]
-            return
-
-
-async def update_overlay_rainmap_timeline(map_settings, map_name):
-
-    if not update_overlay_rain_basetime(map_settings):
-        return
-    # basetime update
-    if map_settings["time_format"] == "unix_timestamp":
-        basetime_str = str(int(map_settings["current_time"].timestamp()))
-    else:
-        basetime_str = map_settings["current_time"].strftime(
-            map_settings["time_format"]
-        )
-    map_settings["basetime"] = basetime_str
-    map_settings["validtime"] = map_settings["basetime"]
-
-
-async def update_overlay_windmap_timeline(map_settings, map_name):
-
-    if map_name.startswith("jpn_scw"):
-        await update_jpn_scw_timeline(
-            map_settings, update_overlay_wind_basetime
-        )
-        return
-    
-    if not update_overlay_wind_basetime(map_settings):
-        return
-    # basetime update
-    basetime_str = map_settings["current_time"].strftime(
-        map_settings["time_format"]
-    )
-    map_settings["basetime"] = basetime_str
-    map_settings["validtime"] = map_settings["basetime"]
-
-
-def update_overlay_rain_basetime(map_settings):
-
-    # update current_time
-    current_time = map_settings["current_time_func"]()
-    delta_minutes = current_time.minute % map_settings["time_interval"]
-
-    # latest measured time (not forecast)
-    delta_seconds = delta_minutes * 60 + current_time.second
-    delta_seconds_cutoff = map_settings["update_minutes"] * 60 + 15
-    if delta_seconds < delta_seconds_cutoff:
-        delta_minutes += map_settings["time_interval"]
-
-    current_time += timedelta(minutes=-delta_minutes)
-    current_time = current_time.replace(second=0, microsecond=0)
-
-    if map_settings["current_time"] != current_time:
-        map_settings["current_time"] = current_time
-        return True
-    else:
-        return False
-
-
-def update_overlay_wind_basetime(map_settings):
-
-    # update current_time
-    current_time = map_settings["current_time_func"]()
-    delta_minutes = current_time.minute % map_settings["time_interval"]
-
-    # time_interval < time_interval/2: latest measured time (not forecast)
-    # time_interval > time_interval/2: next forecast time
-    if delta_minutes > map_settings["time_interval"] / 2:
-        delta_minutes -= map_settings["time_interval"]
-
-    current_time += timedelta(minutes=-delta_minutes)
-    current_time = current_time.replace(second=0, microsecond=0)
-
-    if map_settings["current_time"] != current_time:
-        map_settings["current_time"] = current_time
-        return True
-    else:
-        return False
 
 
 def get_next_validtime(map_settings):
@@ -369,9 +264,8 @@ def get_wind_with_tile_xy(img_files, x_in_tile, y_in_tile, tilesize, tiles_cond,
         xy_in_tile[1] += 256
     # app_logger.debug(f"[{x_in_tile}, {y_in_tile}] -> {xy_in_tile}")
 
-    #image = None
     if image is None:
-        # app_logger.debug("open image")
+        # app_logger.info(f"open image: {img_files}")
         if len(img_files) == 1:
             image = Image.open(img_files[0]).convert("RGB")
         elif len(img_files) == 2:
@@ -417,7 +311,6 @@ def get_wind_with_tile_xy(img_files, x_in_tile, y_in_tile, tilesize, tiles_cond,
             # app_logger.debug(f"{conv_colorcode(c[1])} {c[1]} / {c[0]}: {dist[min_index]:.0f}")
 
     # extract arrows
-    #if True:
     if im_array is None:
         # app_logger.debug("create im_array")
         im_array = np.array(image)
@@ -553,13 +446,15 @@ class MapTileWithValues():
     downloaded_wind_tiles = {}
     wind_image = None
     wind_im_array = None
-    wind_current_time = None
+    scw_wind_validtime = None
     
     # for jpn_kokudo_chiri_in_DEM~
     pre_alt_tile_xy = (np.nan, np.nan)
     pre_alt_xy_in_tile = (np.nan, np.nan)
     pre_altitude = np.nan
     dem_array = None
+
+    get_scw_lock = False
 
     def __init__(self, config):
         self.config = config
@@ -612,6 +507,126 @@ class MapTileWithValues():
                 map_config, map_name, z, download_tile,
             )
 
+    async def update_overlay_windmap_timeline(self, map_settings, map_name):
+
+        if map_name.startswith("jpn_scw"):
+            asyncio.create_task(
+                self.update_jpn_scw_timeline(map_settings, self.update_overlay_wind_basetime)
+            )
+            return
+        
+        if not self.update_overlay_wind_basetime(map_settings):
+            return
+        # basetime update
+        basetime_str = map_settings["current_time"].strftime(
+            map_settings["time_format"]
+        )
+        map_settings["basetime"] = basetime_str
+        map_settings["validtime"] = map_settings["basetime"]
+
+    async def update_jpn_scw_timeline(self, map_settings, update_basetime):
+        update_basetime(map_settings)
+        if map_settings["timeline_update_date"] == map_settings["current_time"]:
+            return
+
+        # check lock
+        if self.get_scw_lock:
+            # app_logger.debug("get_scw_list Locked")
+            return
+        # open connection
+        f_name = self.update_jpn_scw_timeline.__name__
+        if not await self.config.network.open_bt_tethering(f_name):
+            return
+
+        # app_logger.debug("get_scw_list connection start...")
+        self.get_scw_lock = True
+        url = map_settings["inittime"].format(rand=random())
+        init_time_list = await get_scw_list(url, map_settings["referer"])
+        if init_time_list is None:
+            # close connection
+            await self.config.network.close_bt_tethering(f_name)
+            self.get_scw_lock = False
+            return
+        basetime = init_time_list[0]["it"]
+
+        url = map_settings["fl"].format(basetime=basetime, rand=random())
+        timeline = await get_scw_list(url, map_settings["referer"])
+        
+        # close connection
+        await self.config.network.close_bt_tethering(f_name)
+        self.get_scw_lock = False
+
+        if timeline is None:
+            return
+        map_settings["timeline"] = timeline
+        if len(timeline) < 21:
+            app_logger.warning("lack of timeline")
+            app_logger.warning(timeline)
+        time_str = map_settings["current_time"].strftime("%H%MZ%d")
+        for tl in map_settings["timeline"]:
+            if tl["it"].startswith(time_str):
+                map_settings["basetime"] = basetime
+                map_settings["validtime"] = tl["it"]
+                map_settings["subdomain"] = tl["sd"]
+                map_settings["timeline_update_date"] = map_settings["current_time"]
+                # app_logger.debug(f"get_scw_list Success: {basetime} {tl['it']}]")
+                return
+
+    def update_overlay_wind_basetime(self, map_settings):
+
+        # update current_time
+        current_time = map_settings["current_time_func"]()
+        delta_minutes = current_time.minute % map_settings["time_interval"]
+
+        # time_interval < time_interval/2: latest measured time (not forecast)
+        # time_interval > time_interval/2: next forecast time
+        if delta_minutes > map_settings["time_interval"] / 2:
+            delta_minutes -= map_settings["time_interval"]
+
+        current_time += timedelta(minutes=-delta_minutes)
+        current_time = current_time.replace(second=0, microsecond=0)
+
+        if map_settings["current_time"] != current_time:
+            map_settings["current_time"] = current_time
+            return True
+        else:
+            return False
+
+    async def update_overlay_rainmap_timeline(self, map_settings, map_name):
+
+        if not self.update_overlay_rain_basetime(map_settings):
+            return
+        # basetime update
+        if map_settings["time_format"] == "unix_timestamp":
+            basetime_str = str(int(map_settings["current_time"].timestamp()))
+        else:
+            basetime_str = map_settings["current_time"].strftime(
+                map_settings["time_format"]
+            )
+        map_settings["basetime"] = basetime_str
+        map_settings["validtime"] = map_settings["basetime"]
+
+    def update_overlay_rain_basetime(self, map_settings):
+
+        # update current_time
+        current_time = map_settings["current_time_func"]()
+        delta_minutes = current_time.minute % map_settings["time_interval"]
+
+        # latest measured time (not forecast)
+        delta_seconds = delta_minutes * 60 + current_time.second
+        delta_seconds_cutoff = map_settings["update_minutes"] * 60 + 15
+        if delta_seconds < delta_seconds_cutoff:
+            delta_minutes += map_settings["time_interval"]
+
+        current_time += timedelta(minutes=-delta_minutes)
+        current_time = current_time.replace(second=0, microsecond=0)
+
+        if map_settings["current_time"] != current_time:
+            map_settings["current_time"] = current_time
+            return True
+        else:
+            return False
+
     async def get_wind(self, pos):
 
         map_config = self.config.G_WIND_OVERLAY_MAP_CONFIG
@@ -627,10 +642,10 @@ class MapTileWithValues():
         tile_x, tile_y, x_in_tile, y_in_tile = get_tilexy_and_xy_in_tile(
             z, *pos, tilesize
         )
-        # initialize
-        await update_overlay_windmap_timeline(map_settings, map_name)
-        if self.wind_current_time != map_config[map_name]["current_time"]:
-            self.wind_current_time = map_config[map_name]["current_time"]
+        await self.update_overlay_windmap_timeline(map_settings, map_name)
+        if self.scw_wind_validtime != map_config[map_name]["validtime"]:
+            # app_logger.debug(f"get_wind update: {self.scw_wind_validtime}, {map_config[map_name]['validtime']} / {map_config[map_name]['basetime']}")
+            self.scw_wind_validtime = map_config[map_name]["validtime"]
             time_updated = True
         else:
             time_updated = False
@@ -639,6 +654,7 @@ class MapTileWithValues():
             self.pre_wind_tile_xy == (tile_x, tile_y)
             and self.pre_wind_xy_in_tile == (x_in_tile, y_in_tile)
             and not time_updated
+            and self.wind_image is not None
         ):
             return self.pre_wind_speed, self.pre_wind_direction
         
@@ -651,7 +667,7 @@ class MapTileWithValues():
                 tiles_cond[i] = +1
         # tile check and download
         tiles = self.get_tiles(tile_x, tile_y, tiles_cond)
-        await self.download_tiles(tiles, map_config, map_name, z)
+        await self.download_tiles(tiles, map_config, map_name, z) 
 
         tile_files = []
         for t in tiles:
@@ -661,8 +677,12 @@ class MapTileWithValues():
             if not os.path.exists(filename) or os.path.getsize(filename) == 0:
                 continue
             tile_files.append(filename)
+        # download in progress
         if len(tiles) != len(tile_files):
-            return np.nan, np.nan
+            # app_logger.debug("dl in progress... reset wind_image, wind_im_array")
+            self.wind_image = None
+            self.wind_im_array = None
+            return self.pre_wind_speed, self.pre_wind_direction
         # app_logger.debug(f"tiles: {tiles}")
         # app_logger.debug(f"tile_cond: {tiles_cond}")
 
@@ -672,6 +692,7 @@ class MapTileWithValues():
             or self.pre_wind_tiles_cond != tiles_cond
             or time_updated
         ):
+            # app_logger.debug("reset wind_image, wind_im_array")
             self.wind_image = None
             self.wind_im_array = None
         (
