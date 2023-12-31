@@ -87,6 +87,7 @@ def add_map_config(config):
         "current_time": None,
         "current_time_func": datetime.now,  # local?
         "basetime": None,
+        "validtime": None,
         "time_interval": 10,  # [minutes]
         "update_minutes": 1,  # typically int(time_interval/2) [minutes]
         "time_format": "unix_timestamp",
