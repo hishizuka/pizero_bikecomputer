@@ -297,7 +297,9 @@ class Network:
             app_logger.error(f"[BT] connect error, network: {bool(detect_network())}({count}s), f_name: {f_name}")
             return False
 
+        # app_logger.debug(f"bt_pan_status:{bt_pan_status}, {detect_network()}")
         await asyncio.sleep(5)
+
         app_logger.info(f"[BT] connect, network: {bool(detect_network())}({count}s), f_name: {f_name}")
         
         return True

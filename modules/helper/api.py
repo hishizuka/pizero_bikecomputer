@@ -59,6 +59,8 @@ class api:
     
     maptile_with_values = None
 
+    send_livetrack_data_lock = False
+
     send_time = {}
     pre_value = {
         "OPENMETEO_WIND": [np.nan, np.nan]
@@ -545,6 +547,20 @@ class api:
         return (self.thingsboard_client is not None)
 
     def send_livetrack_data(self, quick_send=False):
+
+        # check lock
+        if self.send_livetrack_data_lock:
+            return
+
+        # check interval
+        if not self.check_time_interval(
+            "THINGSBOARD",
+            self.config.G_THINGSBOARD_API["INTERVAL_SEC"],
+            quick_send
+        ):
+            return
+
+        # check module and network (common with send_livetrack_course_load/send_livetrack_course_reset)
         if not self.check_livetrack():
             return
         asyncio.create_task(self.send_livetrack_data_internal(quick_send))
@@ -555,20 +571,14 @@ class api:
             # print("Install tb-mqtt-client")
             return False
         # network check
-        if not detect_network() and not self.config.G_AUTO_BT_TETHERING:
+        if not self.config.G_AUTO_BT_TETHERING and not detect_network():
             # print("No Internet connection")
             return False
         return True
 
     async def send_livetrack_data_internal(self, quick_send=False):
 
-        if not self.check_time_interval(
-            "THINGSBOARD",
-            self.config.G_THINGSBOARD_API["INTERVAL_SEC"],
-            quick_send
-        ):
-            return
-
+        self.send_livetrack_data_lock = True
         f_name = self.send_livetrack_data_internal.__name__
         timestamp_str = ""
         t = int(time.time())
@@ -580,6 +590,7 @@ class api:
         v = self.config.logger.sensor.values
         if not await self.config.network.open_bt_tethering(f_name):
             v["integrated"]["send_time"] = (datetime.now().strftime("%H:%M") + "OE")
+            self.send_livetrack_data_lock = False
             return
 
         speed = v["integrated"]["speed"]
@@ -622,16 +633,18 @@ class api:
         await asyncio.sleep(5)
 
         if self.course_send_status == "LOAD":
-            self.send_livetrack_course()
+            await self.send_livetrack_course()
         elif self.course_send_status == "RESET":
-            self.send_livetrack_course(reset=True)
+            await self.send_livetrack_course(reset=True)
 
         # close connection
         if not await self.config.network.close_bt_tethering(f_name):
             v["integrated"]["send_time"] = (datetime.now().strftime("%H:%M") + "CE")
         # app_logger.info(f"[TB] end, network: {bool(detect_network())}")
 
-    def send_livetrack_course(self, reset=False):
+        self.send_livetrack_data_lock = False
+
+    async def send_livetrack_course(self, reset=False):
         if not reset and (
             not len(self.config.logger.course.latitude)
             or not len(self.config.logger.course.longitude)
@@ -651,28 +664,34 @@ class api:
 
         # send as polygon sources
         data = {"perimeter": course}
+
+        # open connection
+        f_name = self.send_livetrack_course.__name__
+        if not await self.config.network.open_bt_tethering(f_name):
+            return
+
         self.thingsboard_client.connect()
         res = self.thingsboard_client.send_telemetry(data).get()
         if res != TBPublishInfo.TB_ERR_SUCCESS:
             app_logger.error(f"thingsboard upload error: {res}")
         self.thingsboard_client.disconnect()
+
+        # close connection
+        await self.config.network.close_bt_tethering(f_name)
+        
         self.course_send_status = ""
 
     def send_livetrack_course_load(self):
         self.course_send_status = "LOAD"
         if not self.check_livetrack():
             return
-        asyncio.get_running_loop().run_in_executor(
-            None, self.send_livetrack_course, False
-        )
+        asyncio.create_task(self.send_livetrack_course(False))
 
     def send_livetrack_course_reset(self):
         self.course_send_status = "RESET"
         if not self.check_livetrack():
             return
-        asyncio.get_running_loop().run_in_executor(
-            None, self.send_livetrack_course, True
-        )
+        asyncio.create_task(self.send_livetrack_course(True))
     
     def check_time_interval(self, time_key, interval_sec, quick_send):
         t = int(time.time())

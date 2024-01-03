@@ -510,11 +510,20 @@ class MapTileWithValues():
     async def update_overlay_windmap_timeline(self, map_settings, map_name):
 
         if map_name.startswith("jpn_scw"):
+
+            # check lock
+            if self.get_scw_lock:
+                return
+
+            # check network
+            if not self.config.G_AUTO_BT_TETHERING and not detect_network():
+                return
+
             asyncio.create_task(
                 self.update_jpn_scw_timeline(map_settings, self.update_overlay_wind_basetime)
             )
             return
-        
+
         if not self.update_overlay_wind_basetime(map_settings):
             return
         # basetime update
@@ -528,18 +537,14 @@ class MapTileWithValues():
         update_basetime(map_settings)
         if map_settings["timeline_update_date"] == map_settings["current_time"]:
             return
-
-        # check lock
-        if self.get_scw_lock:
-            # app_logger.debug("get_scw_list Locked")
-            return
+        
         # open connection
+        self.get_scw_lock = True
         f_name = self.update_jpn_scw_timeline.__name__
         if not await self.config.network.open_bt_tethering(f_name):
             return
 
-        # app_logger.debug("get_scw_list connection start...")
-        self.get_scw_lock = True
+        # app_logger.info("get_scw_list connection start...")
         url = map_settings["inittime"].format(rand=random())
         init_time_list = await get_scw_list(url, map_settings["referer"])
         if init_time_list is None:
@@ -569,7 +574,7 @@ class MapTileWithValues():
                 map_settings["validtime"] = tl["it"]
                 map_settings["subdomain"] = tl["sd"]
                 map_settings["timeline_update_date"] = map_settings["current_time"]
-                # app_logger.debug(f"get_scw_list Success: {basetime} {tl['it']}]")
+                # app_logger.info(f"get_scw_list Success: {basetime} {tl['it']}]")
                 return
 
     def update_overlay_wind_basetime(self, map_settings):
