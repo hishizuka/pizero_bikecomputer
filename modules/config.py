@@ -360,7 +360,7 @@ class Config:
         "HAVE_API_TOKEN": False,
         "SERVER": "demo.thingsboard.io",
         "TOKEN": "",
-        "INTERVAL_SEC": 120,
+        "INTERVAL_SEC": 180,
     }
 
     # IMU axis conversion

@@ -97,9 +97,7 @@ class Network:
             res = None
             try:
                 await self.open_bt_tethering(f_name)
-                # app_logger.info(f"start download files({len(q['urls'])}), {q['urls'][0]} / {self.download_queue.qsize()}")
                 res = await download_files(**q)
-                # app_logger.info(res)
                 self.download_queue.task_done()
             except concurrent.futures._base.CancelledError:
                 return
@@ -107,8 +105,8 @@ class Network:
             # all False -> give up
             if not any(res) or res is None:
                 failed.append((datetime.now(), q))
-                app_logger.error(f"failed download ({len(q['urls'])}), {bool(detect_network())}")
-                app_logger.debug(q["urls"])
+                app_logger.error(f"failed download ({len(q['urls'])}), network: {bool(detect_network())}")
+                app_logger.error(q["urls"])
             # retry
             elif not all(res) and len(q["urls"]) and len(q["urls"]) == len(res):
                 retry_urls = []
@@ -297,9 +295,7 @@ class Network:
             app_logger.error(f"[BT] connect error, network: {bool(detect_network())}({count}s), f_name: {f_name}")
             return False
 
-        # app_logger.debug(f"bt_pan_status:{bt_pan_status}, {detect_network()}")
         await asyncio.sleep(5)
-
         app_logger.info(f"[BT] connect, network: {bool(detect_network())}({count}s), f_name: {f_name}")
         
         return True
