@@ -139,42 +139,31 @@ class api:
 
     async def get_openmeteo_current_wind_data(self, pos):
 
+        # check pos
         if np.any(np.isnan(pos)):
             return [np.nan, np.nan]
 
+        # check interval
         if not self.check_time_interval(
             "OPENMETEO_WIND",
             self.config.G_OPENMETEO_API["INTERVAL_SEC"],
             False
         ):
             return self.pre_value["OPENMETEO_WIND"]
-
-        # open connection
-        f_name = self.get_openmeteo_current_wind_data.__name__
-        if not await self.config.network.open_bt_tethering(f_name):
+        
+        # check network
+        if not self.config.G_AUTO_BT_TETHERING and not detect_network():
             return self.pre_value["OPENMETEO_WIND"]
 
-        if not detect_network():
-            return [np.nan, np.nan]
-
-        res = await self.get_openmeteo_current_wind_data_internal(pos)
-
-        # close connection
-        await self.config.network.close_bt_tethering(f_name)
-        
-        if "current" in res:
-            self.pre_value["OPENMETEO_WIND"] = [
-                res["current"]["wind_speed_10m"],
-                res["current"]["wind_direction_10m"]
-            ]
-
+        asyncio.create_task(self.get_openmeteo_current_wind_data_internal(pos))
         return self.pre_value["OPENMETEO_WIND"]
     
     async def get_openmeteo_current_wind_data_internal(self, pos):
-        if not detect_network():
-            return None
-        if np.any(np.isnan(pos)):
-            return None
+
+        # open connection
+        f_name = self.get_openmeteo_current_wind_data_internal.__name__
+        if not await self.config.network.open_bt_tethering(f_name):
+            return
 
         vars_str = "wind_speed_10m,wind_direction_10m,wind_gusts_10m"
         url = "{}?latitude={}&longitude={}&current={}&wind_speed_unit=ms".format(
@@ -185,8 +174,15 @@ class api:
         )
         response = await get_json(url)
         # response["elevation"], response["current"][{vars}]
-        
-        return response
+
+        # close connection
+        await self.config.network.close_bt_tethering(f_name)
+
+        if "current" in response:
+            self.pre_value["OPENMETEO_WIND"] = [
+                response["current"]["wind_speed_10m"],
+                response["current"]["wind_direction_10m"]
+            ]
 
     async def get_ridewithgps_route(self, add=False, reset=False):
         if (
