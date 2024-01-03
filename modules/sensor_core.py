@@ -389,7 +389,7 @@ class SensorCore:
                     )
 
                 # wind
-                if self.config.G_USE_WIND_OVERLAY_MAP:
+                if self.config.G_USE_WIND_DATA_SOURCE:
                     (
                         self.values["integrated"]["wind_speed"], 
                         self.values["integrated"]["wind_direction"],
