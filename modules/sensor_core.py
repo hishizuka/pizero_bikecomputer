@@ -70,6 +70,8 @@ class SensorCore:
     }  # valid period of sensor [sec]
     grade_range = 9
     grade_window_size = 5
+    spd_diff_for_brakelight = []
+    spd_diff_for_brakelight_range = 4
     graph_keys = [
         "hr_graph",
         "power_graph",
@@ -104,6 +106,7 @@ class SensorCore:
             ] * self.config.G_GUI_PERFORMANCE_GRAPH_DISPLAY_RANGE
         for d in self.diff_keys:
             self.values["integrated"][d] = [np.nan] * self.grade_range
+        self.spd_diff_for_brakelight = [0] * self.spd_diff_for_brakelight_range
         self.values["integrated"]["CPU_MEM"] = ""
 
         for s in self.average_secs:
@@ -187,6 +190,7 @@ class SensorCore:
                 hr = spd = cdc = pwr = temperature = self.config.G_ANT_NULLVALUE
                 grade = grade_spd = glide = self.config.G_ANT_NULLVALUE
                 ttlwork_diff = 0
+                spd_diff = 0
                 dst_diff = {"ANT+": 0, "GPS": 0, "USE": 0}
                 alt_diff = {"ANT+": 0, "GPS": 0, "USE": 0}
                 dst_diff_spd = {"ANT+": 0}
@@ -303,6 +307,8 @@ class SensorCore:
                         and delta["GPS"] < self.time_threshold["SPD"]
                     ):
                         spd = v["GPS"]["speed"]
+                if not np.isnan(self.values["integrated"]["speed"]):
+                    spd_diff = spd - self.values["integrated"]["speed"]
 
                 # Distance: ANT+(SPD, (PWR)) > GPS
                 if self.config.G_ANT["USE"]["SPD"]:
@@ -546,15 +552,19 @@ class SensorCore:
                 ):
                     if v["I2C"]["light"] <= self.config.G_AUTO_BACKLIGHT_CUTOFF:
                         self.config.display.set_brightness(3)
-
-                        if self.config.G_MANUAL_STATUS == "START":
-                            self.sensor_ant.set_light_mode("FLASH_LOW", auto=True)
-
+                        self.sensor_ant.set_light_mode("FLASH_LOW", auto=True, auto_id="auto_backlight")
                     else:
                         self.config.display.set_brightness(0)
+                        self.sensor_ant.set_light_mode("OFF", auto=True, auto_id="auto_backlight")
 
-                        if self.config.G_MANUAL_STATUS == "START":
-                            self.sensor_ant.set_light_mode("OFF", auto=True)
+                # break light
+                self.spd_diff_for_brakelight[:-1] = self.spd_diff_for_brakelight[1:]
+                self.spd_diff_for_brakelight[-1] = spd_diff
+                # 4*3.6 = 14.4 [km/h]
+                if self.values["integrated"]["speed"] < 1 or all((x < 0 for x in self.spd_diff_for_brakelight)):
+                    self.sensor_ant.set_light_mode("FLASH_LOW", auto=True, auto_id="break_light")
+                else:
+                    self.sensor_ant.set_light_mode("OFF", auto=True, auto_id="break_light")
 
                 # cpu and memory
                 if _IMPORT_PSUTIL:

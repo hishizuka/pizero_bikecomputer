@@ -143,13 +143,17 @@ class Config:
     G_MANUAL_STATUS = "INIT"
     G_STOPWATCH_STATUS = "INIT"  # with Auto Pause
 
-    # Auto Pause Cutoff [m/s] (overwritten with setting.conf)
+    # auto pause cutoff [m/s] (overwritten with setting.conf)
     # G_AUTOSTOP_CUTOFF = 0
     G_AUTOSTOP_CUTOFF = 4.0 * 1000 / 3600
 
     # wheel circumference [m] (overwritten from menu)
     # 700x23c: 2.096, 700x25c: 2.105, 700x28c: 2.136
     G_WHEEL_CIRCUMFERENCE = 2.105
+
+    # auto light: brightness sensor and brake(speed(ANT+/GPS))
+    G_USE_AUTO_LIGHT = False
+    G_AUTO_LIGHT_MIN_DURATION = 10
 
     # ANT Null value
     G_ANT_NULLVALUE = np.nan

@@ -168,7 +168,7 @@ class GUI_Config:
         ),
         "Light(ANT+)": (
             G_UNIT["String"],
-            "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['LGT']]['lgt_state']",
+            "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['LGT']]['light_mode']",
         ),
         # ANT+ multi
         "PWR1": (G_UNIT["Power"], "None"),
