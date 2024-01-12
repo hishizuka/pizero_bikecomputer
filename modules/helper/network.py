@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+import time
 import asyncio
 import json
 import concurrent
@@ -74,6 +75,8 @@ class Network:
     bt_tethering_status = {}
     bt_tethering_last_close_time = None
 
+    DOWNLOAD_WORKER_RETRY_SEC = 300
+
     def __init__(self, config):
         self.config = config
 
@@ -102,9 +105,9 @@ class Network:
             except concurrent.futures._base.CancelledError:
                 return
 
-            # all False -> give up
+            # all False
             if not any(res) or res is None:
-                failed.append((datetime.now(), q))
+                failed.append((int(time.time()), q))
                 app_logger.error(f"failed download ({len(q['urls'])}), network: {bool(detect_network())}")
                 app_logger.error(q["urls"])
             # retry
@@ -119,6 +122,15 @@ class Network:
                     q["urls"] = retry_urls
                     q["save_paths"] = retry_save_paths
                     await self.download_queue.put(q)
+
+            # retry for failed
+            if len(failed):
+                t = int(time.time())
+                for i in range(len(failed)):
+                    if t - failed[i][0] > self.DOWNLOAD_WORKER_RETRY_SEC:
+                        print("retry")
+                        await self.download_queue.put(failed.pop(i)[1])
+
 
     # tiles functions
     async def download_maptile(
