@@ -1,5 +1,4 @@
 import struct
-import time
 import datetime
 
 from logger import app_logger
@@ -154,7 +153,7 @@ class ANT_Device:
     def init_after_connect(self):
         pass
 
-    def disconnect(self, isCheck=True, isChange=False, wait=0):
+    def disconnect(self, isCheck=True, isChange=False):
         if not self.config.G_ANT["STATUS"]:
             return
         if isCheck:
@@ -167,7 +166,7 @@ class ANT_Device:
         try:
             self.close_extra()
             self.channel.close()
-            time.sleep(wait)
+            self.channel.wait_for_event([0x07,])  # EVENT_CHANNEL_CLOSED
             if isChange:
                 self.config.G_ANT["USE"][self.name] = False
         except:
@@ -192,7 +191,7 @@ class ANT_Device:
         pass
 
     def stop(self):
-        self.disconnect(self, isCheck=True, isChange=False, wait=0)
+        self.disconnect(self, isCheck=True, isChange=False)
 
     ##############
     # ANT+ pages #

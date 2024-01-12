@@ -81,9 +81,7 @@ class ANT_Device_Search(ant_device.ANT_Device):
     def stop_search(self, resetWait=True):
         if self.config.G_ANT["STATUS"] and self.searchState:
             if self.antName not in ["CTRL"]:
-                self.disconnect(
-                    isCheck=False, isChange=False, wait=0.5
-                )  # USE: True -> False
+                self.disconnect(isCheck=False, isChange=False)  # USE: True -> False
 
                 # for background scan
                 self.channel.enable_extended_messages(0)
@@ -94,7 +92,7 @@ class ANT_Device_Search(ant_device.ANT_Device):
                     self.set_wait_normal_mode()
 
             elif self.antName == "CTRL":
-                self.ctrl_searcher.disconnect(isCheck=False, isChange=False, wait=0.5)
+                self.ctrl_searcher.disconnect(isCheck=False, isChange=False)
                 self.ctrl_searcher.delete()
                 del self.ctrl_searcher
 
