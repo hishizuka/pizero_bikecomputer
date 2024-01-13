@@ -44,6 +44,7 @@ class GUI_Config:
             "self.sensor.values['integrated']['grade_spd']",
         ),
         "GlideRatio": ("{:.0f}m", "self.sensor.values['integrated']['glide_ratio']"),
+        "Temp": ("{:3.0f}C", "self.sensor.values['integrated']['temperature']"),
         # average_values
         "Power(3s)": (
             G_UNIT["Power"],
@@ -178,7 +179,7 @@ class GUI_Config:
         "HR2": (G_UNIT["HeartRate"], "None"),
         "HR3": (G_UNIT["HeartRate"], "None"),
         # Sensor raw
-        "Temp": ("{:3.0f}C", "self.sensor.values['integrated']['temperature']"),
+        "Temp(I2C)": ("{:3.0f}C", "self.sensor.values['I2C']['temperature']"),
         "Pressure": ("{:4.0f}hPa", "self.sensor.values['I2C']['pressure']"),
         "Altitude": (G_UNIT["Altitude"], "self.sensor.values['I2C']['altitude']"),
         "Humidity": ("{:3.0f}%", "self.sensor.values['I2C']['humidity']"),
