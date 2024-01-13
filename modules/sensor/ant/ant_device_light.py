@@ -16,14 +16,16 @@ class ANT_Device_Light(ant_device.ANT_Device):
         "channel_type": 0x00,  # Channel.Type.BIDIRECTIONAL_RECEIVE,
     }
     elements = (
-        "light_mode",
-        "pre_light_mode",
-        "button_state",
-        "auto_state",
-        "changed_timestamp",
+        # "light_mode",
+        # "pre_light_mode",
+        # "button_state",
+        # "auto_state",
+        # "changed_timestamp",
+        # "auto_on_timestamp",
     )
     page_34_count = 0
-    light_retry_timeout = 5
+    light_retry_timeout = 5  #[s]
+    auto_light_min_duration = 10  #[s]
 
     light_modes = {
         "bontrager_flare_rt": {
@@ -86,6 +88,7 @@ class ANT_Device_Light(ant_device.ANT_Device):
         self.values["button_state"] = False
         self.values["auto_state"] = False
         self.values["changed_timestamp"] = datetime.datetime.now()
+        self.values["auto_on_timestamp"] = datetime.datetime.now()
 
     def close_extra(self):
         if self.ant_state in ["quit", "disconnect_ant_sensor"]:
@@ -119,7 +122,7 @@ class ANT_Device_Light(ant_device.ANT_Device):
             ):
                 self.page_34_count -= 1
                 app_logger.info(
-                    f"Retry to change light mode...\n"
+                    f"Retry to change light mode "
                     f"from: {mode} / "
                     f"to: {self.values['light_mode']} / "
                     f"seq_no: {seq_no} / "
@@ -208,6 +211,9 @@ class ANT_Device_Light(ant_device.ANT_Device):
             if not self.values["auto_state"] and self.values["light_mode"] != "OFF":
                 return
 
+            if self.values["auto_state"] and self.values["light_mode"] != "OFF":
+                self.values["auto_on_timestamp"] = datetime.datetime.now()
+
         if auto:
             self.values["auto_state"] = True
         else:
@@ -225,9 +231,9 @@ class ANT_Device_Light(ant_device.ANT_Device):
             self.values["light_mode"] is not None
             and self.values["light_mode"] != self.values["pre_light_mode"]
         ):
-            app_logger.info(
-                f"ANT+ Light mode change: {self.values['pre_light_mode']} -> {self.values['light_mode']}"
-            )
+            # app_logger.info(
+            #     f"ANT+ Light mode change: {self.values['pre_light_mode']} -> {self.values['light_mode']}"
+            # )
             self.values["pre_light_mode"] = self.values["light_mode"]
             self.send_light_setting(self.values["light_mode"])
 
@@ -236,10 +242,10 @@ class ANT_Device_Light(ant_device.ANT_Device):
             if auto_id is not None:
                 self.auto_off_status[auto_id] = False
             
-            t = (datetime.datetime.now() - self.values["changed_timestamp"]).total_seconds()
+            t = (datetime.datetime.now() - self.values["auto_on_timestamp"]).total_seconds()
             if (
                 any(self.auto_off_status.values())
-                or t < self.config.G_AUTO_LIGHT_MIN_DURATION
+                or t < self.auto_light_min_duration
             ):
                 return
             

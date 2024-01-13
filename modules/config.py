@@ -153,7 +153,6 @@ class Config:
 
     # auto light: brightness sensor and brake(speed(ANT+/GPS))
     G_USE_AUTO_LIGHT = False
-    G_AUTO_LIGHT_MIN_DURATION = 10
 
     # ANT Null value
     G_ANT_NULLVALUE = np.nan
