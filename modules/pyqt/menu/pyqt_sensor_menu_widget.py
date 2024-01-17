@@ -11,11 +11,13 @@ class SensorMenuWidget(MenuWidget):
             ("ANT+ Sensors", "submenu", self.ant_sensors_menu),
             ("ANT+ MultiScan", "submenu", self.ant_multiscan_menu),
             ("Wheel Size", "submenu", self.adjust_wheel_circumference),
+            ("Auto Light", "toggle", lambda: self.onoff_auto_light(True)),
             ("Auto Stop", None, None),
             ("Gross Ave Speed", None, None),
             ("Adjust Altitude", "submenu", self.adjust_altitude),
         )
         self.add_buttons(button_conf)
+        self.onoff_auto_light(False)
 
     def ant_sensors_menu(self):
         if self.config.logger.sensor.sensor_ant.scanner.isUse:
@@ -34,6 +36,13 @@ class SensorMenuWidget(MenuWidget):
         # temporary
         self.config.logger.sensor.sensor_i2c.recalibrate_position()
 
+    def onoff_auto_light(self, change=True):
+        status = self.config.logger.sensor.sensor_ant.toggle_use_auto_light(change)
+        if change:
+            #status = self.config.logger.sensor.sensor_ant.toggle_use_auto_light()
+            #self.config.logger.sensor.sensor_ant.USE_AUTO_LIGHT = not self.config.logger.sensor.sensor_ant.USE_AUTO_LIGHT
+            self.config.state.set_value("USE_AUTO_LIGHT", status, force_apply=True)
+        self.buttons["Auto Light"].change_toggle(status)
 
 class ANTMenuWidget(MenuWidget):
     def setup_menu(self):
