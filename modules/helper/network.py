@@ -277,6 +277,8 @@ class Network:
 
         if not self.config.G_AUTO_BT_TETHERING:
             return True
+        elif self.config.G_AUTO_BT_TETHERING and not self.config.G_BT_USE_ADDRESS:
+            return False
         
         if detect_network():
             if bool(self.bt_tethering_status):
@@ -316,6 +318,11 @@ class Network:
 
         if not self.config.G_AUTO_BT_TETHERING:
             return True
+        elif self.config.G_AUTO_BT_TETHERING and not self.config.G_BT_USE_ADDRESS:
+            return True
+
+        # if BT tethering is ON
+        #     return True
 
         self.bt_tethering_status[f_name] = False
         if (

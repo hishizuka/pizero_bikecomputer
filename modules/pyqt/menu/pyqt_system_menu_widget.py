@@ -155,6 +155,7 @@ class BluetoothTetheringListWidget(ListWidget):
         super().__init__(parent=parent, page_name=page_name, config=config)
 
     def preprocess(self, run_bt_tethering=True):
+        super().preprocess()
         self.run_bt_tethering = run_bt_tethering
 
     def get_default_value(self):

@@ -144,9 +144,10 @@ def get_headwind(wind_speed, wind_track, track):
         return np.nan
     if wind_speed == 0:
         return 0
+    rad_diff = math.radians(wind_track-track)
     # plus: headwind, minus: tailwind
-    return round(math.cos(math.radians(wind_track-track)) * wind_speed, 1)
-
+    return round(math.cos(rad_diff) * wind_speed, 1)
+    # abs(round(math.sin(rad_diff) * wind_speed, 1))  # crosswind
 
 def conv_image(image, map_name):
     res = None
@@ -542,6 +543,7 @@ class MapTileWithValues():
         self.get_scw_lock = True
         f_name = self.update_jpn_scw_timeline.__name__
         if not await self.config.network.open_bt_tethering(f_name):
+            self.get_scw_lock = False
             return
 
         # app_logger.info("get_scw_list connection start...")
