@@ -21,9 +21,9 @@ class MultiScanWidget(ScreenWidget):
     }
 
     item_layout = {
-        "Power": (0, 0),
+        "Power(3s)": (0, 0),
         "HR": (0, 1),
-        "Time": (0, 2),
+        "Speed": (0, 2),
         "HR1": (1, 0),
         "HR2": (1, 1),
         "HR3": (1, 2),
@@ -85,7 +85,7 @@ class MultiScanWidget(ScreenWidget):
                     count["PWR"] += 1
 
         for item in self.items:
-            if item.name in ["HR", "Power", "Time"]:
+            if item.name in ["Power(3s)", "HR", "Speed"]:
                 item.update_value(
                     eval(self.config.gui.gui_config.G_ITEM_DEF[item.name][1])
                 )
