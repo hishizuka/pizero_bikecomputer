@@ -148,7 +148,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
                     self.config.G_MANUAL_STATUS == "START"
                     and values["on_data_timestamp"] is not None
                 ):
-                    # unit: j
+                    # unit: J
                     values["accumulated_power"] += pwr * round(
                         (t - values["on_data_timestamp"]).total_seconds()
                     )
@@ -183,7 +183,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
         # store raw power
         self.config.state.set_value("ant+_power_values_16", power_values[1])
 
-    def on_data_power_0x11(self, data, power_values, pre_values, values):
+    def on_data_power_0x11(self, data, power_values, pre_values, values, resume=True):
         # (page), evt_count, wheel_ticks, x, wheel period(2byte), accumulated power(2byte)
         (
             power_values[2],
@@ -197,6 +197,9 @@ class ANT_Device_Power(ant_device.ANT_Device):
             pre_values = power_values
             values["on_data_timestamp"] = t
             values["power"] = 0
+
+            if not resume:
+                return
 
             pre_pwr_value = self.config.state.get_value(
                 "ant+_power_values_17", pre_values
@@ -235,7 +238,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
             if pwr <= 65535 and (pwr - values["power"]) < self.spike_threshold["power"]:
                 values["power"] = pwr
                 if self.config.G_MANUAL_STATUS == "START":
-                    # unit: j
+                    # unit: J
                     # values['power'] * delta[0] / 2048 #the unit of delta[0] is 1/2048s
                     values["accumulated_power"] += 128 * math.pi * delta[1] / 2048
                 # refresh timestamp called from sensor_core
@@ -269,7 +272,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
         # store raw power
         self.config.state.set_value("ant+_power_values_17", power_values)
 
-    def on_data_power_0x12(self, data, power_values, pre_values, values):
+    def on_data_power_0x12(self, data, power_values, pre_values, values, resume=True):
         # (page), x, x, cadence, period(2byte), accumulatd power(2byte)
         (cadence, power_values[0], power_values[1]) = self.structPattern[self.name][
             0x12
@@ -280,6 +283,9 @@ class ANT_Device_Power(ant_device.ANT_Device):
             values["on_data_timestamp"] = t
             values["power"] = 0
 
+            if not resume:
+                return
+
             pre_pwr_value = self.config.state.get_value(
                 "ant+_power_values_18", pre_values[1]
             )
@@ -289,10 +295,10 @@ class ANT_Device_Power(ant_device.ANT_Device):
             if diff > 0:
                 values["accumulated_power"] += 128 * math.pi * diff / 2048
                 app_logger.info(
-                    f"### resume pwr {diff} {pre_values[1]} {pre_pwr_value} ###"
+                    f"### resume pwr: diff:{diff} = {pre_values[1]} - {pre_pwr_value} ###"
                 )
                 app_logger.info(
-                    f"### resume pwr {int(values['accumulated_power'])} { int(128 * math.pi * diff / 2048)} [j] ###"
+                    f"### resume pwr: {int(values['accumulated_power'])} [J], +{int(128 * math.pi * diff / 2048)} [J] ###"
                 )
             return
 
@@ -312,7 +318,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
                 values["power"] = pwr
                 values["cadence"] = cadence
                 if self.config.G_MANUAL_STATUS == "START":
-                    # unit: j
+                    # unit: J
                     # values['power'] * delta[0] / 2048 #the unit of delta[0] is 1/2048s
                     values["accumulated_power"] += 128 * math.pi * delta[1] / 2048
                 # refresh timestamp called from sensor_core

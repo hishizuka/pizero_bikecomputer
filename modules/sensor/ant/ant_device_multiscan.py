@@ -104,73 +104,7 @@ class ANT_Device_MultiScan(ant_device.ANT_Device):
             if antIDType == self.config.G_ANT["ID_TYPE"]["PWR"]:
                 self.mainAntDevice[antIDType].on_data(data)
             else:
-                if antIDType not in self.values:
-                    self.values[antIDType] = {}
-                    self.power_values[antIDType] = {
-                        0x10: {
-                            "power": 0,
-                            "accumulated_power": 0,
-                            "on_data_timestamp": None,
-                        },
-                        0x11: {
-                            "power": 0,
-                            "accumulated_power": 0,
-                            "distance": 0,
-                            "on_data_timestamp": None,
-                        },
-                        0x12: {
-                            "power": 0,
-                            "accumulated_power": 0,
-                            "on_data_timestamp": None,
-                        },
-                        0x50: {"manu_name": ""},
-                    }
-                    self.power_meter_value[antIDType] = {
-                        0x10: [-1, -1, -1, -1],
-                        0x11: [-1, -1, -1, -1],
-                        0x12: [-1, -1, -1, -1],
-                    }
-                    self.pre_power_meter_value[antIDType] = {
-                        0x10: [-1, -1, -1, -1],
-                        0x11: [-1, -1, -1, -1],
-                        0x12: [-1, -1, -1, -1],
-                    }
-                self.values[antIDType]["timestamp"] = datetime.datetime.now()
-                if data[0] == 0x10:
-                    self.dummyPowerDevice.on_data_power_0x10(
-                        data,
-                        self.power_meter_value[antIDType][0x10],
-                        self.pre_power_meter_value[antIDType][0x10],
-                        self.power_values[antIDType][0x10],
-                    )
-                    self.values[antIDType]["power"] = self.power_values[antIDType][
-                        0x10
-                    ]["power"]
-                elif data[0] == 0x11:
-                    self.dummyPowerDevice.on_data_power_0x11(
-                        data,
-                        self.power_meter_value[antIDType][0x11],
-                        self.pre_power_meter_value[antIDType][0x11],
-                        self.power_values[antIDType][0x11],
-                    )
-                    self.values[antIDType]["power"] = self.power_values[antIDType][
-                        0x11
-                    ]["power"]
-                elif data[0] == 0x12:
-                    self.dummyPowerDevice.on_data_power_0x12(
-                        data,
-                        self.power_meter_value[antIDType][0x12],
-                        self.pre_power_meter_value[antIDType][0x12],
-                        self.power_values[antIDType][0x12],
-                    )
-                    self.values[antIDType]["power"] = self.power_values[antIDType][
-                        0x12
-                    ]["power"]
-                elif data[0] == 0x50:
-                    self.setCommonPage80(data, self.power_values[antIDType][0x50])
-                    self.values[antIDType]["manu_name"] = self.power_values[antIDType][
-                        0x50
-                    ]["manu_name"]
+                self.on_data_power_scan(antIDType, data)
         # Speed
         elif antType in self.config.G_ANT["TYPES"]["SPD"]:
             if antIDType == self.config.G_ANT["ID_TYPE"]["SPD"]:
@@ -183,3 +117,69 @@ class ANT_Device_MultiScan(ant_device.ANT_Device):
         elif antType in self.config.G_ANT["TYPES"]["TEMP"]:
             if antIDType == self.config.G_ANT["ID_TYPE"]["TEMP"]:
                 self.mainAntDevice[antIDType].on_data(data)
+
+    def on_data_power_scan(self, antIDType, data):
+
+        if antIDType not in self.values:
+            self.values[antIDType] = {}
+            self.power_values[antIDType] = {
+                0x10: {
+                    "power": 0,
+                    "accumulated_power": 0,
+                    "on_data_timestamp": None,
+                },
+                0x11: {
+                    "power": 0,
+                    "accumulated_power": 0,
+                    "distance": 0,
+                    "on_data_timestamp": None,
+                },
+                0x12: {
+                    "power": 0,
+                    "accumulated_power": 0,
+                    "on_data_timestamp": None,
+                },
+                0x50: {"manu_name": ""},
+            }
+            self.power_meter_value[antIDType] = {
+                0x10: [-1, -1, -1, -1],
+                0x11: [-1, -1, -1, -1],
+                0x12: [-1, -1, -1, -1],
+            }
+            self.pre_power_meter_value[antIDType] = {
+                0x10: [-1, -1, -1, -1],
+                0x11: [-1, -1, -1, -1],
+                0x12: [-1, -1, -1, -1],
+            }
+
+        v = self.values[antIDType]
+        v["timestamp"] = datetime.datetime.now()
+        if data[0] == 0x10:
+            self.dummyPowerDevice.on_data_power_0x10(
+                data,
+                self.power_meter_value[antIDType][0x10],
+                self.pre_power_meter_value[antIDType][0x10],
+                self.power_values[antIDType][0x10],
+            )
+            v["power"] = self.power_values[antIDType][0x10]["power"]
+        elif data[0] == 0x11:
+            self.dummyPowerDevice.on_data_power_0x11(
+                data,
+                self.power_meter_value[antIDType][0x11],
+                self.pre_power_meter_value[antIDType][0x11],
+                self.power_values[antIDType][0x11],
+                resume=False,
+            )
+            v["power"] = self.power_values[antIDType][0x11]["power"]
+        elif data[0] == 0x12:
+            self.dummyPowerDevice.on_data_power_0x12(
+                data,
+                self.power_meter_value[antIDType][0x12],
+                self.pre_power_meter_value[antIDType][0x12],
+                self.power_values[antIDType][0x12],
+                resume=False,
+            )
+            v["power"] = self.power_values[antIDType][0x12]["power"]
+        elif data[0] == 0x50:
+            self.setCommonPage80(data, self.power_values[antIDType][0x50])
+            v["manu_name"] = self.power_values[antIDType][0x50]["manu_name"]
