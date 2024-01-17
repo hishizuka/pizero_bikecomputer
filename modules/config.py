@@ -151,9 +151,6 @@ class Config:
     # 700x23c: 2.096, 700x25c: 2.105, 700x28c: 2.136
     G_WHEEL_CIRCUMFERENCE = 2.105
 
-    # auto light: brightness sensor and brake(speed(ANT+/GPS))
-    G_USE_AUTO_LIGHT = False
-
     # ANT Null value
     G_ANT_NULLVALUE = np.nan
     # ANT+ setting (overwritten with setting.conf)

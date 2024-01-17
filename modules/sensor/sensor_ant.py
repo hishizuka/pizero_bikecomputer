@@ -45,6 +45,9 @@ class SensorANT(Sensor):
     scanner = None
     device = {}
 
+    # auto light: brightness sensor and brake(speed(ANT+/GPS))
+    USE_AUTO_LIGHT = False
+
     def sensor_init(self):
         global _SENSOR_ANT
         if self.config.G_ANT["STATUS"] and not _SENSOR_ANT:
@@ -108,6 +111,10 @@ class SensorANT(Sensor):
                 self.values[ac["PWR"]][key] = {"accumulated_power": 0}
 
         self.reset()
+
+        self.USE_AUTO_LIGHT = self.config.state.get_value(
+            "USE_AUTO_LIGHT", self.USE_AUTO_LIGHT
+        )
 
     def start_coroutine(self):
         asyncio.create_task(self.start())
@@ -262,22 +269,25 @@ class SensorANT(Sensor):
     def stop_continuous_scan(self):
         self.scanner.set_wait_quick_mode()
         self.scanner.stop_scan()
-        antIDTypes = []
+        antIDTypes = set()
         for k, v in self.config.G_ANT["USE"].items():
-            if v and not self.config.G_ANT["ID_TYPE"][k] in antIDTypes:
-                antIDTypes.append(self.config.G_ANT["ID_TYPE"][k])
-        for antIDType in antIDTypes:
-            self.device[antIDType].connect(
-                isCheck=True, isChange=False
-            )  # USE: True -> True
+            antIDType = self.config.G_ANT["ID_TYPE"][k]
+            if v and antIDType not in antIDTypes:
+                antIDTypes.add(antIDType)
+                self.device[antIDType].connect(isCheck=True, isChange=False)  # USE: True -> True
         self.scanner.set_wait_normal_mode()
 
     def set_light_mode(self, mode, auto=False, auto_id=None):
         if "LGT" not in self.config.G_ANT["USE"] or not self.config.G_ANT["USE"]["LGT"]:
             return
         if auto and (
-            not self.config.G_USE_AUTO_LIGHT
+            not self.USE_AUTO_LIGHT
             or self.config.G_MANUAL_STATUS != "START"
         ):
             return
         self.device[self.config.G_ANT["ID_TYPE"]["LGT"]].send_light_mode(mode, auto, auto_id)
+    
+    def toggle_use_auto_light(self, change):
+        if change:
+            self.USE_AUTO_LIGHT = not self.USE_AUTO_LIGHT
+        return self.USE_AUTO_LIGHT
