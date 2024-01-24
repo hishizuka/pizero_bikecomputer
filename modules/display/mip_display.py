@@ -12,11 +12,11 @@ try:
     import pigpio
 
     _SENSOR_DISPLAY = True
-    import pyximport
 
+    import pyximport
     pyximport.install()
     from .cython.mip_helper import conv_3bit_color, MipDisplay_CPP
-
+    
     MODE = "Cython_full"
 except ImportError:
     pass
