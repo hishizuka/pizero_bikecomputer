@@ -108,6 +108,8 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
         if (
             lat is None
             or lon is None
+            or type(lon) != float
+            or type(lat) != float
             or abs(lat) > 90
             or abs(lon) > 180
             or mode is None
