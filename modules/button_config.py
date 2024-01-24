@@ -62,9 +62,9 @@ class Button_Config:
         "Edge_Remote": {
             "MAIN": {
                 "PAGE": ("scroll_prev", "scroll_next"),
-                "CUSTOM": ("get_screenshot", "enter_menu"),
-                #"CUSTOM": ("change_mode", "enter_menu"),
-                #"CUSTOM": ("multiscan", "enter_menu"),
+                "CUSTOM": ("change_mode", "enter_menu"),
+                #"CUSTOM": ("get_screenshot", "enter_menu"),
+                #"CUSTOM": ("get_screenshot", "turn_on_off_light"),
                 "LAP": ("count_laps",),
             },
             "MAIN_1": {
@@ -79,8 +79,8 @@ class Button_Config:
             },
             "MAP": {
                 "PAGE": ("scroll_prev", "scroll_next"),
-                #"CUSTOM": ("change_mode", "map_zoom_minus"),
-                "CUSTOM": ("get_screenshot", "map_zoom_minus"),
+                "CUSTOM": ("change_mode", "map_zoom_minus"),
+                #"CUSTOM": ("get_screenshot", "map_zoom_minus"),
                 "LAP": ("map_zoom_plus",),
             },
             "MAP_1": {
@@ -120,7 +120,7 @@ class Button_Config:
         },
         "Papirus": {
             "MAIN": {
-                16: ("scroll_prev", ""),  # SW1(left)
+                16: ("scroll_prev", ""),            # SW1(left)
                 26: ("count_laps", "reset_count"),  # SW2
                 20: ("start_and_stop_manual", ""),  # SW3
                 21: ("scroll_next", "enter_menu"),  # SW4
@@ -142,7 +142,47 @@ class Button_Config:
                 20: ("press_tab", "back_menu"),
             },
         },
+        "Pirate_Audio": {
+            "MAIN": {
+                5: ("scroll_prev", "change_mode"),  # A
+                6: ("count_laps", "reset_count"),   # B
+                16: ("scroll_next", "enter_menu"),  # X
+                24: ("start_and_stop_manual", ""),  # Y
+            },
+            "MAIN_1": {
+                5: ("scroll_prev", "change_mode"),
+                6: ("count_laps", ""),
+                16: ("scroll_next", "enter_menu"),
+                24: ("brightness_control", ""),
+            },
+            "MENU": {
+                5: ("press_shift_tab", ""),
+                6: ("back_menu", ""),
+                16: ("press_tab", ""),
+                24: ("press_space", ""),
+            },
+            "MAP": {
+                5: ("scroll_prev", ""),
+                6: ("map_zoom_minus", ""),
+                16: ("scroll_next", "enter_menu"),
+                24: ("map_zoom_plus", "change_map_overlays"),
+            },
+            "COURSE_PROFILE": {
+                5: ("scroll_prev", ""),
+                6: ("map_zoom_minus", ""),
+                16: ("scroll_next", "enter_menu"),
+                24: ("map_zoom_plus", ""),
+            },
+        },
+        "Pirate_Audio_old": {},
+        "Display_HAT_Mini": {},
     }
+    # copy button definition    
+    G_BUTTON_DEF["Display_HAT_Mini"] = G_BUTTON_DEF["Pirate_Audio"]
+    G_BUTTON_DEF["Pirate_Audio_old"] = G_BUTTON_DEF["Pirate_Audio"]
+    for k in G_BUTTON_DEF["Pirate_Audio_old"]:
+        # Y key is GPIO 20, not 24
+        G_BUTTON_DEF["Pirate_Audio_old"][k][20] = G_BUTTON_DEF["Pirate_Audio_old"][k].pop(24)
 
     G_PAGE_MODE = "MAIN"
 
