@@ -59,6 +59,10 @@ Pros&Cons
 - Recommend if you think costs. I think it's better than PiTFT and E-ink displays.
 - <img src="https://user-images.githubusercontent.com/12926652/91795951-fe3ee280-ec59-11ea-8fc1-b5ae35a7306f.png" width=360 />
 
+### [Display HAT Mini](https://shop.pimoroni.com/products/display-hat-mini?variant=39496084717651)
+
+### [Pirate Audio](https://shop.pimoroni.com/collections/pirate-audio)
+
 ### [PiTFT 2.4](https://www.adafruit.com/product/2455)  (OBSOLETE)
 
 Pros&Cons
@@ -183,6 +187,9 @@ get battery percent, etc.
 
 - [PiJuice HAT](https://uk.pi-supply.com/products/pijuice-standard) / [PiJuice Zero](https://uk.pi-supply.com/products/pijuice-zero)
 - <img src="https://user-images.githubusercontent.com/12926652/91799334-d0f63280-ec61-11ea-9a96-429991011b08.png" width=240 />
+- [PiSugar3](https://www.pisugar.com) ([Github](https://github.com/PiSugar/PiSugar/wiki/PiSugar-3-Series))
+
+
 
 ## ANT+ USB dongle
 - available in eBay or aliexpress

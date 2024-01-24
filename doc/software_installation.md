@@ -127,6 +127,12 @@ $ sudo systemctl enable pigpiod
 $ sudo systemctl start pigpiod
 ```
 
+#### Display HAT Mini, Pirate Audio
+
+```
+$ sudo pip3 install st7789
+```
+
 #### PiTFT 2.4
 
 see [hardware_installation_pitft.md](./hardware_installation_pitft.md#display)
@@ -624,6 +630,8 @@ Set the value before starting the program. If the value is set during running, i
   - `MIP_Sharp`: SHARP Memory Display Breakout
   - `Papirus`: PaPiRus ePaper / eInk Screen HAT
   - `DFRobot_RPi_Display`: e-ink Display Module
+  - `Pirate_Audio`, `Pirate_Audio_old`: Pirate Audio ("old" assigns the Y button to GPIO 20.)
+  - `Display_HAT_Mini`: Display HAT Mini
 - `autostop_cutoff`
   - Set the threshold for the speed at which the stopwatch will automatically stop/start after it is activated.
   - The default value is `4` [km/h].
