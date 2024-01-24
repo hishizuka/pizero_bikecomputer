@@ -774,7 +774,7 @@ class MapWidget(BaseMapWidget):
                 )).convert("RGBA")
 
             if (
-                self.config.G_DISPLAY in ("MIP", "MIP_640")
+                self.config.G_DISPLAY in ("MIP", "MIP_640", "MIP_Mraa", "MIP_Mraa_640")
                 and (
                     map_name.startswith("jpn_scw")
                     or map_name.startswith("jpn_jma_bousai")

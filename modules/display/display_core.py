@@ -10,10 +10,15 @@ SUPPORTED_DISPLAYS = {
     "PiTFT": None,
     "MIP": None,  # LPM027M128C, LPM027M128B
     "MIP_640": (640, 480),  # LPM044M141A
+    "MIP_Mraa": None,  # LPM027M128C, LPM027M128B
+    "MIP_Mraa_640": (640, 480),  # LPM044M141A
     "MIP_Sharp": None,
     "MIP_Sharp_320": (320, 240),
     "Papirus": None,
     "DFRobot_RPi_Display": None,
+    "Pirate_Audio": None,
+    "Pirate_Audio_old": None,
+    "Display_HAT_Mini": (320, 240),
 }
 
 
@@ -130,11 +135,16 @@ def init_display(config):
 
         if _SENSOR_DISPLAY:
             display = MipDisplay(config, SUPPORTED_DISPLAYS[config.G_DISPLAY])
-    elif config.G_DISPLAY in ("MIP_Sharp", "MIP_Sharp_320"):
+    elif config.G_DISPLAY.startswith("MIP_Sharp"):
         from .mip_sharp_display import _SENSOR_DISPLAY, MipSharpDisplay
 
         if _SENSOR_DISPLAY:
             display = MipSharpDisplay(config, SUPPORTED_DISPLAYS[config.G_DISPLAY])
+    elif config.G_DISPLAY.startswith("MIP_Mraa"):
+        from .mip_mraa_display import _SENSOR_DISPLAY, MipMraaDisplay
+
+        if _SENSOR_DISPLAY:
+            display = MipMraaDisplay(config, SUPPORTED_DISPLAYS[config.G_DISPLAY])
     elif config.G_DISPLAY == "Papirus":
         from .papirus_display import _SENSOR_DISPLAY, PapirusDisplay
 
@@ -145,5 +155,13 @@ def init_display(config):
 
         if _SENSOR_DISPLAY:
             display = DFRobotRPiDisplay(config)
+    elif config.G_DISPLAY.startswith("Pirate_Audio") or config.G_DISPLAY == "Display_HAT_Mini":
+        from .st7789_display import _SENSOR_DISPLAY, ST7789Display
+
+        if _SENSOR_DISPLAY:
+            if config.G_DISPLAY.startswith("Pirate_Audio"):
+                display = ST7789Display(config)
+            elif config.G_DISPLAY == "Display_HAT_Mini":
+                display = ST7789Display(config, SUPPORTED_DISPLAYS[config.G_DISPLAY])
 
     return display

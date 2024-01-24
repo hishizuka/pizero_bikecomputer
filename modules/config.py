@@ -24,15 +24,6 @@ from modules.utils.map import (
 )
 from modules.utils.timer import Timer
 
-_IS_RASPI = False
-try:
-    import RPi.GPIO as GPIO
-
-    GPIO.setmode(GPIO.BCM)
-    _IS_RASPI = True
-except ImportError:
-    pass
-
 
 class Config:
     #######################
@@ -75,7 +66,7 @@ class Config:
     G_VERSION_MAJOR = 0  # need to be initialized
     G_VERSION_MINOR = 1  # need to be initialized
     G_UNIT_ID = "0000000000000000"  # initialized in get_serial
-    G_UNIT_ID_HEX = 0x1A2B3C4D  # initialized in get_serial
+    G_UNIT_ID_HEX = 0x00000000  # initialized in get_serial
     G_UNIT_MODEL = ""
     G_UNIT_HARDWARE = ""
 
@@ -224,7 +215,9 @@ class Config:
     G_FULLSCREEN = False
 
     # display type (overwritten with setting.conf)
-    G_DISPLAY = "None"  # PiTFT, MIP, MIP_640, Papirus, MIP_Sharp, MIP_Sharp_320, DFRobot_RPi_Display
+    # PiTFT, MIP, MIP_640, MIP_Mraa, MIP_Mraa_640, MIP_Sharp, MIP_Sharp_320, 
+    # Papirus, DFRobot_RPi_Display, Pirate_Audio, Pirate_Audio_old(Y button is GPIO 20), Display_HAT_Mini
+    G_DISPLAY = "None"
 
     G_DISPLAY_PARAM = {
         "SPI_CLOCK": 2000000,
@@ -400,8 +393,15 @@ class Config:
 
     def __init__(self):
         # Raspbian OS detection
-        if _IS_RASPI:
-            self.G_IS_RASPI = True
+        proc_model = "/proc/device-tree/model"
+        if os.path.exists(proc_model) and os.path.exists(proc_model):
+            with open(proc_model) as f:
+                p = f.read()
+                if p.find("Raspberry Pi") == 0:
+                    self.G_IS_RASPI = True
+                elif p.find("Radxa Zero") == 0:
+                    self.G_IS_RASPI = True
+                    self.G_DISPLAY_PARAM["SPI_CLOCK"] = 10000000
 
         # get options
         parser = argparse.ArgumentParser()
