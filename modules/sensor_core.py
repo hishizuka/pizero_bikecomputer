@@ -562,7 +562,7 @@ class SensorCore:
                     all((s < self.brakelight_spd_cutoff for s in self.brakelight_spd)) 
                     or (
                         self.values["integrated"]["speed"] > self.brakelight_spd_cutoff
-                        and self.brakelight_spd[0] - self.brakelight_spd[-1] > self.brakelight_spd[0]*0.1
+                        and self.brakelight_spd[0] - self.brakelight_spd[-1] > self.brakelight_spd[0]*0.05
                     )
                 ):
                     self.sensor_ant.set_light_mode("FLASH_LOW", auto=True, auto_id="break_light")

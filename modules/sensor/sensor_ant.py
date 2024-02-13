@@ -66,6 +66,10 @@ class SensorANT(Sensor):
         )
         self.scanner.set_main_ant_device(self.device)
 
+        self.USE_AUTO_LIGHT = self.config.state.get_value(
+            "USE_AUTO_LIGHT", self.USE_AUTO_LIGHT
+        )
+
         # auto connect ANT+ sensor from setting.conf
         if self.config.G_ANT["STATUS"] and not self.config.G_DUMMY_OUTPUT:
             for key in self.config.G_ANT["ID"].keys():
@@ -110,11 +114,8 @@ class SensorANT(Sensor):
             for key in [0x10, 0x11, 0x12]:
                 self.values[ac["PWR"]][key] = {"accumulated_power": 0}
 
+        # for dummy device
         self.reset()
-
-        self.USE_AUTO_LIGHT = self.config.state.get_value(
-            "USE_AUTO_LIGHT", self.USE_AUTO_LIGHT
-        )
 
     def start_coroutine(self):
         asyncio.create_task(self.start())
@@ -265,6 +266,7 @@ class SensorANT(Sensor):
             dv.disconnect(isCheck=True, isChange=False)  # USE: True -> True
         self.scanner.set_wait_scan_mode()
         self.scanner.scan()
+        app_logger.info("START ANT+ multiscan")
 
     def stop_continuous_scan(self):
         self.scanner.set_wait_quick_mode()
@@ -276,6 +278,7 @@ class SensorANT(Sensor):
                 antIDTypes.add(antIDType)
                 self.device[antIDType].connect(isCheck=True, isChange=False)  # USE: True -> True
         self.scanner.set_wait_normal_mode()
+        app_logger.info("STOP ANT+ multiscan")
 
     def set_light_mode(self, mode, auto=False, auto_id=None):
         if "LGT" not in self.config.G_ANT["USE"] or not self.config.G_ANT["USE"]["LGT"]:

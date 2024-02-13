@@ -18,6 +18,9 @@ class SensorMenuWidget(MenuWidget):
         )
         self.add_buttons(button_conf)
         self.onoff_auto_light(False)
+    
+    def preprocess(self):
+        self.buttons["Auto Light"].onoff_button(self.config.G_ANT["USE"]["LGT"])
 
     def ant_sensors_menu(self):
         if self.config.logger.sensor.sensor_ant.scanner.isUse:
@@ -39,8 +42,6 @@ class SensorMenuWidget(MenuWidget):
     def onoff_auto_light(self, change=True):
         status = self.config.logger.sensor.sensor_ant.toggle_use_auto_light(change)
         if change:
-            #status = self.config.logger.sensor.sensor_ant.toggle_use_auto_light()
-            #self.config.logger.sensor.sensor_ant.USE_AUTO_LIGHT = not self.config.logger.sensor.sensor_ant.USE_AUTO_LIGHT
             self.config.state.set_value("USE_AUTO_LIGHT", status, force_apply=True)
         self.buttons["Auto Light"].change_toggle(status)
 

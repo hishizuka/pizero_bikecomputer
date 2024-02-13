@@ -156,7 +156,7 @@ class TopMenuWidget(MenuWidget):
             # Name(page_name), button_attribute, connected functions, layout
             ("Sensors", "submenu", self.sensors_menu),
             ("Courses", "submenu", self.courses_menu),
-            ("Connectivity", "submenu", self.livetrack_menu),
+            ("Connectivity", "submenu", self.connectivity_menu),
             ("Upload Activity", "submenu", self.cloud_services_menu),
             ("Map and Data", "submenu", self.map_menu),
             ("Profile", "submenu", self.profile_menu),
@@ -165,16 +165,16 @@ class TopMenuWidget(MenuWidget):
         self.add_buttons(button_conf)
 
     def sensors_menu(self):
-        self.change_page("Sensors")
-
-    def cloud_services_menu(self):
-        self.change_page("Upload Activity")
+        self.change_page("Sensors", preprocess=True)
 
     def courses_menu(self):
         self.change_page("Courses", preprocess=True)
 
-    def livetrack_menu(self):
+    def connectivity_menu(self):
         self.change_page("Connectivity", preprocess=True)
+
+    def cloud_services_menu(self):
+        self.change_page("Upload Activity")
 
     def map_menu(self):
         self.change_page("Map and Data")
