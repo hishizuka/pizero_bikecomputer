@@ -1,3 +1,5 @@
+import copy
+
 class Button_Config:
     config = None
 
@@ -177,9 +179,9 @@ class Button_Config:
         "Pirate_Audio_old": {},
         "Display_HAT_Mini": {},
     }
-    # copy button definition    
-    G_BUTTON_DEF["Display_HAT_Mini"] = G_BUTTON_DEF["Pirate_Audio"]
-    G_BUTTON_DEF["Pirate_Audio_old"] = G_BUTTON_DEF["Pirate_Audio"]
+    # copy button definition
+    G_BUTTON_DEF["Display_HAT_Mini"] = copy.deepcopy(G_BUTTON_DEF["Pirate_Audio"])
+    G_BUTTON_DEF["Pirate_Audio_old"] = copy.deepcopy(G_BUTTON_DEF["Pirate_Audio"])
     for k in G_BUTTON_DEF["Pirate_Audio_old"]:
         # Y key is GPIO 20, not 24
         G_BUTTON_DEF["Pirate_Audio_old"][k][20] = G_BUTTON_DEF["Pirate_Audio_old"][k].pop(24)

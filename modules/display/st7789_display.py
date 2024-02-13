@@ -6,7 +6,7 @@ from .display_core import Display
 _SENSOR_DISPLAY = False
 try:
     from ST7789 import ST7789
-    import pigpio
+    #import pigpio
 
     _SENSOR_DISPLAY = True
 except ImportError:
@@ -19,6 +19,7 @@ GPIO_BACKLIGHT_FREQ = 64
 
 class ST7789Display(Display):
     st7789 = None
+    rotation = 90
     blank_buffer = None
     blank_draw = None
     # backlight = None
@@ -30,7 +31,8 @@ class ST7789Display(Display):
     send = True
 
     brightness = 100
-    brightness_table = [0, 1, 2, 3, 4, 5, 10, 50, 100]
+    #brightness_table = [0, 1, 2, 3, 4, 5, 10, 50, 100]
+    brightness_table = [0, 100]
     brightness_index = len(brightness_table)-1
 
     size = (240, 240)
@@ -40,24 +42,27 @@ class ST7789Display(Display):
 
         if size:
             self.size = size
+            self.rotation = 180
 
         self.st7789 = ST7789(
-            height=self.size[0],
+            height=self.size[1],
             width=self.size[0],
+            rotation=self.rotation,
             port=0,
             cs=1,
             dc=9,
-            backlight=None,
-            spi_speed_hz=80 * 1000 * 1000,
+            #backlight=None,
+            backlight=13,
+            spi_speed_hz=120 * 1000 * 1000,
             offset_left=0,
             offset_top=0,
         )
         self.st7789.begin()
 
         # backlight
-        self.pi = pigpio.pi()
-        self.pi.set_mode(GPIO_BACKLIGHT, pigpio.OUTPUT)
-        self.pi.hardware_PWM(GPIO_BACKLIGHT, GPIO_BACKLIGHT_FREQ, 100 * 10000)
+        #self.pi = pigpio.pi()
+        #self.pi.set_mode(GPIO_BACKLIGHT, pigpio.OUTPUT)
+        #self.pi.hardware_PWM(GPIO_BACKLIGHT, GPIO_BACKLIGHT_FREQ, 100 * 10000)
 
         self.blank_buffer = Image.new("RGB", self.size)
         self.blank_draw = ImageDraw.Draw(self.blank_buffer)
@@ -78,5 +83,9 @@ class ST7789Display(Display):
     def set_brightness(self, b):
         if b == self.brightness:
             return
-        self.pi.hardware_PWM(GPIO_BACKLIGHT, GPIO_BACKLIGHT_FREQ, b * 10000)
+        #self.pi.hardware_PWM(GPIO_BACKLIGHT, GPIO_BACKLIGHT_FREQ, b * 10000)
+        if b == 0:
+            self.st7789.set_backlight(False)
+        else:
+            self.st7789.set_backlight(True)
         self.brightness = b
