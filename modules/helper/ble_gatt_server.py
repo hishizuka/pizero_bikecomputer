@@ -166,18 +166,17 @@ class GadgetbridgeService(Service):
                     self.gui.show_dialog_ok_only(fn=None, title="Gadgetbridge")
                 elif m_type == "gps":
                     # encode gps message
-                    lat = (
-                        lon
-                    ) = (
-                        alt
-                    ) = speed = track = hdop = mode = timestamp = self.sensor.NULL_VALUE
+                    lat = lon = alt = speed = track = self.sensor.NULL_VALUE
+                    hdop = mode = timestamp = self.sensor.NULL_VALUE
                     if "lat" in message and "lon" in message:
                         lat = float(message["lat"])
                         lon = float(message["lon"])
                     if "alt" in message:
                         alt = float(message["alt"])
                     if "speed" in message:
-                        speed = float(message["speed"])  # m/s
+                        speed = float(message["speed"])
+                        if speed != 0.0:
+                            speed = speed / 3.6  # km/h -> m/s
                     if "course" in message:
                         track = int(message["course"])
                     if "time" in message:

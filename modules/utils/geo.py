@@ -57,12 +57,10 @@ def get_dist_on_earth(p0_lon, p0_lat, p1_lon, p1_lat):
     (r0_lon, r0_lat, r1_lon, r1_lat) = map(
         math.radians, [p0_lon, p0_lat, p1_lon, p1_lat]
     )
-    delta_x = r1_lon - r0_lon
-    cos_d = math.sin(r0_lat) * math.sin(r1_lat) + math.cos(r0_lat) * math.cos(
-        r1_lat
-    ) * math.cos(delta_x)
+    s_lat = math.sin(r0_lat) * math.sin(r1_lat)
+    c_lat_lon = math.cos(r0_lat) * math.cos(r1_lat) * math.cos(r1_lon - r0_lon)
     try:
-        res = 1000 * math.acos(cos_d) * GEO_R1
+        res = 1000 * math.acos(s_lat + c_lat_lon) * GEO_R1
         return res
     except:
         # traceback.print_exc()
@@ -79,13 +77,10 @@ def get_dist_on_earth_array(p0_lon, p0_lat, p1_lon, p1_lat):
     r0_lat = np.radians(p0_lat)
     r1_lon = np.radians(p1_lon)
     r1_lat = np.radians(p1_lat)
-    # (r0_lon, r0_lat, r1_lon, r1_lat) = map(radians, [p0_lon, p0_lat, p1_lon, p1_lat])
-    delta_x = r1_lon - r0_lon
-    cos_d = np.sin(r0_lat) * np.sin(r1_lat) + np.cos(r0_lat) * np.cos(r1_lat) * np.cos(
-        delta_x
-    )
+    s_lat = np.sin(r0_lat) * np.sin(r1_lat)
+    c_lat_lon = np.cos(r0_lat) * np.cos(r1_lat) * np.cos(r1_lon - r0_lon)
     try:
-        res = 1000 * np.arccos(cos_d) * GEO_R1
+        res = 1000 * np.arccos(s_lat + c_lat_lon) * GEO_R1
         return res
     except:
         traceback.print_exc()

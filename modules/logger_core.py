@@ -385,28 +385,24 @@ class LoggerCore:
         app_logger.info(f"->LAP:{self.values['lap']}   {time_str}")
 
         # show message
-        value_str = (
-            self.config.gui.gui_config.G_UNIT["Speed"]
-            + ", "
-            + self.config.gui.gui_config.G_UNIT["HeartRate"]
-            + ", "
-            + self.config.gui.gui_config.G_UNIT["Power"]
-        )
+        pre_lap_avg = self.record_stats["pre_lap_avg"]
+        dist_str = round(pre_lap_avg["distance"] / 1000, 1)
         hour_sec = divmod(lap_time, 3600)
         min_sec = divmod(hour_sec[1], 60)
-        lap_time_str = "{:}:{:02}".format(hour_sec[0], min_sec[0])
+        lap_time_str = f"{hour_sec[0]}:{min_sec[0]:02}"
+        lap_message = f"LAP {self.values['lap']} ({dist_str}km, {lap_time_str})"
+ 
+        unit = self.config.gui.gui_config.G_UNIT
+        value_message = unit["Speed"].format(pre_lap_avg["speed"] * 3.6)
+        if self.config.G_ANT["USE"]["HR"]:
+            value_message += ", " + unit["HeartRate"].format(pre_lap_avg["heart_rate"])
+        if self.config.G_ANT["USE"]["PWR"]:
+            value_message += ", " + unit['Power'].format(pre_lap_avg["power"])
+
         self.config.gui.show_popup_multiline(
-            "LAP {} ({}km, {})".format(
-                self.values["lap"],
-                round(self.record_stats["pre_lap_avg"]["distance"] / 1000, 1),
-                lap_time_str,
-            ),
-            value_str.format(
-                self.record_stats["pre_lap_avg"]["speed"] * 3.6,
-                self.record_stats["pre_lap_avg"]["heart_rate"],
-                self.record_stats["pre_lap_avg"]["power"],
-            ),
-            10
+            lap_message,
+            value_message,
+            timeout=10 #[s]
         )
         self.config.display.screen_flash_short()
 
