@@ -306,13 +306,12 @@ class LoggerCore:
         self.count_up_lock = False
 
     def start_and_stop_manual(self):
-        time_str = datetime.now().strftime("%Y%m%d %H:%M:%S")
         popup_extra = ""
         pre_status = self.config.G_MANUAL_STATUS
         display_flash_short = True
 
         if self.config.G_MANUAL_STATUS != "START":
-            app_logger.info(f"->M START {time_str}")
+            app_logger.info(f"->M START{self.get_time_str()}")
             self.start_and_stop("STOP")
             self.config.G_MANUAL_STATUS = "START"
             if self.config.gui is not None:
@@ -334,7 +333,7 @@ class LoggerCore:
 
         elif self.config.G_MANUAL_STATUS == "START":
             display_flash_short = False
-            app_logger.info(f"->M STOP  {time_str}")
+            app_logger.info(f"->M STOP{self.get_time_str()}")
             self.start_and_stop("START")
             self.config.G_MANUAL_STATUS = "STOP"
             if self.config.gui is not None:
@@ -358,13 +357,18 @@ class LoggerCore:
     def start_and_stop(self, status=None):
         if status is not None:
             self.config.G_STOPWATCH_STATUS = status
-        time_str = datetime.now().strftime("%Y%m%d %H:%M:%S")
         if self.config.G_STOPWATCH_STATUS != "START":
             self.config.G_STOPWATCH_STATUS = "START"
-            app_logger.info(f"->START   {time_str}")
+            app_logger.info(f"->START{self.get_time_str()}")
         elif self.config.G_STOPWATCH_STATUS == "START":
             self.config.G_STOPWATCH_STATUS = "STOP"
-            app_logger.info(f"->STOP    {time_str}")
+            app_logger.info(f"->STOP{self.get_time_str()}")
+        
+    def get_time_str(self):
+        if not self.config.G_LOG_OUTPUT_FILE:
+            return datetime.now().strftime("  %Y%m%d %H:%M:%S")
+        else:
+            return ""
 
     def count_laps(self):
         if self.values["count"] == 0 or self.values["count_lap"] == 0:
@@ -381,8 +385,7 @@ class LoggerCore:
             self.average["lap"][k2]["count"] = 0
             self.average["lap"][k2]["sum"] = 0
         asyncio.create_task(self.record_log())
-        time_str = datetime.now().strftime("%Y%m%d %H:%M:%S")
-        app_logger.info(f"->LAP:{self.values['lap']}   {time_str}")
+        app_logger.info(f"->LAP:{self.values['lap']}{self.get_time_str()}")
 
         # show message
         pre_lap_avg = self.record_stats["pre_lap_avg"]

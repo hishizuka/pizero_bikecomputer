@@ -11,7 +11,8 @@ class StreamToLogger:
     logger = None
     level = None
     buffer = ""
-    error_char = 0
+    pre_char = ""
+    pre_spaces = False
 
     def __init__(self, logger, level):
         self.logger = logger
@@ -20,30 +21,31 @@ class StreamToLogger:
     def write(self, buf):
 
         for line in buf.splitlines():
+            #self.logger.log(self.level, f"# ({len(line)}):'{line}'") # for debug
             if line.startswith((
                 "<class 'usb.core.USBError'>",
                 "<class 'usb.core.USBTimeoutError'>",
             )):
                 continue
-            elif line == "" :
-                if self.error_char > 0:
-                    self.logger.log(self.level, self.buffer)
-                    self.buffer = ""
-                self.error_char += 1
-                if self.error_char == 3:
-                    self.error_char = 0
-                continue
-
-            if self.error_char == 0:
-                if line.isspace():
-                    self.buffer += line
-                else:
-                    self.logger.log(self.level, self.buffer+line)
-                    self.buffer = ""
-            else:
-                self.buffer += line
             
+            if self.pre_char in [" ", "^"] and line in [" ", "^"]:
+                self.buffer += line
+            elif len(line) > 1 and line.isspace():
+                self.buffer += line
+                self.pre_spaces = True
+            elif line not in [" ", "^"]:
+                if len(self.buffer):
+                    if self.pre_spaces:
+                        self.logger.log(self.level, self.buffer+line)
+                        self.pre_spaces = False
+                    else:
+                        self.logger.log(self.level, f" {self.buffer}") # need space
+                    self.buffer = ""
+                elif len(line):
+                    self.logger.log(self.level, line)
 
+            self.pre_char = line
+            
     def flush(self):
         pass
 

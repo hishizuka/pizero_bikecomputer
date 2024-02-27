@@ -1,6 +1,11 @@
 from datetime import datetime
 
-from timezonefinder import TimezoneFinder
+_TIMEZONE_FINDER = False
+try:
+    from timezonefinder import TimezoneFinder
+    _TIMEZONE_FINDER =True
+except:
+    pass
 
 from modules.utils.cmd import exec_cmd, exec_cmd_return_value
 from logger import app_logger
@@ -31,6 +36,9 @@ def set_time(time_info):
 
 
 async def set_timezone(lat, lon):
+    if not _TIMEZONE_FINDER:
+        return
+
     app_logger.info("try to modify timezone by gps...")
 
     tz_finder = TimezoneFinder()
@@ -49,10 +57,7 @@ async def set_timezone(lat, lon):
                 app_logger.warning(f"Timezone {tz_str} be could not set: {ret_code}")
             else:
                 app_logger.info(f"success: {tz_str}")
-        return True
     except TypeError as e:
         app_logger.exception(f"Incorrect lat, lon passed: {e}")
-        return False
     except Exception as e:
         app_logger.warning(f"Could not set timezone: {e}")
-        return False
