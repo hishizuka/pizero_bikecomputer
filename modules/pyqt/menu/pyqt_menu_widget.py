@@ -77,7 +77,7 @@ class MenuWidget(QtWidgets.QWidget):
     def add_buttons(self, buttons):
         n = len(buttons)
 
-        if n <= 4:
+        if n <= 4 or self.config.G_DISPLAY_ORIENTATION == "vertical":
             layout_type = QtWidgets.QVBoxLayout
         else:
             layout_type = QtWidgets.QGridLayout
@@ -109,6 +109,10 @@ class MenuWidget(QtWidgets.QWidget):
         if n in (1, 2, 3):
             for j in range(4 - n):
                 self.menu_layout.addWidget(MenuButton("dummy", "", self.config))
+
+        if layout_type == QtWidgets.QVBoxLayout and self.config.G_DISPLAY_ORIENTATION == "vertical" and len(self.buttons) <= 5:
+            spacer = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Expanding)
+            self.menu_layout.addItem(spacer)
 
         # set first focus
         if not self.config.display.has_touch:
