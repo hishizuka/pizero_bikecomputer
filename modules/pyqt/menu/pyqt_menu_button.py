@@ -57,6 +57,8 @@ class MenuButton(QtWidgets.QPushButton):
         self.config = config
         self.button_type = button_type
 
+        self.setMinimumHeight(40)
+        self.setMaximumHeight(50)
         self.setSizePolicy(
             QT_EXPANDING,
             QT_EXPANDING,
@@ -100,8 +102,9 @@ class MenuButton(QtWidgets.QPushButton):
         self.setProperty("style", None)
 
     def resizeEvent(self, event):
-        # w = self.size().width()
         h = self.size().height()
+
+        # NOTE: why x > 0 else 1? is there an undocumented edge case?
         psize = int(h / 2.5) if int(h / 2.5) > 0 else 1
 
         q = self.font()
