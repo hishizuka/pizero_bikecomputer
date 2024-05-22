@@ -223,6 +223,8 @@ class Config:
         "SPI_CLOCK": 2000000,
     }
 
+    G_DISPLAY_ORIENTATION = "horizontal"
+
     # auto backlight
     G_USE_AUTO_BACKLIGHT = True
     G_AUTO_BACKLIGHT_CUTOFF = 30
