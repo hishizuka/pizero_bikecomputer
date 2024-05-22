@@ -216,7 +216,7 @@ class ListWidget(MenuWidget):
 
         if self.settings and self.settings.keys():
             for k in self.settings.keys():
-                item = ListItemWidget(self, k)
+                item = ListItemWidget(self, self.config, k)
                 item.enter_signal.connect(self.button_func)
                 self.add_list_item(item)
 
@@ -241,7 +241,7 @@ class ListWidget(MenuWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        h = int((self.height() - self.top_bar.height()) / 4)
+        h = int((self.height() - self.top_bar.height()) / (4 if self.width() > self.height() else 8))
         self.size_hint = QtCore.QSize(self.top_bar.width(), h)
         for i in range(self.list.count()):
             self.list.item(i).setSizeHint(self.size_hint)
@@ -295,7 +295,8 @@ class ListItemWidget(QtWidgets.QWidget):
             title_style = f"{title_style} {border_style}"
         return title_style, detail_style
 
-    def __init__(self, parent, title, detail=None):
+    def __init__(self, parent, config: Config, title, detail=None):
+        self.config = config
         self.title = title
         self.detail = detail
         QtWidgets.QWidget.__init__(self, parent=parent)
