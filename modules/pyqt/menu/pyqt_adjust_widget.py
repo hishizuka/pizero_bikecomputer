@@ -91,7 +91,7 @@ class AdjustWidget(MenuWidget):
                     num_buttons[i], 1 + (i - 1) // 5, (i - 1) % 5
                 )
 
-        clear_button = AdjustButton("x")
+        clear_button = AdjustButton("Del")
         clear_button.clicked.connect(self.clear)
         self.menu_layout.addWidget(clear_button, 1, 5)
 
