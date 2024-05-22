@@ -1,5 +1,6 @@
 from logger import app_logger
 from modules._pyqt import QT_EXPANDING, QtCore, QtWidgets, qasync
+from modules.config import Config
 
 from .pyqt_item import Item
 
@@ -13,7 +14,7 @@ class ScreenWidget(QtWidgets.QWidget):
     font_size = 12
     max_width = max_height = 0
 
-    def __init__(self, parent, config, item_layout=None):
+    def __init__(self, parent, config: Config, item_layout=None):
         self.config = config
         self.items = []
 
@@ -46,7 +47,8 @@ class ScreenWidget(QtWidgets.QWidget):
 
     def resizeEvent(self, event):
         h = self.size().height()
-        self.set_font_size(h)
+        w = self.size().width()
+        self.set_font_size(h if h < w else w)
         for i in self.items:
             i.update_font_size(self.font_size)
 
@@ -81,6 +83,9 @@ class ScreenWidget(QtWidgets.QWidget):
         pass
 
     def set_font_size(self, length):
+        if self.config.G_DISPLAY_ORIENTATION == "vertical":
+            length *= .7
+            
         # need to modify for automation and scaling
         self.font_size = int(length / 6)  # 2 rows (100px)
         if self.max_height == 2:  # 3 rows (66px)
