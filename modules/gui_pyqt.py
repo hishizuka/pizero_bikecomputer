@@ -7,6 +7,7 @@ import asyncio
 import numpy as np
 
 from logger import app_logger
+from modules.config import Config
 from modules.gui_config import GUI_Config
 from modules._pyqt import (
     QT_ALIGN_BOTTOM,
@@ -48,14 +49,9 @@ class SplashScreen(QtWidgets.QWidget):
 
 
 class BootStatus(QtWidgets.QLabel):
-    STYLES = """
-      color: white;
-      font-size: 20px;
-    """
-
-    def __init__(self, *__args):
-        super().__init__(*__args)
-        self.setStyleSheet(self.STYLES)
+    def __init__(self, font_size: float):
+        super().__init__()
+        self.setStyleSheet(f"color: white; font-size: {font_size}px;")
         self.setAlignment(QT_ALIGN_CENTER)
 
 
@@ -133,7 +129,7 @@ class GUI_PyQt(QtCore.QObject):
     def logger(self):
         return self.config.logger
 
-    def __init__(self, config):
+    def __init__(self, config: Config):
         super().__init__()
 
         self.config = config
@@ -175,7 +171,7 @@ class GUI_PyQt(QtCore.QObject):
         splash_layout.setContentsMargins(0, 0, 0, 0)
         splash_layout.setSpacing(0)
 
-        boot_status = BootStatus()
+        boot_status = BootStatus(20 if self.config.G_DISPLAY_ORIENTATION == "horizontal" else 15)
         self.signal_boot_status.connect(boot_status.setText)
         splash_layout.addWidget(boot_status)
 
