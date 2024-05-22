@@ -18,14 +18,10 @@ class TopBar:
 
 
 class TopBarLabel(QtWidgets.QLabel):
-    STYLES = """
-      color: #FFFFFF;
-    """
-
-    def __init__(self, *__args):
+    def __init__(self, font_size, *__args):
         super().__init__(*__args)
         self.setAlignment(QT_ALIGN_CENTER)
-        self.setStyleSheet(self.STYLES)
+        self.setStyleSheet(f"color: #FFFFFF; padding-right: 42.5px; font-size: {font_size}px;")
 
 
 class TopBarBackButton(NaviButton):

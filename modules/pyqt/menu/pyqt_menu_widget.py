@@ -8,6 +8,7 @@ from modules._pyqt import (
     QtWidgets,
     qasync,
 )
+from modules.config import Config
 from modules.pyqt.components import icons, topbar
 
 from .pyqt_menu_button import MenuButton
@@ -29,7 +30,7 @@ class MenuWidget(QtWidgets.QWidget):
     icon_x = 40
     icon_y = 32
 
-    def __init__(self, parent, page_name, config):
+    def __init__(self, parent, page_name, config: Config):
         QtWidgets.QWidget.__init__(self, parent=parent)
         self.config = config
         self.page_name = page_name
@@ -48,7 +49,7 @@ class MenuWidget(QtWidgets.QWidget):
         self.top_bar = topbar.TopBar()
 
         self.back_button = topbar.TopBarBackButton((self.icon_x, self.icon_y))
-        self.page_name_label = topbar.TopBarLabel(self.page_name)
+        self.page_name_label = topbar.TopBarLabel(20 if self.config.G_DISPLAY_ORIENTATION == "horizontal" else 15, self.page_name)
 
         self.top_bar_layout = QtWidgets.QHBoxLayout()
         self.top_bar_layout.setContentsMargins(5, 5, 5, 5)
