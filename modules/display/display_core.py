@@ -1,6 +1,7 @@
 import os
 
 from logger import app_logger
+from modules.config import Config
 
 DEFAULT_RESOLUTION = (400, 240)
 
@@ -34,7 +35,7 @@ class Display:
     brightness_index = 0
     brightness_table = None
 
-    def __init__(self, config):
+    def __init__(self, config: Config):
         self.config = config
 
         if self.has_auto_brightness:
@@ -47,7 +48,9 @@ class Display:
 
     @property
     def resolution(self):
-        return getattr(self, "size", DEFAULT_RESOLUTION)
+        attr = getattr(self, "size", DEFAULT_RESOLUTION)
+        # NOTE: if display orientation is not horizontal, switch width and height
+        return attr if self.config.G_DISPLAY_ORIENTATION == "horizontal" else attr[::-1]
 
     def start_coroutine(self):
         pass
