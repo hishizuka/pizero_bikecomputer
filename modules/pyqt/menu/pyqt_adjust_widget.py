@@ -72,32 +72,34 @@ class AdjustWidget(MenuWidget):
     unit = ""
 
     def setup_menu(self):
+        x_max = (5 if self.config.G_DISPLAY_ORIENTATION == "horizontal" else 3)
+
         self.make_menu_layout(QtWidgets.QGridLayout)
 
         self.display = AdjustEdit("")
-        self.menu_layout.addWidget(self.display, 0, 0, 1, 5)
+        self.menu_layout.addWidget(self.display, 0, 0, 1, x_max)
 
         unitLabel = UnitLabel(self.unit)
-        self.menu_layout.addWidget(unitLabel, 0, 5)
+        self.menu_layout.addWidget(unitLabel, 0, x_max)
 
         num_buttons = {}
         for i in [1, 2, 3, 4, 5, 6, 7, 8, 9, 0]:
             num_buttons[i] = AdjustButton(str(i))
             num_buttons[i].clicked.connect(self.digit_clicked)
             if i == 0:
-                self.menu_layout.addWidget(num_buttons[i], 2, 4)
+                self.menu_layout.addWidget(num_buttons[i], (2 if self.config.G_DISPLAY_ORIENTATION == "horizontal" else 3), (4 if self.config.G_DISPLAY_ORIENTATION == "horizontal" else 3))
             else:
                 self.menu_layout.addWidget(
-                    num_buttons[i], 1 + (i - 1) // 5, (i - 1) % 5
+                    num_buttons[i], 1 + (i - 1) // x_max, (i - 1) % x_max
                 )
 
         clear_button = AdjustButton("Del")
         clear_button.clicked.connect(self.clear)
-        self.menu_layout.addWidget(clear_button, 1, 5)
+        self.menu_layout.addWidget(clear_button, 1, x_max)
 
         set_button = AdjustButton("Set")
         set_button.clicked.connect(self.set_value)
-        self.menu_layout.addWidget(set_button, 2, 5)
+        self.menu_layout.addWidget(set_button, 2, x_max)
 
         if not self.config.display.has_touch:
             self.focus_widget = num_buttons[1]
