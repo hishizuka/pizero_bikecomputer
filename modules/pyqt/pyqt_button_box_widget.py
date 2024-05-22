@@ -1,5 +1,6 @@
 from logger import app_logger
 from modules._pyqt import QtWidgets
+from modules.config import Config
 from modules.pyqt.components import box_buttons, icons
 
 
@@ -14,7 +15,7 @@ class ButtonBoxWidget(QtWidgets.QWidget):
     lap_button_count = 0
     start_button_count = 0
 
-    def __init__(self, parent, config):
+    def __init__(self, parent, config: Config):
         self.config = config
         super().__init__(parent=parent)
         self.setup_ui()
@@ -25,11 +26,13 @@ class ButtonBoxWidget(QtWidgets.QWidget):
         self.show()
         self.setAutoFillBackground(True)
 
-        self.start_button = box_buttons.StartButton()
-        self.lap_button = box_buttons.LapButton()
-        menu_button = box_buttons.MenuButton()
-        scrollnext_button = box_buttons.ScrollNextButton()
-        scrollprev_button = box_buttons.ScrollPrevButton()
+        button_width = 50 if self.config.G_DISPLAY_ORIENTATION == "horizontal" else 40
+
+        self.start_button = box_buttons.StartButton(button_width)
+        self.lap_button = box_buttons.LapButton(button_width)
+        menu_button = box_buttons.MenuButton(button_width)
+        scrollnext_button = box_buttons.ScrollNextButton(button_width)
+        scrollprev_button = box_buttons.ScrollPrevButton(button_width)
 
         self.start_button.clicked.connect(self.gui_start_and_stop_quit)
         self.lap_button.clicked.connect(self.gui_lap_reset)
