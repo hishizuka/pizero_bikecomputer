@@ -344,7 +344,15 @@ class GUI_PyQt(QtCore.QObject):
             for k, v in self.gui_config.layout.items():
                 if not v["STATUS"]:
                     continue
-                if "LAYOUT" in v:
+                if "LAYOUT_VERTICAL" in v and self.config.G_DISPLAY_ORIENTATION == "vertical":
+                    self.main_page.addWidget(
+                        ValuesWidget(
+                            self.main_page,
+                            self.config,
+                            v["LAYOUT_VERTICAL"],
+                        )
+                    )
+                elif "LAYOUT" in v:
                     self.main_page.addWidget(
                         ValuesWidget(
                             self.main_page,

@@ -84,7 +84,7 @@ class ScreenWidget(QtWidgets.QWidget):
 
     def set_font_size(self, length):
         if self.config.G_DISPLAY_ORIENTATION == "vertical":
-            length *= .7
+            length *= .8
             
         # need to modify for automation and scaling
         self.font_size = int(length / 6)  # 2 rows (100px)

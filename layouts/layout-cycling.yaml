@@ -9,6 +9,15 @@ MAIN:
     Dist.: [2, 0]
     Work: [2, 1]
     Ascent: [2, 2]
+  LAYOUT_VERTICAL:
+    Power: [0, 0]
+    HR: [0, 1]
+    Speed: [1, 0]
+    Cad.: [1, 1]
+    Timer: [2, 0]
+    Dist.: [2, 1]
+    Work: [3, 0]
+    Ascent: [3, 1]
 
 GPS:
   STATUS: true
