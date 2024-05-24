@@ -142,21 +142,34 @@ class PerformanceGraphWidget(ScreenWidget):
 
 
 class AccelerationGraphWidget(ScreenWidget):
-    item_layout = {
-        "ACC_X": (0, 0),
-        "ACC_Y": (0, 1),
-        "ACC_Z": (0, 2),
-        "M_Stat": (0, 3),
-    }
-    max_height = 1
-    max_width = 3
-
     # for acc
     pen1 = pg.mkPen(color=(0, 0, 255), width=3)
     pen2 = pg.mkPen(color=(255, 0, 0), width=3)
     pen3 = pg.mkPen(color=(0, 0, 0), width=2)
 
     g_range = 0.3
+
+    def __init__(self, parent, config: Config):
+        self.is_horizontal = config.G_DISPLAY_ORIENTATION == "horizontal"
+
+        self.max_height = 1
+        self.max_width = 3 if self.is_horizontal else 1
+
+        item_layout = {
+            "ACC_X": (0, 0),
+            "ACC_Y": (0, 1),
+            "ACC_Z": (0, 2),
+            "M_Stat": (0, 3),
+        }
+
+        item_layout_vertical = {
+            "ACC_X": (0, 0),
+            "ACC_Y": (0, 1),
+            "ACC_Z": (1, 0),
+            "M_Stat": (1, 1),
+        }
+
+        super().__init__(parent, config, item_layout if self.is_horizontal else item_layout_vertical)
 
     def setup_ui_extra(self):
         plot = pg.PlotWidget()
@@ -175,7 +188,10 @@ class AccelerationGraphWidget(ScreenWidget):
         plot.setXRange(0, self.config.G_GUI_ACC_TIME_RANGE)
         plot.setMouseEnabled(x=False, y=False)
 
-        self.layout.addWidget(plot, 1, 0, 2, 4)
+        if self.is_horizontal:
+            self.layout.addWidget(plot, 1, 0, 2, 4)
+        else:
+            self.layout.addWidget(plot, 2, 0, 2, 2)
 
     def start(self):
         self.timer.start(self.config.G_REALTIME_GRAPH_INTERVAL)
