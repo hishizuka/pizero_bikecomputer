@@ -6,15 +6,6 @@ from modules.pyqt.pyqt_screen_widget import ScreenWidget
 
 
 class PerformanceGraphWidget(ScreenWidget):
-    item_layout = {
-        "Power": (0, 0),
-        "HR": (0, 1),
-        "W'bal(Norm)": (0, 2),
-        "LapTime": (0, 3),
-    }
-    max_height = 1
-    max_width = 3
-
     # for Power
     # brush = pg.mkBrush(color=(0,160,255,64))
     brush = pg.mkBrush(color=(0, 255, 255))
@@ -22,6 +13,8 @@ class PerformanceGraphWidget(ScreenWidget):
     pen1 = pg.mkPen(color=(255, 255, 255), width=0.01)  # transparent and thin line
     # for HR, wbal
     pen2 = pg.mkPen(color=(255, 0, 0), width=2)
+
+    plot_data_x1 = []
 
     def __init__(self, parent, config):
         self.display_item = config.G_GUI_PERFORMANCE_GRAPH_DISPLAY_ITEM
@@ -42,11 +35,30 @@ class PerformanceGraphWidget(ScreenWidget):
                 "yrange": [config.G_GUI_MIN_W_BAL, config.G_GUI_MAX_W_BAL],
             },
         }
-        self.plot_data_x1 = []
+
         for i in range(config.G_GUI_PERFORMANCE_GRAPH_DISPLAY_RANGE + 1):
             self.plot_data_x1.append(i)
 
-        super().__init__(parent, config)
+        self.is_horizontal = config.G_DISPLAY_ORIENTATION == "horizontal"
+
+        self.max_height = 1
+        self.max_width = 3 if self.is_horizontal else 1
+
+        item_layout = {
+            "Power": (0, 0),
+            "HR": (0, 1),
+            "W'bal(Norm)": (0, 2),
+            "LapTime": (0, 3),
+        }
+
+        item_layout_vertical = {
+            "Power": (0, 0),
+            "HR": (0, 1),
+            "W'bal(Norm)": (1, 0),
+            "LapTime": (1, 1),
+        }
+
+        super().__init__(parent, config, item_layout if self.is_horizontal else item_layout_vertical)
 
     def setup_ui_extra(self):
         # 1st graph: POWER
@@ -72,7 +84,10 @@ class PerformanceGraphWidget(ScreenWidget):
         # p2 on p1
         self.p1.setZValue(-100)
 
-        self.layout.addWidget(plot, 1, 0, 2, 4)
+        if self.is_horizontal:
+            self.layout.addWidget(plot, 1, 0, 2, 4)
+        else:
+            self.layout.addWidget(plot, 2, 0, 2, 2)
 
     def set_font_size(self, length):
         self.font_size = int(length / 7)
