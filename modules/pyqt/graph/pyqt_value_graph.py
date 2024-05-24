@@ -1,6 +1,7 @@
 import numpy as np
 
 from modules._pyqt import pg, qasync
+from modules.config import Config
 from modules.pyqt.pyqt_screen_widget import ScreenWidget
 
 
@@ -233,15 +234,6 @@ class AccelerationGraphWidget(ScreenWidget):
 
 
 class AltitudeGraphWidget(ScreenWidget):
-    item_layout = {
-        "Grade": (0, 0),
-        "Grade(spd)": (0, 1),
-        "Altitude": (0, 2),
-        "Alt.(GPS)": (0, 3),
-    }
-    max_height = 1
-    max_width = 3
-
     # for altitude_raw
     pen1 = pg.mkPen(color=(0, 0, 0), width=2)
     pen2 = pg.mkPen(color=(255, 0, 0), width=3)
@@ -251,6 +243,28 @@ class AltitudeGraphWidget(ScreenWidget):
     #     self.plot_data_x1 = []
     #     for i in range(self.config.G_GUI_PERFORMANCE_GRAPH_DISPLAY_RANGE):
     #       self.plot_data_x1.append(i)
+
+    def __init__(self, parent, config: Config):
+        self.is_horizontal = config.G_DISPLAY_ORIENTATION == "horizontal"
+
+        self.max_height = 1
+        self.max_width = 3 if self.is_horizontal else 1
+
+        item_layout = {
+            "Grade": (0, 0),
+            "Grade(spd)": (0, 1),
+            "Altitude": (0, 2),
+            "Alt.(GPS)": (0, 3),
+        }
+
+        item_layout_vertical = {
+            "Grade": (0, 0),
+            "Grade(spd)": (0, 1),
+            "Altitude": (1, 0),
+            "Alt.(GPS)": (1, 1),
+        }
+
+        super().__init__(parent, config, item_layout if self.is_horizontal else item_layout_vertical)
 
     def setup_ui_extra(self):
         plot = pg.PlotWidget()
@@ -268,7 +282,10 @@ class AltitudeGraphWidget(ScreenWidget):
         self.y_range = 15
         self.y_shift = 0  # self.y_ra  nge * 0.25
 
-        self.layout.addWidget(plot, 1, 0, 2, 4)
+        if self.is_horizontal:
+            self.layout.addWidget(plot, 1, 0, 2, 4)
+        else:
+            self.layout.addWidget(plot, 2, 0, 2, 2)
 
     def set_font_size(self, length):
         self.font_size = int(length / 7)
