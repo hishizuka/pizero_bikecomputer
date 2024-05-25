@@ -9,6 +9,7 @@ from modules._pyqt import (
     QtGui,
     qasync,
 )
+from modules.config import Config
 from modules.pyqt.components import icons, topbar
 from modules.utils.network import detect_network
 from .pyqt_menu_widget import (
@@ -230,14 +231,14 @@ class CourseListWidget(ListWidget):
     async def list_local_courses(self):
         courses = self.config.get_courses()
         for c in courses:
-            course_item = CourseListItemWidget(self, self.list_type, c)
+            course_item = CourseListItemWidget(self, self.list_type, c, self.config)
             self.add_list_item(course_item)
 
     async def list_ride_with_gps(self, add=False, reset=False):
         courses = await self.config.api.get_ridewithgps_route(add, reset)
 
         for c in reversed(courses or []):
-            course_item = CourseListItemWidget(self, self.list_type, c)
+            course_item = CourseListItemWidget(self, self.list_type, c, self.config)
             self.add_list_item(course_item)
 
     def set_course(self, course_file=None):
@@ -277,7 +278,7 @@ class CourseListItemWidget(ListItemWidget):
     list_type = None
     locality_text = ", {elevation_gain:.0f}m up, {locality}, {administrative_area}"
 
-    def __init__(self, parent, list_type, list_info):
+    def __init__(self, parent, list_type, list_info, config: Config):
         self.list_type = list_type
         self.list_info = list_info.copy()
 
@@ -289,7 +290,7 @@ class CourseListItemWidget(ListItemWidget):
         else:
             detail = None
 
-        super().__init__(parent=parent, title=list_info["name"], detail=detail)
+        super().__init__(parent=parent, title=list_info["name"], detail=detail, config=config)
 
         if self.list_type == "Local Storage":
             self.enter_signal.connect(parent.set_course)
