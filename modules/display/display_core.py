@@ -48,9 +48,7 @@ class Display:
 
     @property
     def resolution(self):
-        attr = getattr(self, "size", DEFAULT_RESOLUTION)
-        # NOTE: if display orientation is not horizontal, switch width and height
-        return attr if self.config.G_DISPLAY_ORIENTATION == "horizontal" else attr[::-1]
+        return getattr(self, "size", DEFAULT_RESOLUTION)
 
     def start_coroutine(self):
         pass
