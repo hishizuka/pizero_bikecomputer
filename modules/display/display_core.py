@@ -20,6 +20,7 @@ SUPPORTED_DISPLAYS = {
     "Pirate_Audio": None,
     "Pirate_Audio_old": None,
     "Display_HAT_Mini": (320, 240),
+    "ST7789_Breakout": (320, 240),
 }
 
 
@@ -164,5 +165,11 @@ def init_display(config):
                 display = ST7789Display(config)
             elif config.G_DISPLAY == "Display_HAT_Mini":
                 display = ST7789Display(config, SUPPORTED_DISPLAYS[config.G_DISPLAY])
+    elif config.G_DISPLAY == "ST7789_Breakout":
+        from .st7789_breakout_display import _SENSOR_DISPLAY, ST7789BreakoutDisplay
 
+        if _SENSOR_DISPLAY:
+            display = ST7789BreakoutDisplay(
+                config, SUPPORTED_DISPLAYS[config.G_DISPLAY]
+            )
     return display
