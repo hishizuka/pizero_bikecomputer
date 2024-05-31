@@ -69,7 +69,6 @@ Here is [my setup guide in Japanese](https://qiita.com/hishi/items/8bdfd9d72fa8f
 
 Install in the home directory of default user "pi". Also, your Raspberry Pi is connected to internet and updated with `apt update & apt upgrade`.
 
-
 ```
 $ cd
 $ git clone https://github.com/hishizuka/pizero_bikecomputer.git
@@ -87,7 +86,7 @@ Assume Serial interface is on and login shell is off in raspi-config and GPS dev
 
 ```
 $ sudo apt install gpsd gpsd-clients
-$ sudo pip3 install gps3 timezonefinder 
+$ sudo pip3 install gps3 timezonefinder
 $ sudo cp install/etc/default/gpsd /etc/default/gpsd
 $ sudo systemctl enable gpsd
 ```
@@ -104,14 +103,12 @@ $ sudo pip3 install timezonefinder pa1010d
 
 Check with [pa1010d example program](https://github.com/pimoroni/pa1010d-python/blob/master/examples/latlon.py)
 
-
 ### ANT+ USB dongle
 
 ```
 $ sudo apt install libusb-1.0-0 python3-usb
 $ sudo pip3 install git+https://github.com/hishizuka/openant.git
 ```
- 
 
 ### Display
 
@@ -155,7 +152,6 @@ Follow [official setup guide](https://github.com/PiSupply/PaPiRus)
 
 Follow [official setup guide](https://wiki.dfrobot.com/Raspberry_Pi_e-ink_Display_Module_SKU%3A_DFR0591) and install manually.
 
-
 ### I2C sensors
 
 Assume I2C interface is on in raspi-config.
@@ -165,32 +161,32 @@ Assume I2C interface is on in raspi-config.
 Install pip packages of the sensors you own.
 
 Here is an example.
+
 ```
 $ sudo pip3 install adafruit-circuitpython-bmp280
 ```
 
-| Manufacturer | Sensor | additional pip package |
-|:-|:-|:-|
-| [Pimoroni](https://shop.pimoroni.com) | [Enviro pHAT](https://shop.pimoroni.com/products/enviro-phat) | None |
-| [Adafruit](https://www.adafruit.com) | [BMP280](https://www.adafruit.com/product/2651) | None |
-| [Adafruit](https://www.adafruit.com) | [BMP390](https://www.adafruit.com/product/4816) | None |
-| [Sparkfun](https://www.sparkfun.com/) | [BMP581](https://www.sparkfun.com/products/20170) | None |
-| [Adafruit](https://www.adafruit.com) | [LPS33HW](https://www.adafruit.com/product/4414) | adafruit-circuitpython-lps35hw |
-| [Strawberry Linux](https://strawberry-linux.com) | [LPS33HW](https://strawberry-linux.com/catalog/items?code=12133) | None |
-| [DFRobot](https://www.dfrobot.com) | [BMX160+BMP388](https://www.dfrobot.com/product-1928.html) | BMX160(*1) | 
-| [Adafruit](https://www.adafruit.com) | [LSM6DS33 + LIS3MDL](https://www.adafruit.com/product/4485) | adafruit-circuitpython-lsm6ds adafruit-circuitpython-lis3mdl |
-| [Sparkfun](https://www.sparkfun.com/) | [ISM330DHCX + MMC5983MA ](https://www.sparkfun.com/products/19895) | adafruit-circuitpython-lsm6ds |
-| [Adafruit](https://www.adafruit.com) | [LSM9DS1](https://www.adafruit.com/product/4634) | adafruit-circuitpython-lsm9ds1 | 
-| [Adafruit](https://www.adafruit.com) | [BNO055](https://www.adafruit.com/product/4646) | adafruit-circuitpython-bno055(*2) | 
-| [Adafruit](https://www.adafruit.com) | [VCNL4040](https://www.adafruit.com/product/4161) | adafruit-circuitpython-vcnl4040 |
-| [ozzmaker](https://ozzmaker.com) | [Berry GPS IMU v4](https://ozzmaker.com/product/berrygps-imu/) | adafruit-circuitpython-lsm6ds adafruit-circuitpython-lis3mdl |
-| [GPS PIE](https://gps-pie.com/) | [GPS PIE](https://gps-pie.com/) | adafruit-circuitpython-bno055(*2) |
-| [waveshare](https://www.waveshare.com/) | [Environment Sensor HAT](https://www.waveshare.com/environment-sensor-hat.htm) | adafruit-circuitpython-bme280 adafruit-circuitpython-icm20x adafruit-circuitpython-tsl2591 adafruit-circuitpython-ltr390 adafruit-circuitpython-sgp40 |
+| Manufacturer                                     | Sensor                                                                         | additional pip package                                                                                                                                |
+| :----------------------------------------------- | :----------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Pimoroni](https://shop.pimoroni.com)            | [Enviro pHAT](https://shop.pimoroni.com/products/enviro-phat)                  | None                                                                                                                                                  |
+| [Adafruit](https://www.adafruit.com)             | [BMP280](https://www.adafruit.com/product/2651)                                | None                                                                                                                                                  |
+| [Adafruit](https://www.adafruit.com)             | [BMP390](https://www.adafruit.com/product/4816)                                | None                                                                                                                                                  |
+| [Sparkfun](https://www.sparkfun.com/)            | [BMP581](https://www.sparkfun.com/products/20170)                              | None                                                                                                                                                  |
+| [Adafruit](https://www.adafruit.com)             | [LPS33HW](https://www.adafruit.com/product/4414)                               | adafruit-circuitpython-lps35hw                                                                                                                        |
+| [Strawberry Linux](https://strawberry-linux.com) | [LPS33HW](https://strawberry-linux.com/catalog/items?code=12133)               | None                                                                                                                                                  |
+| [DFRobot](https://www.dfrobot.com)               | [BMX160+BMP388](https://www.dfrobot.com/product-1928.html)                     | BMX160(\*1)                                                                                                                                           |
+| [Adafruit](https://www.adafruit.com)             | [LSM6DS33 + LIS3MDL](https://www.adafruit.com/product/4485)                    | adafruit-circuitpython-lsm6ds adafruit-circuitpython-lis3mdl                                                                                          |
+| [Sparkfun](https://www.sparkfun.com/)            | [ISM330DHCX + MMC5983MA ](https://www.sparkfun.com/products/19895)             | adafruit-circuitpython-lsm6ds                                                                                                                         |
+| [Adafruit](https://www.adafruit.com)             | [LSM9DS1](https://www.adafruit.com/product/4634)                               | adafruit-circuitpython-lsm9ds1                                                                                                                        |
+| [Adafruit](https://www.adafruit.com)             | [BNO055](https://www.adafruit.com/product/4646)                                | adafruit-circuitpython-bno055(\*2)                                                                                                                    |
+| [Adafruit](https://www.adafruit.com)             | [VCNL4040](https://www.adafruit.com/product/4161)                              | adafruit-circuitpython-vcnl4040                                                                                                                       |
+| [ozzmaker](https://ozzmaker.com)                 | [Berry GPS IMU v4](https://ozzmaker.com/product/berrygps-imu/)                 | adafruit-circuitpython-lsm6ds adafruit-circuitpython-lis3mdl                                                                                          |
+| [GPS PIE](https://gps-pie.com/)                  | [GPS PIE](https://gps-pie.com/)                                                | adafruit-circuitpython-bno055(\*2)                                                                                                                    |
+| [waveshare](https://www.waveshare.com/)          | [Environment Sensor HAT](https://www.waveshare.com/environment-sensor-hat.htm) | adafruit-circuitpython-bme280 adafruit-circuitpython-icm20x adafruit-circuitpython-tsl2591 adafruit-circuitpython-ltr390 adafruit-circuitpython-sgp40 |
 
-*1 Install manually https://github.com/spacecraft-design-lab-2019/CircuitPython_BMX160
+\*1 Install manually https://github.com/spacecraft-design-lab-2019/CircuitPython_BMX160
 
-*2 You must enable i2c slowdown. Follow [the adafruit guide](https://learn.adafruit.com/circuitpython-on-raspberrypi-linux/i2c-clock-stretching).
-
+\*2 You must enable i2c slowdown. Follow [the adafruit guide](https://learn.adafruit.com/circuitpython-on-raspberrypi-linux/i2c-clock-stretching).
 
 If you want to get a more accurate direction with the geomagnetic sensor, install a package that corrects the geomagnetic declination.
 
@@ -207,7 +203,6 @@ $ sudo apt install python3-buttonshim
 #### PiJuice HAT
 
 Follow [official setup guide](https://github.com/PiSupply/PiJuice/tree/master/Software) of PiSupply/PiJuice
-
 
 # Quick Start
 
@@ -243,7 +238,6 @@ $ QT_QPA_PLATFORM=offscreen python3 pizero_bikecomputer.py
 
 see [hardware_installation_pitft.md](./hardware_installation_pitft.md#run-on-console)
 
-
 ### Run as a service
 
 If you use displays in console environment not X Window, install auto-run service and shutdown service.
@@ -275,7 +269,6 @@ The output of the log file will be in "/home/pi/pizero_bikecomputer/log/debug.tx
 $ sudo systemctl start pizero_bikecomputer.service
 ```
 
-
 # Usage
 
 ## Button
@@ -284,15 +277,15 @@ $ sudo systemctl start pizero_bikecomputer.service
 
 <img width="400" alt="screen01" src="https://user-images.githubusercontent.com/12926652/206077256-f8bda5e5-e4a3-4c39-a7ff-ea343067756c.png">
 
-The buttons at the bottom of the screen are assigned the following functions from left to right. 
+The buttons at the bottom of the screen are assigned the following functions from left to right.
 
-| Button | Short press | Long press |
-|:-|:-|:-|
-| Left (<) | Screen switching(Back) | None |
-| LAP | Lap | Reset |
-| MENU | Menu | None |
-| Start/Stop  | Start/Stop | Quit the program |
-| Right (>) | Screen switching(Forward) | None |
+| Button     | Short press               | Long press       |
+| :--------- | :------------------------ | :--------------- |
+| Left (<)   | Screen switching(Back)    | None             |
+| LAP        | Lap                       | Reset            |
+| MENU       | Menu                      | None             |
+| Start/Stop | Start/Stop                | Quit the program |
+| Right (>)  | Screen switching(Forward) | None             |
 
 ### Hardware button
 
@@ -312,68 +305,68 @@ see [hardware_installation_pitft.md](./hardware_installation_pitft.md#hardware-b
 From left to right, the button assignments are as follows.
 
 | Button | Short press | Long press |
-|:-|:-|:-|
-| A | Left (<) | None |
-| B | Lap | Reset |
-| C | Screenshot | None |
-| D | Start/Stop | None |
-| E | Right (>) | Menu |
+| :----- | :---------- | :--------- |
+| A      | Left (<)    | None       |
+| B      | Lap         | Reset      |
+| C      | Screenshot  | None       |
+| D      | Start/Stop  | None       |
+| E      | Right (>)   | Menu       |
 
 #### Map
 
-| Button | Short press | Long press |
-|:-|:-|:-|
-| A | Left (<) | None |
-| B | Zoom out | Reset |
-| C | Change button mode(*1) | None |
-| D | Zoom in | None |
-| E | Right (>) | Menu |
+| Button | Short press             | Long press |
+| :----- | :---------------------- | :--------- |
+| A      | Left (<)                | None       |
+| B      | Zoom out                | Reset      |
+| C      | Change button mode(\*1) | None       |
+| D      | Zoom in                 | None       |
+| E      | Right (>)               | Menu       |
 
 Another button mode
 
-| Button | Short press | Long press |
-|:-|:-|:-|
-| A | Move left | None |
-| B | Move down | Zoom out |
-| C | Restore button mode | Change move amount |
-| D | Move up | Zoom in |
-| E | Move right | Search route(*) |
+| Button | Short press         | Long press         |
+| :----- | :------------------ | :----------------- |
+| A      | Move left           | None               |
+| B      | Move down           | Zoom out           |
+| C      | Restore button mode | Change move amount |
+| D      | Move up             | Zoom in            |
+| E      | Move right          | Search route(\*)   |
 
-(*)Search route by Google Directions API. Set your API key in setting.conf.
+(\*)Search route by Google Directions API. Set your API key in setting.conf.
 
 #### Course Profile
 
-| Button | Short press | Long press |
-|:-|:-|:-|
-| A | Left (<) | None |
-| B | Zoom out | None |
-| C | Restore button mode | None |
-| D | Zoom in | None |
-| E | Right (>) | None |
+| Button | Short press         | Long press |
+| :----- | :------------------ | :--------- |
+| A      | Left (<)            | None       |
+| B      | Zoom out            | None       |
+| C      | Restore button mode | None       |
+| D      | Zoom in             | None       |
+| E      | Right (>)           | None       |
 
 Another button mode
 
-| Button | Short press | Long press |
-|:-|:-|:-|
-| A | Move left | None |
-| B | Zoom out | None |
-| C | Restore button mode | None |
-| D | Zoom in | None |
-| E | Move right | None |
+| Button | Short press         | Long press |
+| :----- | :------------------ | :--------- |
+| A      | Move left           | None       |
+| B      | Zoom out            | None       |
+| C      | Restore button mode | None       |
+| D      | Zoom in             | None       |
+| E      | Move right          | None       |
 
 #### Menu
 
 In the menu, the button assignments are changed.
 
-| Button | Short press | Long press |
-|:-|:-|:-|
-| A | Back | None |
-| B | Brightness control(*) | None |
-| C | Enter | None |
-| D | Select items (Back) | None |
-| E | Select items (Forward) | None |
+| Button | Short press            | Long press |
+| :----- | :--------------------- | :--------- |
+| A      | Back                   | None       |
+| B      | Brightness control(\*) | None       |
+| C      | Enter                  | None       |
+| D      | Select items (Back)    | None       |
+| E      | Select items (Forward) | None       |
 
-(*) If you use the MIP Reflective color LCD with backlight model.
+(\*) If you use the MIP Reflective color LCD with backlight model.
 
 ### Garmin Edge Remote (ANT+)
 
@@ -381,61 +374,61 @@ In the menu, the button assignments are changed.
 
 The button assignments are as follows.
 
-| Button | Short press | Long press |
-|:-|:-|:-|
-| PAGE | Left (<) | Right (>) |
-| CUSTOM | Change button mode | Menu |
-| LAP | Lap | None |
+| Button | Short press        | Long press |
+| :----- | :----------------- | :--------- |
+| PAGE   | Left (<)           | Right (>)  |
+| CUSTOM | Change button mode | Menu       |
+| LAP    | Lap                | None       |
 
 Another button mode
 
-| Button | Short press | Long press |
-|:-|:-|:-|
-| PAGE | ANT+ Light ON/OFF | Brightness control |
-| CUSTOM | Restore button mode | None |
-| LAP | Start/Stop | None |
+| Button | Short press         | Long press         |
+| :----- | :------------------ | :----------------- |
+| PAGE   | ANT+ Light ON/OFF   | Brightness control |
+| CUSTOM | Restore button mode | None               |
+| LAP    | Start/Stop          | None               |
 
 #### Map
 
-| Button | Short press | Long press |
-|:-|:-|:-|
-| PAGE | Left (<-) | Right (->) |
-| CUSTOM | Change button mode | Zoom out |
-| LAP | Zoom in | None |
+| Button | Short press        | Long press |
+| :----- | :----------------- | :--------- |
+| PAGE   | Left (<-)          | Right (->) |
+| CUSTOM | Change button mode | Zoom out   |
+| LAP    | Zoom in            | None       |
 
 Another button mode
 
-| Button | Short press | Long press |
-|:-|:-|:-|
-| PAGE | None | None  |
-| CUSTOM | Restore button mode| Zoom out |
-| LAP | Zoom in | None |
+| Button | Short press         | Long press |
+| :----- | :------------------ | :--------- |
+| PAGE   | None                | None       |
+| CUSTOM | Restore button mode | Zoom out   |
+| LAP    | Zoom in             | None       |
 
 #### Course Profile
 
-| Button | Short press | Long press |
-|:-|:-|:-|
-| PAGE | Left (<-) | Right (->) |
-| CUSTOM | Change button mode | Zoom out |
-| LAP | Zoom in | None |
+| Button | Short press        | Long press |
+| :----- | :----------------- | :--------- |
+| PAGE   | Left (<-)          | Right (->) |
+| CUSTOM | Change button mode | Zoom out   |
+| LAP    | Zoom in            | None       |
 
 Another button mode
 
-| Button | Short press | Long press |
-|:-|:-|:-|
-| PAGE | None | None  |
-| CUSTOM | Restore button mode| Move left |
-| LAP | Move right | None |
+| Button | Short press         | Long press |
+| :----- | :------------------ | :--------- |
+| PAGE   | None                | None       |
+| CUSTOM | Restore button mode | Move left  |
+| LAP    | Move right          | None       |
 
 #### Menu
 
 In the menu, the button assignments are changed.
 
-| Button | Short press | Long press |
-|:-|:-|:-|
-| PAGE | Select items (Forward) | None |
-| CUSTOM | Select items (Back) | None |
-| LAP | Enter | None |
+| Button | Short press            | Long press |
+| :----- | :--------------------- | :--------- |
+| PAGE   | Select items (Forward) | None       |
+| CUSTOM | Select items (Back)    | None       |
+| LAP    | Enter                  | None       |
 
 ## Map
 
@@ -458,6 +451,7 @@ Right side
 - "right"
 
 ## Course profile
+
 <img width="400" alt="map-02" src="https://user-images.githubusercontent.com/12926652/206341086-7935cfbd-8ed3-4068-9f2b-93f676a8932a.png">
 
 Left side
@@ -481,7 +475,7 @@ Right side
 <img width="400" alt="menu-02-sensors" src="https://user-images.githubusercontent.com/12926652/206076191-4b8a4084-64a0-443b-a434-f6c6b4d51e2a.png">
 
 - ANT+ Sensors
-  - Pairing with ANT+ sensors. 
+  - Pairing with ANT+ sensors.
   - You need to install the ANT+ library and to set [ANT section](#ant-section) of setting.conf with `status = True`.
   - The pairing setting is saved in setting.conf when a sensor is connected, so it will be automatically connected next time you start the program.
 - ANT+ MultiScan
@@ -510,9 +504,8 @@ Right side
   - If properly paired, Android Google Maps Directions route search results can be sent with 'Share Directions' > 'Bluetooth' > (your Raspberry Pi).
     - <img width="320" alt="mapstogpx-01" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/928a8ed5-82e7-4ba2-afc7-6b68150d9043"> <img width="320" alt="mapstogpx-02" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/d6fbfb22-5c93-47e5-920f-8ef4fc9c02de">
 
-
 ### Connectivity
- 
+
 <img width="400" alt="livetrack-01" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/9f9660fd-eca4-4b97-a60a-d2ff890bf3f0">
 
 - Auto BT Tethering
@@ -525,13 +518,12 @@ Right side
   - Enable real-time data upload to the [ThingsBoard](https://thingsboard.io) dashboard.
   - `tb-mqtt-client` package, which can be installed with the `pip3` command, is required.
   - Also, thingsboard device access token is required in [THINGSBOARD_API](#thingsboard_api-section) of setting.conf.
-  - You will also need to upload and set up a dashboard.　For more details of Thingboard setup, see [thingsboard_setup.md](./thingsboard_setup.md).
-
+  - You will also need to upload and set up a dashboard.　 For more details of Thingboard setup, see [thingsboard_setup.md](./thingsboard_setup.md).
 
 ### Upload Activity
 
 Uploads the most recent activity record file(.fit) created by the reset operation after the power is turned on.
- 
+
 <img width="400" alt="menu-04-upload_activity" src="https://user-images.githubusercontent.com/12926652/206076198-55803175-ef4c-4f9b-9408-b44dbe98b1b3.png">
 
 - Strava
@@ -565,7 +557,7 @@ RainViewer
 
 気象庁降水ナウキャスト(Japan)
 
-<img src ="https://user-images.githubusercontent.com/12926652/205563333-549cf4dc-abbd-4392-9233-b8391687e0bc.png" width=400/> 
+<img src ="https://user-images.githubusercontent.com/12926652/205563333-549cf4dc-abbd-4392-9233-b8391687e0bc.png" width=400/>
 
 #### Wind map
 
@@ -582,7 +574,6 @@ If ANT+ powermeter is available, set both parameters are used in W'balance (%). 
 ### System
 
 <img width="400" alt="menu-08-system" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/402692a5-1612-4bf3-a645-a84ba91b766b">
-
 
 - Network
   - See below.
@@ -669,7 +660,7 @@ Set the value before starting the program. If the value is set during running, i
 map.yaml entry
 
   sample_mbtile:
-    url: 
+    url:
     attribution: some attribution.
     use_mbtiles: true
 ```
@@ -685,6 +676,7 @@ map.yaml entry
 If ANT+ power meter is available, set `cp` as CP and `w_prime` as W prime balance.
 
 #### SENSOR_IMU section
+
 In modules/sensor_i2c.py, use the change_axis method to change the axis direction of the IMU (accelerometer/magnetometer/gyroscope) according to its mounting direction.
 The settings are common, so if you use individual sensors, make sure they are all pointing in the same direction.
 
@@ -709,6 +701,7 @@ Axis conversion is performed with the following variables.
 #### DISPLAY_PARAM section
 
 (experimental)
+
 - `spi_clock`: specify SPI clock of the following displays.
   - `MIP`: MIP color reflective LCD module 2.7 inch.
   - `MIP_Sharp`: SHARP Memory Display Breakout
@@ -747,7 +740,6 @@ If you want to search for a route on a map, set your `token` of the Google Direc
 #### THINGSBOARD_API section
 
 If you want to use ThingsBoard dashboard, set your `token` of the Thingboard device access token.
-
 
 ### state.pickle
 
@@ -816,7 +808,6 @@ To download the map in advance, run the program manually with the --demo option.
 $ python3 pizero_bikecomputer.py --demo
 ```
 
-Press the left button to move to the map screen and leave it for a while. The current position will move along the course and download the required area of the map. 
-
+Press the left button to move to the map screen and leave it for a while. The current position will move along the course and download the required area of the map.
 
 [Back to README.md](../README.md)
