@@ -137,6 +137,12 @@ $ sudo pip3 install st7789
 
 see [hardware_installation_pitft.md](./hardware_installation_pitft.md#display)
 
+#### ST7789_Breakout Display
+
+```
+$ sudo pip3 install adafruit_rgb_display
+```
+
 #### E-ink Displays
 
 You can use python3-pyqt5 package too.
