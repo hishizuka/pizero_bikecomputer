@@ -178,6 +178,58 @@ class Button_Config:
         },
         "Pirate_Audio_old": {},
         "Display_HAT_Mini": {},
+        "MCP23009": {
+            "MAIN": {
+                "GP3": ("scroll_prev", ""),
+                "GP4": ("count_laps", "reset_count"),
+                "GP5": ("get_screenshot", ""),
+                # "GP5": ("multiscan", ""),
+                "GP6": ("start_and_stop_manual", ""),
+                "GP7": ("scroll_next", "enter_menu"),
+            },
+            "MENU": {
+                "GP3": ("back_menu", ""),
+                "GP4": ("brightness_control", ""),
+                "GP5": ("press_space", ""),
+                "GP6": ("press_shift_tab", ""),
+                "GP7": ("press_tab", ""),
+            },
+            "MAP": {
+                "GP3": ("scroll_prev", ""),
+                "GP4": ("map_zoom_minus", ""),
+                "GP5": ("change_map_overlays", "change_mode"),
+                "GP6": ("map_zoom_plus", ""),
+                "GP7": ("scroll_next", "enter_menu"),
+            },
+            "MAP_1": {
+                "GP3": ("map_move_x_minus", ""),
+                "GP4": ("map_move_y_minus", "map_zoom_minus"),
+                "GP5": ("change_map_overlays", "change_mode"),
+                "GP6": ("map_move_y_plus", "map_zoom_plus"),
+                "GP7": ("map_move_x_plus", "map_search_route"),
+            },
+            # "MAP_2": {
+            #    "GP3": ("timeline_past", ""),
+            #    "GP4": ("map_zoom_minus", ""),
+            #    "GP5": ("timeline_reset", "change_mode"),
+            #    "GP6": ("map_zoom_plus", ""),
+            #    "GP7": ("timeline_future", ""),
+            # },
+            "COURSE_PROFILE": {
+                "GP3": ("scroll_prev", ""),
+                "GP4": ("map_zoom_minus", ""),
+                "GP5": ("change_mode", ""),
+                "GP6": ("map_zoom_plus", ""),
+                "GP7": ("scroll_next", "enter_menu"),
+            },
+            "COURSE_PROFILE_1": {
+                "GP3": ("map_move_x_minus", ""),
+                "GP4": ("map_zoom_minus", ""),
+                "GP5": ("change_mode", ""),
+                "GP6": ("map_zoom_plus", ""),
+                "GP7": ("map_move_x_plus", ""),
+            },
+        },
     }
     # copy button definition
     G_BUTTON_DEF["Display_HAT_Mini"] = copy.deepcopy(G_BUTTON_DEF["Pirate_Audio"])
