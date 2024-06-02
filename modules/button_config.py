@@ -178,7 +178,7 @@ class Button_Config:
         },
         "Pirate_Audio_old": {},
         "Display_HAT_Mini": {},
-        "MCP23009": {
+        "IOExpander": {
             "MAIN": {
                 "GP3": ("scroll_prev", ""),
                 "GP4": ("count_laps", "reset_count"),
