@@ -8,6 +8,7 @@ from modules._pyqt import (
     QtWidgets,
     qasync,
 )
+from modules.config import Config
 from modules.pyqt.components import icons, topbar
 
 from .pyqt_menu_button import MenuButton
@@ -29,7 +30,7 @@ class MenuWidget(QtWidgets.QWidget):
     icon_x = 40
     icon_y = 32
 
-    def __init__(self, parent, page_name, config):
+    def __init__(self, parent, page_name, config: Config):
         QtWidgets.QWidget.__init__(self, parent=parent)
         self.config = config
         self.page_name = page_name
@@ -48,7 +49,7 @@ class MenuWidget(QtWidgets.QWidget):
         self.top_bar = topbar.TopBar()
 
         self.back_button = topbar.TopBarBackButton((self.icon_x, self.icon_y))
-        self.page_name_label = topbar.TopBarLabel(self.page_name)
+        self.page_name_label = topbar.TopBarLabel(20 if self.config.G_DISPLAY_ORIENTATION == "horizontal" else 15, self.page_name)
 
         self.top_bar_layout = QtWidgets.QHBoxLayout()
         self.top_bar_layout.setContentsMargins(5, 5, 5, 5)
@@ -76,7 +77,7 @@ class MenuWidget(QtWidgets.QWidget):
     def add_buttons(self, buttons):
         n = len(buttons)
 
-        if n <= 4:
+        if n <= 4 or self.config.G_DISPLAY_ORIENTATION == "vertical":
             layout_type = QtWidgets.QVBoxLayout
         else:
             layout_type = QtWidgets.QGridLayout
@@ -108,6 +109,10 @@ class MenuWidget(QtWidgets.QWidget):
         if n in (1, 2, 3):
             for j in range(4 - n):
                 self.menu_layout.addWidget(MenuButton("dummy", "", self.config))
+
+        if layout_type == QtWidgets.QVBoxLayout and self.config.G_DISPLAY_ORIENTATION == "vertical" and len(self.buttons) <= 5:
+            spacer = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Expanding)
+            self.menu_layout.addItem(spacer)
 
         # set first focus
         if not self.config.display.has_touch:
@@ -211,7 +216,7 @@ class ListWidget(MenuWidget):
 
         if self.settings and self.settings.keys():
             for k in self.settings.keys():
-                item = ListItemWidget(self, k)
+                item = ListItemWidget(self, self.config, k)
                 item.enter_signal.connect(self.button_func)
                 self.add_list_item(item)
 
@@ -236,7 +241,7 @@ class ListWidget(MenuWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        h = int((self.height() - self.top_bar.height()) / 4)
+        h = int((self.height() - self.top_bar.height()) / (4 if self.width() > self.height() else 8))
         self.size_hint = QtCore.QSize(self.top_bar.width(), h)
         for i in range(self.list.count()):
             self.list.item(i).setSizeHint(self.size_hint)
@@ -290,7 +295,8 @@ class ListItemWidget(QtWidgets.QWidget):
             title_style = f"{title_style} {border_style}"
         return title_style, detail_style
 
-    def __init__(self, parent, title, detail=None):
+    def __init__(self, parent, config: Config, title, detail=None):
+        self.config = config
         self.title = title
         self.detail = detail
         QtWidgets.QWidget.__init__(self, parent=parent)

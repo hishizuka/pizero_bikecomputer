@@ -1,6 +1,7 @@
 import os
 
 from logger import app_logger
+from modules.config import Config
 
 DEFAULT_RESOLUTION = (400, 240)
 
@@ -19,6 +20,7 @@ SUPPORTED_DISPLAYS = {
     "Pirate_Audio": None,
     "Pirate_Audio_old": None,
     "Display_HAT_Mini": (320, 240),
+    "ST7789_Breakout": (320, 240),
 }
 
 
@@ -34,7 +36,7 @@ class Display:
     brightness_index = 0
     brightness_table = None
 
-    def __init__(self, config):
+    def __init__(self, config: Config):
         self.config = config
 
         if self.has_auto_brightness:
@@ -163,5 +165,11 @@ def init_display(config):
                 display = ST7789Display(config)
             elif config.G_DISPLAY == "Display_HAT_Mini":
                 display = ST7789Display(config, SUPPORTED_DISPLAYS[config.G_DISPLAY])
+    elif config.G_DISPLAY == "ST7789_Breakout":
+        from .st7789_breakout_display import _SENSOR_DISPLAY, ST7789BreakoutDisplay
 
+        if _SENSOR_DISPLAY:
+            display = ST7789BreakoutDisplay(
+                config, SUPPORTED_DISPLAYS[config.G_DISPLAY]
+            )
     return display

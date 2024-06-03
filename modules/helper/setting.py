@@ -44,6 +44,8 @@ class Setting:
                 self.config.G_LANG = c["LANG"].upper()
             if "FONT_FILE" in c:
                 self.config.G_FONT_FILE = c["FONT_FILE"]
+            if "DISPLAY_ORIENTATION" in c:
+                self.config.G_DISPLAY_ORIENTATION = c["DISPLAY_ORIENTATION"]
 
         if "MAP_AND_DATA" in self.config_parser:
             c = self.config_parser["MAP_AND_DATA"]
@@ -228,6 +230,7 @@ class Setting:
         c["AUTO_BACKLIGHT_CUTOFF"] = str(int(self.config.G_AUTO_BACKLIGHT_CUTOFF))
         c["LANG"] = self.config.G_LANG
         c["FONT_FILE"] = self.config.G_FONT_FILE
+        c["DISPLAY_ORIENTATION"] = self.config.G_DISPLAY_ORIENTATION
 
         self.config_parser["MAP_AND_DATA"] = {}
         c = self.config_parser["MAP_AND_DATA"]

@@ -19,10 +19,10 @@ class LapButton(QtWidgets.QPushButton):
       }
     """
 
-    def __init__(self, *args):
+    def __init__(self, button_width, *args):
         super().__init__(LapIcon(), "", *args)
         self.setStyleSheet(self.STYLES)
-        self.setFixedSize(50, 30)
+        self.setFixedSize(button_width, 30)
         # long press
         self.setAutoRepeat(True)
         self.setAutoRepeatDelay(1000)
@@ -45,22 +45,22 @@ class MenuButton(QtWidgets.QPushButton):
       }
     """
 
-    def __init__(self, *args):
+    def __init__(self, button_width, *args):
         super().__init__(MenuIcon(), "", *args)
-        self.setFixedSize(50, 30)
+        self.setFixedSize(button_width, 30)
         self.setStyleSheet(self.STYLES)
 
 
 class ScrollNextButton(NaviButton):
-    def __init__(self, *args):
+    def __init__(self, button_width, *args):
         super().__init__(ForwardIcon(), "", *args)
-        self.setFixedSize(60, 30)
+        self.setFixedSize(button_width + 10, 30)
 
 
 class ScrollPrevButton(NaviButton):
-    def __init__(self, *args):
+    def __init__(self, button_width, *args):
         super().__init__(BackIcon(), "", *args)
-        self.setFixedSize(60, 30)
+        self.setFixedSize(button_width + 10, 30)
 
 
 class StartButton(QtWidgets.QPushButton):
@@ -79,10 +79,10 @@ class StartButton(QtWidgets.QPushButton):
       }
     """
 
-    def __init__(self, *args):
+    def __init__(self, button_width, *args):
         super().__init__(NextIcon(), "", *args)
         self.setStyleSheet(self.STYLES)
-        self.setFixedSize(50, 30)
+        self.setFixedSize(button_width, 30)
         # long press
         self.setAutoRepeat(True)
         self.setAutoRepeatDelay(1000)

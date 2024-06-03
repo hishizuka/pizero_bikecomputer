@@ -1,19 +1,11 @@
 import numpy as np
 
 from modules._pyqt import pg, qasync
+from modules.config import Config
 from modules.pyqt.pyqt_screen_widget import ScreenWidget
 
 
 class PerformanceGraphWidget(ScreenWidget):
-    item_layout = {
-        "Power": (0, 0),
-        "HR": (0, 1),
-        "W'bal(Norm)": (0, 2),
-        "LapTime": (0, 3),
-    }
-    max_height = 1
-    max_width = 3
-
     # for Power
     # brush = pg.mkBrush(color=(0,160,255,64))
     brush = pg.mkBrush(color=(0, 255, 255))
@@ -21,6 +13,8 @@ class PerformanceGraphWidget(ScreenWidget):
     pen1 = pg.mkPen(color=(255, 255, 255), width=0.01)  # transparent and thin line
     # for HR, wbal
     pen2 = pg.mkPen(color=(255, 0, 0), width=2)
+
+    plot_data_x1 = []
 
     def __init__(self, parent, config):
         self.display_item = config.G_GUI_PERFORMANCE_GRAPH_DISPLAY_ITEM
@@ -41,11 +35,30 @@ class PerformanceGraphWidget(ScreenWidget):
                 "yrange": [config.G_GUI_MIN_W_BAL, config.G_GUI_MAX_W_BAL],
             },
         }
-        self.plot_data_x1 = []
+
         for i in range(config.G_GUI_PERFORMANCE_GRAPH_DISPLAY_RANGE + 1):
             self.plot_data_x1.append(i)
 
-        super().__init__(parent, config)
+        self.is_horizontal = config.G_DISPLAY_ORIENTATION == "horizontal"
+
+        self.max_height = 1
+        self.max_width = 3 if self.is_horizontal else 1
+
+        item_layout = {
+            "Power": (0, 0),
+            "HR": (0, 1),
+            "W'bal(Norm)": (0, 2),
+            "LapTime": (0, 3),
+        }
+
+        item_layout_vertical = {
+            "Power": (0, 0),
+            "HR": (0, 1),
+            "W'bal(Norm)": (1, 0),
+            "LapTime": (1, 1),
+        }
+
+        super().__init__(parent, config, item_layout if self.is_horizontal else item_layout_vertical)
 
     def setup_ui_extra(self):
         # 1st graph: POWER
@@ -71,7 +84,10 @@ class PerformanceGraphWidget(ScreenWidget):
         # p2 on p1
         self.p1.setZValue(-100)
 
-        self.layout.addWidget(plot, 1, 0, 2, 4)
+        if self.is_horizontal:
+            self.layout.addWidget(plot, 1, 0, 2, 4)
+        else:
+            self.layout.addWidget(plot, 2, 0, 2, 2)
 
     def set_font_size(self, length):
         self.font_size = int(length / 7)
@@ -141,21 +157,34 @@ class PerformanceGraphWidget(ScreenWidget):
 
 
 class AccelerationGraphWidget(ScreenWidget):
-    item_layout = {
-        "ACC_X": (0, 0),
-        "ACC_Y": (0, 1),
-        "ACC_Z": (0, 2),
-        "M_Stat": (0, 3),
-    }
-    max_height = 1
-    max_width = 3
-
     # for acc
     pen1 = pg.mkPen(color=(0, 0, 255), width=3)
     pen2 = pg.mkPen(color=(255, 0, 0), width=3)
     pen3 = pg.mkPen(color=(0, 0, 0), width=2)
 
     g_range = 0.3
+
+    def __init__(self, parent, config: Config):
+        self.is_horizontal = config.G_DISPLAY_ORIENTATION == "horizontal"
+
+        self.max_height = 1
+        self.max_width = 3 if self.is_horizontal else 1
+
+        item_layout = {
+            "ACC_X": (0, 0),
+            "ACC_Y": (0, 1),
+            "ACC_Z": (0, 2),
+            "M_Stat": (0, 3),
+        }
+
+        item_layout_vertical = {
+            "ACC_X": (0, 0),
+            "ACC_Y": (0, 1),
+            "ACC_Z": (1, 0),
+            "M_Stat": (1, 1),
+        }
+
+        super().__init__(parent, config, item_layout if self.is_horizontal else item_layout_vertical)
 
     def setup_ui_extra(self):
         plot = pg.PlotWidget()
@@ -174,7 +203,10 @@ class AccelerationGraphWidget(ScreenWidget):
         plot.setXRange(0, self.config.G_GUI_ACC_TIME_RANGE)
         plot.setMouseEnabled(x=False, y=False)
 
-        self.layout.addWidget(plot, 1, 0, 2, 4)
+        if self.is_horizontal:
+            self.layout.addWidget(plot, 1, 0, 2, 4)
+        else:
+            self.layout.addWidget(plot, 2, 0, 2, 2)
 
     def start(self):
         self.timer.start(self.config.G_REALTIME_GRAPH_INTERVAL)
@@ -233,15 +265,6 @@ class AccelerationGraphWidget(ScreenWidget):
 
 
 class AltitudeGraphWidget(ScreenWidget):
-    item_layout = {
-        "Grade": (0, 0),
-        "Grade(spd)": (0, 1),
-        "Altitude": (0, 2),
-        "Alt.(GPS)": (0, 3),
-    }
-    max_height = 1
-    max_width = 3
-
     # for altitude_raw
     pen1 = pg.mkPen(color=(0, 0, 0), width=2)
     pen2 = pg.mkPen(color=(255, 0, 0), width=3)
@@ -251,6 +274,28 @@ class AltitudeGraphWidget(ScreenWidget):
     #     self.plot_data_x1 = []
     #     for i in range(self.config.G_GUI_PERFORMANCE_GRAPH_DISPLAY_RANGE):
     #       self.plot_data_x1.append(i)
+
+    def __init__(self, parent, config: Config):
+        self.is_horizontal = config.G_DISPLAY_ORIENTATION == "horizontal"
+
+        self.max_height = 1
+        self.max_width = 3 if self.is_horizontal else 1
+
+        item_layout = {
+            "Grade": (0, 0),
+            "Grade(spd)": (0, 1),
+            "Altitude": (0, 2),
+            "Alt.(GPS)": (0, 3),
+        }
+
+        item_layout_vertical = {
+            "Grade": (0, 0),
+            "Grade(spd)": (0, 1),
+            "Altitude": (1, 0),
+            "Alt.(GPS)": (1, 1),
+        }
+
+        super().__init__(parent, config, item_layout if self.is_horizontal else item_layout_vertical)
 
     def setup_ui_extra(self):
         plot = pg.PlotWidget()
@@ -268,7 +313,10 @@ class AltitudeGraphWidget(ScreenWidget):
         self.y_range = 15
         self.y_shift = 0  # self.y_ra  nge * 0.25
 
-        self.layout.addWidget(plot, 1, 0, 2, 4)
+        if self.is_horizontal:
+            self.layout.addWidget(plot, 1, 0, 2, 4)
+        else:
+            self.layout.addWidget(plot, 2, 0, 2, 2)
 
     def set_font_size(self, length):
         self.font_size = int(length / 7)

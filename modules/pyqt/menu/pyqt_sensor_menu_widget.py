@@ -160,7 +160,7 @@ class ANTListWidget(ListWidget):
                 status_str = " (connected)" if status else ""
                 sensor_type = self.config.G_ANT["TYPE_NAME"][ant_type_array[0]]
                 title = f"{sensor_type} {status_str}".strip()
-                ant_item = ANTListItemWidget(self, ant_id_str, title)
+                ant_item = ANTListItemWidget(self, self.config, ant_id_str, title)
 
                 self.add_list_item(ant_item)
 
@@ -170,9 +170,9 @@ class ANTListWidget(ListWidget):
 class ANTListItemWidget(ListItemWidget):
     id = None
 
-    def __init__(self, parent, ant_id, title):
+    def __init__(self, parent, config, ant_id, title):
         self.id = ant_id
-        super().__init__(parent, title, detail=f"   ID: {ant_id}")
+        super().__init__(parent, config, title, detail=f"   ID: {ant_id}")
 
     def setup_ui(self):
         super().setup_ui()
