@@ -1,11 +1,12 @@
-from .base.button_io_expander import ButtonIOExpander
-from adafruit_mcp230xx.mcp23008 import MCP23008 as MCP
 import board
 import busio
+from adafruit_mcp230xx.mcp23008 import MCP23008 as MCP
+
+from .base.button_io_expander import ButtonIOExpander
+
 
 # https://www.microchip.com/en-us/product/mcp23009
 # https://ww1.microchip.com/downloads/en/DeviceDoc/20002121C.pdf
-
 
 # NOTE: no need to set TEST and RESET address and value, due to adafruit_mcp230xx library handling it.
 class MCP23009(ButtonIOExpander):

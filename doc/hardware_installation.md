@@ -180,6 +180,8 @@ This is essential for displays without buttons, like MIP displays.
 
 - [Button SHIM](https://shop.pimoroni.com/products/button-shim)
 - <img src="https://user-images.githubusercontent.com/12926652/91799330-cfc50580-ec61-11ea-9045-e1991aed205c.png" width=240 />
+- IO Expander (with MCP230009 and some buttons)
+- <img src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/0477aac3-96a2-40f9-bae9-efd3d77ed46f" width=480 />
 
 ### Battery
 

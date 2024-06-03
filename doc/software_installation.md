@@ -198,6 +198,12 @@ $ sudo pip3 install magnetic-field-calculator
 $ sudo apt install python3-buttonshim
 ```
 
+#### IO Expander (with MCP230009 and some buttons)
+
+```
+$ sudo apt install adafruit-circuitpython-mcp230xx
+```
+
 #### PiJuice HAT
 
 Follow [official setup guide](https://github.com/PiSupply/PiJuice/tree/master/Software) of PiSupply/PiJuice

@@ -1,8 +1,9 @@
-from digitalio import Direction, Pull
 import time
 from threading import Thread
-from logger import app_logger
 
+from digitalio import Direction, Pull
+
+from logger import app_logger
 
 try:
     # run from top directory (pizero_bikecomputer)
