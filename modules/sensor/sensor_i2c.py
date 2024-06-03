@@ -360,6 +360,8 @@ class SensorI2C(Sensor):
             "BUTTON_SHIM"
         ] = self.detect_button_button_shim()
 
+        self.available_sensors["BUTTON"]["MCP23009"] = self.detect_button_mcp23009()
+
         # battery
         self.available_sensors["BATTERY"]["PIJUICE"] = self.detect_battery_pijuice()
         self.available_sensors["BATTERY"]["PISUGAR3"] = self.detect_battery_pisugar3()
@@ -1538,6 +1540,16 @@ class SensorI2C(Sensor):
 
             # device test
             self.sensor_button_shim = ButtonShim(self.config)
+            return True
+        except:
+            return False
+
+    def detect_button_mcp23009(self):
+        try:
+            from .i2c.MCP23009 import MCP23009
+
+            # device test
+            self.sensor_mcp23009 = MCP23009(self.config)
             return True
         except:
             return False
