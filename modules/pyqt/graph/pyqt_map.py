@@ -1,10 +1,10 @@
-import datetime
 import io
 import os
 import sqlite3
+from datetime import datetime, timezone
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageEnhance
 
 from logger import app_logger
 from modules._pyqt import QT_COMPOSITION_MODE_DARKEN, QtCore, pg, qasync
@@ -109,6 +109,8 @@ class MapWidget(BaseMapWidget):
     }
     overlay_index = 0
 
+    contrast_factor = 2.0
+
     def setup_ui_extra(self):
         super().setup_ui_extra()
 
@@ -174,11 +176,11 @@ class MapWidget(BaseMapWidget):
         self.reset_map()
 
         # self.load_course()
-        t = datetime.datetime.utcnow()
+        t = datetime.now(timezone.utc)
         self.get_track()  # heavy when resume
         if len(self.tracks_lon):
             app_logger.info(
-                f"resume_track(init): {(datetime.datetime.utcnow() - t).total_seconds():.3f} sec"
+                f"resume_track(init): {(datetime.now(timezone.utc) - t).total_seconds():.3f} sec"
             )
 
         # map
@@ -774,7 +776,14 @@ class MapWidget(BaseMapWidget):
                 )).convert("RGBA")
 
             if (
-                self.config.G_DISPLAY in ("MIP", "MIP_640", "MIP_Mraa", "MIP_Mraa_640")
+                map_config == self.config.G_MAP_CONFIG
+                and self.config.G_DISPLAY.startswith(("MIP_JDI", "MIP_Azumo"))
+                and self.contrast_factor != 1.0
+            ):
+                img_pil = ImageEnhance.Contrast(img_pil).enhance(self.contrast_factor)
+
+            if (
+                self.config.G_DISPLAY.startswith(("MIP_JDI", "MIP_Azumo"))
                 and (
                     map_name.startswith("jpn_scw")
                     or map_name.startswith("jpn_jma_bousai")
@@ -1110,4 +1119,10 @@ class MapWidget(BaseMapWidget):
         else:
             self.buttons["layers"].setEnabled(True)
 
+    def change_dither(self):
+        if self.contrast_factor == 2.0:
+            self.contrast_factor = 1.0
+        elif self.contrast_factor == 1.0:
+            self.contrast_factor = 2.0
+        self.reset_map()
         
