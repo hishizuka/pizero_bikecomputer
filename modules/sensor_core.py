@@ -73,6 +73,8 @@ class SensorCore:
     brakelight_spd = []
     brakelight_spd_range = 4
     brakelight_spd_cutoff = 4  # 4*3.6 = 14.4 [km/h]
+    auto_backlight_brightness = []
+    auto_backlight_brightness_range = 3
     graph_keys = [
         "hr_graph",
         "power_graph",
@@ -108,6 +110,7 @@ class SensorCore:
         for d in self.diff_keys:
             self.values["integrated"][d] = [np.nan] * self.grade_range
         self.brakelight_spd = [0] * self.brakelight_spd_range
+        self.auto_backlight_brightness = [0] * self.auto_backlight_brightness_range
         self.values["integrated"]["CPU_MEM"] = ""
 
         for s in self.average_secs:
@@ -544,18 +547,25 @@ class SensorCore:
                     ):
                         self.config.logger.start_and_stop()
 
-                # auto backlight
-                if self.config.display.auto_brightness and not np.isnan(
-                    v["I2C"]["light"]
+                # auto backlight & brake light with brightness
+                # auto_backlight = False
+                if (
+                    self.config.display.use_auto_backlight
+                    and not np.isnan(v["I2C"]["light"])
                 ):
-                    if v["I2C"]["light"] <= self.config.G_AUTO_BACKLIGHT_CUTOFF:
-                        self.config.display.set_brightness(3)
-                        self.sensor_ant.set_light_mode("FLASH_LOW", auto=True, auto_id="auto_backlight")
+                    self.auto_backlight_brightness[:-1] = self.auto_backlight_brightness[1:]
+                    self.auto_backlight_brightness[-1] = v["I2C"]["light"]
+                    brightness = int(np.mean(self.auto_backlight_brightness))
+
+                    if brightness <= self.config.G_AUTO_BACKLIGHT_CUTOFF:
+                        self.config.display.set_brightness(3) # TODO lowest backlight value
+                        self.sensor_ant.set_light_mode("FLASH_LOW", auto=True, auto_id="brightness")
+                        # auto_backlight = True
                     else:
                         self.config.display.set_brightness(0)
-                        self.sensor_ant.set_light_mode("OFF", auto=True, auto_id="auto_backlight")
+                        self.sensor_ant.set_light_mode("OFF", auto=True, auto_id="brightness")
 
-                # break light
+                # brake light with speed
                 self.brakelight_spd[:-1] = self.brakelight_spd[1:]
                 self.brakelight_spd[-1] = self.values["integrated"]["speed"] 
                 if (
@@ -566,8 +576,14 @@ class SensorCore:
                     )
                 ):
                     self.sensor_ant.set_light_mode("FLASH_LOW", auto=True, auto_id="break_light")
+                    # auto_backlight = True
                 else:
                     self.sensor_ant.set_light_mode("OFF", auto=True, auto_id="break_light")
+
+                # if auto_backlight:
+                #     self.sensor_ant.set_light_mode("FLASH_LOW", auto=True, auto_id="sensor_core")
+                # else:
+                #     self.sensor_ant.set_light_mode("OFF", auto=True, auto_id="sensor_core")
 
                 # cpu and memory
                 if _IMPORT_PSUTIL:
@@ -614,8 +630,9 @@ class SensorCore:
                     d1 = d2 = 0
                 self.wait_time = self.config.G_SENSOR_INTERVAL - d2
                 self.actual_loop_interval = (d1 + 1) * self.config.G_SENSOR_INTERVAL
-        except asyncio.CancelledError:
-            pass
+        except asyncio.CancelledError as e:
+            print(e)
+            #pass
 
     @staticmethod
     def conv_grade(gr):
@@ -681,6 +698,7 @@ class SensorCore:
                     / self.config.G_POWER_W_PRIME
                 )
 
-        v["w_prime_balance_normalized"] = int(
-            v["w_prime_balance"] / self.config.G_POWER_W_PRIME*100
+        v["w_prime_balance_normalized"] = round(
+            v["w_prime_balance"] / self.config.G_POWER_W_PRIME * 100,
+            1
         )
