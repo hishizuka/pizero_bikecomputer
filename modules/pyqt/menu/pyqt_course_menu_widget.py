@@ -2,6 +2,8 @@ import asyncio
 import os
 import shutil
 
+from PIL import Image, ImageEnhance, ImageQt
+
 from modules._pyqt import (
     QT_ALIGN_CENTER,
     QtCore,
@@ -16,6 +18,7 @@ from .pyqt_menu_widget import (
     ListWidget,
     ListItemWidget,
 )
+from modules.pyqt.pyqt_item import Item
 
 
 class CoursesMenuWidget(MenuWidget):
@@ -275,7 +278,7 @@ class CourseListWidget(ListWidget):
 class CourseListItemWidget(ListItemWidget):
     list_info = None
     list_type = None
-    locality_text = ", {elevation_gain:.0f}m up, {locality}, {administrative_area}"
+    locality_text = ", {elevation_gain:.0f}m up, from {locality} {administrative_area}"
 
     def __init__(self, parent, list_type, list_info):
         self.list_type = list_type
@@ -312,10 +315,13 @@ class CourseDetailWidget(MenuWidget):
     map_image_size = None
     profile_image_size = None
     next_button = None
-
-    address_format = "{locality}, {administrative_area}"
+    horizontal = True
+    font_size = 20
 
     def setup_menu(self):
+        if self.parent().size().height() > self.parent().size().width():
+            self.horizontal = False
+
         self.make_menu_layout(QtWidgets.QVBoxLayout)
 
         self.map_image = QtWidgets.QLabel()
@@ -324,34 +330,45 @@ class CourseDetailWidget(MenuWidget):
         self.profile_image = QtWidgets.QLabel()
         self.profile_image.setAlignment(QT_ALIGN_CENTER)
 
-        self.distance_label = QtWidgets.QLabel()
-        self.distance_label.setMargin(0)
-        self.distance_label.setContentsMargins(0, 0, 0, 0)
+        self.set_font_size()
 
-        self.elevation_label = QtWidgets.QLabel()
-        self.elevation_label.setMargin(0)
-        self.elevation_label.setContentsMargins(0, 0, 0, 0)
-
-        self.locality_label = QtWidgets.QLabel()
-        self.locality_label.setMargin(0)
-        self.locality_label.setContentsMargins(0, 0, 0, 0)
-        self.locality_label.setWordWrap(True)
-
-        info_layout = QtWidgets.QVBoxLayout()
-        info_layout.setContentsMargins(5, 0, 0, 0)
-        info_layout.setSpacing(0)
-        info_layout.addWidget(self.distance_label)
-        info_layout.addWidget(self.elevation_label)
-        info_layout.addWidget(self.locality_label)
+        self.distance_item = Item(
+            config=self.config,
+            name="Distance",
+            font_size=self.font_size,
+            right_flag=True,
+            bottom_flag=False,
+        )
+        self.ascent_item = Item(
+            config=self.config,
+            name="Ascent",
+            font_size=self.font_size,
+            right_flag=True,
+            bottom_flag=False,
+        )
 
         outer_layout = QtWidgets.QHBoxLayout()
         outer_layout.setContentsMargins(0, 0, 0, 0)
         outer_layout.setSpacing(0)
-        outer_layout.addWidget(self.map_image)
-        outer_layout.addLayout(info_layout)
+        
+        if self.horizontal:
+            info_layout = QtWidgets.QVBoxLayout()
+            info_layout.setContentsMargins(0, 0, 0, 0)
+            info_layout.setSpacing(0)
+            info_layout.addLayout(self.distance_item)
+            info_layout.addLayout(self.ascent_item)
+
+            outer_layout.addWidget(self.map_image)
+            outer_layout.addLayout(info_layout)
+        else:
+            self.menu_layout.addWidget(self.map_image)
+            outer_layout.addLayout(self.distance_item)
+            outer_layout.addLayout(self.ascent_item)
 
         self.menu_layout.addLayout(outer_layout)
         self.menu_layout.addWidget(self.profile_image)
+        spacer = QtWidgets.QWidget()
+        self.menu_layout.addWidget(spacer)
 
         # update panel for every 1 seconds
         self.timer = QtCore.QTimer(parent=self)
@@ -382,9 +399,8 @@ class CourseDetailWidget(MenuWidget):
         self.next_button.setEnabled(False)
 
         self.page_name_label.setText(course_info["name"])
-        self.distance_label.setText("{:.1f}km".format(course_info["distance"] / 1000))
-        self.elevation_label.setText("{:.0f}m up".format(course_info["elevation_gain"]))
-        self.locality_label.setText(self.address_format.format(**course_info))
+        self.distance_item.update_value(course_info["distance"])
+        self.ascent_item.update_value(course_info["elevation_gain"])
 
         self.list_id = course_info["id"]
 
@@ -454,6 +470,7 @@ class CourseDetailWidget(MenuWidget):
         )
 
     def draw_images(self, draw_map_image=True, draw_profile_image=True):
+
         if self.list_id is None:
             return False
 
@@ -462,45 +479,56 @@ class CourseDetailWidget(MenuWidget):
                 self.config.G_RIDEWITHGPS_API["URL_ROUTE_DOWNLOAD_DIR"]
                 + "preview-{route_id}.png"
             ).format(route_id=self.list_id)
+            if not os.path.exists(filename):
+                return
+
+            im = Image.open(filename).convert("RGBA")
+            im = ImageEnhance.Contrast(im).enhance(2.0)
             if self.map_image_size is None:
-                self.map_image_size = QtGui.QImage(filename).size()
-            if self.map_image_size.width() == 0:
+                self.map_image_size = Image.open(filename).size # tuple (w, h)
+            if self.map_image_size[0] == 0 or self.map_image_size[1] == 0:
                 return False
-            scale = (self.menu.width() / 2) / self.map_image_size.width()
-            map_image_qsize = QtCore.QSize(
-                int(self.map_image_size.width() * scale),
-                int(self.map_image_size.height() * scale),
-            )
-            self.map_image.setPixmap(QtGui.QIcon(filename).pixmap(map_image_qsize))
+
+            ratio = 1 # ratio against window width (for vertical layout)
+            if self.horizontal:
+                ratio = 0.5
+            scale = (self.size().width() * ratio) / self.map_image_size[0]
+            im = im.resize((
+                int(self.map_image_size[0] * scale),
+                int(self.map_image_size[1] * scale),
+            ))
+            self.map_image.setPixmap(QtGui.QPixmap.fromImage(ImageQt.ImageQt(im)))
 
         if draw_profile_image:
             filename = (
                 self.config.G_RIDEWITHGPS_API["URL_ROUTE_DOWNLOAD_DIR"]
                 + "elevation_profile-{route_id}.jpg"
             ).format(route_id=self.list_id)
+
+            im = Image.open(filename).convert("RGBA")
             if self.profile_image_size is None:
-                # self.profile_image_size = Image.open(filename).size
-                self.profile_image_size = QtGui.QImage(filename).size()
-            if self.profile_image_size.width() == 0:
+                self.profile_image_size = Image.open(filename).size # tuple (w, h)
+            if self.profile_image_size[0] == 0 or self.profile_image_size[1] == 0:
                 return False
-            scale = self.menu.width() / self.profile_image_size.width()
-            profile_image_qsize = QtCore.QSize(
-                int(self.profile_image_size.width() * scale),
-                int(self.profile_image_size.height() * scale),
-            )
-            self.profile_image.setPixmap(
-                QtGui.QIcon(filename).pixmap(profile_image_qsize)
-            )
+
+            scale = self.size().width() / self.profile_image_size[0]
+            im = im.resize((
+                int(self.profile_image_size[0] * scale),
+                int(self.profile_image_size[1] * scale),
+            ))
+            self.profile_image.setPixmap(QtGui.QPixmap.fromImage(ImageQt.ImageQt(im)))
+
         return True
+
+    def set_font_size(self):
+        self.font_size = int(min(self.size().width(), self.size().height()) / 10)
 
     def resizeEvent(self, event):
         self.check_all_image_and_draw()
 
-        h = self.size().height()
-        q = self.distance_label.font()
-        q.setPixelSize(int(h / 12))
-        for l in [self.distance_label, self.elevation_label, self.locality_label]:
-            l.setFont(q)
+        self.set_font_size()
+        for i in [self.distance_item, self.ascent_item]:
+            i.update_font_size(self.font_size)
 
         return super().resizeEvent(event)
 

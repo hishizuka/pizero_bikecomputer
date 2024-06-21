@@ -40,15 +40,11 @@ class MenuButton(QtWidgets.QPushButton):
       QPushButton[style='unavailable']{ color: #AAAAAA; }
     """
     config = None
-    button_type = None
-    status = False
 
     res_img = {
         True: QtGui.QIcon("img/cloud_upload_done.svg"),
         False: QtGui.QIcon("img/button_warning.svg"),
     }
-
-    loading_result = False
 
     def __init__(self, button_type, text, config, icon=None):
         # if icon is passed, no text is used
@@ -56,11 +52,10 @@ class MenuButton(QtWidgets.QPushButton):
 
         self.config = config
         self.button_type = button_type
+        self.status = False
+        self.loading_result = False
 
-        self.setSizePolicy(
-            QT_EXPANDING,
-            QT_EXPANDING,
-        )
+        self.setSizePolicy(QT_EXPANDING, QT_EXPANDING)
         self.setStyleSheet(self.STYLES)
 
         if icon:
@@ -100,12 +95,11 @@ class MenuButton(QtWidgets.QPushButton):
         self.setProperty("style", None)
 
     def resizeEvent(self, event):
-        # w = self.size().width()
-        h = self.size().height()
-        psize = int(h / 2.5) if int(h / 2.5) > 0 else 1
-
+        short_side_length = min(self.size().height(), self.size().width())
+        if short_side_length < 3:
+            return
         q = self.font()
-        q.setPixelSize(psize)
+        q.setPixelSize(int(short_side_length / 2.5))
         self.setFont(q)
 
     def focusInEvent(self, event):

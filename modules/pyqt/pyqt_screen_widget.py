@@ -7,15 +7,13 @@ from .pyqt_item import Item
 class ScreenWidget(QtWidgets.QWidget):
     config = None
     layout_class = QtWidgets.QGridLayout
-    item_layout = None
-    items = None
-
-    font_size = 12
-    max_width = max_height = 0
 
     def __init__(self, parent, config, item_layout=None):
         self.config = config
         self.items = []
+        self.item_layout = {}
+        self.max_width = self.max_height = 0
+        self.font_size = 20
 
         if item_layout:
             self.item_layout = item_layout
@@ -45,8 +43,7 @@ class ScreenWidget(QtWidgets.QWidget):
         return self.sensor.values["GPS"]
 
     def resizeEvent(self, event):
-        h = self.size().height()
-        self.set_font_size(h)
+        self.set_font_size(min(self.size().height(), self.size().width()))
         for i in self.items:
             i.update_font_size(self.font_size)
 
@@ -65,9 +62,8 @@ class ScreenWidget(QtWidgets.QWidget):
         self.setup_ui_extra()
 
         self.add_items()
-
-        # this depends on max_height so has to be done after add_items that recalculate it
-        self.set_font_size(self.config.display.resolution[1])
+        
+        self.set_font_size(min(self.config.display.resolution))
 
     # call from on_change_main_page in gui_pyqt.py
     def start(self):
@@ -81,14 +77,20 @@ class ScreenWidget(QtWidgets.QWidget):
         pass
 
     def set_font_size(self, length):
-        # need to modify for automation and scaling
-        self.font_size = int(length / 6)  # 2 rows (100px)
-        if self.max_height == 2:  # 3 rows (66px)
-            self.font_size = int(length / 7)
-        elif self.max_height == 3:  # 4 rows (50px)
-            self.font_size = int(length / 10)
-        elif self.max_height >= 4:  # 5 rows~ (40px)
-            self.font_size = int(length / 15)
+        # get rows/columns for own grid layout
+        short_side_items = self.max_height # width > height
+        f = 1.0 # quick hack. considering aspect ratio?
+        if self.size().height() > self.size().width():
+            short_side_items = self.max_width
+            f = 0.8
+
+        self.font_size = int(length / 6 * f)  # 2 rows/columns (100px)
+        if short_side_items == 2:  # 3 rows/columns (66px)
+            self.font_size = int(length / 7 * f)
+        elif short_side_items == 3:  # 4 rows/columns (50px)
+            self.font_size = int(length / 10 * f)
+        elif short_side_items >= 4:  # 5 rows/columns~ (40px)
+            self.font_size = int(length / 15 * f)
 
         self.set_minimum_size()
 
@@ -119,10 +121,13 @@ class ScreenWidget(QtWidgets.QWidget):
                 if pos[1] == self.max_width:
                     right_flag = True
                 if len(pos) == 4:
-                    if pos[2] - 1 == self.max_height:
+                    if pos[2] in [-1, self.max_height + 1]:
                         bottom_flag = True
-                    if pos[3] - 1 == self.max_width:
+                    if pos[3] in [-1, self.max_width + 1]:
                         right_flag = True
+
+                if key.endswith("GraphWidget"):
+                    continue
 
                 item = Item(
                     config=self.config,

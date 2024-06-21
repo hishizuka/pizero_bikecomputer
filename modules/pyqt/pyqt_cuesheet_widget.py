@@ -107,6 +107,12 @@ class CueSheetWidget(ScreenWidget):
     cuesheet = None
     layout_class = QtWidgets.QVBoxLayout
 
+    def __init__(self, parent, config, item_layout=None):
+        s = config.display.resolution
+        if s[0] < s[1]:
+            config.G_CUESHEET_DISPLAY_NUM = 5
+        super().__init__(parent, config, item_layout)
+
     def set_font_size(self, length):
         self.font_size = int(length / 7)
 
@@ -124,8 +130,7 @@ class CueSheetWidget(ScreenWidget):
             elem.reset()
 
     def resizeEvent(self, event):
-        h = self.size().height()
-        self.set_font_size(h)
+        self.set_font_size(min(self.size().height(), self.size().width()))
         for i in self.cuesheet:
             i.update_font_size(int(self.font_size))  # for 3 rows
 

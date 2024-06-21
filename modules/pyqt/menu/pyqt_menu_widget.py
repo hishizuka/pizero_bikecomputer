@@ -19,12 +19,6 @@ from .pyqt_menu_button import MenuButton
 
 class MenuWidget(QtWidgets.QWidget):
     config = None
-    page_name = None
-    back_index_key = None
-    focus_widget = None
-
-    buttons = None
-    menu_layout = None
 
     icon_x = 40
     icon_y = 32
@@ -33,8 +27,11 @@ class MenuWidget(QtWidgets.QWidget):
         QtWidgets.QWidget.__init__(self, parent=parent)
         self.config = config
         self.page_name = page_name
-
+        self.back_index_key = None
+        self.focus_widget = None
+        self.menu_layout = None
         self.buttons = {}
+
         self.setup_ui()
 
     def setup_ui(self):
@@ -75,13 +72,16 @@ class MenuWidget(QtWidgets.QWidget):
 
     def add_buttons(self, buttons):
         n = len(buttons)
+        vertical = True
+        if self.parent().size().height() < self.parent().size().width():
+            vertical = False
 
-        if n <= 4:
+        if n <= 4 or vertical:
             layout_type = QtWidgets.QVBoxLayout
         else:
             layout_type = QtWidgets.QGridLayout
         self.make_menu_layout(layout_type)
-
+        
         i = 0
         for b in buttons:
             icon = None
@@ -89,6 +89,8 @@ class MenuWidget(QtWidgets.QWidget):
             if rest:
                 icon = rest[0]
 
+            if vertical and name == "":
+                continue
             self.buttons[name] = MenuButton(button_type, name, self.config, icon=icon)
 
             if func is not None:
@@ -103,10 +105,12 @@ class MenuWidget(QtWidgets.QWidget):
                 self.menu_layout.addWidget(self.buttons[name], i % 4, i // 4)
                 i += 1
 
-        # add dummy button
-        # TODO we should remove this but that's for later
-        if n in (1, 2, 3):
+        # add dummy buttons to fit 4x2 (horizontal) or 8x1 (vertical) layouts.
+        if not vertical and n in (1, 2, 3):
             for j in range(4 - n):
+                self.menu_layout.addWidget(MenuButton("dummy", "", self.config))
+        elif vertical:
+            for j in range(self.menu_layout.count(), 8):
                 self.menu_layout.addWidget(MenuButton("dummy", "", self.config))
 
         # set first focus
@@ -117,12 +121,17 @@ class MenuWidget(QtWidgets.QWidget):
         pass
 
     def resizeEvent(self, event):
-        # w = self.size().width()
         h = self.size().height()
-        self.top_bar.setFixedHeight(int(h / 5))
+        w = self.size().width()
+        rows = 5
+        short_side_length = h
+        if h > w:
+            rows = 9
+            short_side_length = w
+        self.top_bar.setFixedHeight(int(h / rows))
 
         q = self.page_name_label.font()
-        q.setPixelSize(int(h / 12))
+        q.setPixelSize(int(short_side_length / 12))
         self.page_name_label.setFont(q)
 
     def connect_buttons(self):
@@ -149,7 +158,10 @@ class MenuWidget(QtWidgets.QWidget):
 
 
 class TopMenuWidget(MenuWidget):
-    back_index_key = "Main"
+
+    def __init__(self, parent, page_name, config):
+        super().__init__(parent, page_name, config)
+        self.back_index_key = "Main"
 
     def setup_menu(self):
         button_conf = (
@@ -236,7 +248,10 @@ class ListWidget(MenuWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        h = int((self.height() - self.top_bar.height()) / 4)
+        rows = 4
+        if self.size().height() > self.size().width():
+            rows = 8
+        h = int((self.height() - self.top_bar.height()) / rows)
         self.size_hint = QtCore.QSize(self.top_bar.width(), h)
         for i in range(self.list.count()):
             self.list.item(i).setSizeHint(self.size_hint)
@@ -276,8 +291,6 @@ class ListWidget(MenuWidget):
 
 class ListItemWidget(QtWidgets.QWidget):
     enter_signal = QtCore.pyqtSignal()
-    title = ""
-    detail = ""
 
     def get_styles(self):
         border_style = "border-bottom: 1px solid #AAAAAA;"
@@ -338,10 +351,10 @@ class ListItemWidget(QtWidgets.QWidget):
         label.setFont(q)
 
     def resizeEvent(self, event):
-        h = self.size().height()
-        self.resize_label(self.title_label, int(h * 0.45))
+        short_side_length = min(self.size().height(), self.size().width())
+        self.resize_label(self.title_label, int(short_side_length * 0.45))
         if self.detail:
-            self.resize_label(self.detail_label, int(h * 0.4))
+            self.resize_label(self.detail_label, int(short_side_length * 0.4))
 
 
 class UploadActivityMenuWidget(MenuWidget):
