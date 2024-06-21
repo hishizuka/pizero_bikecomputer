@@ -247,11 +247,11 @@ class CourseProfileGraphWidget(BaseMapWidget):
             # grade_str = "({:.0f}%)".format(self.course.climb_segment[climb_index]['average_grade'])
             self.climb_detail.setHtml(
                 '<div style=" \
-          text-align: right; \
-          vertical-align: bottom; \
-          font-size: 20px; \
-          background-color: white; \
-        ">'
+                    text-align: right; \
+                    vertical-align: bottom; \
+                    font-size: 20px; \
+                    background-color: white; \
+                ">'
                 + summit_img
                 + rest_distance_str
                 + altitude_up_img

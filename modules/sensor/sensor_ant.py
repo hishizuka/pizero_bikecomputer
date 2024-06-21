@@ -88,25 +88,22 @@ class SensorANT(Sensor):
         # for dummy output
         if not self.config.G_ANT["STATUS"] and self.config.G_DUMMY_OUTPUT:
             # need to set dummy ANT+ device id 0
-            self.config.G_ANT["USE"] = {
-                "HR": True,
-                "SPD": True,
-                "CDC": True,  # same as SPD
-                "PWR": True,
-                "TEMP": False,
-            }
-            self.config.G_ANT["ID_TYPE"] = {
-                "HR": struct.pack("<HB", 0, 0x78),
-                "SPD": struct.pack("<HB", 0, 0x79),
-                "CDC": struct.pack("<HB", 0, 0x79),  # same as SPD
-                "PWR": struct.pack("<HB", 0, 0x0B),
-            }
-            self.config.G_ANT["TYPE"] = {
-                "HR": 0x78,
-                "SPD": 0x79,
-                "CDC": 0x79,  # same as SPD
-                "PWR": 0x0B,
-            }
+            self.config.G_ANT["USE"]["HR"] = True
+            self.config.G_ANT["USE"]["SPD"] = True
+            self.config.G_ANT["USE"]["CDC"] - True  # same as SPD
+            self.config.G_ANT["USE"]["PWR"] = True
+            self.config.G_ANT["USE"]["TEMP"] = False
+
+            self.config.G_ANT["ID_TYPE"]["HR"] = struct.pack("<HB", 0, 0x78)
+            self.config.G_ANT["ID_TYPE"]["SPD"] = struct.pack("<HB", 0, 0x79)
+            self.config.G_ANT["ID_TYPE"]["CDC"] = struct.pack("<HB", 0, 0x79)  # same as SPD
+            self.config.G_ANT["ID_TYPE"]["PWR"] = struct.pack("<HB", 0, 0x0B)
+
+            self.config.G_ANT["TYPE"]["HR"] = 0x78
+            self.config.G_ANT["TYPE"]["SPD"] = 0x79
+            self.config.G_ANT["TYPE"]["CDC"] = 0x79  # same as SPD
+            self.config.G_ANT["TYPE"]["PWR"] = 0x0B
+
             ac = self.config.G_ANT["ID_TYPE"]
             self.values[ac["HR"]] = {}
             self.values[ac["SPD"]] = {"distance": 0}

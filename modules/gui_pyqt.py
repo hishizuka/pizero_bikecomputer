@@ -541,6 +541,9 @@ class GUI_PyQt(QtCore.QObject):
     
     def upload_activity(self):
         pass
+        #self.config.api.strava_upload()
+        #self.config.api.garmin_upload()
+        #self.config.api.rwgps_upload()
 
     @staticmethod
     def press_key(key):
@@ -912,11 +915,10 @@ class GUI_PyQt(QtCore.QObject):
         container.setAutoFillBackground(True)
         layout = QtWidgets.QVBoxLayout(container)
         layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(20)
 
         font = self.main_window.font()
-        fontsize = font.pointSize()
-        font.setPointSize(int(fontsize * 2))
+        font_size = font.pointSize()
+        font.setPointSize(int(font_size * 2))
         title_label = QtWidgets.QLabel(title, font=font, objectName="title_label")
         # title_label = MarqueeLabel(config=self.config)
         title_label.setWordWrap(True)
@@ -940,7 +942,7 @@ class GUI_PyQt(QtCore.QObject):
             layout.addWidget(outer_widget)
         elif message is not None:
             outer_widget = QtWidgets.QWidget(container)
-            font.setPointSize(int(fontsize * 1.5))
+            font.setPointSize(int(font_size * 1.5))
             message_label = QtWidgets.QLabel(message, font=font)
             message_label.setAlignment(text_align)
             message_label.setWordWrap(True)
@@ -962,6 +964,7 @@ class GUI_PyQt(QtCore.QObject):
         elif button_num > 0:
             button_widget = QtWidgets.QWidget(container)
             button_layout = QtWidgets.QHBoxLayout(button_widget)
+            button_layout.setContentsMargins(0, 5, 0, 5)
             if not button_label:
                 button_label = ["OK", "Cancel"]
             buttons = []
