@@ -631,13 +631,15 @@ Set the value before starting the program. If the value is set during running, i
   - Set the type of display.
   - There are definitions in `modules/config.py` for the resolution and availability of the touchscreen.
   - `None`: default (no hardware control)
-  - `PiTFT`: PiTFT2.4 (or a PiTFT2.8 with the same resolution)
-  - `MIP`: MIP color reflective LCD module 2.7 inch.
-  - `MIP_Sharp`: SHARP Memory Display Breakout
+  - `MIP_JDI_color_400x240`: JDI 2.7 inch MIP reflective color LCD module. (LPM027M128C/LPM027M128B)
+  - `MIP_JDI_color_640x480`: JDI 4.4 inch MIP reflective color LCD module. (LPM044M141A)
+  - `MIP_Sharp_mono_400x240`: SHARP 2.7 inch MIP monochrome LCD module. (Sharp LS027B7DH01)
+  - `MIP_Sharp_mono_320x240`: SHARP 4.4 inch MIP monochrome LCD module. (Sharp LS044Q7DH01)
   - `Papirus`: PaPiRus ePaper / eInk Screen HAT
   - `DFRobot_RPi_Display`: e-ink Display Module
   - `Pirate_Audio`, `Pirate_Audio_old`: Pirate Audio ("old" assigns the Y button to GPIO 20.)
   - `Display_HAT_Mini`: Display HAT Mini
+  - `PiTFT`: PiTFT2.4 (or a PiTFT2.8 with the same resolution)
 - `autostop_cutoff`
   - Set the threshold for the speed at which the stopwatch will automatically stop/start after it is activated.
   - The default value is `4` [km/h].

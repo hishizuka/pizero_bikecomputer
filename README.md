@@ -6,25 +6,14 @@ An open-source bike computer based on  Raspberry Pi Zero (W, WH, 2 W) with GPS a
 https://github.com/hishizuka/pizero_bikecomputer
 
 # News
-- 2023/10/20 The program has now been substantially modified with significant contributions from [Ptosiek](https://github.com/Ptosiek) . `timezonefinder` is now required. ~~Also, `qasync` does not work with the latest version, so install version 0.24.0.~~
-- 2023/9/15 Add [receiving route from Android Google Maps](./doc/software_installation.md#courses) with Bluetooth File Transfer Protocol. So, install bluez-obexd and dbus-x11 package.
-- 2023/6/26 Replace hishizuka/pyqtgraph with original pyqtgraph. So uninstall and re-install pyqtgraph.
-- 2023/6/26 Add GadgetBridge documents in [software_installation.md](./doc/software_installation.md#network).
-- 2023/6/26 Add LiveTrack(ThingsBoard) documents in [software_installation.md](./doc/software_installation.md#live-track) and [thingsboard_setup.md](./doc/thingsboard_setup.md)
-
-```
-2023/10/20 update
-$ sudo pip3 install timezonefinder
-$ sudo pip3 install qasync --upgrade
-
-2023/9/15 update
-#For Android only
-$ sudo apt install bluez-obexd dbus-x11
-
-#2023/6/26 update
-$ sudo pip3 uninstall pyqtgraph
-$ sudo pip3 install pyqtgraph
-```
+- 2024/6/21 Changed the value for `display` in `setting.conf` when using JDI/Sharp MIP LCD. See `modules/display/display_core.py` for setting values.
+  - `MIP_JDI_color_400x240`
+  - `MIP_JDI_color_640x480`
+  - `MIP_Azumo_color_272x451` (WIP)
+  - `MIP_Sharp_mono_400x240`
+  - `MIP_Sharp_mono_320x240`
+- 2024/6/21 Vertical layouts is avaiable. Set from the initial display resolution at startup. If you want to try it in a desktop environment, change `DEFAULT_RESOLUTION` in `modules/display/display_core.py`. For individual hardware displays, specify the appropriate value.
+  - ![verticai-layout-01](https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/ac7f2000-68ec-4f89-a1f5-afd71aacd173) ![verticai-layout-02](https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/e4b67398-455c-40cd-80fd-f8ec05c155a0)
 
 
 # Table of Contents
