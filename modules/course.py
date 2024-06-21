@@ -2,7 +2,7 @@ import os
 import json
 import re
 import shutil
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import asyncio
 
 import oyaml
@@ -877,7 +877,7 @@ class Course:
         if not self.is_set or not detect_network():
             return
         
-        current_time = datetime.utcnow()
+        current_time = datetime.now(timezone.utc)
         self.wind_coordinates.append([self.longitude[0], self.latitude[0]])
         self.wind_timeline.append(current_time)
 

@@ -1,12 +1,12 @@
 import pickle
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 # store temporary values. unreadable and uneditable.
 class AppState:
-    interval = 10  # [s]
+    interval = 20  # [s]
 
-    last_write_time = datetime.utcnow()
+    last_write_time = datetime.now(timezone.utc)
     pickle_file = "state.pickle"
     values = None
 
@@ -20,7 +20,7 @@ class AppState:
     def set_value(self, key, value, force_apply=False):
         self.values[key] = value
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         if (
             not force_apply

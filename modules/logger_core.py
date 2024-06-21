@@ -160,7 +160,7 @@ class LoggerCore:
             utctime = datetime.strptime(
                 self.last_timestamp, "%Y-%m-%d %H:%M:%S.%f"
             ) + timedelta(seconds=delta)
-            if utctime > datetime.utcnow():
+            if utctime > datetime.now(timezone.utc):
                 datecmd = [
                     "sudo",
                     "date",
@@ -317,7 +317,7 @@ class LoggerCore:
             if self.config.gui is not None:
                 self.config.gui.change_start_stop_button(self.config.G_MANUAL_STATUS)
             if self.values["start_time"] is None:
-                self.values["start_time"] = int(datetime.utcnow().timestamp())
+                self.values["start_time"] = int(datetime.now(timezone.utc).timestamp())
 
             if pre_status == "INIT" and not np.isnan(
                 self.sensor.values["integrated"]["dem_altitude"]
@@ -393,14 +393,14 @@ class LoggerCore:
         hour_sec = divmod(lap_time, 3600)
         min_sec = divmod(hour_sec[1], 60)
         lap_time_str = f"{hour_sec[0]}:{min_sec[0]:02}"
-        lap_message = f"LAP {self.values['lap']} ({dist_str}km, {lap_time_str})"
+        lap_message = f"LAP {self.values['lap']} ({dist_str} km, {lap_time_str})"
  
-        unit = self.config.gui.gui_config.G_UNIT
-        value_message = unit["Speed"].format(pre_lap_avg["speed"] * 3.6)
+        u = self.config.gui.gui_config.G_UNIT
+        value_message = f"{(pre_lap_avg['speed'] * 3.6):{u['Speed'][0]}} {u['Speed'][1]}"
         if self.config.G_ANT["USE"]["HR"]:
-            value_message += ", " + unit["HeartRate"].format(pre_lap_avg["heart_rate"])
+            value_message += f", {pre_lap_avg['heart_rate']:{u['HeartRate'][0]}} {u['HeartRate'][1]}"
         if self.config.G_ANT["USE"]["PWR"]:
-            value_message += ", " + unit['Power'].format(pre_lap_avg["power"])
+            value_message += f", {pre_lap_avg['power']:{u['Power'][0]}} {u['Power'][1]}"
 
         self.config.gui.show_popup_multiline(
             lap_message,
@@ -616,7 +616,7 @@ class LoggerCore:
             self.record_stats["lap_max"][k] = x2
 
         ## SQLite
-        now_time = datetime.utcnow()
+        now_time = datetime.now(timezone.utc)
         # self.cur.execute("""\
         sql = (
             """\
@@ -730,7 +730,7 @@ class LoggerCore:
             return
         # [s]
         self.values["elapsed_time"] = int(
-            datetime.utcnow().timestamp() - self.values["start_time"]
+            datetime.now(timezone.utc).timestamp() - self.values["start_time"]
         )
 
         # gross_ave_spd
@@ -931,11 +931,11 @@ class LoggerCore:
         lon = np.array([])
         lat = np.array([])
         timestamp_new = timestamp
-        # t = datetime.utcnow()
+        # t = datetime.now(timezone.utc)
 
         timestamp_delta = None
         if timestamp is not None:
-            timestamp_delta = (datetime.utcnow() - timestamp).total_seconds()
+            timestamp_delta = (datetime.now(timezone.utc) - timestamp).total_seconds()
 
         # make_tmp_db = False
         lat_raw = np.array([])
@@ -1005,8 +1005,8 @@ class LoggerCore:
                 lon = lon_raw
 
         if timestamp is None:
-            timestamp_new = datetime.utcnow()
+            timestamp_new = datetime.now(timezone.utc)
 
-        # print("\tlogger_core : update_track(new) ", (datetime.utcnow()-t).total_seconds(), "sec")
+        # print("\tlogger_core : update_track(new) ", (datetime.now(timezone.utc)-t).total_seconds(), "sec")
 
         return timestamp_new, lon, lat
