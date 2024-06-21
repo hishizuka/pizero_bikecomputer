@@ -221,11 +221,12 @@ class Config:
 
     G_DISPLAY_PARAM = {
         "SPI_CLOCK": 2000000,
+        "USE_BACKLIGHT": False,
     }
 
     # auto backlight
     G_USE_AUTO_BACKLIGHT = True
-    G_AUTO_BACKLIGHT_CUTOFF = 30
+    G_AUTO_BACKLIGHT_CUTOFF = 10
 
     # GUI mode
     G_GUI_MODE = "PyQt"
@@ -399,7 +400,7 @@ class Config:
                 p = f.read()
                 if p.find("Raspberry Pi") == 0:
                     self.G_IS_RASPI = True
-                elif p.find("Radxa Zero") == 0:
+                elif p.lower().startswith("radxa zero"):
                     self.G_IS_RASPI = True
                     self.G_DISPLAY_PARAM["SPI_CLOCK"] = 10000000
 
@@ -637,6 +638,7 @@ class Config:
                     self.gui.press_shift_tab()
                 elif key == "b" and self.gui:
                     self.gui.back_menu()
+                # test other functions
                 elif key == "c" and self.gui:
                     self.gui.get_screenshot()
         except asyncio.CancelledError:

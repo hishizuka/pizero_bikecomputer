@@ -51,14 +51,27 @@ void MipDisplay::quit() {
   delete[] pre_buf_image;
 }
 
-void MipDisplay::set_screen_size(int w, int h) {
+void MipDisplay::set_screen_size(int w, int h, int c) {
   WIDTH = w;
   HEIGHT = h;
-  BUF_WIDTH = WIDTH*BPP/8 + 2;
+  COLORS = c;
+
+  if(COLORS == 2) {
+    BPP = 1;
+    BUF_WIDTH = WIDTH*BPP/8 + 2;
+    conv_color = &MipDisplay::conv_1bit_color;
+  }
+  else if(COLORS == 8) {
+    BPP = 3;
+    BUF_WIDTH = WIDTH*BPP/8 + 2;
+    conv_color = &MipDisplay::conv_3bit_color;
+  }
   int length = HEIGHT*BUF_WIDTH;
   
   buf_image = new char[length];
   pre_buf_image = new char[length];
+
+  SPI_MAX_ROWS = int(SPI_MAX_BUF_SIZE/BUF_WIDTH);
 
   clear_buf();
   memcpy(pre_buf_image, buf_image, length);
@@ -102,6 +115,7 @@ void MipDisplay::set_brightness(int brightness) {
 void MipDisplay::inversion(float sec) {
   float s = sec;
   bool state = true;
+
   while(s > 0) {
     gpio_write(pigpio, GPIO_SCS, 1);
     usleep(6);
@@ -141,18 +155,102 @@ bool MipDisplay::get_status_quit() {
 }
 
 void MipDisplay::update(unsigned char* image) {
-  clear_buf();
-  
-  int update_lines = 0;
-  bool t_index = true;
-  int bit_count = 0;
-  
-  unsigned char *image_index = image;
-  char *buf_image_index = buf_image;
 
+  clear_buf();
+  int update_lines = (this->*conv_color)(image);
+  
+  //std::cout << "    diff " << int(update_lines*100/HEIGHT) << "%, " << BUF_WIDTH << "*" << update_lines << "=" << BUF_WIDTH*update_lines << std::endl;
+  if(update_lines == 0) {
+    return;
+  }
+
+  {
+    std::unique_lock<std::mutex> ul(mutex_);
+    if(update_lines < SPI_MAX_ROWS) { 
+      queue_.emplace(buf_image, buf_image+BUF_WIDTH*update_lines);
+    }
+    else {
+      int l = BUF_WIDTH * int(update_lines/2);
+      queue_.emplace(buf_image, buf_image+l);
+      queue_.emplace(buf_image+l, buf_image+BUF_WIDTH*update_lines);
+    }
+  } //release lock
+  cv_.notify_all();
+}
+
+int MipDisplay::conv_1bit_color(unsigned char* image) {
+  return 0;
+}
+
+int MipDisplay::conv_2bit_color(unsigned char* image) {
+  int update_lines = 0;
   char *buf_image_diff_index = buf_image;
   char *pre_buf_image_diff_index = pre_buf_image;
   char *buf_image_update_index = buf_image;
+
+  int width_24byte = int(WIDTH*3/24);
+  unsigned char *image_index = image;
+  char *buf_image_index = buf_image;
+
+  for(int y = 0; y < HEIGHT; y++) {
+    buf_image_index += 2;
+
+    for(int x = 0; x < width_24byte; x++) {
+      /*
+      *buf_image_index++ = ((*image_index++ >> 7) << 7) | ((*image_index++ >> 7) << 6) | ((*image_index++ >> 7) << 5) | ((*image_index++ >> 7) << 4) | ((*image_index++ >> 7) << 3) | ((*image_index++ >> 7) << 2)  | ((*image_index++ >> 7) << 1) | (*image_index++ >> 7);
+      *buf_image_index++ = ((*image_index++ >> 7) << 7) | ((*image_index++ >> 7) << 6) | ((*image_index++ >> 7) << 5) | ((*image_index++ >> 7) << 4) | ((*image_index++ >> 7) << 3) | ((*image_index++ >> 7) << 2)  | ((*image_index++ >> 7) << 1) | (*image_index++ >> 7);
+      *buf_image_index++ = ((*image_index++ >> 7) << 7) | ((*image_index++ >> 7) << 6) | ((*image_index++ >> 7) << 5) | ((*image_index++ >> 7) << 4) | ((*image_index++ >> 7) << 3) | ((*image_index++ >> 7) << 2)  | ((*image_index++ >> 7) << 1) | (*image_index++ >> 7);
+      */
+      *buf_image_index    = (*image_index++ & 0b10000000);
+      *buf_image_index   |= (*image_index++ & 0b10000000) >> 1;
+      *buf_image_index   |= (*image_index++ & 0b10000000) >> 2;
+      *buf_image_index   |= (*image_index++ & 0b10000000) >> 3;
+      *buf_image_index   |= (*image_index++ & 0b10000000) >> 4;
+      *buf_image_index   |= (*image_index++ & 0b10000000) >> 5;
+      *buf_image_index   |= (*image_index++ & 0b10000000) >> 6;
+      *buf_image_index++ |= (*image_index++ & 0b10000000) >> 7;
+
+      *buf_image_index    = (*image_index++ & 0b10000000);
+      *buf_image_index   |= (*image_index++ & 0b10000000) >> 1;
+      *buf_image_index   |= (*image_index++ & 0b10000000) >> 2;
+      *buf_image_index   |= (*image_index++ & 0b10000000) >> 3;
+      *buf_image_index   |= (*image_index++ & 0b10000000) >> 4;
+      *buf_image_index   |= (*image_index++ & 0b10000000) >> 5;
+      *buf_image_index   |= (*image_index++ & 0b10000000) >> 6;
+      *buf_image_index++ |= (*image_index++ & 0b10000000) >> 7;
+
+      *buf_image_index    = (*image_index++ & 0b10000000);
+      *buf_image_index   |= (*image_index++ & 0b10000000) >> 1;
+      *buf_image_index   |= (*image_index++ & 0b10000000) >> 2;
+      *buf_image_index   |= (*image_index++ & 0b10000000) >> 3;
+      *buf_image_index   |= (*image_index++ & 0b10000000) >> 4;
+      *buf_image_index   |= (*image_index++ & 0b10000000) >> 5;
+      *buf_image_index   |= (*image_index++ & 0b10000000) >> 6;
+      *buf_image_index++ |= (*image_index++ & 0b10000000) >> 7;
+    }
+
+    if(memcmp(buf_image_diff_index, pre_buf_image_diff_index, BUF_WIDTH) != 0) {
+      memcpy(pre_buf_image_diff_index, buf_image_diff_index, BUF_WIDTH);
+      memcpy(buf_image_update_index, pre_buf_image_diff_index, BUF_WIDTH);
+      update_lines++;
+      buf_image_update_index += BUF_WIDTH;
+    }
+    buf_image_diff_index += BUF_WIDTH;
+    pre_buf_image_diff_index += BUF_WIDTH;
+  }
+  return update_lines;
+}
+
+int MipDisplay::conv_3bit_color(unsigned char* image) {
+  int update_lines = 0;
+  char *buf_image_diff_index = buf_image;
+  char *pre_buf_image_diff_index = pre_buf_image;
+  char *buf_image_update_index = buf_image;
+
+  bool t_index = true;
+  int bit_count;
+  unsigned char *image_index = image;
+  char *buf_image_index = buf_image;
 
   for(int y = 0; y < HEIGHT; y++) {
     buf_image_index += 2;
@@ -191,24 +289,11 @@ void MipDisplay::update(unsigned char* image) {
     buf_image_diff_index += BUF_WIDTH;
     pre_buf_image_diff_index += BUF_WIDTH;
   }
+  return update_lines;
+}
 
-  //std::cout << "    diff " << int(update_lines*100/HEIGHT) << "%, " << BUF_WIDTH << "*" << update_lines << "=" << BUF_WIDTH*update_lines << std::endl;
-  if(update_lines == 0) {
-    return;
-  }
-
-  {
-    std::unique_lock<std::mutex> ul(mutex_);
-    if(update_lines < MAX_HEIGHT_PER_ONCE) { 
-      queue_.emplace(buf_image, buf_image+BUF_WIDTH*update_lines);
-    }
-    else {
-      int l = BUF_WIDTH*update_lines/2;
-      queue_.emplace(buf_image, buf_image+l);
-      queue_.emplace(buf_image, &buf_image[l]+l);
-    }
-  } //release lock
-  cv_.notify_all();
+int MipDisplay::conv_4bit_color(unsigned char* image) {
+  return 0;
 }
 
 void MipDisplay::draw(std::vector<char>& buf_queue) {

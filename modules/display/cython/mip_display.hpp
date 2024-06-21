@@ -30,6 +30,7 @@ class MipDisplay {
 
     char UPDATE_MODE = 0x80;
     int BPP = 3;
+    int COLORS = 8;
     int BUF_WIDTH;
     char* buf_image;
     char* pre_buf_image;
@@ -41,7 +42,8 @@ class MipDisplay {
     const char thresholds[2] = {216, 128};
     const char add_bit[8] = {0b10000000, 0b01000000, 0b00100000, 0b00010000, 0b00001000, 0b00000100, 0b00000010, 0b00000001};
 
-    int MAX_HEIGHT_PER_ONCE = 270;
+    int SPI_MAX_BUF_SIZE = 65536;
+    int SPI_MAX_ROWS = 0;
 
     std::queue<std::vector<char> > queue_;
     std::mutex mutex_;
@@ -54,6 +56,12 @@ class MipDisplay {
     void clear();
     void no_update();
 
+    int (MipDisplay::*conv_color)(unsigned char* image);
+    int conv_1bit_color(unsigned char* image);
+    int conv_2bit_color(unsigned char* image);
+    int conv_3bit_color(unsigned char* image);
+    int conv_4bit_color(unsigned char* image);
+
     void draw_worker();
     void draw(std::vector<char>& buf_queue);
     bool get_status_quit();
@@ -63,7 +71,7 @@ class MipDisplay {
     ~MipDisplay();
 
     void update(unsigned char* image);
-    void set_screen_size(int w, int h);
+    void set_screen_size(int w, int h, int c);
     void set_brightness(int brightness);
     void inversion(float sec);
     void quit();

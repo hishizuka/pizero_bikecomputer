@@ -25,8 +25,6 @@ class ST7789Display(Display):
     # backlight = None
     pi = None
 
-    has_auto_brightness = False
-    has_color = True
     has_touch = False
     send = True
 
@@ -42,6 +40,7 @@ class ST7789Display(Display):
 
         if size:
             self.size = size
+        if config.G_DISPLAY == "Display_HAT_Mini":
             self.rotation = 180
 
         self.st7789 = ST7789(

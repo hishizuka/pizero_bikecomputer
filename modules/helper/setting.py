@@ -37,9 +37,6 @@ class Setting:
             if "DISPLAY" in c:
                 # store temporary
                 self.config.G_DISPLAY = c["DISPLAY"]
-            if "AUTO_BACKLIGHT_CUTOFF" in c:
-                # store temporary
-                self.config.G_AUTO_BACKLIGHT_CUTOFF = int(c["AUTO_BACKLIGHT_CUTOFF"])
             if "LANG" in c:
                 self.config.G_LANG = c["LANG"].upper()
             if "FONT_FILE" in c:
@@ -162,10 +159,14 @@ class Setting:
                     )
 
         if "DISPLAY_PARAM" in self.config_parser:
-            if "SPI_CLOCK" in self.config_parser["DISPLAY_PARAM"]:
-                self.config.G_DISPLAY_PARAM["SPI_CLOCK"] = int(
-                    self.config_parser["DISPLAY_PARAM"]["SPI_CLOCK"]
-                )
+            c = self.config_parser["DISPLAY_PARAM"]
+            if "SPI_CLOCK" in c:
+                self.config.G_DISPLAY_PARAM["SPI_CLOCK"] = int(c["SPI_CLOCK"])
+            if "USE_BACKLIGHT" in c:
+                self.config.G_DISPLAY_PARAM["USE_BACKLIGHT"] = c.getboolean("USE_BACKLIGHT")
+            if "AUTO_BACKLIGHT_CUTOFF" in c:
+                # store temporary
+                self.config.G_AUTO_BACKLIGHT_CUTOFF = int(c["AUTO_BACKLIGHT_CUTOFF"])
 
         if "GPSD_PARAM" in self.config_parser:
             if "EPX_EPY_CUTOFF" in self.config_parser["GPSD_PARAM"]:
@@ -225,7 +226,6 @@ class Setting:
         c["AUTOSTOP_CUTOFF"] = str(int(self.config.G_AUTOSTOP_CUTOFF * 3.6))
         c["WHEEL_CIRCUMFERENCE"] = str(int(self.config.G_WHEEL_CIRCUMFERENCE * 1000))
         c["GROSS_AVE_SPEED"] = str(int(self.config.G_GROSS_AVE_SPEED))
-        c["AUTO_BACKLIGHT_CUTOFF"] = str(int(self.config.G_AUTO_BACKLIGHT_CUTOFF))
         c["LANG"] = self.config.G_LANG
         c["FONT_FILE"] = self.config.G_FONT_FILE
 
@@ -249,57 +249,37 @@ class Setting:
 
         if not self.config.G_DUMMY_OUTPUT:
             self.config_parser["ANT"] = {}
-            self.config_parser["ANT"]["STATUS"] = str(self.config.G_ANT["STATUS"])
+            c = self.config_parser["ANT"]
+            c["STATUS"] = str(self.config.G_ANT["STATUS"])
             for key1 in ["USE", "ID", "TYPE"]:
                 for key2 in self.config.G_ANT[key1]:
                     if (
                         key2 in self.config.G_ANT["ID"].keys()
                     ):  # ['HR','SPD','CDC','PWR']:
-                        self.config_parser["ANT"][key1 + "_" + key2] = str(
-                            self.config.G_ANT[key1][key2]
-                        )
+                        c[key1 + "_" + key2] = str(self.config.G_ANT[key1][key2])
 
         self.config_parser["SENSOR_IMU"] = {}
-        self.config_parser["SENSOR_IMU"]["AXIS_SWAP_XY_STATUS"] = str(
-            self.config.G_IMU_AXIS_SWAP_XY["STATUS"]
-        )
-        self.config_parser["SENSOR_IMU"]["AXIS_CONVERSION_STATUS"] = str(
-            self.config.G_IMU_AXIS_CONVERSION["STATUS"]
-        )
-        self.config_parser["SENSOR_IMU"]["AXIS_CONVERSION_COEF"] = str(
-            list(self.config.G_IMU_AXIS_CONVERSION["COEF"])
-        )
-        self.config_parser["SENSOR_IMU"]["MAG_AXIS_SWAP_XY_STATUS"] = str(
-            self.config.G_IMU_MAG_AXIS_SWAP_XY["STATUS"]
-        )
-        self.config_parser["SENSOR_IMU"]["MAG_AXIS_CONVERSION_STATUS"] = str(
-            self.config.G_IMU_MAG_AXIS_CONVERSION["STATUS"]
-        )
-        self.config_parser["SENSOR_IMU"]["MAG_AXIS_CONVERSION_COEF"] = str(
-            list(self.config.G_IMU_MAG_AXIS_CONVERSION["COEF"])
-        )
-        self.config_parser["SENSOR_IMU"]["MAG_DECLINATION"] = str(
-            int(self.config.G_IMU_MAG_DECLINATION)
-        )
+        c = self.config_parser["SENSOR_IMU"]
+        c["AXIS_SWAP_XY_STATUS"] = str(self.config.G_IMU_AXIS_SWAP_XY["STATUS"])
+        c["AXIS_CONVERSION_STATUS"] = str(self.config.G_IMU_AXIS_CONVERSION["STATUS"])
+        c["AXIS_CONVERSION_COEF"] = str(list(self.config.G_IMU_AXIS_CONVERSION["COEF"]))
+        c["MAG_AXIS_SWAP_XY_STATUS"] = str(self.config.G_IMU_MAG_AXIS_SWAP_XY["STATUS"])
+        c["MAG_AXIS_CONVERSION_STATUS"] = str(self.config.G_IMU_MAG_AXIS_CONVERSION["STATUS"])
+        c["MAG_AXIS_CONVERSION_COEF"] = str(list(self.config.G_IMU_MAG_AXIS_CONVERSION["COEF"]))
+        c["MAG_DECLINATION"] = str(int(self.config.G_IMU_MAG_DECLINATION))
 
         self.config_parser["DISPLAY_PARAM"] = {}
-        self.config_parser["DISPLAY_PARAM"]["SPI_CLOCK"] = str(
-            int(self.config.G_DISPLAY_PARAM["SPI_CLOCK"])
-        )
+        c = self.config_parser["DISPLAY_PARAM"]
+        c["SPI_CLOCK"] = str(int(self.config.G_DISPLAY_PARAM["SPI_CLOCK"]))
+        c["USE_BACKLIGHT"] = str(self.config.G_DISPLAY_PARAM["USE_BACKLIGHT"])
+        c["AUTO_BACKLIGHT_CUTOFF"] = str(int(self.config.G_AUTO_BACKLIGHT_CUTOFF))
 
         self.config_parser["GPSD_PARAM"] = {}
-        self.config_parser["GPSD_PARAM"]["EPX_EPY_CUTOFF"] = str(
-            self.config.G_GPSD_PARAM["EPX_EPY_CUTOFF"]
-        )
-        self.config_parser["GPSD_PARAM"]["EPV_CUTOFF"] = str(
-            self.config.G_GPSD_PARAM["EPV_CUTOFF"]
-        )
-        self.config_parser["GPSD_PARAM"]["SP1_EPV_CUTOFF"] = str(
-            self.config.G_GPSD_PARAM["SP1_EPV_CUTOFF"]
-        )
-        self.config_parser["GPSD_PARAM"]["SP1_USED_SATS_CUTOFF"] = str(
-            self.config.G_GPSD_PARAM["SP1_USED_SATS_CUTOFF"]
-        )
+        c = self.config_parser["GPSD_PARAM"]
+        c["EPX_EPY_CUTOFF"] = str(self.config.G_GPSD_PARAM["EPX_EPY_CUTOFF"])
+        c["EPV_CUTOFF"] = str(self.config.G_GPSD_PARAM["EPV_CUTOFF"])
+        c["SP1_EPV_CUTOFF"] = str(self.config.G_GPSD_PARAM["SP1_EPV_CUTOFF"])
+        c["SP1_USED_SATS_CUTOFF"] = str(self.config.G_GPSD_PARAM["SP1_USED_SATS_CUTOFF"])
 
         self.config_parser["STRAVA_API"] = {}
         for k in self.config.G_STRAVA_API.keys():

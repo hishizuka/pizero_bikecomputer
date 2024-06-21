@@ -2,47 +2,54 @@ import os
 
 from logger import app_logger
 
-DEFAULT_RESOLUTION = (400, 240)
+DEFAULT_RESOLUTION = (400, 240)#(272, 451)#(400, 240)
 
 SUPPORTED_DISPLAYS = {
-    # display name, resolution if different from its class default
+    # display name, resolution, colors if different from its class default
     "None": None,  # DEFAULT_RESOLUTION
-    "PiTFT": None,
-    "MIP": None,  # LPM027M128C, LPM027M128B
-    "MIP_640": (640, 480),  # LPM044M141A
-    "MIP_Mraa": None,  # LPM027M128C, LPM027M128B
-    "MIP_Mraa_640": (640, 480),  # LPM044M141A
-    "MIP_Sharp": None,
-    "MIP_Sharp_320": (320, 240),
+
+    # MIP Reflective color/mono LCD
+    "MIP_JDI_color_400x240": (DEFAULT_RESOLUTION, 8),  # JDI LPM027M128C/LPM027M128B
+    "MIP_JDI_color_640x480": ((640, 480), 8), # JDI LPM044M141A
+    "MIP_Azumo_color_272x451": ((272, 451), 64), # Azumo 14793-06
+    "MIP_Sharp_mono_400x240": (DEFAULT_RESOLUTION, 2), # Sharp LS027B7DH01
+    "MIP_Sharp_mono_320x240": ((320, 240), 2), # Sharp LS044Q7DH01
+
+    # e-paper
     "Papirus": None,
     "DFRobot_RPi_Display": None,
+
+    # TFT (obsolete)
+    "PiTFT": None,
     "Pirate_Audio": None,
     "Pirate_Audio_old": None,
     "Display_HAT_Mini": (320, 240),
+    "ST7789_Breakout": None,
 }
 
 
 # default display (X window)
 class Display:
-    has_auto_brightness = False
+    has_backlight = False
     has_color = True
     has_touch = True
     send = False
 
     # current auto brightness status (on/off)
-    auto_brightness = False
+    use_auto_backlight = False
     brightness_index = 0
-    brightness_table = None
+    brightness_table = []
 
     def __init__(self, config):
         self.config = config
 
-        if self.has_auto_brightness:
+        self.has_backlight = config.G_DISPLAY_PARAM["USE_BACKLIGHT"]
+        if self.has_backlight:
             # set initial status
-            self.auto_brightness = config.G_USE_AUTO_BACKLIGHT
+            self.use_auto_backlight = config.G_USE_AUTO_BACKLIGHT
 
             # set index properly if on
-            if self.auto_brightness:
+            if self.use_auto_backlight:
                 self.brightness_index = len(self.brightness_table)
 
     @property
@@ -67,19 +74,18 @@ class Display:
     # We can not have auto brightness and an empty brightness table
     def change_brightness(self):
         if self.brightness_table:
-            # brightness is changing as following if the display has auto_brightness feature
-            # [*self.brightness_table, self.auto_brightness]
-            if self.has_auto_brightness:
+            # brightness is changing as following if the display has use_auto_backlight feature
+            if self.has_backlight:
                 self.brightness_index = (self.brightness_index + 1) % (
                     len(self.brightness_table) + 1
                 )
 
-                # switch on auto_brightness
+                # switch on use_auto_backlight
                 if self.brightness_index == len(self.brightness_table):
-                    self.auto_brightness = True
-                # switch off auto_brightness and set requested brightness
+                    self.use_auto_backlight = True
+                # switch off use_auto_backlight and set requested brightness
                 else:
-                    self.auto_brightness = False
+                    self.use_auto_backlight = False
                     self.set_brightness(self.brightness_table[self.brightness_index])
             else:
                 # else we just loop over the brightness table
@@ -130,21 +136,14 @@ def init_display(config):
 
         if _SENSOR_DISPLAY:
             display = PiTFT28r(config)
-    elif config.G_DISPLAY in ("MIP", "MIP_640"):
-        from .mip_display import _SENSOR_DISPLAY, MipDisplay
+    elif config.G_DISPLAY.startswith("MIP_"):
+        from .mip_display_pigpio import _SENSOR_DISPLAY as _SENSOR_DISPLAY_PIGPIO, MipDisplayPigpio
+        from .mip_display_mraa import _SENSOR_DISPLAY as _SENSOR_DISPLAY_MRAA, MipDisplayMraa
 
-        if _SENSOR_DISPLAY:
-            display = MipDisplay(config, SUPPORTED_DISPLAYS[config.G_DISPLAY])
-    elif config.G_DISPLAY.startswith("MIP_Sharp"):
-        from .mip_sharp_display import _SENSOR_DISPLAY, MipSharpDisplay
-
-        if _SENSOR_DISPLAY:
-            display = MipSharpDisplay(config, SUPPORTED_DISPLAYS[config.G_DISPLAY])
-    elif config.G_DISPLAY.startswith("MIP_Mraa"):
-        from .mip_mraa_display import _SENSOR_DISPLAY, MipMraaDisplay
-
-        if _SENSOR_DISPLAY:
-            display = MipMraaDisplay(config, SUPPORTED_DISPLAYS[config.G_DISPLAY])
+        if _SENSOR_DISPLAY_PIGPIO:
+            display = MipDisplayPigpio(config, *SUPPORTED_DISPLAYS[config.G_DISPLAY])
+        elif _SENSOR_DISPLAY_MRAA:
+            display = MipDisplayMraa(config, *SUPPORTED_DISPLAYS[config.G_DISPLAY])
     elif config.G_DISPLAY == "Papirus":
         from .papirus_display import _SENSOR_DISPLAY, PapirusDisplay
 
@@ -155,7 +154,7 @@ def init_display(config):
 
         if _SENSOR_DISPLAY:
             display = DFRobotRPiDisplay(config)
-    elif config.G_DISPLAY.startswith("Pirate_Audio") or config.G_DISPLAY == "Display_HAT_Mini":
+    elif config.G_DISPLAY.startswith(("Pirate_Audio", "Display_HAT_Mini")):
         from .st7789_display import _SENSOR_DISPLAY, ST7789Display
 
         if _SENSOR_DISPLAY:
@@ -163,5 +162,9 @@ def init_display(config):
                 display = ST7789Display(config)
             elif config.G_DISPLAY == "Display_HAT_Mini":
                 display = ST7789Display(config, SUPPORTED_DISPLAYS[config.G_DISPLAY])
-
+    elif config.G_DISPLAY == "ST7789_Breakout":
+        from .st7789_breakout_display import _SENSOR_DISPLAY, ST7789BreakoutDisplay
+        
+        if _SENSOR_DISPLAY:
+            display = ST7789BreakoutDisplay(config, SUPPORTED_DISPLAYS[config.G_DISPLAY])
     return display

@@ -8,7 +8,7 @@ cdef extern from "mip_display.hpp":
   cdef cppclass MipDisplay:
     MipDisplay(int spi_clock)
     void update(unsigned char* image)
-    void set_screen_size(int w, int h)
+    void set_screen_size(int w, int h, int c)
     void set_brightness(int b)
     void inversion(float sec)
     void quit()
@@ -23,9 +23,8 @@ cdef class MipDisplay_CPP:
   def __dealloc__(self):
     del self.m
 
-  cpdef set_screen_size(self, w, h):
-    pass
-    self.m.set_screen_size(w, h)
+  cpdef set_screen_size(self, w, h, c):
+    self.m.set_screen_size(w, h, c)
 
   cpdef update(self, const cnp.uint8_t[:,:,::1] im_array, direct_update):
     self.m.update(<unsigned char*> &im_array[0,0,0])
@@ -43,7 +42,7 @@ cdef class MipDisplay_CPP:
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.nonecheck(False)
-cpdef conv_3bit_color(cnp.ndarray[cnp.uint8_t, ndim=3] im_array):
+cpdef conv_3bit_color(cnp.uint8_t[:,:,::1] im_array):
   cdef int i, j, k, h, w, d, bit_count
   cdef int bit_index = 0
   cdef int[2] thresholds = [216, 128]
