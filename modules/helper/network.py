@@ -58,9 +58,10 @@ async def get_http_request(session, url, save_path, headers, params):
         return False
 
 
-async def download_files(urls, save_paths, headers=None, params=None):
+async def download_files(urls, save_paths, headers=None, params=None, limit=None):
+    sem = 3 if limit else COROUTINE_SEM
     tasks = []
-    async with asyncio.Semaphore(COROUTINE_SEM):
+    async with asyncio.Semaphore(sem):
         async with aiohttp.ClientSession() as session:
             for url, save_path in zip(urls, save_paths):
                 tasks.append(
@@ -86,6 +87,13 @@ class Network:
     async def quit(self):
         await self.download_queue.put(None)
 
+    def get_bt_limit(self):
+        # Todo: detect bnep0 only
+        if self.config.G_AUTO_BT_TETHERING and self.config.G_BT_USE_ADDRESS:
+            return True
+        else:
+            return False
+
     async def download_worker(self):
         failed = []
         f_name = self.download_worker.__name__
@@ -100,7 +108,7 @@ class Network:
             res = None
             try:
                 await self.open_bt_tethering(f_name)
-                res = await download_files(**q)
+                res = await download_files(**q, limit=self.get_bt_limit())
                 self.download_queue.task_done()
             except concurrent.futures._base.CancelledError:
                 return
@@ -128,9 +136,8 @@ class Network:
                 t = int(time.time())
                 for i in range(len(failed)):
                     if t - failed[i][0] > self.DOWNLOAD_WORKER_RETRY_SEC:
-                        print("retry")
+                        app_logger.error("retry")
                         await self.download_queue.put(failed.pop(i)[1])
-
 
     # tiles functions
     async def download_maptile(
