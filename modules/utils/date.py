@@ -16,9 +16,10 @@ def datetime_myparser(ts):
             int(ts[12:14]),  # %s
         )
         return dt
-    elif 24 <= len(ts) <= 26:
-        # 2019-03-22T23:24:14.280604 / 26 chars
-        # 2019-09-30T12:44:55.000Z   / 24 chars
+    elif 24 <= len(ts) <= 26 or len(ts) == 32:
+        # 2019-03-22T23:24:14.280604        / 26 chars
+        # 2019-09-30T12:44:55.000Z          / 24 chars
+        # 2024-06-24 00:58:54.801928+00:00  / 32 chars
         dt = datetime(
             int(ts[0:4]),  # %Y
             int(ts[5:7]),  # %m

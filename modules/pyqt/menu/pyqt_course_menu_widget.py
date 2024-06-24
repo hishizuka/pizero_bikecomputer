@@ -520,13 +520,16 @@ class CourseDetailWidget(MenuWidget):
 
         return True
 
-    def set_font_size(self):
-        self.font_size = int(min(self.size().width(), self.size().height()) / 10)
+    def set_font_size(self, init=False):
+        if init:
+            self.font_size = int(min(self.config.display.resolution) / 10)
+        else:
+            self.font_size = int(min(self.size().width(), self.size().height()) / 10)
 
     def resizeEvent(self, event):
         self.check_all_image_and_draw()
 
-        self.set_font_size()
+        self.set_font_size(event.oldSize() == QtCore.QSize(-1, -1))
         for i in [self.distance_item, self.ascent_item]:
             i.update_font_size(self.font_size)
 
