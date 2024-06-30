@@ -1,30 +1,20 @@
-import time
-
-import asyncio
-import numpy as np
+from .mip_display_base import MipDisplayBase
 
 from logger import app_logger
-from .display_core import Display
 
 _SENSOR_DISPLAY = False
-MODE = "Python"
 try:
     import mraa
 
     _SENSOR_DISPLAY = True
-
-    #import pyximport
-    #pyximport.install()
-    #from .cython.mip_helper import conv_3bit_color
-
-    #MODE = "Cython"
 except ImportError:
     pass
 
-app_logger.info(f"MIP_Mraa DISPLAY: {_SENSOR_DISPLAY}")
+if _SENSOR_DISPLAY:
+    app_logger.info(f"MIP DISPLAY(mraa): {_SENSOR_DISPLAY}")
 
 
-class MipDisplayMraa(Display):
+class MipDisplayMraa(MipDisplayBase):
 
     # GPIO.BCM
     DISP = 13
@@ -42,10 +32,6 @@ class MipDisplayMraa(Display):
             self.conv_color = self.conv_3bit_color_py
         if self.color == 64:
             self.conv_color = self.conv_4bit_color_py
-        
-        #######################
-        if self.color == 2:
-            self.update(self.pre_img[:, 2:], direct_update=True)
 
     def init_spi(self):
         self.spi = mraa.Spi(1)
