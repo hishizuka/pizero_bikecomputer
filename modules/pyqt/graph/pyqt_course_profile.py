@@ -1,7 +1,6 @@
 import numpy as np
-import qasync
 
-from modules._pyqt import QtGui, pg
+from modules._pyqt import QtGui, pg, qasync
 from modules.pyqt.graph.pyqtgraph.CourseProfileGraphItem import CourseProfileGraphItem
 from modules.utils.timer import Timer
 from .pyqt_base_map import BaseMapWidget
