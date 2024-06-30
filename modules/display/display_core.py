@@ -119,7 +119,6 @@ def detect_display():
 
 def init_display(config):
     # default dummy display
-
     display = Display(config)
 
     if not config.G_IS_RASPI:
@@ -137,13 +136,18 @@ def init_display(config):
         if _SENSOR_DISPLAY:
             display = PiTFT28r(config)
     elif config.G_DISPLAY.startswith("MIP_"):
+        # stop importing when a valid import is found
         from .mip_display_pigpio import _SENSOR_DISPLAY as _SENSOR_DISPLAY_PIGPIO, MipDisplayPigpio
-        from .mip_display_mraa import _SENSOR_DISPLAY as _SENSOR_DISPLAY_MRAA, MipDisplayMraa
-
         if _SENSOR_DISPLAY_PIGPIO:
             display = MipDisplayPigpio(config, *SUPPORTED_DISPLAYS[config.G_DISPLAY])
-        elif _SENSOR_DISPLAY_MRAA:
-            display = MipDisplayMraa(config, *SUPPORTED_DISPLAYS[config.G_DISPLAY])
+        else:
+            from .mip_display_mraa import _SENSOR_DISPLAY as _SENSOR_DISPLAY_MRAA, MipDisplayMraa
+            if _SENSOR_DISPLAY_MRAA:
+                display = MipDisplayMraa(config, *SUPPORTED_DISPLAYS[config.G_DISPLAY])
+            else:
+                from .mip_display_spidev import _SENSOR_DISPLAY as _SENSOR_DISPLAY_SPIDEV, MipDisplaySpidev
+                if _SENSOR_DISPLAY_SPIDEV:
+                    display = MipDisplaySpidev(config, *SUPPORTED_DISPLAYS[config.G_DISPLAY])
     elif config.G_DISPLAY == "Papirus":
         from .papirus_display import _SENSOR_DISPLAY, PapirusDisplay
 
