@@ -173,9 +173,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
             values["power_l"] = 0
             values["lr_balance"] = ":"
         else:
-            app_logger.error(
-                f"ANT+ Power(16) err: {datetime.datetime.now().strftime('%Y%m%d %H:%M:%S')} {delta}",
-            )
+            app_logger.error(f"ANT+ Power(16) err: {delta}")
 
         pre_values[0:2] = power_values[0:2]
         # on_data timestamp
@@ -261,9 +259,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
             values["power"] = 0
             values["speed"] = 0
         else:
-            app_logger.error(
-                f"ANT+ Power(17) err: {datetime.datetime.now().strftime('%Y%m%d %H:%M:%S')} {delta}",
-            )
+            app_logger.error(f"ANT+ Power(17) err: {delta}")
 
         pre_values = power_values
         # on_data timestamp
@@ -335,9 +331,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
                 # keep increasing accumulated_power at stopping, so it causes a spike at restart
                 pass
             else:
-                app_logger.error(
-                    f"ANT+ Power(18) err: {datetime.datetime.now().strftime('%Y%m%d %H:%M:%S')} {delta}",
-                )
+                app_logger.error(f"ANT+ Power(18) err: {delta}")
 
         pre_values[0:2] = power_values[0:2]
         # on_data timestamp
