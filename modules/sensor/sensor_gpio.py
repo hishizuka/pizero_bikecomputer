@@ -14,7 +14,7 @@ except ImportError:
     pass
 
 if _SENSOR_RPiGPIO:
-    app_logger.info("GPIO")
+    app_logger.info("  GPIO")
 
 
 class SensorGPIO(Sensor):

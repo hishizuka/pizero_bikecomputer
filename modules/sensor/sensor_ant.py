@@ -32,7 +32,7 @@ except DriverNotFound:
     pass
 
 if _SENSOR_ANT:
-    app_logger.info("ANT")
+    app_logger.info("  ANT")
 
 
 class SensorANT(Sensor):

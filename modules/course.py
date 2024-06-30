@@ -181,11 +181,11 @@ class Course:
         self.reset()
 
         timers = [
-            Timer(auto_start=False, text="read_file           : {0:.3f} sec"),
-            Timer(auto_start=False, text="downsample          : {0:.3f} sec"),
-            Timer(auto_start=False, text="calc_slope_smoothing: {0:.3f} sec"),
-            Timer(auto_start=False, text="modify_course_points: {0:.3f} sec"),
-            Timer(auto_start=False, text="get_course_wind     : {0:.3f} sec"),
+            Timer(auto_start=False, text="  read_file           : {0:.3f} sec"),
+            Timer(auto_start=False, text="  downsample          : {0:.3f} sec"),
+            Timer(auto_start=False, text="  calc_slope_smoothing: {0:.3f} sec"),
+            Timer(auto_start=False, text="  modify_course_points: {0:.3f} sec"),
+            Timer(auto_start=False, text="  get_course_wind     : {0:.3f} sec"),
         ]
 
         with timers[0]:
@@ -229,7 +229,7 @@ class Course:
             asyncio.create_task(self.get_course_wind())
 
         app_logger.info("[logger] Loading course:")
-        log_timers(timers, text_total="total               : {0:.3f} sec")
+        log_timers(timers, text_total="  total               : {0:.3f} sec")
 
         if self.config.G_THINGSBOARD_API["STATUS"]:
             self.config.api.send_livetrack_course_load()

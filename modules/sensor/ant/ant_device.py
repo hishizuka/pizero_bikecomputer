@@ -100,7 +100,7 @@ class ANT_Device:
     def make_channel(self, c_type, ext_assign=None):
         if self.config.G_ANT["STATUS"] and self.channel is None:
             self.channel = self.node.new_channel(c_type, ext_assign=ext_assign)
-            app_logger.info(self.name)
+            app_logger.info(f"  {self.name}")
             self.channel.on_broadcast_data = self.on_data
             self.channel.on_burst_data = self.on_data
             self.channel.on_acknowledge_data = self.on_data

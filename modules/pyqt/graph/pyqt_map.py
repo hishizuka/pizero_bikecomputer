@@ -339,8 +339,8 @@ class MapWidget(BaseMapWidget):
 
     def load_course(self):
         timers = [
-            Timer(auto_start=False, text="course plot  : {0:.3f} sec"),
-            Timer(auto_start=False, text="course points: {0:.3f} sec"),
+            Timer(auto_start=False, text="  course plot  : {0:.3f} sec"),
+            Timer(auto_start=False, text="  course points: {0:.3f} sec"),
         ]
 
         with timers[0]:
@@ -414,7 +414,7 @@ class MapWidget(BaseMapWidget):
                 self.plot.addItem(self.course_points_plot)
 
         app_logger.info("Plotting course:")
-        log_timers(timers, text_total=f"total        : {0:.3f} sec")
+        log_timers(timers, text_total=f"  total        : {0:.3f} sec")
 
     @qasync.asyncSlot()
     async def update_display(self):

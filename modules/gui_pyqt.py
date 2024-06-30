@@ -193,10 +193,10 @@ class GUI_PyQt(QtCore.QObject):
     def delay_init(self):
         # ensure visually alignment for log
         timers = [
-            Timer(auto_start=False, text="misc  : {0:.3f} sec"),
-            Timer(auto_start=False, text="import: {0:.3f} sec"),
-            Timer(auto_start=False, text="init  : {0:.3f} sec"),
-            Timer(auto_start=False, text="layout: {0:.3f} sec"),
+            Timer(auto_start=False, text="  misc  : {0:.3f} sec"),
+            Timer(auto_start=False, text="  import: {0:.3f} sec"),
+            Timer(auto_start=False, text="  init  : {0:.3f} sec"),
+            Timer(auto_start=False, text="  layout: {0:.3f} sec"),
         ]
 
         with timers[0]:
@@ -426,7 +426,7 @@ class GUI_PyQt(QtCore.QObject):
             self.on_change_main_page(self.main_page_index)
 
         app_logger.info("Drawing components:")
-        log_timers(timers, text_total="total : {0:.3f} sec")
+        log_timers(timers, text_total="  total : {0:.3f} sec")
 
     def init_buffer(self, display):
         if display.send:

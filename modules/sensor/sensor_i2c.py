@@ -19,7 +19,7 @@ try:
 except ImportError:
     pass
 if _SENSOR_I2C:
-    app_logger.info("I2C")
+    app_logger.info("  I2C")
 
 _SENSOR_MAG_DECLINATION = False
 try:
@@ -374,7 +374,7 @@ class SensorI2C(Sensor):
         for k in self.available_sensors.keys():
             for kk in self.available_sensors[k]:
                 if self.available_sensors[k][kk]:
-                    app_logger.info(f"{k}: {kk}")
+                    app_logger.info(f"  {k}: {kk}")
 
     def reset(self):
         for key in self.elements:

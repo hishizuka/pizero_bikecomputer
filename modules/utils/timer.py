@@ -62,7 +62,7 @@ class Timer:
             app_logger.warning("Not logger defined for timer")
 
 
-def log_timers(timers, text_total="total: {0:.3f} sec", logger=app_logger.info):
+def log_timers(timers, text_total="  total: {0:.3f} sec", logger=app_logger.info):
     total_time = 0
     for t in timers:
         t.log()

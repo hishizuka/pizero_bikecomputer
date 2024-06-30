@@ -9,12 +9,12 @@ def main():
 
     # ensure visually alignment for log
     timers = [
-        Timer(auto_start=False, text="config import : {0:.3f} sec"),
-        Timer(auto_start=False, text="config init   : {0:.3f} sec"),
-        Timer(auto_start=False, text="display import: {0:.3f} sec"),
-        Timer(auto_start=False, text="display init  : {0:.3f} sec"),
-        Timer(auto_start=False, text="import gui    : {0:.3f} sec"),
-        Timer(auto_start=False, text="import logger : {0:.3f} sec"),
+        Timer(auto_start=False, text="  config import : {0:.3f} sec"),
+        Timer(auto_start=False, text="  config init   : {0:.3f} sec"),
+        Timer(auto_start=False, text="  display import: {0:.3f} sec"),
+        Timer(auto_start=False, text="  display init  : {0:.3f} sec"),
+        Timer(auto_start=False, text="  import gui    : {0:.3f} sec"),
+        Timer(auto_start=False, text="  import logger : {0:.3f} sec"),
     ]
 
     with timers[0]:
@@ -44,7 +44,7 @@ def main():
         config.set_logger(logger)
 
     app_logger.info("Initialize modules:")
-    total_time = log_timers(timers, text_total="total         : {0:.3f} sec")
+    total_time = log_timers(timers, text_total="  total         : {0:.3f} sec")
     app_logger.info("########## INITIALIZE END ##########")
     config.boot_time += total_time
 

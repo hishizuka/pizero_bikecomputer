@@ -110,7 +110,8 @@ class SensorCore:
         for d in self.diff_keys:
             self.values["integrated"][d] = [np.nan] * self.grade_range
         self.brakelight_spd = [0] * self.brakelight_spd_range
-        self.auto_backlight_brightness = [0] * self.auto_backlight_brightness_range
+        self.auto_backlight_brightness = \
+            [self.config.G_AUTO_BACKLIGHT_CUTOFF+1] * self.auto_backlight_brightness_range
         self.values["integrated"]["CPU_MEM"] = ""
 
         for s in self.average_secs:
@@ -124,8 +125,8 @@ class SensorCore:
             self.sensor_gps = SensorGPS(config, self.values["GPS"])
 
         timers = [
-            Timer(auto_start=False, text="ANT+ : {0:.3f} sec"),
-            Timer(auto_start=False, text="I2C  : {0:.3f} sec"),
+            Timer(auto_start=False, text="  ANT+ : {0:.3f} sec"),
+            Timer(auto_start=False, text="  I2C  : {0:.3f} sec"),
         ]
 
         with timers[0]:
