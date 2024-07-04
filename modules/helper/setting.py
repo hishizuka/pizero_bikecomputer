@@ -262,10 +262,10 @@ class Setting:
         c = self.config_parser["SENSOR_IMU"]
         c["AXIS_SWAP_XY_STATUS"] = str(self.config.G_IMU_AXIS_SWAP_XY["STATUS"])
         c["AXIS_CONVERSION_STATUS"] = str(self.config.G_IMU_AXIS_CONVERSION["STATUS"])
-        c["AXIS_CONVERSION_COEF"] = str(list(self.config.G_IMU_AXIS_CONVERSION["COEF"]))
+        c["AXIS_CONVERSION_COEF"] = str(self.config.G_IMU_AXIS_CONVERSION["COEF"].tolist())
         c["MAG_AXIS_SWAP_XY_STATUS"] = str(self.config.G_IMU_MAG_AXIS_SWAP_XY["STATUS"])
         c["MAG_AXIS_CONVERSION_STATUS"] = str(self.config.G_IMU_MAG_AXIS_CONVERSION["STATUS"])
-        c["MAG_AXIS_CONVERSION_COEF"] = str(list(self.config.G_IMU_MAG_AXIS_CONVERSION["COEF"]))
+        c["MAG_AXIS_CONVERSION_COEF"] = str(self.config.G_IMU_MAG_AXIS_CONVERSION["COEF"].tolist())
         c["MAG_DECLINATION"] = str(int(self.config.G_IMU_MAG_DECLINATION))
 
         self.config_parser["DISPLAY_PARAM"] = {}
