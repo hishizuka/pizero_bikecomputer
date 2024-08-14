@@ -4,16 +4,16 @@ from logger import app_logger
 
 
 # still return returncode
-def exec_cmd(cmd, cmd_print=True):
+def exec_cmd(cmd, cmd_print=True, timeout=None):
     if cmd_print:
         app_logger.info(cmd)
     try:
-        return subprocess.run(cmd).returncode
+        return subprocess.run(cmd, timeout=timeout).returncode
     except Exception:  # noqa
         app_logger.exception(f"Failed executing {cmd}")
 
 
-def exec_cmd_return_value(cmd, cmd_print=True):
+def exec_cmd_return_value(cmd, cmd_print=True, timeout=None):
     if cmd_print:
         app_logger.info(cmd)
     try:
@@ -21,9 +21,12 @@ def exec_cmd_return_value(cmd, cmd_print=True):
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            timeout=timeout,
         )
         string = p.stdout.decode("utf8").strip()
         return string
+    except subprocess.TimeoutExpired:
+        app_logger.exception(f"Timeout {cmd}")
     except Exception:  # noqa
         app_logger.exception(f"Failed executing {cmd}")
 
