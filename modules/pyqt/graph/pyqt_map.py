@@ -4,10 +4,10 @@ import sqlite3
 from datetime import datetime, timezone
 
 import numpy as np
-from PIL import Image, ImageEnhance
+from PIL import Image
 
 from logger import app_logger
-from modules._pyqt import QT_COMPOSITION_MODE_DARKEN, QtCore, pg, qasync
+from modules._pyqt import QT_COMPOSITION_MODE_DARKEN, pg, qasync, Signal
 from modules.pyqt.pyqt_cuesheet_widget import CueSheetWidget
 from modules.pyqt.graph.pyqtgraph.CoursePlotItem import CoursePlotItem
 from modules.utils.geo import (
@@ -75,7 +75,7 @@ class MapWidget(BaseMapWidget):
     auto_zoomlevel_back = None
 
     # signal for physical button
-    signal_search_route = QtCore.pyqtSignal()
+    signal_search_route = Signal()
 
     track_pen = pg.mkPen(color=(0, 170, 255), width=4)
     scale_pen = pg.mkPen(color=(0, 0, 0), width=3)
@@ -109,7 +109,8 @@ class MapWidget(BaseMapWidget):
     }
     overlay_index = 0
 
-    contrast_factor = 2.0
+    tile_modify_mode = 0
+
 
     def setup_ui_extra(self):
         super().setup_ui_extra()
@@ -251,18 +252,17 @@ class MapWidget(BaseMapWidget):
         elif self.overlay_index == self.overlay_order_index["WIND"]:
             map_settings = self.config.G_WIND_OVERLAY_MAP_CONFIG[self.config.G_WIND_OVERLAY_MAP]
         if map_settings is not None:
-            attribution_text += f"<br />{map_settings['attribution']}"
-            # b, v = self.add_attribution_extra_text(map_settings)
-            # if b != "":
-            #     attribution_text += f"<br /><font size='+1'>{b}</font>"
-            # if v != "": 
-            #     attribution_text += f"<font size='+1'> / {v}</font>"
+            attribution_text += f" / {map_settings['attribution']}"
+            b, v = self.add_attribution_extra_text(map_settings)
+            if b != "" and v != "":
+                attribution_text += f" ({b}/{v})"
 
         self.map_attribution.setHtml(
-            '<div style="text-align: right;"><span style="color: #000; font-size: 10px;">'
+            '<span style="color: #000000; font-size: small;">'
             + attribution_text
-            + "</span></div>"
+            + "</span>"
         )
+
         if attribution_text == "":
             self.map_attribution.setZValue(-100)
         else:
@@ -295,9 +295,11 @@ class MapWidget(BaseMapWidget):
 
             # init instruction
             self.instruction = pg.TextItem(
-                color=(0, 0, 0),
+                # color=(0, 0, 0),
+                # fill=(255, 255, 255, 192),
+                color=(255, 255, 255),
+                fill=(0, 128, 0),
                 anchor=(0.5, 0.5),
-                fill=(255, 255, 255, 192),
                 border=(0, 0, 0),
             )
             self.instruction.setZValue(100)
@@ -343,11 +345,13 @@ class MapWidget(BaseMapWidget):
             Timer(auto_start=False, text="  course points: {0:.3f} sec"),
         ]
 
+        disable_print_timers = False
         with timers[0]:
             if self.course_plot is not None:
                 self.plot.removeItem(self.course_plot)
+
             if not len(self.course.latitude):
-                app_logger.warning("Course has no points")
+                disable_print_timers |= True
             else:
                 self.course_plot = CoursePlotItem(
                     x=self.course.longitude,
@@ -384,8 +388,7 @@ class MapWidget(BaseMapWidget):
                 self.plot.removeItem(self.course_points_plot)
 
             if not len(self.course_points.longitude):
-                app_logger.warning("No course points found")
-
+                disable_print_timers |= True
             else:
                 self.course_points_plot = pg.ScatterPlotItem(
                     pxMode=True, symbol="t", size=12
@@ -413,8 +416,9 @@ class MapWidget(BaseMapWidget):
                 self.course_points_plot.setData(formatted_course_points)
                 self.plot.addItem(self.course_points_plot)
 
-        app_logger.info("Plotting course:")
-        log_timers(timers, text_total=f"  total        : {0:.3f} sec")
+        if not disable_print_timers:
+            app_logger.info("Plotting course:")
+            log_timers(timers, text_total=f"  total        : {0:.3f} sec")
 
     @qasync.asyncSlot()
     async def update_display(self):
@@ -775,12 +779,6 @@ class MapWidget(BaseMapWidget):
                     x_start, y_start, x_start + w_h, y_start + w_h
                 )).convert("RGBA")
 
-            if (
-                map_config == self.config.G_MAP_CONFIG
-                and self.config.G_DISPLAY.startswith(("MIP_JDI", "MIP_Azumo"))
-                and self.contrast_factor != 1.0
-            ):
-                img_pil = ImageEnhance.Contrast(img_pil).enhance(self.contrast_factor)
 
             if (
                 self.config.G_DISPLAY.startswith(("MIP_JDI", "MIP_Azumo"))
@@ -1016,11 +1014,11 @@ class MapWidget(BaseMapWidget):
 
         if self.instruction is not None:
             self.plot.removeItem(self.instruction)
-        image_src = '<img src="img/navi_flag.png">'  # svg
+        image_src = '<img src="img/navi_flag_white.svg">'
         if self.cuesheet_widget.cuesheet[0].name.text() == "Right":
-            image_src = '<img src="img/navi_turn_right.svg">'
+            image_src = '<img src="img/navi_turn_right_white.svg">'
         elif self.cuesheet_widget.cuesheet[0].name.text() == "Left":
-            image_src = '<img src="img/navi_turn_left.svg">'
+            image_src = '<img src="img/navi_turn_left_white.svg">'
         elif self.cuesheet_widget.cuesheet[0].name.text() == "Summit":
             image_src = '<img src="img/summit.png">'  # svg
         self.instruction.setHtml(
@@ -1119,10 +1117,10 @@ class MapWidget(BaseMapWidget):
         else:
             self.buttons["layers"].setEnabled(True)
 
-    def change_dither(self):
-        if self.contrast_factor == 2.0:
-            self.contrast_factor = 1.0
-        elif self.contrast_factor == 1.0:
-            self.contrast_factor = 2.0
+    def modify_map_tile(self):
+        if self.tile_modify_mode == 3:
+            self.tile_modify_mode = 0
+        else:
+            self.tile_modify_mode += 1
+        self.config.display.screen_flash_short()
         self.reset_map()
-        
