@@ -327,7 +327,7 @@ class LoggerCore:
                         self.sensor.values["integrated"]["dem_altitude"]
                     )
                 )
-                popup_extra = "<br />altitude corrected: {}m".format(
+                popup_extra = "<br /><font size=small>altitude corrected: {}m</font>".format(
                     int(self.sensor.values["integrated"]["dem_altitude"])
                 )
 
@@ -437,7 +437,7 @@ class LoggerCore:
 
     def reset_count(self):
         if self.config.G_MANUAL_STATUS == "START" or self.values["count"] == 0:
-            return
+            return False
 
         # reset
         self.config.display.screen_flash_long()
@@ -451,7 +451,7 @@ class LoggerCore:
 
         if start_date is None and end_date is None:
             app_logger.info("No log found, nothing to write")
-            return
+            return False
 
         start_date_local = start_date.astimezone().strftime("%Y-%m-%d_%H-%M-%S")
 
@@ -468,14 +468,14 @@ class LoggerCore:
         if self.config.G_LOG_WRITE_CSV:
             with timers[0]:
                 if not self.logger_csv.write_log(f"{filename}.csv"):
-                    return
+                    return False
 
         if self.config.G_LOG_WRITE_FIT:
             with timers[1]:
                 if not self.logger_fit.write_log(
                     f"{filename}.fit", start_date, end_date
                 ):
-                    return
+                    return False
 
         # backup and reset database
         with timers[2]:
@@ -499,6 +499,8 @@ class LoggerCore:
         self.sensor.reset()
         # reset course index
         self.course.index.reset()
+
+        return True
 
     def reset(self):
         # clear lap
