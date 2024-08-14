@@ -1,13 +1,11 @@
 import sys
 import os
 
-import datetime
-import signal
+from datetime import datetime
 import asyncio
-import numpy as np
 
 from logger import app_logger
-from modules.gui_config import GUI_Config
+from modules.gui_qt_base import GUI_Qt_Base
 from modules._pyqt import (
     QT_ALIGN_BOTTOM,
     QT_ALIGN_LEFT,
@@ -21,12 +19,11 @@ from modules._pyqt import (
     QT_KEY_BACKTAB,
     QT_KEY_TAB,
     QT_NO_MODIFIER,
-    QT_FORMAT_MONO,
-    QT_FORMAT_RGB888,
     QtCore,
     QtWidgets,
     QtGui,
     qasync,
+    Signal,
 )
 from modules.utils.timer import Timer, log_timers
 
@@ -90,10 +87,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.gui.draw_display()
 
 
-class GUI_PyQt(QtCore.QObject):
-    config = None
-    gui_config = None
-    app = None
+class GUI_PyQt(GUI_Qt_Base):
+    main_window = None
 
     stack_widget = None
     button_box_widget = None
@@ -108,48 +103,29 @@ class GUI_PyQt(QtCore.QObject):
     multi_scan_widget = None
 
     # signal
-    signal_next_button = QtCore.pyqtSignal(int)
-    signal_prev_button = QtCore.pyqtSignal(int)
-    signal_menu_button = QtCore.pyqtSignal(int)
-    signal_menu_back_button = QtCore.pyqtSignal()
-    signal_get_screenshot = QtCore.pyqtSignal()
-    signal_multiscan = QtCore.pyqtSignal()
-    signal_start_and_stop_manual = QtCore.pyqtSignal()
-    signal_count_laps = QtCore.pyqtSignal()
-    signal_boot_status = QtCore.pyqtSignal(str)
-    signal_change_overlay = QtCore.pyqtSignal()
-
-    # for draw_display
-    image_format = None
-    screen_shape = None
-    screen_image = None
-    remove_bytes = 0
-    bufsize = 0
+    signal_next_button = Signal(int)
+    signal_prev_button = Signal(int)
+    signal_menu_button = Signal(int)
+    signal_menu_back_button = Signal()
+    signal_get_screenshot = Signal()
+    signal_multiscan = Signal()
+    signal_start_and_stop_manual = Signal()
+    signal_count_laps = Signal()
+    signal_reset_count = Signal()
+    signal_boot_status = Signal(str)
+    signal_change_overlay = Signal()
+    signal_modify_map_tile = Signal()
+    signal_turn_on_off_light = Signal()
 
     # for dialog
     display_dialog = False
-
+    
     @property
-    def logger(self):
-        return self.config.logger
+    def grab_func(self):
+        return self.stack_widget.grab().toImage()
 
     def __init__(self, config):
-        super().__init__()
-
-        self.config = config
-        self.config.gui = self
-
-        self.gui_config = GUI_Config(config.G_LAYOUT_FILE)
-
-        try:
-            signal.signal(signal.SIGTERM, self.quit_by_ctrl_c)
-            signal.signal(signal.SIGINT, self.quit_by_ctrl_c)
-            signal.signal(signal.SIGQUIT, self.quit_by_ctrl_c)
-            signal.signal(signal.SIGHUP, self.quit_by_ctrl_c)
-        except:
-            pass
-
-        self.init_window()
+        super().__init__(config)
 
     def init_window(self):
         self.app = QtWidgets.QApplication(sys.argv)
@@ -195,8 +171,8 @@ class GUI_PyQt(QtCore.QObject):
         timers = [
             Timer(auto_start=False, text="  misc  : {0:.3f} sec"),
             Timer(auto_start=False, text="  import: {0:.3f} sec"),
-            Timer(auto_start=False, text="  init  : {0:.3f} sec"),
-            Timer(auto_start=False, text="  layout: {0:.3f} sec"),
+            Timer(auto_start=False, text="  menu  : {0:.3f} sec"),
+            Timer(auto_start=False, text="  main  : {0:.3f} sec"),
         ]
 
         with timers[0]:
@@ -215,8 +191,12 @@ class GUI_PyQt(QtCore.QObject):
                 self.start_and_stop_manual_internal
             )
             self.signal_count_laps.connect(self.count_laps_internal)
+            self.signal_reset_count.connect(self.reset_count_internal)
 
             self.signal_change_overlay.connect(self.change_map_overlays_internal)
+            self.signal_modify_map_tile.connect(self.modify_map_tile_internal)
+
+            self.signal_turn_on_off_light.connect(self.turn_on_off_light_internal)
 
             self.msg_queue = asyncio.Queue()
             self.msg_event = asyncio.Event()
@@ -245,7 +225,6 @@ class GUI_PyQt(QtCore.QObject):
                 SensorMenuWidget,
                 ANTMenuWidget,
                 ANTListWidget,
-                ANTMultiScanScreenWidget,
             )
             from modules.pyqt.menu.pyqt_course_menu_widget import (
                 CoursesMenuWidget,
@@ -296,7 +275,6 @@ class GUI_PyQt(QtCore.QObject):
             # reverse order (make children widget first, then make parent widget)
             menus = [
                 ("ANT+ Detail", ANTListWidget),
-                ("ANT+ MultiScan", ANTMultiScanScreenWidget),
                 ("ANT+ Sensors", ANTMenuWidget),
                 ("Wheel Size", AdjustWheelCircumferenceWidget),
                 ("Adjust Altitude", AdjustAltitudeWidget),
@@ -336,6 +314,7 @@ class GUI_PyQt(QtCore.QObject):
 
             self.stack_widget.setCurrentIndex(1)
 
+        with timers[3]:
             # main layout
             main_layout = QtWidgets.QVBoxLayout(main_widget)
             main_layout.setContentsMargins(0, 0, 0, 0)
@@ -405,12 +384,12 @@ class GUI_PyQt(QtCore.QObject):
                         )
                         self.main_page.addWidget(self.cuesheet_widget)
                     
-            self.multi_scan_widget = MultiScanWidget(self.main_page, self.config)
-            self.main_page.addWidget(self.multi_scan_widget)
-            self.multiscan_index = self.main_page.count() - 1
-            self.multiscan_back_index = self.multiscan_index
+            if self.config.G_ANT["STATUS"]:
+                self.multi_scan_widget = MultiScanWidget(self.main_page, self.config)
+                self.main_page.addWidget(self.multi_scan_widget)
+                self.multiscan_index = self.main_page.count() - 1
+                self.multiscan_back_index = self.multiscan_index
 
-        with timers[3]:
             # integrate main_layout
             main_layout.addWidget(self.main_page)
             if self.config.display.has_touch:
@@ -427,94 +406,6 @@ class GUI_PyQt(QtCore.QObject):
 
         app_logger.info("Drawing components:")
         log_timers(timers, text_total="  total : {0:.3f} sec")
-
-    def init_buffer(self, display):
-        if display.send:
-            has_color = display.has_color
-
-            # set image format
-            if has_color:
-                self.image_format = QT_FORMAT_RGB888
-            else:
-                self.image_format = QT_FORMAT_MONO
-
-            p = self.stack_widget.grab().toImage().convertToFormat(self.image_format)
-
-            # PyQt 5.11(Buster) or 5.15(Bullseye)
-            qt_version = QtCore.QT_VERSION_STR.split(".")
-
-            if qt_version[0] == "5" and int(qt_version[1]) < 15:
-                self.bufsize = p.bytesPerLine() * p.height()  # PyQt 5.11(Buster)
-            else:
-                self.bufsize = p.sizeInBytes()  # PyQt 5.15 or later (Bullseye)
-
-            if has_color:
-                self.screen_shape = (p.height(), p.width(), 3)
-            else:
-                self.screen_shape = (p.height(), int(p.width() / 8))
-                self.remove_bytes = p.bytesPerLine() - int(p.width() / 8)
-
-    def draw_display(self, direct_update=False):
-        if not self.bufsize:
-            return
-
-        # self.config.check_time("draw_display start")
-        p = self.stack_widget.grab().toImage().convertToFormat(self.image_format)
-
-        if self.screen_image is not None and p == self.screen_image:
-            return
-
-        # self.config.check_time("grab")
-        ptr = p.constBits()
-
-        if ptr is None:
-            return
-
-        self.screen_image = p
-
-        ptr.setsize(self.bufsize)
-
-        if self.remove_bytes > 0:
-            buf = np.frombuffer(ptr, dtype=np.uint8).reshape(
-                (p.height(), self.remove_bytes + int(p.width() / 8))
-            )
-            buf = buf[:, : -self.remove_bytes]
-        else:
-            buf = np.frombuffer(ptr, dtype=np.uint8).reshape(self.screen_shape)
-
-        self.config.display.update(buf, direct_update)
-        # self.config.check_time("draw_display end")
-
-    def exec(self):
-        with self.config.loop:
-            self.config.loop.run_forever()
-            # loop is stopped
-        # loop is closed
-
-    def add_font(self):
-        # Additional font from setting.conf
-        if self.config.G_FONT_FILE:
-            # use full path as macOS is not allowing relative paths
-            res = QtGui.QFontDatabase.addApplicationFont(
-                os.path.join(os.getcwd(), "fonts", self.config.G_FONT_FILE)
-            )
-            if res != -1:
-                font_name = QtGui.QFontDatabase.applicationFontFamilies(res)[0]
-                font = QtGui.QFont(font_name)
-                self.app.setFont(font)
-                app_logger.info(f"add font: {font_name}")
-
-    @qasync.asyncSlot(object, object)
-    async def quit_by_ctrl_c(self, signal, frame):
-        await self.quit()
-
-    async def quit(self):
-        self.msg_event.set()
-        await self.msg_queue.put(None)
-        await self.config.quit()
-
-        # with loop.close, so execute at the end
-        self.app.quit()
 
     # for main_page page transition
     def on_change_main_page(self, index):
@@ -535,15 +426,51 @@ class GUI_PyQt(QtCore.QObject):
         self.logger.count_laps()
 
     def reset_count(self):
-        self.logger.reset_count()
+        self.signal_reset_count.emit()
+
+    def reset_count_internal(self):
+        res = self.logger.reset_count()
         self.map_widget.reset_track()
-        #self.show_dialog(self.upload_activity, "Upload Activity?")
-    
-    def upload_activity(self):
-        pass
-        #self.config.api.strava_upload()
-        #self.config.api.garmin_upload()
-        #self.config.api.rwgps_upload()
+        if (
+            res
+            and self.config.G_AUTO_UPLOAD
+            and any(self.config.G_AUTO_UPLOAD_SERVICE.values())
+        ):
+            self.show_dialog(self.upload_activity, "Upload Activity?")
+
+    @qasync.asyncSlot()
+    async def upload_activity(self):
+        f_name = self.upload_activity.__name__
+        upload_func = {
+            "STRAVA": self.config.api.strava_upload,
+            "RWGPS": self.config.api.rwgps_upload,
+            "GARMIN": self.config.api.garmin_upload,
+        }
+
+        # BT tethering on
+        bt_status = await self.config.network.open_bt_tethering(f_name)
+        res_status = False
+
+        for k, v in self.config.G_AUTO_UPLOAD_SERVICE.items():
+            if v:
+                self.show_forced_message(f"Upload to {k}...")
+                await asyncio.sleep(1.0)
+                # need to select service with loading images
+                res_status |= await upload_func[k]()
+
+        # BT tethering off
+        if bt_status:
+            await self.config.network.close_bt_tethering(f_name)
+
+        self.delete_popup()
+        if res_status:
+            self.show_dialog(self.power_off, "Power Off?")
+        else:
+            self.show_dialog_ok_only(None, "Upload failed.")
+
+    @qasync.asyncSlot()
+    async def power_off(self):
+        await self.config.power_off()
 
     @staticmethod
     def press_key(key):
@@ -592,9 +519,16 @@ class GUI_PyQt(QtCore.QObject):
     def change_map_overlays(self):
         if self.map_widget is not None:
             self.signal_change_overlay.emit()
-    
+
+    def modify_map_tile(self):
+        if self.map_widget is not None:
+            self.signal_modify_map_tile.emit()
+
     def change_map_overlays_internal(self):
         self.map_widget.change_map_overlays()
+
+    def modify_map_tile_internal(self):
+        self.map_widget.modify_map_tile()
 
     def map_move_x_plus(self):
         self.map_method("move_x_plus")
@@ -677,6 +611,8 @@ class GUI_PyQt(QtCore.QObject):
         self.signal_multiscan.emit()
 
     def multiscan_internal(self):
+        if self.multi_scan_widget is None:
+            return
         if self.main_page.currentWidget() != self.multi_scan_widget:
             self.multiscan_back_index = self.main_page.currentIndex()
             self.on_change_main_page(self.multiscan_index)
@@ -689,7 +625,7 @@ class GUI_PyQt(QtCore.QObject):
         self.signal_get_screenshot.emit()
 
     def screenshot(self):
-        date = datetime.datetime.now()
+        date = datetime.now()
         filename = date.strftime("%Y-%m-%d_%H-%M-%S.png")
         app_logger.info(f"screenshot: {filename}")
         p = self.stack_widget.grab()
@@ -704,6 +640,9 @@ class GUI_PyQt(QtCore.QObject):
         self.config.display.change_brightness()
 
     def turn_on_off_light(self):
+        self.signal_turn_on_off_light.emit()
+
+    def turn_on_off_light_internal(self):
         self.config.logger.sensor.sensor_ant.set_light_mode("ON_OFF_FLASH_LOW")
 
     def change_menu_page(self, page, focus_reset=True):
@@ -725,77 +664,9 @@ class GUI_PyQt(QtCore.QObject):
     def goto_menu(self):
         self.change_menu_page(self.gui_config.G_GUI_INDEX["Menu"])
 
-    async def add_message_queue(self, title=None, message=None, fn=None):
-        await self.msg_queue.put(message)
-
-    async def msg_worker(self):
-        while True:
-            msg = await self.msg_queue.get()
-            if msg is None:
-                break
-            self.msg_queue.task_done()
-
-            await self.show_dialog_base(msg)
-
-            # event set in close_dialog()
-            await self.msg_event.wait()
-            self.msg_event.clear()
-            await asyncio.sleep(0.1)
-
     def delete_popup(self):
         if self.display_dialog:
             self.signal_menu_back_button.emit()
-
-    def show_popup(self, title, timeout=None):
-        asyncio.create_task(
-            self.msg_queue.put(
-                {
-                    "title": title,
-                    "button_num": 0,
-                    "position": QT_ALIGN_BOTTOM,
-                    "timeout": timeout,
-                }
-            )
-        )
-
-    def show_popup_multiline(self, title, message, timeout=None):
-        asyncio.create_task(
-            self.msg_queue.put(
-                {
-                    "title": title,
-                    "message": message,
-                    "position": QT_ALIGN_BOTTOM,
-                    "text_align": QT_ALIGN_LEFT,
-                    "timeout": timeout,
-                }
-            )
-        )
-
-    def show_message(self, title, message, limit_length=False):
-        t = title
-        m = message
-
-        if limit_length:
-            width = 14
-            w_t = width - 1
-            w_m = 3 * width - 1
-
-            if len(t) > w_t:
-                t = t[0:w_t] + "..."
-            if len(m) > w_m:
-                m = m[0:w_m] + "..."
-        asyncio.create_task(
-            self.msg_queue.put(
-                {
-                    "title": t,
-                    "message": m,
-                    "button_num": 1,
-                    "position": QT_ALIGN_BOTTOM,
-                    "text_align": QT_ALIGN_LEFT,
-                }
-            )
-        )
-        # await self.config.logger.sensor.sensor_i2c.led_blink(5)
 
     def show_forced_message(self, msg):
         if self.dialog_exists():
@@ -803,31 +674,12 @@ class GUI_PyQt(QtCore.QObject):
         else:
             self.show_dialog_ok_only(None, msg)
 
-    def show_dialog(self, fn, title):
-        asyncio.create_task(
-            self.msg_queue.put({"fn": fn, "title": title, "button_num": 2})
-        )
-
-    def show_dialog_ok_only(self, fn, title):
-        asyncio.create_task(
-            self.msg_queue.put(
-                {"fn": fn, "title": title, "button_num": 1, "button_label": ["OK"]}
-            )
-        )
-
-    def show_dialog_cancel_only(self, fn, title):
-        asyncio.create_task(
-            self.msg_queue.put(
-                {"fn": fn, "title": title, "button_num": 1, "button_label": ["Cancel"]}
-            )
-        )
-
     async def show_dialog_base(self, msg):
         if self.display_dialog:
             return
 
         title = msg.get("title")
-        title_icon = msg.get("title_icon")
+        title_icon = msg.get("title_icon")  # QtGui.QIcon
         message = msg.get("message")
         button_num = msg.get("button_num", 0)  # 0: none, 1: OK, 2: OK+Cancel
         button_label = msg.get("button_label", None)  # button label for button_num = 1
@@ -880,12 +732,13 @@ class GUI_PyQt(QtCore.QObject):
               Container {
                 border: 3px solid black;
                 border-radius: 5px;
-                padding: 15px;
+                padding: 10px;
               }
               Container DialogButton{
                 border: 2px solid #AAAAAA;
                 border-radius: 3px;
                 text-align: center;
+                padding: 3px;
               }
               Container DialogButton:pressed{background-color: black; }
               Container DialogButton:focus{background-color: black; color: white; }
@@ -914,7 +767,7 @@ class GUI_PyQt(QtCore.QObject):
         back_layout.addWidget(container, alignment=position)
         container.setAutoFillBackground(True)
         layout = QtWidgets.QVBoxLayout(container)
-        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(0)
 
         font = self.main_window.font()
         font_size = font.pointSize()
@@ -925,32 +778,36 @@ class GUI_PyQt(QtCore.QObject):
         title_label.setText(title)
         title_label.setAlignment(text_align)
         title_label.setFont(font)
+        title_label.setContentsMargins(5, 5, 5, 5)
 
         # title_label_width = title_label.fontMetrics().horizontalAdvance(title_label.text())
 
         # title_icon
         if title_icon is not None:
             outer_widget = QtWidgets.QWidget(container)
-
             left_icon = QtWidgets.QLabel()
             left_icon.setPixmap(title_icon.pixmap(QtCore.QSize(32, 32)))
+            title_label.setAlignment(QT_ALIGN_LEFT)
 
             label_layout = QtWidgets.QHBoxLayout(outer_widget)
             label_layout.setContentsMargins(0, 0, 0, 0)
+            label_layout.setSpacing(0)
             label_layout.addWidget(left_icon)
             label_layout.addWidget(title_label, stretch=2)
             layout.addWidget(outer_widget)
         elif message is not None:
             outer_widget = QtWidgets.QWidget(container)
             font.setPointSize(int(font_size * 1.5))
+            title_label.setFont(font)
+            title_label.setStyleSheet("font-weight: bold;")
             message_label = QtWidgets.QLabel(message, font=font)
             message_label.setAlignment(text_align)
             message_label.setWordWrap(True)
-            title_label.setFont(font)
-            title_label.setStyleSheet("font-weight: bold;")
+            message_label.setContentsMargins(5, 5, 5, 5)
 
             label_layout = QtWidgets.QVBoxLayout(outer_widget)
             label_layout.setContentsMargins(0, 0, 0, 0)
+            label_layout.setSpacing(0)
             label_layout.addWidget(title_label)
             label_layout.addWidget(message_label)
             layout.addWidget(outer_widget)
@@ -964,7 +821,8 @@ class GUI_PyQt(QtCore.QObject):
         elif button_num > 0:
             button_widget = QtWidgets.QWidget(container)
             button_layout = QtWidgets.QHBoxLayout(button_widget)
-            button_layout.setContentsMargins(0, 5, 0, 5)
+            button_layout.setContentsMargins(5, 10, 5, 10)
+            button_layout.setSpacing(10)
             if not button_label:
                 button_label = ["OK", "Cancel"]
             buttons = []
