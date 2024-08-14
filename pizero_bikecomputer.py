@@ -34,12 +34,15 @@ def main():
     with timers[4]:
         if config.G_GUI_MODE == "PyQt":
             from modules import gui_pyqt
+        elif config.G_GUI_MODE == "QML":
+            from modules import gui_qml
+        elif config.G_GUI_MODE == "Kivy":
+            from modules import gui_kivy
         else:
             raise ValueError(f"{config.G_GUI_MODE} mode not supported")
 
     with timers[5]:
         from modules import logger_core
-
         logger = logger_core.LoggerCore(config)
         config.set_logger(logger)
 
@@ -50,6 +53,10 @@ def main():
 
     if config.G_GUI_MODE == "PyQt":
         gui_pyqt.GUI_PyQt(config)
+    elif config.G_GUI_MODE == "QML":
+        gui_qml.GUI_QML(config)
+    elif config.G_GUI_MODE == "Kivy":
+        gui_kivy.GUI_Kivy(config)
 
 
 if __name__ == "__main__":

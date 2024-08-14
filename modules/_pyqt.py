@@ -1,28 +1,57 @@
 import os
 
-__all__ = ["USE_PYQT6", "QtCore", "QtWidgets", "QtGui", "pg", "qasync"]
+__all__ = ["USE_PYQT6", "QtCore", "QtWidgets", "QtGui", "pg", "qasync", "Signal", "Slot"]
 
 USE_PYQT6 = False
-try:
-    import PyQt6.QtCore as QtCore
-    import PyQt6.QtWidgets as QtWidgets
-    import PyQt6.QtGui as QtGui
+USE_PYQT5 = False
+USE_PYSIDE6 = False
 
-    USE_PYQT6 = True
+#PySide6(PyQt/QML) or PyQt6(PyQt/QML) or PyQt5(PyQt)
+try:
+    # Test for PySide6
+    raise ImportError
+    import PySide6.QtCore as QtCore
+    import PySide6.QtGui as QtGui
+    import PySide6.QtWidgets as QtWidgets
+    #import PySide6.QtQml as QtQml # for QML
+    #import PySide6.QtQuick as QtQuick # for QML
+    USE_PYSIDE6 = True
 except (ImportError, ModuleNotFoundError):
-    import PyQt5.QtCore as QtCore
-    import PyQt5.QtWidgets as QtWidgets
-    import PyQt5.QtGui as QtGui
+    try:
+        import PyQt6.QtCore as QtCore
+        import PyQt6.QtWidgets as QtWidgets
+        import PyQt6.QtGui as QtGui
+        #import PyQt6.QtQml as QtQml # for QML
+        #import PyQt6.QtQuick as QtQuick # for QML
+        USE_PYQT6 = True
+    except (ImportError, ModuleNotFoundError):
+        import PyQt5.QtCore as QtCore
+        import PyQt5.QtWidgets as QtWidgets
+        import PyQt5.QtGui as QtGui
+        USE_PYQT5 = True
+# print(f"{USE_PYSIDE6=}, {USE_PYQT6=}, {USE_PYQT5=}")
+
+if USE_PYSIDE6:
+    Signal = QtCore.Signal
+    QtCore.QT_VERSION_STR = QtCore.__version__
+    Slot = QtCore.Slot
+else:
+    Signal = QtCore.pyqtSignal
+    Slot = QtCore.pyqtSlot
 
 # import qasync once pyQt is imported so the correct version is used (it starts with PyQt5 then tries PyQt6)
 import qasync  # noqa
 
 # make sure the version is correct in case the underlying code for qasync changed
-if USE_PYQT6 and qasync.QtModuleName != "PyQt6":
+if USE_PYSIDE6 and qasync.QtModuleName != "PySide6":
     raise AssertionError(
         f"Wrong version of PyQt6 used for qasync: {qasync.QtModuleName}"
     )
-elif not USE_PYQT6 and qasync.QtModuleName != "PyQt5":
+elif USE_PYQT6 and qasync.QtModuleName != "PyQt6":
+    raise AssertionError(
+        f"Wrong version of PyQt6 used for qasync: {qasync.QtModuleName}"
+    )
+elif USE_PYQT5 and qasync.QtModuleName != "PyQt5":
     raise AssertionError(
         f"Wrong version of PyQt5 used for qasync: {qasync.QtModuleName}"
     )
@@ -52,6 +81,7 @@ QT_NO_MODIFIER = (
 )
 
 QT_ALIGN_LEFT = QtCore.Qt.AlignmentFlag.AlignLeft if USE_PYQT6 else QtCore.Qt.AlignLeft
+QT_ALIGN_RIGHT = QtCore.Qt.AlignmentFlag.AlignRight if USE_PYQT6 else QtCore.Qt.AlignRight
 QT_ALIGN_CENTER = (
     QtCore.Qt.AlignmentFlag.AlignCenter if USE_PYQT6 else QtCore.Qt.AlignCenter
 )

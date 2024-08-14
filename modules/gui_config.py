@@ -1,4 +1,7 @@
 import oyaml as yaml
+import time
+
+import numpy as np
 
 
 class GUI_Config:
@@ -342,3 +345,34 @@ class GUI_Config:
                 self.layout = yaml.safe_load(text)
         except FileNotFoundError:
             pass
+    
+    def format_text(self, name, value, G_STOPWATCH_STATUS, itemformat):
+        text = "-"
+        if value is None:
+            pass
+        elif isinstance(value, str):
+            text = value
+        elif np.isnan(value):
+            pass
+        elif name.startswith("Speed") or "SPD" in name:
+            text = f"{(value * 3.6):{itemformat}}"  # m/s to km/h
+        elif "Dist" in name or "DIST" in name:
+            text = f"{(value / 1000):{itemformat}}"  # m to km
+        elif "Work" in name or "WRK" in name:
+            text = f"{(value / 1000):{itemformat}}"  # j to kj
+        elif (
+            "Grade" in name or "Glide" in name
+        ) and G_STOPWATCH_STATUS != "START":
+            text = "-"
+        elif itemformat == "timer":
+            # fmt = '%H:%M:%S' #default (too long)
+            fmt = "%H:%M"
+            if value < 3600:
+                fmt = "%M:%S"
+            text = time.strftime(fmt, time.gmtime(value))
+        elif itemformat == "time":
+            text = time.strftime("%H:%M")
+        else:
+            text = f"{value:{itemformat}}"
+
+        return text

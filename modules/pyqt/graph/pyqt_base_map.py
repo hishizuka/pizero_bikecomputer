@@ -1,6 +1,6 @@
 import numpy as np
 
-from modules._pyqt import QtCore, pg, qasync
+from modules._pyqt import QtCore, pg, qasync, Signal
 from modules.pyqt.pyqt_screen_widget import ScreenWidget
 from .pyqt_map_button import (
     ZoomInButton,
@@ -29,13 +29,13 @@ class BaseMapWidget(ScreenWidget):
     course_loaded = False
 
     # signal for physical button
-    signal_move_x_plus = QtCore.pyqtSignal()
-    signal_move_x_minus = QtCore.pyqtSignal()
-    signal_move_y_plus = QtCore.pyqtSignal()
-    signal_move_y_minus = QtCore.pyqtSignal()
-    signal_zoom_plus = QtCore.pyqtSignal()
-    signal_zoom_minus = QtCore.pyqtSignal()
-    signal_change_move = QtCore.pyqtSignal()
+    signal_move_x_plus = Signal()
+    signal_move_x_minus = Signal()
+    signal_move_y_plus = Signal()
+    signal_move_y_minus = Signal()
+    signal_zoom_plus = Signal()
+    signal_zoom_minus = Signal()
+    signal_change_move = Signal()
 
     # for change_move
     move_adjust_mode = False

@@ -4,6 +4,7 @@ from modules._pyqt import (
     QtCore,
     QtWidgets,
     QtGui,
+    Slot,
 )
 from modules.pyqt.components import icons
 
@@ -123,13 +124,13 @@ class MenuButton(QtWidgets.QPushButton):
         self.status = status
         self.right_icon.toggle(status, self.hasFocus())
 
-    @QtCore.pyqtSlot()
+    @Slot()
     def loading_start(self):
         if not self.status:
             self.status = True
             self.loading_movie.start()
 
-    @QtCore.pyqtSlot()
+    @Slot()
     def loading_stop(self, res):
         self.loading_movie.stop()
         self.right_icon.set_icon(self.res_img[res])
@@ -143,7 +144,7 @@ class MenuButton(QtWidgets.QPushButton):
         if self.loading_movie.loopCount() != -1:
             self.loading_movie.finished.connect(self.start)
 
-    @QtCore.pyqtSlot(int)
+    @Slot(int)
     def on_frameChanged(self, frameNumber):
         self.right_icon.set_icon(QtGui.QIcon(self.loading_movie.currentPixmap()))
 

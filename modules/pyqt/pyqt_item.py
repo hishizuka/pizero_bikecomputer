@@ -81,32 +81,14 @@ class Item(QtWidgets.QVBoxLayout):
         self.update_value(np.nan)
 
     def update_value(self, value):
-        if value is None:
-            self.value.setText("-")
-        elif isinstance(value, str):
-            self.value.setText(value)
-        elif np.isnan(value):
-            self.value.setText("-")
-        elif self.name.startswith("Speed") or "SPD" in self.name:
-            self.value.setText(f"{(value * 3.6):{self.itemformat}}")  # m/s to km/h
-        elif "Dist" in self.name or "DIST" in self.name:
-            self.value.setText(f"{(value / 1000):{self.itemformat}}")  # m to km
-        elif "Work" in self.name or "WRK" in self.name:
-            self.value.setText(f"{(value / 1000):{self.itemformat}}")  # j to kj
-        elif (
-            "Grade" in self.name or "Glide" in self.name
-        ) and self.config.G_STOPWATCH_STATUS != "START":
-            self.value.setText("-")
-        elif self.itemformat == "timer":
-            # fmt = '%H:%M:%S' #default (too long)
-            fmt = "%H:%M"
-            if value < 3600:
-                fmt = "%M:%S"
-            self.value.setText(time.strftime(fmt, time.gmtime(value)))
-        elif self.itemformat == "time":
-            self.value.setText(time.strftime("%H:%M"))
-        else:
-            self.value.setText(f"{value:{self.itemformat}}")
+        self.value.setText(
+            self.config.gui.gui_config.format_text(
+                self.name,
+                value,
+                self.config.G_STOPWATCH_STATUS,
+                self.itemformat,
+            )
+        )
         
         if self.unittext != "":
             if self.font_size_unit_set:

@@ -7,6 +7,7 @@ from modules._pyqt import (
     QtCore,
     QtWidgets,
     qasync,
+    Signal,
 )
 from modules.pyqt.components import icons, topbar
 
@@ -290,7 +291,7 @@ class ListWidget(MenuWidget):
 
 
 class ListItemWidget(QtWidgets.QWidget):
-    enter_signal = QtCore.pyqtSignal()
+    enter_signal = Signal()
 
     def get_styles(self):
         border_style = "border-bottom: 1px solid #AAAAAA;"
@@ -402,11 +403,7 @@ class ConnectivityMenuWidget(MenuWidget):
     def setup_menu(self):
         button_conf = (
             # Name(page_name), button_attribute, connected functions, layout
-            (
-                "Auto BT Tethering",
-                "toggle",
-                lambda: self.bt_auto_tethering(True),
-            ),
+            ("Auto BT Tethering","toggle",lambda: self.bt_auto_tethering(True)),
             ("Select BT device", "submenu", self.bt_tething),
             ("Live Track", "toggle", lambda: self.onoff_live_track(True)),
             ("", None, None),
@@ -463,6 +460,7 @@ class ConnectivityMenuWidget(MenuWidget):
             self.config.state.set_value(
                 "G_AUTO_BT_TETHERING", self.config.G_AUTO_BT_TETHERING, force_apply=True
             )
+            self.config.network.reset_bt_error_status()
         self.buttons["Auto BT Tethering"].change_toggle(self.config.G_AUTO_BT_TETHERING)
 
         self.buttons["Select BT device"].onoff_button(self.config.G_AUTO_BT_TETHERING)
