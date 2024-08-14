@@ -90,6 +90,8 @@ class SensorCore:
     ]
     lp = 4
 
+    status_quit = False
+
     def __init__(self, config):
         self.config = config
         self.values["GPS"] = {}
@@ -148,6 +150,8 @@ class SensorCore:
         self.sensor_i2c.start_coroutine()
 
     async def quit(self):
+        self.status_quit = True
+        self.sensor_i2c.quit()
         self.sensor_ant.quit()
         await self.sensor_gps.quit()
         self.sensor_gpio.quit()
@@ -185,455 +189,440 @@ class SensorCore:
         self.wait_time = self.config.G_SENSOR_INTERVAL
         self.actual_loop_interval = self.config.G_SENSOR_INTERVAL
 
-        try:
-            while True:
-                await asyncio.sleep(self.wait_time)
-                start_time = datetime.now()
-                # print(start_time, self.wait_time)
+        while not self.status_quit:
+            await asyncio.sleep(self.wait_time)
+            start_time = datetime.now()
+            # print(start_time, self.wait_time)
 
-                time_profile = [start_time,]
-                hr = spd = cdc = pwr = temperature = self.config.G_ANT_NULLVALUE
-                grade = grade_spd = glide = self.config.G_ANT_NULLVALUE
-                ttlwork_diff = 0
-                dst_diff = {"ANT+": 0, "GPS": 0, "USE": 0}
-                alt_diff = {"ANT+": 0, "GPS": 0, "USE": 0}
-                dst_diff_spd = {"ANT+": 0}
-                alt_diff_spd = {"ANT+": 0}
-                grade_use = {"ANT+": False, "GPS": False}
-                time_profile.append(datetime.now())
-                # self.sensor_i2c.update()
-                # self.sensor_gps.update()
-                self.sensor_ant.update()  # for dummy
+            time_profile = [start_time,]
+            hr = spd = cdc = pwr = temperature = self.config.G_ANT_NULLVALUE
+            grade = grade_spd = glide = self.config.G_ANT_NULLVALUE
+            ttlwork_diff = 0
+            dst_diff = {"ANT+": 0, "GPS": 0, "USE": 0}
+            alt_diff = {"ANT+": 0, "GPS": 0, "USE": 0}
+            dst_diff_spd = {"ANT+": 0}
+            alt_diff_spd = {"ANT+": 0}
+            grade_use = {"ANT+": False, "GPS": False}
+            time_profile.append(datetime.now())
+            # self.sensor_i2c.update()
+            # self.sensor_gps.update()
+            self.sensor_ant.update()  # for dummy
 
-                now_time = datetime.now()
-                time_profile.append(now_time)
+            now_time = datetime.now()
+            time_profile.append(now_time)
 
-                ant_id_type = self.config.G_ANT["ID_TYPE"]
-                delta = {
-                    "PWR": {0x10: float("inf"), 0x11: float("inf"), 0x12: float("inf")}
-                }
-                for key in ["HR", "SPD", "CDC", "TEMP", "GPS"]:
-                    delta[key] = float("inf")
-                # need for ANT+ ID update
-                for key in ["HR", "SPD", "CDC", "PWR", "TEMP"]:
-                    if (
-                        self.config.G_ANT["USE"][key]
-                        and ant_id_type[key] in self.values["ANT+"]
-                    ):
-                        v[key] = self.values["ANT+"][ant_id_type[key]]
+            ant_id_type = self.config.G_ANT["ID_TYPE"]
+            delta = {
+                "PWR": {0x10: float("inf"), 0x11: float("inf"), 0x12: float("inf")}
+            }
+            for key in ["HR", "SPD", "CDC", "TEMP"]:
+                delta[key] = float("inf")
+            # need for ANT+ ID update
+            for key in ["HR", "SPD", "CDC", "PWR", "TEMP"]:
+                if (
+                    self.config.G_ANT["USE"][key]
+                    and ant_id_type[key] in self.values["ANT+"]
+                ):
+                    v[key] = self.values["ANT+"][ant_id_type[key]]
 
-                # make intervals from timestamp
-                for key in ["HR", "SPD", "CDC", "TEMP"]:
-                    if not self.config.G_ANT["USE"][key]:
-                        continue
-                    if "timestamp" in v[key]:
-                        delta[key] = (now_time - v[key]["timestamp"]).total_seconds()
-                    # override:
-                    # cadence from power
-                    if self.config.G_ANT["TYPE"][key] == 0x0B and key == "CDC":
-                        for page in [0x12, 0x10]:
-                            if not "timestamp" in v[key][page]:
-                                continue
-                            delta[key] = (
-                                now_time - v[key][page]["timestamp"]
-                            ).total_seconds()
-                            break
-                    # speed from power
-                    elif self.config.G_ANT["TYPE"][key] == 0x0B and key == "SPD":
-                        if not "timestamp" in v[key][0x11]:
+            # make intervals from timestamp
+            for key in ["HR", "SPD", "CDC", "TEMP"]:
+                if not self.config.G_ANT["USE"][key]:
+                    continue
+                if "timestamp" in v[key]:
+                    delta[key] = (now_time - v[key]["timestamp"]).total_seconds()
+                # override:
+                # cadence from power
+                if self.config.G_ANT["TYPE"][key] == 0x0B and key == "CDC":
+                    for page in [0x12, 0x10]:
+                        if not "timestamp" in v[key][page]:
                             continue
                         delta[key] = (
-                            now_time - v[key][0x11]["timestamp"]
+                            now_time - v[key][page]["timestamp"]
                         ).total_seconds()
-                # timestamp(power)
-                if self.config.G_ANT["USE"]["PWR"]:
-                    for page in [0x12, 0x11, 0x10]:
-                        if not "timestamp" in v["PWR"][page]:
-                            continue
-                        delta["PWR"][page] = (
-                            now_time - v["PWR"][page]["timestamp"]
-                        ).total_seconds()
-                if "timestamp" in v["GPS"]:
-                    delta["GPS"] = (now_time - v["GPS"]["timestamp"]).total_seconds()
-
-                # HeartRate : ANT+
-                if self.config.G_ANT["USE"]["HR"]:
-                    if delta["HR"] < self.time_threshold["HR"]:
-                        hr = v["HR"]["heart_rate"]
-
-                # Cadence : ANT+
-                if self.config.G_ANT["USE"]["CDC"]:
-                    cdc = 0
-                    # get from cadence or speed&cadence sensor
-                    if self.config.G_ANT["TYPE"]["CDC"] in [0x79, 0x7A]:
-                        if delta["CDC"] < self.time_threshold["CDC"]:
-                            cdc = v["CDC"]["cadence"]
-                    # get from powermeter
-                    elif self.config.G_ANT["TYPE"]["CDC"] == 0x0B:
-                        for page in [0x12, 0x10]:
-                            if not "timestamp" in v["CDC"][page]:
-                                continue
-                            if delta["CDC"] < self.time_threshold["CDC"]:
-                                cdc = v["CDC"][page]["cadence"]
-                                break
-
-                # Power : ANT+(assumed crank type > wheel type)
-                if self.config.G_ANT["USE"]["PWR"]:
-                    pwr = 0
-                    # page18 > 17 > 16, 16simple is not used
-                    for page in [0x12, 0x11, 0x10]:
-                        if delta["PWR"][page] < self.time_threshold["PWR"]:
-                            pwr = v["PWR"][page]["power"]
-                            break
-
-                # Speed : ANT+(SPD&CDC, (PWR)) > GPS
-                if self.config.G_ANT["USE"]["SPD"]:
-                    spd = 0
-                    if self.config.G_ANT["TYPE"]["SPD"] in [0x79, 0x7B]:
-                        if delta["SPD"] < self.time_threshold["SPD"]:
-                            spd = v["SPD"]["speed"]
-                    elif self.config.G_ANT["TYPE"]["SPD"] == 0x0B:
-                        if delta["SPD"] < self.time_threshold["SPD"]:
-                            spd = v["SPD"][0x11]["speed"]
-                    # complement from GPS speed when I2C acc sensor is available (using moving status)
-                    if (
-                        delta["SPD"] > self.time_threshold["SPD"]
-                        and spd == 0
-                        and v["I2C"]["m_stat"] == 1
-                        and v["GPS"]["speed"] > 0
-                    ):
-                        spd = v["GPS"]["speed"]
-                        # print("speed from GPS: delta {}s, {:.1f}km/h".format(delta['SPD'], v['GPS']['speed']*3.6))
-                elif "timestamp" in v["GPS"]:
-                    spd = 0
-                    if (
-                        not np.isnan(v["GPS"]["speed"])
-                        and delta["GPS"] < self.time_threshold["SPD"]
-                    ):
-                        spd = v["GPS"]["speed"]
-
-                # Distance: ANT+(SPD, (PWR)) > GPS
-                if self.config.G_ANT["USE"]["SPD"]:
-                    # normal speed meter
-                    if self.config.G_ANT["TYPE"]["SPD"] in [0x79, 0x7B]:
-                        if pre_dst["ANT+"] < v["SPD"]["distance"]:
-                            dst_diff["ANT+"] = v["SPD"]["distance"] - pre_dst["ANT+"]
-                        pre_dst["ANT+"] = v["SPD"]["distance"]
-                    elif self.config.G_ANT["TYPE"]["SPD"] == 0x0B:
-                        if pre_dst["ANT+"] < v["SPD"][0x11]["distance"]:
-                            dst_diff["ANT+"] = (
-                                v["SPD"][0x11]["distance"] - pre_dst["ANT+"]
-                            )
-                        pre_dst["ANT+"] = v["SPD"][0x11]["distance"]
-                    dst_diff["USE"] = dst_diff["ANT+"]
-                    grade_use["ANT+"] = True
-                if "timestamp" in v["GPS"]:
-                    if pre_dst["GPS"] < v["GPS"]["distance"]:
-                        dst_diff["GPS"] = v["GPS"]["distance"] - pre_dst["GPS"]
-                    pre_dst["GPS"] = v["GPS"]["distance"]
-                    if not self.config.G_ANT["USE"]["SPD"] and dst_diff["GPS"] > 0:
-                        dst_diff["USE"] = dst_diff["GPS"]
-                        grade_use["GPS"] = True
-                    # ANT+ sensor is not connected from the beginning of the ride
-                    elif self.config.G_ANT["USE"]["SPD"]:
-                        if (
-                            delta["SPD"] == np.inf
-                            and dst_diff["ANT+"] == 0
-                            and dst_diff["GPS"] > 0
-                        ):
-                            dst_diff["USE"] = dst_diff["GPS"]
-                            grade_use["ANT+"] = False
-                            grade_use["GPS"] = True
-
-                # Total Power: ANT+
-                if self.config.G_ANT["USE"]["PWR"]:
-                    # both type are not exist in same ID(0x12:crank, 0x11:wheel)
-                    # if 0x12 or 0x11 exists, never take 0x10
-                    for page in [0x12, 0x11, 0x10]:
-                        if "timestamp" in v["PWR"][page]:
-                            if (
-                                pre_ttlwork["ANT+"]
-                                < v["PWR"][page]["accumulated_power"]
-                            ):
-                                ttlwork_diff = (
-                                    v["PWR"][page]["accumulated_power"]
-                                    - pre_ttlwork["ANT+"]
-                                )
-                            pre_ttlwork["ANT+"] = v["PWR"][page]["accumulated_power"]
-                            # never take other powermeter
-                            break
-
-                # Temperature : ANT+
-                if self.config.G_ANT["USE"]["TEMP"]:
-                    if delta["TEMP"] < self.time_threshold["TEMP"]:
-                        temperature = v["TEMP"]["temperature"]
-                elif not np.isnan(v["I2C"]["temperature"]):
-                    temperature = v["I2C"]["temperature"]
-
-                # altitude
-                if not np.isnan(v["I2C"]["pre_altitude"]):
-                    alt = v["I2C"]["altitude"]
-                    # for grade (distance base)
-                    for key in ["ANT+", "GPS"]:
-                        if dst_diff[key] > 0:
-                            alt_diff[key] = alt - pre_alt[key]
-                        pre_alt[key] = alt
-                    if self.config.G_ANT["USE"]["SPD"]:
-                        alt_diff["USE"] = alt_diff["ANT+"]
-                    elif not self.config.G_ANT["USE"]["SPD"] and dst_diff["GPS"] > 0:
-                        alt_diff["USE"] = alt_diff["GPS"]
-                    # for grade (speed base)
-                    if self.config.G_ANT["USE"]["SPD"]:
-                        if dst_diff["ANT+"] > 0:
-                            alt_diff_spd["ANT+"] = alt - pre_alt_spd["ANT+"]
-                        pre_alt_spd["ANT+"] = alt
-
-                # dem_altitude
-                if self.config.G_USE_DEM_TILE:
-                    self.values["integrated"][
-                        "dem_altitude"
-                    ] = await self.config.api.get_altitude(
-                        [v["GPS"]["lon"], v["GPS"]["lat"]]
-                    )
-
-                # wind
-                if self.config.G_USE_WIND_DATA_SOURCE:
-                    (
-                        self.values["integrated"]["wind_speed"], 
-                        self.values["integrated"]["wind_direction"],
-                        self.values["integrated"]["wind_direction_str"],
-                        self.values["integrated"]["headwind"]
-                    ) = await self.config.api.get_wind(
-                        [v["GPS"]["lon"], v["GPS"]["lat"]], v["GPS"]["track"]
-                    )
-
-                # grade (distance base)
-                if dst_diff["USE"] > 0:
-                    for key in ["alt_diff", "dst_diff"]:
-                        self.values["integrated"][key][0:-1] = self.values[
-                            "integrated"
-                        ][key][1:]
-                        self.values["integrated"][key][-1] = eval(key + "['USE']")
-                        # diff_sum[key] = np.mean(self.values['integrated'][key][-self.grade_window_size:])
-                        diff_sum[key] = np.nansum(
-                            self.values["integrated"][key][-self.grade_window_size :]
-                        )
-                    # set grade
-                    gl = self.config.G_ANT_NULLVALUE
-                    gr = self.config.G_ANT_NULLVALUE
-                    x = self.config.G_ANT_NULLVALUE
-                    y = diff_sum["alt_diff"]
-                    if grade_use["ANT+"]:
-                        x = math.sqrt(
-                            abs(diff_sum["dst_diff"] ** 2 - diff_sum["alt_diff"] ** 2)
-                        )
-                    elif grade_use["GPS"]:
-                        x = diff_sum["dst_diff"]
-                    if x > 0:
-                        # gr = int(round(100 * y / x))
-                        gr = self.conv_grade(100 * y / x)
-                    if y != 0.0:
-                        gl = int(round(-1 * x / y))
-                    grade = pre_grade = gr
-                    glide = pre_glide = gl
-                # for sometimes ANT+ distance is 0 although status is running
-                elif dst_diff["USE"] == 0 and self.config.G_STOPWATCH_STATUS == "START":
-                    grade = pre_grade
-                    glide = pre_glide
-
-                # grade (speed base)
-                if self.config.G_ANT["USE"]["SPD"]:
-                    dst_diff_spd["ANT+"] = spd * self.actual_loop_interval
-                    for key in ["alt_diff_spd", "dst_diff_spd"]:
-                        self.values["integrated"][key][0:-1] = self.values[
-                            "integrated"
-                        ][key][1:]
-                        self.values["integrated"][key][-1] = eval(key + "['ANT+']")
-                        diff_sum[key] = np.mean(
-                            self.values["integrated"][key][-self.grade_window_size :]
-                        )
-                        # diff_sum[key] = np.nansum(self.values['integrated'][key][-self.grade_window_size:])
-                    # set grade
-                    x = diff_sum["dst_diff_spd"] ** 2 - diff_sum["alt_diff_spd"] ** 2
-                    y = diff_sum["alt_diff_spd"]
-                    gr = self.config.G_ANT_NULLVALUE
-                    if x > 0:
-                        x = math.sqrt(x)
-                        gr = self.conv_grade(100 * y / x)
-                    grade_spd = pre_grade_spd = gr
-                # for sometimes speed sensor value is missing in running
-                elif (
-                    dst_diff_spd["ANT+"] == 0
-                    and self.config.G_STOPWATCH_STATUS == "START"
-                ):
-                    grade_spd = pre_grade_spd
-
-                self.values["integrated"]["heart_rate"] = hr
-                self.values["integrated"]["speed"] = spd
-                self.values["integrated"]["cadence"] = cdc
-                self.values["integrated"]["power"] = pwr
-                self.values["integrated"]["distance"] += dst_diff["USE"]
-                self.values["integrated"]["accumulated_power"] += ttlwork_diff
-                self.values["integrated"]["grade"] = grade
-                self.values["integrated"]["grade_spd"] = grade_spd
-                self.values["integrated"]["glide_ratio"] = glide
-                self.values["integrated"]["temperature"] = temperature
-                
-                #set self.values["integrated"]["w_prime_balance_normalized"] etc
-                if self.config.G_ANT["USE"]["PWR"]:
-                    self.calc_w_prime_balance(pwr)
-
-                for g in self.graph_keys:
-                    self.values["integrated"][g][:-1] = self.values["integrated"][g][1:]
-                self.values["integrated"]["hr_graph"][-1] = hr
-                self.values["integrated"]["power_graph"][-1] = pwr
-                self.values["integrated"]["w_bal_graph"][-1] = self.values[
-                    "integrated"
-                ]["w_prime_balance_normalized"]
-                self.values["integrated"]["altitude_gps_graph"][-1] = v["GPS"]["alt"]
-                self.values["integrated"]["altitude_graph"][-1] = v["I2C"]["altitude"]
-
-                # average power, heart_rate
-                if self.config.G_ANT["USE"]["PWR"] and not np.isnan(pwr):
-                    self.get_ave_values("power", pwr)
-                if self.config.G_ANT["USE"]["HR"] and not np.isnan(hr):
-                    self.get_ave_values("heart_rate", hr)
-
-                time_profile.append(datetime.now())
-
-                # toggle auto stop
-                # ANT+ or GPS speed is available
-                if not np.isnan(spd) and self.config.G_MANUAL_STATUS == "START":
-                    # speed from ANT+ or GPS
-                    flag_spd = False
-                    if spd >= self.config.G_AUTOSTOP_CUTOFF:
-                        flag_spd = True
-
-                    # use moving status of accelerometer because of excluding erroneous speed values when stopping
-                    flag_moving = False
-                    if v["I2C"]["m_stat"] == 1:
-                        flag_moving = True
-
-                    # flag_moving is not considered (set True) as follows,
-                    # accelerometer is not available (nan)
-                    # ANT+ speed sensor is available
-                    if (
-                        np.isnan(v["I2C"]["m_stat"])
-                        or self.config.G_ANT["USE"]["SPD"]
-                        or self.config.G_DUMMY_OUTPUT
-                    ):
-                        flag_moving = True
-
-                    if (
-                        self.config.G_STOPWATCH_STATUS == "STOP"
-                        and flag_spd
-                        and flag_moving
-                        and self.config.logger is not None
-                    ):
-                        self.config.logger.start_and_stop()
-                    elif (
-                        self.config.G_STOPWATCH_STATUS == "START"
-                        and (not flag_spd or not flag_moving)
-                        and self.config.logger is not None
-                    ):
-                        self.config.logger.start_and_stop()
-
-                # ANT+ or GPS speed is not available
-                elif np.isnan(spd) and self.config.G_MANUAL_STATUS == "START":
-                    # stop recording if speed is broken
-                    if (
-                        (self.config.G_ANT["USE"]["SPD"] or "timestamp" in v["GPS"])
-                        and self.config.G_STOPWATCH_STATUS == "START"
-                        and self.config.logger is not None
-                    ):
-                        self.config.logger.start_and_stop()
-
-                # auto backlight & brake light with brightness
-                # auto_backlight = False
-                if (
-                    self.config.display.use_auto_backlight
-                    and not np.isnan(v["I2C"]["light"])
-                ):
-                    self.auto_backlight_brightness[:-1] = self.auto_backlight_brightness[1:]
-                    self.auto_backlight_brightness[-1] = v["I2C"]["light"]
-                    brightness = int(np.mean(self.auto_backlight_brightness))
-
-                    if brightness <= self.config.G_AUTO_BACKLIGHT_CUTOFF:
-                        self.config.display.set_brightness(3) # TODO lowest backlight value
-                        self.sensor_ant.set_light_mode("FLASH_LOW", auto=True, auto_id="brightness")
-                        # auto_backlight = True
-                    else:
-                        self.config.display.set_brightness(0)
-                        self.sensor_ant.set_light_mode("OFF", auto=True, auto_id="brightness")
-
-                # brake light with speed
-                self.brakelight_spd[:-1] = self.brakelight_spd[1:]
-                self.brakelight_spd[-1] = self.values["integrated"]["speed"] 
-                if (
-                    all((s < self.brakelight_spd_cutoff for s in self.brakelight_spd)) 
-                    or (
-                        self.values["integrated"]["speed"] > self.brakelight_spd_cutoff
-                        and self.brakelight_spd[0] - self.brakelight_spd[-1] > self.brakelight_spd[0]*0.05
-                    )
-                ):
-                    self.sensor_ant.set_light_mode("FLASH_LOW", auto=True, auto_id="break_light")
-                    # auto_backlight = True
-                else:
-                    self.sensor_ant.set_light_mode("OFF", auto=True, auto_id="break_light")
-
-                # if auto_backlight:
-                #     self.sensor_ant.set_light_mode("FLASH_LOW", auto=True, auto_id="sensor_core")
-                # else:
-                #     self.sensor_ant.set_light_mode("OFF", auto=True, auto_id="sensor_core")
-
-                # cpu and memory
-                if _IMPORT_PSUTIL:
-                    self.values["integrated"]["cpu_percent"] = int(
-                        self.process.cpu_percent(interval=None)
-                    )
-                    self.values["integrated"][
-                        "CPU_MEM"
-                    ] = "{0:^2.0f}% ({1}) / ALL {2:^2.0f}%,  {3:^2.0f}%".format(
-                        self.values["integrated"][
-                            "cpu_percent"
-                        ],  # self.process.cpu_percent(interval=None),
-                        self.process.num_threads(),
-                        psutil.cpu_percent(interval=None),
-                        self.process.memory_percent(),
-                    )
-
-                # adjust loop time
-                time_profile.append(datetime.now())
-                sec_diff = []
-                time_progile_sec = 0
-                for i in range(len(time_profile)):
-                    if i == 0:
+                        break
+                # speed from power
+                elif self.config.G_ANT["TYPE"][key] == 0x0B and key == "SPD":
+                    if not "timestamp" in v[key][0x11]:
                         continue
-                    sec_diff.append(
-                        "{0:.6f}".format(
-                            (time_profile[i] - time_profile[i - 1]).total_seconds()
-                        )
-                    )
-                    time_progile_sec += (
-                        time_profile[i] - time_profile[i - 1]
+                    delta[key] = (
+                        now_time - v[key][0x11]["timestamp"]
                     ).total_seconds()
-                if time_progile_sec > 1.5 * self.config.G_SENSOR_INTERVAL:
-                    app_logger.warning(
-                        f"too long loop time: {datetime.now().strftime('%Y%m%d %H:%M:%S')}, sec_diff: {sec_diff}"
-                    )
+            # timestamp(power)
+            if self.config.G_ANT["USE"]["PWR"]:
+                for page in [0x12, 0x11, 0x10]:
+                    if not "timestamp" in v["PWR"][page]:
+                        continue
+                    delta["PWR"][page] = (
+                        now_time - v["PWR"][page]["timestamp"]
+                    ).total_seconds()
+            if "timestamp" in v["GPS"]:
+                delta["GPS"] = (now_time - v["GPS"]["timestamp"]).total_seconds()
 
-                loop_time = (datetime.now() - start_time).total_seconds()
-                d1, d2 = divmod(loop_time, self.config.G_SENSOR_INTERVAL)
-                if d1 > self.config.G_SENSOR_INTERVAL * 10:  # [s]
-                    app_logger.warning(
-                        f"too long loop_time({self.__class__.__name__}):{loop_time:.2f}, interval:{self.config.G_SENSOR_INTERVAL:.1f}"
+            # HeartRate : ANT+
+            if self.config.G_ANT["USE"]["HR"]:
+                if delta["HR"] < self.time_threshold["HR"]:
+                    hr = v["HR"]["heart_rate"]
+
+            # Cadence : ANT+
+            if self.config.G_ANT["USE"]["CDC"]:
+                cdc = 0
+                # get from cadence or speed&cadence sensor
+                if self.config.G_ANT["TYPE"]["CDC"] in [0x79, 0x7A]:
+                    if delta["CDC"] < self.time_threshold["CDC"]:
+                        cdc = v["CDC"]["cadence"]
+                # get from powermeter
+                elif self.config.G_ANT["TYPE"]["CDC"] == 0x0B:
+                    for page in [0x12, 0x10]:
+                        if not "timestamp" in v["CDC"][page]:
+                            continue
+                        if delta["CDC"] < self.time_threshold["CDC"]:
+                            cdc = v["CDC"][page]["cadence"]
+                            break
+
+            # Power : ANT+(assumed crank type > wheel type)
+            if self.config.G_ANT["USE"]["PWR"]:
+                pwr = 0
+                # page18 > 17 > 16, 16simple is not used
+                for page in [0x12, 0x11, 0x10]:
+                    if delta["PWR"][page] < self.time_threshold["PWR"]:
+                        pwr = v["PWR"][page]["power"]
+                        break
+
+            # Speed : ANT+(SPD&CDC, (PWR)) > GPS
+            if self.config.G_ANT["USE"]["SPD"]:
+                spd = 0
+                if delta["SPD"] < self.time_threshold["SPD"]:
+                    if self.config.G_ANT["TYPE"]["SPD"] in [0x79, 0x7B]:
+                        spd = v["SPD"]["speed"]
+                    elif self.config.G_ANT["TYPE"]["SPD"] == 0x0B:
+                        spd = v["SPD"][0x11]["speed"]
+                # complement from GPS speed when I2C acc sensor is available (using moving status)
+                else:
+                    if v["I2C"]["m_stat"] == 1 and v["GPS"]["speed"] > 0:
+                        spd = v["GPS"]["speed"]
+            elif not np.isnan(v["GPS"]["speed"]):
+                spd = v["GPS"]["speed"]
+
+            # Distance: ANT+(SPD, (PWR)) > GPS
+            if self.config.G_ANT["USE"]["SPD"]:
+                # normal speed meter
+                if self.config.G_ANT["TYPE"]["SPD"] in [0x79, 0x7B]:
+                    if pre_dst["ANT+"] < v["SPD"]["distance"]:
+                        dst_diff["ANT+"] = v["SPD"]["distance"] - pre_dst["ANT+"]
+                    pre_dst["ANT+"] = v["SPD"]["distance"]
+                elif self.config.G_ANT["TYPE"]["SPD"] == 0x0B:
+                    if pre_dst["ANT+"] < v["SPD"][0x11]["distance"]:
+                        dst_diff["ANT+"] = (
+                            v["SPD"][0x11]["distance"] - pre_dst["ANT+"]
+                        )
+                    pre_dst["ANT+"] = v["SPD"][0x11]["distance"]
+                dst_diff["USE"] = dst_diff["ANT+"]
+                grade_use["ANT+"] = True
+            if "timestamp" in v["GPS"]:
+                if pre_dst["GPS"] < v["GPS"]["distance"]:
+                    dst_diff["GPS"] = v["GPS"]["distance"] - pre_dst["GPS"]
+                pre_dst["GPS"] = v["GPS"]["distance"]
+                if not self.config.G_ANT["USE"]["SPD"] and dst_diff["GPS"] > 0:
+                    dst_diff["USE"] = dst_diff["GPS"]
+                    grade_use["GPS"] = True
+                # ANT+ sensor is not connected from the beginning of the ride
+                elif self.config.G_ANT["USE"]["SPD"]:
+                    if (
+                        delta["SPD"] == np.inf
+                        and dst_diff["ANT+"] == 0
+                        and dst_diff["GPS"] > 0
+                    ):
+                        dst_diff["USE"] = dst_diff["GPS"]
+                        grade_use["ANT+"] = False
+                        grade_use["GPS"] = True
+
+            # Total Power: ANT+
+            if self.config.G_ANT["USE"]["PWR"]:
+                # both type are not exist in same ID(0x12:crank, 0x11:wheel)
+                # if 0x12 or 0x11 exists, never take 0x10
+                for page in [0x12, 0x11, 0x10]:
+                    if "timestamp" in v["PWR"][page]:
+                        if (
+                            pre_ttlwork["ANT+"]
+                            < v["PWR"][page]["accumulated_power"]
+                        ):
+                            ttlwork_diff = (
+                                v["PWR"][page]["accumulated_power"]
+                                - pre_ttlwork["ANT+"]
+                            )
+                        pre_ttlwork["ANT+"] = v["PWR"][page]["accumulated_power"]
+                        # never take other powermeter
+                        break
+
+            # Temperature : ANT+
+            if self.config.G_ANT["USE"]["TEMP"]:
+                if delta["TEMP"] < self.time_threshold["TEMP"]:
+                    temperature = v["TEMP"]["temperature"]
+            elif not np.isnan(v["I2C"]["temperature"]):
+                temperature = v["I2C"]["temperature"]
+
+            # altitude
+            if not np.isnan(v["I2C"]["pre_altitude"]):
+                alt = v["I2C"]["altitude"]
+                # for grade (distance base)
+                for key in ["ANT+", "GPS"]:
+                    if dst_diff[key] > 0:
+                        alt_diff[key] = alt - pre_alt[key]
+                    pre_alt[key] = alt
+                if self.config.G_ANT["USE"]["SPD"]:
+                    alt_diff["USE"] = alt_diff["ANT+"]
+                elif not self.config.G_ANT["USE"]["SPD"] and dst_diff["GPS"] > 0:
+                    alt_diff["USE"] = alt_diff["GPS"]
+                # for grade (speed base)
+                if self.config.G_ANT["USE"]["SPD"]:
+                    if dst_diff["ANT+"] > 0:
+                        alt_diff_spd["ANT+"] = alt - pre_alt_spd["ANT+"]
+                    pre_alt_spd["ANT+"] = alt
+
+            # dem_altitude
+            if self.config.G_USE_DEM_TILE:
+                self.values["integrated"][
+                    "dem_altitude"
+                ] = await self.config.api.get_altitude(
+                    [v["GPS"]["lon"], v["GPS"]["lat"]]
+                )
+
+            # wind
+            if self.config.G_USE_WIND_DATA_SOURCE:
+                (
+                    self.values["integrated"]["wind_speed"], 
+                    self.values["integrated"]["wind_direction"],
+                    self.values["integrated"]["wind_direction_str"],
+                    self.values["integrated"]["headwind"]
+                ) = await self.config.api.get_wind(
+                    [v["GPS"]["lon"], v["GPS"]["lat"]], v["GPS"]["track"]
+                )
+
+            # grade (distance base)
+            if dst_diff["USE"] > 0:
+                for key in ["alt_diff", "dst_diff"]:
+                    self.values["integrated"][key][0:-1] = self.values[
+                        "integrated"
+                    ][key][1:]
+                    self.values["integrated"][key][-1] = eval(key + "['USE']")
+                    # diff_sum[key] = np.mean(self.values['integrated'][key][-self.grade_window_size:])
+                    diff_sum[key] = np.nansum(
+                        self.values["integrated"][key][-self.grade_window_size :]
                     )
-                    d1 = d2 = 0
-                self.wait_time = self.config.G_SENSOR_INTERVAL - d2
-                self.actual_loop_interval = (d1 + 1) * self.config.G_SENSOR_INTERVAL
-        except asyncio.CancelledError as e:
-            print(e)
-            #pass
+                # set grade
+                gl = self.config.G_ANT_NULLVALUE
+                gr = self.config.G_ANT_NULLVALUE
+                x = self.config.G_ANT_NULLVALUE
+                y = diff_sum["alt_diff"]
+                if grade_use["ANT+"]:
+                    x = math.sqrt(
+                        abs(diff_sum["dst_diff"] ** 2 - diff_sum["alt_diff"] ** 2)
+                    )
+                elif grade_use["GPS"]:
+                    x = diff_sum["dst_diff"]
+                if x > 0:
+                    # gr = int(round(100 * y / x))
+                    gr = self.conv_grade(100 * y / x)
+                if y != 0.0:
+                    gl = int(round(-1 * x / y))
+                grade = pre_grade = gr
+                glide = pre_glide = gl
+            # for sometimes ANT+ distance is 0 although status is running
+            elif dst_diff["USE"] == 0 and self.config.G_STOPWATCH_STATUS == "START":
+                grade = pre_grade
+                glide = pre_glide
+
+            # grade (speed base)
+            if self.config.G_ANT["USE"]["SPD"]:
+                dst_diff_spd["ANT+"] = spd * self.actual_loop_interval
+                for key in ["alt_diff_spd", "dst_diff_spd"]:
+                    self.values["integrated"][key][0:-1] = self.values[
+                        "integrated"
+                    ][key][1:]
+                    self.values["integrated"][key][-1] = eval(key + "['ANT+']")
+                    diff_sum[key] = np.mean(
+                        self.values["integrated"][key][-self.grade_window_size :]
+                    )
+                    # diff_sum[key] = np.nansum(self.values['integrated'][key][-self.grade_window_size:])
+                # set grade
+                x = diff_sum["dst_diff_spd"] ** 2 - diff_sum["alt_diff_spd"] ** 2
+                y = diff_sum["alt_diff_spd"]
+                gr = self.config.G_ANT_NULLVALUE
+                if x > 0:
+                    x = math.sqrt(x)
+                    gr = self.conv_grade(100 * y / x)
+                grade_spd = pre_grade_spd = gr
+            # for sometimes speed sensor value is missing in running
+            elif (
+                dst_diff_spd["ANT+"] == 0
+                and self.config.G_STOPWATCH_STATUS == "START"
+            ):
+                grade_spd = pre_grade_spd
+
+            self.values["integrated"]["heart_rate"] = hr
+            self.values["integrated"]["speed"] = spd
+            self.values["integrated"]["cadence"] = cdc
+            self.values["integrated"]["power"] = pwr
+            self.values["integrated"]["distance"] += dst_diff["USE"]
+            self.values["integrated"]["accumulated_power"] += ttlwork_diff
+            self.values["integrated"]["grade"] = grade
+            self.values["integrated"]["grade_spd"] = grade_spd
+            self.values["integrated"]["glide_ratio"] = glide
+            self.values["integrated"]["temperature"] = temperature
+            
+            #set self.values["integrated"]["w_prime_balance_normalized"] etc
+            if self.config.G_ANT["USE"]["PWR"]:
+                self.calc_w_prime_balance(pwr)
+
+            for g in self.graph_keys:
+                self.values["integrated"][g][:-1] = self.values["integrated"][g][1:]
+            self.values["integrated"]["hr_graph"][-1] = hr
+            self.values["integrated"]["power_graph"][-1] = pwr
+            self.values["integrated"]["w_bal_graph"][-1] = self.values[
+                "integrated"
+            ]["w_prime_balance_normalized"]
+            self.values["integrated"]["altitude_gps_graph"][-1] = v["GPS"]["alt"]
+            self.values["integrated"]["altitude_graph"][-1] = v["I2C"]["altitude"]
+
+            # average power, heart_rate
+            if self.config.G_ANT["USE"]["PWR"] and not np.isnan(pwr):
+                self.get_ave_values("power", pwr)
+            if self.config.G_ANT["USE"]["HR"] and not np.isnan(hr):
+                self.get_ave_values("heart_rate", hr)
+
+            time_profile.append(datetime.now())
+
+            # toggle auto stop
+            # ANT+ or GPS speed is available
+            if not np.isnan(spd) and self.config.G_MANUAL_STATUS == "START":
+                # speed from ANT+ or GPS
+                flag_spd = False
+                if spd >= self.config.G_AUTOSTOP_CUTOFF:
+                    flag_spd = True
+
+                # use moving status of accelerometer because of excluding erroneous speed values when stopping
+                flag_moving = False
+                if v["I2C"]["m_stat"] == 1:
+                    flag_moving = True
+
+                # flag_moving is not considered (set True) as follows,
+                # accelerometer is not available (nan)
+                # ANT+ speed sensor is available
+                if (
+                    np.isnan(v["I2C"]["m_stat"])
+                    or self.config.G_ANT["USE"]["SPD"]
+                    or self.config.G_DUMMY_OUTPUT
+                ):
+                    flag_moving = True
+
+                if (
+                    self.config.G_STOPWATCH_STATUS == "STOP"
+                    and flag_spd
+                    and flag_moving
+                    and self.config.logger is not None
+                ):
+                    self.config.logger.start_and_stop()
+                elif (
+                    self.config.G_STOPWATCH_STATUS == "START"
+                    and (not flag_spd or not flag_moving)
+                    and self.config.logger is not None
+                ):
+                    self.config.logger.start_and_stop()
+
+            # ANT+ or GPS speed is not available
+            elif np.isnan(spd) and self.config.G_MANUAL_STATUS == "START":
+                # stop recording if speed is broken
+                if (
+                    (self.config.G_ANT["USE"]["SPD"] or "timestamp" in v["GPS"])
+                    and self.config.G_STOPWATCH_STATUS == "START"
+                    and self.config.logger is not None
+                ):
+                    self.config.logger.start_and_stop()
+
+            # auto backlight & brake light with brightness
+            auto_light = False
+            if (
+                self.config.display.use_auto_backlight
+                and not np.isnan(v["I2C"]["light"])
+            ):
+                self.auto_backlight_brightness[:-1] = self.auto_backlight_brightness[1:]
+                self.auto_backlight_brightness[-1] = v["I2C"]["light"]
+                brightness = int(np.mean(self.auto_backlight_brightness))
+
+                if brightness <= self.config.G_AUTO_BACKLIGHT_CUTOFF:
+                    self.config.display.set_brightness(3) # TODO lowest backlight value
+                    auto_light = True
+                else:
+                    self.config.display.set_brightness(0)
+
+            # brake light with speed
+            if not np.isnan(self.values["integrated"]["speed"]):
+                self.brakelight_spd[:-1] = self.brakelight_spd[1:]
+                self.brakelight_spd[-1] = self.values["integrated"]["speed"]
+
+                # 1: all past speeds are less than brakelight_spd_cutoff
+                cond_1 = all((s < self.brakelight_spd_cutoff for s in self.brakelight_spd))
+                # 2-1: current speed exceeds brakelight_spd_cutoff
+                cond_2_1 = self.values["integrated"]["speed"] > self.brakelight_spd_cutoff
+                # 2-2: current speed reduced by 5% from the speed [brakelight_spd_range] seconds ago
+                #  30km/h: 1.2km/h(4%), 20km/h: 0.8km/h(4%)
+                cond_2_2 = self.brakelight_spd[0] - self.brakelight_spd[-1] > self.brakelight_spd[0]*0.04
+                if (cond_1 or (cond_2_1 and cond_2_2)):
+                    auto_light = True
+
+            if self.sensor_ant.use_auto_light() and self.config.G_MANUAL_STATUS == "START":
+                if auto_light:
+                    self.sensor_ant.set_light_mode("FLASH_LOW", auto_id="sensor_core")
+                else:
+                    self.sensor_ant.set_light_mode("OFF", auto_id="sensor_core")
+
+            # cpu and memory
+            if _IMPORT_PSUTIL:
+                self.values["integrated"]["cpu_percent"] = int(
+                    self.process.cpu_percent(interval=None)
+                )
+                self.values["integrated"][
+                    "CPU_MEM"
+                ] = "{0:^2.0f}% ({1}) / ALL {2:^2.0f}%,  {3:^2.0f}%".format(
+                    self.values["integrated"][
+                        "cpu_percent"
+                    ],  # self.process.cpu_percent(interval=None),
+                    self.process.num_threads(),
+                    psutil.cpu_percent(interval=None),
+                    self.process.memory_percent(),
+                )
+
+            # adjust loop time
+            time_profile.append(datetime.now())
+            sec_diff = []
+            time_progile_sec = 0
+            for i in range(len(time_profile)):
+                if i == 0:
+                    continue
+                sec_diff.append(
+                    "{0:.6f}".format(
+                        (time_profile[i] - time_profile[i - 1]).total_seconds()
+                    )
+                )
+                time_progile_sec += (
+                    time_profile[i] - time_profile[i - 1]
+                ).total_seconds()
+            if time_progile_sec > 1.5 * self.config.G_SENSOR_INTERVAL:
+                app_logger.warning(
+                    f"too long loop time, sec_diff: {sec_diff}"
+                    f"(def/sensor_ant.update()/make variables(too long)/post-processing)"
+                )
+
+            loop_time = (datetime.now() - start_time).total_seconds()
+            d1, d2 = divmod(loop_time, self.config.G_SENSOR_INTERVAL)
+            if d1 > self.config.G_SENSOR_INTERVAL * 10:  # [s]
+                app_logger.warning(
+                    f"too long loop_time({self.__class__.__name__}):{loop_time:.2f}, interval:{self.config.G_SENSOR_INTERVAL:.1f}"
+                )
+                d1 = d2 = 0
+            self.wait_time = self.config.G_SENSOR_INTERVAL - d2
+            self.actual_loop_interval = (d1 + 1) * self.config.G_SENSOR_INTERVAL
 
     @staticmethod
     def conv_grade(gr):

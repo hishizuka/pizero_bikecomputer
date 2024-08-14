@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime
 import random
 import struct
 import asyncio
@@ -40,8 +40,6 @@ class SensorANT(Sensor):
     node = None
     NETWORK_KEY = [0xB9, 0xA5, 0x21, 0xFB, 0xBD, 0x72, 0xC3, 0x45]
     NETWORK_NUM = 0x00
-    CHANNEL = 0x00
-    DEVICE_ALL = 0
     scanner = None
     device = {}
 
@@ -129,7 +127,7 @@ class SensorANT(Sensor):
         speed_value = random.randint(5, 30) / 3.6  # 5 - 30km/h [unit:m/s]
         cad_value = random.randint(60, 100)
         power_value = random.randint(0, 250)
-        timestamp = datetime.datetime.now()
+        timestamp = datetime.now()
 
         ac = self.config.G_ANT["ID_TYPE"]
         self.values[ac["HR"]]["heart_rate"] = hr_value
@@ -197,39 +195,43 @@ class SensorANT(Sensor):
             self.device[antIDType].init_after_connect()
             return
 
+        ant_opt = {}
+        if antName in ["SPD", "LGT"] and self.use_auto_light():
+            ant_opt["force_4Hz"] = True
+
         # newly connect
         self.values[antIDType] = {}
         if antType == 0x78:
             self.device[antIDType] = ant_device_heartrate.ANT_Device_HeartRate(
-                self.node, self.config, self.values[antIDType], antName
+                self.node, self.config, self.values[antIDType], antName, ant_opt
             )
         elif antType == 0x79:
             self.device[antIDType] = ant_device_speed_cadence.ANT_Device_Speed_Cadence(
-                self.node, self.config, self.values[antIDType], antName
+                self.node, self.config, self.values[antIDType], antName, ant_opt
             )
         elif antType == 0x7A:
             self.device[antIDType] = ant_device_speed_cadence.ANT_Device_Cadence(
-                self.node, self.config, self.values[antIDType], antName
+                self.node, self.config, self.values[antIDType], antName, ant_opt
             )
         elif antType == 0x7B:
             self.device[antIDType] = ant_device_speed_cadence.ANT_Device_Speed(
-                self.node, self.config, self.values[antIDType], antName
+                self.node, self.config, self.values[antIDType], antName, ant_opt
             )
         elif antType == 0x0B:
             self.device[antIDType] = ant_device_power.ANT_Device_Power(
-                self.node, self.config, self.values[antIDType], antName
+                self.node, self.config, self.values[antIDType], antName, ant_opt
             )
         elif antType == 0x23:
             self.device[antIDType] = ant_device_light.ANT_Device_Light(
-                self.node, self.config, self.values[antIDType], antName
+                self.node, self.config, self.values[antIDType], antName, ant_opt
             )
         elif antType == 0x10:
             self.device[antIDType] = ant_device_ctrl.ANT_Device_CTRL(
-                self.node, self.config, self.values[antIDType], antName
+                self.node, self.config, self.values[antIDType], antName, ant_opt
             )
         elif antType == 0x19:
             self.device[antIDType] = ant_device_temperature.ANT_Device_Temperature(
-                self.node, self.config, self.values[antIDType], antName
+                self.node, self.config, self.values[antIDType], antName, ant_opt
             )
         self.device[antIDType].ant_state = "connect_ant_sensor"
         self.device[antIDType].init_after_connect()
@@ -277,16 +279,14 @@ class SensorANT(Sensor):
         self.scanner.set_wait_normal_mode()
         app_logger.info("STOP ANT+ multiscan")
 
-    def set_light_mode(self, mode, auto=False, auto_id=None):
+    def use_auto_light(self):
+        return self.USE_AUTO_LIGHT
+
+    def set_light_mode(self, mode, auto_id=None):
         if "LGT" not in self.config.G_ANT["USE"] or not self.config.G_ANT["USE"]["LGT"]:
             return
-        if auto and (
-            not self.USE_AUTO_LIGHT
-            or self.config.G_MANUAL_STATUS != "START"
-        ):
-            return
-        self.device[self.config.G_ANT["ID_TYPE"]["LGT"]].send_light_mode(mode, auto, auto_id)
-    
+        self.device[self.config.G_ANT["ID_TYPE"]["LGT"]].send_light_mode(mode, auto_id)
+
     def toggle_use_auto_light(self, change):
         if change:
             self.USE_AUTO_LIGHT = not self.USE_AUTO_LIGHT

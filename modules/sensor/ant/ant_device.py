@@ -1,5 +1,5 @@
 import struct
-import datetime
+from datetime import datetime
 
 from logger import app_logger
 from . import ant_code
@@ -14,7 +14,7 @@ class ANT_Device:
     ant_state = None
     name = ""
     elements = ()
-    stop_cutoff = 60
+    valid_time = 60
     structPattern = {
         "ID": struct.Struct("<HB"),
         0x50: struct.Struct("<xxxBHH"),
@@ -50,7 +50,7 @@ class ANT_Device:
     }
     ant_idle_interval = {"NORMAL": 0.20, "QUICK": 0.01, "SCAN": 0.20}
 
-    def __init__(self, node=None, config=None, values=None, name=""):
+    def __init__(self, node=None, config=None, values=None, name="", ant_opt={}):
         self.node = node
         self.config = config
         self.name = name
@@ -58,6 +58,10 @@ class ANT_Device:
             self.values = {}
         else:
             self.values = values
+        
+        if ant_opt.get("force_4Hz", False):
+            self.ant_config["interval"] = tuple([self.ant_config["interval"][0]] * 3)
+
         self.add_struct_pattern()
         self.init_value()
 
@@ -220,7 +224,7 @@ class ANT_Device:
     @staticmethod
     def print_spike(device_str, val, pre_val, delta, delta_t):
         app_logger.info(
-            f"ANT+ {device_str} spike: {datetime.datetime.now().strftime('%Y%m%d %H:%M:%S')}, value:{val:.0f}, pre:{pre_val:.0f}, delta: {delta}, delta_t: {delta_t}"
+            f"ANT+ {device_str} spike: {datetime.now().strftime('%Y%m%d %H:%M:%S')}, value:{val:.0f}, pre:{pre_val:.0f}, delta: {delta}, delta_t: {delta_t}"
         )
 
     def set_wait(self, interval):

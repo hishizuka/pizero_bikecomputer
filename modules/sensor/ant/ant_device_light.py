@@ -1,8 +1,7 @@
 import struct
-import datetime
+from datetime import datetime
 import array
-import threading
-import queue
+import asyncio
 
 from logger import app_logger
 from . import ant_device
@@ -10,7 +9,7 @@ from . import ant_device
 
 class ANT_Device_Light(ant_device.ANT_Device):
     ant_config = {
-        "interval": (4084, 16336, 32672), #(4084, 4084, 4084),  # 4084 / 8168 / 16336 / 32672
+        "interval": (4084, 16336, 32672),  # 4084 / 8168 / 16336 / 32672
         "type": 0x23,
         "transmission_type": 0x00,
         "channel_type": 0x00,  # Channel.Type.BIDIRECTIONAL_RECEIVE,
@@ -25,7 +24,7 @@ class ANT_Device_Light(ant_device.ANT_Device):
     )
     page_34_count = 0
     light_retry_timeout = 5  #[s]
-    auto_light_min_duration = 10  #[s]
+    auto_light_min_duration = 5  #[s]
 
     light_modes = {
         "bontrager_flare_rt": {
@@ -61,18 +60,18 @@ class ANT_Device_Light(ant_device.ANT_Device):
         # 0:-18 dBm, 1:-12 dBm, 2:-6 dBm, 3:0 dBm, 4:N/A
         self.channel.set_channel_tx_power(0)
 
-        self.send_queue = queue.Queue()
-        self.send_thread = threading.Thread(
-            target=self.send_worker, name="send_worker", args=()
-        )
-        self.send_thread.start()
+        self.send_queue = asyncio.Queue()
+        asyncio.create_task(self.send_worker())
 
     @staticmethod
     def format_list(l):
         return "[" + " ".join(map(lambda a: str.format("{0:02x}", a), l)) + "]"
 
-    def send_worker(self):
-        for data in iter(self.send_queue.get, None):
+    async def send_worker(self):
+        while True:
+            data = await self.send_queue.get()
+            if data is None:
+                break
             try:
                 if not self.channel.send_acknowledged_data_with_retry(data):
                     app_logger.error(f"ANT+ light acknowledged_data retry error: {self.format_list(data)}")
@@ -87,14 +86,14 @@ class ANT_Device_Light(ant_device.ANT_Device):
         self.values["light_mode"] = None
         self.values["button_state"] = False
         self.values["auto_state"] = False
-        self.values["changed_timestamp"] = datetime.datetime.now()
-        self.values["auto_on_timestamp"] = datetime.datetime.now()
+        self.values["changed_timestamp"] = None
+        self.values["auto_on_timestamp"] = datetime.now()
 
     def close_extra(self):
-        if self.ant_state in ["quit", "disconnect_ant_sensor"]:
-            self.send_disconnect_light()
-            self.reset_value()
-            self.send_queue.put(None)
+        self.send_disconnect_light()
+        if self.ant_state == "quit":
+            asyncio.create_task(self.send_queue.put(None))
+        self.reset_value()
 
     def init_after_connect(self):
         if (
@@ -113,25 +112,35 @@ class ANT_Device_Light(ant_device.ANT_Device):
         if data[0] == 0x01:
             mode = self.get_light_mode(data[6] >> 2)
             seq_no = data[4]
-            time_delta = (datetime.datetime.now() - self.values["changed_timestamp"]).total_seconds()
-            # app_logger.info(f"{mode} / {self.values['light_mode']} / {seq_no} / {self.page_34_count}")
-            if (
-                self.values["light_mode"] is not None
-                and seq_no != self.page_34_count
-                and time_delta > self.light_retry_timeout
-            ):
-                self.page_34_count -= 1
-                app_logger.info(
-                    f"Retry to change light mode "
-                    f"from: {mode} / "
-                    f"to: {self.values['light_mode']} / "
-                    f"seq_no: {seq_no} / "
-                    f"page_34_count: {self.page_34_count} / "
-                    f"time_delta: {round(time_delta, 2)}"
-                )
-                self.send_light_setting(self.values["light_mode"])
             self.battery_status = self.battery_levels[data[2] >> 5]
             self.light_type = (data[2] >> 2) & 0b00011
+
+            time_delta = None
+            if self.values["changed_timestamp"] is not None:
+                time_delta = (datetime.now() - self.values["changed_timestamp"]).total_seconds()
+            if (
+                self.values["light_mode"] is not None
+                and time_delta is not None
+                and seq_no != self.page_34_count
+            ):
+                #app_logger.info(f"{mode} / {self.values['light_mode']}, {seq_no} / {self.page_34_count}")
+                if mode == self.values['light_mode']:
+                    self.page_34_count = seq_no
+                elif (
+                    mode != self.values['light_mode']
+                    and time_delta > self.light_retry_timeout
+                ):
+                    app_logger.info(
+                        f"Retry to change light mode "
+                        f"{mode} -> {self.values['light_mode']}, "
+                        f"seq_no: {seq_no} != "
+                        f"page_34_count: {self.page_34_count}, "
+                        f"time_delta: {round(time_delta, 2)} > "
+                        f"self.light_retry_timeout: {self.light_retry_timeout}"
+                    )
+                    self.page_34_count = seq_no
+                    # send directly
+                    self.send_light_setting_on_data(self.values["light_mode"])
         elif data[0] == 0x02:
             pass
         # Common Data Page 80 (0x50): Manufacturer’s Information
@@ -142,19 +151,21 @@ class ANT_Device_Light(ant_device.ANT_Device):
             self.setCommonPage81(data, self.values)
 
     def send_connect_light(self):
-        self.send_queue.put(
-            array.array(
-                "B",
-                struct.pack(
-                    "<BBBBBHB",
-                    0x21,
-                    0x01,
-                    0xFF,
-                    0x5A,
-                    0b01001000,
-                    self.config.G_ANT["ID"][self.name],
-                    0x00,
-                ),
+        asyncio.create_task(
+            self.send_queue.put(
+                array.array(
+                    "B",
+                    struct.pack(
+                        "<BBBBBHB",
+                        0x21,
+                        0x01,
+                        0xFF,
+                        0x5A,
+                        0b01001000,
+                        self.config.G_ANT["ID"][self.name],
+                        0x00,
+                    ),
+                )
             )
         )
         # 5th field:
@@ -165,56 +176,78 @@ class ANT_Device_Light(ant_device.ANT_Device):
         self.values["light_mode"] = "OFF"
 
     def send_disconnect_light(self):
-        self.send_queue.put(
+        self.channel.send_acknowledged_data_with_retry(
             array.array("B", [0x20, 0x01, 0x5A, 0x02, 0x00, 0x00, 0x00, 0x00])
         )
 
     def send_light_setting(self, mode):
         self.page_34_count = (self.page_34_count + 1) % 256
-        self.send_queue.put(
-            array.array(
-                "B",
-                [
-                    0x22,
-                    0x01,
-                    0x28,
-                    self.page_34_count,
-                    0x5A,
-                    0x10,
-                    self.light_modes[self.light_name][mode][1],
-                    0x00,
-                ],
+        asyncio.create_task(
+            self.send_queue.put(
+                array.array(
+                    "B",
+                    [
+                        0x22,
+                        0x01,
+                        0x28,
+                        self.page_34_count,
+                        0x5A,
+                        0x10,
+                        self.light_modes[self.light_name][mode][1],
+                        0x00,
+                    ],
+                )
             )
         )
-        self.values["changed_timestamp"] = datetime.datetime.now()
+        self.values["changed_timestamp"] = datetime.now()
 
-    def send_light_mode(self, mode, auto=False, auto_id=None):
+    def send_light_setting_on_data(self, mode):
+        asyncio.run_coroutine_threadsafe(
+            self.send_queue.put(
+                array.array(
+                    "B",
+                    [
+                        0x22,
+                        0x01,
+                        0x28,
+                        self.page_34_count,
+                        0x5A,
+                        0x10,
+                        self.light_modes[self.light_name][mode][1],
+                        0x00,
+                    ],
+                )
+            ),
+            self.config.loop
+        )
+        self.values["changed_timestamp"] = datetime.now()
+
+    def send_light_mode(self, mode, auto_id=None):
         if mode == "OFF":
-            self.change_light_setting_off(auto, auto_id)
+            self.change_light_setting_off(auto_id)
         elif mode == "ON_OFF_FLASH_LOW":
-            if not self.values["button_state"]:
-                self.change_light_setting("FLASH_LOW", auto, auto_id)
-            elif self.values["button_state"]:
-                self.change_light_setting_off(auto, auto_id)
+            if not self.values["button_state"]: # OFF -> ON
+                self.change_light_setting("FLASH_LOW", auto_id)
+            else: # ON -> OFF
+                self.change_light_setting_off(auto_id)
         elif mode in self.light_modes[self.light_name].keys():
-            self.change_light_setting(mode, auto, auto_id)
+            self.change_light_setting(mode, auto_id)
 
-    def change_light_setting(self, mode, auto=False, auto_id=None):
-        if auto:
-            if auto_id is not None:
-                self.auto_off_status[auto_id] = True
+    def change_light_setting(self, mode, auto_id=None):
+        if auto_id is not None:
+            self.auto_off_status[auto_id] = True
 
-            # auto_state + auto request: Turn on
-            # auto_state + manual request: Turn on
-            # manual(not auto_state) + manual request: Turn on
-            # manual(not auto_state) + auto request: Turn on if OFF, don't turn on if other
-            if not self.values["auto_state"] and self.values["light_mode"] != "OFF":
-                return
+            if self.values["light_mode"] != "OFF":
+                if not self.values["auto_state"]:
+                    return
+                else:
+                    self.values["auto_on_timestamp"] = datetime.now()
 
-            if self.values["auto_state"] and self.values["light_mode"] != "OFF":
-                self.values["auto_on_timestamp"] = datetime.datetime.now()
-
-        if auto:
+        # auto_state + auto_id request: Turn on
+        # auto_state + manual(auto_id is Null) request: Turn on
+        # manual(not auto_state) + manual(auto_id is Null) request: Turn on
+        # manual(not auto_state) + auto_id request: Turn on if OFF, don't turn on if other
+        if auto_id is not None:
             self.values["auto_state"] = True
         else:
             self.values["button_state"] = True
@@ -237,26 +270,25 @@ class ANT_Device_Light(ant_device.ANT_Device):
             self.values["pre_light_mode"] = self.values["light_mode"]
             self.send_light_setting(self.values["light_mode"])
 
-    def change_light_setting_off(self, auto=False, auto_id=None):
-        if auto:
-            if auto_id is not None:
-                self.auto_off_status[auto_id] = False
-            
-            t = (datetime.datetime.now() - self.values["auto_on_timestamp"]).total_seconds()
+    def change_light_setting_off(self, auto_id=None):
+        if auto_id is not None:
+            self.auto_off_status[auto_id] = False
+        
+            t = (datetime.now() - self.values["auto_on_timestamp"]).total_seconds()
             if (
                 any(self.auto_off_status.values())
                 or t < self.auto_light_min_duration
             ):
                 return
-            
-            # auto_state + auto request: Turn off
-            # auto_state + manual request: Turn off
-            # manual(not auto_state) + manual request: Turn off
-            # manual(not auto_state) + auto request: Don't turn off light
+    
             if not self.values["auto_state"]:
                 return
 
-        if auto:
+        # auto_state + auto request: Turn off
+        # auto_state + manual request: Turn off
+        # manual(not auto_state) + manual request: Turn off
+        # manual(not auto_state) + auto request: Don't turn off light
+        if auto_id is not None:
             self.values["auto_state"] = True
         else:
             self.values["button_state"] = False
