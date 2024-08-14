@@ -106,7 +106,7 @@ class GadgetbridgeService(Service):
             agent = NoIoAgent()
             await agent.register(self.bus)
             adapter = await Adapter.get_first(self.bus)
-            advert = Advertisement(self.product, [self.service_uuid], 0, 60)
+            advert = Advertisement(self.product, [self.service_uuid], 0, 180)
             await advert.register(self.bus, adapter)
 
         return self.status
