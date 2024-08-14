@@ -1,5 +1,5 @@
 import struct
-import datetime
+from datetime import datetime
 
 from . import ant_device
 from . import ant_device_power
@@ -18,6 +18,7 @@ class ANT_Device_MultiScan(ant_device.ANT_Device):
     power_values = {}
     power_meter_value = {}
     pre_power_meter_value = {}
+    pre_power_meter_delta = {}
 
     def __init__(self, node, config):
         self.node = node
@@ -37,6 +38,7 @@ class ANT_Device_MultiScan(ant_device.ANT_Device):
         self.power_values = {}
         self.power_meter_value = {}
         self.pre_power_meter_value = {}
+        self.pre_power_meter_delta = {}
 
     def ready_scan(self):
         if self.config.G_ANT["STATUS"]:
@@ -97,7 +99,7 @@ class ANT_Device_MultiScan(ant_device.ANT_Device):
             else:
                 if antIDType not in self.values:
                     self.values[antIDType] = {}
-                self.values[antIDType]["timestamp"] = datetime.datetime.now()
+                self.values[antIDType]["timestamp"] = datetime.now()
                 self.values[antIDType]["heart_rate"] = data[7]
         # Power
         elif antType in self.config.G_ANT["TYPES"]["PWR"]:
@@ -125,14 +127,17 @@ class ANT_Device_MultiScan(ant_device.ANT_Device):
             self.power_values[antIDType] = {}
             self.power_meter_value[antIDType] = {}
             self.pre_power_meter_value[antIDType] = {}
+            self.pre_power_meter_delta[antIDType] = {}
             for t in [0x10, 0x11, 0x12]:
                 self.power_values[antIDType][t] = {
                     "power": 0,
                     "accumulated_power": 0,
                     "on_data_timestamp": None,
+                    "stop_timestamp": None,
                 }
-                self.power_meter_value[antIDType][t] = [-1, -1, -1, -1]
                 self.pre_power_meter_value[antIDType][t] = [-1, -1, -1, -1]
+                self.pre_power_meter_delta[antIDType][t] = [-1, -1, -1, -1]
+                self.power_meter_value[antIDType][t] = [-1, -1, -1, -1]
             self.power_values[antIDType][0x11]["distance"] = 0
             self.power_values[antIDType][0x12]["manu_id"] = ""
             self.power_values[antIDType][0x12]["model_num"] = ""
@@ -141,12 +146,13 @@ class ANT_Device_MultiScan(ant_device.ANT_Device):
             self.power_values[antIDType]["manu_name"] = ""
 
         v = self.values[antIDType]
-        v["timestamp"] = datetime.datetime.now()
+        v["timestamp"] = datetime.now()
         if data[0] == 0x10:
             self.dummyPowerDevice.on_data_power_0x10(
                 data,
                 self.power_meter_value[antIDType][0x10],
                 self.pre_power_meter_value[antIDType][0x10],
+                self.pre_power_meter_delta[antIDType][0x10],
                 self.power_values[antIDType][0x10],
             )
             v["power"] = self.power_values[antIDType][0x10]["power"]
@@ -155,6 +161,7 @@ class ANT_Device_MultiScan(ant_device.ANT_Device):
                 data,
                 self.power_meter_value[antIDType][0x11],
                 self.pre_power_meter_value[antIDType][0x11],
+                self.pre_power_meter_delta[antIDType][0x11],
                 self.power_values[antIDType][0x11],
                 resume=False,
             )
@@ -164,6 +171,7 @@ class ANT_Device_MultiScan(ant_device.ANT_Device):
                 data,
                 self.power_meter_value[antIDType][0x12],
                 self.pre_power_meter_value[antIDType][0x12],
+                self.pre_power_meter_delta[antIDType][0x12],
                 self.power_values[antIDType][0x12],
                 resume=False,
             )

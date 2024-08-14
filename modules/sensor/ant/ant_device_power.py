@@ -1,5 +1,5 @@
 import struct
-import datetime
+from datetime import datetime
 import math
 
 from logger import app_logger
@@ -14,6 +14,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
         "channel_type": 0x00,  # Channel.Type.BIDIRECTIONAL_RECEIVE,
     }
     pre_values = {0x10: [], 0x11: [], 0x12: [], 0x13: []}
+    pre_delta = {0x10: [], 0x11: [], 0x12: [], 0x13: []}
     power_values = {0x10: [], 0x11: [], 0x12: [], 0x13: []}
     elements = {
         0x10: (
@@ -29,6 +30,8 @@ class ANT_Device_Power(ant_device.ANT_Device):
         0x12: ("power", "cadence", "accumulated_power"),
         0x13: ("torque_eff", "pedal_sm"),
     }
+    stop_cutoff = 3
+
     pickle_key = "ant+_pwr_values"
 
     def add_struct_pattern(self):
@@ -62,24 +65,26 @@ class ANT_Device_Power(ant_device.ANT_Device):
         self.values[0x12]["accumulated_power"] = 0.0
         for page in self.pre_values:
             self.pre_values[page] = [-1, -1, -1, -1]
+            self.pre_delta[page] = [-1, -1, -1, -1]
             self.power_values[page] = [-1, -1, -1, -1]
             self.values[page]["on_data_timestamp"] = None
+            self.values[page]["stop_timestamp"] = None
 
     def on_data(self, data):
         # standard power-only main data page (0x10)
         if data[0] == 0x10:
             self.on_data_power_0x10(
-                data, self.power_values[0x10], self.pre_values[0x10], self.values[0x10]
+                data, self.power_values[0x10], self.pre_values[0x10], self.pre_delta[0x10], self.values[0x10]
             )
         # Standard Wheel Torque Main Data Page (0x11) #not verified (not own)
         elif data[0] == 0x11:
             self.on_data_power_0x11(
-                data, self.power_values[0x11], self.pre_values[0x11], self.values[0x11]
+                data, self.power_values[0x11], self.pre_values[0x11], self.pre_delta[0x11], self.values[0x11]
             )
         # standard crank power torque main data page (0x12)
         elif data[0] == 0x12:
             self.on_data_power_0x12(
-                data, self.power_values[0x12], self.pre_values[0x12], self.values[0x12]
+                data, self.power_values[0x12], self.pre_values[0x12], self.pre_delta[0x12], self.values[0x12]
             )
         # Torque Effectiveness and Pedal Smoothness Main Data Page (0x13)
         elif data[0] == 0x13:
@@ -110,7 +115,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
 
         # self.channel.send_acknowledged_data(array.array('B',[0x46,0xFF,0xFF,0xFF,0xFF,0x88,0x02,0x01]))
 
-    def on_data_power_0x10(self, data, power_values, pre_values, values):
+    def on_data_power_0x10(self, data, power_values, pre_values, pre_delta, values):
         # (page), evt_count, balance, cadence, accumulated power(2byte), instantaneous power(2byte)
         (
             power_values[0],
@@ -119,7 +124,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
             power_values[1],
             power_16_simple,
         ) = self.structPattern[self.name][0x10].unpack(data[0:8])
-        t = datetime.datetime.now()
+        t = datetime.now()
 
         if pre_values[0] == -1:
             pre_values[0:2] = power_values[0:2]
@@ -133,11 +138,9 @@ class ANT_Device_Power(ant_device.ANT_Device):
         if -65535 <= delta[1] < 0:
             delta[1] += 65536
         delta_t = (t - values["on_data_timestamp"]).total_seconds()
-        # print("ANT+ Power(16) delta: ", datetime.datetime.now().strftime("%Y%m%d %H:%M:%S"), delta)
+        # print("ANT+ Power(16) delta: ", datetime.now().strftime("%Y%m%d %H:%M:%S"), delta)
 
-        if (
-            delta[0] > 0 and delta[1] >= 0 and delta_t < self.stop_cutoff
-        ):  # delta[1] < 16384: #for spike
+        if delta[0] > 0 and delta[1] >= 0 and delta_t < self.valid_time:
             pwr = delta[1] / delta[0]
             # max value in .fit file is 65536 [w]
             if pwr <= 65535 and (pwr - values["power"]) < self.spike_threshold["power"]:
@@ -165,23 +168,27 @@ class ANT_Device_Power(ant_device.ANT_Device):
             else:
                 self.print_spike("Power(16)", pwr, values["power"], delta, delta_t)
         elif delta[0] == 0 and delta[1] == 0:
-            # if values['on_data_timestamp'] is not None and delta_t >= self.stop_cutoff:
-            values["power"] = 0
-            values["power_16_simple"] = 0
-            values["cadence"] = 0
-            values["power_r"] = 0
-            values["power_l"] = 0
-            values["lr_balance"] = ":"
+            if pre_delta[0:2] != [0, 0]:
+                values["stop_timestamp"] = t
+            elif (t - values["stop_timestamp"]).total_seconds() >= self.stop_cutoff:
+                values["power"] = 0
+                values["power_16_simple"] = 0
+                values["cadence"] = 0
+                values["power_r"] = 0
+                values["power_l"] = 0
+                values["lr_balance"] = ":"
         else:
             app_logger.error(f"ANT+ Power(16) err: {delta}")
 
         pre_values[0:2] = power_values[0:2]
         # on_data timestamp
         values["on_data_timestamp"] = t
+        pre_delta = delta[:]
+
         # store raw power
         self.config.state.set_value("ant+_power_values_16", power_values[1])
 
-    def on_data_power_0x11(self, data, power_values, pre_values, values, resume=True):
+    def on_data_power_0x11(self, data, power_values, pre_values, pre_delta, values, resume=True):
         # (page), evt_count, wheel_ticks, x, wheel period(2byte), accumulated power(2byte)
         (
             power_values[2],
@@ -189,7 +196,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
             power_values[0],
             power_values[1],
         ) = self.structPattern[self.name][0x11].unpack(data[0:8])
-        t = datetime.datetime.now()
+        t = datetime.now()
 
         if pre_values[0] == -1:
             pre_values = power_values
@@ -229,8 +236,8 @@ class ANT_Device_Power(ant_device.ANT_Device):
             delta[0] > 0
             and delta[1] >= 0
             and delta[2] >= 0
-            and delta_t < self.stop_cutoff
-        ):  # delta[1] < 16384 for spike
+            and delta_t < self.valid_time
+        ):
             pwr = 128 * math.pi * delta[1] / delta[0]
             # max value in .fit file is 65536 [w]
             if pwr <= 65535 and (pwr - values["power"]) < self.spike_threshold["power"]:
@@ -255,25 +262,31 @@ class ANT_Device_Power(ant_device.ANT_Device):
             else:
                 self.print_spike("Speed(17)", spd, values["speed"], delta, delta_t)
         elif delta[0] == 0 and delta[1] == 0 and delta[2] == 0:
-            # if values['on_data_timestamp'] is not None and delta_t >= self.stop_cutoff:
-            values["power"] = 0
-            values["speed"] = 0
+            if pre_delta[0:3] != [0, 0, 0]:
+                values["stop_timestamp"] = t
+            elif (t - values["stop_timestamp"]).total_seconds() >= self.stop_cutoff:
+                values["power"] = 0
+                values["speed"] = 0
         else:
             app_logger.error(f"ANT+ Power(17) err: {delta}")
 
         pre_values = power_values
         # on_data timestamp
         values["on_data_timestamp"] = t
+        pre_delta = delta[:]
 
         # store raw power
         self.config.state.set_value("ant+_power_values_17", power_values)
 
-    def on_data_power_0x12(self, data, power_values, pre_values, values, resume=True):
+    def on_data_power_0x12(self, data, power_values, pre_values, pre_delta, values, resume=True):
         # (page), x, x, cadence, period(2byte), accumulatd power(2byte)
-        (cadence, power_values[0], power_values[1]) = self.structPattern[self.name][
-            0x12
-        ].unpack(data[0:8])
-        t = datetime.datetime.now()
+        (
+            cadence,
+            power_values[0],
+            power_values[1],
+        ) = self.structPattern[self.name][0x12].unpack(data[0:8])
+        t = datetime.now()
+
         if pre_values[0] == -1:
             pre_values[0:2] = power_values[0:2]
             values["on_data_timestamp"] = t
@@ -304,10 +317,9 @@ class ANT_Device_Power(ant_device.ANT_Device):
         if -65535 <= delta[1] < 0:
             delta[1] += 65536
         delta_t = (t - values["on_data_timestamp"]).total_seconds()
-        # print("ANT+ Power(18) delta: ", datetime.datetime.now().strftime("%Y%m%d %H:%M:%S"), delta)
+        # print("ANT+ Power(18) delta: ", datetime.now().strftime("%Y%m%d %H:%M:%S"), delta)
 
-        # delta[1] < 16384: #for spike
-        if delta[0] > 0 and delta[1] >= 0 and delta_t < self.stop_cutoff:
+        if delta[0] > 0 and delta[1] >= 0 and delta_t < self.valid_time:
             pwr = 128 * math.pi * delta[1] / delta[0]
             # max value in .fit file is 65536 [w]
             if pwr <= 65535 and (pwr - values["power"]) < self.spike_threshold["power"]:
@@ -321,10 +333,12 @@ class ANT_Device_Power(ant_device.ANT_Device):
                 values["timestamp"] = t
             else:
                 self.print_spike("Power(18)", pwr, values["power"], delta, delta_t)
-        elif delta[0] == 0 and delta[1] == 0:
-            # if delta_t >= self.stop_cutoff:
-            values["power"] = 0
-            values["cadence"] = 0
+        elif delta[0] == 0 and delta[1] == 0:        
+            if pre_delta[0:2] != [0, 0]:
+                values["stop_timestamp"] = t
+            elif (t - values["stop_timestamp"]).total_seconds() >= self.stop_cutoff:
+                values["power"] = 0
+                values["cadence"] = 0
         else:
             if self.values["manu_id"] == 48 and self.values["model_num"] == 910:
                 # Pioneer SGY-PM910Z powermeter mode fix (not pedaling monitor mode)
@@ -336,6 +350,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
         pre_values[0:2] = power_values[0:2]
         # on_data timestamp
         values["on_data_timestamp"] = t
+        pre_delta = delta[:]
 
         # store raw power
         self.config.state.set_value("ant+_power_values_18", power_values[1])
