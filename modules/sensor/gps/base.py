@@ -56,6 +56,8 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
 
     valid_cutoff_dof = (99.0, 99.0, 99.0)
 
+    quit_status = False
+
     @property
     def is_real(self):
         return True  # only dummy is not a real GPS
@@ -75,6 +77,7 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
         self.values["distance"] = 0
 
     async def quit(self):
+        self.quit_status = True
         await self.sleep()
 
     def start_coroutine(self):

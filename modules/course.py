@@ -228,8 +228,9 @@ class Course:
         with timers[4]:
             asyncio.create_task(self.get_course_wind())
 
-        app_logger.info("[logger] Loading course:")
-        log_timers(timers, text_total="  total               : {0:.3f} sec")
+        if self.is_set:
+            app_logger.info("[logger] Loading course:")
+            log_timers(timers, text_total="  total               : {0:.3f} sec")
 
         if self.config.G_THINGSBOARD_API["STATUS"]:
             self.config.api.send_livetrack_course_load()

@@ -39,13 +39,13 @@ class AppState:
     #   mag_min, mag_max: keep until power is turned off
     def reset(self):
         for k, v in list(self.values.items()):
-            if "mag" in k:
+            if k.startswith(("mag", "G_BT_USE_ADDRESS", "G_AUTO_BT_TETHERING", "GB")):
                 continue
             del self.values[k]
         with open(self.pickle_file, "wb") as f:
             pickle.dump(self.values, f)
 
-    # quit (poweroff)
+    # quit (power_off)
     #   ant+_sc_values, ant+_spd_values,
     #   ant+_power_values_16, ant+_power_values_17, ant+_power_values_18
     def delete(self):

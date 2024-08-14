@@ -30,7 +30,7 @@ class SystemMenuWidget(MenuWidget):
             (
                 "Power Off",
                 "dialog",
-                lambda: self.config.gui.show_dialog(self.config.poweroff, "Power Off"),
+                lambda: self.config.gui.show_dialog(self.config.gui.power_off, "Power Off"),
             ),
         )
         self.add_buttons(button_conf)

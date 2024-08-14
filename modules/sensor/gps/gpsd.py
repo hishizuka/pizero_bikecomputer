@@ -53,31 +53,28 @@ class GPSD(AbstractSensorGPS):
             return
 
         g = self.gps_thread.data_stream
-        try:
-            while True:
-                await self.sleep()
-                total, used = satellites_used(g.satellites)
-                gps_time = self.NULL_VALUE
-                if g.time != self.NULL_VALUE:
-                    gps_time = datetime.strptime(g.time, "%Y-%m-%dT%X.%fZ").replace(
-                        tzinfo=timezone.utc
-                    )
-                await self.get_basic_values(
-                    g.lat,
-                    g.lon,
-                    g.alt,
-                    g.speed,
-                    g.track,
-                    g.mode,
-                    [g.epx, g.epy, g.epv],
-                    [g.pdop, g.hdop, g.vdop],
-                    (used, total),
-                    gps_time,
+        while not self.quit_status:
+            await self.sleep()
+            total, used = satellites_used(g.satellites)
+            gps_time = self.NULL_VALUE
+            if g.time != self.NULL_VALUE:
+                gps_time = datetime.strptime(g.time, "%Y-%m-%dT%X.%fZ").replace(
+                    tzinfo=timezone.utc
                 )
-                self.get_sleep_time()
-        except asyncio.CancelledError:
-            pass
-
+            await self.get_basic_values(
+                g.lat,
+                g.lon,
+                g.alt,
+                g.speed,
+                g.track,
+                g.mode,
+                [g.epx, g.epy, g.epv],
+                [g.pdop, g.hdop, g.vdop],
+                (used, total),
+                gps_time,
+            )
+            self.get_sleep_time()
+                
     def is_position_valid(self, lat, lon, mode, dop, satellites, error=None):
         valid = super().is_position_valid(lat, lon, mode, dop, satellites, error)
         if valid and error:

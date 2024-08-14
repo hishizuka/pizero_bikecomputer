@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime
 
 from . import ant_device
 
@@ -15,7 +15,7 @@ class ANT_Device_HeartRate(ant_device.ANT_Device):
 
     def on_data(self, data):
         self.values["heart_rate"] = data[7]
-        self.values["timestamp"] = datetime.datetime.now()
+        self.values["timestamp"] = datetime.now()
         # self.channel.send_acknowledged_data(array.array('B',[0x46,0xFF,0xFF,0xFF,0xFF,0x88,0x06,0x01]))
         # if data[0] & 0b1111 == 0b000: # 0x00 or 0x80
         #  print("0x00 : ", format_list(data))

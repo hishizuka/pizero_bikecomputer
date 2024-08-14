@@ -7,7 +7,7 @@
   - [Raspberry Pi OS](#Raspberry-Pi-OS)
     - [common](#common)
     - [GPS module](#gps-module)
-    - [ANT+ USB dongle](#ant+-usb-dongle)
+    - [ANT+ USB dongle](#ant-usb-dongle)
     - [Display](#display)
     - [I2C sensors](#i2c-sensors)
 - [Quick Start](#quick-start)

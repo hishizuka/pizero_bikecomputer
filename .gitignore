@@ -3,6 +3,7 @@
 /screenshots/
 /maptile/*
 /modules/test_code/
+/modules/qml/
 /courses/.current
 /courses/ridewithgps/*
 /courses/*html*
@@ -12,6 +13,7 @@
 /.venv/
 __pycache__/
 *.py[cod]
+*.qml
 *.qmlc
 *.db
 *.fit

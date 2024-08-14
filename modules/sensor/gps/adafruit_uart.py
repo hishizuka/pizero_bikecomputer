@@ -46,40 +46,37 @@ class Adafruit_GPS(AbstractSensorGPS):
         g = self.adafruit_gps
         last_print = time.monotonic()
 
-        try:
-            while True:
-                g.update()
-                current = time.monotonic()
+        while not self.quit_status:
+            g.update()
+            current = time.monotonic()
 
-                if current - last_print < 1.0:
-                    await asyncio.sleep(0.1)
-                    continue
+            if current - last_print < 1.0:
+                await asyncio.sleep(0.1)
+                continue
 
-                last_print = current
-                if (
-                    g.has_fix
-                    and g.timestamp_utc.tm_year >= 2000
-                ):
-                    speed = (
-                        g.speed_knots * 1.852 / 3.6
-                        if not self.is_null_value(g.speed_knots)
-                        else 0
-                    )
-                    used, total = self.get_satellites(g.sats)
-                    await self.get_basic_values(
-                        g.latitude,
-                        g.longitude,
-                        g.altitude_m,
-                        speed,
-                        g.track_angle_deg,
-                        g.fix_quality_3d,
-                        None,
-                        [g.pdop, g.hdop, g.vdop],
-                        (used, total),
-                        time.strftime("%Y-%m-%dT%H:%M:%S+00:00", g.timestamp_utc),
-                    )
-        except asyncio.CancelledError:
-            pass
+            last_print = current
+            if (
+                g.has_fix
+                and g.timestamp_utc.tm_year >= 2000
+            ):
+                speed = (
+                    g.speed_knots * 1.852 / 3.6
+                    if not self.is_null_value(g.speed_knots)
+                    else 0
+                )
+                used, total = self.get_satellites(g.sats)
+                await self.get_basic_values(
+                    g.latitude,
+                    g.longitude,
+                    g.altitude_m,
+                    speed,
+                    g.track_angle_deg,
+                    g.fix_quality_3d,
+                    None,
+                    [g.pdop, g.hdop, g.vdop],
+                    (used, total),
+                    time.strftime("%Y-%m-%dT%H:%M:%S+00:00", g.timestamp_utc),
+                )
 
     def get_satellites(self, gs):
         gnum = guse = 0

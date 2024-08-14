@@ -34,41 +34,38 @@ class GPS_I2C(AbstractSensorGPS):
         
         g = self.i2c_gps
 
-        try:
-            while True:
-                await self.sleep()
+        while not self.quit_status:
+            await self.sleep()
 
-                result = g.update()
-                if result:
-                    mode = (
-                        int(g.data["mode_fix_type"])
-                        if not self.is_null_value(g.data["mode_fix_type"])
-                        else self.NULL_VALUE
-                    )
-                    speed = (
-                        g.data["speed_over_ground"] * 1.852 / 3.6
-                        if not self.is_null_value(g.data["speed_over_ground"])
-                        else 0
-                    )
-                    dop = [
-                        float(g.data[x])
-                        if g.data[x] not in ["", self.NULL_VALUE]
-                        else None
-                        for x in ["pdop", "hdop", "vdop"]
-                    ]
+            result = g.update()
+            if result:
+                mode = (
+                    int(g.data["mode_fix_type"])
+                    if not self.is_null_value(g.data["mode_fix_type"])
+                    else self.NULL_VALUE
+                )
+                speed = (
+                    g.data["speed_over_ground"] * 1.852 / 3.6
+                    if not self.is_null_value(g.data["speed_over_ground"])
+                    else 0
+                )
+                dop = [
+                    float(g.data[x])
+                    if g.data[x] not in ["", self.NULL_VALUE]
+                    else None
+                    for x in ["pdop", "hdop", "vdop"]
+                ]
 
-                    await self.get_basic_values(
-                        g.data["latitude"],
-                        g.data["longitude"],
-                        g.data["altitude"],
-                        speed,
-                        self.NULL_VALUE,
-                        mode,
-                        None,
-                        dop,
-                        (int(g.data["num_sats"] or 0), None),
-                        g.data["timestamp"],  # this is a time object not a datetime
-                    )
-                self.get_sleep_time()
-        except asyncio.CancelledError:
-            pass
+                await self.get_basic_values(
+                    g.data["latitude"],
+                    g.data["longitude"],
+                    g.data["altitude"],
+                    speed,
+                    self.NULL_VALUE,
+                    mode,
+                    None,
+                    dop,
+                    (int(g.data["num_sats"] or 0), None),
+                    g.data["timestamp"],  # this is a time object not a datetime
+                )
+            self.get_sleep_time()

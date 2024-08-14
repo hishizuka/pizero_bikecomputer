@@ -1,5 +1,5 @@
 import struct
-import datetime
+from datetime import datetime
 
 from . import ant_device
 from . import ant_device_ctrl
@@ -103,7 +103,7 @@ class ANT_Device_Search(ant_device.ANT_Device):
             return self.searchList
         else:
             # dummy
-            timestamp = datetime.datetime.now()
+            timestamp = datetime.now()
             if 0 < timestamp.second % 30 < 15:
                 return {
                     12345: (0x79, False),

@@ -23,6 +23,8 @@ class SensorGPIO(Sensor):
     interval = 0.01
     interval_inv = int(1 / interval)
     mode = "MAIN"
+    
+    quit_status = False
 
     def sensor_init(self):
         if _SENSOR_RPiGPIO and self.config.G_DISPLAY in [
@@ -52,7 +54,7 @@ class SensorGPIO(Sensor):
     def my_callback(self, channel):
         sw_counter = 0
 
-        while True:
+        while not self.quit_status:
             sw_status = GPIO.input(channel)
 
             if sw_status == 0:
@@ -87,5 +89,6 @@ class SensorGPIO(Sensor):
                 )
 
     def quit(self):
+        self.quit_status = True
         if _SENSOR_RPiGPIO:
             GPIO.cleanup()

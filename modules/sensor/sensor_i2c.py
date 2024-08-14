@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime
 import math
 import asyncio
 
@@ -145,6 +145,8 @@ class SensorI2C(Sensor):
     kfp = None
     kf = None
     dt = None
+
+    quit_status = False
 
     def sensor_init(self):
         self.detect_sensors()
@@ -435,17 +437,17 @@ class SensorI2C(Sensor):
         asyncio.create_task(self.start())
 
     async def start(self):
-        try:
-            while True:
-                await self.sleep()
-                await self.update()
-                self.get_sleep_time(self.config.G_I2C_INTERVAL)
-        except asyncio.CancelledError:
-            pass
+        while not self.quit_status:
+            await self.sleep()
+            await self.update()
+            self.get_sleep_time(self.config.G_I2C_INTERVAL)
+    
+    def quit(self):
+        self.quit_status = True
 
     async def update(self):
         # timestamp
-        self.values["timestamp"] = datetime.datetime.now()
+        self.values["timestamp"] = datetime.now()
         self.timestamp_array[0:-1] = self.timestamp_array[1:]
         self.timestamp_array[-1] = self.values["timestamp"]
 
@@ -990,7 +992,7 @@ class SensorI2C(Sensor):
         sp = self.available_sensors["PRESSURE"]
 
         try:
-            # t = datetime.datetime.now()
+            # t = datetime.now()
             if (
                 ("LPS3XHW_ORIG" in sp and sp["LPS3XHW_ORIG"])
                 or ("BMP280_ORIG" in sp and sp["BMP280_ORIG"])
@@ -1007,7 +1009,7 @@ class SensorI2C(Sensor):
             if "BME280" in sp and sp["BME280"]:
                 self.values["humidity"] = self.sensor["i2c_baro_temp"].relative_humidity
                 # discomfort_index = 0.81*self.values['temperature'] + 0.01*self.values['humidity']*(0.99*self.values['temperature']-14.3) + 46.3
-            # print("    read value: {:.3f} sec".format((datetime.datetime.now()-t).total_seconds()))
+            # print("    read value: {:.3f} sec".format((datetime.now()-t).total_seconds()))
             # print("    pressure:{:.2f}, temperature:{}".format(self.values['pressure_raw'],self.values['temperature']))
         except:
             return
@@ -1169,7 +1171,7 @@ class SensorI2C(Sensor):
         hampel_value = np.abs(self.values[key] - self.median_val[key])
         if (hampel_value > diff_min) and (hampel_value > sigma * hampel_std):
             app_logger.info(
-                f"pressure spike:{datetime.datetime.now().strftime('%Y%m%d %H:%M:%S')}, {self.values[key]:.3f}hPa, diff:{hampel_value:.3f}, threshold:{sigma * hampel_std:.3f}"
+                f"pressure spike:{datetime.now().strftime('%Y%m%d %H:%M:%S')}, {self.values[key]:.3f}hPa, diff:{hampel_value:.3f}, threshold:{sigma * hampel_std:.3f}"
             )
             self.values[key] = self.median_val[key]
 
