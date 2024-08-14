@@ -1,6 +1,7 @@
 import os
 from datetime import datetime
 import time
+import shutil
 import asyncio
 import json
 import concurrent
@@ -71,10 +72,31 @@ async def download_files(urls, save_paths, headers=None, params=None, limit=None
     return res
 
 
+def check_bnep0():
+    return check_network_interface(iface="bnep0")
+
+
+def check_wlan0():
+    return check_network_interface(iface="wlan0")
+
+
+def check_network_interface(iface=None):
+    res = exec_cmd_return_value(["ip", "-br", "-4", "a", "show", iface], cmd_print=False)
+    if not res:
+        return False
+
+    res_list = [x.strip() for x in res.split(' ') if x != '']
+    if len(res_list) != 3:
+        return False
+
+    return res_list[-1].startswith(("192.168.",))
+
+
 class Network:
     config = None
     bt_tethering_status = {}
-    bt_tethering_last_close_time = None
+    bt_error_history_open = False
+    bt_error_history_close = False
 
     DOWNLOAD_WORKER_RETRY_SEC = 300
 
@@ -88,11 +110,14 @@ class Network:
         await self.download_queue.put(None)
 
     def get_bt_limit(self):
-        # Todo: detect bnep0 only
-        if self.config.G_AUTO_BT_TETHERING and self.config.G_BT_USE_ADDRESS:
+        if self.config.G_IS_RASPI and check_bnep0() and not check_wlan0():
             return True
         else:
             return False
+    
+    def reset_bt_error_status(self):
+        self.bt_error_history_open = False
+        self.bt_error_history_close = False
 
     async def download_worker(self):
         failed = []
@@ -132,12 +157,11 @@ class Network:
                     await self.download_queue.put(q)
 
             # retry for failed
-            if len(failed):
-                t = int(time.time())
-                for i in range(len(failed)):
-                    if t - failed[i][0] > self.DOWNLOAD_WORKER_RETRY_SEC:
-                        app_logger.error("retry")
-                        await self.download_queue.put(failed.pop(i)[1])
+            #if len(failed):
+            #    t = int(time.time())
+            #    for i in range(len(failed)):
+            #        if t - failed[i][0] > self.DOWNLOAD_WORKER_RETRY_SEC:
+            #            await self.download_queue.put(failed.pop(i)[1]) ############ causes index error
 
     # tiles functions
     async def download_maptile(
@@ -268,80 +292,104 @@ class Network:
             or not self.config.G_BT_USE_ADDRESS
             or not self.config.bt_pan
         ):
-            return
+            return False
 
-        if not disconnect:
-            res = await self.config.bt_pan.connect_tethering(
-                self.config.G_BT_ADDRESSES[self.config.G_BT_USE_ADDRESS]
-            )
+        bt_address = self.config.G_BT_ADDRESSES[self.config.G_BT_USE_ADDRESS]
+        if shutil.which("nmcli") is not None:
+            if not disconnect:
+                res = exec_cmd_return_value(
+                    ["sudo", "nmcli", "d", "connect", bt_address],
+                    cmd_print=True,
+                    timeout=5
+                )
+            else:
+                res = exec_cmd_return_value(
+                    ["sudo", "nmcli", "d", "disconnect", bt_address],
+                    cmd_print=True,
+                    timeout=5
+                )
         else:
-            res = await self.config.bt_pan.disconnect_tethering(
-                self.config.G_BT_ADDRESSES[self.config.G_BT_USE_ADDRESS]
-            )
+            if not disconnect:
+                res = await self.config.bt_pan.connect_tethering(bt_address)
+            else:
+                res = await self.config.bt_pan.disconnect_tethering(bt_address)
         return bool(res)
 
     async def open_bt_tethering(self, f_name):
 
-        if not self.config.G_AUTO_BT_TETHERING:
+        if not self.config.G_IS_RASPI:
+            return True
+        elif not self.config.G_AUTO_BT_TETHERING:
             return True
         elif self.config.G_AUTO_BT_TETHERING and not self.config.G_BT_USE_ADDRESS:
             return False
-        
+
+        # if other network exists, return
         if detect_network():
-            if bool(self.bt_tethering_status):
-                self.bt_tethering_status[f_name] = True
             return True
-        
+
+        # if bt tethering is opened from other function, return
         if any(self.bt_tethering_status.values()):
-            self.bt_tethering_status[f_name] = True
-            return
+            return True
 
         self.bt_tethering_status[f_name] = True
+
+        # open bt tethering
         bt_pan_status = await self.bluetooth_tethering()
-        count = 0
-
-        while (
-            bt_pan_status
-            and not detect_network()
-            and count < BT_TETHERING_TIMEOUT_SEC
-        ):
-            await asyncio.sleep(2)
-            count += 2
-
-        if not bt_pan_status or count >= BT_TETHERING_TIMEOUT_SEC:
-            if bt_pan_status:
-                await self.bluetooth_tethering(disconnect=True)
-            await asyncio.sleep(5)
+        if not bt_pan_status:
             self.bt_tethering_status[f_name] = False
-            app_logger.error(f"[BT] connect error, network: {bool(detect_network())}({count}s), f_name: {f_name}")
+            if not self.bt_error_history_open:
+                self.config.gui.show_forced_message("BT error(open)")
+                self.bt_error_history_open = True
+            app_logger.error(f"[BT] connect error_1, f_name: {f_name}")
             return False
 
-        await asyncio.sleep(5)
-        app_logger.info(f"[BT] connect, network: {bool(detect_network())}({count}s), f_name: {f_name}")
-        
+        # wait for an internet connection
+        count = 0
+        while count < BT_TETHERING_TIMEOUT_SEC:
+            await asyncio.sleep(2)
+            if check_bnep0() and detect_network():
+                break
+            count += 2
+
+        # if an internet connection cannot be obtained, return False
+        if count >= BT_TETHERING_TIMEOUT_SEC and not (check_bnep0() and detect_network()):
+            await self.bluetooth_tethering(disconnect=True)
+            if not self.bt_error_history_close:
+                self.config.gui.show_forced_message("BT error(close)")
+                self.bt_error_history_close = True
+            await asyncio.sleep(5)
+            self.bt_tethering_status[f_name] = False
+            app_logger.error(f"[BT] connect error_2({count}s), f_name: {f_name}")
+            return False
+
+        app_logger.info(f"[BT] connect({count}s), f_name: {f_name}")  
         return True
 
     async def close_bt_tethering(self, f_name):
 
-        if not self.config.G_AUTO_BT_TETHERING:
+        if not self.config.G_IS_RASPI:
+            return True
+        elif not self.config.G_AUTO_BT_TETHERING:
             return True
         elif self.config.G_AUTO_BT_TETHERING and not self.config.G_BT_USE_ADDRESS:
             return True
 
-        # if BT tethering is ON
-        #     return True
+        if f_name in self.bt_tethering_status:
+            self.bt_tethering_status[f_name] = False
 
-        self.bt_tethering_status[f_name] = False
-        if (
-            not bool(self.bt_tethering_status)
-            or any(self.bt_tethering_status.values())
-        ):
+        # if other network exists, return
+        if check_wlan0():  # except bnep0
             return True
 
+        # if bt tethering is opened from other function, return
+        if any(self.bt_tethering_status.values()):
+            return True
+
+        # close bt tethering
         await self.bluetooth_tethering(disconnect=True)
         await asyncio.sleep(5)
         self.bt_tethering_status[f_name] = False
-        self.bt_tethering_last_close_time = datetime.now()
         network_status = bool(detect_network())
         app_logger.info(f"[BT] disconnect, network: {network_status}, f_name: {f_name}")
         return not network_status

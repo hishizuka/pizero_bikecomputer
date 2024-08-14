@@ -99,6 +99,8 @@ class BTPanDbusNext(BTPan):
             except DBusError as e:
                 app_logger.error(f"[BT] {e}")
                 await asyncio.sleep(1)
+                if e == "Input/output error":
+                    break
             else:
                 break
         connected = await self.interface.get_connected()

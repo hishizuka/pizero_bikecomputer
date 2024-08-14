@@ -5,7 +5,6 @@ from datetime import datetime
 import socket
 import urllib.parse
 import asyncio
-import aiofiles
 
 import numpy as np
 
@@ -23,11 +22,13 @@ from logger import app_logger
 
 _IMPORT_GARMINCONNECT = False
 try:
+    from garth.exc import GarthHTTPError
+    import requests
     from garminconnect import (
         Garmin,
+        GarminConnectAuthenticationError,
         GarminConnectConnectionError,
         GarminConnectTooManyRequestsError,
-        GarminConnectAuthenticationError,
     )
 
     _IMPORT_GARMINCONNECT = True
@@ -411,8 +412,8 @@ class api:
             "Authorization": "Bearer " + self.config.G_STRAVA_API["ACCESS_TOKEN"]
         }
         data = {"data_type": "fit"}
-        async with aiofiles.open(self.config.G_UPLOAD_FILE, "rb"):
-            data["file"] = open(self.config.G_UPLOAD_FILE, "rb")
+        with open(self.config.G_UPLOAD_FILE, "rb") as file:
+            data["file"] = file
             upload_result = await post(
                 self.config.G_STRAVA_API_URL["UPLOAD"], headers=headers, data=data
             )
@@ -441,28 +442,32 @@ class api:
             return False
 
         try:
-            saved_session = self.config.state.get_value("garmin_session", None)
-            garmin_api = Garmin(session_data=saved_session)
-            garmin_api.login()
-        except (FileNotFoundError, GarminConnectAuthenticationError):
+            tokenstore = self.config.state.get_value("garmin_session", "")
+            if tokenstore == "":
+                raise ValueError
+            else:
+                garmin_api = Garmin()
+                garmin_api.login(tokenstore)
+        except (
+            ValueError,
+            GarthHTTPError,
+            GarminConnectAuthenticationError
+        ):
             try:
                 garmin_api = Garmin(
-                    self.config.G_GARMINCONNECT_API["EMAIL"],
-                    self.config.G_GARMINCONNECT_API["PASSWORD"],
+                    email=self.config.G_GARMINCONNECT_API["EMAIL"],
+                    password=self.config.G_GARMINCONNECT_API["PASSWORD"]
                 )
                 garmin_api.login()
                 self.config.state.set_value(
-                    "garmin_session", garmin_api.session_data, force_apply=True
+                    "garmin_session", garmin_api.garth.dumps(), force_apply=True
                 )
             except (
-                GarminConnectConnectionError,
+                GarthHTTPError,
                 GarminConnectAuthenticationError,
-                GarminConnectTooManyRequestsError,
+                requests.exceptions.HTTPError
             ) as err:
                 app_logger.error(err)
-                return False
-            else:
-                traceback.print_exc()
                 return False
 
         end_status = False
@@ -472,14 +477,22 @@ class api:
                 garmin_api.upload_activity(self.config.G_UPLOAD_FILE)
                 end_status = True
                 break
+            except GarthHTTPError as err:
+                # detect 409 in garth.exc.GarthHTTPError
+                # Error in request: 409 Client Error: Conflict for url: https://connectapi.garmin.com/upload-service/upload
+                if " 409 " in str(err):
+                    app_logger.info("This activity has already been uploaded.")
+                    end_status = True
+                    break
             except (
                 GarminConnectConnectionError,
                 GarminConnectAuthenticationError,
                 GarminConnectTooManyRequestsError,
             ) as err:
+                app_logger.error(type(err))
                 app_logger.error(err)
-            else:
-                traceback.print_exc()
+                return end_status
+
             time.sleep(1.0)
 
         return end_status
@@ -497,9 +510,12 @@ class api:
             "apikey": self.config.G_RIDEWITHGPS_API["APIKEY"],
             "version": "2",
             "auth_token": self.config.G_RIDEWITHGPS_API["TOKEN"],
+            "trip[name]": "",
+            "trip[description]": "",
+            "trip[bad_elevations]": "false",
         }
 
-        async with aiofiles.open(self.config.G_UPLOAD_FILE, "rb") as file:
+        with open(self.config.G_UPLOAD_FILE, "rb") as file:
             response = await post(
                 self.config.G_RIDEWITHGPS_API["URL_UPLOAD"],
                 params=params,
