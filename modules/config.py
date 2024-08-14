@@ -9,7 +9,6 @@ from glob import glob
 import numpy as np
 import oyaml as yaml
 
-
 from logger import CustomRotatingFileHandler, app_logger
 from modules.map_config import add_map_config
 from modules.helper.setting import Setting
@@ -230,6 +229,8 @@ class Config:
 
     # GUI mode
     G_GUI_MODE = "PyQt"
+    #G_GUI_MODE = "QML"
+    #G_GUI_MODE = "Kivy"
 
     # PerformanceGraph:
     # 1st: POWER
@@ -283,6 +284,8 @@ class Config:
     G_GPS_KEEP_ON_COURSE_CUTOFF = int(60 / G_GPS_INTERVAL)  # [s]
 
     G_UPLOAD_FILE = ""
+    G_AUTO_UPLOAD = False
+    G_AUTO_UPLOAD_SERVICE = {"STRAVA": True, "RWGPS": False, "GARMIN": False,}
     # STRAVA token (need to write setting.conf manually)
     G_STRAVA_API_URL = {
         "OAUTH": "https://www.strava.com/oauth/token",
@@ -324,7 +327,6 @@ class Config:
     G_GARMINCONNECT_API = {
         "EMAIL": "",
         "PASSWORD": "",
-        "URL_UPLOAD_DIFF": "proxy/upload-service/upload/.fit",  # https://connect.garmin.com/modern/proxy/upload-service/upload/.fit
     }
 
     G_GOOGLE_DIRECTION_API = {
@@ -411,6 +413,7 @@ class Config:
         parser.add_argument("--demo", action="store_true", default=False)
         parser.add_argument("--version", action="version", version="%(prog)s 0.1")
         parser.add_argument("--layout")
+        parser.add_argument("--gui")
         parser.add_argument("--headless", action="store_true", default=False)
         parser.add_argument("--output_log", action="store_true", default=False)
 
@@ -425,6 +428,8 @@ class Config:
             self.G_DUMMY_OUTPUT = True
         if args.layout and os.path.exists(args.layout):
             self.G_LAYOUT_FILE = args.layout
+        if args.gui and args.gui in ["PyQt", "QML", "Kivy"]:
+            self.G_GUI_MODE = args.gui
         if args.headless:
             self.G_HEADLESS = True
         if args.output_log:
@@ -511,14 +516,17 @@ class Config:
         self.button_config = Button_Config(self)
 
     def init_loop(self, call_from_gui=False):
-        if self.G_GUI_MODE == "PyQt":
+        if self.G_GUI_MODE in ["PyQt", "QML"]:
             if call_from_gui:
                 # workaround for latest qasync and older version(~0.24.0)
                 asyncio.events._set_running_loop(self.loop)
                 asyncio.set_event_loop(self.loop)
                 self.start_coroutine()
         else:
-            self.loop = asyncio.get_event_loop()
+            if call_from_gui:
+                self.loop = asyncio.get_event_loop()
+                self.loop.set_debug(True)
+                asyncio.set_event_loop(self.loop)
 
     def start_coroutine(self):
         self.logger.start_coroutine()
@@ -526,6 +534,9 @@ class Config:
 
         # delay init start
         asyncio.create_task(self.delay_init())
+    
+    async def start_coroutine_async(self):
+        self.start_coroutine()
 
     async def delay_init(self):
         await asyncio.sleep(0.01)
@@ -638,9 +649,6 @@ class Config:
                     self.gui.press_shift_tab()
                 elif key == "b" and self.gui:
                     self.gui.back_menu()
-                # test other functions
-                elif key == "c" and self.gui:
-                    self.gui.get_screenshot()
         except asyncio.CancelledError:
             pass
 
@@ -699,7 +707,7 @@ class Config:
         tasks = asyncio.all_tasks()
         current_task = asyncio.current_task()
         for task in tasks:
-            if self.G_GUI_MODE == "PyQt":
+            if self.G_GUI_MODE in ["PyQt", "QML"]:
                 if task == current_task or task.get_coro().__name__ in [
                     "update_display"
                 ]:
@@ -714,6 +722,7 @@ class Config:
 
     async def quit(self):
         app_logger.info("quit")
+
         if self.ble_uart is not None:
             await self.ble_uart.quit()
         await self.network.quit()
@@ -731,19 +740,14 @@ class Config:
         await asyncio.sleep(0.5)
         await self.kill_tasks()
         self.logger.remove_handler()
+
         app_logger.info("quit done")
 
-    def poweroff(self):
-        # TODO
-        #  should be replaced by quit() with power_off option
-        #  keep the logic for now but remove the shutdown service eg:
-        #  if we are running through a service, stop it and issue power-off command (on rasp-pi only)
-
-        # this returns 0 if active
-
-        if is_running_as_service():
-            exec_cmd(["sudo", "systemctl", "stop", "pizero_bikecomputer"])
-        if self.G_IS_RASPI:
+    async def power_off(self):
+        service_state = is_running_as_service() if self.G_IS_RASPI else False
+        
+        await self.quit()
+        if service_state and self.G_IS_RASPI:
             exec_cmd(["sudo", "poweroff"])
 
     def reboot(self):
