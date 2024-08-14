@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime
 import struct
 
 from .pyqt_screen_widget import ScreenWidget
@@ -6,7 +6,6 @@ from .pyqt_screen_widget import ScreenWidget
 #################################
 # multi scan widget
 #################################
-
 
 class MultiScanWidget(ScreenWidget):
     values = {
@@ -20,17 +19,29 @@ class MultiScanWidget(ScreenWidget):
         "ID": struct.Struct("<HB"),
     }
 
-    item_layout = {
-        "Power(3s)": (0, 0),
-        "HR": (0, 1),
-        "Speed": (0, 2),
-        "HR1": (1, 0),
-        "HR2": (1, 1),
-        "HR3": (1, 2),
-        "PWR1": (2, 0),
-        "PWR2": (2, 1),
-        "PWR3": (2, 2),
-    }
+    elements_horizontal = (
+        "Power(3s)", "HR", "Speed",
+        "PWR1", "PWR2", "PWR3",
+        "HR1", "HR2", "HR3",
+    )
+    elements_vertical = (
+        "Power(3s)", "HR",
+        "PWR1", "HR1",
+        "PWR2", "HR2",
+        "PWR3", "HR3",
+    )
+    item_layout = {}
+
+    def __init__(self, parent, config):
+        s = config.display.resolution
+        elements = self.elements_horizontal
+        cols = 3
+        if s[0] < s[1]:
+            elements = self.elements_vertical
+            cols = 2
+        for i, e in enumerate(elements):
+            self.item_layout[e] = (i // cols, i % cols)
+        super().__init__(parent, config, self.item_layout)
 
     def reset_values(self):
         self.values = {
@@ -55,7 +66,7 @@ class MultiScanWidget(ScreenWidget):
 
     def update_display(self):
         # update multi device value
-        now_time = datetime.datetime.now()
+        now_time = datetime.now()
         self.reset_values()
         count = {"HR": 0, "PWR": 0}
         for ant_id_type, values in self.sensor.sensor_ant.scanner.values.items():
@@ -89,23 +100,25 @@ class MultiScanWidget(ScreenWidget):
                 item.update_value(
                     eval(self.config.gui.gui_config.G_ITEM_DEF[item.name][1])
                 )
-            else:
-                item.label.setText(item.name)
-                key = item.name[0:-1]
-                i = int(item.name[-1:]) - 1
-                ant_id_type = self.values[key + "_ID"][i]
-                if ant_id_type != 0:
-                    (ant_id, ant_type) = self.struct_pattern["ID"].unpack(ant_id_type)
-                    item.update_value(self.values[key][i])
-                    if (
-                        key == "PWR"
-                        and "manu_name"
-                        in self.sensor.sensor_ant.scanner.values[ant_id_type]
-                    ):
-                        item.label.setText(
-                            self.sensor.sensor_ant.scanner.values[ant_id_type][
-                                "manu_name"
-                            ]
-                        )
-                else:
-                    item.update_value(None)
+                continue
+            
+            item.label.setText(item.name)
+
+            key = item.name[0:-1]
+            i = int(item.name[-1:]) - 1
+            ant_id_type = self.values[key + "_ID"][i]
+
+            if ant_id_type == 0:
+                item.update_value(None)
+                continue
+
+            (ant_id, ant_type) = self.struct_pattern["ID"].unpack(ant_id_type)
+            item.update_value(self.values[key][i])
+
+            if (
+                key == "PWR"
+                and "manu_name" in self.sensor.sensor_ant.scanner.values[ant_id_type]
+            ):
+                item.label.setText(
+                    self.sensor.sensor_ant.scanner.values[ant_id_type]["manu_name"]
+                )
