@@ -1,21 +1,27 @@
 import os
 import signal
 import asyncio
+from datetime import datetime, timezone
 
 import numpy as np
 
 from logger import app_logger
 from modules.gui_config import GUI_Config
-from modules._pyqt import (
+from modules._qt_ver import (
+    QtMode,
     USE_PYSIDE6,
-    QT_ALIGN_BOTTOM,
-    QT_ALIGN_LEFT,
-    QT_FORMAT_MONO,
-    QT_FORMAT_RGB888,
-    QtCore,
-    QtGui,
-    qasync,
+    QT_PACKAGE,
 )
+import importlib
+_qt_import = importlib.import_module(f"modules._qt_{QtMode.lower()}")
+QT_ALIGN_BOTTOM = _qt_import.QT_ALIGN_BOTTOM
+QT_ALIGN_LEFT = _qt_import.QT_ALIGN_LEFT
+QT_FORMAT_MONO = _qt_import.QT_FORMAT_MONO
+QT_FORMAT_RGB888 = _qt_import.QT_FORMAT_RGB888
+QtCore = _qt_import.QtCore
+QtGui = _qt_import.QtGui
+qasync = _qt_import.qasync
+del _qt_import
 
 
 class GUI_Qt_Base(QtCore.QObject):
@@ -42,6 +48,7 @@ class GUI_Qt_Base(QtCore.QObject):
 
     def __init__(self, config):
         super().__init__()
+        app_logger.info(f"Qt version: {QtCore.QT_VERSION_STR} ({QT_PACKAGE})")
 
         self.config = config
         self.config.gui = self
@@ -92,7 +99,7 @@ class GUI_Qt_Base(QtCore.QObject):
         # loop is closed
 
     def init_buffer(self, display):
-        if True:#if display.send:
+        if display.send:
             has_color = display.has_color
 
             # set image format
@@ -141,9 +148,8 @@ class GUI_Qt_Base(QtCore.QObject):
             return
 
         self.screen_image = p
-
-        if not USE_PYSIDE6:
-            ptr.setsize(self.bufsize)  # PyQt only
+        if not USE_PYSIDE6:  # PyQt only
+            ptr.setsize(self.bufsize)
 
         if self.remove_bytes > 0:
             buf = np.frombuffer(ptr, dtype=np.uint8).reshape(
@@ -153,7 +159,7 @@ class GUI_Qt_Base(QtCore.QObject):
         else:
             buf = np.frombuffer(ptr, dtype=np.uint8).reshape(self.screen_shape)
 
-        self.config.display.update(buf, direct_update) ############
+        self.config.display.update(buf, direct_update)
         # self.config.check_time("draw_display end")
 
     def show_popup(self, title, timeout=None):

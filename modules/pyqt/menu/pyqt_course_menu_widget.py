@@ -4,7 +4,7 @@ import shutil
 
 from PIL import Image, ImageEnhance, ImageQt
 
-from modules._pyqt import (
+from modules._qt_qtwidgets import (
     QT_ALIGN_CENTER,
     QtCore,
     QtWidgets,

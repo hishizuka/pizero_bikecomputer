@@ -2,11 +2,10 @@ import logging
 from functools import partial
 
 from logger import app_logger
-from modules._pyqt import (
+from modules._qt_qtwidgets import (
     QT_TEXTEDIT_NOWRAP,
     QT_SCROLLBAR_ALWAYSOFF,
     QtWidgets,
-    qasync,
 )
 from modules.utils.network import detect_network
 from .pyqt_menu_widget import MenuWidget, ListWidget

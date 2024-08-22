@@ -1,4 +1,4 @@
-from modules._pyqt import QtWidgets, QtCore
+from modules._qt_qtwidgets import QtWidgets, QtCore
 from modules.pyqt.components.icons import (
     ZoomInIcon,
     ZoomOutIcon,

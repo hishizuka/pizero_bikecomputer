@@ -5,9 +5,11 @@ from datetime import datetime
 import asyncio
 
 from logger import app_logger
-from modules.gui_qt_base import GUI_Qt_Base
-from modules._pyqt import (
-    QT_ALIGN_BOTTOM,
+
+import modules._qt_ver as _qt_ver
+_qt_ver.QtMode = "QtWidgets"
+
+from modules._qt_qtwidgets import (
     QT_ALIGN_LEFT,
     QT_ALIGN_CENTER,
     QT_STACKINGMODE_STACKALL,
@@ -25,6 +27,7 @@ from modules._pyqt import (
     qasync,
     Signal,
 )
+from modules.gui_qt_base import GUI_Qt_Base
 from modules.utils.timer import Timer, log_timers
 
 
@@ -61,7 +64,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def __init__(self, title, size, parent=None):
         super().__init__(parent=parent)
-        app_logger.info(f"Qt version: {QtCore.QT_VERSION_STR}")
         self.setWindowTitle(title)
         self.setMinimumSize(*size)
         self.set_color()

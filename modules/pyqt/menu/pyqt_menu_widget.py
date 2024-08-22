@@ -1,4 +1,4 @@
-from modules._pyqt import (
+from modules._qt_qtwidgets import (
     QT_ALIGN_LEFT,
     QT_KEY_SPACE,
     QT_NO_FOCUS,

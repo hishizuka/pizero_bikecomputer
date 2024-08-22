@@ -1,5 +1,5 @@
 from logger import app_logger
-from modules._pyqt import QT_EXPANDING, QtCore, QtWidgets, qasync
+from modules._qt_qtwidgets import QT_EXPANDING, QtCore, QtWidgets, qasync
 
 from .pyqt_item import Item
 

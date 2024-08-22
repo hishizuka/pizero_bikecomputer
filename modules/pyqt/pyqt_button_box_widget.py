@@ -1,5 +1,5 @@
 from logger import app_logger
-from modules._pyqt import QtWidgets
+from modules._qt_qtwidgets import QtWidgets
 from modules.pyqt.components import box_buttons, icons
 
 

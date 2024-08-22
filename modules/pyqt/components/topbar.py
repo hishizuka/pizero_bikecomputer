@@ -1,4 +1,4 @@
-from modules._pyqt import QT_ALIGN_CENTER, QtCore, QtWidgets
+from modules._qt_qtwidgets import QT_ALIGN_CENTER, QtCore, QtWidgets
 
 from .icons import BackIcon, ForwardIcon
 from .navi_button import NaviButton

@@ -1,4 +1,4 @@
-from modules._pyqt import QtWidgets
+from modules._qt_qtwidgets import QtWidgets
 from .icons import BackIcon, ForwardIcon, NextIcon, LapIcon, MenuIcon
 from .navi_button import NaviButton
 

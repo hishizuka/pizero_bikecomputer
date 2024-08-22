@@ -1,6 +1,6 @@
 import os
 
-from modules._pyqt import (
+from modules._qt_qtwidgets import (
     QT_COMPOSITION_MODE_SOURCEIN,
     QT_WA_TRANSLUCENT_BACKGROUND,
     QT_WA_TRANSPARENT_FOR_MOUSE_EVENTS,

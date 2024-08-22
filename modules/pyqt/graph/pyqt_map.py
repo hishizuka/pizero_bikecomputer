@@ -7,7 +7,7 @@ import numpy as np
 from PIL import Image
 
 from logger import app_logger
-from modules._pyqt import QT_COMPOSITION_MODE_DARKEN, pg, qasync, Signal
+from modules._qt_qtwidgets import QT_COMPOSITION_MODE_DARKEN, pg, qasync, Signal
 from modules.pyqt.pyqt_cuesheet_widget import CueSheetWidget
 from modules.pyqt.graph.pyqtgraph.CoursePlotItem import CoursePlotItem
 from modules.utils.geo import (

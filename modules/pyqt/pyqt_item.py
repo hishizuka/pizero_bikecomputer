@@ -1,8 +1,6 @@
-import time
-
 import numpy as np
 
-from modules._pyqt import QT_ALIGN_CENTER, QtWidgets
+from modules._qt_qtwidgets import QT_ALIGN_CENTER, QtWidgets
 
 
 class ItemLabel(QtWidgets.QLabel):

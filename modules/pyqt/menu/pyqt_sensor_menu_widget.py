@@ -1,6 +1,5 @@
 from logger import app_logger
-from modules._pyqt import QtCore, QtWidgets, QtGui
-import modules.pyqt.pyqt_multiscan_widget as pyqt_multiscan
+from modules._qt_qtwidgets import QtCore, QtWidgets, QtGui
 from .pyqt_menu_widget import MenuWidget, ListWidget, ListItemWidget
 
 

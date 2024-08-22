@@ -1,6 +1,6 @@
 import numpy as np
 
-from modules._pyqt import pg, qasync
+from modules._qt_qtwidgets import pg, qasync
 from modules.pyqt.pyqt_screen_widget import ScreenWidget
 
 HOLIZONTAL_ITEMS = 4

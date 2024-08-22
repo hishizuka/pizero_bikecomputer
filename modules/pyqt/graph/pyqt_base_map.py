@@ -1,6 +1,6 @@
 import numpy as np
 
-from modules._pyqt import QtCore, pg, qasync, Signal
+from modules._qt_qtwidgets import pg, qasync, Signal
 from modules.pyqt.pyqt_screen_widget import ScreenWidget
 from .pyqt_map_button import (
     ZoomInButton,
