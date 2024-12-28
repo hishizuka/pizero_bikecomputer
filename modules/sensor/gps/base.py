@@ -4,6 +4,7 @@ from datetime import datetime, time
 
 import numpy as np
 
+from logger import app_logger
 from modules.sensor.sensor import Sensor
 from modules.utils.geo import get_dist_on_earth, get_track_str, calc_azimuth
 from modules.utils.time import set_time, set_timezone
@@ -44,7 +45,20 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
         "time",
         "utctime",
         "mode",
+        "status",
     ]
+    # status: 
+    #    0=Unknown,
+    #    1=Normal,
+    #    2=DGPS,
+    #    3=RTK Fixed,
+    #    4=RTK Floating,
+    #    5=DR,
+    #    6=GNSSDR,
+    #    7=Time (surveyed),
+    #    8=Simulated,
+    #    9=P(Y)
+
     is_time_modified = False
     is_fixed = False
     is_altitude_modified = False
@@ -72,6 +86,8 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
             self.config.G_GPS_AZIMUTH_CUTOFF,
             360 - self.config.G_GPS_AZIMUTH_CUTOFF,
         ]
+        self.config.G_DUMMY_POS_X = self.config.state.get_value("pos_lon", self.config.G_DUMMY_POS_X)
+        self.config.G_DUMMY_POS_Y = self.config.state.get_value("pos_lat", self.config.G_DUMMY_POS_Y)
 
     def reset(self):
         self.values["distance"] = 0
@@ -106,7 +122,7 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
                 continue
             self.values[element] = np.nan
 
-    def is_position_valid(self, lat, lon, mode, dop, satellites, error=None):
+    def is_position_valid(self, lat, lon, mode, status, dop, satellites, error=None):
         valid = True
         if (
             lat is None
@@ -122,11 +138,14 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
             or satellites[0] <= USED_SAT_CUTOFF
         ):
             valid = False
+        else:
+            if type(lon) != float or type(lat) != float:
+                app_logger.error(f"GPS lon&lat are not float: {lon}, {type(lon)}, {lat}, {type(lat)}, {mode}, {dop}, {satellites}")
 
         return valid
 
     async def get_basic_values(
-        self, lat, lon, alt, speed, track, mode, error, dop, satellites, gps_time
+        self, lat, lon, alt, speed, track, mode, status, error, dop, satellites, gps_time
     ):
         # TODO, this probably has to go in the long term
         self.init_values()
@@ -148,12 +167,13 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
             speed = id_or_none(speed)
             track = id_or_none(track)
             mode = id_or_none(mode)
+            status = id_or_none(status)
             error = id_or_none(error)
             dop = id_or_none(dop)
             # no need to check for satellites, manually computed
 
         # coordinate
-        valid_pos = self.is_position_valid(lat, lon, mode, dop, satellites, error)
+        valid_pos = self.is_position_valid(lat, lon, mode, status, dop, satellites, error)
 
         # special condition #2
         # if not valid_pos and self.values['mode'] == 3 and self.values['used_sats'] >= 10 \
@@ -271,6 +291,11 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
         # raw coordinates
         self.values["raw_lat"] = lat
         self.values["raw_lon"] = lon
+
+        # record in state
+        if not np.any(np.isnan([self.values["lat"], self.values["lon"]])):
+            self.config.state.set_value("pos_lat", self.values["lat"])
+            self.config.state.set_value("pos_lon", self.values["lon"])
 
         self.values["mode"] = mode
 
