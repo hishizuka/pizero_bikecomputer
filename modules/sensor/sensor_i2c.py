@@ -73,6 +73,7 @@ class SensorI2C(Sensor):
         "pitch",
         "roll",
         "yaw",
+        "yaw_for_heading",
         "fixed_pitch",
         "fixed_roll",
         "modified_pitch",
@@ -102,8 +103,8 @@ class SensorI2C(Sensor):
         "acc_variance",
     )
 
-    values_mod = {}
-    elements_vec_mod = ("mag_min", "mag_max", "gyro_ave")
+    values_mod = {}  # mag_min, mag_max, gyro_ave
+    elements_vec_mod = ("gyro_ave",)
     sensor_label = {
         "MAG": "",
     }
@@ -149,82 +150,58 @@ class SensorI2C(Sensor):
     quit_status = False
 
     def sensor_init(self):
-        self.detect_sensors()
-
-        # barometic pressure & temperature sensor
-        if self.available_sensors["PRESSURE"]["BMP280"]:
-            self.sensor["i2c_baro_temp"] = self.sensor_bmp280
-        elif self.available_sensors["PRESSURE"]["BMP280_ORIG"]:
-            self.sensor["i2c_baro_temp"] = self.sensor_bmp280
-        elif self.available_sensors["PRESSURE"]["BME280"]:
-            self.sensor["i2c_baro_temp"] = self.sensor_bme280
-        elif self.available_sensors["PRESSURE"]["LPS3XHW"]:
-            self.sensor["i2c_baro_temp"] = self.sensor_lps35hw
-        elif self.available_sensors["PRESSURE"]["LPS3XHW_ORIG"]:
-            self.sensor["i2c_baro_temp"] = self.sensor_lps33hw
-        elif self.available_sensors["PRESSURE"]["BMP3XX"]:
-            self.sensor["i2c_baro_temp"] = self.sensor_bmp3xx
-        elif self.available_sensors["PRESSURE"]["MS5637"]:
-            self.sensor["i2c_baro_temp"] = self.sensor_ms5637
-        elif self.available_sensors["PRESSURE"]["BMP581"]:
-            self.sensor["i2c_baro_temp"] = self.sensor_bmp581
-
-        # accelerometer & magnetometer sensor
-        # acc + mag
-        if self.available_sensors["MOTION"]["LSM303_ORIG"]:
-            self.sensor["i2c_imu"] = self.sensor_lsm303
-        # acc + gyro
-        if self.available_sensors["MOTION"]["LSM6DS"]:
-            self.sensor["i2c_imu"] = self.sensor_lsm6ds
-        # acc + mag
-        if self.available_sensors["MOTION"]["ISM330DHCX"]:
-            self.sensor["i2c_imu"] = self.sensor_ism330dhcx
-        # mag
-        if self.available_sensors["MOTION"]["LIS3MDL"]:
-            self.sensor["i2c_mag"] = self.sensor_lis3mdl
-        if self.available_sensors["MOTION"]["MMC5983MA"]:
-            self.sensor["i2c_mag"] = self.sensor_mmc5983ma
-        # acc + gyro + mag
-        if self.available_sensors["MOTION"]["BMX160"]:
-            self.sensor["i2c_imu"] = self.sensor_bmx160
-        # acc + gyro + mag
-        if self.available_sensors["MOTION"]["LSM9DS1"]:
-            self.sensor["i2c_imu"] = self.sensor_lsm9ds1
-        # euler and quaternion
-        if self.available_sensors["MOTION"]["BNO055"]:
-            self.sensor["i2c_imu"] = self.sensor_bno055
-        # acc + gyro + mag
-        if self.available_sensors["MOTION"]["ICM20948"]:
-            self.sensor["i2c_imu"] = self.sensor_icm20948
-
-        # light sensor
-        if self.available_sensors["LIGHT"]["TCS3472"]:
-            self.sensor["lux"] = self.sensor_tcs3472
-        elif self.available_sensors["LIGHT"]["VCNL4040"]:
-            self.sensor["lux"] = self.sensor_vcnl4040
-        elif self.available_sensors["LIGHT"]["TSL2591"]:
-            self.sensor["lux"] = self.sensor_tsl2591
-
-        # uv sensor
-        if self.available_sensors["UV"]["LTR390"]:
-            self.sensor["uv"] = self.sensor_ltr390
-
-        # gas sensor
-        if self.available_sensors["GAS"]["SGP40"]:
-            self.sensor["gas"] = self.sensor_sgp40
-
         self.reset()
+
+        if not _SENSOR_I2C:
+            return
+
+        if self.config.G_USE_PCB_PIZERO_BIKECOMPUTER:
+            if self.detect_pressure_bmp581():
+                self.available_sensors["PRESSURE"]["BMP581"] = True
+                self.sensor["i2c_baro_temp"] = self.sensor_bmp581
+            if self.detect_motion_bmi270():
+                self.available_sensors["MOTION"]["BMI270"] = True
+                self.motion_sensor["ACC"] = True
+                self.motion_sensor["GYRO"] = True
+                self.sensor["i2c_imu"] = self.sensor_bmi270
+            if self.detect_motion_bmm150():
+                self.available_sensors["MOTION"]["BMM150"] = True
+                self.motion_sensor["MAG"] = True
+                self.sensor_label["MAG"] = "BMM150"
+                self.sensor["i2c_mag"] = self.sensor_bmm150
+            if self.detect_light_vncl4040():
+                self.available_sensors["LIGHT"]["VCNL4040"] = True
+                self.sensor["lux"] = self.sensor_vcnl4040
+            if self.detect_button_mcp230xx():
+                self.available_sensors["BUTTON"]["MCP23008"] = True
+
+            self.print_sensors()
+        else:
+            self.detect_sensors()
+            self.set_sensors()
+        
+        #self.reset()
 
         self.sealevel_pa = self.config.state.get_value("sealevel_pa", self.sealevel_pa)
         self.sealevel_temp = self.config.state.get_value(
             "sealevel_temp", self.sealevel_temp
         )
-        self.values_mod["mag_min"] = self.config.state.get_value(
-            "mag_min" + "_" + self.sensor_label["MAG"], self.values_mod["mag_min"]
-        )
-        self.values_mod["mag_max"] = self.config.state.get_value(
-            "mag_max" + "_" + self.sensor_label["MAG"], self.values_mod["mag_max"]
-        )
+
+        if not self.config.G_IMU_CALIB["MAG"]:
+            for k in ("mag_min", "mag_max"):
+                self.values_mod[k] = self.config.state.get_value(
+                    f"{k}_{self.sensor_label['MAG']}", None
+                )
+        else:
+            self.values_mod["mag_min"] = None
+            self.values_mod["mag_max"] = None
+
+        if not self.config.G_IMU_CALIB["PITCH_ROLL"]:
+            for k in ("fixed_pitch", "fixed_roll"):
+                self.values[k] = self.config.state.get_value(k, 0.0)
+        else:
+            self.values["fixed_pitch"] = 0.0
+            self.values["fixed_roll"] = 0.0
 
     async def init_kalman(self, interval):
         sampling_num = 100
@@ -307,6 +284,8 @@ class SensorI2C(Sensor):
         self.available_sensors["MOTION"]["BMX160"] = self.detect_motion_bmx160()
         self.available_sensors["MOTION"]["BNO055"] = self.detect_motion_bno055()
         self.available_sensors["MOTION"]["ICM20948"] = self.detect_motion_icm20948()
+        self.available_sensors["MOTION"]["BMI270"] = self.detect_motion_bmi270()
+        self.available_sensors["MOTION"]["BMM150"] = self.detect_motion_bmm150()
         if self.available_sensors["MOTION"]["LSM303_ORIG"]:
             self.motion_sensor["ACC"] = True
             self.motion_sensor["MAG"] = True
@@ -345,6 +324,12 @@ class SensorI2C(Sensor):
             self.motion_sensor["GYRO"] = True
             self.motion_sensor["MAG"] = True
             self.sensor_label["MAG"] = "ICM20948"
+        if self.available_sensors["MOTION"]["BMI270"]:
+            self.motion_sensor["ACC"] = True
+            self.motion_sensor["GYRO"] = True
+        if self.available_sensors["MOTION"]["BMM150"]:
+            self.motion_sensor["MAG"] = True
+            self.sensor_label["MAG"] = "BMM150"
 
         # light sensors
         self.available_sensors["LIGHT"]["TCS3472"] = self.detect_light_tcs3472()
@@ -361,22 +346,85 @@ class SensorI2C(Sensor):
         self.available_sensors["BUTTON"][
             "BUTTON_SHIM"
         ] = self.detect_button_button_shim()
-
-        self.available_sensors["BUTTON"]["MCP23009"] = self.detect_button_mcp23009()
+        self.available_sensors["BUTTON"]["MCP23008"] = self.detect_button_mcp230xx()
 
         # battery
         self.available_sensors["BATTERY"]["PIJUICE"] = self.detect_battery_pijuice()
         self.available_sensors["BATTERY"]["PISUGAR3"] = self.detect_battery_pisugar3()
 
         # print
-        if not _SENSOR_I2C:
-            return
+        self.print_sensors()
 
+    def print_sensors(self):
         app_logger.info("detected I2c sensors:")
         for k in self.available_sensors.keys():
             for kk in self.available_sensors[k]:
                 if self.available_sensors[k][kk]:
                     app_logger.info(f"  {k}: {kk}")
+
+    def set_sensors(self):
+        # barometic pressure & temperature sensor
+        if self.available_sensors["PRESSURE"].get("BMP280"):
+            self.sensor["i2c_baro_temp"] = self.sensor_bmp280
+        elif self.available_sensors["PRESSURE"].get("BMP280_ORIG"):
+            self.sensor["i2c_baro_temp"] = self.sensor_bmp280
+        elif self.available_sensors["PRESSURE"].get("BME280"):
+            self.sensor["i2c_baro_temp"] = self.sensor_bme280
+        elif self.available_sensors["PRESSURE"].get("LPS3XHW"):
+            self.sensor["i2c_baro_temp"] = self.sensor_lps35hw
+        elif self.available_sensors["PRESSURE"].get("LPS3XHW_ORIG"):
+            self.sensor["i2c_baro_temp"] = self.sensor_lps33hw
+        elif self.available_sensors["PRESSURE"].get("BMP3XX"):
+            self.sensor["i2c_baro_temp"] = self.sensor_bmp3xx
+        elif self.available_sensors["PRESSURE"].get("MS5637"):
+            self.sensor["i2c_baro_temp"] = self.sensor_ms5637
+        elif self.available_sensors["PRESSURE"].get("BMP581"):
+            self.sensor["i2c_baro_temp"] = self.sensor_bmp581
+
+        # accelerometer & magnetometer sensor
+        # acc + gyro
+        if self.available_sensors["MOTION"].get("BMI270"):
+            self.sensor["i2c_imu"] = self.sensor_bmi270
+        elif self.available_sensors["MOTION"].get("LSM6DS"):
+            self.sensor["i2c_imu"] = self.sensor_lsm6ds
+        # acc + mag
+        if self.available_sensors["MOTION"].get("ISM330DHCX"):
+            self.sensor["i2c_imu"] = self.sensor_ism330dhcx
+        elif self.available_sensors["MOTION"].get("LSM303_ORIG"):
+            self.sensor["i2c_imu"] = self.sensor_lsm303
+        # mag
+        if self.available_sensors["MOTION"].get("BMM150"):
+            self.sensor["i2c_mag"] = self.sensor_bmm150
+        elif self.available_sensors["MOTION"].get("MMC5983MA"):
+            self.sensor["i2c_mag"] = self.sensor_mmc5983ma
+        elif self.available_sensors["MOTION"].get("LIS3MDL"):
+            self.sensor["i2c_mag"] = self.sensor_lis3mdl
+        # acc + gyro + mag
+        if self.available_sensors["MOTION"].get("BMX160"):
+            self.sensor["i2c_imu"] = self.sensor_bmx160
+        elif self.available_sensors["MOTION"].get("LSM9DS1"):
+            self.sensor["i2c_imu"] = self.sensor_lsm9ds1
+        elif self.available_sensors["MOTION"].get("ICM20948"):
+            self.sensor["i2c_imu"] = self.sensor_icm20948
+        # euler and quaternion
+        if self.available_sensors["MOTION"].get("BNO055"):
+            self.sensor["i2c_imu"] = self.sensor_bno055
+
+        # light sensor
+        if self.available_sensors["LIGHT"].get("VCNL4040"):
+            self.sensor["lux"] = self.sensor_vcnl4040
+        elif self.available_sensors["LIGHT"].get("TCS3472"):
+            self.sensor["lux"] = self.sensor_tcs3472
+        elif self.available_sensors["LIGHT"].get("TSL2591"):
+            self.sensor["lux"] = self.sensor_tsl2591
+
+        # uv sensor
+        if self.available_sensors["UV"].get("LTR390"):
+            self.sensor["uv"] = self.sensor_ltr390
+
+        # gas sensor
+        if self.available_sensors["GAS"].get("SGP40"):
+            self.sensor["gas"] = self.sensor_sgp40
 
     def reset(self):
         for key in self.elements:
@@ -401,16 +449,11 @@ class SensorI2C(Sensor):
         # for temporary values
         for key in self.elements_vec_mod:
             self.values_mod[key] = np.zeros(3)
-        self.values_mod["mag_min"] = np.full(3, np.inf)
-        self.values_mod["mag_max"] = np.full(3, -np.inf)
         self.gyro_average_array = np.zeros((3, int(2 / self.config.G_I2C_INTERVAL) + 1))
 
         self.values["total_ascent"] = 0
         self.values["total_descent"] = 0
         self.values["accumulated_altitude"] = 0
-
-        self.values["fixed_pitch"] = 0
-        self.values["fixed_roll"] = 0
 
         self.graph_values = {}
         for g in self.graph_keys:
@@ -425,7 +468,6 @@ class SensorI2C(Sensor):
         self.euler_array = np.zeros((2, self.mov_window_size))
         self.acc_variance = np.zeros(3)
         self.moving = np.ones(self.mov_window_size)
-        self.do_position_calibration = True
 
         self.vspeed_window_size *= int(1 / self.config.G_I2C_INTERVAL)
         self.timestamp_size *= int(1 / self.config.G_I2C_INTERVAL)
@@ -451,29 +493,6 @@ class SensorI2C(Sensor):
         self.timestamp_array[0:-1] = self.timestamp_array[1:]
         self.timestamp_array[-1] = self.values["timestamp"]
 
-        # battery
-        if self.available_sensors["BATTERY"]["PIJUICE"]:
-            bv = self.sensor_pijuice.status.GetBatteryVoltage()
-            bc = self.sensor_pijuice.status.GetBatteryCurrent()
-            iv = self.sensor_pijuice.status.GetIoVoltage()
-            ic = self.sensor_pijuice.status.GetIoCurrent()
-            bl = self.sensor_pijuice.status.GetChargeLevel()
-            if bv["error"] == "NO_ERROR":
-                self.values["voltage_battery"] = bv["data"] / 1000
-            if bc["error"] == "NO_ERROR":
-                self.values["current_battery"] = bc["data"] / 1000
-            if iv["error"] == "NO_ERROR":
-                self.values["voltage_out"] = iv["data"] / 1000
-            if ic["error"] == "NO_ERROR":
-                self.values["current_out"] = ic["data"] / 1000
-            if bl["error"] == "NO_ERROR":
-                self.values["battery_percentage"] = bl["data"]
-        elif self.available_sensors["BATTERY"]["PISUGAR3"]:
-            self.sensor_pisugar3.read()
-            self.values["battery_percentage"] = self.sensor_pisugar3.battery_level
-
-        self.read_light()
-
         self.read_acc()
         self.read_gyro()
         self.read_mag()
@@ -482,29 +501,37 @@ class SensorI2C(Sensor):
 
         self.read_baro_temp()
         self.calc_altitude()
+
+        self.read_light()
         self.read_gas()
 
+        self.read_battery()
+
     def read_light(self):
+        if not self.available_sensors["LIGHT"] and not self.available_sensors["UV"]:
+            return
         try:
-            if self.available_sensors["LIGHT"]["TCS3472"]:
-                self.values["light"] = int(self.sensor["lux"].light())
-            elif (
-                self.available_sensors["LIGHT"]["VCNL4040"]
-                or self.available_sensors["LIGHT"]["TSL2591"]
+            if (
+                self.available_sensors["LIGHT"].get("VCNL4040")
+                or self.available_sensors["LIGHT"].get("TSL2591")
             ):
                 self.values["light"] = int(self.sensor["lux"].lux)
-            if self.available_sensors["LIGHT"]["TSL2591"]:
+            elif self.available_sensors["LIGHT"].get("TCS3472"):
+                self.values["light"] = int(self.sensor["lux"].light())
+            if self.available_sensors["LIGHT"].get("TSL2591"):
                 self.values["infrared"] = int(self.sensor["lux"].infrared)
-            if self.available_sensors["UV"]["LTR390"]:
+            if self.available_sensors["UV"].get("LTR390"):
                 self.values["uvi"] = int(self.sensor["uv"].uvi)
         except:
             return
 
     def read_gas(self):
+        if not self.available_sensors["GAS"]:
+            return
         try:
             if (
-                self.available_sensors["GAS"]["SGP40"]
-                and self.available_sensors["PRESSURE"]["BME280"]
+                self.available_sensors["GAS"].get("SGP40")
+                and self.available_sensors["PRESSURE"].get("BME280")
             ):
                 self.values["voc_index"] = int(
                     self.sensor["gas"].measure_index(
@@ -515,6 +542,32 @@ class SensorI2C(Sensor):
                 self.values["raw_gas"] = int(self.sensor["gas"].raw)
         except:
             return
+
+    def read_battery(self):
+        if not self.available_sensors["BATTERY"]:
+            return
+        try:
+            if self.available_sensors["BATTERY"].get("PIJUICE"):
+                bv = self.sensor_pijuice.status.GetBatteryVoltage()
+                bc = self.sensor_pijuice.status.GetBatteryCurrent()
+                iv = self.sensor_pijuice.status.GetIoVoltage()
+                ic = self.sensor_pijuice.status.GetIoCurrent()
+                bl = self.sensor_pijuice.status.GetChargeLevel()
+                if bv["error"] == "NO_ERROR":
+                    self.values["voltage_battery"] = bv["data"] / 1000
+                if bc["error"] == "NO_ERROR":
+                    self.values["current_battery"] = bc["data"] / 1000
+                if iv["error"] == "NO_ERROR":
+                    self.values["voltage_out"] = iv["data"] / 1000
+                if ic["error"] == "NO_ERROR":
+                    self.values["current_out"] = ic["data"] / 1000
+                if bl["error"] == "NO_ERROR":
+                    self.values["battery_percentage"] = bl["data"]
+            elif self.available_sensors["BATTERY"].get("PISUGAR3"):
+                self.sensor_pisugar3.read()
+                self.values["battery_percentage"] = self.sensor_pisugar3.battery_level
+        except:
+            pass
 
     def change_axis(self, a, is_mag=False):
         # acc
@@ -531,17 +584,18 @@ class SensorI2C(Sensor):
         # X: to North (north is max, south is min)
         # Y: to West (east is max, west is min)
         # Z: to down (minus)
+        # Check that the azimuth can be obtained with math.atan2(y, x) in the horizontal state.
 
         # X-Y swap
         if is_mag and self.config.G_IMU_MAG_AXIS_SWAP_XY["STATUS"]:
             a[0:2] = a[1::-1]
-        elif self.config.G_IMU_AXIS_SWAP_XY["STATUS"]:
+        elif not is_mag and self.config.G_IMU_AXIS_SWAP_XY["STATUS"]:
             a[0:2] = a[1::-1]
 
         # X, Y, Zinversion
         if is_mag and self.config.G_IMU_MAG_AXIS_CONVERSION["STATUS"]:
             a = a * self.config.G_IMU_MAG_AXIS_CONVERSION["COEF"]
-        elif self.config.G_IMU_AXIS_CONVERSION["STATUS"]:
+        elif not is_mag and self.config.G_IMU_AXIS_CONVERSION["STATUS"]:
             a = a * self.config.G_IMU_AXIS_CONVERSION["COEF"]
 
         return a
@@ -551,24 +605,27 @@ class SensorI2C(Sensor):
             return
         try:
             # get raw acc (normalized by gravitational acceleration, g = 9.80665)
-            if self.available_sensors["MOTION"]["LSM303_ORIG"]:
+            if (
+                self.available_sensors["MOTION"].get("LSM303_ORIG")
+                or self.available_sensors["MOTION"].get("BMI270")
+            ):
                 self.sensor["i2c_imu"].read_acc()
                 self.values["acc_raw"] = np.array(self.sensor["i2c_imu"].values["acc"])
             elif (
-                self.available_sensors["MOTION"]["LSM6DS"]
-                or self.available_sensors["MOTION"]["ISM330DHCX"]
-                or self.available_sensors["MOTION"]["BNO055"]
-                or self.available_sensors["MOTION"]["ICM20948"]
+                self.available_sensors["MOTION"].get("LSM6DS")
+                or self.available_sensors["MOTION"].get("ISM330DHCX")
+                or self.available_sensors["MOTION"].get("BNO055")
+                or self.available_sensors["MOTION"].get("ICM20948")
             ):
                 # sometimes BNO055 returns [None, None, None] array occurs
                 self.values["acc_raw"] = (
                     np.array(self.sensor["i2c_imu"].acceleration) / G
                 )
-            elif self.available_sensors["MOTION"]["LSM9DS1"]:
+            elif self.available_sensors["MOTION"].get("LSM9DS1"):
                 self.values["acc_raw"] = (
                     np.array(list(self.sensor["i2c_imu"].acceleration)) / G
                 )
-            elif self.available_sensors["MOTION"]["BMX160"]:
+            elif self.available_sensors["MOTION"].get("BMX160"):
                 self.values["acc_raw"] = np.array(self.sensor["i2c_imu"].accel) / G
         except:
             return
@@ -585,29 +642,30 @@ class SensorI2C(Sensor):
         if not self.motion_sensor["GYRO"]:
             return
         try:
-            if (
-                self.available_sensors["MOTION"]["LSM6DS"]
-                or self.available_sensors["MOTION"]["ISM330DHCX"]
-                or self.available_sensors["MOTION"]["BMX160"]
-                or self.available_sensors["MOTION"]["ICM20948"]
+            if self.available_sensors["MOTION"].get("BMI270"): # deg/sec
+                self.values["gyro_raw"] = np.array(self.sensor["i2c_imu"].values["gyro"])
+            elif (
+                self.available_sensors["MOTION"].get("LSM6DS") # rad/sec
+                or self.available_sensors["MOTION"].get("ISM330DHCX") # rad/sec
+                or self.available_sensors["MOTION"].get("BMX160") # deg/sec
+                or self.available_sensors["MOTION"].get("ICM20948") # deg/sec
             ):
                 self.values["gyro_raw"] = np.array(self.sensor["i2c_imu"].gyro)
-            elif self.available_sensors["MOTION"]["LSM9DS1"]:
+            elif self.available_sensors["MOTION"].get("LSM9DS1"): # rad/sec
                 self.values["gyro_raw"] = np.array(list(self.sensor["i2c_imu"].gyro))
-            elif self.available_sensors["MOTION"]["BNO055"]:
+            elif self.available_sensors["MOTION"].get("BNO055"): # rad/sec
                 # sometimes BNO055 returns [None, None, None] array occurs
                 self.values["gyro_raw"] = np.array(self.sensor["i2c_imu"].gyro) / 1.0
         except:
             return
         self.values["gyro_raw"] = self.change_axis(self.values["gyro_raw"])
 
+        # convert units (degree -> radians)
         if (
-            self.available_sensors["MOTION"]["LSM6DS"]
-            or self.available_sensors["MOTION"]["ISM330DHCX"]
+            self.available_sensors["MOTION"].get("BMI270")
+            or self.available_sensors["MOTION"].get("BMX160")
+            or self.available_sensors["MOTION"].get("ICM20948")
         ):
-            # already radians
-            pass
-        else:
             self.values["gyro_raw"] = np.radians(self.values["gyro_raw"])
 
         if return_raw:
@@ -616,9 +674,9 @@ class SensorI2C(Sensor):
         # calibration
         self.gyro_average_array[:, 0:-1] = self.gyro_average_array[:, 1:]
         self.gyro_average_array[:, -1] = self.values["gyro_raw"]
-        if self.do_position_calibration:
-            self.values_mod["gyro_ave"] = np.nanmean(self.gyro_average_array, axis=1)
-        self.values["gyro_mod"] = self.values["gyro_raw"] - self.values_mod["gyro_ave"]
+        #if self.do_position_calibration:
+        #    self.values_mod["gyro_ave"] = np.nanmean(self.gyro_average_array, axis=1)
+        self.values["gyro_mod"] = self.values["gyro_raw"]# - self.values_mod["gyro_ave"]
 
         # LP filter
         self.lp_filter("gyro_mod", 5)
@@ -643,21 +701,24 @@ class SensorI2C(Sensor):
         if not self.motion_sensor["MAG"]:
             return
         try:
-            if self.available_sensors["MOTION"]["LSM303_ORIG"]:
+            if self.available_sensors["MOTION"].get("LSM303_ORIG"):
                 self.sensor["i2c_imu"].read_mag()
                 self.values["mag_raw"] = np.array(self.sensor["i2c_imu"].values["mag"])
-            elif self.available_sensors["MOTION"]["LIS3MDL"]:
+            elif self.available_sensors["MOTION"].get("LIS3MDL"):
                 self.values["mag_raw"] = np.array(self.sensor["i2c_mag"].magnetic)
-            elif self.available_sensors["MOTION"]["LSM9DS1"]:
+            elif self.available_sensors["MOTION"].get("LSM9DS1"):
                 self.values["mag_raw"] = np.array(list(self.sensor["i2c_imu"].magnetic))
-            elif self.available_sensors["MOTION"]["BMX160"]:
+            elif self.available_sensors["MOTION"].get("BMX160"):
                 self.values["mag_raw"] = np.array(self.sensor["i2c_imu"].mag)
-            elif self.available_sensors["MOTION"]["ICM20948"]:
+            elif self.available_sensors["MOTION"].get("ICM20948"):
                 self.values["mag_raw"] = np.array(self.sensor["i2c_imu"].magnetic)
-            elif self.available_sensors["MOTION"]["BNO055"]:
+            elif self.available_sensors["MOTION"].get("BNO055"):
                 # sometimes BNO055 returns [None, None, None] array occurs
                 self.values["mag_raw"] = np.array(self.sensor["i2c_imu"].magnetic) / 1.0
-            if self.available_sensors["MOTION"]["MMC5983MA"]:
+            if (
+                self.available_sensors["MOTION"].get("MMC5983MA")
+                or self.available_sensors["MOTION"].get("BMM150")
+            ):
                 self.sensor["i2c_mag"].read_mag()
                 self.values["mag_raw"] = np.array(self.sensor["i2c_mag"].values["mag"])
         except:
@@ -665,35 +726,39 @@ class SensorI2C(Sensor):
         self.values["mag_raw"] = self.change_axis(self.values["mag_raw"], is_mag=True)
 
         self.values["mag_mod"] = self.values["mag_raw"]
+
         # calibration(hard/soft iron distortion)
-        pre_min = self.values_mod["mag_min"].copy()
-        pre_max = self.values_mod["mag_max"].copy()
-        self.values_mod["mag_min"] = np.minimum(
-            self.values["mag_mod"], self.values_mod["mag_min"]
-        )
-        self.values_mod["mag_max"] = np.maximum(
-            self.values["mag_mod"], self.values_mod["mag_max"]
-        )
-        # store
-        if np.any(pre_min != self.values_mod["mag_min"]):
-            self.config.state.set_value(
-                "mag_min" + "_" + self.sensor_label["MAG"], self.values_mod["mag_min"]
+        if self.config.G_IMU_CALIB["MAG"]:
+            if self.values_mod["mag_min"] is None or self.values_mod["mag_max"] is None:
+                pre_min = np.full(3, np.inf)
+                pre_max = np.full(3, -np.inf)
+            else:
+                pre_min = self.values_mod["mag_min"].copy()
+                pre_max = self.values_mod["mag_max"].copy()
+
+            self.values_mod["mag_min"] = np.minimum(pre_min, self.values["mag_mod"])
+            self.values_mod["mag_max"] = np.maximum(pre_max, self.values["mag_mod"])
+
+            # store
+            for pre, k in zip((pre_min, pre_max), ("mag_min", "mag_max")):
+                if np.any(pre != self.values_mod[k]):
+                    self.config.state.set_value(
+                        k + "_" + self.sensor_label["MAG"], self.values_mod[k]
+                    )
+                    app_logger.info(f"update {k}: {self.values_mod[k]}")
+
+        if self.values_mod["mag_min"] is not None and self.values_mod["mag_max"] is not None:
+            # hard iron distortion
+            self.values["mag_mod"] = (
+                self.values["mag_mod"]
+                - (self.values_mod["mag_min"] + self.values_mod["mag_max"]) / 2
             )
-        if np.any(pre_max != self.values_mod["mag_max"]):
-            self.config.state.set_value(
-                "mag_max" + "_" + self.sensor_label["MAG"], self.values_mod["mag_max"]
-            )
-        # hard iron distortion
-        self.values["mag_mod"] = (
-            self.values["mag_mod"]
-            - (self.values_mod["mag_min"] + self.values_mod["mag_max"]) / 2
-        )
-        # soft iron distortion
-        avg_delta = (self.values_mod["mag_max"] - self.values_mod["mag_min"]) / 2
-        avg_delta_all = np.sum(avg_delta) / 3
-        if not np.any(avg_delta == 0):
-            scale = avg_delta_all / avg_delta
-            self.values["mag_mod"] = self.values["mag_mod"] * scale
+            # soft iron distortion
+            avg_delta = (self.values_mod["mag_max"] - self.values_mod["mag_min"]) / 2
+            avg_delta_all = np.sum(avg_delta) / 3
+            if not np.any(avg_delta == 0):
+                scale = avg_delta_all / avg_delta
+                self.values["mag_mod"] = self.values["mag_mod"] * scale
 
         # LP filter
         # self.lp_filter('mag_mod', 4)
@@ -701,11 +766,22 @@ class SensorI2C(Sensor):
         # finalize mag
         self.values["mag"] = self.values["mag_mod"]
 
+        self.values["raw_heading"] = int(
+            math.degrees(
+                math.atan2(self.values['mag'][1], self.values['mag'][0])
+            )
+            - self.config.G_IMU_MAG_DECLINATION
+        )
+        if self.values["raw_heading"] < 0:
+            self.values["raw_heading"] += 360
+        elif self.values["raw_heading"] > 360:
+            self.values["raw_heading"] -= 360
+
     def read_quaternion(self):
         if not self.motion_sensor["QUATERNION"]:
             return
         try:
-            if self.available_sensors["MOTION"]["BNO055"]:
+            if self.available_sensors["MOTION"].get("BNO055"):
                 # sometimes [None, None, None] array occurs
                 self.values["quaternion"] = (
                     np.array(self.sensor["i2c_imu"].quaternion) / 1.0
@@ -717,21 +793,19 @@ class SensorI2C(Sensor):
         # get pitch, roll and yaw into self.values
         self.get_pitch_roll_yaw()
 
-        # print(
-        #  self.values['heading'],
-        #  math.degrees(self.values['pitch']),
-        #  math.degrees(self.values['roll'])
-        #  )
-
         # detect start/stop status and position(fixed_pitch, fixed_roll)
         self.detect_motion()
 
         # calc acc based on fixed_pitch and fixed_roll
         self.modified_acc()
 
+        # calc heading using yaw_for_heading, fixed_pitch and fixed_roll
+        #self.calc_heading()
+        self.calc_heading(self.values["yaw_for_heading"])
+
     def get_pitch_roll_yaw(self):
-        # pitch : the direction to look up is plus
-        # roll  : the direction to right up is plus
+        # pitch : the direction to look down is plus
+        # roll  : the direction to left up is plus
         # yaw   : clockwise rotation is plus, and the north is 0 (-180~+180)
         if self.motion_sensor["QUATERNION"]:
             self.calc_pitch_roll_yaw_from_quaternion()
@@ -756,7 +830,6 @@ class SensorI2C(Sensor):
         self.calc_heading(self.values["yaw"])
 
     def calc_pitch_roll_yaw_from_acc_mag(self):
-        # if np.any(np.isnan(self.motion_sensor['ACC'])) or np.any(np.isnan(self.motion_sensor['MAG'])):
         if not self.motion_sensor["ACC"] or not self.motion_sensor["MAG"]:
             return
 
@@ -766,17 +839,13 @@ class SensorI2C(Sensor):
         self.values["yaw"] = self.get_yaw(
             self.values["mag"], self.values["pitch"], self.values["roll"]
         )
-        self.calc_heading(self.values["yaw"])
+
+        self.values["yaw_for_heading"] = self.get_yaw(
+            self.values["mag"], self.values["fixed_pitch"], self.values["fixed_roll"]
+        )
 
     def calc_heading(self, yaw):
-        tilt_heading = yaw
-        if tilt_heading < 0:
-            tilt_heading += 2 * math.pi
-        if tilt_heading > 2 * math.pi:
-            tilt_heading -= 2 * math.pi
-
-        # set heading with yaw
-        if np.isnan(tilt_heading):
+        if np.isnan(yaw):
             return
 
         # true north modification
@@ -801,16 +870,20 @@ class SensorI2C(Sensor):
                 except:
                     pass
 
-        self.values["heading"] = (
-            int(math.degrees(tilt_heading)) - self.config.G_IMU_MAG_DECLINATION
-        )
+        # set heading with yaw
+        tilt_heading = yaw - math.radians(self.config.G_IMU_MAG_DECLINATION)
+        if tilt_heading < 0:
+            tilt_heading += 2 * math.pi
+        elif tilt_heading > 2 * math.pi:
+            tilt_heading -= 2 * math.pi
+
+        self.values["heading"] = int(math.degrees(tilt_heading))
         self.values["heading_str"] = get_track_str(self.values["heading"])
 
     @staticmethod
     def get_pitch_roll(acc):
-        roll = math.atan2(acc[Y], acc[Z])
         pitch = math.atan2(-acc[X], (math.sqrt(acc[Y] ** 2 + acc[Z] ** 2)))
-
+        roll = math.atan2(acc[Y], acc[Z])
         return pitch, roll
 
     @staticmethod
@@ -821,27 +894,17 @@ class SensorI2C(Sensor):
         sin_r = math.sin(roll)
         tiltcomp_x = mag[X] * cos_p + mag[Z] * sin_p
         tiltcomp_y = mag[X] * sin_r * sin_p + mag[Y] * cos_r - mag[Z] * sin_r * cos_p
-        # tiltcomp_z = mag[X] * cos_r * sin_p + mag[Y] * sin_r + mag[Z] * cos_r * cos_p
         yaw = math.atan2(tiltcomp_y, tiltcomp_x)
-
         return yaw
 
     def detect_motion(self):
         # require acc
         if not self.motion_sensor["ACC"]:
             return
-        self.acc_raw_hist[:, 0:-1] = self.acc_raw_hist[:, 1:]
-        self.acc_raw_hist[:, -1] = self.values["acc_raw"]
-        self.acc_hist[:, 0:-1] = self.acc_hist[:, 1:]
-        self.acc_hist[:, -1] = self.values["acc"]
-        self.acc_variance = np.var(self.acc_hist, axis=1)
+
         self.update_moving_threshold()
-        if self.motion_sensor["QUATERNION"]:
-            self.euler_array[:, 0:-1] = self.euler_array[:, 1:]
-            self.euler_array[:, -1] = [self.values["pitch"], self.values["roll"]]
 
         moving = 1
-        # if np.all(self.acc_variance < self.moving_threshold):
         if self.acc_variance[Z] < self.moving_threshold:
             moving = 0
         self.moving[0:-1] = self.moving[1:]
@@ -850,13 +913,11 @@ class SensorI2C(Sensor):
         self.values["m_stat"] = self.moving[-1]
 
         # calibrate position
-        if not self.do_position_calibration or sum(self.moving) != 0:
+        if not self.config.G_IMU_CALIB["PITCH_ROLL"] or sum(self.moving) != 0:
             return
+
         pitch = roll = np.nan
-        if self.motion_sensor["QUATERNION"]:
-            pitch = np.average(self.euler_array[0])
-            roll = np.average(self.euler_array[1])
-        elif self.motion_sensor["ACC"]:
+        if self.motion_sensor["ACC"]:
             pitch, roll = self.get_pitch_roll(
                 [
                     np.average(self.acc_raw_hist[0]),
@@ -864,14 +925,43 @@ class SensorI2C(Sensor):
                     np.average(self.acc_raw_hist[2]),
                 ]
             )
-        if not np.isnan(pitch) and not np.isnan(roll):
+        elif self.motion_sensor["QUATERNION"]:
+            pitch = np.average(self.euler_array[0])
+            roll = np.average(self.euler_array[1])
+
+        if not np.any(np.isnan((pitch, roll))):
             self.values["fixed_pitch"] = pitch
             self.values["fixed_roll"] = roll
+            self.config.state.set_value("fixed_pitch", pitch)
+            self.config.state.set_value("fixed_roll", roll, force_apply=True)
             self.values["gyro"] = np.zeros(3)
-            self.do_position_calibration = False
             app_logger.info(
                 f"calibrated position: pitch:{int(math.degrees(pitch))}, roll:{int(math.degrees(roll))}"
             )
+            self.config.G_IMU_CALIB["PITCH_ROLL"] = False
+
+    def update_moving_threshold(self):
+        if self.motion_sensor["ACC"]:
+            self.acc_raw_hist[:, 0:-1] = self.acc_raw_hist[:, 1:]
+            self.acc_raw_hist[:, -1] = self.values["acc_raw"]
+        elif self.motion_sensor["QUATERNION"]:
+            self.euler_array[:, 0:-1] = self.euler_array[:, 1:]
+            self.euler_array[:, -1] = [self.values["pitch"], self.values["roll"]]
+
+        self.acc_hist[:, 0:-1] = self.acc_hist[:, 1:]
+        self.acc_hist[:, -1] = self.values["acc"]
+        self.acc_variance = np.var(self.acc_hist, axis=1)
+
+        if np.any(self.acc_variance == 0):
+            return
+
+        variance_order = np.floor(np.log10(self.acc_variance))
+        self.values["acc_variance"] = variance_order
+        o = variance_order[Z]
+        # if np.sum(variance_order == o) >= 2 and o < self.moving_threshold_min:
+        if o < self.moving_threshold_min:
+            self.moving_threshold_min = o
+            self.moving_threshold = pow(10, 0.57 * o)
 
     def modified_acc(self):
         # require acc
@@ -970,23 +1060,8 @@ class SensorI2C(Sensor):
                 ]
             )
 
-    def recalibrate_position(self):
-        self.do_position_calibration = True
-
-    def update_moving_threshold(self):
-        if np.any(self.acc_variance == 0):
-            return
-        variance_order = np.floor(np.log10(self.acc_variance))
-        self.values["acc_variance"] = variance_order
-        o = variance_order[Z]
-        # if np.sum(variance_order == o) >= 2 and o < self.moving_threshold_min:
-        if o < self.moving_threshold_min:
-            self.moving_threshold_min = o
-            self.moving_threshold = pow(10, 0.57 * o)
-            # print(self.moving_threshold, self.moving_threshold_min)
-
     def read_baro_temp(self):
-        if not any(self.available_sensors["PRESSURE"].values()):
+        if not self.available_sensors["PRESSURE"]:
             return
 
         sp = self.available_sensors["PRESSURE"]
@@ -994,12 +1069,12 @@ class SensorI2C(Sensor):
         try:
             # t = datetime.now()
             if (
-                ("LPS3XHW_ORIG" in sp and sp["LPS3XHW_ORIG"])
-                or ("BMP280_ORIG" in sp and sp["BMP280_ORIG"])
-                or ("BME280" in sp and sp["BME280"])
-                or ("BMP3XX" in sp and sp["BMP3XX"])
-                or ("MS5637" in sp and sp["MS5637"])
-                or ("BMP581" in sp and sp["BMP581"])
+                sp.get("LPS3XHW_ORIG")
+                or sp.get("BMP280_ORIG")
+                or sp.get("BME280")
+                or sp.get("BMP3XX")
+                or sp.get("MS5637")
+                or sp.get("BMP581")
             ):
                 self.sensor["i2c_baro_temp"].read()
             self.values["temperature"] = round(
@@ -1009,8 +1084,6 @@ class SensorI2C(Sensor):
             if "BME280" in sp and sp["BME280"]:
                 self.values["humidity"] = self.sensor["i2c_baro_temp"].relative_humidity
                 # discomfort_index = 0.81*self.values['temperature'] + 0.01*self.values['humidity']*(0.99*self.values['temperature']-14.3) + 46.3
-            # print("    read value: {:.3f} sec".format((datetime.now()-t).total_seconds()))
-            # print("    pressure:{:.2f}, temperature:{}".format(self.values['pressure_raw'],self.values['temperature']))
         except:
             return
 
@@ -1186,10 +1259,10 @@ class SensorI2C(Sensor):
         #  round(self.values['altitude_kalman'],1),"m, ",
         #  round(self.values['altitude'],1),"m, ",
         #  round(self.values['acc'][Z]*G,1),"m/s^2"
-        #  )
+        #)
 
     async def led_blink(self, sec):
-        if not self.available_sensors["BUTTON"]["BUTTON_SHIM"]:
+        if not self.available_sensors["BUTTON"].get("BUTTON_SHIM"):
             return
         t = sec
         while t > 0:
@@ -1206,7 +1279,6 @@ class SensorI2C(Sensor):
             import adafruit_bmp280
 
             i2c = busio.I2C(board.SCL, board.SDA)
-            # device test
             self.sensor_bmp280 = adafruit_bmp280.Adafruit_BMP280_I2C(i2c)
             self.sensor_bmp280.mode = adafruit_bmp280.MODE_NORMAL
             # STANDBY_TC_0_5, STANDBY_TC_10, STANDBY_TC_20, STANDBY_TC_62_5,
@@ -1238,7 +1310,6 @@ class SensorI2C(Sensor):
             import board
             import adafruit_lps35hw
 
-            # device test
             self.sensor_lps35hw = adafruit_lps35hw.LPS35HW(board.I2C())
             self.sensor_lps35hw.low_pass_enabled = True
             # self.sensor_lps35hw.data_rate = adafruit_lps35hw.DataRate.RATE_1_HZ
@@ -1286,7 +1357,6 @@ class SensorI2C(Sensor):
             import board
             from adafruit_bme280 import advanced as adafruit_bme280
 
-            # device test
             # for Waveshare Environment Sensor HAT
             self.sensor_bme280 = adafruit_bme280.Adafruit_BME280_I2C(
                 board.I2C(), address=0x76
@@ -1460,6 +1530,47 @@ class SensorI2C(Sensor):
             return True
         except:
             return False
+            
+    def detect_motion_bmi270(self):
+        try:
+            from .i2c.BMI270 import BMI270
+
+            # device test
+            if not BMI270.test():
+                return False
+            self.sensor_bmi270 = BMI270()
+            return True
+        except:
+            return False
+
+    def detect_motion_icm20948(self):
+        try:
+            import board
+            import busio
+            import adafruit_icm20x
+
+            # for Waveshare Environment Sensor HAT
+            self.sensor_icm20948 = adafruit_icm20x.ICM20948(
+                busio.I2C(board.SCL, board.SDA), address=0x68
+            )
+            return True
+        except:
+            return False
+
+    def detect_motion_bmm150(self):
+        try:
+            from .i2c.BMM150 import BMM150
+
+            # device test
+            if BMM150.test():
+                self.sensor_bmm150 = BMM150()
+            elif BMM150.test(address=0x12):
+                self.sensor_bmm150 = BMM150(address=0x12)
+            else:
+                return False
+            return True
+        except:
+            return False
 
     def detect_light_tcs3472(self):
         try:
@@ -1467,7 +1578,6 @@ class SensorI2C(Sensor):
 
             light.light()
             self.sensor_tcs3472 = light
-            # device test
             return True
         except:
             return False
@@ -1482,7 +1592,6 @@ class SensorI2C(Sensor):
                 busio.I2C(board.SCL, board.SDA)
             )
             self.sensor_vcnl4040.proximity_shutdown = True
-            # device test
             return True
         except:
             return False
@@ -1501,7 +1610,6 @@ class SensorI2C(Sensor):
             # self.sensor_tsl2591.integration_time = adafruit_tsl2591.INTEGRATIONTIME_100MS
             # INTEGRATIONTIME_100MS(default), INTEGRATIONTIME_200MS, INTEGRATIONTIME_300MS,
             # INTEGRATIONTIME_400MS, INTEGRATIONTIME_500MS, INTEGRATIONTIME_600MS
-            # device test
             return True
         except:
             return False
@@ -1519,7 +1627,6 @@ class SensorI2C(Sensor):
             # GAIN_1X, GAIN_3X, GAIN_6X, GAIN_9X, GAIN_18X
             # self.sensor_ltr390.measurement_delay = adafruit_ltr390.MeasurementDelay.DELAY_25MS
             # DELAY_25MS, DELAY_50MS, DELAY_100MS, DELAY_200MS, DELAY_500MS, DELAY_1000MS, DELAY_2000MS
-            # device test
             return True
         except:
             return False
@@ -1531,7 +1638,6 @@ class SensorI2C(Sensor):
             import adafruit_sgp40
 
             self.sensor_sgp40 = adafruit_sgp40.SGP40(busio.I2C(board.SCL, board.SDA))
-            # device test
             return True
         except:
             return False
@@ -1540,18 +1646,16 @@ class SensorI2C(Sensor):
         try:
             from .i2c.button_shim import ButtonShim
 
-            # device test
             self.sensor_button_shim = ButtonShim(self.config)
             return True
         except:
             return False
 
-    def detect_button_mcp23009(self):
+    def detect_button_mcp230xx(self):
         try:
-            from .i2c.MCP23009 import MCP23009
+            from .i2c.MCP230XX import MCP23008
 
-            # device test
-            self.sensor_mcp23009 = MCP23009(self.config)
+            self.sensor_mcp23008 = MCP23008(self.config)
             return True
         except:
             return False
