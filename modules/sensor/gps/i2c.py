@@ -64,6 +64,7 @@ class GPS_I2C(AbstractSensorGPS):
                     self.NULL_VALUE,
                     mode,
                     None,
+                    None,
                     dop,
                     (int(g.data["num_sats"] or 0), None),
                     g.data["timestamp"],  # this is a time object not a datetime

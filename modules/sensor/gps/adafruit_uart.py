@@ -73,6 +73,7 @@ class Adafruit_GPS(AbstractSensorGPS):
                     g.track_angle_deg,
                     g.fix_quality_3d,
                     None,
+                    None,
                     [g.pdop, g.hdop, g.vdop],
                     (used, total),
                     time.strftime("%Y-%m-%dT%H:%M:%S+00:00", g.timestamp_utc),
