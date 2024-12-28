@@ -16,6 +16,7 @@ class MipDisplayBase(Display):
     SCS = 23  # 16 in GPIO.BOARD
     VCOMSEL = 17  # 11 in GPIO.BOARD
     BACKLIGHT = 18  # 12 in GPIO.BOARD with hardware PWM in pigpio
+    BACKLIGHT_SWITCH = 24  # 18 in GPIO.BOARD
 
     # update mode
     # https://www.j-display.com/product/pdf/Datasheet/3LPM027M128C_specification_ver02.pdf
@@ -37,8 +38,7 @@ class MipDisplayBase(Display):
 
     brightness_table = [0, 1, 2, 3, 5, 7, 10, 25, 50, 100]
     brightness = 0
-
-    dithering_cutoff = [192, 216, 224]
+    minimum_brightness = 0
 
     size = (400, 240)
     bpp = 3 # 1/3/6
@@ -48,6 +48,7 @@ class MipDisplayBase(Display):
     spi_max_rows = 0
 
     quit_status = False
+    use_cpp = False
 
     def __init__(self, config, size=None, color=None):
         super().__init__(config)
@@ -64,6 +65,9 @@ class MipDisplayBase(Display):
             if color == 64:
                 self.bpp = 6
 
+        self.init_minimum_brightness()
+        self.init_backlight_func()
+
         if self.init_cython():
             # switch to cython
             return
@@ -77,9 +81,21 @@ class MipDisplayBase(Display):
 
         self.init_buffer()
 
+    def init_minimum_brightness(self):
+        if self.config.G_DISPLAY == "MIP_JDI_color_400x240":
+            self.minimum_brightness = 3
+        elif self.config.G_DISPLAY == "MIP_JDI_color_640x480":
+            self.minimum_brightness = 10
+        elif self.config.G_DISPLAY == "MIP_Azumo_color_272x451":
+            self.minimum_brightness = 10
+
+    def init_backlight_func(self):
+        pass
+
     def start_coroutine(self):
-        self.draw_queue = asyncio.Queue()
-        asyncio.create_task(self.draw_worker())
+        if not self.use_cpp:
+            self.draw_queue = asyncio.Queue()
+            asyncio.create_task(self.draw_worker())
 
     def init_spi(self):
         pass
@@ -100,8 +116,8 @@ class MipDisplayBase(Display):
         self.img_buff_rgb8[:, 1] = np.arange(self.size[1]) & 0xFF
 
         if self.config.G_DISPLAY.startswith("MIP_Sharp_mono"):
-            self.img_buff_rgb8[:,2:] = 255
-            self.pre_img[:,2:] = 255
+            self.img_buff_rgb8[:, 2:] = 255
+            self.pre_img[:, 2:] = 255
             # address is set in reversed bits
             self.img_buff_rgb8[:, 1] = [
                 int("{:08b}".format(a)[::-1], 2) for a in range(self.size[1])
@@ -156,6 +172,7 @@ class MipDisplayBase(Display):
         s = sec
         state = True
         disp_cond = self.config.G_DISPLAY.startswith((
+            "MIP_Azumo_color_272x451",
             "MIP_Sharp_mono"
         ))
 
@@ -187,7 +204,7 @@ class MipDisplayBase(Display):
             if img_bytes is None:
                 break
             # self.config.check_time("mip_draw_worker start")
-            # t = datetime.datetime.now()
+            # t = datetime.now()
             self.gpio_write(self.SCS, 1)
             await asyncio.sleep(0.000006)
             self.spi_write(img_bytes)
@@ -196,7 +213,7 @@ class MipDisplayBase(Display):
             await asyncio.sleep(0.000006)
             self.gpio_write(self.SCS, 0)
             # self.config.check_time("mip_draw_worker end")
-            # print("####### draw(Py)", (datetime.datetime.now()-t).total_seconds())
+            # print("####### draw(Py)", (datetime.now()-t).total_seconds())
             self.draw_queue.task_done()
 
     def update(self, im_array, direct_update):
@@ -280,6 +297,9 @@ class MipDisplayBase(Display):
             return
         self.set_PWM(b)
         self.brightness = b
+
+    def set_minimum_brightness(self):
+        self.set_brightness(self.minimum_brightness)
 
     def backlight_blink(self):
         for x in range(2):

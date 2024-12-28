@@ -1,7 +1,10 @@
 #include "mip_display.hpp"
 
 
-MipDisplay::MipDisplay(int spi_clock) {
+MipDisplay::MipDisplay(int spi_clock, int pcb_pattern) {
+
+  // pcb_pattern
+  //   0: None, 1: SWITCH_SCIENCE_MIP_BOARD, 2: PIZERO_BIKECOMPUTER
 
   pigpio = pigpio_start(0, 0);
   spi = spi_open(pigpio, 0, spi_clock, 0);
@@ -11,6 +14,13 @@ MipDisplay::MipDisplay(int spi_clock) {
   set_mode(pigpio, GPIO_SCS, PI_OUTPUT);
   set_mode(pigpio, GPIO_VCOMSEL, PI_OUTPUT);
   set_mode(pigpio, GPIO_BACKLIGHT, PI_OUTPUT);
+  if (pcb_pattern == 1){
+    set_PWM = &MipDisplay::set_PWM_switch_science_mip_board;
+  }
+  else if(pcb_pattern == 2) {
+    set_PWM = &MipDisplay::set_PWM_pizero_bikecomputer_pcb;
+    set_mode(pigpio, GPIO_BACKLIGHT_SWITCH, PI_OUTPUT);
+  }
   usleep(6);
 
   gpio_write(pigpio, GPIO_SCS, 0);
@@ -18,7 +28,7 @@ MipDisplay::MipDisplay(int spi_clock) {
   gpio_write(pigpio, GPIO_VCOMSEL, 1);
   usleep(6);
 
-  hardware_PWM(pigpio, GPIO_BACKLIGHT, GPIO_BACKLIGHT_FREQ, 0);
+  set_brightness(0);
   usleep(6);
 
   //threads_.emplace((&MipDisplay::draw_worker, this));
@@ -101,14 +111,32 @@ void MipDisplay::no_update() {
   usleep(6);
 }
 
+void MipDisplay::set_PWM_switch_science_mip_board(int b) {
+  hardware_PWM(pigpio, GPIO_BACKLIGHT, GPIO_BACKLIGHT_FREQ, b*10000);
+}
+
+void MipDisplay::set_PWM_pizero_bikecomputer_pcb(int b) {
+  if(b == 0) {
+    gpio_write(pigpio, GPIO_BACKLIGHT_SWITCH, 0);
+  } else {
+    gpio_write(pigpio, GPIO_BACKLIGHT_SWITCH, 1);
+  }
+  hardware_PWM(pigpio, GPIO_BACKLIGHT, GPIO_BACKLIGHT_FREQ, (100-b)*10000);
+}
+
 void MipDisplay::set_brightness(int brightness) {
+  if(pre_brightness == brightness) {
+    return;
+  }
+
   int b = brightness;
   if(b >= 100) {
     b = 100;
   } else if (b <= 0) {
     b = 0;
   }
-  hardware_PWM(pigpio, GPIO_BACKLIGHT, GPIO_BACKLIGHT_FREQ, b*10000);
+  (this->*set_PWM)(b);
+  pre_brightness = b;
   usleep(50000);
 }
 
@@ -179,7 +207,8 @@ void MipDisplay::update(unsigned char* image) {
 }
 
 int MipDisplay::conv_1bit_color(unsigned char* image) {
-  return 0;
+  int update_lines = 0;
+  return update_lines;
 }
 
 int MipDisplay::conv_2bit_color(unsigned char* image) {
@@ -293,7 +322,8 @@ int MipDisplay::conv_3bit_color(unsigned char* image) {
 }
 
 int MipDisplay::conv_4bit_color(unsigned char* image) {
-  return 0;
+  int update_lines = 0;
+  return update_lines;
 }
 
 void MipDisplay::draw(std::vector<char>& buf_queue) {
