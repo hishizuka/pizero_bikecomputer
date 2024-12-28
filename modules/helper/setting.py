@@ -42,6 +42,17 @@ class Setting:
             if "FONT_FILE" in c:
                 self.config.G_FONT_FILE = c["FONT_FILE"]
 
+        if "BT" in self.config_parser:
+            c = self.config_parser["BT"]
+            if "BT_PAN_DEVICE" in c:
+                self.config.G_BT_PAN_DEVICE = c["BT_PAN_DEVICE"]
+            if "AUTO_BT_TETHERING" in c:
+                self.config.G_AUTO_BT_TETHERING = c.getboolean("AUTO_BT_TETHERING")
+            if "GADGETBRIDGE_STATUS" in c:
+                self.config.G_GADGETBRIDGE["STATUS"] = c.getboolean("GADGETBRIDGE_STATUS")
+            if "GADGETBRIDGE_USE_GPS" in c:
+                self.config.G_GADGETBRIDGE["USE_GPS"] = c.getboolean("GADGETBRIDGE_USE_GPS")
+
         if "MAP_AND_DATA" in self.config_parser:
             c = self.config_parser["MAP_AND_DATA"]
             if "MAP" in c:
@@ -76,43 +87,25 @@ class Setting:
                 )
 
         if "ANT" in self.config_parser:
-            for key in self.config_parser["ANT"]:
-                if key.upper() == "STATUS":
-                    self.config.G_ANT["STATUS"] = self.config_parser["ANT"].getboolean(
-                        key
-                    )
+            c = self.config_parser["ANT"]
+            for key in c:
+                if key.upper() in ["STATUS", "USE_AUTO_LIGHT"]:
+                    self.config.G_ANT[key.upper()] = c.getboolean(key)
                     continue
-                i = key.rfind("_")
 
+                i = key.rfind("_")
                 if i < 0:
                     continue
 
-                key1 = key[0:i]
-                key2 = key[i + 1 :]
-                try:
-                    k1 = key1.upper()
-                    k2 = key2.upper()
-                except:
-                    continue
-                if (
-                    k1 == "USE" and k2 in self.config.G_ANT["ID"].keys()
-                ):  # ['HR','SPD','CDC','PWR']:
-                    try:
-                        self.config.G_ANT[k1][k2] = self.config_parser[
-                            "ANT"
-                        ].getboolean(key)
-                    except:
-                        pass
-                elif (
-                    k1 in ["ID", "TYPE"] and k2 in self.config.G_ANT["ID"].keys()
-                ):  # ['HR','SPD','CDC','PWR']:
-                    try:
-                        self.config.G_ANT[k1][k2] = self.config_parser["ANT"].getint(
-                            key
-                        )
-                    except:
-                        pass
-            for key in self.config.G_ANT["ID"].keys():  # ['HR','SPD','CDC','PWR']:
+                k1 = key[0:i].upper()
+                k2 = key[i + 1:].upper()
+                if k2 in self.config.G_ANT["ID"].keys():
+                    if k1 == "USE":
+                        self.config.G_ANT[k1][k2] = c.getboolean(key)
+                    elif k1 in ["ID", "TYPE"]:
+                        self.config.G_ANT[k1][k2] = c.getint(key)
+
+            for key in self.config.G_ANT["ID"].keys():
                 if (
                     not (0 <= self.config.G_ANT["ID"][key] <= 0xFFFF)
                     or not self.config.G_ANT["TYPE"][key]
@@ -162,6 +155,8 @@ class Setting:
             c = self.config_parser["DISPLAY_PARAM"]
             if "SPI_CLOCK" in c:
                 self.config.G_DISPLAY_PARAM["SPI_CLOCK"] = int(c["SPI_CLOCK"])
+            if "PCB_BACKLIGHT" in c:
+                self.config.G_PCB_BACKLIGHT = c["PCB_BACKLIGHT"].upper()
             if "USE_BACKLIGHT" in c:
                 self.config.G_DISPLAY_PARAM["USE_BACKLIGHT"] = c.getboolean("USE_BACKLIGHT")
             if "AUTO_BACKLIGHT_CUTOFF" in c:
@@ -207,8 +202,12 @@ class Setting:
             config = eval("self.config.G_" + token + "_API")
             if token_str in self.config_parser:
                 for k in config.keys():
-                    if k in self.config_parser[token_str]:
-                        config[k] = self.config_parser[token_str][k]
+                    c = self.config_parser[token_str]
+                    if k in c:
+                        if k == "STATUS":
+                            config[k] = c.getboolean(k)
+                        else:
+                            config[k] = c[k]
                 if config["TOKEN"] != "":
                     config["HAVE_API_TOKEN"] = True
 
@@ -228,6 +227,13 @@ class Setting:
         c["GROSS_AVE_SPEED"] = str(int(self.config.G_GROSS_AVE_SPEED))
         c["LANG"] = self.config.G_LANG
         c["FONT_FILE"] = self.config.G_FONT_FILE
+
+        self.config_parser["BT"] = {}
+        c = self.config_parser["BT"]
+        c["BT_PAN_DEVICE"] = str(self.config.G_BT_PAN_DEVICE)
+        c["AUTO_BT_TETHERING"] = str(self.config.G_AUTO_BT_TETHERING)
+        c["GADGETBRIDGE_STATUS"] = str(self.config.G_GADGETBRIDGE["STATUS"])
+        c["GADGETBRIDGE_USE_GPS"] = str(self.config.G_GADGETBRIDGE["USE_GPS"])
 
         self.config_parser["MAP_AND_DATA"] = {}
         c = self.config_parser["MAP_AND_DATA"]
@@ -257,6 +263,7 @@ class Setting:
                         key2 in self.config.G_ANT["ID"].keys()
                     ):  # ['HR','SPD','CDC','PWR']:
                         c[key1 + "_" + key2] = str(self.config.G_ANT[key1][key2])
+            c["USE_AUTO_LIGHT"] = str(self.config.G_ANT["USE_AUTO_LIGHT"])
 
         self.config_parser["SENSOR_IMU"] = {}
         c = self.config_parser["SENSOR_IMU"]
@@ -271,6 +278,7 @@ class Setting:
         self.config_parser["DISPLAY_PARAM"] = {}
         c = self.config_parser["DISPLAY_PARAM"]
         c["SPI_CLOCK"] = str(int(self.config.G_DISPLAY_PARAM["SPI_CLOCK"]))
+        c["PCB_BACKLIGHT"] = str(self.config.G_PCB_BACKLIGHT).lower()
         c["USE_BACKLIGHT"] = str(self.config.G_DISPLAY_PARAM["USE_BACKLIGHT"])
         c["AUTO_BACKLIGHT_CUTOFF"] = str(int(self.config.G_AUTO_BACKLIGHT_CUTOFF))
 
@@ -300,6 +308,8 @@ class Setting:
             self.config_parser[token_str]["TOKEN"] = config["TOKEN"]
             if token == "RIDEWITHGPS":
                 self.config_parser[token_str]["APIKEY"] = config["APIKEY"]
+            if token == "THINGSBOARD":
+                self.config_parser[token_str]["STATUS"] = str(config["STATUS"])
 
         self.config_parser["GARMINCONNECT_API"] = {}
         for k in ["EMAIL", "PASSWORD"]:
