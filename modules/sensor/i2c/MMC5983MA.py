@@ -66,19 +66,12 @@ class MMC5983MA(i2c.i2c):
     TEST_ADDRESS = 0x2F
     TEST_VALUE = (0b00110000,)
 
-    elements = ()
     elements_vec = ("mag",)
 
     # https://learn.sparkfun.com/tutorials/qwiic-9dof---ism330dhcx-mmc5983ma-hookup-guide#hardware-overview
     # Z Axis is opposite to ISM330DHCX
     z_sign = -1
     # acc_factor = ACCEL_SCALE/math.pow(2, 15)
-
-    def reset_value(self):
-        for key in self.elements:
-            self.values[key] = np.nan
-        for key in self.elements_vec:
-            self.values[key] = [0] * 3
 
     def init_sensor(self):
         # Set

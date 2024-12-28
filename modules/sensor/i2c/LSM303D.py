@@ -105,15 +105,9 @@ class LSM303D(i2c.i2c):
     TEST_ADDRESS = 0x0F
     TEST_VALUE = (0x49,)
 
-    elements = ()
     elements_vec = ("acc", "mag")
-    acc_factor = ACCEL_SCALE / math.pow(2, 15)
 
-    def reset_value(self):
-        for key in self.elements:
-            self.values[key] = np.nan
-        for key in self.elements_vec:
-            self.values[key] = [0] * 3
+    acc_factor = ACCEL_SCALE / math.pow(2, 15)
 
     def init_sensor(self):
         # ODR=3Hz, all accel axes on ## maybe 0x27 is Low Res?
