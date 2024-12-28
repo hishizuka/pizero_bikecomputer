@@ -10,10 +10,9 @@ class Button_Config:
         # call from ButtonShim
         "Button_Shim": {
             "MAIN": {
-                "A": ("scroll_prev", ""),
+                "A": ("scroll_prev", "get_screenshot"),
                 "B": ("count_laps", "reset_count"),
-                "C": ("get_screenshot", ""),
-                #"C": ("multiscan", ""),
+                "C": ("multiscan", ""),
                 "D": ("start_and_stop_manual", ""),
                 "E": ("scroll_next", "enter_menu"),
             },
@@ -25,14 +24,14 @@ class Button_Config:
                 "E": ("press_tab", ""),
             },
             "MAP": {
-                "A": ("scroll_prev", ""),
-                "B": ("map_zoom_minus", ""),
+                "A": ("scroll_prev", "get_screenshot"),
+                "B": ("map_zoom_minus", "modify_map_tile"),
                 "C": ("change_map_overlays", "change_mode"),
                 "D": ("map_zoom_plus", ""),
                 "E": ("scroll_next", "enter_menu"),
             },
             "MAP_1": {
-                "A": ("map_move_x_minus", ""),
+                "A": ("map_move_x_minus", "get_screenshot"),
                 "B": ("map_move_y_minus", "map_zoom_minus"),
                 "C": ("change_map_overlays", "change_mode"),
                 "D": ("map_move_y_plus", "map_zoom_plus"),
@@ -60,20 +59,20 @@ class Button_Config:
                 "E": ("map_move_x_plus", ""),
             },
         },
+        # copy from Button_Shim
+        "IOExpander": {},
         # call from sensor_ant
         "Edge_Remote": {
             "MAIN": {
                 "PAGE": ("scroll_prev", "scroll_next"),
-                "CUSTOM": ("change_mode", "enter_menu"),
-                #"CUSTOM": ("get_screenshot", "enter_menu"),
-                #"CUSTOM": ("get_screenshot", "turn_on_off_light"),
+                "CUSTOM": ("turn_on_off_light", "enter_menu"),
                 "LAP": ("count_laps",),
             },
-            "MAIN_1": {
-                "PAGE": ("turn_on_off_light", "brightness_control"),
-                "CUSTOM": ("change_mode", ""),
-                "LAP": ("start_and_stop_manual",),
-            },
+            #"MAIN_1": {
+            #    "PAGE": ("turn_on_off_light", "brightness_control"),
+            #    "CUSTOM": ("change_mode", ""),
+            #    "LAP": ("start_and_stop_manual",),
+            #},
             "MENU": {
                 "PAGE": ("press_tab", ""),
                 "CUSTOM": ("press_shift_tab", "back_menu"),
@@ -82,7 +81,6 @@ class Button_Config:
             "MAP": {
                 "PAGE": ("scroll_prev", "scroll_next"),
                 "CUSTOM": ("change_mode", "map_zoom_minus"),
-                #"CUSTOM": ("get_screenshot", "map_zoom_minus"),
                 "LAP": ("map_zoom_plus",),
             },
             "MAP_1": {
@@ -178,60 +176,18 @@ class Button_Config:
         },
         "Pirate_Audio_old": {},
         "Display_HAT_Mini": {},
-        "IOExpander": {
-            "MAIN": {
-                "GP3": ("scroll_prev", ""),
-                "GP4": ("count_laps", "reset_count"),
-                "GP5": ("get_screenshot", ""),
-                # "GP5": ("multiscan", ""),
-                "GP6": ("start_and_stop_manual", ""),
-                "GP7": ("scroll_next", "enter_menu"),
-            },
-            "MENU": {
-                "GP3": ("back_menu", ""),
-                "GP4": ("brightness_control", ""),
-                "GP5": ("press_space", ""),
-                "GP6": ("press_shift_tab", ""),
-                "GP7": ("press_tab", ""),
-            },
-            "MAP": {
-                "GP3": ("scroll_prev", ""),
-                "GP4": ("map_zoom_minus", ""),
-                "GP5": ("change_map_overlays", "change_mode"),
-                "GP6": ("map_zoom_plus", ""),
-                "GP7": ("scroll_next", "enter_menu"),
-            },
-            "MAP_1": {
-                "GP3": ("map_move_x_minus", ""),
-                "GP4": ("map_move_y_minus", "map_zoom_minus"),
-                "GP5": ("change_map_overlays", "change_mode"),
-                "GP6": ("map_move_y_plus", "map_zoom_plus"),
-                "GP7": ("map_move_x_plus", "map_search_route"),
-            },
-            # "MAP_2": {
-            #    "GP3": ("timeline_past", ""),
-            #    "GP4": ("map_zoom_minus", ""),
-            #    "GP5": ("timeline_reset", "change_mode"),
-            #    "GP6": ("map_zoom_plus", ""),
-            #    "GP7": ("timeline_future", ""),
-            # },
-            "COURSE_PROFILE": {
-                "GP3": ("scroll_prev", ""),
-                "GP4": ("map_zoom_minus", ""),
-                "GP5": ("change_mode", ""),
-                "GP6": ("map_zoom_plus", ""),
-                "GP7": ("scroll_next", "enter_menu"),
-            },
-            "COURSE_PROFILE_1": {
-                "GP3": ("map_move_x_minus", ""),
-                "GP4": ("map_zoom_minus", ""),
-                "GP5": ("change_mode", ""),
-                "GP6": ("map_zoom_plus", ""),
-                "GP7": ("map_move_x_plus", ""),
-            },
-        },
     }
     # copy button definition
+    G_BUTTON_DEF["IOExpander"] = copy.deepcopy(G_BUTTON_DEF["Button_Shim"])
+    # change button keys
+    change_keys = {
+        "A": "GP0", "B": "GP1", "C": "GP2", "D": "GP3", "E": "GP4",
+    }
+    for k1 in G_BUTTON_DEF["IOExpander"]:
+        b = G_BUTTON_DEF["IOExpander"][k1]
+        for k2 in change_keys:
+            b[change_keys[k2]] = b.pop(k2)
+            
     G_BUTTON_DEF["Display_HAT_Mini"] = copy.deepcopy(G_BUTTON_DEF["Pirate_Audio"])
     G_BUTTON_DEF["Pirate_Audio_old"] = copy.deepcopy(G_BUTTON_DEF["Pirate_Audio"])
     for k in G_BUTTON_DEF["Pirate_Audio_old"]:

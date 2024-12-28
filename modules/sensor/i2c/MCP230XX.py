@@ -1,16 +1,20 @@
 import time
 from threading import Thread
 
+import board
+import busio
 from digitalio import Direction, Pull
+from adafruit_mcp230xx.mcp23008 import MCP23008 as Adafruit_MCP23008
+from adafruit_mcp230xx.mcp23017 import MCP23017 as Adafruit_MCP23017
 
 from logger import app_logger
 
 try:
     # run from top directory (pizero_bikecomputer)
-    from .. import i2c
+    from . import i2c
 except:
     # directly run this program
-    import modules.sensor.i2c.i2c
+    import i2c
 
 
 class ButtonIOExpander(i2c.i2c):
@@ -18,14 +22,11 @@ class ButtonIOExpander(i2c.i2c):
     # The amount of available channels (8 for MCP23009)
     CHANNELS = 8
 
-    # A button press counts as long press after this amount of milliseconds
-    LONG_PRESS_DURATION_MS = 1000
-
     # After the button is pressed, it is disabled for this amount of milliseconds to prevent bouncing
-    DEBOUNCE_DURATION_MS = 80
+    DEBOUNCE_DURATION_MS = 90
 
     # Button reads per second. Should be at least 20 for precise results
-    FPS = 30
+    FPS = 20
 
     _thread = None
 
@@ -38,8 +39,11 @@ class ButtonIOExpander(i2c.i2c):
 
         self._ms_per_frame = 1000 / self.FPS
 
-        # How many frames it takes to reach the LONG_PRESS_DURATION_MS
-        self._long_press_frames = int(self.LONG_PRESS_DURATION_MS // self._ms_per_frame)
+        # How many frames it takes to reach the G_BUTTON_LONG_PRESS
+        self._long_press_frames = int(
+            (self.config.button_config.G_BUTTON_LONG_PRESS*1000)
+            // self._ms_per_frame
+        )
 
         # How many frames a button is disabled after release
         self._debounce_frames = int(self.DEBOUNCE_DURATION_MS // self._ms_per_frame)
@@ -86,6 +90,7 @@ class ButtonIOExpander(i2c.i2c):
             self.config.button_config.press_button("IOExpander", button, index)
         except:
             app_logger.warning(f"No button_config for button '{button}'")
+            #pass
 
     def get_pressed_buttons(self):
         return [not button.value for button in self.pins]
@@ -119,3 +124,55 @@ class ButtonIOExpander(i2c.i2c):
     def _reset_button(self, button_index):
         self._locked[button_index] = False
         self._counter[button_index] = 0
+
+
+# https://www.microchip.com/en-us/product/mcp23009
+# https://ww1.microchip.com/downloads/en/DeviceDoc/20002121C.pdf
+
+# NOTE: no need to set TEST and RESET address and value, due to adafruit_mcp230xx library handling it.
+class MCP23008(ButtonIOExpander):
+    # address
+    SENSOR_ADDRESS = 0x20
+    # The amount of available channels (8 for MCP23008)
+    CHANNELS = 8
+
+    def __init__(self, config):
+        i2c = busio.I2C(board.SCL, board.SDA)
+        self.mcp = Adafruit_MCP23008(i2c, address=self.SENSOR_ADDRESS)
+        super().__init__(config, self.mcp)
+
+
+class MCP23009(MCP23008):
+    # address
+    SENSOR_ADDRESS = 0x27
+
+
+class MCP23017(ButtonIOExpander):
+    # address
+    SENSOR_ADDRESS = 0x20
+
+    def __init__(self, config):
+        i2c = busio.I2C(board.SCL, board.SDA)
+        self.mcp = Adafruit_MCP23017(i2c, address=self.SENSOR_ADDRESS)
+        super().__init__(config, self.mcp)
+
+
+if __name__ == "__main__":
+    
+    class button_config:
+        G_BUTTON_LONG_PRESS = 1
+        def press_button(self, key, button, index):
+            print(f"{key}, {button}, {index}")
+
+    class config_local:
+        button_config = None
+
+    c = config_local()
+    b = button_config()
+    c.button_config = b
+
+    #mcp = MCP23017(c)
+    mcp = MCP23008(c)
+
+    while True:
+        time.sleep(1)
