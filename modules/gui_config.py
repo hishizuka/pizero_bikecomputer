@@ -25,6 +25,7 @@ class GUI_Config:
         "GPS_DOP": (".1f", ""),
         "String": ("s", ""),
         "Percent": (".0f", "%"),
+        "Int": (".0f", ""),
     }
 
     G_ITEM_DEF = {
@@ -79,6 +80,7 @@ class GUI_Config:
         "Alt.(GPS)": (G_UNIT["Altitude"], "self.sensor.values['GPS']['alt']"),
         "Speed(GPS)": (G_UNIT["Speed"], "self.sensor.values['GPS']['speed']"),
         "Dist.(GPS)": (G_UNIT["Distance"], "self.sensor.values['GPS']['distance']"),
+        "Heading_RAW(GPS)": (G_UNIT["Int"], "self.sensor.values['GPS']['track']"),
         "Heading(GPS)": (G_UNIT["String"], "self.sensor.values['GPS']['track_str']"),
         "Satellites": (G_UNIT["String"], "self.sensor.values['GPS']['used_sats_str']"),
         "Error(x)": (G_UNIT["GPS_error"], "self.sensor.values['GPS']['epx']"),
@@ -188,7 +190,7 @@ class GUI_Config:
         "HR2": (G_UNIT["HeartRate"], "None"),
         "HR3": (G_UNIT["HeartRate"], "None"),
         # Sensor raw
-        "Temp(I2C)": (G_UNIT["Temp"], "self.sensor.values['I2C']['temperature']"),
+        "Temp_RAW(I2C)": (G_UNIT["Temp"], "self.sensor.values['I2C']['temperature']"),
         "Pressure": (("4.0f", "hPa"), "self.sensor.values['I2C']['pressure']"),
         "Altitude": (G_UNIT["Altitude"], "self.sensor.values['I2C']['altitude']"),
         "Humidity": (G_UNIT["Percent"], "self.sensor.values['I2C']['humidity']"),
@@ -199,19 +201,40 @@ class GUI_Config:
         "Vert.Spd": (("3.1f", "m/s"), "self.sensor.values['I2C']['vertical_speed']"),
         "Ascent": (G_UNIT["Altitude"], "self.sensor.values['I2C']['total_ascent']"),
         "Descent": (G_UNIT["Altitude"], "self.sensor.values['I2C']['total_descent']"),
-        "Light": ((".0f", ""), "self.sensor.values['I2C']['light']"),
-        "Infrared": ((".0f", ""), "self.sensor.values['I2C']['infrared']"),
-        "UVI": ((".0f", ""), "self.sensor.values['I2C']['uvi']"),
-        "VOC_Index": ((".0f", ""), "self.sensor.values['I2C']['voc_index']"),
-        "Raw_Gas": ((".0f", ""), "self.sensor.values['I2C']['raw_gas']"),
+        "Light": (G_UNIT["Int"], "self.sensor.values['I2C']['light']"),
+        "Infrared": (G_UNIT["Int"], "self.sensor.values['I2C']['infrared']"),
+        "UVI": (G_UNIT["Int"], "self.sensor.values['I2C']['uvi']"),
+        "VOC_Index": (G_UNIT["Int"], "self.sensor.values['I2C']['voc_index']"),
+        "Raw_Gas": (G_UNIT["Int"], "self.sensor.values['I2C']['raw_gas']"),
+        "Battery": (G_UNIT["Percent"], "self.sensor.values['I2C']['battery_percentage']"),
         "Motion": (("1.1f", ""), "self.sensor.values['I2C']['motion']"),
         "M_Stat": (("1.1f", ""), "self.sensor.values['I2C']['m_stat']"),
         "ACC_X": (("1.1f", ""), "self.sensor.values['I2C']['acc'][0]"),
         "ACC_Y": (("1.1f", ""), "self.sensor.values['I2C']['acc'][1]"),
         "ACC_Z": (("1.1f", ""), "self.sensor.values['I2C']['acc'][2]"),
-        "Battery": (G_UNIT["Percent"], "self.sensor.values['I2C']['battery_percentage']"),
+        "MAG_X": (("1.1f", ""), "self.sensor.values['I2C']['mag'][0]"),
+        "MAG_Y": (("1.1f", ""), "self.sensor.values['I2C']['mag'][1]"),
+        "MAG_Z": (("1.1f", ""), "self.sensor.values['I2C']['mag'][2]"),
         "Heading": (G_UNIT["String"], "self.sensor.values['I2C']['heading_str']"),
-        "Pitch": (("1.0f", ""), "self.sensor.values['I2C']['modified_pitch']"),
+        "Heading_Raw(I2C)": (G_UNIT["Int"], "self.sensor.values['I2C']['raw_heading']"),
+        "Heading_Tilt": (G_UNIT["Int"], "self.sensor.values['I2C']['heading']"),
+        "Pitch": (G_UNIT["Int"], "self.sensor.values['I2C']['modified_pitch']"),
+        "Pitch_Fixed": (
+            G_UNIT["Int"],
+            "int(180/3.1415*self.sensor.values['I2C']['fixed_pitch'])"
+        ),
+        "Roll_Fixed": (
+            G_UNIT["Int"],
+            "int(180/3.1415*self.sensor.values['I2C']['fixed_roll'])"
+        ),
+        "Pitch_Raw": (
+            G_UNIT["Int"],
+            "int(180/3.1415*self.sensor.values['I2C']['pitch'])"
+        ),
+        "Roll_Raw": (
+            G_UNIT["Int"],
+            "int(180/3.1415*self.sensor.values['I2C']['roll'])"
+        ),
         # General
         "Timer": (("timer", ""), "self.logger.values['count']"),
         "LapTime": (("timer", ""), "self.logger.values['count_lap']"),

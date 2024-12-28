@@ -52,6 +52,7 @@ class LPS33HW(i2c.i2c):
     TEST_VALUE = (0xB1,)
 
     elements = ("temperature", "pressure")
+
     temperature = None
     pressure = None
 

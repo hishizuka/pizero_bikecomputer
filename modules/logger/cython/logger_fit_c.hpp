@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <time.h>
 
+#include <cstdint>
 #include <cstring>
 #include <string>
 #include <algorithm>

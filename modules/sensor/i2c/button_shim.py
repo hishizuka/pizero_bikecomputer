@@ -1,6 +1,8 @@
 import buttonshim
 
 
+buttonshim.FPS = 20
+
 # button functions
 _FUNC = {
     "A": None,

@@ -5,7 +5,6 @@ from .display_core import Display
 
 _SENSOR_DISPLAY = False
 try:
-    import RPi.GPIO as GPIO
     from papirus import Papirus
 
     _SENSOR_DISPLAY = True

@@ -155,7 +155,7 @@ class AdjustAltitudeWidget(AdjustWidget):
         self.display.setMaxLength(4)
 
     async def set_value_extra(self, value):
-        await self.config.logger.sensor.sensor_i2c.update_sealevel_pa(value)
+        await self.sensor_i2c.update_sealevel_pa(value)
 
 
 class AdjustWheelCircumferenceWidget(AdjustWidget):

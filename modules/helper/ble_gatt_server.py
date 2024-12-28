@@ -61,7 +61,7 @@ class GadgetbridgeService(Service):
             self.auto_connect_gps = init_statuses[1]
 
     async def quit(self):
-        if not self.status and self.bus is not None:
+        if self.status and self.bus is not None:
             self.bus.disconnect()
 
     # direct access from central
@@ -201,6 +201,7 @@ class GadgetbridgeService(Service):
                             speed,
                             track,
                             mode,
+                            None,
                             None,
                             [hdop, hdop, hdop],
                             (int(message.get("satellites", 0)), None),

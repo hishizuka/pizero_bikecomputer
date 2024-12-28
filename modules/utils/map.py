@@ -36,8 +36,10 @@ def get_tilexy_and_xy_in_tile(z, x, y, tile_size):
 
 def remove_maptiles(map_name, basetime):
     path = os.path.join("maptile", map_name)
-    if os.path.exists(path):
-        files = os.listdir(path)
-        dirs = [f for f in files if basetime is not None and f != basetime and os.path.isdir(os.path.join(path, f))]
-        for d in dirs:
-            shutil.rmtree(os.path.join(path, d))
+    if not os.path.exists(path) or basetime is None:
+        return
+
+    files = os.listdir(path)
+    dirs = [f for f in files if f != basetime and os.path.isdir(os.path.join(path, f))]
+    for d in dirs:
+        shutil.rmtree(os.path.join(path, d))

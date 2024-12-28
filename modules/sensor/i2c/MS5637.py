@@ -45,6 +45,7 @@ class MS5637(i2c.i2c):
     TEST_VALUE = (0xA7,)  # Factory defined value at data[0]
 
     elements = ("temperature", "pressure")
+
     temperature = None
     pressure = None
 

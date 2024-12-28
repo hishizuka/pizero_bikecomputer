@@ -21,8 +21,6 @@ from .sensor.gps import SensorGPS
 from .sensor.sensor_ant import SensorANT
 from .sensor.sensor_gpio import SensorGPIO
 from .sensor.sensor_i2c import SensorI2C
-
-
 # Todo: BLE
 
 
@@ -551,7 +549,7 @@ class SensorCore:
                 brightness = int(np.mean(self.auto_backlight_brightness))
 
                 if brightness <= self.config.G_AUTO_BACKLIGHT_CUTOFF:
-                    self.config.display.set_brightness(3) # TODO lowest backlight value
+                    self.config.display.set_minimum_brightness()
                     auto_light = True
                 else:
                     self.config.display.set_brightness(0)
@@ -571,7 +569,7 @@ class SensorCore:
                 if (cond_1 or (cond_2_1 and cond_2_2)):
                     auto_light = True
 
-            if self.sensor_ant.use_auto_light() and self.config.G_MANUAL_STATUS == "START":
+            if self.config.G_ANT["USE_AUTO_LIGHT"] and self.config.G_MANUAL_STATUS == "START":
                 if auto_light:
                     self.sensor_ant.set_light_mode("FLASH_LOW", auto_id="sensor_core")
                 else:
@@ -579,19 +577,17 @@ class SensorCore:
 
             # cpu and memory
             if _IMPORT_PSUTIL:
-                self.values["integrated"]["cpu_percent"] = int(
-                    self.process.cpu_percent(interval=None)
-                )
-                self.values["integrated"][
-                    "CPU_MEM"
-                ] = "{0:^2.0f}% ({1}) / ALL {2:^2.0f}%,  {3:^2.0f}%".format(
+                with self.process.oneshot():
+                    self.values["integrated"]["cpu_percent"] = int(
+                        self.process.cpu_percent(interval=None)
+                    )
                     self.values["integrated"][
-                        "cpu_percent"
-                    ],  # self.process.cpu_percent(interval=None),
-                    self.process.num_threads(),
-                    psutil.cpu_percent(interval=None),
-                    self.process.memory_percent(),
-                )
+                        "CPU_MEM"
+                    ] = "{0:^2.0f}% ({1}),  {2:^2.0f}MB".format(
+                        self.values["integrated"]["cpu_percent"],
+                        self.process.num_threads(),
+                        self.process.memory_info().rss/1024**2,
+                    )
 
             # adjust loop time
             time_profile.append(datetime.now())

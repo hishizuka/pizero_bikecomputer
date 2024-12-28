@@ -294,6 +294,9 @@ class ANT_Device_Power(ant_device.ANT_Device):
 
             if not resume:
                 return
+            # Exclude when not started. (Pioneer SGY-PM910Z only)
+            if self.config.state.get_value("G_MANUAL_STATUS", None) is None:
+                return
 
             pre_pwr_value = self.config.state.get_value(
                 "ant+_power_values_18", pre_values[1]

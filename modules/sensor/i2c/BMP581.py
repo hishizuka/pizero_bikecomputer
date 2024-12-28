@@ -100,6 +100,7 @@ class BMP581(i2c.i2c):
     TEST_VALUE = (0x50,)
 
     elements = ("temperature", "pressure")
+
     temperature = None
     pressure = None
 

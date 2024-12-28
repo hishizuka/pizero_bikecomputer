@@ -160,5 +160,5 @@ class ScreenWidget(QtWidgets.QWidget):
             except Exception:  # noqa
                 item.update_value(None)
                 app_logger.exception(
-                    f"###update_display### : {item.name} {eval(self.config.gui.gui_config.G_ITEM_DEF[item.name][1])}",
+                    f"not found in items: {item.name} {eval(self.config.gui.gui_config.G_ITEM_DEF[item.name][1])}",
                 )
