@@ -1,4 +1,5 @@
 #include <unistd.h>
+#include <cstdint>
 #include <cstring>
 #include <iostream>
 #include <chrono>
@@ -11,11 +12,12 @@
 
 #include <pigpiod_if2.h>
 
-//#GPIO.BCM
-#define GPIO_DISP 27 //13 in GPIO.BOARD
-#define GPIO_SCS 23 //16 in GPIO.BOARD
-#define GPIO_VCOMSEL 17 //11 in GPIO.BOARD
-#define GPIO_BACKLIGHT 18 //12 in GPIO.BOARD with hardware PWM in pigpio
+// GPIO.BCM
+#define GPIO_DISP 27  // 13 in GPIO.BOARD
+#define GPIO_SCS 23  // 16 in GPIO.BOARD
+#define GPIO_VCOMSEL 17  // 11 in GPIO.BOARD
+#define GPIO_BACKLIGHT 18  // 12 in GPIO.BOARD with hardware PWM in pigpio
+#define GPIO_BACKLIGHT_SWITCH 24  // 18 in GPIO.BOARD
 #define GPIO_BACKLIGHT_FREQ 64
 
 
@@ -45,6 +47,8 @@ class MipDisplay {
     int SPI_MAX_BUF_SIZE = 65536;
     int SPI_MAX_ROWS = 0;
 
+    int pre_brightness = 0;
+
     std::queue<std::vector<char> > queue_;
     std::mutex mutex_;
     std::condition_variable cv_;
@@ -62,12 +66,16 @@ class MipDisplay {
     int conv_3bit_color(unsigned char* image);
     int conv_4bit_color(unsigned char* image);
 
+    void (MipDisplay::*set_PWM)(int b);
+    void set_PWM_switch_science_mip_board(int b);
+    void set_PWM_pizero_bikecomputer_pcb(int b);
+
     void draw_worker();
     void draw(std::vector<char>& buf_queue);
     bool get_status_quit();
 
   public:
-    MipDisplay(int spi_clock);
+    MipDisplay(int spi_clock, int pcb_pattern);
     ~MipDisplay();
 
     void update(unsigned char* image);
