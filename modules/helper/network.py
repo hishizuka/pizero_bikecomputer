@@ -95,8 +95,8 @@ def check_network_interface(iface=None):
 class Network:
     config = None
     bt_tethering_status = {}
-    bt_error_history_open = False
-    bt_error_history_close = False
+    bt_error_open = False
+    bt_error_close = False
 
     DOWNLOAD_WORKER_RETRY_SEC = 300
 
@@ -108,6 +108,9 @@ class Network:
 
     async def quit(self):
         await self.download_queue.put(None)
+        if self.config.G_IS_RASPI and check_bnep0():
+            await self.bluetooth_tethering(disconnect=True)
+            await asyncio.sleep(5)
 
     def get_bt_limit(self):
         if self.config.G_IS_RASPI and check_bnep0() and not check_wlan0():
@@ -116,8 +119,8 @@ class Network:
             return False
     
     def reset_bt_error_status(self):
-        self.bt_error_history_open = False
-        self.bt_error_history_close = False
+        self.bt_error_open = False
+        self.bt_error_close = False
 
     async def download_worker(self):
         failed = []
@@ -289,30 +292,29 @@ class Network:
     async def bluetooth_tethering(self, disconnect=False):
         if (
             not self.config.G_IS_RASPI
-            or not self.config.G_BT_USE_ADDRESS
+            or not self.config.G_BT_PAN_DEVICE
             or not self.config.bt_pan
         ):
             return False
 
-        bt_address = self.config.G_BT_ADDRESSES[self.config.G_BT_USE_ADDRESS]
+        bt_address = self.config.G_BT_ADDRESSES[self.config.G_BT_PAN_DEVICE]
         if shutil.which("nmcli") is not None:
-            if not disconnect:
-                res = exec_cmd_return_value(
-                    ["sudo", "nmcli", "d", "connect", bt_address],
-                    cmd_print=True,
-                    timeout=5
-                )
-            else:
-                res = exec_cmd_return_value(
-                    ["sudo", "nmcli", "d", "disconnect", bt_address],
-                    cmd_print=True,
-                    timeout=5
-                )
+            connect = "connect"
+            if disconnect:
+                connect = "disconnect"
+            res = exec_cmd_return_value(
+                ["sudo", "nmcli", "d", connect, bt_address],
+                cmd_print=False,
+                timeout=5
+            )
         else:
             if not disconnect:
                 res = await self.config.bt_pan.connect_tethering(bt_address)
             else:
                 res = await self.config.bt_pan.disconnect_tethering(bt_address)
+        #######################################
+        # get bt "input/output error"
+        #######################################
         return bool(res)
 
     async def open_bt_tethering(self, f_name):
@@ -321,7 +323,7 @@ class Network:
             return True
         elif not self.config.G_AUTO_BT_TETHERING:
             return True
-        elif self.config.G_AUTO_BT_TETHERING and not self.config.G_BT_USE_ADDRESS:
+        elif self.config.G_AUTO_BT_TETHERING and not self.config.G_BT_PAN_DEVICE:
             return False
 
         # if other network exists, return
@@ -332,15 +334,19 @@ class Network:
         if any(self.bt_tethering_status.values()):
             return True
 
+        # input/output error only
+        #if self.bt_error_open or self.bt_error_close:
+        #    return False
+
         self.bt_tethering_status[f_name] = True
 
         # open bt tethering
         bt_pan_status = await self.bluetooth_tethering()
         if not bt_pan_status:
             self.bt_tethering_status[f_name] = False
-            if not self.bt_error_history_open:
+            if not self.bt_error_open:
                 self.config.gui.show_forced_message("BT error(open)")
-                self.bt_error_history_open = True
+                self.bt_error_open = True
             app_logger.error(f"[BT] connect error_1, f_name: {f_name}")
             return False
 
@@ -355,9 +361,9 @@ class Network:
         # if an internet connection cannot be obtained, return False
         if count >= BT_TETHERING_TIMEOUT_SEC and not (check_bnep0() and detect_network()):
             await self.bluetooth_tethering(disconnect=True)
-            if not self.bt_error_history_close:
+            if not self.bt_error_close:
                 self.config.gui.show_forced_message("BT error(close)")
-                self.bt_error_history_close = True
+                self.bt_error_close = True
             await asyncio.sleep(5)
             self.bt_tethering_status[f_name] = False
             app_logger.error(f"[BT] connect error_2({count}s), f_name: {f_name}")
@@ -372,7 +378,7 @@ class Network:
             return True
         elif not self.config.G_AUTO_BT_TETHERING:
             return True
-        elif self.config.G_AUTO_BT_TETHERING and not self.config.G_BT_USE_ADDRESS:
+        elif self.config.G_AUTO_BT_TETHERING and not self.config.G_BT_PAN_DEVICE:
             return True
 
         if f_name in self.bt_tethering_status:
