@@ -158,14 +158,10 @@ class BluetoothTetheringListWidget(ListWidget):
         self.run_bt_tethering = run_bt_tethering
 
     def get_default_value(self):
-        return self.config.G_BT_USE_ADDRESS
+        return self.config.G_BT_PAN_DEVICE
 
     async def button_func_extra(self):
-        self.config.G_BT_USE_ADDRESS = self.selected_item.title_label.text()
-        self.config.state.set_value(
-            "G_BT_USE_ADDRESS", self.config.G_BT_USE_ADDRESS, force_apply=True
-        )
-
+        self.config.G_BT_PAN_DEVICE = self.selected_item.title_label.text()
         if self.run_bt_tethering:
             await self.config.network.bluetooth_tethering()
 

@@ -24,6 +24,14 @@ class MenuWidget(QtWidgets.QWidget):
     icon_x = 40
     icon_y = 32
 
+    @property
+    def sensor_i2c(self):
+        return self.config.logger.sensor.sensor_i2c
+    
+    @property
+    def sensor_ant(self):
+        return self.config.logger.sensor.sensor_ant
+
     def __init__(self, parent, page_name, config):
         QtWidgets.QWidget.__init__(self, parent=parent)
         self.config = config
@@ -442,14 +450,7 @@ class ConnectivityMenuWidget(MenuWidget):
 
     def onoff_live_track(self, change=True):
         if change:
-            self.config.G_THINGSBOARD_API["STATUS"] = not self.config.G_THINGSBOARD_API[
-                "STATUS"
-            ]
-            self.config.state.set_value(
-                "G_THINGSBOARD_API_STATUS",
-                self.config.G_THINGSBOARD_API["STATUS"],
-                force_apply=True
-            )
+            self.config.G_THINGSBOARD_API["STATUS"] = not self.config.G_THINGSBOARD_API["STATUS"]
         self.buttons["Live Track"].change_toggle(
             self.config.G_THINGSBOARD_API["STATUS"]
         )
@@ -457,12 +458,8 @@ class ConnectivityMenuWidget(MenuWidget):
     def bt_auto_tethering(self, change=True):
         if change:
             self.config.G_AUTO_BT_TETHERING = not self.config.G_AUTO_BT_TETHERING
-            self.config.state.set_value(
-                "G_AUTO_BT_TETHERING", self.config.G_AUTO_BT_TETHERING, force_apply=True
-            )
             self.config.network.reset_bt_error_status()
         self.buttons["Auto BT Tethering"].change_toggle(self.config.G_AUTO_BT_TETHERING)
-
         self.buttons["Select BT device"].onoff_button(self.config.G_AUTO_BT_TETHERING)
 
     def bt_tething(self):
@@ -471,11 +468,11 @@ class ConnectivityMenuWidget(MenuWidget):
     @qasync.asyncSlot()
     async def onoff_ble_uart_service(self):
         status = await self.config.ble_uart.on_off_uart_service()
+        self.config.G_GADGETBRIDGE["STATUS"] = status
         self.buttons["Gadgetbridge"].change_toggle(status)
         self.buttons["Get Location"].onoff_button(status)
-        self.config.state.set_value("GB", status, force_apply=True)
 
     def onoff_gadgetbridge_gps(self):
         status = self.config.ble_uart.on_off_gadgetbridge_gps()
+        self.config.G_GADGETBRIDGE["USE_GPS"] = status
         self.buttons["Get Location"].change_toggle(status)
-        self.config.state.set_value("GB_gps", status, force_apply=True)
