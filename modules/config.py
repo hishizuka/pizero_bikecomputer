@@ -13,7 +13,7 @@ from logger import CustomRotatingFileHandler, app_logger
 from modules.map_config import add_map_config
 from modules.helper.setting import Setting
 from modules.button_config import Button_Config
-from modules.state import AppState
+from modules.helper.state import AppState
 from modules.utils.cmd import (
     exec_cmd,
     is_running_as_service,
@@ -55,6 +55,9 @@ class Config:
     G_POWER_CP = 150
     G_POWER_W_PRIME = 15000
     G_POWER_W_PRIME_ALGORITHM = "WATERWORTH"  # WATERWORTH, DIFFERENTIAL
+
+    G_USE_PCB_PIZERO_BIKECOMPUTER = False
+    G_PCB_BACKLIGHT = ""  # "PIZERO_BIKECOMPUTER", "SWITCH_SCIENCE_MIP_BOARD"
 
     ###########################
     # fixed or pointer values #
@@ -198,6 +201,8 @@ class Config:
         },
         # for display order in ANT+ menu (antMenuWidget)
         "ORDER": ["HR", "SPD", "CDC", "PWR", "LGT", "CTRL", "TEMP"],
+
+        "USE_AUTO_LIGHT": False,
     }
 
     # GPS speed cutoff (the distance in 1 seconds at 0.36km/h is 10cm)
@@ -358,6 +363,10 @@ class Config:
         "TOKEN": "",
         "INTERVAL_SEC": 180,
     }
+    G_GADGETBRIDGE = {
+        "STATUS": False,
+        "USE_GPS": False,
+    }
 
     # IMU axis conversion
     #  X: to North (up rotation is plus)
@@ -373,10 +382,14 @@ class Config:
     }
     G_IMU_MAG_AXIS_CONVERSION = {"STATUS": False, "COEF": np.ones(3)}  # X, Y, Z
     G_IMU_MAG_DECLINATION = 0.0
+    G_IMU_CALIB = {
+        "MAG": False,
+        "PITCH_ROLL": False,
+    }
 
     # Bluetooth tethering
     G_BT_ADDRESSES = {}
-    G_BT_USE_ADDRESS = ""
+    G_BT_PAN_DEVICE = ""
     G_AUTO_BT_TETHERING = False
 
     #######################
@@ -416,6 +429,8 @@ class Config:
         parser.add_argument("--gui")
         parser.add_argument("--headless", action="store_true", default=False)
         parser.add_argument("--output_log", action="store_true", default=False)
+        parser.add_argument("--calib_mag", action="store_true", default=False)
+        parser.add_argument("--calib_pitch_roll", action="store_true", default=False)
 
         args = parser.parse_args()
 
@@ -434,6 +449,11 @@ class Config:
             self.G_HEADLESS = True
         if args.output_log:
             self.G_LOG_OUTPUT_FILE = True
+        if args.calib_mag:
+            self.G_IMU_CALIB["MAG"] = True
+            self.G_I2C_INTERVAL = 0.1
+        if args.calib_pitch_roll:
+            self.G_IMU_CALIB["PITCH_ROLL"] = True
 
         # read setting.conf and state.pickle
         self.setting = Setting(self)
@@ -570,19 +590,6 @@ class Config:
                 if is_available:
                     self.G_BT_ADDRESSES = await self.bt_pan.find_bt_pan_devices()
 
-            # resume BT tethering
-            self.G_BT_USE_ADDRESS = self.state.get_value(
-                "G_BT_USE_ADDRESS", self.G_BT_USE_ADDRESS
-            )
-            self.G_AUTO_BT_TETHERING = self.state.get_value(
-                "G_AUTO_BT_TETHERING", self.G_AUTO_BT_TETHERING
-            )
-
-        # resume ThingsBoard
-        self.G_THINGSBOARD_API["STATUS"] = self.state.get_value(
-            "G_THINGSBOARD_API_STATUS", self.G_THINGSBOARD_API["STATUS"]
-        )
-
         # logger, sensor
         await self.gui.set_boot_status("initialize sensor...")
         self.logger.delay_init()
@@ -597,8 +604,8 @@ class Config:
                     self.logger.sensor.sensor_gps,
                     self.gui,
                     (
-                        self.state.get_value("GB", False),
-                        self.state.get_value("GB_gps", False),
+                        self.G_GADGETBRIDGE["STATUS"],
+                        self.G_GADGETBRIDGE["USE_GPS"],
                     ),
                 )
 
@@ -700,7 +707,7 @@ class Config:
                 self.G_UNIT_MODEL = f.read().replace("\x00", "").strip()
 
         app_logger.info(
-            f"{self.G_UNIT_MODEL}({self.G_UNIT_HARDWARE}), serial:{hex(self.G_UNIT_ID_HEX)}"
+            f"{self.G_UNIT_MODEL}({self.G_UNIT_HARDWARE}), serial:{self.G_UNIT_ID_HEX:X}"
         )
 
     async def kill_tasks(self):
