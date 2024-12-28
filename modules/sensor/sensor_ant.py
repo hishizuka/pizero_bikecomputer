@@ -43,9 +43,6 @@ class SensorANT(Sensor):
     scanner = None
     device = {}
 
-    # auto light: brightness sensor and brake(speed(ANT+/GPS))
-    USE_AUTO_LIGHT = False
-
     def sensor_init(self):
         global _SENSOR_ANT
         if self.config.G_ANT["STATUS"] and not _SENSOR_ANT:
@@ -63,10 +60,6 @@ class SensorANT(Sensor):
             self.node, self.config, self.values
         )
         self.scanner.set_main_ant_device(self.device)
-
-        self.USE_AUTO_LIGHT = self.config.state.get_value(
-            "USE_AUTO_LIGHT", self.USE_AUTO_LIGHT
-        )
 
         # auto connect ANT+ sensor from setting.conf
         if self.config.G_ANT["STATUS"] and not self.config.G_DUMMY_OUTPUT:
@@ -196,7 +189,7 @@ class SensorANT(Sensor):
             return
 
         ant_opt = {}
-        if antName in ["SPD", "LGT"] and self.use_auto_light():
+        if antName in ["SPD", "LGT"] and self.config.G_ANT["USE_AUTO_LIGHT"]:
             ant_opt["force_4Hz"] = True
 
         # newly connect
@@ -276,18 +269,12 @@ class SensorANT(Sensor):
             if v and antIDType not in antIDTypes:
                 antIDTypes.add(antIDType)
                 self.device[antIDType].connect(isCheck=True, isChange=False)  # USE: True -> True
+                self.device[antIDType].ant_state = "connect_ant_sensor"
+                self.device[antIDType].init_after_connect()
         self.scanner.set_wait_normal_mode()
         app_logger.info("STOP ANT+ multiscan")
-
-    def use_auto_light(self):
-        return self.USE_AUTO_LIGHT
 
     def set_light_mode(self, mode, auto_id=None):
         if "LGT" not in self.config.G_ANT["USE"] or not self.config.G_ANT["USE"]["LGT"]:
             return
         self.device[self.config.G_ANT["ID_TYPE"]["LGT"]].send_light_mode(mode, auto_id)
-
-    def toggle_use_auto_light(self, change):
-        if change:
-            self.USE_AUTO_LIGHT = not self.USE_AUTO_LIGHT
-        return self.USE_AUTO_LIGHT

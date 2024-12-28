@@ -4,6 +4,7 @@ from .pyqt_menu_widget import MenuWidget, ListWidget, ListItemWidget
 
 
 class SensorMenuWidget(MenuWidget):
+
     def setup_menu(self):
         button_conf = (
             # Name(page_name), button_attribute, connected functions, layout
@@ -21,7 +22,7 @@ class SensorMenuWidget(MenuWidget):
         self.buttons["Auto Light"].onoff_button(self.config.G_ANT["USE"]["LGT"])
 
     def ant_sensors_menu(self):
-        if self.config.logger.sensor.sensor_ant.scanner.isUse:
+        if self.sensor_ant.scanner.isUse:
             # output message dialog "cannot go in multiscan mode"
             return
         self.change_page("ANT+ Sensors")
@@ -31,14 +32,11 @@ class SensorMenuWidget(MenuWidget):
 
     def adjust_altitude(self):
         self.change_page("Adjust Altitude")
-        # temporary
-        self.config.logger.sensor.sensor_i2c.recalibrate_position()
 
     def onoff_auto_light(self, change=True):
-        status = self.config.logger.sensor.sensor_ant.toggle_use_auto_light(change)
         if change:
-            self.config.state.set_value("USE_AUTO_LIGHT", status, force_apply=True)
-        self.buttons["Auto Light"].change_toggle(status)
+            self.config.G_ANT["USE_AUTO_LIGHT"] = not self.config.G_ANT["USE_AUTO_LIGHT"] 
+        self.buttons["Auto Light"].change_toggle(self.config.G_ANT["USE_AUTO_LIGHT"])
 
 class ANTMenuWidget(MenuWidget):
     def setup_menu(self):
@@ -88,7 +86,7 @@ class ANTMenuWidget(MenuWidget):
     def setting_ant(self, ant_name):
         if self.config.G_ANT["USE"][ant_name]:
             # disable ANT+ sensor
-            self.config.logger.sensor.sensor_ant.disconnect_ant_sensor(ant_name)
+            self.sensor_ant.disconnect_ant_sensor(ant_name)
             self.config.setting.write_config()
         else:
             # search ANT+ sensor
@@ -123,7 +121,7 @@ class ANTListWidget(ListWidget):
         app_logger.info(f"connect {self.list_type}: {self.selected_item.id}")
 
         ant_id = int(self.selected_item.id)
-        self.config.logger.sensor.sensor_ant.connect_ant_sensor(
+        self.sensor_ant.connect_ant_sensor(
             self.list_type,  # sensor type
             ant_id,  # ID
             self.ant_sensor_types[ant_id][0],  # id_type
@@ -133,18 +131,18 @@ class ANTListWidget(ListWidget):
 
     def on_back_menu(self):
         self.timer.stop()
-        self.config.logger.sensor.sensor_ant.searcher.stop_search()
+        self.sensor_ant.searcher.stop_search()
         # button update
         index = self.config.gui.gui_config.G_GUI_INDEX[self.back_index_key]
         self.parentWidget().widget(index).update_button_label()
 
     def preprocess_extra(self):
         self.ant_sensor_types.clear()
-        self.config.logger.sensor.sensor_ant.searcher.search(self.list_type)
+        self.sensor_ant.searcher.search(self.list_type)
         self.timer.start(self.config.G_DRAW_INTERVAL)
 
     def update_display(self):
-        detected_sensors = self.config.logger.sensor.sensor_ant.searcher.getSearchList()
+        detected_sensors = self.sensor_ant.searcher.getSearchList()
 
         for ant_id, ant_type_array in detected_sensors.items():
             ant_id_str = f"{ant_id:05d}"
