@@ -486,6 +486,8 @@ class SensorI2C(Sensor):
     
     def quit(self):
         self.quit_status = True
+        if self.available_sensors["BUTTON"].get("MCP23008", False):
+            self.sensor_mcp23008.quit()
 
     async def update(self):
         # timestamp
@@ -1646,7 +1648,7 @@ class SensorI2C(Sensor):
         try:
             from .i2c.button_shim import ButtonShim
 
-            self.sensor_button_shim = ButtonShim(self.config)
+            self.sensor_button_shim = ButtonShim(self.config.button_config)
             return True
         except:
             return False
@@ -1655,7 +1657,7 @@ class SensorI2C(Sensor):
         try:
             from .i2c.MCP230XX import MCP23008
 
-            self.sensor_mcp23008 = MCP23008(self.config)
+            self.sensor_mcp23008 = MCP23008(self.config.button_config)
             return True
         except:
             return False

@@ -1,7 +1,7 @@
 import buttonshim
 
 
-buttonshim.FPS = 20
+# buttonshim.FPS = 20
 
 # button functions
 _FUNC = {
@@ -28,14 +28,14 @@ _HOLD_STATUS = {
 
 
 class ButtonShim:
-    config = None
+    button_config = None
 
-    def __init__(self, config):
-        self.config = config
+    def __init__(self, button_config):
+        self.button_config = button_config
         buttonshim.set_pixel(0x00, 0x00, 0x00)
         # update hold_time of buttons
         for b in buttonshim._handlers:
-            b.hold_time = self.config.button_config.G_BUTTON_LONG_PRESS
+            b.hold_time = self.button_config.G_BUTTON_LONG_PRESS
         global _FUNC
         _FUNC["A"] = self.press_A
         _FUNC["A_LONG"] = self.press_A_LONG
@@ -49,7 +49,7 @@ class ButtonShim:
         _FUNC["E_LONG"] = self.press_E_LONG
 
     def press_button(self, button, index):
-        self.config.button_config.press_button("Button_Shim", button, index)
+        self.button_config.press_button("Button_Shim", button, index)
 
     def press_A(self):
         self.press_button("A", 0)

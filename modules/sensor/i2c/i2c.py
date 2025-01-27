@@ -24,8 +24,8 @@ class i2c:
     elements_vec = ()
     values = {}
 
-    def __init__(self, reset=True, address=None):
-        self.bus = smbus.SMBus(1)
+    def __init__(self, bus=1, reset=True, address=None):
+        self.bus = smbus.SMBus(bus)
         if address is not None:
             self.SENSOR_ADDRESS = address
         if reset:
@@ -37,11 +37,11 @@ class i2c:
         self.init_sensor()
 
     @classmethod
-    def test(cls, address=None):
+    def test(cls, bus=1, address=None):
         if address is not None:
             cls.SENSOR_ADDRESS = address
         try:
-            bus = smbus.SMBus(1)
+            bus = smbus.SMBus(bus)
             v = bus.read_byte_data(cls.SENSOR_ADDRESS, cls.TEST_ADDRESS)
             if v in cls.TEST_VALUE:
                 return True

@@ -248,8 +248,7 @@ class Button_Config:
         if func_str in ("", "dummy"):
             return
         
-        func = eval("self.config.gui." + func_str)
-        func()
+        getattr(self.config.gui, func_str)()
 
     def change_mode(self):
         # check MAP
