@@ -23,12 +23,17 @@ def exec_cmd_return_value(cmd, cmd_print=True, timeout=None):
             stderr=subprocess.PIPE,
             timeout=timeout,
         )
-        string = p.stdout.decode("utf8").strip()
-        return string
-    except subprocess.TimeoutExpired:
-        app_logger.exception(f"Timeout {cmd}")
-    except Exception:  # noqa
-        app_logger.exception(f"Failed executing {cmd}")
+        stdout_string = p.stdout.decode("utf8").strip()
+        stderr_string = p.stderr.decode("utf8").strip()
+        return stdout_string, stderr_string
+    except subprocess.TimeoutExpired as e:
+        if cmd_print:
+            app_logger.exception(f"Timeout {cmd}, {e}")
+        return "", repr(e)
+    except Exception as e:  # noqa
+        if cmd_print:
+            app_logger.exception(f"Failed executing {cmd}, {e}")
+        return "", repr(e)
 
 
 def is_service_running(service):

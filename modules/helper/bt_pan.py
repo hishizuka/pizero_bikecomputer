@@ -90,34 +90,28 @@ class BTPanDbusNext(BTPan):
         return True
 
     async def connect_tethering(self, remote_addr):
+        res_err = ""
         if not await self.initialize_device(remote_addr):
-            return False
+            return res_err
 
-        for n in range(2):
-            try:
-                await self.interface.call_connect(self.service_uuid)
-            except DBusError as e:
-                app_logger.error(f"[BT] {e}")
-                await asyncio.sleep(1)
-                if e == "Input/output error":
-                    break
-            else:
-                break
-        connected = await self.interface.get_connected()
-
-        return connected
+        try:
+            await self.interface.call_connect(self.service_uuid)
+        except DBusError as e:
+            app_logger.error(f"[BT] {e}, {type(e)}")
+            res_err = repr(e)
+        return res_err
 
     async def disconnect_tethering(self, remote_addr):
+        res_err = ""
         if not await self.initialize_device(remote_addr):
-            return False
+            return res_err
 
         try:
             await self.interface.call_disconnect()
         except DBusError as e:
             app_logger.error(f"[BT] {e}")
-        connected = await self.interface.get_connected()
-
-        return connected
+            res_err = repr(e)
+        return res_err
 
 
 # based on bluez(https://github.com/bluez/bluez) test/test-network

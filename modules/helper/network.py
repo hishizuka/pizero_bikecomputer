@@ -81,7 +81,7 @@ def check_wlan0():
 
 
 def check_network_interface(iface=None):
-    res = exec_cmd_return_value(["ip", "-br", "-4", "a", "show", iface], cmd_print=False)
+    res, _ = exec_cmd_return_value(["ip", "-br", "-4", "a", "show", iface], cmd_print=False)
     if not res:
         return False
 
@@ -95,14 +95,16 @@ def check_network_interface(iface=None):
 class Network:
     config = None
     bt_tethering_status = {}
-    bt_error_open = False
-    bt_error_close = False
+    bt_error_counts = {
+        "input/output": 0, # dbus error
+        "timed out": 0,    # nmcli error
+    }
+    bt_error_limit = 15
 
     DOWNLOAD_WORKER_RETRY_SEC = 300
 
     def __init__(self, config):
         self.config = config
-
         self.download_queue = asyncio.Queue()
         asyncio.create_task(self.download_worker())
 
@@ -112,15 +114,15 @@ class Network:
             await self.bluetooth_tethering(disconnect=True)
             await asyncio.sleep(5)
 
+    def reset_bt_error_counts(self):
+        for k in self.bt_error_counts:
+            self.bt_error_counts[k] = 0
+
     def get_bt_limit(self):
         if self.config.G_IS_RASPI and check_bnep0() and not check_wlan0():
             return True
         else:
             return False
-    
-    def reset_bt_error_status(self):
-        self.bt_error_open = False
-        self.bt_error_close = False
 
     async def download_worker(self):
         failed = []
@@ -302,29 +304,27 @@ class Network:
             connect = "connect"
             if disconnect:
                 connect = "disconnect"
-            res = exec_cmd_return_value(
+            _, res_err = exec_cmd_return_value(
                 ["sudo", "nmcli", "d", connect, bt_address],
                 cmd_print=False,
-                timeout=5
+                timeout=5,
             )
         else:
             if not disconnect:
-                res = await self.config.bt_pan.connect_tethering(bt_address)
+                res_err = await self.config.bt_pan.connect_tethering(bt_address)
             else:
-                res = await self.config.bt_pan.disconnect_tethering(bt_address)
-        #######################################
-        # get bt "input/output error"
-        #######################################
-        return bool(res)
+                res_err = await self.config.bt_pan.disconnect_tethering(bt_address)
+
+        return res_err
 
     async def open_bt_tethering(self, f_name):
-
         if not self.config.G_IS_RASPI:
             return True
         elif not self.config.G_AUTO_BT_TETHERING:
             return True
-        elif self.config.G_AUTO_BT_TETHERING and not self.config.G_BT_PAN_DEVICE:
-            return False
+        elif self.config.G_AUTO_BT_TETHERING:
+            if not self.config.G_BT_PAN_DEVICE or not self.config.G_BT_ADDRESSES:
+                return False
 
         # if other network exists, return
         if detect_network():
@@ -333,72 +333,89 @@ class Network:
         # if bt tethering is opened from other function, return
         if any(self.bt_tethering_status.values()):
             return True
-
-        # input/output error only
-        #if self.bt_error_open or self.bt_error_close:
-        #    return False
-
-        self.bt_tethering_status[f_name] = True
+        
+        # specific error (input/output error)
+        for k in self.bt_error_counts:
+            if self.bt_error_counts[k] >= self.bt_error_limit:
+                return False
 
         # open bt tethering
-        bt_pan_status = await self.bluetooth_tethering()
-        if not bt_pan_status:
-            self.bt_tethering_status[f_name] = False
-            if not self.bt_error_open:
-                self.config.gui.show_forced_message("BT error(open)")
-                self.bt_error_open = True
-            app_logger.error(f"[BT] connect error_1, f_name: {f_name}")
+        bt_pan_error = await self.bluetooth_tethering()
+
+        for k in self.bt_error_counts:
+            if k in bt_pan_error.lower():
+                if self.bt_error_counts[k] == 0:
+                    self.config.gui.show_forced_message(f"BT {k} error")
+                    app_logger.error(f"[BT] {k}, f_name: {f_name}")
+                self.bt_error_counts[k] += 1
+                return False
+
+        if bt_pan_error:
+            app_logger.error(f"[BT] connect error: {bt_pan_error}, f_name: {f_name}")
+
+        # wait for making bnep0
+        count = 0
+        while count < BT_TETHERING_TIMEOUT_SEC:
+            await asyncio.sleep(2)
+            if check_bnep0():
+                break
+            count += 2
+        if not check_bnep0():
             return False
+
+        self.reset_bt_error_counts()
 
         # wait for an internet connection
         count = 0
         while count < BT_TETHERING_TIMEOUT_SEC:
-            await asyncio.sleep(2)
-            if check_bnep0() and detect_network():
+            if detect_network():
                 break
+            await asyncio.sleep(2)
             count += 2
 
         # if an internet connection cannot be obtained, return False
-        if count >= BT_TETHERING_TIMEOUT_SEC and not (check_bnep0() and detect_network()):
+        if count >= BT_TETHERING_TIMEOUT_SEC and not detect_network():
             await self.bluetooth_tethering(disconnect=True)
-            if not self.bt_error_close:
-                self.config.gui.show_forced_message("BT error(close)")
-                self.bt_error_close = True
-            await asyncio.sleep(5)
-            self.bt_tethering_status[f_name] = False
-            app_logger.error(f"[BT] connect error_2({count}s), f_name: {f_name}")
+            app_logger.error(f"[BT] connect network error({count}s), f_name: {f_name}")
             return False
 
-        app_logger.info(f"[BT] connect({count}s), f_name: {f_name}")  
+        self.bt_tethering_status[f_name] = True
+        app_logger.info(f"[BT] connect, bnep0_status={check_bnep0()}, {f_name=}")
         return True
 
     async def close_bt_tethering(self, f_name):
-
         if not self.config.G_IS_RASPI:
             return True
         elif not self.config.G_AUTO_BT_TETHERING:
             return True
-        elif self.config.G_AUTO_BT_TETHERING and not self.config.G_BT_PAN_DEVICE:
-            return True
+        elif self.config.G_AUTO_BT_TETHERING:
+            if not self.config.G_BT_PAN_DEVICE or not self.config.G_BT_ADDRESSES:
+                return True
 
-        if f_name in self.bt_tethering_status:
-            self.bt_tethering_status[f_name] = False
-
-        # if other network exists, return
-        if check_wlan0():  # except bnep0
-            return True
+        self.bt_tethering_status[f_name] = False
 
         # if bt tethering is opened from other function, return
         if any(self.bt_tethering_status.values()):
             return True
 
+        # specific error (input/output error)
+        for k in self.bt_error_counts:
+            if self.bt_error_counts[k] >= self.bt_error_limit:
+                return True
+
+        # if already closed, return
+        if not check_bnep0():
+            return True
+
         # close bt tethering
-        await self.bluetooth_tethering(disconnect=True)
-        await asyncio.sleep(5)
-        self.bt_tethering_status[f_name] = False
-        network_status = bool(detect_network())
-        app_logger.info(f"[BT] disconnect, network: {network_status}, f_name: {f_name}")
-        return not network_status
+        bt_pan_error = await self.bluetooth_tethering(disconnect=True)
+        if bt_pan_error:
+            app_logger.error(f"[BT] disconnect error: {bt_pan_error}, f_name: {f_name}")
+
+        await asyncio.sleep(3)
+        status = check_bnep0()
+        app_logger.info(f"[BT] disconnect, bnep0_status={status}, {f_name=}")
+        return not status
     
     def get_wifi_bt_status(self):
         if not self.config.G_IS_RASPI:
@@ -407,7 +424,7 @@ class Network:
         status = {"wlan": False, "bluetooth": False}
         try:
             # json option requires raspbian buster
-            raw_status = exec_cmd_return_value(
+            raw_status, _ = exec_cmd_return_value(
                 ["sudo", "rfkill", "--json"], cmd_print=False
             )
             json_status = json.loads(raw_status)

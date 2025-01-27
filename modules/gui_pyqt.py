@@ -450,9 +450,11 @@ class GUI_PyQt(GUI_Qt_Base):
         }
 
         # BT tethering on
-        bt_status = await self.config.network.open_bt_tethering(f_name)
-        res_status = False
+        if not await self.config.network.open_bt_tethering(f_name):
+            self.show_dialog_ok_only(None, "No network.")
+            return
 
+        res_status = False
         for k, v in self.config.G_AUTO_UPLOAD_SERVICE.items():
             if v:
                 self.show_forced_message(f"Upload to {k}...")
@@ -461,8 +463,7 @@ class GUI_PyQt(GUI_Qt_Base):
                 res_status |= await upload_func[k]()
 
         # BT tethering off
-        if bt_status:
-            await self.config.network.close_bt_tethering(f_name)
+        await self.config.network.close_bt_tethering(f_name)
 
         self.delete_popup()
         if res_status:

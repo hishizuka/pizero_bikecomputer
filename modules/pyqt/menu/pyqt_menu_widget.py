@@ -458,7 +458,7 @@ class ConnectivityMenuWidget(MenuWidget):
     def bt_auto_tethering(self, change=True):
         if change:
             self.config.G_AUTO_BT_TETHERING = not self.config.G_AUTO_BT_TETHERING
-            self.config.network.reset_bt_error_status()
+            self.config.network.reset_bt_error_counts()
         self.buttons["Auto BT Tethering"].change_toggle(self.config.G_AUTO_BT_TETHERING)
         self.buttons["Select BT device"].onoff_button(self.config.G_AUTO_BT_TETHERING)
 
