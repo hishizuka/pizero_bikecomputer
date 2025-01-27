@@ -285,7 +285,7 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
 
         # timestamp
         self.values["timestamp"] = datetime.now()
-        # set time
+        # get time
         self.get_utc_time(gps_time)
 
         # raw coordinates

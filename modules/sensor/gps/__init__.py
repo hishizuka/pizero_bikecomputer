@@ -2,7 +2,7 @@ from logger import app_logger
 
 
 from .adafruit_uart import _SENSOR_GPS_ADAFRUIT_UART, Adafruit_GPS
-from .gpsd import _SENSOR_GPS_GPSD, GPSD
+from .gpsd import _SENSOR_GPS_GPSD, _SENSER_GPS_STR, GPSD
 from .i2c import _SENSOR_GPS_I2C, GPS_I2C
 
 # we always have a non-null GPS sensor, but it won't generate data unless told to do so with G_DUMMY_OUTPUT
@@ -17,4 +17,4 @@ elif _SENSOR_GPS_ADAFRUIT_UART:
 else:
     SensorGPS = Dummy_GPS
 
-app_logger.info(f"  GPS ({SensorGPS.__name__})")
+app_logger.info(f"  GPS ({SensorGPS.__name__}" + (f"/{_SENSER_GPS_STR}" if _SENSOR_GPS_GPSD else "") + ")")

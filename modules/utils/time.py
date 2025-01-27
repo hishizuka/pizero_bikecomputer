@@ -1,4 +1,5 @@
 from datetime import datetime
+import sys
 
 _TIMEZONE_FINDER = False
 try:
@@ -14,7 +15,7 @@ from logger import app_logger
 def set_time(time_info):
     app_logger.info(f"modify time to {time_info}")
 
-    last_known_date = exec_cmd_return_value(
+    last_known_date, _ = exec_cmd_return_value(
         [
             "git",
             "log",
@@ -24,8 +25,16 @@ def set_time(time_info):
         ],
         cmd_print=False,
     )
+    
+    # for python 3.9 (bullseye)
+    # To be deprecated
+    python_ver = sys.version_info
+    if python_ver[0] == 3 and python_ver[1] < 11 and time_info[-1] == "Z":
+        dt = dt = datetime.fromisoformat(time_info[:-1] + "+00:00")
+    else:
+        dt = datetime.fromisoformat(time_info)
 
-    if datetime.fromisoformat(time_info) < datetime.fromisoformat(last_known_date):
+    if dt < datetime.fromisoformat(last_known_date):
         return False
 
     exec_cmd(
