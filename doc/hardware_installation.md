@@ -23,9 +23,11 @@
 
 ## Display
 
-### [MIP Reflective color LCD module 2.7" w/ backlight (LPM027M128C)](https://international.switch-science.com/catalog/5395/) 
+### JDI LPM027M128B / LPM027M128C
 
-[Connection board for MIP Reflective color LCD to FRDM-K64F](https://international.switch-science.com/catalog/5393/) (MIP Interface Board) is also needed
+The Switch Science (JP) product originally used is sold out, please select Alternatives below.
+
+[Connection board for MIP Reflective color LCD to FRDM-K64F](https://international.switch-science.com/catalog/5393/) (MIP Interface Board) is also needed. Or make a custom PCB based on an existing product.
 
 Pros&Cons
 
@@ -38,13 +40,19 @@ Pros&Cons
 
 - <img src="https://user-images.githubusercontent.com/12926652/206317535-71345000-8dfa-4051-a674-15e21afb4203.jpeg" width=480 />
 
-Alternatives: 
-- [Aliexpress New LPM027M128B LPM027M128C LTPS TFT-LCD, LCM 2.7 inch 400X240 display](https://ja.aliexpress.com/item/1005002351792191.html?spm=a2g0o.productlist.0.0.52452576NqqM6z&algo_pvid=ba698ed0-3580-48fa-8fdc-b7774c4c9cf0&algo_expid=ba698ed0-3580-48fa-8fdc-b7774c4c9cf0-0&btsid=0bb0623116212468747683928ed47e&ws_ab_test=searchweb0_0,searchweb201602_,searchweb201603_)
-- [WAHOO ELEMNT ROAM screen replacement](https://ja.aliexpress.com/item/1005002276498187.html?spm=a2g0o.productlist.0.0.75631bcfeHZvG1&algo_pvid=15c33af1-273e-4fac-a224-6dff903b6f43&algo_expid=15c33af1-273e-4fac-a224-6dff903b6f43-0&btsid=0b0a555416212467903751350ef791&ws_ab_test=searchweb0_0,searchweb201602_,searchweb201603_): Protector panel is included.
+Display alternatives: 
+- [Aliexpress New LPM027M128B LPM027M128C LTPS TFT-LCD, LCM 2.7 inch 400X240 display](https://www.aliexpress.com/item/1005002351792191.html)
+- ELEMNT ROAM V1 (WFCC4) display
+  - [Aliexpress New Wahoo Element Roam WFCC4 Screen Lcd Display Replacement/Repair](https://www.aliexpress.com/item/1005008210004927.html): Protector panel is included.
+  - [Aliexpress LCD Screen Matrix For Wahoo WFCC5 Elemnt Bolt V1 V2 Bike Computer Assembly Replacement Display](https://www.aliexpress.com/item/1005007797291187.html): choose "V1"
+  - [Aliexpress LCD Screen Matrix For Wahoo WFCC5 Elemnt Bolt V1 V2 Bike Computer Assembly Replacement Display](https://www.aliexpress.com/item/1005007782333344.html): differnt page, choose "V1"
   - <img src="https://user-images.githubusercontent.com/12926652/206317870-dfb424bf-f16f-49bc-a39f-3310ae243257.png" width=320 />
 - [Digikey LPM027M128B](https://www.digikey.com/en/products/detail/azumo/12380-06-T2/9602620): backlight cable is different from original
-- [LPM044M141](https://www.digikey.com/en/products/detail/azumo/12567-06-T3/10492348): 4.4" color LCD
-- [Adafruit SHARP Memory Display Breakout](https://www.adafruit.com/product/4694): Alternative for MIP Interface Board. Replace monochrome LCD panel. Backlight control is not included.
+- [MIP Reflective color LCD module 2.7" w/ backlight (LPM027M128C)](https://international.switch-science.com/catalog/5395/) from Switch Science(JP): sold out
+- [LPM044M141](https://www.digikey.com/en/products/detail/azumo/12567-06-T3/10492348): 4.4" color LCD from Azumo
+
+Interface board alternatives:
+- [Adafruit SHARP Memory Display Breakout](https://www.adafruit.com/product/4694): Replace monochrome LCD panel. Backlight control is not included.
 
 ### [Adafruit SHARP Memory Display Breakout (LS027B7DH01)](https://www.adafruit.com/product/4694)
 
@@ -243,21 +251,21 @@ Note that the connection between Raspberry Pi and SHARP Memory Display is differ
 | Name | Raspberry Pi | SHARP Memory Display Breakout | MIP Interface Board |
 |:-|:-:|:-:|:-:|
 | GND      | IO25 | GND   | CN1-4 |
-| VCOMSEL  | IO11 | EXTIN | CN2-3 |
-| DISP     | IO13 | DISP  | CN1-9 |
-| CS       | IO16 | CS    | CN1-8 |
+| VCOMSEL  | IO11 (GPIO17) | EXTIN | CN2-3 |
+| DISP     | IO13 (GPIO27) | DISP  | CN1-9 |
+| CS       | IO16 (GIOP23) | CS    | CN1-8 |
 | 3.3V     | IO17 | VIN   | CN1-6 |
-| SPI MOSI | IO19 | MOSI  | CN1-7 |
-| SPI SCLK | IO23 | SCLK  | CN1-5 |
+| SPI MOSI | IO19 (GPIO10) | MOSI  | CN1-7 |
+| SPI SCLK | IO23 (GPIO11) | SCLK  | CN1-5 |
 
 
 for backlight (MIP Interface Board)
 
 | Name | Raspberry Pi | MIP Interface Board |
 |:-|:-:|:-:|
-| LEDPWM   | IO12 | CN2-1 |
-| VBUS-5V  | IO02/04 | CN3-5 |
-| BL2-CTRL | IO06/09/14/20/25/34/39 | CN4-3 |
+| LEDPWM   | IO12 (GPIO18) | CN2-1 |
+| VBUS-5V  | IO02/04 (5V) | CN3-5 |
+| BL2-CTRL | IO06/09/14/20/25/34/39 (GND) | CN4-3 |
 
 
 Reference:

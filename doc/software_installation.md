@@ -43,7 +43,7 @@ Assume Python version 3 environment. Version 2 is not supported.
 
 ```
 $ git clone https://github.com/hishizuka/pizero_bikecomputer.git
-$ pip3 install PyQt5 numpy pyqtgraph cython oyaml pillow polyline aiohttp aiofiles qasync garminconnect stravacookies tb-mqtt-client
+$ pip3 install PyQt5 numpy pyqtgraph cython setuptools oyaml pillow polyline aiohttp aiofiles qasync garminconnect stravacookies tb-mqtt-client
 $ pip3 install git+https://github.com/hishizuka/crdp.git
 
 # mac
