@@ -58,8 +58,7 @@ class CustomRotatingFileHandler(RotatingFileHandler):
             self.stream.close()
             self.stream = None
             # remove file older than one month (30 days)
-            base_filename_no_ext, ext = os.path.splitext(self.baseFilename)
-            regex = rf"{base_filename_no_ext}-(.*?){ext}"
+            regex = rf"{self.baseFilename}-(.*?)"
             cut_out_date = datetime.now() - timedelta(days=30)
             for root, dirs, files in os.walk(os.path.dirname(self.baseFilename)):
                 for file in files:
@@ -80,7 +79,7 @@ class CustomRotatingFileHandler(RotatingFileHandler):
 
             self.rotate(
                 self.baseFilename,
-                f"{base_filename_no_ext}-{last_date.strftime(datetime_format)}{ext}",
+                f"{self.baseFilename}-{last_date.strftime(datetime_format)}",
             )
         if not self.delay:
             self.stream = self._open()
