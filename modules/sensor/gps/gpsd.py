@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timezone
 
-from logger import app_logger
+from modules.app_logger import app_logger
 from .base import AbstractSensorGPS
 
 _SENSOR_GPS_AIOGPS = False

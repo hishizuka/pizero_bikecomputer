@@ -1,12 +1,11 @@
 from PIL import Image
 
-from logger import app_logger
+from modules.app_logger import app_logger
 from .display_core import Display
 
 _SENSOR_DISPLAY = False
 try:
     from papirus import Papirus
-
     _SENSOR_DISPLAY = True
 except ImportError:
     pass

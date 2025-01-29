@@ -1,4 +1,4 @@
-from logger import app_logger
+from modules.app_logger import app_logger
 from modules._qt_qtwidgets import QtCore, QtWidgets, QtGui
 from .pyqt_menu_widget import MenuWidget, ListWidget, ListItemWidget
 

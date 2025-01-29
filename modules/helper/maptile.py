@@ -15,7 +15,7 @@ from modules.utils.map import (
     get_maptile_filename,
     get_tilexy_and_xy_in_tile,
 )
-from logger import app_logger
+from modules.app_logger import app_logger
 
 SCW_WIND_SPEED_ARROW = np.array([
     [190,   0, 180], #   0~1[m/s]

@@ -25,7 +25,7 @@ from modules.sensor.gps.base import (
 )
 from modules.utils.asyncio import call_with_delay
 from modules.utils.time import set_time
-from logger import app_logger
+from modules.app_logger import app_logger
 
 # Message first and last byte markers
 F_BYTE_MARKER = 0x10

@@ -1,6 +1,6 @@
 import time
 
-from logger import app_logger
+from modules.app_logger import app_logger
 from .sensor import Sensor
 
 
@@ -8,7 +8,6 @@ from .sensor import Sensor
 _SENSOR_RPiGPIO = False
 try:
     import RPi.GPIO as GPIO
-
     _SENSOR_RPiGPIO = True
 except ImportError:
     pass

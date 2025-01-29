@@ -4,8 +4,7 @@ import os
 from datetime import datetime
 import asyncio
 
-from logger import app_logger
-
+from modules.app_logger import app_logger
 import modules._qt_ver as _qt_ver
 _qt_ver.QtMode = "QtWidgets"
 

@@ -18,7 +18,7 @@ from modules.helper.maptile import (
     get_headwind
 )
 from modules.utils.geo import get_track_str
-from logger import app_logger
+from modules.app_logger import app_logger
 
 _IMPORT_GARMINCONNECT = False
 try:

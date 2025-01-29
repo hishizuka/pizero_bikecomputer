@@ -3,7 +3,7 @@ from datetime import datetime
 import array
 import asyncio
 
-from logger import app_logger
+from modules.app_logger import app_logger
 from . import ant_device
 
 

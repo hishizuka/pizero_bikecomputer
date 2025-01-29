@@ -9,7 +9,7 @@ import oyaml
 import numpy as np
 from crdp import rdp
 
-from logger import app_logger
+from modules.app_logger import app_logger
 from modules.loaders import TcxLoader
 from modules.utils.filters import savitzky_golay
 from modules.utils.geo import calc_azimuth, get_dist_on_earth, get_dist_on_earth_array

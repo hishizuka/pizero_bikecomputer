@@ -1,4 +1,4 @@
-from logger import app_logger
+from modules.app_logger import app_logger
 from modules._qt_qtwidgets import (
     QT_ALIGN_CENTER,
     QT_ALIGN_RIGHT,

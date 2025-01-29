@@ -9,7 +9,7 @@ from glob import glob
 import numpy as np
 import oyaml as yaml
 
-from logger import CustomRotatingFileHandler, app_logger
+from modules.app_logger import CustomRotatingFileHandler, app_logger
 from modules.map_config import add_map_config
 from modules.helper.setting import Setting
 from modules.button_config import Button_Config

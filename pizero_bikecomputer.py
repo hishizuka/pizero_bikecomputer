@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-from logger import app_logger
+from modules.app_logger import app_logger
 from modules.utils.timer import Timer, log_timers
 
 

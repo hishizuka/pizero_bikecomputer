@@ -7,12 +7,11 @@ import numpy as np
 _IMPORT_PSUTIL = False
 try:
     import psutil
-
     _IMPORT_PSUTIL = True
 except ImportError:
     pass
 
-from logger import app_logger
+from modules.app_logger import app_logger
 
 app_logger.info("detected sensor modules:")
 

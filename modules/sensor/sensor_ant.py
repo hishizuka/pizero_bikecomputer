@@ -5,7 +5,7 @@ import asyncio
 
 import numpy as np
 
-from logger import app_logger
+from modules.app_logger import app_logger
 from .sensor import Sensor
 from .ant import ant_device_heartrate
 from .ant import ant_device_speed_cadence

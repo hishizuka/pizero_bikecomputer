@@ -2,7 +2,7 @@ import sqlite3
 import struct
 from datetime import datetime, timezone
 
-from logger import app_logger
+from modules.app_logger import app_logger
 from modules.utils.date import datetime_myparser
 from .logger import Logger
 

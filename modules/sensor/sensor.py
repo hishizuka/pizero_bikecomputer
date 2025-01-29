@@ -1,7 +1,7 @@
 import asyncio
 import time
 
-from logger import app_logger
+from modules.app_logger import app_logger
 
 
 class Sensor:

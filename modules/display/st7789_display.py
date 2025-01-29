@@ -1,13 +1,12 @@
 from PIL import Image, ImageDraw
 
-from logger import app_logger
+from modules.app_logger import app_logger
 from .display_core import Display
 
 _SENSOR_DISPLAY = False
 try:
     from ST7789 import ST7789
     #import pigpio
-
     _SENSOR_DISPLAY = True
 except ImportError:
     pass

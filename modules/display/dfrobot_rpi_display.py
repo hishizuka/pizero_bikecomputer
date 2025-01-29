@@ -1,11 +1,10 @@
-from logger import app_logger
+from modules.app_logger import app_logger
 from .display_core import Display
 
 _SENSOR_DISPLAY = False
 
 try:
     from DFRobot_RPi_Display.devices.dfrobot_epaper import DFRobot_Epaper_SPI
-
     _SENSOR_DISPLAY = True
 except ImportError:
     pass

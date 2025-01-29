@@ -9,7 +9,7 @@ except:
     pass
 
 from modules.utils.cmd import exec_cmd, exec_cmd_return_value
-from logger import app_logger
+from modules.app_logger import app_logger
 
 
 def set_time(time_info):

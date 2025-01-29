@@ -1,11 +1,10 @@
 from .mip_display_base import MipDisplayBase
 
-from logger import app_logger
+from modules.app_logger import app_logger
 
 _SENSOR_DISPLAY = False
 try:
     import mraa
-
     _SENSOR_DISPLAY = True
 except ImportError:
     pass

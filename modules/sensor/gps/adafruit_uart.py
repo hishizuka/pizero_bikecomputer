@@ -1,7 +1,7 @@
 import asyncio
 import time
 
-from logger import app_logger
+from modules.app_logger import app_logger
 from .base import AbstractSensorGPS
 
 
@@ -9,7 +9,6 @@ _SENSOR_GPS_ADAFRUIT_UART = False
 try:
     import serial
     import adafruit_gps
-
     _uart = serial.Serial("/dev/ttyS0", baudrate=9600, timeout=10)
     _sensor_adafruit_gps = adafruit_gps.GPS(_uart, debug=False)
     _SENSOR_GPS_ADAFRUIT_UART = True

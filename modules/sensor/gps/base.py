@@ -4,7 +4,7 @@ from datetime import datetime, time
 
 import numpy as np
 
-from logger import app_logger
+from modules.app_logger import app_logger
 from modules.sensor.sensor import Sensor
 from modules.utils.geo import get_dist_on_earth, get_track_str, calc_azimuth
 from modules.utils.time import set_time, set_timezone

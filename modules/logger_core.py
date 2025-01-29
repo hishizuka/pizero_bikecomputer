@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 import numpy as np
 from crdp import rdp
 
-from logger import app_logger
+from modules.app_logger import app_logger
 from modules.utils.cmd import exec_cmd
 from modules.utils.date import datetime_myparser
 from modules.utils.timer import Timer

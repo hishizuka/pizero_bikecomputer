@@ -1,16 +1,13 @@
 import asyncio
 
-from logger import app_logger
+from modules.app_logger import app_logger
 
 HAS_DBUS_NEXT = False
 HAS_DBUS = False
 
 try:
     from dbus_next import BusType, DBusError
-    from dbus_next.service import ServiceInterface, method, signal, dbus_property
     from dbus_next.aio.message_bus import MessageBus
-    from dbus_next import Variant
-
     HAS_DBUS_NEXT = True
 except ImportError:
     pass
@@ -18,7 +15,6 @@ except ImportError:
 try:
     if not HAS_DBUS_NEXT:
         import dbus
-
         HAS_DBUS = True
 except ImportError:
     pass

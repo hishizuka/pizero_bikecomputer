@@ -4,7 +4,7 @@ import asyncio
 
 import numpy as np
 
-from logger import app_logger
+from modules.app_logger import app_logger
 from modules.utils.filters import KalmanFilter, KalmanFilter_pitch
 from modules.utils.geo import get_track_str
 from modules.utils.network import detect_network
@@ -14,7 +14,6 @@ from .sensor import Sensor
 _SENSOR_I2C = False
 try:
     import smbus
-
     _SENSOR_I2C = True
 except ImportError:
     pass

@@ -1,4 +1,4 @@
-from logger import app_logger
+from modules.app_logger import app_logger
 from modules._qt_qtwidgets import QT_EXPANDING, QtCore, QtWidgets, qasync
 
 from .pyqt_item import Item

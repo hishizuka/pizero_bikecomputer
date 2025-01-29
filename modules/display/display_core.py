@@ -1,6 +1,6 @@
 import os
 
-from logger import app_logger
+from modules.app_logger import app_logger
 
 DEFAULT_RESOLUTION = (400, 240)#(272, 451)#(400, 240)
 

@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 import numpy as np
 
-from logger import app_logger
+from modules.app_logger import app_logger
 from modules.gui_config import GUI_Config
 from modules._qt_ver import (
     QtMode,

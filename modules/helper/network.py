@@ -16,7 +16,7 @@ from modules.utils.cmd import (
     exec_cmd_return_value,
 )
 
-from logger import app_logger
+from modules.app_logger import app_logger
 
 COROUTINE_SEM = 100
 BT_TETHERING_TIMEOUT_SEC = 15
