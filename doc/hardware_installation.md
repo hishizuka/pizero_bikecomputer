@@ -163,8 +163,11 @@ The accelerometer is used for stop detection when using GPS. The magnetometer is
 - [LIS3MDL](https://www.adafruit.com/product/4485): Mag 
 - [BMX160](https://www.dfrobot.com/product-1928.html): Accel / Gyro / Mag
 - [BNO055](https://www.adafruit.com/product/4646): Accel / Gyro / Mag / Euler / Quatenrion
-- [ISM330DHCX and ](https://www.sparkfun.com/products/19895): Accel / Gyro
+- [ISM330DHCX](https://www.sparkfun.com/products/19895): Accel / Gyro
 - [MMC5983MA](https://www.sparkfun.com/products/19895): Mag
+- [BMI270](https://www.bosch-sensortec.com/products/motion-sensors/imus/bmi270/): Accel / Gyro
+- [BMM150](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm150/): Mag
+- [BMM350](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm350/): Mag
 
 ### Light
 
@@ -188,8 +191,8 @@ This is essential for displays without buttons, like MIP displays.
 
 - [Button SHIM](https://shop.pimoroni.com/products/button-shim)
 - <img src="https://user-images.githubusercontent.com/12926652/91799330-cfc50580-ec61-11ea-9045-e1991aed205c.png" width=240 />
-- IO Expander (with MCP230009 and some buttons)
-- <img src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/0477aac3-96a2-40f9-bae9-efd3d77ed46f" width=480 />
+- MCP230008 or some variants
+- <img width="526" alt="Image" src="https://github.com/user-attachments/assets/8d2532a1-5e8b-4710-9c9f-fc227330d6f0" />
 
 ### Battery
 
