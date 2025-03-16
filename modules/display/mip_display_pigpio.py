@@ -16,7 +16,7 @@ except ImportError:
     pass
 
 if _SENSOR_DISPLAY:
-    app_logger.info(f"MIP DISPLAY(pigpio): {_SENSOR_DISPLAY}")
+    app_logger.info(f"MIP DISPLAY(pigpio): {_SENSOR_DISPLAY} ({MODE})")
 
 
 class MipDisplayPigpio(MipDisplayBase):

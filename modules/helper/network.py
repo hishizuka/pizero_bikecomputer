@@ -380,7 +380,7 @@ class Network:
             return False
 
         self.bt_tethering_status[f_name] = True
-        app_logger.info(f"[BT] connect, bnep0_status={check_bnep0()}, {f_name=}")
+        app_logger.info(f"[BT] connect,    bnep0_status={check_bnep0()},  {f_name=}")
         return True
 
     async def close_bt_tethering(self, f_name):

@@ -1,12 +1,14 @@
 def make_ext(modname, pyxfilename):
     from distutils.extension import Extension
     import numpy
-    ext = Extension(name = modname,
+    ext = Extension(
+        name = modname,
         sources=[pyxfilename, 'mip_display.cpp'],
         extra_compile_args=['-std=c++17'],
         language='c++',
         include_dirs = ['modules/display/cython', numpy.get_include()],
         extra_link_args = ['-lpigpiod_if2'],
+        define_macros=[("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")],
     )
     return ext
 

@@ -1,11 +1,10 @@
 def make_ext(modname, pyxfilename):
     from distutils.extension import Extension
-    #import numpy
-    ext = Extension(name = modname,
+    ext = Extension(
+        name = modname,
         sources=[pyxfilename,'logger_fit_c.cpp'],
         extra_compile_args=['-std=c++17'],
         language='c++',
-        #include_dirs = ['modules/logger/cython', numpy.get_include()],
         include_dirs = ['modules/logger/cython'],
         extra_link_args = ['-lsqlite3'],
     )
