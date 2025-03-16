@@ -20,7 +20,6 @@ except:
 
 
 class Adafruit_GPS(AbstractSensorGPS):
-    NULL_VALUE = None
 
     def is_null_value(self, value):
         return value is self.NULL_VALUE
@@ -73,7 +72,7 @@ class Adafruit_GPS(AbstractSensorGPS):
                     g.fix_quality_3d,
                     None,
                     None,
-                    [g.pdop, g.hdop, g.vdop],
+                    (g.pdop, g.hdop, g.vdop),
                     (used, total),
                     time.strftime("%Y-%m-%dT%H:%M:%S+00:00", g.timestamp_utc),
                 )

@@ -66,7 +66,7 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
     azimuth_cutoff = [0, 360]
     datetime_format = "%Y/%m/%d %H:%M:%S +0000"
 
-    NULL_VALUE = "n/a"
+    NULL_VALUE = None
 
     valid_cutoff_dof = (99.0, 99.0, 99.0)
 
@@ -135,7 +135,7 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
             or mode < NMEA_MODE_3D
             or None in dop
             or any([x >= self.valid_cutoff_dof[i] for i, x in enumerate(dop)])
-            or satellites[0] <= USED_SAT_CUTOFF
+            or (not self.check_3DGPS_FIX_status(status) and satellites[0] <= USED_SAT_CUTOFF)
         ):
             valid = False
         else:
@@ -143,6 +143,16 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
                 app_logger.error(f"GPS lon&lat are not float: {lon}, {type(lon)}, {lat}, {type(lat)}, {mode}, {dop}, {satellites}")
 
         return valid
+    
+    def check_3DGPS_FIX_status(self, status):
+        if self.is_null_value(status):
+            return False
+        else:
+            # 3D DGPS FIX
+            if status in [2, ]:
+                return True
+            else:
+                return False
 
     async def get_basic_values(
         self, lat, lon, alt, speed, track, mode, status, error, dop, satellites, gps_time
@@ -156,7 +166,7 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
         if self.NULL_VALUE is not None:
 
             def id_or_none(value):
-                if isinstance(value, list):
+                if isinstance(value, tuple):
                     return [id_or_none(x) for x in value]
                 else:
                     return value if not self.is_null_value(value) else None
@@ -174,12 +184,6 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
 
         # coordinate
         valid_pos = self.is_position_valid(lat, lon, mode, status, dop, satellites, error)
-
-        # special condition #2
-        # if not valid_pos and self.values['mode'] == 3 and self.values['used_sats'] >= 10 \
-        #  and np.all(np.array([self.values['pdop'], self.values['hdop'], self.values['vdop']]) < np.array([3.0, 3.0, 3.0])) \
-        #  :
-        #  valid_pos = True
 
         if valid_pos:
             self.values["lat"] = lat

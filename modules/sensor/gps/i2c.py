@@ -17,7 +17,6 @@ except Exception:  # noqa
 
 
 class GPS_I2C(AbstractSensorGPS):
-    NULL_VALUE = None
 
     def is_null_value(self, value):
         return value is self.NULL_VALUE
