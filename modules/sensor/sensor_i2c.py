@@ -168,6 +168,11 @@ class SensorI2C(Sensor):
                 self.motion_sensor["MAG"] = True
                 self.sensor_label["MAG"] = "BMM150"
                 self.sensor["i2c_mag"] = self.sensor_bmm150
+            if self.detect_motion_bmm350():
+                self.available_sensors["MOTION"]["BMM350"] = True
+                self.motion_sensor["MAG"] = True
+                self.sensor_label["MAG"] = "BMM350"
+                self.sensor["i2c_mag"] = self.sensor_bmm350
             if self.detect_light_vncl4040():
                 self.available_sensors["LIGHT"]["VCNL4040"] = True
                 self.sensor["lux"] = self.sensor_vcnl4040
@@ -285,6 +290,7 @@ class SensorI2C(Sensor):
         self.available_sensors["MOTION"]["ICM20948"] = self.detect_motion_icm20948()
         self.available_sensors["MOTION"]["BMI270"] = self.detect_motion_bmi270()
         self.available_sensors["MOTION"]["BMM150"] = self.detect_motion_bmm150()
+        self.available_sensors["MOTION"]["BMM350"] = self.detect_motion_bmm350()
         if self.available_sensors["MOTION"]["LSM303_ORIG"]:
             self.motion_sensor["ACC"] = True
             self.motion_sensor["MAG"] = True
@@ -329,6 +335,9 @@ class SensorI2C(Sensor):
         if self.available_sensors["MOTION"]["BMM150"]:
             self.motion_sensor["MAG"] = True
             self.sensor_label["MAG"] = "BMM150"
+        if self.available_sensors["MOTION"]["BMM350"]:
+            self.motion_sensor["MAG"] = True
+            self.sensor_label["MAG"] = "BMM350"
 
         # light sensors
         self.available_sensors["LIGHT"]["TCS3472"] = self.detect_light_tcs3472()
@@ -394,6 +403,8 @@ class SensorI2C(Sensor):
         # mag
         if self.available_sensors["MOTION"].get("BMM150"):
             self.sensor["i2c_mag"] = self.sensor_bmm150
+        elif self.available_sensors["MOTION"].get("BMM350"):
+            self.sensor["i2c_mag"] = self.sensor_bmm350
         elif self.available_sensors["MOTION"].get("MMC5983MA"):
             self.sensor["i2c_mag"] = self.sensor_mmc5983ma
         elif self.available_sensors["MOTION"].get("LIS3MDL"):
@@ -643,7 +654,7 @@ class SensorI2C(Sensor):
         if not self.motion_sensor["GYRO"]:
             return
         try:
-            if self.available_sensors["MOTION"].get("BMI270"): # deg/sec
+            if self.available_sensors["MOTION"].get("BMI270"): # rad/sec
                 self.values["gyro_raw"] = np.array(self.sensor["i2c_imu"].values["gyro"])
             elif (
                 self.available_sensors["MOTION"].get("LSM6DS") # rad/sec
@@ -663,8 +674,7 @@ class SensorI2C(Sensor):
 
         # convert units (degree -> radians)
         if (
-            self.available_sensors["MOTION"].get("BMI270")
-            or self.available_sensors["MOTION"].get("BMX160")
+            self.available_sensors["MOTION"].get("BMX160")
             or self.available_sensors["MOTION"].get("ICM20948")
         ):
             self.values["gyro_raw"] = np.radians(self.values["gyro_raw"])
@@ -702,26 +712,26 @@ class SensorI2C(Sensor):
         if not self.motion_sensor["MAG"]:
             return
         try:
-            if self.available_sensors["MOTION"].get("LSM303_ORIG"):
-                self.sensor["i2c_imu"].read_mag()
-                self.values["mag_raw"] = np.array(self.sensor["i2c_imu"].values["mag"])
-            elif self.available_sensors["MOTION"].get("LIS3MDL"):
+            if (
+                self.available_sensors["MOTION"].get("MMC5983MA")
+                or self.available_sensors["MOTION"].get("BMM150")
+                or self.available_sensors["MOTION"].get("BMM350")
+                or self.available_sensors["MOTION"].get("LIS3MDL")
+                or self.available_sensors["MOTION"].get("LSM303_ORIG")
+            ):
                 self.values["mag_raw"] = np.array(self.sensor["i2c_mag"].magnetic)
+            elif (
+                self.available_sensors["MOTION"].get("LSM303_ORIG")
+                or self.available_sensors["MOTION"].get("ICM20948")
+            ):
+                self.values["mag_raw"] = np.array(self.sensor["i2c_imu"].magnetic)
             elif self.available_sensors["MOTION"].get("LSM9DS1"):
                 self.values["mag_raw"] = np.array(list(self.sensor["i2c_imu"].magnetic))
             elif self.available_sensors["MOTION"].get("BMX160"):
                 self.values["mag_raw"] = np.array(self.sensor["i2c_imu"].mag)
-            elif self.available_sensors["MOTION"].get("ICM20948"):
-                self.values["mag_raw"] = np.array(self.sensor["i2c_imu"].magnetic)
             elif self.available_sensors["MOTION"].get("BNO055"):
                 # sometimes BNO055 returns [None, None, None] array occurs
                 self.values["mag_raw"] = np.array(self.sensor["i2c_imu"].magnetic) / 1.0
-            if (
-                self.available_sensors["MOTION"].get("MMC5983MA")
-                or self.available_sensors["MOTION"].get("BMM150")
-            ):
-                self.sensor["i2c_mag"].read_mag()
-                self.values["mag_raw"] = np.array(self.sensor["i2c_mag"].values["mag"])
         except:
             return
         self.values["mag_raw"] = self.change_axis(self.values["mag_raw"], is_mag=True)
@@ -1376,6 +1386,9 @@ class SensorI2C(Sensor):
             return False
 
     def detect_pressure_bmp581(self):
+        if self.detect_pressure_bmp581_c():
+            return True
+
         try:
             from .i2c.BMP581 import BMP581
 
@@ -1384,6 +1397,21 @@ class SensorI2C(Sensor):
                 return False
             self.sensor_bmp581 = BMP581()
             return True
+        except:
+            return False
+    
+    def detect_pressure_bmp581_c(self):
+        try:
+            import pyximport
+            pyximport.install()
+            from .i2c.cython.i2c_helper import BMP5_C
+
+            self.sensor_bmp581 = BMP5_C(1)
+            if self.sensor_bmp581.status:
+                return True
+            else:
+                del(self.sensor_bmp581)
+                return False
         except:
             return False
 
@@ -1531,8 +1559,11 @@ class SensorI2C(Sensor):
             return True
         except:
             return False
-            
+
     def detect_motion_bmi270(self):
+        if self.detect_motion_bmi270_c():
+            return True
+
         try:
             from .i2c.BMI270 import BMI270
 
@@ -1541,6 +1572,21 @@ class SensorI2C(Sensor):
                 return False
             self.sensor_bmi270 = BMI270()
             return True
+        except:
+            return False
+
+    def detect_motion_bmi270_c(self):
+        try:
+            import pyximport
+            pyximport.install(inplace=True)
+            from .i2c.cython.i2c_helper import BMI270_C
+
+            self.sensor_bmi270 = BMI270_C(1)
+            if self.sensor_bmi270.status:
+                return True
+            else:
+                del(self.sensor_bmi270)
+                return False
         except:
             return False
 
@@ -1559,6 +1605,9 @@ class SensorI2C(Sensor):
             return False
 
     def detect_motion_bmm150(self):
+        if self.detect_motion_bmm150_c():
+            return True
+
         try:
             from .i2c.BMM150 import BMM150
 
@@ -1570,6 +1619,36 @@ class SensorI2C(Sensor):
             else:
                 return False
             return True
+        except:
+            return False
+
+    def detect_motion_bmm150_c(self):
+        try:
+            import pyximport
+            pyximport.install()
+            from .i2c.cython.i2c_helper import BMM150_C
+
+            self.sensor_bmm150 = BMM150_C(1)
+            if self.sensor_bmm150.status:
+                return True
+            else:
+                del(self.sensor_bmm150)
+                return False
+        except:
+            return False
+
+    def detect_motion_bmm350(self):
+        try:
+            import pyximport
+            pyximport.install()
+            from .i2c.cython.i2c_helper import BMM350_C
+
+            self.sensor_bmm350 = BMM350_C(1)
+            if self.sensor_bmm350.status:
+                return True
+            else:
+                del(self.sensor_bmm350)
+                return False
         except:
             return False
 
@@ -1657,6 +1736,7 @@ class SensorI2C(Sensor):
             from .i2c.MCP230XX import MCP23008
 
             self.sensor_mcp23008 = MCP23008(self.config.button_config)
+            #self.sensor_mcp23008 = MCP23008(self.config.button_config, int_pin=23)
             return True
         except:
             return False
