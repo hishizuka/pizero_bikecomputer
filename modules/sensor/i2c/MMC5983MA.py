@@ -1,8 +1,6 @@
 import time
 import struct
 
-import numpy as np
-
 try:
     # run from top directory (pizero_bikecomputer)
     from . import i2c
@@ -115,6 +113,11 @@ class MMC5983MA(i2c.i2c):
             * (((mag_raw[2] | (((mag_xyz[0] & 0x03) >> 2) & 0x3)) - 131072) / 16384)
             * 100
         )
+
+    @property
+    def magnetic(self):
+        self.read_mag()
+        return self.values["mag"]
 
 
 if __name__ == "__main__":

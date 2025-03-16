@@ -1,8 +1,6 @@
 import time
 import struct
 
-import numpy as np
-
 try:
     # run from top directory (pizero_bikecomputer)
     from . import i2c
@@ -225,11 +223,16 @@ class BMM150(i2c.i2c):
         else:
             return (256-number)*-1
 
+    @property
+    def magnetic(self):
+        self.read_mag()
+        return self.values["mag"]
+
 
 if __name__ == "__main__":
     import math
-    BMM150.test(address=0x12)
-    b = BMM150(address=0x12)
+    BMM150.test()
+    b = BMM150()
 
     while True:
         b.read_mag()

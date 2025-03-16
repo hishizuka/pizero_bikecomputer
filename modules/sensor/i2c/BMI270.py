@@ -1,7 +1,6 @@
 import time
 import struct
-
-import numpy as np
+import math
 
 try:
     # run from top directory (pizero_bikecomputer)
@@ -517,9 +516,10 @@ class BMI270(i2c.i2c):
     elements_vec = ("acc", "gyro")
 
     acc_range = ACC_RANGE_2G
-    gyro_range = GYR_RANGE_1000
+    gyro_range = GYR_RANGE_2000
     acc_factor = (2 << acc_range) / 32768
-    gyro_factor = (125 * (1 << (GYR_RANGE_125 - gyro_range))) / 32768
+    #gyro_factor = (125 * (1 << (GYR_RANGE_125 - gyro_range))) / 32768  # deg/sec
+    gyro_factor = (125 * (1 << (GYR_RANGE_125 - gyro_range))) / 32768 * math.pi / 180  # rad/sec
 
     struct_pattern = struct.Struct("<hhh")
 
@@ -620,19 +620,18 @@ class BMI270(i2c.i2c):
 
 
 if __name__ == "__main__":
-    import math
     BMI270.test()
     b = BMI270()
     while True:
         b.read()
         print(
-            "acc:{:+.2f}, {:+.2f}, {:+.2f}, gyro:{:+.1f}, {:+.1f}, {:+.1f}".format(
+            "acc:{:+.3f}, {:+.3f}, {:+.3f}, gyro:{:+.3f}, {:+.3f}, {:+.3f}".format(
                 b.values["acc"][0],
                 b.values["acc"][1],
                 b.values["acc"][2],
-                math.radians(b.values["gyro"][0]),
-                math.radians(b.values["gyro"][1]),
-                math.radians(b.values["gyro"][2]),
+                b.values["gyro"][0],
+                b.values["gyro"][1],
+                b.values["gyro"][2],
             )
         )
         time.sleep(0.1)

@@ -2,7 +2,6 @@ import time
 import struct
 
 import math
-import numpy as np
 
 try:
     # run from top directory (pizero_bikecomputer)
@@ -146,6 +145,11 @@ class LSM303D(i2c.i2c):
         # Read the magnetomter and return the raw x, y and z magnetic readings as a vector.
         mag_raw = self.bus.read_i2c_block_data(self.SENSOR_ADDRESS, OUT_X_L_M | 0x80, 6)
         self.values["mag"] = list(struct.unpack("<hhh", bytearray(mag_raw)))
+
+    @property
+    def magnetic(self):
+        self.read_mag()
+        return self.values["mag"]
 
 
 if __name__ == "__main__":
