@@ -1,5 +1,8 @@
 import copy
 
+from modules.app_logger import app_logger
+
+
 class Button_Config:
     config = None
 
@@ -59,7 +62,7 @@ class Button_Config:
                 "E": ("map_move_x_plus", ""),
             },
         },
-        # copy from Button_Shim
+        # copy from Button_Shim: see ioexpander_change_keys
         "IOExpander": {},
         # call from sensor_ant
         "Edge_Remote": {
@@ -180,13 +183,13 @@ class Button_Config:
     # copy button definition
     G_BUTTON_DEF["IOExpander"] = copy.deepcopy(G_BUTTON_DEF["Button_Shim"])
     # change button keys
-    change_keys = {
+    ioexpander_change_keys = {
         "A": "GP0", "B": "GP1", "C": "GP2", "D": "GP3", "E": "GP4",
     }
     for k1 in G_BUTTON_DEF["IOExpander"]:
         b = G_BUTTON_DEF["IOExpander"][k1]
-        for k2 in change_keys:
-            b[change_keys[k2]] = b.pop(k2)
+        for k2 in ioexpander_change_keys:
+            b[ioexpander_change_keys[k2]] = b.pop(k2)
             
     G_BUTTON_DEF["Display_HAT_Mini"] = copy.deepcopy(G_BUTTON_DEF["Pirate_Audio"])
     G_BUTTON_DEF["Pirate_Audio_old"] = copy.deepcopy(G_BUTTON_DEF["Pirate_Audio"])
@@ -244,6 +247,11 @@ class Button_Config:
         elif w_index >= 2:
             self.G_PAGE_MODE = "MENU"
 
+        if press_button not in self.G_BUTTON_DEF[button_hard][self.G_PAGE_MODE]:
+            app_logger.warning(
+                f"buton key error: '{press_button}' is not defined in self.G_BUTTON_DEF['{button_hard}']['{self.G_PAGE_MODE}']"
+            )
+            return
         func_str = self.G_BUTTON_DEF[button_hard][self.G_PAGE_MODE][press_button][index]
         if func_str in ("", "dummy"):
             return
