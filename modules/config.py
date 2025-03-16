@@ -443,7 +443,7 @@ class Config:
             self.G_DUMMY_OUTPUT = True
         if args.layout and os.path.exists(args.layout):
             self.G_LAYOUT_FILE = args.layout
-        if args.gui and args.gui in ["PyQt", "QML", "Kivy"]:
+        if args.gui and args.gui in ["PyQt", "QML", "Kivy", "None"]:
             self.G_GUI_MODE = args.gui
         if args.headless:
             self.G_HEADLESS = True
@@ -655,7 +655,6 @@ class Config:
                 elif key == "." and self.gui:
                     self.gui.press_shift_tab()
                 elif key == "b" and self.gui:
-                    self.gui.back_menu()
         except asyncio.CancelledError:
             pass
 

@@ -38,6 +38,8 @@ def main():
             from modules import gui_qml
         elif config.G_GUI_MODE == "Kivy":
             from modules import gui_kivy
+        elif config.G_GUI_MODE == "None":
+            from modules import gui_none
         else:
             raise ValueError(f"{config.G_GUI_MODE} mode not supported")
 
@@ -45,7 +47,6 @@ def main():
         from modules import logger_core
         logger = logger_core.LoggerCore(config)
         config.set_logger(logger)
-
     app_logger.info("Initialize modules:")
     total_time = log_timers(timers, text_total="  total         : {0:.3f} sec")
     app_logger.info("########## INITIALIZE END ##########")
@@ -57,6 +58,8 @@ def main():
         gui_qml.GUI_QML(config)
     elif config.G_GUI_MODE == "Kivy":
         gui_kivy.GUI_Kivy(config)
+    elif config.G_GUI_MODE == "None":
+        gui_none.GUI_None(config)
 
 
 if __name__ == "__main__":
