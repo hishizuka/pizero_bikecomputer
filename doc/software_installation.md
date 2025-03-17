@@ -163,38 +163,68 @@ Here is an example.
 $ sudo pip3 install adafruit-circuitpython-bmp280
 ```
 
-| Manufacturer | Sensor | additional pip package |
-|:-|:-|:-|
-| [Pimoroni](https://shop.pimoroni.com) | [Enviro pHAT](https://shop.pimoroni.com/products/enviro-phat) | None |
-| [Adafruit](https://www.adafruit.com) | [BMP280](https://www.adafruit.com/product/2651) | None |
-| [Adafruit](https://www.adafruit.com) | [BMP390](https://www.adafruit.com/product/4816) | None |
-| [Sparkfun](https://www.sparkfun.com/) | [BMP581](https://www.sparkfun.com/products/20170) | None(*1) |
-| [BOSCH](https://www.bosch-sensortec.com/) | [BMI270](https://www.bosch-sensortec.com/products/motion-sensors/imus/bmi270/) | None(*1) |
-| [BOSCH](https://www.bosch-sensortec.com/) | [BMM150](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm150/) | None(*1) |
-| [BOSCH](https://www.bosch-sensortec.com/) | [BMM350](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm350/) | None(*1') |
-| [Adafruit](https://www.adafruit.com) | [LPS33HW](https://www.adafruit.com/product/4414) | adafruit-circuitpython-lps35hw |
-| [Strawberry Linux](https://strawberry-linux.com) | [LPS33HW](https://strawberry-linux.com/catalog/items?code=12133) | None |
-| [DFRobot](https://www.dfrobot.com) | [BMX160+BMP388](https://www.dfrobot.com/product-1928.html) | BMX160(*2) | 
-| [Adafruit](https://www.adafruit.com) | [LSM6DS33 + LIS3MDL](https://www.adafruit.com/product/4485) | adafruit-circuitpython-lsm6ds adafruit-circuitpython-lis3mdl |
-| [Sparkfun](https://www.sparkfun.com/) | [ISM330DHCX + MMC5983MA ](https://www.sparkfun.com/products/19895) | adafruit-circuitpython-lsm6ds |
-| [Adafruit](https://www.adafruit.com) | [LSM9DS1](https://www.adafruit.com/product/4634) | adafruit-circuitpython-lsm9ds1 | 
-| [Adafruit](https://www.adafruit.com) | [BNO055](https://www.adafruit.com/product/4646) | adafruit-circuitpython-bno055(*3) | 
-| [Adafruit](https://www.adafruit.com) | [VCNL4040](https://www.adafruit.com/product/4161) | adafruit-circuitpython-vcnl4040 |
-| [ozzmaker](https://ozzmaker.com) | [Berry GPS IMU v4](https://ozzmaker.com/product/berrygps-imu/) | adafruit-circuitpython-lsm6ds adafruit-circuitpython-lis3mdl |
-| [GPS PIE](https://gps-pie.com/) | [GPS PIE](https://gps-pie.com/) | adafruit-circuitpython-bno055(*2) |
-| [waveshare](https://www.waveshare.com/) | [Environment Sensor HAT](https://www.waveshare.com/environment-sensor-hat.htm) | adafruit-circuitpython-bme280 adafruit-circuitpython-icm20x adafruit-circuitpython-tsl2591 adafruit-circuitpython-ltr390 adafruit-circuitpython-sgp40 |
+| Manufacturer+Sensor | Product | Recommend | additional pip package |
+|:-|:-|:-|:-|
+| [Bosch BMP280](https://www.adafruit.com/product/2651) | [Adafruit](https://www.adafruit.com/product/2651) | | None |
+| [Bosch BMP390](https://www.adafruit.com/product/4816) | [Adafruit](https://www.adafruit.com/product/4816) | | None |
+| [Bosch BMP581](https://www.sparkfun.com/products/20170) | [SparkFun](https://www.sparkfun.com/products/20170) | o | None(*1) |
+| [Bosch BMI270](https://www.bosch-sensortec.com/products/motion-sensors/imus/bmi270/) | | o | None(*1) |
+| [Bosch BMM150 (Obsolete)](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm150/) | | | None(*1) |
+| [Bosch BMM350](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm350/) | | o | None(*1, 1') |
+| [Bosch BNO055](https://www.bosch-sensortec.com/products/smart-sensor-systems/bno055/) | [Adafruit](https://www.adafruit.com/product/4646) | | adafruit-circuitpython-bno055(*2) | 
+| [MEMSIC MMC5983MA](https://www.memsic.com/magnetometer-5) | [SparkFun](https://www.sparkfun.com/products/19895) | | None |
+| [STMicroelectronics LIS3MDL](https://www.st.com/en/mems-and-sensors/lis3mdl.html) | [Adafruit](https://www.adafruit.com/product/4485) | | adafruit-circuitpython-lis3mdl |
+| [STMicroelectronics ISM330DHCX](https://www.st.com/en/mems-and-sensors/ism330dhcx.html) | [SparkFun](https://www.sparkfun.com/products/19895) | | adafruit-circuitpython-lsm6ds |
+| [Vishay VCNL4040](https://www.vishay.com/en/product/84274/) | [Adafruit](https://www.adafruit.com/product/4161) | o | adafruit-circuitpython-vcnl4040 |
+| | [ozzmaker Berry GPS IMU v4](https://ozzmaker.com/product/berrygps-imu/) | | adafruit-circuitpython-lsm6ds adafruit-circuitpython-lis3mdl |
+| | [GPS PIE](https://gps-pie.com/) | | adafruit-circuitpython-bno055(*2) |
+| | [waveshare Environment Sensor HAT](https://www.waveshare.com/environment-sensor-hat.htm) | | adafruit-circuitpython-bme280 adafruit-circuitpython-icm20x adafruit-circuitpython-tsl2591 adafruit-circuitpython-ltr390 adafruit-circuitpython-sgp40 |
+| (Obsolete) Bosch BMX160+BMP388 | [DFRobot](https://www.dfrobot.com/product-1928.html) | | BMX160(*3) | 
+| (Obsolete) [STMicroelectronics LPS33HW](https://www.st.com/resource/en/product_presentation/Sensors2018_Water_resistant_Pressure_Sensor_LPS33HW.pdf) | [Adafruit](https://www.adafruit.com/product/4414), [Strawberry Linux](https://strawberry-linux.com/catalog/items?code=12133)| | None |
+| STMicroelectronics LSM6DS33(Obsolete) | [Adafruit](https://www.adafruit.com/product/4485) | | adafruit-circuitpython-lsm6ds |
+| (Obsolete) [STMicroelectronics LSM9DS1](https://www.st.com/ja/mems-and-sensors/lsm9ds1.html) | [Adafruit](https://www.adafruit.com/product/4634) | | adafruit-circuitpython-lsm9ds1 | 
+| | (Obsolete) [Pimoroni Enviro pHAT](https://learn.pimoroni.com/article/getting-started-with-enviro-phat) | | None |
 
-*1 It is also possible to use the official BOSCH C library with cython.
+*1 It is also possible to use the official BOSCH C library with cython. Create a shared library with the following command and name and place it under LD_LIBRARY_PATH (e.g. /usr/local/lib).
+Also, place the header files in LD_INCLUDE_PATH (/usr/local/include, etc.).
 - [BMP5_SensorAPI](https://github.com/boschsensortec/BMP5_SensorAPI)
+  - 
+  ```
+  $ gcc -shared -fPIC -O2 -o libbmp5.so bmp5.c
+  $ sudo mv libbmp5.so /usr/local/lib/
+  $ sudo cp bmp5.h bmp5_defs.h /usr/local/include/
+  $ sudo ldconfig
+  ```
 - [BMI270_SensorAPI](https://github.com/boschsensortec/BMI270_SensorAPI/)
+  - 
+  ```
+  $ gcc -shared -fPIC -O2 -o libbmi270.so bmi270.c bmi2.c
+  $ sudo mv libbmi270.so /usr/local/lib/
+  $ sudo cp bmi2.h bmi270.h bmi2_defs.h /usr/local/include/
+  $ sudo ldconfig
+  ```
 - [BMM150_SensorAPI](https://github.com/boschsensortec/BMM150_SensorAPI/)
+  - 
+  ```
+  $ gcc -shared -fPIC -O2 -o libbmm150.so bmm150.c
+  $ sudo mv libbmm150.so /usr/local/lib/
+  $ sudo cp bmm150.h bmm150_defs.h /usr/local/include/
+  $ sudo ldconfig
+  ```
 - [BMM350_SensorAPI](https://github.com/boschsensortec/BMM350_SensorAPI/)
+  - 
+  ```
+  $ gcc -shared -fPIC -O2 -o libbmm350.so bmm350.c
+  $ sudo mv libbmm350.so /usr/local/lib/
+  $ sudo cp bmm350.h bmm350_defs.h /usr/local/include/
+  $ sudo ldconfig
+  ```
 
 *1' Only the official C library of BOSCH is supported. Build BMM350_SensorAPI.
 
-*2 Install manually https://github.com/spacecraft-design-lab-2019/CircuitPython_BMX160
+*2 You must enable i2c slowdown. Follow [the adafruit guide](https://learn.adafruit.com/circuitpython-on-raspberrypi-linux/i2c-clock-stretching).
 
-*3 You must enable i2c slowdown. Follow [the adafruit guide](https://learn.adafruit.com/circuitpython-on-raspberrypi-linux/i2c-clock-stretching).
+*3 Install manually https://github.com/spacecraft-design-lab-2019/CircuitPython_BMX160
 
 
 If you want to get a more accurate direction with the geomagnetic sensor, install a package that corrects the geomagnetic declination.
