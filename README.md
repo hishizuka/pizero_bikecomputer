@@ -6,6 +6,8 @@ An open-source bike computer based on  Raspberry Pi Zero (W, WH, 2 W) with GPS a
 https://github.com/hishizuka/pizero_bikecomputer
 
 # News
+- 2025/3/17 PCBs are under development.
+  - <img width="320" alt="4inch-01" src="https://github.com/user-attachments/assets/d31f1cd3-5472-47b1-8995-1efe8fb5ef97" /> <img width="320" alt="4inch-02" src="https://github.com/user-attachments/assets/87afa6c3-ba28-4dbc-970b-e3c7c9a55806" /> <img width="320" alt="4inch-03" src="https://github.com/user-attachments/assets/3b9528d5-9e02-437a-a13f-2607aac2f90d" />
 - 2024/6/21 Changed the value for `display` in `setting.conf` when using JDI/Sharp MIP LCD. See `modules/display/display_core.py` for setting values.
   - `MIP_JDI_color_400x240`
   - `MIP_JDI_color_640x480`
@@ -199,7 +201,7 @@ In Japan, [気象庁降水ナウキャスト](https://www.jma.go.jp/bosai/nowc/)
 
 it displays three of the people around you in the order in which you caught sensors using ANT+ continuous scanning mode.
 
-- <img src="https://camo.qiitausercontent.com/97904ae429c191677e9ece3cd113e07dfe8eefb2/68747470733a2f2f71696974612d696d6167652d73746f72652e73332e61702d6e6f727468656173742d312e616d617a6f6e6177732e636f6d2f302f3130303734312f33383765663432332d346631642d623332352d666235642d6638623434646332396564362e6a706567" width=320 />
+- <img src="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F100741%2F387ef423-4f1d-b325-fb5d-f8b44dc29ed6.jpeg?ixlib=rb-4.0.0&auto=format&gif-q=60&q=75&s=3460d1b3a5a96ac9b4effd7c4fd7767e" width=320 />
 
 
 # Comparison with other bike computers
