@@ -44,8 +44,13 @@ if _SENSOR_GPS_GPSD and shutil.which("gpspipe"):
     if res:
         message = json.loads(res.split('\n')[1])
         devices = message.get('devices')
-        if devices:
-            app_logger.info(f"devices: {devices}")
+        if devices and type(devices) == list:
+            driver = devices[0].get('driver')
+            subtype1 = devices[0].get('subtype1')
+            if driver:
+                _SENSER_GPS_STR += f", {driver}"
+            if subtype1:
+                _SENSER_GPS_STR += f", {subtype1}"
 
 
 class GPSD(AbstractSensorGPS):
