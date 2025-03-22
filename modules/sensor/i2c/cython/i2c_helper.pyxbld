@@ -46,7 +46,7 @@ def make_ext(modname, pyxfilename):
     
     sources = []
     for s in i2c_sensors:
-        if check_lib(i2c_sensors[s]['src'], lib_paths):
+        if check_lib(i2c_sensors[s]['lib'], lib_paths):
             sources.append(i2c_sensors[s]['src'])
             extra_link_args.append('-l' + os.path.splitext(i2c_sensors[s]['lib'])[0][3:])
             extra_link_args.extend(i2c_sensors[s]['extra_lib'])
