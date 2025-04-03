@@ -25,6 +25,8 @@
 
 ### JDI LPM027M128B / LPM027M128C
 
+2.7 inch 8 colors MIP reflective display.
+
 The Switch Science (JP) product originally used is sold out, please select Alternatives below.
 
 [Connection board for MIP Reflective color LCD to FRDM-K64F](https://international.switch-science.com/catalog/5393/) (MIP Interface Board) is also needed. Or make a custom PCB based on an existing product.
@@ -49,10 +51,21 @@ Display alternatives:
   - <img src="https://user-images.githubusercontent.com/12926652/206317870-dfb424bf-f16f-49bc-a39f-3310ae243257.png" width=320 />
 - [Digikey LPM027M128B](https://www.digikey.com/en/products/detail/azumo/12380-06-T2/9602620): backlight cable is different from original
 - [MIP Reflective color LCD module 2.7" w/ backlight (LPM027M128C)](https://international.switch-science.com/catalog/5395/) from Switch Science(JP): sold out
-- [LPM044M141](https://www.digikey.com/en/products/detail/azumo/12567-06-T3/10492348): 4.4" color LCD from Azumo
 
 Interface board alternatives:
 - [Adafruit SHARP Memory Display Breakout](https://www.adafruit.com/product/4694): Replace monochrome LCD panel. Backlight control is not included.
+
+### JDI [LPM044M141](https://www.digikey.jp/ja/products/detail/azumo/12561-06-A1/19110331)
+
+4.4 inch 8 colors MIP reflective display.
+
+- <img width="320" alt="4.4inch-01" src="https://github.com/user-attachments/assets/d31f1cd3-5472-47b1-8995-1efe8fb5ef97" /> <img width="320" alt="4.4inch-02" src="https://github.com/user-attachments/assets/87afa6c3-ba28-4dbc-970b-e3c7c9a55806" /> <img width="320" alt="4inch-03" src="https://github.com/user-attachments/assets/3b9528d5-9e02-437a-a13f-2607aac2f90d" />
+
+### Azumo [14793-06_A1](https://www.azumotech.com/products/3-4-14793-01-64-color-display-mip/) (WIP)
+
+3.4 inch 64 colors MIP reflective display.
+
+- <img width="320" alt="3.4inch-01" src="https://github.com/user-attachments/assets/43fa3611-0155-4abf-baa6-040cf3165ba0" /> <img width="320" alt="3.4inch-02" src="https://github.com/user-attachments/assets/f248ded7-ede3-4ccb-b39d-e62e6ea914c3" />
 
 ### [Adafruit SHARP Memory Display Breakout (LS027B7DH01)](https://www.adafruit.com/product/4694)
 
@@ -98,32 +111,30 @@ Pros&Cons
 
 UART modules with GPSd are recommended. I2C(Sparkfun qwiic or Adafruit STEMMA QT) modules are supported experimentally.
 
+### MAX-M10S
+
+- UART
+- an antenna is also needed
+- stable and low power consumption
+- recommended as of 2025/4.
+  - [MAX-M10S Ultra Low Power GNSS receiver with UF.L connector](https://gnss.store/max-m10s-gnss-modules/169-elt0150.html)
+  - [MAX-M10S Ultra Low Power GNSS receiver with SMA connector](https://gnss.store/max-m10s-gnss-modules/378-elt0151.html)
+  - [SparkFun GNSS Receiver Breakout - MAX-M10S (Qwiic)](https://www.sparkfun.com/sparkfun-gnss-receiver-breakout-max-m10s-qwiic.html)
+
 ### [SparkFun ZOE-M8Q](https://www.sparkfun.com/products/15193)
 
 - UART, I2C(Sparkfun qwiic) and SPI
 - an [antenna](https://www.sparkfun.com/products/15246) is also needed
 - stable and low power consumption
-- recommended as of 2020/6.
 
-### [Berry GPS IMU v4](https://ozzmaker.com/product/berrygps-imu/)
-
-- UART and I2C
-- an [antenna](https://www.sparkfun.com/products/15246) is also needed
-- BMP390 and IMU(LSM6DS/LIS3MDL) are included
-- best replacement for Enviro pHAT
-- magnetic sensor is broken...? (All the two modules I have are not working properly.)
-
-### [GPS-PIE](https://gps-pie.com)
-
-- UART and I2C
-- an [antenna](https://www.sparkfun.com/products/15246) is also needed with Gmm slice model. L80 slice model can use an internal or external antenna.
-- MS5637(pressure) and IMU(BNO055) are included
-
-### [Akizuki Denshi GPS module](http://akizukidenshi.com/catalog/g/gK-09991/)
+### [Akizuki Denshi GPS module](https://akizukidenshi.com/catalog/g/g117980/)
 
 - UART
 - easy to get in Tokyo (buy at Akihabara)
 - cheap and low power consumption
+
+### [Adafruit Ultimate GPS Breakout](https://www.adafruit.com/product/746)
+- UART
 
 ### PA1010D GPS
 
@@ -132,8 +143,19 @@ UART modules with GPSd are recommended. I2C(Sparkfun qwiic or Adafruit STEMMA QT
 - [PIMORONI PA1010D GPS Breakout](https://shop.pimoroni.com/products/pa1010d-gps-breakout)
   - UART and I2C
 
-### [Adafruit Ultimate GPS Breakout](https://www.adafruit.com/product/746)
-- UART
+### [Berry GPS IMU v4](https://ozzmaker.com/product/berrygps-imu/)
+
+- UART and I2C
+- an antenna is also needed
+- BMP390 and IMU(LSM6DS/LIS3MDL) are included
+- magnetic sensor is broken...? (All the two modules I have are not working properly.)
+
+### [GPS-PIE](https://gps-pie.com)
+
+- UART and I2C
+- an [antenna](https://www.sparkfun.com/products/15246) is also needed with Gmm slice model. L80 slice model can use an internal or external antenna.
+- MS5637(pressure) and IMU(BNO055) are included
+
 
 ## I2C sensors
 
