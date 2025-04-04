@@ -655,6 +655,7 @@ class Config:
                 elif key == "." and self.gui:
                     self.gui.press_shift_tab()
                 elif key == "b" and self.gui:
+                    self.gui.back_menu()
         except asyncio.CancelledError:
             pass
 
