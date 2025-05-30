@@ -431,7 +431,8 @@ class GUI_PyQt(GUI_Qt_Base):
 
     def reset_count_internal(self):
         res = self.logger.reset_count()
-        self.map_widget.reset_track()
+        if self.map_widget is not None:
+            self.map_widget.reset_track()
         if (
             res
             and self.config.G_AUTO_UPLOAD
