@@ -359,13 +359,23 @@ class GUI_Config:
         ),
     }
 
-    def __init__(self, layout_file):
+    def __init__(self, layout_file, menus_file):
         self.layout = {}
-
+        self.menus = {}
+        # Load layout yaml file to determine the screens displayed and
+        # the layout of each screen
         try:
             with open(layout_file) as file:
                 text = file.read()
                 self.layout = yaml.safe_load(text)
+        except FileNotFoundError:
+            pass
+        # Load menus yaml file to determine which menus are displayed in the TopMenu
+        # This can be used to simplify/complicate the available settings for the user.
+        try:
+            with open(menus_file) as file:
+                text = file.read()
+                self.menus = yaml.safe_load(text)
         except FileNotFoundError:
             pass
     

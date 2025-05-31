@@ -53,7 +53,7 @@ class GUI_Qt_Base(QtCore.QObject):
         self.config = config
         self.config.gui = self
 
-        self.gui_config = GUI_Config(config.G_LAYOUT_FILE)
+        self.gui_config = GUI_Config(config.G_LAYOUT_FILE, config.G_MENUS_FILE)
 
         try:
             signal.signal(signal.SIGTERM, self.quit_by_ctrl_c)

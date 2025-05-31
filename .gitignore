@@ -27,6 +27,7 @@ a.out
 setting.conf
 state.pickle
 layout.yaml
+menus.yaml
 map.yaml
 nohup.out
 !.gitkeep
