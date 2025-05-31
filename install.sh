@@ -8,7 +8,7 @@ o_service_file="/etc/systemd/system/pizero_bikecomputer.service"
 
 read -p "Using TFT/XWindow? [y/n] (n): " use_x
 
-# check if venv is set, in that case default to using thi venv to run the script
+# check if venv is set, in that case default to using venv to run the script
 #read -p "Use current virtualenv? [y/n] (y): " use_venv
 
 if [[ -n "$VIRTUAL_ENV" ]]; then

@@ -541,7 +541,7 @@ Right side
 - Local Storage
   - Select course .tcx file in `courses` folder.
 - Ride with GPS
-  - If you [set token in setting.conf](#ridewithgps_api-section), select course from Ride with GPS. Internet access is required. Sample image are shown as belows.
+  - If you [set token in setting.conf](#ridewithgps_api-section), select course from Ride with GPS. Internet access is required. Sample image are shown as below.
   - <img width="400" alt="RidewithGPS-01" src="https://user-images.githubusercontent.com/12926652/206076210-9c50f789-bac3-4bd0-8209-9dea3a61a132.png">
   - <img width="400" alt="RidewithGPS-02" src="https://user-images.githubusercontent.com/12926652/206076212-8696ac34-c9e6-485f-b1ba-687c0d2a0061.png">
 - Android Google Maps
@@ -645,7 +645,7 @@ If ANT+ powermeter is available, set both parameters are used in W'balance (%). 
 - IP Address
   - Show IP address. This can be used for ssh access while tethering a smartphone.
 - GadgetBridge
-  - Recieve notifications and GPS location from a smartphone. Install [GadgetBridge](https://gadgetbridge.org) Android app and toggle on.
+  - Receive notifications and GPS location from a smartphone. Install [GadgetBridge](https://gadgetbridge.org) Android app and toggle on.
   - `dbus-next` and `bluez-peripheral` packages, which can be installed with the `pip3` command, is required.
   - GadgetBridge app settings
     - Enable all permissions.

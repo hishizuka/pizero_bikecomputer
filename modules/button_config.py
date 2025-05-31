@@ -249,7 +249,7 @@ class Button_Config:
 
         if press_button not in self.G_BUTTON_DEF[button_hard][self.G_PAGE_MODE]:
             app_logger.warning(
-                f"buton key error: '{press_button}' is not defined in self.G_BUTTON_DEF['{button_hard}']['{self.G_PAGE_MODE}']"
+                f"button key error: '{press_button}' is not defined in self.G_BUTTON_DEF['{button_hard}']['{self.G_PAGE_MODE}']"
             )
             return
         func_str = self.G_BUTTON_DEF[button_hard][self.G_PAGE_MODE][press_button][index]
