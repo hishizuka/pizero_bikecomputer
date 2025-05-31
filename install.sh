@@ -1,5 +1,11 @@
 #!/bin/bash
-
+#############################################################
+# This script installs the Pi Zero Bike Computer service.
+#
+# It should be run as root and should be run one you are ready
+# to use the bike computer. Once installed, the service will
+# start automatically on boot.
+#############################################################
 current_dir=$(pwd)
 script="$current_dir/pizero_bikecomputer.py"
 

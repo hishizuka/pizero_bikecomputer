@@ -59,13 +59,29 @@ Pyqt version 5.15.0 in macOS has [a qpushbutton issue](https://bugreports.qt.io/
 
 ## Raspberry Pi OS
 
-Raspberry Pi OS (32-bit) with desktop is recommended.
+Raspberry Pi OS (64-bit) with desktop is recommended.
 
-The program works with Raspberry Pi OS (32-bit) Lite, but missing libraries will need to be installed. Especially installing python3-pyqt5 with `apt` command will also installs massive libraries of desktop software, so building PyQt5 package is recommended.
+The program works with Raspberry Pi OS (64-bit) Lite, but missing libraries will need to be installed. Especially installing python3-pyqt5 with `apt` command will also install massive libraries of desktop software, so building PyQt5 package is recommended.
 
 Here is [my setup guide in Japanese](https://qiita.com/hishi/items/8bdfd9d72fa8fe2e7573).
 
-### Common
+### Initial Setup script
+
+The easiest way to do the initial setup is to run the setup script. It will install all the required packages and clone the repository.
+
+`./scripts/initial_setup.sh`
+
+Atlhough this won't clone the repository, it will install all the required packages and set up the environment for you.
+
+### OS Update (if not running the setup script)
+
+```
+$ sudo apt update
+$ sudo apt upgrade
+$ sudo reboot
+```
+
+### Common (if not running the setup script)
 
 Install in the home directory of default user "pi". Also, your Raspberry Pi is connected to internet and updated with `apt update & apt upgrade`.
 
