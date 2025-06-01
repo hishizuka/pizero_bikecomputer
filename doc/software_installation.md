@@ -59,25 +59,57 @@ Pyqt version 5.15.0 in macOS has [a qpushbutton issue](https://bugreports.qt.io/
 
 ## Raspberry Pi OS
 
-Raspberry Pi OS (32-bit) with desktop is recommended.
+Raspberry Pi OS (64-bit) with desktop is recommended.
 
-The program works with Raspberry Pi OS (32-bit) Lite, but missing libraries will need to be installed. Especially installing python3-pyqt5 with `apt` command will also installs massive libraries of desktop software, so building PyQt5 package is recommended.
+The program works with Raspberry Pi OS (64-bit) Lite, but missing libraries will need to be installed. Especially 
+installing python3-pyqt5 with `apt` command will also install massive libraries of desktop software, so building 
+PyQt5 package is recommended. Unfortunately, building PyQt5 package requires a lot of time and disk space, so it is 
+not recommended for Raspberry Pi Zero.
 
 Here is [my setup guide in Japanese](https://qiita.com/hishi/items/8bdfd9d72fa8fe2e7573).
 
 ### Common
 
-Install in the home directory of default user "pi". Also, your Raspberry Pi is connected to internet and updated with `apt update & apt upgrade`.
-
+Clone the repository in the home directory of default user "pi". Also, the Raspberry Pi must be connected to the internet.
 
 ```
 $ cd
 $ git clone https://github.com/hishizuka/pizero_bikecomputer.git
+```
+
+### Initial setup script (for use on Raspberry Pi Zero W / Raspberry Pi OS)
+
+After cloning the repository onto your Raspberry Pi, setup it up by running `initial_setup.sh` script. This will setup
+the environment and install the required packages so that you can at a minimum run the program without sensors.
+
+`./scripts/initial_setup.sh`
+
+Once this is done, you can run the program with `QT_QPA_PLATFORM=offscreen python3 pizero_bikecomputer.py` command from 
+the root direcotry of the project.
+
+### Initial setup without setup script (if not using Raspberry Pi Zero W and/or Raspberry Pi OS)
+
+```
+$ sudo apt update 
+$ sudo apt upgrade
 $ sudo apt install python3-pip cython3 cmake python3-numpy python3-pyqt5 python3-pyqtgraph sqlite3 libsqlite3-dev libatlas-base-dev python3-aiohttp python3-aiofiles python3-smbus python3-rpi.gpio python3-psutil python3-pil bluez-obexd dbus-x11
+$ sudo apt install -y python3-pigpio
+$ sudo systemctl enable pigpiod
+$ sudo systemctl start pigpiod
 $ sudo pip3 install oyaml sip polyline garminconnect stravacookies qasync dbus-next bluez-peripheral tb-mqtt-client timezonefinder
 $ sudo pip3 install git+https://github.com/hishizuka/crdp.git
 $ cd pizero_bikecomputer
+
 ```
+
+Start the application with the following command.
+
+```
+$ QT_QPA_PLATFORM=offscreen python3 pizero_bikecomputer.py
+```
+
+This will start the application in offline mode. There may be warnings but you should be no errors in the terminal. 
+`Cntrl+C` to exit the application.
 
 ### GPS module
 
@@ -541,7 +573,7 @@ Right side
 - Local Storage
   - Select course .tcx file in `courses` folder.
 - Ride with GPS
-  - If you [set token in setting.conf](#ridewithgps_api-section), select course from Ride with GPS. Internet access is required. Sample image are shown as belows.
+  - If you [set token in setting.conf](#ridewithgps_api-section), select course from Ride with GPS. Internet access is required. Sample image are shown as below.
   - <img width="400" alt="RidewithGPS-01" src="https://user-images.githubusercontent.com/12926652/206076210-9c50f789-bac3-4bd0-8209-9dea3a61a132.png">
   - <img width="400" alt="RidewithGPS-02" src="https://user-images.githubusercontent.com/12926652/206076212-8696ac34-c9e6-485f-b1ba-687c0d2a0061.png">
 - Android Google Maps
@@ -645,7 +677,7 @@ If ANT+ powermeter is available, set both parameters are used in W'balance (%). 
 - IP Address
   - Show IP address. This can be used for ssh access while tethering a smartphone.
 - GadgetBridge
-  - Recieve notifications and GPS location from a smartphone. Install [GadgetBridge](https://gadgetbridge.org) Android app and toggle on.
+  - Receive notifications and GPS location from a smartphone. Install [GadgetBridge](https://gadgetbridge.org) Android app and toggle on.
   - `dbus-next` and `bluez-peripheral` packages, which can be installed with the `pip3` command, is required.
   - GadgetBridge app settings
     - Enable all permissions.
