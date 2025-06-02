@@ -79,7 +79,7 @@ mkdir -p "$USER_HOME/tmp" && touch "$PID_FILE"
 echo "ℹ️ Starting pizero_bikecomputer.py in headless mode for verification..."
 cd "$USER_HOME"/pizero_bikecomputer
 # Start app in background with offscreen rendering
-QT_QPA_PLATFORM=offscreen "$USER_HOME/.venv/bin/python3" pizero_bikecomputer.py &
+sudo -u "$USER" QT_QPA_PLATFORM=offscreen "$USER_HOME/.venv/bin/python3" pizero_bikecomputer.py &
 APP_PID=$!
 echo $APP_PID > "$PID_FILE"
 
@@ -97,6 +97,9 @@ else
     rm -f "$PID_FILE"
     exit 1
 fi
+
+cd "$USER_HOME"
+sudo chown --recursive pi:pi pizero_bikecomputer
 
 echo "✅ Startup test completed successfully."
 
