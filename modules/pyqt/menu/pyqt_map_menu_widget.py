@@ -179,7 +179,7 @@ class ExternalDataSourceMenuWidget(MenuWidget):
         if change:
             self.config.G_USE_DEM_TILE = not self.config.G_USE_DEM_TILE
         self.buttons["DEM Tile"].change_toggle(self.config.G_USE_DEM_TILE)
-        self.buttons["DEM Tile source"].onoff_button(self.config.G_USE_WIND_DATA_SOURCE)
+        self.buttons["DEM Tile source"].onoff_button(self.config.G_USE_DEM_TILE)
 
     def select_wind_source(self):
         self.change_page("Wind Source", preprocess=True)
