@@ -18,7 +18,7 @@ https://github.com/hishizuka/pizero_bikecomputer
   - ![verticai-layout-01](https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/ac7f2000-68ec-4f89-a1f5-afd71aacd173) ![verticai-layout-02](https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/e4b67398-455c-40cd-80fd-f8ec05c155a0)
 
 ## Stargazers over time
-[![Stargazers over time](https://starchart.cc/hishizuka/pizero_bikecomputer.svg?variant=adaptive)](https://starchart.cc/hishizuka/pizero_bikecomputer)
+[![Stargazers over time](https://starchart.cc/hishizuka/pizero_bikecomputer.svg?variant=dark)](https://starchart.cc/hishizuka/pizero_bikecomputer)
 
 # Table of Contents
 
@@ -120,20 +120,20 @@ Some functions depend on your parts.
 
 USB dongle is required if using ANT+ sensors.
 
-| Specs | Support | Detail                                           |
-|:-|:-|:-------------------------------------------------|
-| ANT+ Heartrate sensor |  Yes |                                                  |
-| ANT+ Speed sensor |  Yes |                                                  |
-| ANT+ Cadence sensor |  Yes |                                                  |
-| ANT+ Speed&Cadence sensor |  Yes |                                                  |
-| ANT+ Powermeter |  Yes | Calibration is not supported.                    |
-| ANT+ Light |  Yes | Bontrager Flare RT only.                         |
-| ANT+ Control |  Yes | Garmin Edge Remote only.                         |
-| ANT+ Environment |  Yes | Garmin tempe (temperature sensor)                |
-| Bluetooth sensors |  No | developing now...                                |
-| Barometric altimeter | Yes | I2C sensor(pressure, temperature)                |
-| Accelerometer | Yes | I2C sensor                                       |
-| Magnetometer | Yes | I2C sensor                                       |
+| Specs | Support | Detail |
+|:-|:-|:-|
+| ANT+ Heartrate sensor |  Yes | |
+| ANT+ Speed sensor |  Yes | |
+| ANT+ Cadence sensor |  Yes | |
+| ANT+ Speed&Cadence sensor |  Yes | |
+| ANT+ Powermeter |  Yes | Calibration is not supported. |
+| ANT+ Light |  Yes | Bontrager Flare RT only. |
+| ANT+ Control |  Yes | Garmin Edge Remote only. |
+| ANT+ Environment |  Yes | Garmin tempe (temperature sensor) |
+| Bluetooth sensors |  No | developping now... |
+| Barometric altimeter | Yes | I2C sensor(pressure, temperature) |
+| Accelerometer | Yes | I2C sensor |
+| Magnetometer | Yes | I2C sensor |
 | Light sensor | Yes | I2C sensor. Use for auto backlight and lighting. |
 
 ## Maps and navigations
