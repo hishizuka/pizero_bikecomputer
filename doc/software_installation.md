@@ -3,37 +3,37 @@
 # Table of Contents
 
 - [Software Installation](#software-installation)
-  - [macOS or Linux](#macOS-or-Linux)
-  - [Raspberry Pi OS](#Raspberry-Pi-OS)
-    - [common](#common)
-    - [GPS module](#gps-module)
-    - [ANT+ USB dongle](#ant-usb-dongle)
-    - [Display](#display)
-    - [I2C sensors](#i2c-sensors)
+    - [macOS or Linux](#macOS-or-Linux)
+    - [Raspberry Pi OS](#Raspberry-Pi-OS)
+        - [common](#common)
+        - [GPS module](#gps-module)
+        - [ANT+ USB dongle](#ant-usb-dongle)
+        - [Display](#display)
+        - [I2C sensors](#i2c-sensors)
 - [Quick Start](#quick-start)
-  - [Run on X Window](#run-on-x-window)
-  - [Run on console](#run-on-console)
-    - [Manual execution](#manual-execution)
-    - [Run as a service](#run-as-a-service)
+    - [Run on X Window](#run-on-x-window)
+    - [Run on console](#run-on-console)
+        - [Manual execution](#manual-execution)
+        - [Run as a service](#run-as-a-service)
 - [Usage](#usage)
-  - [Button](#button)
-    - [Software button](#software-button)
-    - [Hardware button](#hardware-button)
-  - [Menu screen](#menu-screen)
-    - [Sensors](#sensors)
-    - [Courses](#courses)
-    - [Connectivity](#connectivity)
-    - [Upload Activity](#upload-activity)
-    - [Map](#map)
-    - [Profile](#profile)
-    - [System](#System)
-  - [Settings](#settings)
-    - [setting.conf](#settingconf)
-    - [state.pickle](#statepickle)
-    - [layout.yaml](#layoutyaml)
-    - [map.yaml](#mapyaml)
-    - [config.py](#configpy)
-  - [Prepare course files and maps](#prepare-course-files-and-maps)
+    - [Button](#button)
+        - [Software button](#software-button)
+        - [Hardware button](#hardware-button)
+    - [Menu screen](#menu-screen)
+        - [Sensors](#sensors)
+        - [Courses](#courses)
+        - [Connectivity](#connectivity)
+        - [Upload Activity](#upload-activity)
+        - [Map](#map)
+        - [Profile](#profile)
+        - [System](#System)
+    - [Settings](#settings)
+        - [setting.conf](#settingconf)
+        - [state.pickle](#statepickle)
+        - [layout.yaml](#layoutyaml)
+        - [map.yaml](#mapyaml)
+        - [config.py](#configpy)
+    - [Prepare course files and maps](#prepare-course-files-and-maps)
 
 # Software Installation
 
@@ -55,22 +55,24 @@ $ cd pizero_bikecomputer
 ```
 
 Note:
-Pyqt version 5.15.0 in macOS has [a qpushbutton issue](https://bugreports.qt.io/browse/QTBUG-84852), so installing newest version(5.15.1~) is recommended.
+Pyqt version 5.15.0 in macOS has [a qpushbutton issue](https://bugreports.qt.io/browse/QTBUG-84852), so installing
+newest version(5.15.1~) is recommended.
 
 ## Raspberry Pi OS
 
 Raspberry Pi OS (64-bit) with desktop is recommended.
 
-The program works with Raspberry Pi OS (64-bit) Lite, but missing libraries will need to be installed. Especially 
-installing python3-pyqt5 with `apt` command will also install massive libraries of desktop software, so building 
-PyQt5 package is recommended. Unfortunately, building PyQt5 package requires a lot of time and disk space, so it is 
+The program works with Raspberry Pi OS (64-bit) Lite, but missing libraries will need to be installed. Especially
+installing python3-pyqt5 with `apt` command will also install massive libraries of desktop software, so building
+PyQt5 package is recommended. Unfortunately, building PyQt5 package requires a lot of time and disk space, so it is
 not recommended for Raspberry Pi Zero.
 
 Here is [my setup guide in Japanese](https://qiita.com/hishi/items/8bdfd9d72fa8fe2e7573).
 
 ### Common
 
-Clone the repository in the home directory of default user "pi". Also, the Raspberry Pi must be connected to the internet.
+Clone the repository in the home directory of default user "pi". Also, the Raspberry Pi must be connected to the
+internet.
 
 ```
 $ cd
@@ -84,8 +86,9 @@ the environment and install the required packages so that you can at a minimum r
 
 `./scripts/initial_setup.sh`
 
-Once this is done, you can run the program with `QT_QPA_PLATFORM=offscreen python3 pizero_bikecomputer.py` command from 
-the root direcotry of the project.
+Once this is done, you can run the program with `QT_QPA_PLATFORM=offscreen python3 pizero_bikecomputer.py` command from
+the root direcotry of the project. It should start without any exceptions, but you may see some warnings in the
+terminal.
 
 ### Initial setup without setup script (if not using Raspberry Pi Zero W and/or Raspberry Pi OS)
 
@@ -108,14 +111,69 @@ Start the application with the following command.
 $ QT_QPA_PLATFORM=offscreen python3 pizero_bikecomputer.py
 ```
 
-This will start the application in offline mode. There may be warnings but you should be no errors in the terminal. 
+This will start the application in offline mode. There may be warnings but you should be no errors in the terminal.
 `Cntrl+C` to exit the application.
+
+### Accessing the program via VNC
+
+Do not enable VNC in raspi-config if you want to access the Pi Zero Bike Computer. The software has an inbuilt
+VNC server that allows you to access the program without needing to enable VNC in raspi-config.
+
+#### Install VNC Viewer on your local computer
+
+RealVNC Viewer, TigerVNC, etc etc.
+
+#### Start the PiZero Bike Computer in VNC mode
+
+SSH into the Raspberry Pi or open a terminal on the Raspberry Pi directly. From inside the `~/pizero_bikecomputer` directory, run the following command to start the program.
+
+```
+$ QT_QPA_PLATFORM=vnc python3 ./pizero_bikecomputer.py
+```
+#### Connect to the Raspberry Pi using VNC Viewer
+
+On a mac this is easy. Simply open the finder and type Cmd+K. In the dialog that appears, type in the address of your
+Raspberry Pi. If you have not changed the hostname, it should be `raspberrypi.local`. If you have changed the hostname,
+use that instead.
+
+`vnc://raspberrypi.local`
+
+If you have not changed the hostname, it should be `raspberrypi.local`. If you have changed the hostname, use that
+instead.
+
+### Accessing the program via SSH / XWindows
+
+If you want to access the program via SSH or XWindows, you need to enable SSH in raspi-config. If you want to use VNC,
+you also need to enable VNC in raspi-config.
+
+On a Mac this is done using an X11 client such as [https://www.xquartz.org/](https://www.xquartz.org/).
+
+#### Enable trusted X11 forwarding in SSH
+
+Open an SSH connection with trusted X11 forwarding enabled. This is required to run the program on the Raspberry Pi and
+display it on your local machine.
+
+```
+$ ssh -Y pi@raspberrypi.local
+```
+
+#### Start the PiZero Bike Computer in X11 mode
+
+From inside the ~/pizero_bikecomputer directory, run the following command to start the program.
+
+```
+QT_QPA_PLATFORM=xcb python pizero_bikecomputer.py
+```
+
+A window should open on your local machine displaying the PiZero Bike Computer interface. You can interact with it as if
+you were running it directly on the Raspberry Pi.
 
 ### GPS module
 
 #### UART GPS
 
-Assume Serial interface is on and login shell is off in raspi-config and GPS device is connected as /dev/ttyS0. If GPS device is /dev/ttyAMA0, modify gpsd config file(/etc/default/gpsd).
+Assume Serial interface is on and login shell is off in raspi-config and GPS device is connected as /dev/ttyS0. If GPS
+device is /dev/ttyAMA0, modify gpsd config file(/etc/default/gpsd).
 
 ```
 $ sudo apt install gpsd gpsd-clients
@@ -136,14 +194,12 @@ $ sudo pip3 install timezonefinder pa1010d
 
 Check with [pa1010d example program](https://github.com/pimoroni/pa1010d-python/blob/master/examples/latlon.py)
 
-
 ### ANT+ USB dongle
 
 ```
 $ sudo apt install libusb-1.0-0 python3-usb
 $ sudo pip3 install git+https://github.com/hishizuka/openant.git
 ```
- 
 
 ### Display
 
@@ -179,8 +235,8 @@ Follow [official setup guide](https://github.com/PiSupply/PaPiRus)
 
 ##### DFRobot e-ink Display Module for Raspberry Pi 4B/3B+/Zero W
 
-Follow [official setup guide](https://wiki.dfrobot.com/Raspberry_Pi_e-ink_Display_Module_SKU%3A_DFR0591) and install manually.
-
+Follow [official setup guide](https://wiki.dfrobot.com/Raspberry_Pi_e-ink_Display_Module_SKU%3A_DFR0591) and install
+manually.
 
 ### I2C sensors
 
@@ -191,34 +247,37 @@ Assume I2C interface is on in raspi-config.
 Install pip packages of the sensors you own.
 
 Here is an example.
+
 ```
 $ sudo pip3 install adafruit-circuitpython-bmp280
 ```
 
-| Manufacturer+Sensor | Product | Recommend | additional pip package |
-|:-|:-|:-|:-|
-| [Bosch BMP280](https://www.adafruit.com/product/2651) | [Adafruit](https://www.adafruit.com/product/2651) | | None |
-| [Bosch BMP390](https://www.adafruit.com/product/4816) | [Adafruit](https://www.adafruit.com/product/4816) | | None |
-| [Bosch BMP581](https://www.sparkfun.com/products/20170) | [SparkFun](https://www.sparkfun.com/products/20170) | o | None(*1) |
-| [Bosch BMI270](https://www.bosch-sensortec.com/products/motion-sensors/imus/bmi270/) | | o | None(*1) |
-| [Bosch BMM150 (Obsolete)](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm150/) | | | None(*1) |
-| [Bosch BMM350](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm350/) | | o | None(*1, 1') |
-| [Bosch BNO055](https://www.bosch-sensortec.com/products/smart-sensor-systems/bno055/) | [Adafruit](https://www.adafruit.com/product/4646) | | adafruit-circuitpython-bno055(*2) | 
-| [MEMSIC MMC5983MA](https://www.memsic.com/magnetometer-5) | [SparkFun](https://www.sparkfun.com/products/19895) | | None |
-| [STMicroelectronics LIS3MDL](https://www.st.com/en/mems-and-sensors/lis3mdl.html) | [Adafruit](https://www.adafruit.com/product/4485) | | adafruit-circuitpython-lis3mdl |
-| [STMicroelectronics ISM330DHCX](https://www.st.com/en/mems-and-sensors/ism330dhcx.html) | [SparkFun](https://www.sparkfun.com/products/19895) | | adafruit-circuitpython-lsm6ds |
-| [Vishay VCNL4040](https://www.vishay.com/en/product/84274/) | [Adafruit](https://www.adafruit.com/product/4161) | o | adafruit-circuitpython-vcnl4040 |
-| | [ozzmaker Berry GPS IMU v4](https://ozzmaker.com/product/berrygps-imu/) | | adafruit-circuitpython-lsm6ds adafruit-circuitpython-lis3mdl |
-| | [GPS PIE](https://gps-pie.com/) | | adafruit-circuitpython-bno055(*2) |
-| | [waveshare Environment Sensor HAT](https://www.waveshare.com/environment-sensor-hat.htm) | | adafruit-circuitpython-bme280 adafruit-circuitpython-icm20x adafruit-circuitpython-tsl2591 adafruit-circuitpython-ltr390 adafruit-circuitpython-sgp40 |
-| (Obsolete) Bosch BMX160+BMP388 | [DFRobot](https://www.dfrobot.com/product-1928.html) | | BMX160(*3) | 
-| (Obsolete) [STMicroelectronics LPS33HW](https://www.st.com/resource/en/product_presentation/Sensors2018_Water_resistant_Pressure_Sensor_LPS33HW.pdf) | [Adafruit](https://www.adafruit.com/product/4414), [Strawberry Linux](https://strawberry-linux.com/catalog/items?code=12133)| | None |
-| STMicroelectronics LSM6DS33(Obsolete) | [Adafruit](https://www.adafruit.com/product/4485) | | adafruit-circuitpython-lsm6ds |
-| (Obsolete) [STMicroelectronics LSM9DS1](https://www.st.com/ja/mems-and-sensors/lsm9ds1.html) | [Adafruit](https://www.adafruit.com/product/4634) | | adafruit-circuitpython-lsm9ds1 | 
-| | (Obsolete) [Pimoroni Enviro pHAT](https://learn.pimoroni.com/article/getting-started-with-enviro-phat) | | None |
+| Manufacturer+Sensor                                                                                                                                  | Product                                                                                                                      | Recommend | additional pip package                                                                                                                                |
+|:-----------------------------------------------------------------------------------------------------------------------------------------------------|:-----------------------------------------------------------------------------------------------------------------------------|:----------|:------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [Bosch BMP280](https://www.adafruit.com/product/2651)                                                                                                | [Adafruit](https://www.adafruit.com/product/2651)                                                                            |           | None                                                                                                                                                  |
+| [Bosch BMP390](https://www.adafruit.com/product/4816)                                                                                                | [Adafruit](https://www.adafruit.com/product/4816)                                                                            |           | None                                                                                                                                                  |
+| [Bosch BMP581](https://www.sparkfun.com/products/20170)                                                                                              | [SparkFun](https://www.sparkfun.com/products/20170)                                                                          | o         | None(*1)                                                                                                                                              |
+| [Bosch BMI270](https://www.bosch-sensortec.com/products/motion-sensors/imus/bmi270/)                                                                 |                                                                                                                              | o         | None(*1)                                                                                                                                              |
+| [Bosch BMM150 (Obsolete)](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm150/)                                             |                                                                                                                              |           | None(*1)                                                                                                                                              |
+| [Bosch BMM350](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm350/)                                                        |                                                                                                                              | o         | None(*1, 1')                                                                                                                                          |
+| [Bosch BNO055](https://www.bosch-sensortec.com/products/smart-sensor-systems/bno055/)                                                                | [Adafruit](https://www.adafruit.com/product/4646)                                                                            |           | adafruit-circuitpython-bno055(*2)                                                                                                                     | 
+| [MEMSIC MMC5983MA](https://www.memsic.com/magnetometer-5)                                                                                            | [SparkFun](https://www.sparkfun.com/products/19895)                                                                          |           | None                                                                                                                                                  |
+| [STMicroelectronics LIS3MDL](https://www.st.com/en/mems-and-sensors/lis3mdl.html)                                                                    | [Adafruit](https://www.adafruit.com/product/4485)                                                                            |           | adafruit-circuitpython-lis3mdl                                                                                                                        |
+| [STMicroelectronics ISM330DHCX](https://www.st.com/en/mems-and-sensors/ism330dhcx.html)                                                              | [SparkFun](https://www.sparkfun.com/products/19895)                                                                          |           | adafruit-circuitpython-lsm6ds                                                                                                                         |
+| [Vishay VCNL4040](https://www.vishay.com/en/product/84274/)                                                                                          | [Adafruit](https://www.adafruit.com/product/4161)                                                                            | o         | adafruit-circuitpython-vcnl4040                                                                                                                       |
+|                                                                                                                                                      | [ozzmaker Berry GPS IMU v4](https://ozzmaker.com/product/berrygps-imu/)                                                      |           | adafruit-circuitpython-lsm6ds adafruit-circuitpython-lis3mdl                                                                                          |
+|                                                                                                                                                      | [GPS PIE](https://gps-pie.com/)                                                                                              |           | adafruit-circuitpython-bno055(*2)                                                                                                                     |
+|                                                                                                                                                      | [waveshare Environment Sensor HAT](https://www.waveshare.com/environment-sensor-hat.htm)                                     |           | adafruit-circuitpython-bme280 adafruit-circuitpython-icm20x adafruit-circuitpython-tsl2591 adafruit-circuitpython-ltr390 adafruit-circuitpython-sgp40 |
+| (Obsolete) Bosch BMX160+BMP388                                                                                                                       | [DFRobot](https://www.dfrobot.com/product-1928.html)                                                                         |           | BMX160(*3)                                                                                                                                            | 
+| (Obsolete) [STMicroelectronics LPS33HW](https://www.st.com/resource/en/product_presentation/Sensors2018_Water_resistant_Pressure_Sensor_LPS33HW.pdf) | [Adafruit](https://www.adafruit.com/product/4414), [Strawberry Linux](https://strawberry-linux.com/catalog/items?code=12133) |           | None                                                                                                                                                  |
+| STMicroelectronics LSM6DS33(Obsolete)                                                                                                                | [Adafruit](https://www.adafruit.com/product/4485)                                                                            |           | adafruit-circuitpython-lsm6ds                                                                                                                         |
+| (Obsolete) [STMicroelectronics LSM9DS1](https://www.st.com/ja/mems-and-sensors/lsm9ds1.html)                                                         | [Adafruit](https://www.adafruit.com/product/4634)                                                                            |           | adafruit-circuitpython-lsm9ds1                                                                                                                        | 
+|                                                                                                                                                      | (Obsolete) [Pimoroni Enviro pHAT](https://learn.pimoroni.com/article/getting-started-with-enviro-phat)                       |           | None                                                                                                                                                  |
 
-*1 It is also possible to use the official BOSCH C library with cython. Create a shared library with the following command and name and place it under LD_LIBRARY_PATH (e.g. /usr/local/lib).
+*1 It is also possible to use the official BOSCH C library with cython. Create a shared library with the following
+command and name and place it under LD_LIBRARY_PATH (e.g. /usr/local/lib).
 Also, place the header files in LD_INCLUDE_PATH (/usr/local/include, etc.).
+
 - [BMP5_SensorAPI](https://github.com/boschsensortec/BMP5_SensorAPI)
   - 
   ```
@@ -254,12 +313,13 @@ Also, place the header files in LD_INCLUDE_PATH (/usr/local/include, etc.).
 
 *1' Only the official C library of BOSCH is supported. Build BMM350_SensorAPI.
 
-*2 You must enable i2c slowdown. Follow [the adafruit guide](https://learn.adafruit.com/circuitpython-on-raspberrypi-linux/i2c-clock-stretching).
+*2 You must enable i2c slowdown.
+Follow [the adafruit guide](https://learn.adafruit.com/circuitpython-on-raspberrypi-linux/i2c-clock-stretching).
 
 *3 Install manually https://github.com/spacecraft-design-lab-2019/CircuitPython_BMX160
 
-
-If you want to get a more accurate direction with the geomagnetic sensor, install a package that corrects the geomagnetic declination.
+If you want to get a more accurate direction with the geomagnetic sensor, install a package that corrects the
+geomagnetic declination.
 
 ```
 $ sudo pip3 install magnetic-field-calculator
@@ -281,7 +341,6 @@ $ sudo apt install adafruit-circuitpython-mcp230xx
 
 Follow [official setup guide](https://github.com/PiSupply/PiJuice/tree/master/Software) of PiSupply/PiJuice
 
-
 # Quick Start
 
 If cython is available, it will take a few minutes to run for the first time to compile the program.
@@ -294,7 +353,8 @@ If you use Raspberry Pi OS with desktop, starting on X Window (or using VNC) at 
 $ python3 pizero_bikecomputer.py
 ```
 
-If you use MIP Reflective color LCD module, SHARP Memory Display or E-Ink displays, run with [`QT_QPA_PLATFORM=offscreen`](#mip-reflective-color-lcd-module-sharp-memory-display-or-e-ink-displays)
+If you use MIP Reflective color LCD module, SHARP Memory Display or E-Ink displays, run with [
+`QT_QPA_PLATFORM=offscreen`](#mip-reflective-color-lcd-module-sharp-memory-display-or-e-ink-displays)
 
 ### PiTFT
 
@@ -316,14 +376,14 @@ $ QT_QPA_PLATFORM=offscreen python3 pizero_bikecomputer.py
 
 see [hardware_installation_pitft.md](./hardware_installation_pitft.md#run-on-console)
 
-
 ### Run as a service
 
 If you use displays in console environment not X Window, install auto-run service and shutdown service.
 
 #### auto-run setting
 
-If you use MIP Reflective color LCD module, SHARP Memory Display or E-Ink displays, modify install/etc/systemd/system/pizero_bikecomputer.service.
+If you use MIP Reflective color LCD module, SHARP Memory Display or E-Ink displays, modify
+install/etc/systemd/system/pizero_bikecomputer.service.
 
 ```
 ExecStart=/home/pi/pizero_bikecomputer/exec-mip.sh
@@ -348,7 +408,6 @@ The output of the log file will be in "/home/pi/pizero_bikecomputer/log/debug.tx
 $ sudo systemctl start pizero_bikecomputer.service
 ```
 
-
 # Usage
 
 ## Button
@@ -357,15 +416,15 @@ $ sudo systemctl start pizero_bikecomputer.service
 
 <img width="400" alt="screen01" src="https://user-images.githubusercontent.com/12926652/206077256-f8bda5e5-e4a3-4c39-a7ff-ea343067756c.png">
 
-The buttons at the bottom of the screen are assigned the following functions from left to right. 
+The buttons at the bottom of the screen are assigned the following functions from left to right.
 
-| Button | Short press | Long press |
-|:-|:-|:-|
-| Left (<) | Screen switching(Back) | None |
-| LAP | Lap | Reset |
-| MENU | Menu | None |
-| Start/Stop  | Start/Stop | Quit the program |
-| Right (>) | Screen switching(Forward) | None |
+| Button     | Short press               | Long press       |
+|:-----------|:--------------------------|:-----------------|
+| Left (<)   | Screen switching(Back)    | None             |
+| LAP        | Lap                       | Reset            |
+| MENU       | Menu                      | None             |
+| Start/Stop | Start/Stop                | Quit the program |
+| Right (>)  | Screen switching(Forward) | None             |
 
 ### Hardware button
 
@@ -385,66 +444,66 @@ see [hardware_installation_pitft.md](./hardware_installation_pitft.md#hardware-b
 From left to right, the button assignments are as follows.
 
 | Button | Short press | Long press |
-|:-|:-|:-|
-| A | Left (<) | None |
-| B | Lap | Reset |
-| C | Screenshot | None |
-| D | Start/Stop | None |
-| E | Right (>) | Menu |
+|:-------|:------------|:-----------|
+| A      | Left (<)    | None       |
+| B      | Lap         | Reset      |
+| C      | Screenshot  | None       |
+| D      | Start/Stop  | None       |
+| E      | Right (>)   | Menu       |
 
 #### Map
 
-| Button | Short press | Long press |
-|:-|:-|:-|
-| A | Left (<) | None |
-| B | Zoom out | Reset |
-| C | Change button mode(*1) | None |
-| D | Zoom in | None |
-| E | Right (>) | Menu |
+| Button | Short press            | Long press |
+|:-------|:-----------------------|:-----------|
+| A      | Left (<)               | None       |
+| B      | Zoom out               | Reset      |
+| C      | Change button mode(*1) | None       |
+| D      | Zoom in                | None       |
+| E      | Right (>)              | Menu       |
 
 Another button mode
 
-| Button | Short press | Long press |
-|:-|:-|:-|
-| A | Move left | None |
-| B | Move down | Zoom out |
-| C | Restore button mode | Change move amount |
-| D | Move up | Zoom in |
-| E | Move right | Search route(*) |
+| Button | Short press         | Long press         |
+|:-------|:--------------------|:-------------------|
+| A      | Move left           | None               |
+| B      | Move down           | Zoom out           |
+| C      | Restore button mode | Change move amount |
+| D      | Move up             | Zoom in            |
+| E      | Move right          | Search route(*)    |
 
 (*)Search route by Google Directions API. Set your API key in setting.conf.
 
 #### Course Profile
 
-| Button | Short press | Long press |
-|:-|:-|:-|
-| A | Left (<) | None |
-| B | Zoom out | None |
-| C | Restore button mode | None |
-| D | Zoom in | None |
-| E | Right (>) | None |
+| Button | Short press         | Long press |
+|:-------|:--------------------|:-----------|
+| A      | Left (<)            | None       |
+| B      | Zoom out            | None       |
+| C      | Restore button mode | None       |
+| D      | Zoom in             | None       |
+| E      | Right (>)           | None       |
 
 Another button mode
 
-| Button | Short press | Long press |
-|:-|:-|:-|
-| A | Move left | None |
-| B | Zoom out | None |
-| C | Restore button mode | None |
-| D | Zoom in | None |
-| E | Move right | None |
+| Button | Short press         | Long press |
+|:-------|:--------------------|:-----------|
+| A      | Move left           | None       |
+| B      | Zoom out            | None       |
+| C      | Restore button mode | None       |
+| D      | Zoom in             | None       |
+| E      | Move right          | None       |
 
 #### Menu
 
 In the menu, the button assignments are changed.
 
-| Button | Short press | Long press |
-|:-|:-|:-|
-| A | Back | None |
-| B | Brightness control(*) | None |
-| C | Enter | None |
-| D | Select items (Back) | None |
-| E | Select items (Forward) | None |
+| Button | Short press            | Long press |
+|:-------|:-----------------------|:-----------|
+| A      | Back                   | None       |
+| B      | Brightness control(*)  | None       |
+| C      | Enter                  | None       |
+| D      | Select items (Back)    | None       |
+| E      | Select items (Forward) | None       |
 
 (*) If you use the MIP Reflective color LCD with backlight model.
 
@@ -454,61 +513,61 @@ In the menu, the button assignments are changed.
 
 The button assignments are as follows.
 
-| Button | Short press | Long press |
-|:-|:-|:-|
-| PAGE | Left (<) | Right (>) |
-| CUSTOM | Change button mode | Menu |
-| LAP | Lap | None |
+| Button | Short press        | Long press |
+|:-------|:-------------------|:-----------|
+| PAGE   | Left (<)           | Right (>)  |
+| CUSTOM | Change button mode | Menu       |
+| LAP    | Lap                | None       |
 
 Another button mode
 
-| Button | Short press | Long press |
-|:-|:-|:-|
-| PAGE | ANT+ Light ON/OFF | Brightness control |
-| CUSTOM | Restore button mode | None |
-| LAP | Start/Stop | None |
+| Button | Short press         | Long press         |
+|:-------|:--------------------|:-------------------|
+| PAGE   | ANT+ Light ON/OFF   | Brightness control |
+| CUSTOM | Restore button mode | None               |
+| LAP    | Start/Stop          | None               |
 
 #### Map
 
-| Button | Short press | Long press |
-|:-|:-|:-|
-| PAGE | Left (<-) | Right (->) |
-| CUSTOM | Change button mode | Zoom out |
-| LAP | Zoom in | None |
+| Button | Short press        | Long press |
+|:-------|:-------------------|:-----------|
+| PAGE   | Left (<-)          | Right (->) |
+| CUSTOM | Change button mode | Zoom out   |
+| LAP    | Zoom in            | None       |
 
 Another button mode
 
-| Button | Short press | Long press |
-|:-|:-|:-|
-| PAGE | None | None  |
-| CUSTOM | Restore button mode| Zoom out |
-| LAP | Zoom in | None |
+| Button | Short press         | Long press |
+|:-------|:--------------------|:-----------|
+| PAGE   | None                | None       |
+| CUSTOM | Restore button mode | Zoom out   |
+| LAP    | Zoom in             | None       |
 
 #### Course Profile
 
-| Button | Short press | Long press |
-|:-|:-|:-|
-| PAGE | Left (<-) | Right (->) |
-| CUSTOM | Change button mode | Zoom out |
-| LAP | Zoom in | None |
+| Button | Short press        | Long press |
+|:-------|:-------------------|:-----------|
+| PAGE   | Left (<-)          | Right (->) |
+| CUSTOM | Change button mode | Zoom out   |
+| LAP    | Zoom in            | None       |
 
 Another button mode
 
-| Button | Short press | Long press |
-|:-|:-|:-|
-| PAGE | None | None  |
-| CUSTOM | Restore button mode| Move left |
-| LAP | Move right | None |
+| Button | Short press         | Long press |
+|:-------|:--------------------|:-----------|
+| PAGE   | None                | None       |
+| CUSTOM | Restore button mode | Move left  |
+| LAP    | Move right          | None       |
 
 #### Menu
 
 In the menu, the button assignments are changed.
 
-| Button | Short press | Long press |
-|:-|:-|:-|
-| PAGE | Select items (Forward) | None |
-| CUSTOM | Select items (Back) | None |
-| LAP | Enter | None |
+| Button | Short press            | Long press |
+|:-------|:-----------------------|:-----------|
+| PAGE   | Select items (Forward) | None       |
+| CUSTOM | Select items (Back)    | None       |
+| LAP    | Enter                  | None       |
 
 ## Map
 
@@ -518,10 +577,10 @@ Left side
 
 - "-": zoom in
 - "L": lock / unlock
-  - The map can be moved when unlocked.
+    - The map can be moved when unlocked.
 - "+": zoom out
 - "G": route search by Google Directions API
-  - set token in [GOOGLE_DIRECTION_API section](#google_direction_api-section) of setting.conf
+    - set token in [GOOGLE_DIRECTION_API section](#google_direction_api-section) of setting.conf
 
 Right side
 
@@ -531,13 +590,14 @@ Right side
 - "right"
 
 ## Course profile
+
 <img width="400" alt="map-02" src="https://user-images.githubusercontent.com/12926652/206341086-7935cfbd-8ed3-4068-9f2b-93f676a8932a.png">
 
 Left side
 
 - "-": zoom in
 - "L": lock / unlock
-  - The course profile can be moved to left or right when unlocked.
+    - The course profile can be moved to left or right when unlocked.
 - "+": zoom out
 
 Right side
@@ -554,75 +614,82 @@ Right side
 <img width="400" alt="menu-02-sensors" src="https://user-images.githubusercontent.com/12926652/206076191-4b8a4084-64a0-443b-a434-f6c6b4d51e2a.png">
 
 - ANT+ Sensors
-  - Pairing with ANT+ sensors. 
-  - You need to install the ANT+ library and to set [ANT section](#ant-section) of setting.conf with `status = True`.
-  - The pairing setting is saved in setting.conf when a sensor is connected, so it will be automatically connected next time you start the program.
+    - Pairing with ANT+ sensors.
+    - You need to install the ANT+ library and to set [ANT section](#ant-section) of setting.conf with `status = True`.
+    - The pairing setting is saved in setting.conf when a sensor is connected, so it will be automatically connected
+      next time you start the program.
 - ANT+ MultiScan
 - Wheel Size
-  - Enter the wheel circumference in mm when the ANT+ speed sensor is available.
-  - It is used to calculate the distance.
-  - The default value is 2,105mm, which is the circumference of 700x25c tire.
-  - The value is saved in setting.conf
+    - Enter the wheel circumference in mm when the ANT+ speed sensor is available.
+    - It is used to calculate the distance.
+    - The default value is 2,105mm, which is the circumference of 700x25c tire.
+    - The value is saved in setting.conf
 - Adjust Altitude
-  - Enter the current altitude to correct the sea level and increase the accuracy when an I2C pressure sensor is connected.
+    - Enter the current altitude to correct the sea level and increase the accuracy when an I2C pressure sensor is
+      connected.
 
 ### Courses
 
 <img width="400" alt="menu-03-courses" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/35322fa8-e41e-4f8d-a922-fc86c8481cf5">
 
 - Local Storage
-  - Select course .tcx file in `courses` folder.
+    - Select course .tcx file in `courses` folder.
 - Ride with GPS
-  - If you [set token in setting.conf](#ridewithgps_api-section), select course from Ride with GPS. Internet access is required. Sample image are shown as below.
-  - <img width="400" alt="RidewithGPS-01" src="https://user-images.githubusercontent.com/12926652/206076210-9c50f789-bac3-4bd0-8209-9dea3a61a132.png">
-  - <img width="400" alt="RidewithGPS-02" src="https://user-images.githubusercontent.com/12926652/206076212-8696ac34-c9e6-485f-b1ba-687c0d2a0061.png">
+    - If you [set token in setting.conf](#ridewithgps_api-section), select course from Ride with GPS. Internet access is
+      required. Sample image are shown as below.
+    - <img width="400" alt="RidewithGPS-01" src="https://user-images.githubusercontent.com/12926652/206076210-9c50f789-bac3-4bd0-8209-9dea3a61a132.png">
+    - <img width="400" alt="RidewithGPS-02" src="https://user-images.githubusercontent.com/12926652/206076212-8696ac34-c9e6-485f-b1ba-687c0d2a0061.png">
 - Android Google Maps
-  - Receive routes from Google Maps on Android via Bluetooth. The result is parsed using [https://mapstogpx.com](https://mapstogpx.com).
-  - To use this feature, pair the device with an Android smartphone with obexd activated. `bluez-obexd` and `dbus-x11` packages are required to be installed in advance.
-    - `eval 'dbus-launch --auto-syntax' /usr/libexec/bluetooth/obexd -d -n -r /home/pi -l -a`
-  - If properly paired, Android Google Maps Directions route search results can be sent with 'Share Directions' > 'Bluetooth' > (your Raspberry Pi).
-    - <img width="320" alt="mapstogpx-01" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/928a8ed5-82e7-4ba2-afc7-6b68150d9043"> <img width="320" alt="mapstogpx-02" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/d6fbfb22-5c93-47e5-920f-8ef4fc9c02de">
-
+    - Receive routes from Google Maps on Android via Bluetooth. The result is parsed
+      using [https://mapstogpx.com](https://mapstogpx.com).
+    - To use this feature, pair the device with an Android smartphone with obexd activated. `bluez-obexd` and `dbus-x11`
+      packages are required to be installed in advance.
+        - `eval 'dbus-launch --auto-syntax' /usr/libexec/bluetooth/obexd -d -n -r /home/pi -l -a`
+    - If properly paired, Android Google Maps Directions route search results can be sent with 'Share Directions' > '
+      Bluetooth' > (your Raspberry Pi).
+        - <img width="320" alt="mapstogpx-01" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/928a8ed5-82e7-4ba2-afc7-6b68150d9043"> <img width="320" alt="mapstogpx-02" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/d6fbfb22-5c93-47e5-920f-8ef4fc9c02de">
 
 ### Connectivity
- 
+
 <img width="400" alt="livetrack-01" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/9f9660fd-eca4-4b97-a60a-d2ff890bf3f0">
 
 - Auto BT Tethering
-  - Upload to ThingsBoard via bluetooth tethering via a paired smartphone which are already paired using `bluetoothctl`.
-  - The following `Select BT device` must also be specified.
-  - Since it operates intermittently once every two minutes, the power consumption of the Raspberry Pi and smartphone is much lower than a constant connection via Wifi tethering.
+    - Upload to ThingsBoard via bluetooth tethering via a paired smartphone which are already paired using
+      `bluetoothctl`.
+    - The following `Select BT device` must also be specified.
+    - Since it operates intermittently once every two minutes, the power consumption of the Raspberry Pi and smartphone
+      is much lower than a constant connection via Wifi tethering.
 - Select BT device
-  - Specify the device to use for bluetooth tethering.
+    - Specify the device to use for bluetooth tethering.
 - Live Track
-  - Enable real-time data upload to the [ThingsBoard](https://thingsboard.io) dashboard.
-  - `tb-mqtt-client` package, which can be installed with the `pip3` command, is required.
-  - Also, thingsboard device access token is required in [THINGSBOARD_API](#thingsboard_api-section) of setting.conf.
-  - You will also need to upload and set up a dashboard.　For more details of Thingboard setup, see [thingsboard_setup.md](./thingsboard_setup.md).
-
+    - Enable real-time data upload to the [ThingsBoard](https://thingsboard.io) dashboard.
+    - `tb-mqtt-client` package, which can be installed with the `pip3` command, is required.
+    - Also, thingsboard device access token is required in [THINGSBOARD_API](#thingsboard_api-section) of setting.conf.
+    - You will also need to upload and set up a dashboard. For more details of Thingboard setup,
+      see [thingsboard_setup.md](./thingsboard_setup.md).
 
 ### Upload Activity
 
 Uploads the most recent activity record file(.fit) created by the reset operation after the power is turned on.
- 
+
 <img width="400" alt="menu-04-upload_activity" src="https://user-images.githubusercontent.com/12926652/206076198-55803175-ef4c-4f9b-9408-b44dbe98b1b3.png">
 
 - Strava
-  - You need to set the Strava Token in [Strava API section](#strava_api-section) of setting.conf.
+    - You need to set the Strava Token in [Strava API section](#strava_api-section) of setting.conf.
 - Garmin
-  - You need to set the Garmin setting in [GARMINCONNECT_API section](#garminconnect_api-section) of setting.conf.
+    - You need to set the Garmin setting in [GARMINCONNECT_API section](#garminconnect_api-section) of setting.conf.
 - Ride with GPS
-  - You need to set the Ride with GPS Token in [RIDEWITHGPS_API section](#ridewithgps_api-section) of setting.conf.
+    - You need to set the Ride with GPS Token in [RIDEWITHGPS_API section](#ridewithgps_api-section) of setting.conf.
 
 ### Map
 
 <img width="400" alt="menu-05-map" src="https://user-images.githubusercontent.com/12926652/206076200-383c1d24-ec26-4b79-95e9-a6fd88e161dd.png"> <img width="400" alt="menu-06-map_overlay" src="https://user-images.githubusercontent.com/12926652/206076202-29989a71-34c0-4892-8433-48305868326d.png">
 
 - Select Map
-  - Select a standard map.
+    - Select a standard map.
 - Map Overlay
-  - Toggle map overlay(heatmap, rain map and wind map) and select an overlay map.
-  - Heatmaps are cached, but rain map and wind map require internet connection to fetch the latest images.
+    - Toggle map overlay(heatmap, rain map and wind map) and select an overlay map.
+    - Heatmaps are cached, but rain map and wind map require internet connection to fetch the latest images.
 
 #### Heatmap
 
@@ -648,7 +715,9 @@ openportguide
 
 ### Profile
 
-If ANT+ powermeter is available, set both parameters are used in W'balance (%). They are determined by histrical activity data with bicycle power with [GoldenCheetah](http://www.goldencheetah.org) or [intervals.icu](https://intervals.icu).
+If ANT+ powermeter is available, set both parameters are used in W'balance (%). They are determined by histrical
+activity data with bicycle power with [GoldenCheetah](http://www.goldencheetah.org)
+or [intervals.icu](https://intervals.icu).
 
 <img width="400" alt="menu-07-profile" src="https://user-images.githubusercontent.com/12926652/206076204-197f2454-940b-4267-a626-52740391ddac.png">
 
@@ -656,41 +725,47 @@ If ANT+ powermeter is available, set both parameters are used in W'balance (%). 
 
 <img width="400" alt="menu-08-system" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/402692a5-1612-4bf3-a645-a84ba91b766b">
 
-
 - Network
-  - See below.
+    - See below.
 - Debug (experimental)
-  - Debug log: view "log/debug.log".
-  - Disable Wifi/BT, Enable Wifi/BT: modify /boot/config.txt to turn Wifi and BT On/Off at the hardware level. Reboot required for settings to take effect.
-  - Update: execite `git pull origin master`.
+    - Debug log: view "log/debug.log".
+    - Disable Wifi/BT, Enable Wifi/BT: modify /boot/config.txt to turn Wifi and BT On/Off at the hardware level. Reboot
+      required for settings to take effect.
+    - Update: execite `git pull origin master`.
 - Power Off
-  - Power off the raspberry pi zero when the program is started with the service.
+    - Power off the raspberry pi zero when the program is started with the service.
 
 #### Network
 
 <img width="400" alt="menu-09-network" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/48a617c4-73a5-4c4d-ac7b-d2471ed1d404">
 
 - Wifi, Bluetooth
-  - Turn Wifi and BT On/Off at the software level using `rfkill`.
+    - Turn Wifi and BT On/Off at the software level using `rfkill`.
 - BT Tethering
-  - If dbus and bluez is available, start bluetooth tethering with a smartphone which are already paired using `bluetoothctl`.
+    - If dbus and bluez is available, start bluetooth tethering with a smartphone which are already paired using
+      `bluetoothctl`.
 - IP Address
-  - Show IP address. This can be used for ssh access while tethering a smartphone.
+    - Show IP address. This can be used for ssh access while tethering a smartphone.
 - GadgetBridge
-  - Receive notifications and GPS location from a smartphone. Install [GadgetBridge](https://gadgetbridge.org) Android app and toggle on.
-  - `dbus-next` and `bluez-peripheral` packages, which can be installed with the `pip3` command, is required.
-  - GadgetBridge app settings
-    - Enable all permissions.
-    - `Settings` > `Discovery and Pairing options` > `Ignore bonded devices`: Off, `CompanionDevice Pairing`: On, `Discover unsupported devices`: On, `Scanning intensity`: 2 or 3
-    - From `Connect new device` in the menu or `+` button, you can enter '`Device discovery`. Select the device(shown as host name), long press, and do pairing as `Bangle.js`.
+    - Receive notifications and GPS location from a smartphone. Install [GadgetBridge](https://gadgetbridge.org) Android
+      app and toggle on.
+    - `dbus-next` and `bluez-peripheral` packages, which can be installed with the `pip3` command, is required.
+    - GadgetBridge app settings
+        - Enable all permissions.
+        - `Settings` > `Discovery and Pairing options` > `Ignore bonded devices`: Off, `CompanionDevice Pairing`: On,
+          `Discover unsupported devices`: On, `Scanning intensity`: 2 or 3
+        - From `Connect new device` in the menu or `+` button, you can enter '`Device discovery`. Select the device(
+          shown as host name), long press, and do pairing as `Bangle.js`.
 - Get Location
-  - Enable GPS location acquisition by Gadgetbridge.
-  - GadgetBridge app settings
-    - Click the Settings button in the list of devices on the top screen. `Use phone gps data`: On, `GPS data update interval in ms`: 5000-10000.
+    - Enable GPS location acquisition by Gadgetbridge.
+    - GadgetBridge app settings
+        - Click the Settings button in the list of devices on the top screen. `Use phone gps data`: On,
+          `GPS data update interval in ms`: 5000-10000.
 
 ## Settings
 
-There are five different configuration files. You need to edit at the first "setting.conf" and don't need to care about the other files.
+There are five different configuration files. You need to edit at the first "setting.conf" and don't need to care about
+the other files.
 
 ### setting.conf
 
@@ -701,44 +776,47 @@ Set the value before starting the program. If the value is set during running, i
 #### GENERAL section
 
 - `display`
-  - Set the type of display.
-  - There are definitions in `modules/config.py` for the resolution and availability of the touchscreen.
-  - `None`: default (no hardware control)
-  - `MIP_JDI_color_400x240`: JDI 2.7 inch MIP reflective color LCD module. (LPM027M128C/LPM027M128B)
-  - `MIP_JDI_color_640x480`: JDI 4.4 inch MIP reflective color LCD module. (LPM044M141A)
-  - `MIP_Sharp_mono_400x240`: SHARP 2.7 inch MIP monochrome LCD module. (Sharp LS027B7DH01)
-  - `MIP_Sharp_mono_320x240`: SHARP 4.4 inch MIP monochrome LCD module. (Sharp LS044Q7DH01)
-  - `Papirus`: PaPiRus ePaper / eInk Screen HAT
-  - `DFRobot_RPi_Display`: e-ink Display Module
-  - `Pirate_Audio`, `Pirate_Audio_old`: Pirate Audio ("old" assigns the Y button to GPIO 20.)
-  - `Display_HAT_Mini`: Display HAT Mini
-  - `PiTFT`: PiTFT2.4 (or a PiTFT2.8 with the same resolution)
+    - Set the type of display.
+    - There are definitions in `modules/config.py` for the resolution and availability of the touchscreen.
+    - `None`: default (no hardware control)
+    - `MIP_JDI_color_400x240`: JDI 2.7 inch MIP reflective color LCD module. (LPM027M128C/LPM027M128B)
+    - `MIP_JDI_color_640x480`: JDI 4.4 inch MIP reflective color LCD module. (LPM044M141A)
+    - `MIP_Sharp_mono_400x240`: SHARP 2.7 inch MIP monochrome LCD module. (Sharp LS027B7DH01)
+    - `MIP_Sharp_mono_320x240`: SHARP 4.4 inch MIP monochrome LCD module. (Sharp LS044Q7DH01)
+    - `Papirus`: PaPiRus ePaper / eInk Screen HAT
+    - `DFRobot_RPi_Display`: e-ink Display Module
+    - `Pirate_Audio`, `Pirate_Audio_old`: Pirate Audio ("old" assigns the Y button to GPIO 20.)
+    - `Display_HAT_Mini`: Display HAT Mini
+    - `PiTFT`: PiTFT2.4 (or a PiTFT2.8 with the same resolution)
 - `autostop_cutoff`
-  - Set the threshold for the speed at which the stopwatch will automatically stop/start after it is activated.
-  - The default value is `4` [km/h].
+    - Set the threshold for the speed at which the stopwatch will automatically stop/start after it is activated.
+    - The default value is `4` [km/h].
 - `wheel_circumference`
-  - Set the wheel circumference required for ANT+ speed sensor use.
-  - It can also be set on the screen.
-  - The default value is `2105` (unit is mm) for 700x25c.
+    - Set the wheel circumference required for ANT+ speed sensor use.
+    - It can also be set on the screen.
+    - The default value is `2105` (unit is mm) for 700x25c.
 - `gross_ave_speed`
-  - Set the gross average speed, which is used in the brevet and the like.
-  - It is used for cycling long distances with a set time limit.
-  - The screen shows the actual gross average and the gained time from this gross average speed.
-  - The default value is `15` [km/h].
+    - Set the gross average speed, which is used in the brevet and the like.
+    - It is used for cycling long distances with a set time limit.
+    - The screen shows the actual gross average and the gained time from this gross average speed.
+    - The default value is `15` [km/h].
 - `lang`
-  - The language setting of the label of items.
-  - The default is `EN`.
+    - The language setting of the label of items.
+    - The default is `EN`.
 - `font_file`
-  - Set the full path of the font which you want to use.
-  - Place the fonts in `fonts/` folder.
+    - Set the full path of the font which you want to use.
+    - Place the fonts in `fonts/` folder.
 - `map`
-  - Set the map.
-  - The `G_MAP_CONFIG` in modules/config.py provides some preset definitions.
-  - `wikimedia`: An example map of a full-color map. [https://maps.wikimedia.org/](https://maps.wikimedia.org/)
-  - `jpn_kokudo_chiri_in`: A map from Japan GSI. [https://cyberjapandata.gsi.go.jp](https://cyberjapandata.gsi.go.jp)
-  - (obsolete)`toner`: A map for monochrome colors. [http://maps.stamen.com/toner/](http://maps.stamen.com/toner/)
-  - You can add a map URL to map.yaml. Specify the URL in tile format (tile coordinates by [x, y] and zoom level by [z]). And The map name is set to this setting `map`.
-  - Also, you can set raster mbtiles mapsets generated from [mb-util](https://github.com/mapbox/mbutil). It is sqlite3 db packed with raster maptile images. The definition in map.yaml is following with sample mbtile map named `sample_mbtile` placed at `maptile/sample_mbtile.mbtiles`.
+    - Set the map.
+    - The `G_MAP_CONFIG` in modules/config.py provides some preset definitions.
+    - `wikimedia`: An example map of a full-color map. [https://maps.wikimedia.org/](https://maps.wikimedia.org/)
+    - `jpn_kokudo_chiri_in`: A map from Japan GSI. [https://cyberjapandata.gsi.go.jp](https://cyberjapandata.gsi.go.jp)
+    - (obsolete)`toner`: A map for monochrome colors. [http://maps.stamen.com/toner/](http://maps.stamen.com/toner/)
+    - You can add a map URL to map.yaml. Specify the URL in tile format (tile coordinates by [x, y] and zoom level
+      by [z]). And The map name is set to this setting `map`.
+    - Also, you can set raster mbtiles mapsets generated from [mb-util](https://github.com/mapbox/mbutil). It is sqlite3
+      db packed with raster maptile images. The definition in map.yaml is following with sample mbtile map named
+      `sample_mbtile` placed at `maptile/sample_mbtile.mbtiles`.
 
 ```
 map.yaml entry
@@ -760,7 +838,9 @@ map.yaml entry
 If ANT+ power meter is available, set `cp` as CP and `w_prime` as W prime balance.
 
 #### SENSOR_IMU section
-In modules/sensor_i2c.py, use the change_axis method to change the axis direction of the IMU (accelerometer/magnetometer/gyroscope) according to its mounting direction.
+
+In modules/sensor_i2c.py, use the change_axis method to change the axis direction of the IMU (
+accelerometer/magnetometer/gyroscope) according to its mounting direction.
 The settings are common, so if you use individual sensors, make sure they are all pointing in the same direction.
 
 X, Y, and Z printed on the board are set to the following orientations by default.
@@ -772,28 +852,34 @@ X, Y, and Z printed on the board are set to the following orientations by defaul
 Axis conversion is performed with the following variables.
 
 - `axis_swap_xy_status`: Swaps the X and Y axes.
-  - The default is `False`, or `True` if you want to apply it.
+    - The default is `False`, or `True` if you want to apply it.
 - `axis_conversion_status`: Inverts the signs of X, Y and Z.
-  - Change to `False` by default, or `True` if you want to apply it.
-  - `axis_conversion_coef`: Fill in [X, Y, Z] with ±1.
+    - Change to `False` by default, or `True` if you want to apply it.
+    - `axis_conversion_coef`: Fill in [X, Y, Z] with ±1.
 
-`mag_axis_swap_xy_status`, `mag_axis_conversion_status` and `mag_axis_conversion_coef` can be set if magnetometer axes are different from accelerometer and gyroscope. For example, [SparkFun 9DoF IMU Breakout - ISM330DHCX, MMC5983MA (Qwiic)](https://www.sparkfun.com/products/19895).
+`mag_axis_swap_xy_status`, `mag_axis_conversion_status` and `mag_axis_conversion_coef` can be set if magnetometer axes
+are different from accelerometer and gyroscope. For
+example, [SparkFun 9DoF IMU Breakout - ISM330DHCX, MMC5983MA (Qwiic)](https://www.sparkfun.com/products/19895).
 
 `mag_declination` is automatically set by magnetic-field-calculator package.
 
 #### DISPLAY_PARAM section
 
 (experimental)
+
 - `spi_clock`: specify SPI clock of the following displays.
-  - `MIP`: MIP color reflective LCD module 2.7 inch.
-  - `MIP_Sharp`: SHARP Memory Display Breakout
+    - `MIP`: MIP color reflective LCD module 2.7 inch.
+    - `MIP_Sharp`: SHARP Memory Display Breakout
 
 #### STRAVA_API section
 
-Set up for uploading your .fit file to Strava in the "Strava Upload" of the menu. The upload is limited to the most recently reset and exported .fit file.
+Set up for uploading your .fit file to Strava in the "Strava Upload" of the menu. The upload is limited to the most
+recently reset and exported .fit file.
 
-To get the Strava token, see "[Trying the Authorization Method (OAuth2) of the Strava V3 API (In Japanese)](https://hhhhhskw.hatenablog.com/entry/2018/11/06/014206)".
-Set the `client_id`, `client_secret`, `code`, `access_token` and `refresh_token` as described in the article. Once set, they will be updated automatically.
+To get the Strava token,
+see "[Trying the Authorization Method (OAuth2) of the Strava V3 API (In Japanese)](https://hhhhhskw.hatenablog.com/entry/2018/11/06/014206)".
+Set the `client_id`, `client_secret`, `code`, `access_token` and `refresh_token` as described in the article. Once set,
+they will be updated automatically.
 
 #### STRAVA_COOKIE section
 
@@ -805,10 +891,10 @@ If you want to use heatmap or upload activities to RidewithGPS, set your `token`
 
 - Sign up for an account with [RideWithGPS](https://ridewithgps.com/signup).
 - Create an API key on [RWGPS API](https://ridewithgps.com/api).
-  - Apikey is assumed as `pizero_bikecomputer`.
-  - <img width="600" alt="rwgps_api" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/48269f97-04ec-43f8-b0e1-e4f802c42732">
-  - If you entered a valid email/password, you will see the auth_token parameter was filled in below.
-  - <img width="261" alt="rwgps_get_token" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/fcaf77a8-0531-4e87-a106-6cb3cc1f2c83">
+    - Apikey is assumed as `pizero_bikecomputer`.
+    - <img width="600" alt="rwgps_api" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/48269f97-04ec-43f8-b0e1-e4f802c42732">
+    - If you entered a valid email/password, you will see the auth_token parameter was filled in below.
+    - <img width="261" alt="rwgps_get_token" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/fcaf77a8-0531-4e87-a106-6cb3cc1f2c83">
 - Set your token.
 
 #### GARMINCONNECT_API section
@@ -823,10 +909,10 @@ If you want to search for a route on a map, set your `token` of the Google Direc
 
 If you want to use ThingsBoard dashboard, set your `token` of the Thingboard device access token.
 
-
 ### state.pickle
 
-It stores temporary variables such as values for quick recovery in the event of a power failure and sensor calibration results.
+It stores temporary variables such as values for quick recovery in the event of a power failure and sensor calibration
+results.
 
 Most of them are deleted on reset.
 
@@ -851,13 +937,19 @@ MAIN:
     Ascent: [2, 2]
 ```
 
-- `MAIN`: The name is optional. It is not used in the program, but the following `STATUS` and `LAYOUT` are displayed on one screen. The number of screens can be increased or decreased.
+- `MAIN`: The name is optional. It is not used in the program, but the following `STATUS` and `LAYOUT` are displayed on
+  one screen. The number of screens can be increased or decreased.
 - `STATUS`: Show this screen or not.
-  - Set the boolean value of `true` or `false` of yaml format.
+    - Set the boolean value of `true` or `false` of yaml format.
 - `LAYOUT`: Specify the position of each element.
-  - Each element is defined in modules/gui_congig.py under `G_ITEM_DEF`. You can also add your own variables to the modules/gui_congig.py file.
-  - The position is set up in the form of [Y, X], with the top left as the origin [0, 0], the right as the positive direction of the X axis, and the bottom as the positive direction of the Y axis. The implementation is the coordinate system of QGridLayout.
-  - If you want to merge multiple cells, the third argument should be the bottom Y coordinate + 1, and the fourth argument should be the right X coordinate + 1. For example, `Power: [0, 0, 1, 2]` merges the [0, 0] cell with the right next [0, 1] cell.
+    - Each element is defined in modules/gui_congig.py under `G_ITEM_DEF`. You can also add your own variables to the
+      modules/gui_congig.py file.
+    - The position is set up in the form of [Y, X], with the top left as the origin [0, 0], the right as the positive
+      direction of the X axis, and the bottom as the positive direction of the Y axis. The implementation is the
+      coordinate system of QGridLayout.
+    - If you want to merge multiple cells, the third argument should be the bottom Y coordinate + 1, and the fourth
+      argument should be the right X coordinate + 1. For example, `Power: [0, 0, 1, 2]` merges the [0, 0] cell with the
+      right next [0, 1] cell.
 
 ### map.yaml
 
@@ -871,19 +963,21 @@ strava_heatmap_hot:
 ```
 
 - Line 1: Map name
-  - This is the string to be set to [GENERAL](#general-section) -> map in setting.conf.
+    - This is the string to be set to [GENERAL](#general-section) -> map in setting.conf.
 - Second line: tile URL
-  - Set the tile URL. Tile coordinates X, Y, and zoom Z should be listed with `{x}`, `{y}`, and `{z}`.
+    - Set the tile URL. Tile coordinates X, Y, and zoom Z should be listed with `{x}`, `{y}`, and `{z}`.
 - Line 3: Copyright.
-  - Set the copyright required for the map.
+    - Set the copyright required for the map.
 
 ### config.py
 
-There are some settings which the user doesn't need to care about and some variables defined in the above configuration file.
+There are some settings which the user doesn't need to care about and some variables defined in the above configuration
+file.
 
 ## Prepare course files and maps
 
-Put course.tcx file in course folder. The file name is fixed for now. If the file exists, it will be loaded when it starts up.
+Put course.tcx file in course folder. The file name is fixed for now. If the file exists, it will be loaded when it
+starts up.
 
 To download the map in advance, run the program manually with the --demo option. It will start in demo mode.
 
@@ -891,7 +985,7 @@ To download the map in advance, run the program manually with the --demo option.
 $ python3 pizero_bikecomputer.py --demo
 ```
 
-Press the left button to move to the map screen and leave it for a while. The current position will move along the course and download the required area of the map. 
-
+Press the left button to move to the map screen and leave it for a while. The current position will move along the
+course and download the required area of the map.
 
 [Back to README.md](../README.md)
