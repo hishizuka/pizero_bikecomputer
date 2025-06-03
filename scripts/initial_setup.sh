@@ -31,6 +31,40 @@ else
   exit 1
 fi
 
+###
+# Function to ask the user for input
+# Returns "true" for yes, "false" for no, and exits for quit.
+###
+ask_user() {
+    local prompt="$1"
+    while true; do
+        read -rp "$prompt [y/n/q(uit)]: " answer
+        case "${answer,,}" in
+            y|Y|yes|Yes|YES|yep|Yep|YEP)
+                echo "true"
+                return 0
+                ;;
+            n|N|no|No|NO)
+                echo "false"
+                return 1
+                ;;
+            q|Q|quit|Quit|QUIT)
+                echo "Exiting..."
+                exit 0
+                ;;
+            *)
+                echo "Invalid input. Please answer with y, n, or q."
+                ;;
+        esac
+    done
+}
+
+install_ant_plus=$(ask_user "Would you like to install the ANT+ dependencies?")
+install_gps=$(ask_user "Would you like to install the GPS dependencies?")
+install_dev=$(ask_user "Would you like to install the development dependencies?")
+install_gpio=$(ask_user "Would you like to install the GPIO dependencies?")
+install_i2c=$(ask_user "Would you like to install the i2c dependencies?")
+
 USER_HOME="$(eval echo "~$SUDO_USER")"
 USER="$SUDO_USER"
 # update apt and upgrade the system
@@ -58,19 +92,93 @@ rm -rf "$USER_HOME/Templates"
 rm -rf "$USER_HOME/Videos"
 
 cd "$USER_HOME"
-
 echo "ℹ️ Running pip install. Python location: $(which python3), pip location: $(which pip3)"
 apt install -y python3-pip cython3 cmake python3-numpy python3-pyqt5 python3-pyqtgraph sqlite3 libsqlite3-dev libatlas-base-dev python3-aiohttp python3-aiofiles python3-smbus python3-rpi.gpio python3-psutil python3-pil bluez-obexd dbus-x11
 echo "ℹ️ .deb packages installed."
 # Install additional requirements
 echo "🔧 Installing the application's core Python requirements..."
 sudo -u "$USER" "$USER_HOME/.venv/bin/pip3" install -r "$USER_HOME/pizero_bikecomputer/reqs/full.txt"
+sudo -u "$USER" "$USER_HOME/.venv/bin/pip3" install git+https://github.com/hishizuka/openant.git
 echo "✅ Core Python dependencies installed successfully."
 
-apt install -y python3-pigpio
-systemctl enable pigpiod
-systemctl start pigpiod
-echo "✅ python3-pigpio installed, enabled and started."
+# Install Ant+ packages
+if [[ "$install_ant_plus" == "true" ]]; then
+  echo "🔧 Installing the ANT+ dependencies..."
+  apt install -y python3-setuptools libusb-1.0-0 python3-usb
+  # install as root to ensure there are no udev_rules permission issues fro setuptools
+  "$USER_HOME/.venv/bin/pip3" install git+https://github.com/hishizuka/openant.git
+  echo "✅ ANT+ dependencies installed successfully."
+fi
+
+if [[ "$install_gps" == "true" ]]; then
+  echo "🔧 Installing the GPS dependencies..."
+  sudo -u "$USER" "$USER_HOME/.venv/bin/pip3" install -r "$USER_HOME/pizero_bikecomputer/reqs/sensors/gps/gpsd.txt"
+  sudo -u "$USER" "$USER_HOME/.venv/bin/pip3" install -r "$USER_HOME/pizero_bikecomputer/reqs/sensors/gps/i2c.txt"
+  echo "✅ GPS dependencies installed successfully."
+fi
+
+if [[ "$install_dev" == "true" ]]; then
+  echo "🔧 Installing the development dependencies..."
+  sudo -u "$USER" "$USER_HOME/.venv/bin/pip3" install -r "$USER_HOME/pizero_bikecomputer/reqs/dev.txt"
+  echo "✅ Development dependencies installed successfully."
+fi
+
+if [[ "$install_gpio" == "true" ]]; then
+  echo "🔧 Installing the GPIO dependencies..."
+  apt install -y python3-pigpio
+  systemctl enable pigpiod
+  systemctl start pigpiod
+  echo "ℹ️ python3-pigpio installed, enabled and started successfully."
+  echo "✅ GPIO dependencies installed successfully."
+fi
+
+BOOT_CONFIG_FILE="/boot/firmware/config.txt"
+
+if [[ "$install_i2c" == "true" ]]; then
+  echo "🔧 Installing the i2c dependencies..."
+  sudo -u "$USER" "$USER_HOME/.venv/bin/pip3" install -r "$USER_HOME/pizero_bikecomputer/reqs/sensors/gps/i2c.txt"
+  echo "✅ i2c dependencies installed successfully."
+
+  # Enable I2C on Raspberry Pi
+  echo "🔧 Enabling i2c on Raspberry Pi..."
+  I2C_PARAM="dtparam=i2c_arm=on"
+
+  # Check if the line exists (commented or uncommented)
+  if grep -q -E "^\s*#?\s*${I2C_PARAM}" "$BOOT_CONFIG_FILE"; then
+      # Uncomment if commented
+      sudo sed -i "s|^\s*#\s*\(${I2C_PARAM}\)|\1|" "$BOOT_CONFIG_FILE"
+  else
+      # Add the line at the end if not found
+      echo "$I2C_PARAM" | sudo tee -a "$BOOT_CONFIG_FILE" > /dev/null
+  fi
+  # add pi to i2c if not already a member
+  if ! groups pi | grep -qw i2c; then
+    sudo adduser pi i2c
+  fi
+  echo "✅ I2C enabled successfully in $BOOT_CONFIG_FILE (or already enabled)"
+
+fi
+
+AUDIO_PARAM="dtparam=audio=on"
+# Disable audio on Raspberry Pi
+echo "🔧 Disabling the Raspberry Pi audio..."
+if grep -q "^[^#]*$AUDIO_PARAM" "$BOOT_CONFIG_FILE"; then
+  sudo sed -i "/^[^#]*$AUDIO_PARAM/s/^/#/" "$BOOT_CONFIG_FILE"
+else
+  echo "ℹ️ Audio is already disabled or line is commented out."
+fi
+echo "✅ Audio disabled successfully in $BOOT_CONFIG_FILE (or already disabled)"
+
+CAMERA_PARAM="camera_auto_detect=1"
+# Disable audio on Raspberry Pi
+echo "🔧 Disabling the Raspberry Pi camera..."
+if grep -q "^[^#]*$CAMERA_PARAM" "$BOOT_CONFIG_FILE"; then
+  sudo sed -i "/^[^#]*$CAMERA_PARAM/s/^/#/" "$BOOT_CONFIG_FILE"
+else
+  echo "ℹ️ Camera is already disabled or line is commented out."
+fi
+echo "✅ Camera disabled successfully in $BOOT_CONFIG_FILE (or already disabled)"
+
 
 # Start the bike computer then kill it. This will create the necessary directories and files.
 PID_FILE="$USER_HOME/tmp/bikecomputer_install_test.pid"
