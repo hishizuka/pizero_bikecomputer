@@ -93,14 +93,13 @@ echo "✅ .deb packages installed."
 # Install additional requirements
 echo "🔧 Installing the application's core Python requirements..."
 sudo -u "$PI_USER" "$PI_USER_HOME/.venv/bin/pip3" install -r "$PI_USER_HOME/pizero_bikecomputer/reqs/full.txt"
-sudo -u "$PI_USER" "$PI_USER_HOME/.venv/bin/pip3" install git+https://github.com/hishizuka/openant.git
 echo "✅ Core Python dependencies installed successfully."
 
 # Install Ant+ packages
 if [[ "$install_ant_plus" == "true" ]]; then
   echo "🔧 Installing the ANT+ dependencies..."
   apt install -y python3-setuptools libusb-1.0-0 python3-usb
-  # install as root to ensure there are no udev_rules permission issues fro setuptools
+  # install as root to ensure there are no udev_rules permission issues from setuptools
   "$PI_USER_HOME/.venv/bin/pip3" install git+https://github.com/hishizuka/openant.git
   echo "✅ ANT+ dependencies installed successfully."
 fi
