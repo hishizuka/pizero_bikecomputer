@@ -457,7 +457,7 @@ class LoggerCore:
 
         filename = os.path.join(self.config.G_LOG_DIR, start_date_local)
         fit_text = f"Write fit({self.logger_fit.mode}):"
-        csv_text = f"Write csv{' ' * (len(self.logger_fit.mode) + 2)}:"
+        csv_text = f"Write csv{' ' * (len(self.logger_csv.mode) + 2)}:"
 
         timers = [
             Timer(auto_start=False, auto_log=True, text=f"{csv_text} {{:0.4f}} sec"),
