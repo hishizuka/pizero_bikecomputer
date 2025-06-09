@@ -13,7 +13,6 @@
 /.vscode/
 /.venv/
 __pycache__/
-tmp/
 *.py[cod]
 *.qml
 *.qmlc
