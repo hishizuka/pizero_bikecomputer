@@ -74,6 +74,7 @@ class Config:
 
     # layout def
     G_LAYOUT_FILE = "layout.yaml"
+    G_MENUS_FILE = "menus.yaml"
 
     # Language defined by G_LANG in gui_config.py
     G_LANG = "EN"
@@ -200,6 +201,7 @@ class Config:
             0x19: "Temperature",
         },
         # for display order in ANT+ menu (antMenuWidget)
+        # Remmeber to add any new entries to the menus-cycling.yaml (and menus).yaml and menu_config.yaml
         "ORDER": ["HR", "SPD", "CDC", "PWR", "LGT", "CTRL", "TEMP"],
 
         "USE_AUTO_LIGHT": False,
@@ -426,6 +428,7 @@ class Config:
         parser.add_argument("--demo", action="store_true", default=False)
         parser.add_argument("--version", action="version", version="%(prog)s 0.1")
         parser.add_argument("--layout")
+        parser.add_argument("--menus")
         parser.add_argument("--gui")
         parser.add_argument("--headless", action="store_true", default=False)
         parser.add_argument("--output_log", action="store_true", default=False)
@@ -443,6 +446,8 @@ class Config:
             self.G_DUMMY_OUTPUT = True
         if args.layout and os.path.exists(args.layout):
             self.G_LAYOUT_FILE = args.layout
+        if args.menus and os.path.exists(args.menus):
+            self.G_MENUS_FILE = args.menus
         if args.gui and args.gui in ["PyQt", "QML", "Kivy", "None"]:
             self.G_GUI_MODE = args.gui
         if args.headless:
@@ -487,6 +492,10 @@ class Config:
         if not os.path.exists(self.G_LAYOUT_FILE):
             default_layout_file = os.path.join("layouts", "layout-cycling.yaml")
             shutil.copy(default_layout_file, self.G_LAYOUT_FILE)
+
+        if not os.path.exists(self.G_MENUS_FILE):
+            default_menus_file = os.path.join("layouts", "menus-cycling.yaml")
+            shutil.copy(default_menus_file, self.G_MENUS_FILE)
 
         # map list
         if os.path.exists(self.G_MAP_LIST):
@@ -740,6 +749,7 @@ class Config:
 
         await self.logger.quit()
         self.setting.write_config()
+        self.gui.menu_config.write_menus_yaml()
         self.state.delete()
 
         self.delete_weather_overlay_tiles()

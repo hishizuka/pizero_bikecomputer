@@ -10,6 +10,7 @@ from modules._qt_qtwidgets import (
     Signal,
 )
 from modules.pyqt.components import icons, topbar
+from modules.button_registry import ButtonRegistry
 
 from .pyqt_menu_button import MenuButton
 
@@ -39,7 +40,7 @@ class MenuWidget(QtWidgets.QWidget):
         self.back_index_key = None
         self.focus_widget = None
         self.menu_layout = None
-        self.buttons = {}
+        self.buttons = ButtonRegistry()
 
         self.setup_ui()
 
@@ -79,8 +80,30 @@ class MenuWidget(QtWidgets.QWidget):
         self.menu_layout.setContentsMargins(0, 0, 0, 0)
         self.menu_layout.setSpacing(0)
 
+    def filter_buttons(self, buttons, wrap_menus):
+        """
+        Filter buttons based on the current configuration in the menus.yaml. If a button's key
+        does not exist in the configuration it will be included by default.
+
+        It is expected that the button's key is found in the menu_config.py and has
+        a value corresponding to the location of the configuration in the menus.yaml
+        file.
+        """
+        filtered_buttons_list = []
+        for button in buttons:
+            menu_config_key, name, *rest = button
+            # Skip empty buttons if wrap_menus is enabled
+            if wrap_menus and "EMPTY" in menu_config_key:
+                continue
+            # Check if the menu item is enabled in the config
+            if self.config.gui.menu_config.get_status(menu_config_key):
+                filtered_buttons_list.append(button)
+        return filtered_buttons_list
+
     def add_buttons(self, buttons):
-        n = len(buttons)
+        wrap_menus = self.config.gui.menu_config.wrap_menus()
+        filtered_buttons = self.filter_buttons(buttons, wrap_menus)
+        n = len(filtered_buttons)
         vertical = True
         if self.parent().size().height() < self.parent().size().width():
             vertical = False
@@ -90,29 +113,37 @@ class MenuWidget(QtWidgets.QWidget):
         else:
             layout_type = QtWidgets.QGridLayout
         self.make_menu_layout(layout_type)
-        
+
         i = 0
-        for b in buttons:
+        for b in filtered_buttons:
             icon = None
-            name, button_type, func, *rest = b
+            menu_config_key, name, button_type, func, *rest = b
             if rest:
                 icon = rest[0]
 
             if vertical and name == "":
                 continue
-            self.buttons[name] = MenuButton(button_type, name, self.config, icon=icon)
+            self.buttons[menu_config_key] = MenuButton(button_type, name, self.config, icon=icon)
 
             if func is not None:
-                self.buttons[name].clicked.connect(func)
+                self.buttons[menu_config_key].clicked.connect(func)
             else:
-                self.buttons[name].setEnabled(False)
-                self.buttons[name].setProperty("style", "unavailable")
+                self.buttons[menu_config_key].setEnabled(False)
+                self.buttons[menu_config_key].setProperty("style", "unavailable")
 
             if layout_type == QtWidgets.QVBoxLayout:
-                self.menu_layout.addWidget(self.buttons[name])
-            else:
-                self.menu_layout.addWidget(self.buttons[name], i % 4, i // 4)
+                self.menu_layout.addWidget(self.buttons[menu_config_key])
+            elif wrap_menus == True: # QtWidgets.QVBoxLayout
+                # wrap menus in a 2xN grid layout. Adds buttons left to right, top to bottom.
+                columns = 2
+                row = i // columns
+                col = i % columns
+                self.menu_layout.addWidget(self.buttons[menu_config_key], row, col)
                 i += 1
+            else: # QtWidgets.QVBoxLayout
+                self.menu_layout.addWidget(self.buttons[menu_config_key], i % 4, i // 4)
+                i += 1
+
 
         # add dummy buttons to fit 4x2 (horizontal) or 8x1 (vertical) layouts.
         if not vertical and n in (1, 2, 3):
@@ -174,14 +205,14 @@ class TopMenuWidget(MenuWidget):
 
     def setup_menu(self):
         button_conf = (
-            # Name(page_name), button_attribute, connected functions, layout
-            ("Sensors", "submenu", self.sensors_menu),
-            ("Courses", "submenu", self.courses_menu),
-            ("Connectivity", "submenu", self.connectivity_menu),
-            ("Upload Activity", "submenu", self.cloud_services_menu),
-            ("Map and Data", "submenu", self.map_menu),
-            ("Profile", "submenu", self.profile_menu),
-            ("System", "submenu", self.setting_menu),
+            # MenuConfig Key, Name(page_name), button_attribute, connected functions, layout
+            ("SENSORS", "Sensors", "submenu", self.sensors_menu),
+            ("COURSES", "Courses", "submenu", self.courses_menu),
+            ("CONNECTIVITY", "Connectivity", "submenu", self.connectivity_menu),
+            ("UPLOAD_ACTIVITY", "Upload Activity", "submenu", self.cloud_services_menu),
+            ("MAP_AND_DATA", "Map and Data", "submenu", self.map_menu),
+            ("PROFILE", "Profile", "submenu", self.profile_menu),
+            ("SYSTEM", "System", "submenu", self.setting_menu)
         )
         self.add_buttons(button_conf)
 
@@ -369,20 +400,23 @@ class ListItemWidget(QtWidgets.QWidget):
 class UploadActivityMenuWidget(MenuWidget):
     def setup_menu(self):
         button_conf = (
-            # Name(page_name), button_attribute, connected functions, icon
+            # MenuConfig Key, Name(page_name), button_attribute, connected functions, icon
             (
+                "STRAVA_UPLOAD",
                 "Strava",
                 "cloud_upload",
                 self.strava_upload,
                 (icons.StravaIcon(), (icons.BASE_LOGO_SIZE * 4, icons.BASE_LOGO_SIZE)),
             ),
             (
+                "GARMIN_CONNECT_UPLOAD",
                 "Garmin",
                 "cloud_upload",
                 self.garmin_upload,
                 (icons.GarminIcon(), (icons.BASE_LOGO_SIZE * 5, icons.BASE_LOGO_SIZE)),
             ),
             (
+                "RIDE_WITH_GPS_UPLOAD",
                 "Ride with GPS",
                 "cloud_upload",
                 self.rwgps_upload,
@@ -396,46 +430,46 @@ class UploadActivityMenuWidget(MenuWidget):
 
     @qasync.asyncSlot()
     async def strava_upload(self):
-        await self.buttons["Strava"].run(self.config.api.strava_upload)
+        await self.buttons.run_if_exists("STRAVA_UPLOAD", self.config.api.strava_upload)
 
     @qasync.asyncSlot()
     async def garmin_upload(self):
-        await self.buttons["Garmin"].run(self.config.api.garmin_upload)
+        await self.buttons.run_if_exists("GARMIN_CONNECT_UPLOAD", self.config.api.garmin_upload)
 
     @qasync.asyncSlot()
     async def rwgps_upload(self):
-        await self.buttons["Ride with GPS"].run(self.config.api.rwgps_upload)
+        await self.buttons.run_if_exists("RIDE_WITH_GPS_UPLOAD", self.config.api.rwgps_upload)
 
 
 class ConnectivityMenuWidget(MenuWidget):
     def setup_menu(self):
         button_conf = (
-            # Name(page_name), button_attribute, connected functions, layout
-            ("Auto BT Tethering","toggle",lambda: self.bt_auto_tethering(True)),
-            ("Select BT device", "submenu", self.bt_tething),
-            ("Live Track", "toggle", lambda: self.onoff_live_track(True)),
-            ("", None, None),
-            ("Gadgetbridge", "toggle", self.onoff_ble_uart_service),
-            ("Get Location", "toggle", self.onoff_gadgetbridge_gps),
+            # MenuConfig Key, Name(page_name), button_attribute, connected functions, layout
+            ("AUTO_BT_TETHERING", "Auto BT Tethering","toggle",lambda: self.bt_auto_tethering(True)),
+            ("SELECT_BT_DEVICE", "Select BT device", "submenu", self.bt_tething),
+            ("LIVE_TRACKING", "Live Track", "toggle", lambda: self.onoff_live_track(True)),
+            ("CONNECTIVITY_EMPTY", "", None, None),
+            ("GADGET_BRIDGE", "Gadgetbridge", "toggle", self.onoff_ble_uart_service),
+            ("GET_LOCATION", "Get Location", "toggle", self.onoff_gadgetbridge_gps),
         )
         self.add_buttons(button_conf)
 
         # Auto BT Tethering
         if not self.config.G_IS_RASPI:
-            self.buttons["Auto BT Tethering"].disable()
-            self.buttons["Select BT device"].disable()
+            self.buttons.disable_if_exists("AUTO_BT_TETHERING")
+            self.buttons.disable_if_exists("SELECT_BT_DEVICE")
 
         # ThingsBoard
         if (
             not self.config.api.thingsboard_check()
             or not self.config.G_THINGSBOARD_API["HAVE_API_TOKEN"]
         ):
-            self.buttons["Live Track"].disable()
+            self.buttons.disable_if_exists("LIVE_TRACKING")
         
         #GadgetBridge
         if self.config.ble_uart is None:
-            self.buttons["Gadgetbridge"].disable()
-            self.buttons["Get Location"].disable()
+            self.buttons.disable_if_exists("GADGET_BRIDGE")
+            self.buttons.disable_if_exists("GET_LOCATION")
 
         # initialize toggle button status
         self.onoff_live_track(change=False)
@@ -444,14 +478,14 @@ class ConnectivityMenuWidget(MenuWidget):
     def preprocess(self):
         if self.config.ble_uart:
             status = self.config.ble_uart.status
-            self.buttons["Gadgetbridge"].change_toggle(status)
-            self.buttons["Get Location"].change_toggle(self.config.ble_uart.gps_status)
-            self.buttons["Get Location"].onoff_button(status)
+            self.buttons.change_toggle_if_exists("GADGET_BRIDGE", status)
+            self.buttons.change_toggle_if_exists("GET_LOCATION", self.config.ble_uart.gps_status)
+            self.buttons.onoff_button_if_exists("GET_LOCATION", status)
 
     def onoff_live_track(self, change=True):
         if change:
             self.config.G_THINGSBOARD_API["STATUS"] = not self.config.G_THINGSBOARD_API["STATUS"]
-        self.buttons["Live Track"].change_toggle(
+        self.buttons.change_toggle_if_exists("LIVE_TRACKING",
             self.config.G_THINGSBOARD_API["STATUS"]
         )
 
@@ -459,8 +493,8 @@ class ConnectivityMenuWidget(MenuWidget):
         if change:
             self.config.G_AUTO_BT_TETHERING = not self.config.G_AUTO_BT_TETHERING
             self.config.network.reset_bt_error_counts()
-        self.buttons["Auto BT Tethering"].change_toggle(self.config.G_AUTO_BT_TETHERING)
-        self.buttons["Select BT device"].onoff_button(self.config.G_AUTO_BT_TETHERING)
+        self.buttons.change_toggle_if_exists("AUTO_BT_TETHERING", self.config.G_AUTO_BT_TETHERING)
+        self.buttons.onoff_button_if_exists("SELECT_BT_DEVICE", self.config.G_AUTO_BT_TETHERING)
 
     def bt_tething(self):
         self.change_page("BT Tethering", preprocess=True, run_bt_tethering=False)
@@ -469,10 +503,10 @@ class ConnectivityMenuWidget(MenuWidget):
     async def onoff_ble_uart_service(self):
         status = await self.config.ble_uart.on_off_uart_service()
         self.config.G_GADGETBRIDGE["STATUS"] = status
-        self.buttons["Gadgetbridge"].change_toggle(status)
-        self.buttons["Get Location"].onoff_button(status)
+        self.buttons.change_toggle_if_exists("GADGET_BRIDGE", status)
+        self.buttons.change_toggle_if_exists("GET_LOCATION", status)
 
     def onoff_gadgetbridge_gps(self):
         status = self.config.ble_uart.on_off_gadgetbridge_gps()
         self.config.G_GADGETBRIDGE["USE_GPS"] = status
-        self.buttons["Get Location"].change_toggle(status)
+        self.buttons.change_toggle_if_exists("GET_LOCATION", status)
