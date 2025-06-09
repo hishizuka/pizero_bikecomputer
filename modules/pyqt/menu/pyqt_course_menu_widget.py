@@ -24,9 +24,9 @@ from modules.pyqt.pyqt_item import Item
 class CoursesMenuWidget(MenuWidget):
     def setup_menu(self):
         button_conf = (
-            # Name(page_name), button_attribute, connected functions, icon
-            ("Local Storage", "submenu", self.load_local_courses),
-            (
+            # MenuConfig Key, Name(page_name), button_attribute, connected functions, icon
+            ("LOCAL_STORAGE", "Local Storage", "submenu", self.load_local_courses),
+            (   "RIDE_WITH_GPS",
                 "Ride with GPS",
                 "submenu",
                 self.load_rwgps_courses,
@@ -35,26 +35,26 @@ class CoursesMenuWidget(MenuWidget):
                     (icons.BASE_LOGO_SIZE * 4, icons.BASE_LOGO_SIZE),
                 ),
             ),
-            ("Android Google Maps", None, self.receive_route),
-            ("", None, None),
+            ("ANDROID_GOOGLE_MAPS", "Android Google Maps", None, self.receive_route),
+            ("COURSE_EMPTY", "", None, None),
             # ('Google Directions API mode', 'submenu', self.google_directions_api_setting_menu),
-            (
+            (   "COURSE_CANCEL",
                 "Cancel Course",
                 "dialog",
                 lambda: self.config.gui.show_dialog(
                     self.cancel_course, "Cancel Course"
                 ),
             ),
-            ("Course Calc", "toggle", lambda: self.onoff_course_calc(True)),
+            ("COURSE_CALCULATION", "Course Calc", "toggle", lambda: self.onoff_course_calc(True)),
         )
         self.add_buttons(button_conf)
 
         # if not self.config.G_GOOGLE_DIRECTION_API["HAVE_API_TOKEN"]:
-        #  self.buttons['Google Directions API mode'].disable()
+        #  self.buttons.disable_if_exists('Google Directions API mode')
 
         if not self.config.G_IS_RASPI or not os.path.isfile(self.config.G_OBEXD_CMD):
-            self.buttons["Android Google Maps"].disable()
-        
+            self.buttons.disable_if_exists("ANDROID_GOOGLE_MAPS")
+
         self.onoff_course_calc(False)
 
     def preprocess(self):
@@ -63,7 +63,7 @@ class CoursesMenuWidget(MenuWidget):
     def onoff_course_calc(self, change=True):
         if change:
             self.config.G_COURSE_INDEXING = not self.config.G_COURSE_INDEXING
-        self.buttons["Course Calc"].change_toggle(self.config.G_COURSE_INDEXING)
+        self.buttons.change_toggle_if_exists("COURSE_CALCULATION", self.config.G_COURSE_INDEXING)
 
     @qasync.asyncSlot()
     async def load_local_courses(self):
@@ -84,7 +84,7 @@ class CoursesMenuWidget(MenuWidget):
 
     def onoff_course_cancel_button(self):
         status = self.config.logger.course.is_set
-        self.buttons["Cancel Course"].onoff_button(status)
+        self.buttons.onoff_button_if_exists("COURSE_CANCEL", status)
 
     def cancel_course(self, replace=False):
         self.config.logger.reset_course(delete_course_file=True, replace=replace)

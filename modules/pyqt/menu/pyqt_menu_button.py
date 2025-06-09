@@ -99,8 +99,10 @@ class MenuButton(QtWidgets.QPushButton):
         short_side_length = min(self.size().height(), self.size().width())
         if short_side_length < 3:
             return
+        menu_button_font_size = self.config.gui.menu_config.menu_button_font_size()
+        font_size = menu_button_font_size if menu_button_font_size > 0 else int(short_side_length / 2.5)
         q = self.font()
-        q.setPixelSize(int(short_side_length / 2.5))
+        q.setPixelSize(font_size)
         self.setFont(q)
 
     def focusInEvent(self, event):

@@ -7,19 +7,19 @@ class SensorMenuWidget(MenuWidget):
 
     def setup_menu(self):
         button_conf = (
-            # Name(page_name), button_attribute, connected functions, layout
-            ("ANT+ Sensors", "submenu", self.ant_sensors_menu),
-            ("Wheel Size", "submenu", self.adjust_wheel_circumference),
-            ("Auto Light", "toggle", lambda: self.onoff_auto_light(True)),
-            ("Auto Stop", None, None),
-            ("Gross Ave Speed", None, None),
-            ("Adjust Altitude", "submenu", self.adjust_altitude),
+            # MenuConfig Key, Name(page_name), button_attribute, connected functions, layout
+            ("ANT_PLUS_SENSORS", "ANT+ Sensors", "submenu", self.ant_sensors_menu),
+            ("WHEEL_SIZE", "Wheel Size", "submenu", self.adjust_wheel_circumference),
+            ("AUTO_LIGHT", "Auto Light", "toggle", lambda: self.onoff_auto_light(True)),
+            ("AUTO_STOP", "Auto Stop", None, None),
+            ("GROSS_AVG_SPEED", "Gross Ave Speed", None, None),
+            ("ADJUST_ALTITUDE", "Adjust Altitude", "submenu", self.adjust_altitude),
         )
         self.add_buttons(button_conf)
         self.onoff_auto_light(False)
     
     def preprocess(self):
-        self.buttons["Auto Light"].onoff_button(self.config.G_ANT["USE"]["LGT"])
+        self.buttons.onoff_button_if_exists("AUTO_LIGHT", self.config.G_ANT["USE"]["LGT"])
 
     def ant_sensors_menu(self):
         if self.sensor_ant.scanner.isUse:
@@ -36,22 +36,22 @@ class SensorMenuWidget(MenuWidget):
     def onoff_auto_light(self, change=True):
         if change:
             self.config.G_ANT["USE_AUTO_LIGHT"] = not self.config.G_ANT["USE_AUTO_LIGHT"] 
-        self.buttons["Auto Light"].change_toggle(self.config.G_ANT["USE_AUTO_LIGHT"])
+        self.buttons.change_toggle_if_exists("AUTO_LIGHT", self.config.G_ANT["USE_AUTO_LIGHT"])
 
 class ANTMenuWidget(MenuWidget):
     def setup_menu(self):
         button_conf = []
 
         for antName in self.config.G_ANT["ORDER"]:
-            # Name(page_name), button_attribute, connected functions, layout
+            # MenuConfig Key, Name(page_name), button_attribute, connected functions, layout
             button_conf.append(
-                (antName, "submenu", eval("self.setting_ant_" + antName))
+                (antName, antName, "submenu", eval("self.setting_ant_" + antName))
             )
         self.add_buttons(button_conf)
 
         # modify label from antName to self.get_button_state()
         for antName in self.config.G_ANT["ORDER"]:
-            self.buttons[antName].setText(self.get_button_state(antName))
+            self.buttons.set_text_if_exists(antName, self.get_button_state(antName))
 
         if not self.config.display.has_touch:
             self.focus_widget = self.buttons[self.config.G_ANT["ORDER"][0]]
@@ -98,7 +98,7 @@ class ANTMenuWidget(MenuWidget):
 
     def update_button_label(self):
         for ant_name in self.buttons.keys():
-            self.buttons[ant_name].setText(self.get_button_state(ant_name))
+            self.buttons.set_text_if_exists(ant_name, self.get_button_state(ant_name))
 
 
 class ANTListWidget(ListWidget):

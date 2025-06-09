@@ -1,0 +1,163 @@
+# WRAP_MENU_LAYOUT: set to true if you want auto layout of menus in UI.
+# Make sure to set status of all empty menus to false.
+WRAP_MENU_LAYOUT: false
+
+# The font size for the menu buttons. This is used to set the font size in the UI.
+# Set to 0 to use the default font size.
+MENU_BUTTON_FONT_SIZE: 0
+
+# Configure the menu visibility. If a parent menu is set to false, then all children will
+# be set to false as well. When adding a new menu, make sure to set its key/path in the
+# menu_config.py file. To ensure the layout looks ok, if items are hidden then WRAP_MENU_LAYOUT
+# should be set to true.
+MENUS:
+  STATUS: true
+  SUB_MENUS:
+    SENSORS:
+      STATUS: true
+      SUB_MENUS:
+        ANT_PLUS_DETAIL:
+          STATUS: true
+        ANT_PLUS_SENSORS:
+          STATUS: true
+          SUB_MENUS:
+            POWER:
+              STATUS: true
+            CONTROL:
+              STATUS: true
+            HEART_RATE:
+              STATUS: true
+            TEMPERATURE:
+              STATUS: true
+            SPEED:
+              STATUS: true
+            CADENCE:
+              STATUS: true
+            LIGHT:
+              STATUS: true
+        WHEEL_SIZE:
+          STATUS: true
+        ADJUST_ALTITUDE:
+          STATUS: true
+        AUTO_STOP:
+          STATUS: true
+        AUTO_LIGHT:
+          STATUS: true
+        GROSS_AVG_SPEED:
+          STATUS: true
+    MAP_AND_DATA:
+      STATUS: true
+      SUB_MENUS:
+        MAP_OVERLAY:
+          STATUS: true
+          SUB_MENUS:
+            WIND_MAP:
+              STATUS: true
+            WIND_MAP_LIST:
+              STATUS: true
+            RAIN_MAP:
+              STATUS: true
+            RAIN_MAP_LIST:
+              STATUS: true
+            HEATMAP:
+              STATUS: true
+            HEATMAP_LIST:
+              STATUS: true
+        SELECT_MAP:
+          STATUS: true
+        EXTERNAL_DATA_SOURCES:
+          STATUS: true
+          SUB_MENUS:
+            DEM_TILE:
+              STATUS: true
+            DEM_TILE_SOURCE:
+              STATUS: true
+            WIND:
+              STATUS: true
+            WIND_SOURCE:
+              STATUS: true
+    COURSES:
+      STATUS: true
+      SUB_MENUS:
+        COURSE_DETAIL:
+          STATUS: true
+        COURSES_LIST:
+          STATUS: true
+        COURSE_CALCULATION:
+          STATUS: true
+        COURSE_CANCEL:
+          STATUS: true
+        LOCAL_STORAGE:
+          STATUS: true
+        RIDE_WITH_GPS:
+          STATUS: true
+        ANDROID_GOOGLE_MAPS:
+          STATUS: true
+        EMPTY:
+          STATUS: true
+    PROFILE:
+      STATUS: true
+      SUB_MENUS:
+        CP:
+          STATUS: true
+        W_PRIME_BALANCE:
+          STATUS: true
+    CONNECTIVITY:
+      STATUS: true
+      SUB_MENUS:
+        BT_TETHERING:
+          STATUS: true
+        SELECT_BT_DEVICE:
+          STATUS: true
+        LIVE_TRACKING:
+          STATUS: true
+        GADGET_BRIDGE:
+          STATUS: true
+        GET_LOCATION:
+          STATUS: true
+        EMPTY:
+          STATUS: true
+    SYSTEM:
+      STATUS: true
+      SUB_MENUS:
+        NETWORK:
+          STATUS: true
+          SUB_MENUS:
+            WIFI:
+              STATUS: true
+            BLUETOOTH:
+              STATUS: true
+            BT_TETHERING:
+              STATUS: true
+            IP_ADDRESS:
+              STATUS: true
+        DEBUG:
+          STATUS: true
+          SUB_MENUS:
+            DISABLE_ENABLE_WIFI_BT:
+              STATUS: true
+            RESTART:
+              STATUS: true
+            REBOOT:
+              STATUS: true
+            DEBUG_LOG_LEVEL:
+              STATUS: true
+            DEBUG_LOG:
+              STATUS: true
+        POWER_OFF:
+          STATUS: true
+        LANGUAGE:
+          STATUS: true
+        UPDATE:
+          STATUS: true
+        BRIGHTNESS:
+          STATUS: true
+    UPLOAD_ACTIVITY:
+      STATUS: true
+      SUB_MENUS:
+        GARMIN_CONNECT:
+          STATUS: true
+        STRAVA:
+          STATUS: true
+        RIDE_WITH_GPS:
+          STATUS: true

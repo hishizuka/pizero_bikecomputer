@@ -28,6 +28,7 @@ setting.conf
 state.pickle
 layout.yaml
 map.yaml
+menus.yaml
 nohup.out
 !.gitkeep
 screenlog.*

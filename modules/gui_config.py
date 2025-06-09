@@ -361,14 +361,16 @@ class GUI_Config:
 
     def __init__(self, layout_file):
         self.layout = {}
-
+        self.menus = {}
+        # Load layout yaml file to determine the screens displayed and
+        # the layout of each screen
         try:
             with open(layout_file) as file:
                 text = file.read()
                 self.layout = yaml.safe_load(text)
         except FileNotFoundError:
             pass
-    
+
     def format_text(self, name, value, G_STOPWATCH_STATUS, itemformat):
         text = "-"
         if value is None:

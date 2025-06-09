@@ -7,6 +7,7 @@ import numpy as np
 
 from modules.app_logger import app_logger
 from modules.gui_config import GUI_Config
+from modules.menu_config import MenuConfig
 from modules._qt_ver import (
     QtMode,
     USE_PYSIDE6,
@@ -54,6 +55,7 @@ class GUI_Qt_Base(QtCore.QObject):
         self.config.gui = self
 
         self.gui_config = GUI_Config(config.G_LAYOUT_FILE)
+        self.menu_config = MenuConfig(config.G_MENUS_FILE)
 
         try:
             signal.signal(signal.SIGTERM, self.quit_by_ctrl_c)

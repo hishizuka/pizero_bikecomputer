@@ -6,10 +6,10 @@ from .pyqt_menu_widget import MenuWidget, ListWidget
 class MapMenuWidget(MenuWidget):
     def setup_menu(self):
         button_conf = (
-            # Name(page_name), button_attribute, connected functions, layout
-            ("Select Map", "submenu", self.select_map),
-            ("Map Overlay", "submenu", self.map_overlay),
-            ("External Data Sources", "submenu", self.external_data_sources),
+            # MenuConfig Key, Name(page_name), button_attribute, connected functions, layout
+            ("SELECT_MAP", "Select Map", "submenu", self.select_map),
+            ("MAP_OVERLAY", "Map Overlay", "submenu", self.map_overlay),
+            ("EXTERNAL_DATA_SOURCES", "External Data Sources", "submenu", self.external_data_sources),
         )
         self.add_buttons(button_conf)
 
@@ -42,13 +42,13 @@ class MapListWidget(ListWidget):
 class MapOverlayMenuWidget(MenuWidget):
     def setup_menu(self):
         button_conf = (
-            # Name(page_name), button_attribute, connected functions, layout
-            ("Heatmap", "toggle", lambda: self.onoff_heatmap(True)),
-            ("Heatmap List", "submenu", self.select_heatmap),
-            ("Rain map", "toggle", lambda: self.onoff_rainmap(True)),
-            ("Rain map List", "submenu", self.select_rainmap),
-            ("Wind map", "toggle", lambda: self.onoff_windmap(True)),
-            ("Wind map List", "submenu", self.select_windmap),
+            # MenuConfig Key, Name(page_name), button_attribute, connected functions, layout
+            ("HEATMAP", "Heatmap", "toggle", lambda: self.onoff_heatmap(True)),
+            ("HEATMAP_LIST", "Heatmap List", "submenu", self.select_heatmap),
+            ("RAIN_MAP", "Rain map", "toggle", lambda: self.onoff_rainmap(True)),
+            ("RAIN_MAP_LIST", "Rain map List", "submenu", self.select_rainmap),
+            ("WIND_MAP", "Wind map", "toggle", lambda: self.onoff_windmap(True)),
+            ("WIND_MAP_LIST", "Wind map List", "submenu", self.select_windmap),
         )
         self.add_buttons(button_conf)
 
@@ -57,32 +57,32 @@ class MapOverlayMenuWidget(MenuWidget):
         self.onoff_windmap(False)
 
     def onoff_heatmap(self, change=True):
-        self.onoff_map("Heatmap", change, self.config.G_USE_HEATMAP_OVERLAY_MAP)
+        self.onoff_map("HEATMAP", change, self.config.G_USE_HEATMAP_OVERLAY_MAP)
 
     def onoff_rainmap(self, change=True):
-        self.onoff_map("Rain map", change, self.config.G_USE_RAIN_OVERLAY_MAP)
+        self.onoff_map("RAIN_MAP", change, self.config.G_USE_RAIN_OVERLAY_MAP)
 
     def onoff_windmap(self, change=True):
-        self.onoff_map("Wind map", change, self.config.G_USE_WIND_OVERLAY_MAP)
+        self.onoff_map("WIND_MAP", change, self.config.G_USE_WIND_OVERLAY_MAP)
 
     def onoff_map(self, overlay_type, change, is_use):
         status = is_use
-        list_key = overlay_type + " List"
+        list_key = overlay_type + "_LIST"
         if change:
-            if overlay_type == "Heatmap":
+            if overlay_type == "HEATMAP":
                 self.config.G_USE_HEATMAP_OVERLAY_MAP = not status
-            elif overlay_type == "Rain map":
+            elif overlay_type == "RAIN_MAP":
                 self.config.G_USE_RAIN_OVERLAY_MAP = not status
-            elif overlay_type == "Wind map":
+            elif overlay_type == "WIND_MAP":
                 self.config.G_USE_WIND_OVERLAY_MAP = not status
             status = not status
             if self.config.display.has_touch:
                 self.config.gui.map_widget.enable_overlay_button()
 
-        self.buttons[overlay_type].change_toggle(status)
+        self.buttons.change_toggle_if_exists(overlay_type, status)
 
         # toggle list
-        self.buttons[list_key].onoff_button(status)
+        self.buttons.onoff_button_if_exists(list_key, status)
 
         if (
             not self.config.G_USE_HEATMAP_OVERLAY_MAP
@@ -158,11 +158,11 @@ class WindmapListWidget(ListWidget):
 class ExternalDataSourceMenuWidget(MenuWidget):
     def setup_menu(self):
         button_conf = (
-            # Name(page_name), button_attribute, connected functions, layout
-            ("Wind", "toggle", lambda: self.onoff_wind(True)),
-            ("Wind Source", "submenu", self.select_wind_source),
-            ("DEM Tile", "toggle", lambda: self.onoff_dem_tile(True)),
-            ("DEM Tile source", "submenu", self.select_dem_tile),
+            # MenuConfig Key, Name(page_name), button_attribute, connected functions, layout
+            ("WIND", "Wind", "toggle", lambda: self.onoff_wind(True)),
+            ("WIND_SOURCE", "Wind Source", "submenu", self.select_wind_source),
+            ("DEM_TILE", "DEM Tile", "toggle", lambda: self.onoff_dem_tile(True)),
+            ("DEM_TILE_SOURCE", "DEM Tile source", "submenu", self.select_dem_tile),
         )
         self.add_buttons(button_conf)
 
@@ -172,14 +172,14 @@ class ExternalDataSourceMenuWidget(MenuWidget):
     def onoff_wind(self, change=True):
         if change:
             self.config.G_USE_WIND_DATA_SOURCE = not self.config.G_USE_WIND_DATA_SOURCE
-        self.buttons["Wind"].change_toggle(self.config.G_USE_WIND_DATA_SOURCE)
-        self.buttons["Wind Source"].onoff_button(self.config.G_USE_WIND_DATA_SOURCE)
+        self.buttons.change_toggle_if_exists("WIND", self.config.G_USE_WIND_DATA_SOURCE)
+        self.buttons.onoff_button_if_exists("WIND_SOURCE", self.config.G_USE_WIND_DATA_SOURCE)
 
     def onoff_dem_tile(self, change=True):
         if change:
             self.config.G_USE_DEM_TILE = not self.config.G_USE_DEM_TILE
-        self.buttons["DEM Tile"].change_toggle(self.config.G_USE_DEM_TILE)
-        self.buttons["DEM Tile source"].onoff_button(self.config.G_USE_DEM_TILE)
+        self.buttons.change_toggle_if_exists("DEM_TILE", self.config.G_USE_DEM_TILE)
+        self.buttons.onoff_button_if_exists("DEM_TILE_SOURCE", self.config.G_USE_DEM_TILE)
 
     def select_wind_source(self):
         self.change_page("Wind Source", preprocess=True)

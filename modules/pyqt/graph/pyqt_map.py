@@ -58,7 +58,7 @@ class MapWidget(BaseMapWidget):
 
     # misc
     arrow_direction_num = 16
-    # calculate these ony once
+    # calculate these only once
     arrow_direction_angle_unit = 360 / arrow_direction_num
     arrow_direction_angle_unit_half = arrow_direction_angle_unit / 2
 
