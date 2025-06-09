@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from functools import partial
 
 from modules.app_logger import app_logger
@@ -56,6 +57,11 @@ class NetworkMenuWidget(MenuWidget):
             ("Bluetooth", "toggle", wifi_bt_button_func_bt),
             ("BT Tethering", "submenu", self.bt_tething),
             ("IP Address", "dialog", self.show_ip_address),
+            ("WIFI with WPS", "dialog", lambda: self.config.gui.show_dialog(
+                lambda: asyncio.create_task(self.wifi_connect_with_wps()),
+                "Connect to Wifi with WPS?",
+            )),
+
         )
         self.add_buttons(button_conf)
 
@@ -84,6 +90,38 @@ class NetworkMenuWidget(MenuWidget):
         address = detect_network() or "No address"
         # Button is OK only
         self.config.gui.show_dialog_ok_only(None, address)
+
+    async def wifi_connect_with_wps(self):
+        # Start background task to update status
+        updater_task = asyncio.create_task(self._show_wps_connecting_progress())
+        try:
+            # Run the blocking connection code in a thread
+            connect_status = await asyncio.to_thread(self.config.network.wifi_connect_with_wps)
+        finally:
+            # Stop the updater once done
+            updater_task.cancel()
+            try:
+                await updater_task
+            except asyncio.CancelledError:
+                pass
+
+        # Show final result
+        if connect_status:
+            self.config.gui.show_forced_message("Connection succeeded!")
+        else:
+            self.config.gui.show_forced_message("Connection failed for some reason!")
+
+    async def _show_wps_connecting_progress(self):
+        messages = [
+            "Trying to connect.",
+            "Trying to connect..",
+            "Trying to connect...",
+        ]
+        i = 0
+        while True:
+            self.config.gui.show_popup(messages[i % len(messages)], timeout=2)
+            i += 1
+            await asyncio.sleep(2)
 
 
 class DebugMenuWidget(MenuWidget):
