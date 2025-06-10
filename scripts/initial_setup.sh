@@ -116,9 +116,11 @@ if [[ "$install_gps" == "true" ]]; then
     echo "🔧 Installing the GPS dependencies..."
     sudo apt install -y gpsd
     pip install gps3
+    sudo raspi-config nonint do_serial_cons 1
+    sudo raspi-config nonint do_serial_hw 0
     sudo systemctl enable gpsd
     sudo systemctl enable gpsd.socket
-    sudo systemctl start gpsd
+    #sudo systemctl start gpsd
     echo "✅ GPS dependencies installed successfully."
 fi
 
@@ -126,7 +128,7 @@ if [[ "$enable_pigpio" == "true" ]]; then
   echo "🔧 Installing the GPIO dependencies..."
   #apt install -y python3-pigpio
   sudo systemctl enable pigpiod
-  sudo systemctl start pigpiod
+  #sudo systemctl start pigpiod
   echo "ℹ️ python3-pigpio installed, enabled and started successfully."
   echo "✅ GPIO dependencies installed successfully."
 fi
@@ -213,3 +215,4 @@ echo "✅ Startup test completed successfully."
 echo "✅ Pi Zero Bike Computer initial setup completed successfully! Now rebooting"
 
 sudo reboot
+
