@@ -49,35 +49,9 @@ prompt_and_store() {
     esac
 }
 
-make_python_venv() {
-    ask_user "🔧 Install Python virtual environment in ~/.venv?"
-    case $? in
-        0)
-            read -rp "📦 Enter virtual environment name (default: .venv): " venv_name
-            venv_name="${venv_name:-.venv}"
-            venv_path=~/"$venv_name"
-            echo "🔧 Creating virtual environment at: $venv_path"
-            python3 -m venv --system-site-packages "$venv_path"
-            if ! grep -Fxq "source $venv_path/bin/activate" ~/.bashrc; then
-                echo "source $venv_path/bin/activate" >> ~/.bashrc
-                echo "🔧 Added 'source $venv_path/bin/activate' to ~/.bashrc"
-            fi
-            source "$venv_path/bin/activate"
-            echo "✅ Virtual environment setup complete. Python location: $(which python3), pip location: $(which pip3)"
-            ;;
-        1) 
-            echo "⏭️ Skipping virtual environment setup."
-            ;;
-        2)
-            echo "👋 Quitting...bye!";
-            exit 0
-            ;;
-    esac
-}
-
-
 # temporarily disable error checking to allow for user input
 set +e
+prompt_and_store "Setup Python virtual environment?" setup_python_venv
 prompt_and_store "Install ANT+ dependencies?" install_ant_plus
 prompt_and_store "Install GPS dependencies?" install_gps
 prompt_and_store "Enable PIGPIO?" enable_pigpio
@@ -89,18 +63,33 @@ set -e
 sudo apt update
 sudo apt upgrade -y
 
-# setup virutal environment
-cd
-set +e
-make_python_venv
-set -e
+sudo apt install -y git python3-yaml cython3 cmake python3-numpy sqlite3 libsqlite3-dev python3-pil python3-aiohttp python3-aiofiles python3-psutil python3-pyqt6 python3-pyqt6.qtsvg pyqt6-dev-tools bluez-obexd
+echo "✅ .deb packages installed."
 
 cd
-sudo apt install -y python3-yaml cython3 cmake python3-numpy sqlite3 libsqlite3-dev python3-pil python3-aiohttp python3-aiofiles python3-psutil python3-pyqt6 python3-pyqt6.qtsvg pyqt6-dev-tools bluez-obexd
-echo "✅ .deb packages installed."
+
+# setup virutal environment
+if [[ "$setup_python_venv" == "true" ]]; then
+    set +e
+    read -rp "📦 Enter virtual environment name (default: .venv): " venv_name
+    venv_name="${venv_name:-.venv}"
+    venv_path=~/"$venv_name"
+    echo "🔧 Creating virtual environment at: $venv_path"
+    python3 -m venv --system-site-packages "$venv_path"
+    if ! grep -Fxq "source $venv_path/bin/activate" ~/.bashrc; then
+        echo "source $venv_path/bin/activate" >> ~/.bashrc
+        echo "🔧 Added 'source $venv_path/bin/activate' to ~/.bashrc"
+    fi
+    source "$venv_path/bin/activate"
+    echo "✅ Virtual environment setup complete. Python location: $(which python3), pip location: $(which pip3)"
+    set -e
+else
+    echo "⏭️ Skipping Python virtual environment setup."
+fi
+
 # Install additional requirements
 echo "🔧 Installing the application's core Python requirements..."
-pip install oyaml polyline qasync pyqtgraph timezonefinder git+https://github.com/hishizuka/crdp.git garminconnect stravacookies dbus-next bluez-peripheral tb-mqtt-client mmh
+pip install oyaml polyline qasync pyqtgraph timezonefinder git+https://github.com/hishizuka/crdp.git garminconnect stravacookies dbus-next bluez-peripheral tb-mqtt-client mmh3
 echo "✅ Core Python dependencies installed successfully."
 
 # Install Ant+ packages
@@ -174,6 +163,7 @@ sudo raspi-config nonint do_camera 1
 
 
 echo "🔧 Starting pizero_bikecomputer.py in headless mode for verification..."
+#git clone https://github.com/hishizuka/pizero_bikecomputer.git
 cd ~/pizero_bikecomputer
 
 # Create a named pipe (FIFO) to monitor output
