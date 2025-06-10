@@ -1,35 +1,23 @@
 #!/bin/bash
 set -euo pipefail
 #############################################################
-# This script sets up the Pi Zero Bike Computer environment
+# This script sets up the pizero_bikecomputer environment
 # and is intended to be run on a fresh Raspberry Pi OS installation.
-# 1. It should be run as root.
-# 2. Creates a Python virtual environment, installs necessary
-#    packages, and prepares the system for running the bike computer
+# 1. Creates a Python virtual environment, installs necessary
+#    packages, and prepares the system for running the pizero_bikecomputer
 #    application.
-# 3. Be aware that this script will not install the bike computer
+# 2. Be aware that this script will not install the bike computer
 #    service and it will not install hardware specific packages.
-# 4. It is intended to be run once, before the bike computer service
+# 3. It is intended to be run once, before the bike computer service
 #    is installed.
-# 5. It will also remove the default directories in the home directory.
+# 4. It will also remove the default directories in the home directory.
 #
-# This script is based on the instructions from the Pi Zero Bike Computer
+# This script is based on the instructions from the pizero_bikecomputer
 # foud here: https://qiita.com/hishi/items/46619b271daaa9ad41b3
 #
-# Usage: sudo ./scripts/initial_setup.sh
+# Usage: ./scripts/initial_setup.sh
 #
 #############################################################
-
-if [ "$EUID" -eq 0 ]; then
-  if [ -n "$SUDO_USER" ]; then
-    echo "✅ Running with sudo as user: $SUDO_USER"
-  else
-    echo "✅ Running directly as root"
-  fi
-else
-  echo "❌ Not running as root. Please use sudo."
-  exit 1
-fi
 
 ###
 # Function to ask the user for input
@@ -55,103 +43,118 @@ prompt_and_store() {
     local var_name="$2"
     ask_user "$prompt"
     case $? in
-      0) eval "$var_name=true" ;;
-      1) eval "$var_name=false" ;;
-      2) echo "👋 Quitting...bye!"; exit 0 ;;
+        0) eval "$var_name=true" ;;
+        1) eval "$var_name=false" ;;
+        2) echo "👋 Quitting...bye!"; exit 0 ;;
     esac
 }
+
+make_python_venv() {
+    ask_user "🔧 Install Python virtual environment in ~/.venv?"
+    case $? in
+        0)
+            read -rp "📦 Enter virtual environment name (default: .venv): " venv_name
+            venv_name="${venv_name:-.venv}"
+            venv_path=~/"$venv_name"
+            echo "🔧 Creating virtual environment at: $venv_path"
+            python3 -m venv --system-site-packages "$venv_path"
+            if ! grep -Fxq "source $venv_path/bin/activate" ~/.bashrc; then
+                echo "source $venv_path/bin/activate" >> ~/.bashrc
+                echo "🔧 Added 'source $venv_path/bin/activate' to ~/.bashrc"
+            fi
+            source "$venv_path/bin/activate"
+            echo "✅ Virtual environment setup complete. Python location: $(which python3), pip location: $(which pip3)"
+            ;;
+        1) 
+            echo "⏭️ Skipping virtual environment setup."
+            ;;
+        2)
+            echo "👋 Quitting...bye!";
+            exit 0
+            ;;
+    esac
+}
+
 
 # temporarily disable error checking to allow for user input
 set +e
 prompt_and_store "Install ANT+ dependencies?" install_ant_plus
 prompt_and_store "Install GPS dependencies?" install_gps
-prompt_and_store "Install Dev dependencies?" install_dev
-prompt_and_store "Install GPIO dependencies?" install_gpio
-prompt_and_store "Install I2C dependencies?" install_i2c
+prompt_and_store "Enable PIGPIO?" enable_pigpio
+prompt_and_store "Enable I2C?" enable_i2c
+prompt_and_store "Enable SPI?" enable_spi
 set -e
 
-PI_USER_HOME="$(eval echo "~$SUDO_USER")"
-PI_USER="$SUDO_USER"
 # update apt and upgrade the system
-apt update && apt upgrade -y
+sudo apt update
+sudo apt upgrade -y
 
 # setup virutal environment
-cd "$PI_USER_HOME"
-echo "🔧Setting up Python virtual environment in $PI_USER_HOME/.venv"
-sudo -u "$PI_USER" python3 -m venv --system-site-packages "$PI_USER_HOME/.venv"
-grep -qxF "source ~/.venv/bin/activate" "$PI_USER_HOME/.bashrc" || echo "source ~/.venv/bin/activate" >> "$PI_USER_HOME/.bashrc"
-grep -qxF "source $PI_USER_HOME/.venv/bin/activate" ~/.bashrc || echo "source $PI_USER_HOME/.venv/bin/activate" >> ~/.bashrc
-echo "🔧 Adding virtual environment to PATH in $PI_USER_HOME/.bashrc"
-echo "🔧 Sourcing ~/.bashrc"
-source ~/.bashrc
-echo "✅ Virtual environment setup complete. Python location: $(which python3), pip location: $(which pip3)"
+cd
+set +e
+make_python_venv
+set -e
 
-cd "$PI_USER_HOME"
-echo "🔧 Running pip install. Python location: $(which python3), pip location: $(which pip3)"
-apt install -y python3-pip cython3 cmake python3-numpy python3-pyqt5 python3-pyqtgraph sqlite3 libsqlite3-dev libatlas-base-dev python3-aiohttp python3-aiofiles python3-smbus python3-rpi.gpio python3-psutil python3-pil bluez-obexd dbus-x11
+cd
+sudo apt install -y python3-yaml cython3 cmake python3-numpy sqlite3 libsqlite3-dev python3-pil python3-aiohttp python3-aiofiles python3-psutil python3-pyqt6 python3-pyqt6.qtsvg pyqt6-dev-tools bluez-obexd
 echo "✅ .deb packages installed."
 # Install additional requirements
 echo "🔧 Installing the application's core Python requirements..."
-sudo -u "$PI_USER" "$PI_USER_HOME/.venv/bin/pip3" install -r "$PI_USER_HOME/pizero_bikecomputer/reqs/full.txt"
+pip install oyaml polyline qasync pyqtgraph timezonefinder git+https://github.com/hishizuka/crdp.git garminconnect stravacookies dbus-next bluez-peripheral tb-mqtt-client mmh
 echo "✅ Core Python dependencies installed successfully."
 
 # Install Ant+ packages
 if [[ "$install_ant_plus" == "true" ]]; then
-  echo "🔧 Installing the ANT+ dependencies..."
-  apt install -y python3-setuptools libusb-1.0-0 python3-usb
-  # install as root to ensure there are no udev_rules permission issues from setuptools
-  "$PI_USER_HOME/.venv/bin/pip3" install git+https://github.com/hishizuka/openant.git
-  echo "✅ ANT+ dependencies installed successfully."
+    echo "🔧 Installing the ANT+ dependencies..."
+    sudo apt install -y python3-pip libusb-1.0-0 python3-usb
+    # install as root to ensure there are no udev_rules permission issues from setuptools
+    sudo pip3 install git+https://github.com/hishizuka/openant.git --break-system-packages
+    echo "✅ ANT+ dependencies installed successfully."
 fi
 
 if [[ "$install_gps" == "true" ]]; then
-  echo "🔧 Installing the GPS dependencies..."
-  sudo -u "$PI_USER" "$PI_USER_HOME/.venv/bin/pip3" install -r "$PI_USER_HOME/pizero_bikecomputer/reqs/sensors/gps/gpsd.txt"
-  sudo -u "$PI_USER" "$PI_USER_HOME/.venv/bin/pip3" install -r "$PI_USER_HOME/pizero_bikecomputer/reqs/sensors/gps/i2c.txt"
-  echo "✅ GPS dependencies installed successfully."
+    echo "🔧 Installing the GPS dependencies..."
+    sudo apt install -y gpsd
+    pip install gps3
+    sudo systemctl enable gpsd
+    sudo systemctl enable gpsd.socket
+    sudo systemctl start gpsd
+    echo "✅ GPS dependencies installed successfully."
 fi
 
-if [[ "$install_dev" == "true" ]]; then
-  echo "🔧 Installing the development dependencies..."
-  sudo -u "$PI_USER" "$PI_USER_HOME/.venv/bin/pip3" install -r "$PI_USER_HOME/pizero_bikecomputer/reqs/dev.txt"
-  echo "✅ Development dependencies installed successfully."
-fi
-
-if [[ "$install_gpio" == "true" ]]; then
+if [[ "$enable_pigpio" == "true" ]]; then
   echo "🔧 Installing the GPIO dependencies..."
-  apt install -y python3-pigpio
-  systemctl enable pigpiod
-  systemctl start pigpiod
+  #apt install -y python3-pigpio
+  sudo systemctl enable pigpiod
+  sudo systemctl start pigpiod
   echo "ℹ️ python3-pigpio installed, enabled and started successfully."
   echo "✅ GPIO dependencies installed successfully."
 fi
 
-BOOT_CONFIG_FILE="/boot/firmware/config.txt"
 
-if [[ "$install_i2c" == "true" ]]; then
-  echo "🔧 Installing the i2c dependencies..."
-  sudo -u "$PI_USER" "$PI_USER_HOME/.venv/bin/pip3" install -r "$PI_USER_HOME/pizero_bikecomputer/reqs/sensors/gps/i2c.txt"
-  echo "✅ i2c dependencies installed successfully."
-
+if [[ "$enable_i2c" == "true" ]]; then
   # Enable I2C on Raspberry Pi
   echo "🔧 Enabling i2c on Raspberry Pi..."
-  I2C_PARAM="dtparam=i2c_arm=on"
-
-  # Check if the line exists (commented or uncommented)
-  if grep -q -E "^\s*#?\s*${I2C_PARAM}" "$BOOT_CONFIG_FILE"; then
-      # Uncomment if commented
-      sudo sed -i "s|^\s*#\s*\(${I2C_PARAM}\)|\1|" "$BOOT_CONFIG_FILE"
-  else
-      # Add the line at the end if not found
-      echo "$I2C_PARAM" | sudo tee -a "$BOOT_CONFIG_FILE" > /dev/null
-  fi
+  sudo raspi-config nonint do_i2c 0
   # add pi to i2c if not already a member
-  if ! groups pi | grep -qw i2c; then
-    sudo adduser pi i2c
-  fi
-  echo "✅ I2C enabled successfully in $BOOT_CONFIG_FILE (or already enabled)"
-
+  #if ! groups $USER | grep -qw i2c; then
+  #  sudo adduser $USER i2c
+  #fi
+  echo "✅ I2C enabled successfully"
 fi
+
+if [[ "$enable_spi" == "true" ]]; then
+  # Enable SPI on Raspberry Pi
+  echo "🔧 Enabling spi on Raspberry Pi..."
+  sudo raspi-config nonint do_spi 0
+  # add pi to i2c if not already a member
+  #if ! groups $USER | grep -qw spi; then
+  #  sudo adduser $USER spi
+  #fi
+  echo "✅ SPI enabled successfully"
+fi
+
+BOOT_CONFIG_FILE="/boot/firmware/config.txt"
 
 AUDIO_PARAM="dtparam=audio=on"
 # Disable audio on Raspberry Pi
@@ -163,33 +166,22 @@ else
 fi
 echo "✅ Audio disabled successfully in $BOOT_CONFIG_FILE (or already disabled)"
 
-CAMERA_PARAM="camera_auto_detect=1"
-# Disable audio on Raspberry Pi
+# Disable camera on Raspberry Pi
 echo "🔧 Disabling the Raspberry Pi camera..."
-if grep -q "^[^#]*$CAMERA_PARAM" "$BOOT_CONFIG_FILE"; then
-  sudo sed -i "/^[^#]*$CAMERA_PARAM/s/^/#/" "$BOOT_CONFIG_FILE"
-else
-  echo "ℹ️ Camera is already disabled or line is commented out."
-fi
-echo "✅ Camera disabled successfully in $BOOT_CONFIG_FILE (or already disabled)"
+sudo raspi-config nonint do_camera 1
 
 
 echo "🔧 Starting pizero_bikecomputer.py in headless mode for verification..."
-
-PID_FILE="$PI_USER_HOME/tmp/bikecomputer_install_test.pid"
-mkdir -p "$PI_USER_HOME/tmp" && touch "$PID_FILE"
-
-cd "$PI_USER_HOME"/pizero_bikecomputer
+cd ~/pizero_bikecomputer
 
 # Create a named pipe (FIFO) to monitor output
 PIPE=$(mktemp -u)
 mkfifo "$PIPE"
 
 # Start the app and tee its output to both screen and PIPE
-stdbuf -oL sudo -u "$PI_USER" QT_QPA_PLATFORM=offscreen "$PI_USER_HOME/.venv/bin/python3" pizero_bikecomputer.py \
-  2>&1 | tee "$PIPE" &
+export QT_QPA_PLATFORM=offscreen
+stdbuf -oL python3 pizero_bikecomputer.py 2>&1 | tee "$PIPE" &
 APP_PID=$!
-echo $APP_PID > "$PID_FILE"
 
 # Monitor the output for readiness
 ready=0
@@ -201,26 +193,23 @@ while IFS= read -r line; do
 
     if [[ $ready -eq 1 && "$line" == *"total :"* ]]; then
         sleep 10
+        echo "q\n" > "$INPUT_PIPE"
         break
     fi
 done < "$PIPE"
 
 # Check if app is still running
 if ps -p $APP_PID > /dev/null; then
-    echo "✅ Application started successfully (PID $APP_PID). Shutting it down..."
-    kill "$APP_PID"
-    rm -f "$PID_FILE" "$PIPE"
+    echo "✅ Application started successfully (PID $APP_PID)."
+    rm -f "$PIPE" "$INPUT_PIPE"
 else
     echo "❌ Application did not start correctly. Check logs or errors."
-    rm -f "$PID_FILE" "$PIPE"
+    rm -f "$PIPE" "$INPUT_PIPE"
     exit 1
 fi
 
-
-cd "$PI_USER_HOME"
-sudo chown --recursive pi:pi pizero_bikecomputer
-
+cd
 echo "✅ Startup test completed successfully."
-
 echo "✅ Pi Zero Bike Computer initial setup completed successfully! Now rebooting"
-reboot
+
+sudo reboot
