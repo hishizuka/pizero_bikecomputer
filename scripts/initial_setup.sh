@@ -185,7 +185,7 @@ while IFS= read -r line; do
 
     if [[ $ready -eq 1 && "$line" == *"total :"* ]]; then
         sleep 10
-        echo "q\n" > "$INPUT_PIPE"
+        #echo "q\n" > "$INPUT_PIPE"
         break
     fi
 done < "$PIPE"
@@ -193,10 +193,12 @@ done < "$PIPE"
 # Check if app is still running
 if ps -p $APP_PID > /dev/null; then
     echo "✅ Application started successfully (PID $APP_PID)."
-    rm -f "$PIPE" "$INPUT_PIPE"
+    rm -f "$PIPE"
+    #rm -f "$INPUT_PIPE"
 else
     echo "❌ Application did not start correctly. Check logs or errors."
-    rm -f "$PIPE" "$INPUT_PIPE"
+    rm -f "$PIPE"
+    #rm -f "$INPUT_PIPE"
     exit 1
 fi
 
