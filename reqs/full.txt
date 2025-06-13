@@ -26,7 +26,7 @@ polyline==2.0.0
 pyparsing==3.1.1
 pyqtgraph==0.13.3
 pyyaml==6.0.1
-qasync==0.24.0
+qasync==0.27.1
 requests==2.31.0
 requests-toolbelt==1.0.0
 simplejson==3.19.1

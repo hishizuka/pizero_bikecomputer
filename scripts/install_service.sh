@@ -1,14 +1,21 @@
 #!/bin/bash
-
+#############################################################
+# This script installs the Pi Zero Bike Computer service.
+#
+# It should be run as root and should be run when the device is ready
+# to use as a the bike computer. Once installed, the service will
+# start automatically on boot.
+#############################################################
 current_dir=$(pwd)
-script="$current_dir/pizero_bikecomputer.py"
+project_root_dir=$(dirname "$current_dir")
+script="$project_root_dir/pizero_bikecomputer.py"
 
-i_service_file="$current_dir/scripts/install/etc/systemd/system/pizero_bikecomputer.service"
+i_service_file="$current_dir/install/etc/systemd/system/pizero_bikecomputer.service"
 o_service_file="/etc/systemd/system/pizero_bikecomputer.service"
 
 read -p "Using TFT/XWindow? [y/n] (n): " use_x
 
-# check if venv is set, in that case default to using thi venv to run the script
+# check if venv is set, in that case default to using venv to run the script
 #read -p "Use current virtualenv? [y/n] (y): " use_venv
 
 if [[ -n "$VIRTUAL_ENV" ]]; then
@@ -29,7 +36,7 @@ fi
 
 if [ -f "$i_service_file" ]; then
     content=$(<"$i_service_file")
-    content="${content/WorkingDirectory=/WorkingDirectory=$current_dir}"
+    content="${content/WorkingDirectory=/WorkingDirectory=$project_root_dir}"
     content="${content/ExecStart=/ExecStart=$script}"
     content="${content/User=/User=$USER}"
     content="${content/Group=/Group=$USER}"
