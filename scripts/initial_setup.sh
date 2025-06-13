@@ -27,7 +27,8 @@ ask_user() {
     local prompt="$1"
     while true; do
         read -rp "$prompt [y/n/q(uit)]: " answer
-        answer="${answer,,}"  # lowercase
+        #answer="${answer,,}"  # lowercase
+        answer="$(echo "$answer" | tr 'A-Z' 'a-z')"
 
         case "$answer" in
             y|yes) return 0 ;;
@@ -52,9 +53,13 @@ prompt_and_store() {
 # temporarily disable error checking to allow for user input
 set +e
 prompt_and_store "Setup Python virtual environment?" setup_python_venv
+if [[ "$setup_python_venv" == "true" ]]; then
+    read -rp "📦 Enter virtual environment name (default: .venv): " venv_name
+    venv_name="${venv_name:-.venv}"
+    venv_path=~/"$venv_name"
+fi
 prompt_and_store "Install ANT+ dependencies?" install_ant_plus
 prompt_and_store "Install GPS dependencies?" install_gps
-prompt_and_store "Enable PIGPIO?" enable_pigpio
 prompt_and_store "Enable I2C?" enable_i2c
 prompt_and_store "Enable SPI?" enable_spi
 set -e
@@ -63,17 +68,13 @@ set -e
 sudo apt update
 sudo apt upgrade -y
 
-sudo apt install -y git python3-yaml cython3 cmake python3-numpy sqlite3 libsqlite3-dev python3-pil python3-aiohttp python3-aiofiles python3-psutil python3-pyqt6 python3-pyqt6.qtsvg pyqt6-dev-tools bluez-obexd
+sudo apt install -y python3-venv git python3-yaml cython3 cmake python3-numpy sqlite3 libsqlite3-dev python3-pil python3-aiohttp python3-aiofiles python3-psutil python3-pyqt6 python3-pyqt6.qtsvg pyqt6-dev-tools bluez-obexd
 echo "✅ .deb packages installed."
 
 cd
 
 # setup virutal environment
 if [[ "$setup_python_venv" == "true" ]]; then
-    set +e
-    read -rp "📦 Enter virtual environment name (default: .venv): " venv_name
-    venv_name="${venv_name:-.venv}"
-    venv_path=~/"$venv_name"
     echo "🔧 Creating virtual environment at: $venv_path"
     python3 -m venv --system-site-packages "$venv_path"
     if ! grep -Fxq "source $venv_path/bin/activate" ~/.bashrc; then
@@ -82,15 +83,24 @@ if [[ "$setup_python_venv" == "true" ]]; then
     fi
     source "$venv_path/bin/activate"
     echo "✅ Virtual environment setup complete. Python location: $(which python3), pip location: $(which pip3)"
-    set -e
 else
     echo "⏭️ Skipping Python virtual environment setup."
 fi
 
 # Install additional requirements
 echo "🔧 Installing the application's core Python requirements..."
-pip install oyaml polyline qasync pyqtgraph timezonefinder git+https://github.com/hishizuka/crdp.git garminconnect stravacookies dbus-next bluez-peripheral tb-mqtt-client mmh3
+sudo apt install -y python3-venv
+# essential
+pip install oyaml polyline qasync pyqtgraph timezonefinder git+https://github.com/hishizuka/crdp.git
+# optional
+pip install garminconnect stravacookies dbus-next bluez-peripheral tb-mqtt-client mmh3
 echo "✅ Core Python dependencies installed successfully."
+
+if command -v raspi-config >/dev/null 2>&1; then
+    has_raspi_config=true
+else
+    has_raspi_config=false
+fi
 
 # Install Ant+ packages
 if [[ "$install_ant_plus" == "true" ]]; then
@@ -105,74 +115,88 @@ if [[ "$install_gps" == "true" ]]; then
     echo "🔧 Installing the GPS dependencies..."
     sudo apt install -y gpsd
     pip install gps3
-    sudo raspi-config nonint do_serial_cons 1
-    sudo raspi-config nonint do_serial_hw 0
+    if [[ "$has_raspi_config" == "true" ]]; then
+        sudo raspi-config nonint do_serial_cons 1
+        sudo raspi-config nonint do_serial_hw 0
+    fi
     sudo systemctl enable gpsd
     sudo systemctl enable gpsd.socket
     #sudo systemctl start gpsd
     echo "✅ GPS dependencies installed successfully."
 fi
 
-if [[ "$enable_pigpio" == "true" ]]; then
-  echo "🔧 Installing the GPIO dependencies..."
-  #apt install -y python3-pigpio
-  sudo systemctl enable pigpiod
-  #sudo systemctl start pigpiod
-  echo "ℹ️ python3-pigpio installed, enabled and started successfully."
-  echo "✅ GPIO dependencies installed successfully."
-fi
-
-
 if [[ "$enable_i2c" == "true" ]]; then
-  # Enable I2C on Raspberry Pi
-  echo "🔧 Enabling i2c on Raspberry Pi..."
-  sudo raspi-config nonint do_i2c 0
-  # add pi to i2c if not already a member
-  #if ! groups $USER | grep -qw i2c; then
-  #  sudo adduser $USER i2c
-  #fi
-  echo "✅ I2C enabled successfully"
+    # Enable I2C on Raspberry Pi
+    echo "🔧 Enabling i2c on Raspberry Pi..."
+    if [[ "$has_raspi_config" == "true" ]]; then
+        sudo raspi-config nonint do_i2c 0
+    fi
+    # add pi to i2c if not already a member
+    #if ! groups $USER | grep -qw i2c; then
+    #  sudo adduser $USER i2c
+    #fi
+    echo "✅ I2C enabled successfully"
 fi
 
 if [[ "$enable_spi" == "true" ]]; then
-  # Enable SPI on Raspberry Pi
-  echo "🔧 Enabling spi on Raspberry Pi..."
-  sudo raspi-config nonint do_spi 0
-  # add pi to i2c if not already a member
-  #if ! groups $USER | grep -qw spi; then
-  #  sudo adduser $USER spi
-  #fi
-  echo "✅ SPI enabled successfully"
+    # Enable SPI on Raspberry Pi
+    echo "🔧 Enabling spi on Raspberry Pi..."
+    if [[ "$has_raspi_config" == "true" ]]; then
+        sudo raspi-config nonint do_spi 0
+    fi
+    # add pi to i2c if not already a member
+    #if ! groups $USER | grep -qw spi; then
+    #  sudo adduser $USER spi
+    #fi
+    
+    sudo systemctl enable pigpiod
+    echo "ℹ️ pigpio enabled  successfully."
+
+    echo "✅ SPI enabled successfully"
+
 fi
 
 BOOT_CONFIG_FILE="/boot/firmware/config.txt"
 
-AUDIO_PARAM="dtparam=audio=on"
-# Disable audio on Raspberry Pi
-echo "🔧 Disabling the Raspberry Pi audio..."
-if grep -q "^[^#]*$AUDIO_PARAM" "$BOOT_CONFIG_FILE"; then
-  sudo sed -i "/^[^#]*$AUDIO_PARAM/s/^/#/" "$BOOT_CONFIG_FILE"
-else
-  echo "ℹ️ Audio is already disabled or line is commented out."
+if [ -f "$BOOT_CONFIG_FILE" ]; then
+    AUDIO_PARAM="dtparam=audio=on"
+    # Disable audio on Raspberry Pi
+    echo "🔧 Disabling the Raspberry Pi audio..."
+    if grep -q "^[^#]*$AUDIO_PARAM" "$BOOT_CONFIG_FILE"; then
+        sudo sed -i "/^[^#]*$AUDIO_PARAM/s/^/#/" "$BOOT_CONFIG_FILE"
+    else
+        echo "ℹ️ Audio is already disabled or line is commented out."
+    fi
+    echo "✅ Audio disabled successfully in $BOOT_CONFIG_FILE (or already disabled)"
 fi
-echo "✅ Audio disabled successfully in $BOOT_CONFIG_FILE (or already disabled)"
 
 # Disable camera on Raspberry Pi
-echo "🔧 Disabling the Raspberry Pi camera..."
-sudo raspi-config nonint do_camera 1
-
+if [[ "$has_raspi_config" == "true" ]]; then
+    echo "🔧 Disabling the Raspberry Pi camera..."
+    sudo raspi-config nonint do_camera 1
+fi
 
 echo "🔧 Starting pizero_bikecomputer.py in headless mode for verification..."
-#git clone https://github.com/hishizuka/pizero_bikecomputer.git
-cd ~/pizero_bikecomputer
+pgm_dir=~/pizero_bikecomputer
+if [ ! -d "$pgm_dir" ]; then
+    git clone https://github.com/hishizuka/pizero_bikecomputer.git
+fi
+
+cd "$pgm_dir"
 
 # Create a named pipe (FIFO) to monitor output
-PIPE=$(mktemp -u)
-mkfifo "$PIPE"
+OUT_PIPE=$(mktemp -u)
+mkfifo "$OUT_PIPE"
+
+cleanup() {
+    rm -f "$OUT_PIPE"
+    kill "$APP_PID" 2>/dev/null || true
+}
+trap cleanup EXIT
 
 # Start the app and tee its output to both screen and PIPE
 export QT_QPA_PLATFORM=offscreen
-stdbuf -oL python3 pizero_bikecomputer.py 2>&1 | tee "$PIPE" &
+stdbuf -oL python3 pizero_bikecomputer.py 2>&1 | tee "$OUT_PIPE" &
 APP_PID=$!
 
 # Monitor the output for readiness
@@ -182,23 +206,17 @@ while IFS= read -r line; do
         echo "ℹ️ 'Drawing components:' detected. Waiting 10s..."
         ready=1
     fi
-
     if [[ $ready -eq 1 && "$line" == *"total :"* ]]; then
         sleep 10
-        #echo "q\n" > "$INPUT_PIPE"
         break
     fi
-done < "$PIPE"
+done < "$OUT_PIPE"
 
 # Check if app is still running
 if ps -p $APP_PID > /dev/null; then
     echo "✅ Application started successfully (PID $APP_PID)."
-    rm -f "$PIPE"
-    #rm -f "$INPUT_PIPE"
 else
     echo "❌ Application did not start correctly. Check logs or errors."
-    rm -f "$PIPE"
-    #rm -f "$INPUT_PIPE"
     exit 1
 fi
 
