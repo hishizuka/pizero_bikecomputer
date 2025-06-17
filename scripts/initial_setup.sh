@@ -60,6 +60,7 @@ if [[ "$setup_python_venv" == "true" ]]; then
 fi
 prompt_and_store "Install ANT+ dependencies?" install_ant_plus
 prompt_and_store "Install GPS dependencies?" install_gps
+prompt_and_store "Install Bluetooth packages?" install_bluetooth
 prompt_and_store "Enable I2C?" enable_i2c
 prompt_and_store "Enable SPI?" enable_spi
 set -e
@@ -68,7 +69,7 @@ set -e
 sudo apt update
 sudo apt upgrade -y
 
-sudo apt install -y python3-venv git python3-yaml cython3 cmake python3-numpy sqlite3 libsqlite3-dev python3-pil python3-aiohttp python3-aiofiles python3-psutil python3-pyqt6 python3-pyqt6.qtsvg pyqt6-dev-tools bluez-obexd
+sudo apt install -y git python3-venv python3-yaml cython3 cmake python3-numpy sqlite3 libsqlite3-dev python3-pil python3-aiohttp python3-aiofiles python3-psutil python3-pyqt6 python3-pyqt6.qtsvg pyqt6-dev-tools
 echo "✅ .deb packages installed."
 
 cd
@@ -91,9 +92,7 @@ fi
 echo "🔧 Installing the application's core Python requirements..."
 sudo apt install -y python3-venv
 # essential
-pip install oyaml polyline qasync pyqtgraph timezonefinder git+https://github.com/hishizuka/crdp.git
-# optional
-pip install garminconnect stravacookies dbus-next bluez-peripheral tb-mqtt-client mmh3
+pip install oyaml polyline qasync pyqtgraph git+https://github.com/hishizuka/crdp.git
 echo "✅ Core Python dependencies installed successfully."
 
 if command -v raspi-config >/dev/null 2>&1; then
@@ -102,7 +101,7 @@ else
     has_raspi_config=false
 fi
 
-# Install Ant+ packages
+# Install ANT+ packages
 if [[ "$install_ant_plus" == "true" ]]; then
     echo "🔧 Installing the ANT+ dependencies..."
     sudo apt install -y python3-pip libusb-1.0-0 python3-usb
@@ -111,10 +110,11 @@ if [[ "$install_ant_plus" == "true" ]]; then
     echo "✅ ANT+ dependencies installed successfully."
 fi
 
+# Install GPS packages
 if [[ "$install_gps" == "true" ]]; then
     echo "🔧 Installing the GPS dependencies..."
     sudo apt install -y gpsd
-    pip install gps3
+    pip install gps3 timezonefinder
     if [[ "$has_raspi_config" == "true" ]]; then
         sudo raspi-config nonint do_serial_cons 1
         sudo raspi-config nonint do_serial_hw 0
@@ -125,7 +125,17 @@ if [[ "$install_gps" == "true" ]]; then
     echo "✅ GPS dependencies installed successfully."
 fi
 
+# Install Bluetooth packages
+if [[ "$install_bluetooth" == "true" ]]; then
+    echo "🔧 Installing the Bluetooth dependencies..."
+    sudo apt install -y bluez-obexd
+    pip install garminconnect stravacookies dbus-next bluez-peripheral tb-mqtt-client mmh3 timezonefinder
+    echo "✅ Bluetooth dependencies installed successfully."
+fi
+
+# Enable SPI
 if [[ "$enable_i2c" == "true" ]]; then
+    pip install magnetic-field-calculator
     # Enable I2C on Raspberry Pi
     echo "🔧 Enabling i2c on Raspberry Pi..."
     if [[ "$has_raspi_config" == "true" ]]; then
@@ -138,6 +148,7 @@ if [[ "$enable_i2c" == "true" ]]; then
     echo "✅ I2C enabled successfully"
 fi
 
+# Enable SPI
 if [[ "$enable_spi" == "true" ]]; then
     # Enable SPI on Raspberry Pi
     echo "🔧 Enabling spi on Raspberry Pi..."
@@ -153,11 +164,11 @@ if [[ "$enable_spi" == "true" ]]; then
     echo "ℹ️ pigpio enabled  successfully."
 
     echo "✅ SPI enabled successfully"
-
 fi
 
 BOOT_CONFIG_FILE="/boot/firmware/config.txt"
 
+# Disable audio on Raspberry Pi
 if [ -f "$BOOT_CONFIG_FILE" ]; then
     AUDIO_PARAM="dtparam=audio=on"
     # Disable audio on Raspberry Pi
@@ -220,9 +231,13 @@ else
     exit 1
 fi
 
-cd
 echo "✅ Startup test completed successfully."
 echo "✅ Pi Zero Bike Computer initial setup completed successfully! Now rebooting"
+
+# Install GPS service configuration
+if [[ "$install_gps" == "true" ]]; then
+    sudo cp scripts/install/etc/default/gpsd /etc/default/gpsd
+fi
 
 sudo reboot
 
