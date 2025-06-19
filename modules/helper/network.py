@@ -1,5 +1,4 @@
 import os
-import subprocess
 import time
 import shutil
 import asyncio
@@ -416,40 +415,27 @@ class Network:
         status = check_bnep0()
         app_logger.info(f"[BT] disconnect, bnep0_status={status}, {f_name=}")
         return not status
+    
+    async def wifi_connect_with_wps(self):
+        if not self.config.G_IS_RASPI:
+            return False
 
-    def wifi_connect_with_wps(self):
         app_logger.info(f"Wifi connect with WPS")
-        try:
-            # Start the wpa_cli process
-            print("Starting WPS push-button connection...")
-            result = subprocess.run(['sudo', 'wpa_cli', 'wps_pbc'],
-                                    stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE,
-                                    text=True)
+        # Start the wpa_cli process
+        res, err = exec_cmd_return_value(['sudo', 'wpa_cli', 'wps_pbc'], cmd_print=True)
 
-            print("Command output:\n", result.stdout)
-            if result.returncode != 0:
-                print("Error:\n", result.stderr)
-                return False
+        # Wait for connection (may take up to 30 seconds)
+        self.config.gui.change_dialog(
+            title="Wait for connection.", button_label="OK"
+        )
+        await asyncio.sleep(15)
 
-            # Wait for connection (may take up to 30 seconds)
-            print("Waiting for connection...")
-            time.sleep(15)
+        # Check connection status
+        res, err = exec_cmd_return_value(['sudo', 'wpa_cli', 'status'], cmd_print=True)
 
-            # Check connection status
-            status = subprocess.run(['sudo', 'wpa_cli', 'status'],
-                                    stdout=subprocess.PIPE,
-                                    text=True).stdout
-
-            if "wpa_state=COMPLETED" in status:
-                print("Connected successfully!")
-                return True
-            else:
-                print("Failed to connect. Status:\n", status)
-                return False
-
-        except Exception as e:
-            print(f"An error occurred: {e}")
+        if "wpa_state=COMPLETED" in res:
+            return True
+        else:
             return False
     
     def get_wifi_bt_status(self):
