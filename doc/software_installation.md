@@ -43,20 +43,20 @@ Assume Python version 3 environment. Version 2 is not supported.
 
 ## macOS or Linux
 
-Please build a python virtual environment since the pip3 command is used.
+Please build a python virtual environment since the pip command is used.
 
 ```
 # mac
 $ brew install pyqt numpy cython python-setuptools pillow sqlite3
-$ pip3 install pyqtgraph oyaml polyline aiohttp aiofiles qasync
+$ pip install pyqtgraph oyaml polyline aiohttp aiofiles qasync
 # or linux (Debian)
-$ pip3 install PyQt6 numpy cython setuptools pillow pyqtgraph oyaml polyline aiohttp aiofiles qasync
+$ pip install PyQt6 numpy cython setuptools pillow pyqtgraph oyaml polyline aiohttp aiofiles qasync
 $ sudo apt install sqlite3 libsqlite3-dev
 
-$ pip3 install git+https://github.com/hishizuka/crdp.git
+$ pip install git+https://github.com/hishizuka/crdp.git
 
 # (optional) If you want to try the upload to cloud feature.
-$ pip3 garminconnect stravacookies tb-mqtt-client
+$ pip garminconnect stravacookies tb-mqtt-client
 
 $ git clone https://github.com/hishizuka/pizero_bikecomputer.git
 $ cd pizero_bikecomputer
@@ -123,7 +123,7 @@ Assume Serial interface is on and login shell is off in raspi-config and GPS dev
 
 ```
 $ sudo apt install gpsd gpsd-clients
-$ sudo pip3 install gps3 timezonefinder 
+$ pip install gps3 timezonefinder 
 $ sudo cp install/etc/default/gpsd /etc/default/gpsd
 $ sudo systemctl enable gpsd
 ```
@@ -135,7 +135,7 @@ Check with `cgps` or `gpsmon` command.
 Assume I2C interface is on in raspi-config.
 
 ```
-$ sudo pip3 install timezonefinder pa1010d
+$ pip install timezonefinder pa1010d
 ```
 
 Check with [pa1010d example program](https://github.com/pimoroni/pa1010d-python/blob/master/examples/latlon.py)
@@ -144,8 +144,8 @@ Check with [pa1010d example program](https://github.com/pimoroni/pa1010d-python/
 ### ANT+ USB dongle
 
 ```
-$ sudo apt install libusb-1.0-0 python3-usb
-$ sudo pip3 install git+https://github.com/hishizuka/openant.git
+$ sudo apt install libusb-1.0-0 python3-usb python3-pip
+# sudo pip3 install git+https://github.com/hishizuka/openant.git --break-system-packages
 ```
  
 
@@ -166,7 +166,7 @@ $ sudo systemctl start pigpiod
 #### Display HAT Mini, Pirate Audio
 
 ```
-$ sudo pip3 install st7789
+$ pip install st7789
 ```
 
 #### PiTFT 2.4
@@ -194,7 +194,7 @@ Install pip packages of the sensors you own.
 
 Here is an example.
 ```
-$ sudo pip3 install adafruit-circuitpython-bmp280
+$ pip install adafruit-circuitpython-bmp280
 ```
 
 | Manufacturer+Sensor | Product | Recommend | additional pip package |
@@ -264,7 +264,7 @@ Also, place the header files in LD_INCLUDE_PATH (/usr/local/include, etc.).
 If you want to get a more accurate direction with the geomagnetic sensor, install a package that corrects the geomagnetic declination.
 
 ```
-$ sudo pip3 install magnetic-field-calculator
+$ pip install magnetic-field-calculator
 ```
 
 #### Button SHIM
@@ -616,7 +616,7 @@ Right side
   - Specify the device to use for bluetooth tethering.
 - Live Track
   - Enable real-time data upload to the [ThingsBoard](https://thingsboard.io) dashboard.
-  - `tb-mqtt-client` package, which can be installed with the `pip3` command, is required.
+  - `tb-mqtt-client` package, which can be installed with the `pip` command, is required.
   - Also, thingsboard device access token is required in [THINGSBOARD_API](#thingsboard_api-section) of setting.conf.
   - You will also need to upload and set up a dashboard.　For more details of Thingboard setup, see [thingsboard_setup.md](./thingsboard_setup.md).
 
@@ -698,7 +698,7 @@ If ANT+ powermeter is available, set both parameters are used in W'balance (%). 
   - Show IP address. This can be used for ssh access while tethering a smartphone.
 - GadgetBridge
   - Recieve notifications and GPS location from a smartphone. Install [GadgetBridge](https://gadgetbridge.org) Android app and toggle on.
-  - `dbus-next` and `bluez-peripheral` packages, which can be installed with the `pip3` command, is required.
+  - `dbus-next` and `bluez-peripheral` packages, which can be installed with the `pip` command, is required.
   - GadgetBridge app settings
     - Enable all permissions.
     - `Settings` > `Discovery and Pairing options` > `Ignore bonded devices`: Off, `CompanionDevice Pairing`: On, `Discover unsupported devices`: On, `Scanning intensity`: 2 or 3
