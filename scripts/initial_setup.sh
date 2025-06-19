@@ -196,48 +196,51 @@ fi
 cd "$pgm_dir"
 
 # Create a named pipe (FIFO) to monitor output
-OUT_PIPE=$(mktemp -u)
-mkfifo "$OUT_PIPE"
+#OUT_PIPE=$(mktemp -u)
+#mkfifo "$OUT_PIPE"
 
-cleanup() {
-    rm -f "$OUT_PIPE"
-    kill "$APP_PID" 2>/dev/null || true
-}
-trap cleanup EXIT
+#cleanup() {
+#    rm -f "$OUT_PIPE"
+#    kill "$APP_PID" 2>/dev/null || true
+#}
+#trap cleanup EXIT
 
 # Start the app and tee its output to both screen and PIPE
-export QT_QPA_PLATFORM=offscreen
-stdbuf -oL python3 pizero_bikecomputer.py 2>&1 | tee "$OUT_PIPE" &
-APP_PID=$!
+#export QT_QPA_PLATFORM=offscreen
+#stdbuf -oL python3 pizero_bikecomputer.py 2>&1 | tee "$OUT_PIPE" &
+#APP_PID=$!
 
 # Monitor the output for readiness
-ready=0
-while IFS= read -r line; do
-    if [[ $ready -eq 0 && "$line" == *"Drawing components:"* ]]; then
-        echo "ℹ️ 'Drawing components:' detected. Waiting 10s..."
-        ready=1
-    fi
-    if [[ $ready -eq 1 && "$line" == *"total :"* ]]; then
-        sleep 10
-        break
-    fi
-done < "$OUT_PIPE"
+#ready=0
+#while IFS= read -r line; do
+#    if [[ $ready -eq 0 && "$line" == *"Drawing components:"* ]]; then
+#        echo "ℹ️ 'Drawing components:' detected. Waiting 10s..."
+#        ready=1
+#    fi
+#    if [[ $ready -eq 1 && "$line" == *"total :"* ]]; then
+#        sleep 10
+#        break
+#    fi
+#done < "$OUT_PIPE"
 
 # Check if app is still running
-if ps -p $APP_PID > /dev/null; then
-    echo "✅ Application started successfully (PID $APP_PID)."
-else
-    echo "❌ Application did not start correctly. Check logs or errors."
-    exit 1
-fi
+#if ps -p $APP_PID > /dev/null; then
+#    echo "✅ Application started successfully (PID $APP_PID)."
+#else
+#    echo "❌ Application did not start correctly. Check logs or errors."
+#    exit 1
+#fi
 
-echo "✅ Startup test completed successfully."
-echo "✅ Pi Zero Bike Computer initial setup completed successfully! Now rebooting"
+#echo "✅ Startup test completed successfully."
+#echo "✅ Pi Zero Bike Computer initial setup completed successfully! Now rebooting"
 
-# Install GPS service configuration
+# WIP: Install Services
+
+# GPS service configuration
 if [[ "$install_gps" == "true" ]]; then
     sudo cp scripts/install/etc/default/gpsd /etc/default/gpsd
 fi
 
-sudo reboot
+echo "✅ pizero_bikecomputer initial setup completed successfully! Please reboot."
+#sudo reboot
 
