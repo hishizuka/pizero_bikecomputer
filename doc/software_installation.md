@@ -50,7 +50,7 @@ Please build a python virtual environment since the pip3 command is used.
 $ brew install pyqt numpy cython python-setuptools pillow sqlite3
 $ pip3 install pyqtgraph oyaml polyline aiohttp aiofiles qasync
 # or linux (Debian)
-$ pip3 install PyQt6 numpy cython setuptools pillow
+$ pip3 install PyQt6 numpy cython setuptools pillow pyqtgraph oyaml polyline aiohttp aiofiles qasync
 $ sudo apt install sqlite3 libsqlite3-dev
 
 $ pip3 install git+https://github.com/hishizuka/crdp.git
