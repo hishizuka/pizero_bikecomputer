@@ -90,7 +90,6 @@ fi
 
 # Install additional requirements
 echo "🔧 Installing the application's core Python requirements..."
-sudo apt install -y python3-venv
 # essential
 pip install oyaml polyline qasync pyqtgraph git+https://github.com/hishizuka/crdp.git
 echo "✅ Core Python dependencies installed successfully."
