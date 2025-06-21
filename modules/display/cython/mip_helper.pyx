@@ -82,7 +82,3 @@ cpdef conv_3bit_color(cnp.uint8_t[:,:,::1] im_array):
     t_index = not t_index
 
   return im_bits
-
-
-
-

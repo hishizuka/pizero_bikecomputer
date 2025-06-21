@@ -14,11 +14,11 @@ https://github.com/hishizuka/pizero_bikecomputer
   - `MIP_Azumo_color_272x451` (WIP)
   - `MIP_Sharp_mono_400x240`
   - `MIP_Sharp_mono_320x240`
-- 2024/6/21 Vertical layouts is avaiable. Set from the initial display resolution at startup. If you want to try it in a desktop environment, change `DEFAULT_RESOLUTION` in `modules/display/display_core.py`. For individual hardware displays, specify the appropriate value.
+- 2024/6/21 Vertical layouts is available. Set from the initial display resolution at startup. If you want to try it in a desktop environment, change `DEFAULT_RESOLUTION` in `modules/display/display_core.py`. For individual hardware displays, specify the appropriate value.
   - ![verticai-layout-01](https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/ac7f2000-68ec-4f89-a1f5-afd71aacd173) ![verticai-layout-02](https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/e4b67398-455c-40cd-80fd-f8ec05c155a0)
 
 ## Stargazers over time
-[![Stargazers over time](https://starchart.cc/hishizuka/pizero_bikecomputer.svg?variant=adaptive)](https://starchart.cc/hishizuka/pizero_bikecomputer)
+[![Stargazers over time](https://starchart.cc/hishizuka/pizero_bikecomputer.svg?variant=dark)](https://starchart.cc/hishizuka/pizero_bikecomputer)
 
 # Table of Contents
 

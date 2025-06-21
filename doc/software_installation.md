@@ -6,15 +6,17 @@
   - [macOS or Linux](#macOS-or-Linux)
   - [Raspberry Pi OS](#Raspberry-Pi-OS)
     - [common](#common)
+    - [Bluetooth and Cloud(Strava, Garmin and ThingsBoard)](#bluetooth-and-cloud)
     - [GPS module](#gps-module)
     - [ANT+ USB dongle](#ant-usb-dongle)
     - [Display](#display)
     - [I2C sensors](#i2c-sensors)
 - [Quick Start](#quick-start)
-  - [Run on X Window](#run-on-x-window)
-  - [Run on console](#run-on-console)
+  - [Run on Wayland / X Window](#run-on-wayland--x-window)
+  - [Run in console](#run-in-console)
     - [Manual execution](#manual-execution)
     - [Run as a service](#run-as-a-service)
+  - [Run with VNC](#run-with-vnc)
 - [Usage](#usage)
   - [Button](#button)
     - [Software button](#software-button)
@@ -41,42 +43,76 @@ Assume Python version 3 environment. Version 2 is not supported.
 
 ## macOS or Linux
 
-```
-$ git clone https://github.com/hishizuka/pizero_bikecomputer.git
-$ pip3 install PyQt5 numpy pyqtgraph cython setuptools oyaml pillow polyline aiohttp aiofiles qasync garminconnect stravacookies tb-mqtt-client
-$ pip3 install git+https://github.com/hishizuka/crdp.git
+Please build a python virtual environment since the pip command is used.
 
+```
 # mac
-$ brew install sqlite3
-# linux
+$ brew install pyqt numpy cython python-setuptools pillow sqlite3
+$ pip install pyqtgraph oyaml polyline aiohttp aiofiles qasync
+# or linux (Debian)
+$ pip install PyQt6 numpy cython setuptools pillow pyqtgraph oyaml polyline aiohttp aiofiles qasync
 $ sudo apt install sqlite3 libsqlite3-dev
 
+$ pip install git+https://github.com/hishizuka/crdp.git
+
+# (optional) If you want to try the upload to cloud feature.
+$ pip garminconnect stravacookies tb-mqtt-client
+
+$ git clone https://github.com/hishizuka/pizero_bikecomputer.git
 $ cd pizero_bikecomputer
 ```
 
-Note:
-Pyqt version 5.15.0 in macOS has [a qpushbutton issue](https://bugreports.qt.io/browse/QTBUG-84852), so installing newest version(5.15.1~) is recommended.
-
 ## Raspberry Pi OS
 
-Raspberry Pi OS (32-bit) with desktop is recommended.
+The program works with any Raspberry Pi OS [32-bit/64-bit] * [Lite/desktop].
 
-The program works with Raspberry Pi OS (32-bit) Lite, but missing libraries will need to be installed. Especially installing python3-pyqt5 with `apt` command will also installs massive libraries of desktop software, so building PyQt5 package is recommended.
+Execute the following commands on the Raspberry Pi immediately after installation with the Internet connection.
 
+```
+$ /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/hishizuka/pizero_bikecomputer/refs/heads/master/install.sh)"
+```
+
+This command will install following ranges and you can at a minimum run the program without sensors.
+
+- [Common](#common)
+- [Bluetooth and Cloud](#bluetooth-and-cloud)
+- [GPS module / UART GPS](#uart-gps)
+- [ANT+ USB dongle](#ant-usb-dongle)
+- [Display / JDI & SHARP display](#jdi--sharp-display).
+
+After executing the command, reboot and resume from [Quick Start](#quick-start).
+Or, if you want to use a specific display/sensor, please read the following sections carefully.
+
+The following are the steps for manual installation.
 Here is [my setup guide in Japanese](https://qiita.com/hishi/items/8bdfd9d72fa8fe2e7573).
 
 ### Common
 
 Install in the home directory of default user "pi". Also, your Raspberry Pi is connected to internet and updated with `apt update & apt upgrade`.
 
-
 ```
 $ cd
+
+$ sudo apt install -y git python3-venv python3-yaml cython3 cmake python3-numpy sqlite3 libsqlite3-dev python3-pil python3-aiohttp python3-aiofiles python3-psutil python3-pyqt6 python3-pyqt6.qtsvg pyqt6-dev-tools
+
+# If there is no python virtual environment.
+$ python -m venv --system-site-packages ~/.env
+$ source ~/.env/bin/activate
+$ echo "source ~/.env/bin/activate" >> ~/.bashrc
+
+$ pip install oyaml polyline qasync pyqtgraph git+https://github.com/hishizuka/crdp.git
+
 $ git clone https://github.com/hishizuka/pizero_bikecomputer.git
-$ sudo apt install python3-pip cython3 cmake python3-numpy python3-pyqt5 python3-pyqtgraph sqlite3 libsqlite3-dev libatlas-base-dev python3-aiohttp python3-aiofiles python3-smbus python3-rpi.gpio python3-psutil python3-pil bluez-obexd dbus-x11
-$ sudo pip3 install oyaml sip polyline garminconnect stravacookies qasync dbus-next bluez-peripheral tb-mqtt-client timezonefinder
-$ sudo pip3 install git+https://github.com/hishizuka/crdp.git
 $ cd pizero_bikecomputer
+```
+
+### Bluetooth and Cloud
+
+Strava, Garmin and ThingsBoard
+
+```
+$ sudo apt install -y bluez-obexd
+$ pip install garminconnect stravacookies dbus-next bluez-peripheral tb-mqtt-client mmh3 timezonefinder
 ```
 
 ### GPS module
@@ -87,19 +123,19 @@ Assume Serial interface is on and login shell is off in raspi-config and GPS dev
 
 ```
 $ sudo apt install gpsd gpsd-clients
-$ sudo pip3 install gps3 timezonefinder 
+$ pip install gps3 timezonefinder 
 $ sudo cp install/etc/default/gpsd /etc/default/gpsd
 $ sudo systemctl enable gpsd
 ```
 
 Check with `cgps` or `gpsmon` command.
 
-#### I2C GPS
+#### I2C GPS (obsoleted)
 
 Assume I2C interface is on in raspi-config.
 
 ```
-$ sudo pip3 install timezonefinder pa1010d
+$ pip install timezonefinder pa1010d
 ```
 
 Check with [pa1010d example program](https://github.com/pimoroni/pa1010d-python/blob/master/examples/latlon.py)
@@ -108,8 +144,8 @@ Check with [pa1010d example program](https://github.com/pimoroni/pa1010d-python/
 ### ANT+ USB dongle
 
 ```
-$ sudo apt install libusb-1.0-0 python3-usb
-$ sudo pip3 install git+https://github.com/hishizuka/openant.git
+$ sudo apt install libusb-1.0-0 python3-usb python3-pip
+# sudo pip3 install git+https://github.com/hishizuka/openant.git --break-system-packages
 ```
  
 
@@ -117,9 +153,9 @@ $ sudo pip3 install git+https://github.com/hishizuka/openant.git
 
 Assume SPI interface is on in raspi-config.
 
-#### MIP Reflective color LCD module and Adafruit SHARP Memory Display Breakout
+#### JDI & SHARP MIP display
 
-You can use python3-pyqt5 package. Don't need building Qt.
+For JDI MIP Reflective color LCD module and Adafruit SHARP Memory Display Breakout.
 
 ```
 $ sudo apt install python3-pigpio
@@ -130,7 +166,7 @@ $ sudo systemctl start pigpiod
 #### Display HAT Mini, Pirate Audio
 
 ```
-$ sudo pip3 install st7789
+$ pip install st7789
 ```
 
 #### PiTFT 2.4
@@ -138,8 +174,6 @@ $ sudo pip3 install st7789
 see [hardware_installation_pitft.md](./hardware_installation_pitft.md#display)
 
 #### E-ink Displays
-
-You can use python3-pyqt5 package too.
 
 ##### PaPiRus ePaper / eInk Screen HAT for Raspberry Pi
 
@@ -160,7 +194,7 @@ Install pip packages of the sensors you own.
 
 Here is an example.
 ```
-$ sudo pip3 install adafruit-circuitpython-bmp280
+$ pip install adafruit-circuitpython-bmp280
 ```
 
 | Manufacturer+Sensor | Product | Recommend | additional pip package |
@@ -230,7 +264,7 @@ Also, place the header files in LD_INCLUDE_PATH (/usr/local/include, etc.).
 If you want to get a more accurate direction with the geomagnetic sensor, install a package that corrects the geomagnetic declination.
 
 ```
-$ sudo pip3 install magnetic-field-calculator
+$ pip install magnetic-field-calculator
 ```
 
 #### Button SHIM
@@ -254,7 +288,7 @@ Follow [official setup guide](https://github.com/PiSupply/PiJuice/tree/master/So
 
 If cython is available, it will take a few minutes to run for the first time to compile the program.
 
-## Run on X Window
+## Run on Wayland / X Window
 
 If you use Raspberry Pi OS with desktop, starting on X Window (or using VNC) at first would be better.
 
@@ -268,17 +302,21 @@ If you use MIP Reflective color LCD module, SHARP Memory Display or E-Ink displa
 
 see [hardware_installation_pitft.md](./hardware_installation_pitft.md#run-on-x-window)
 
-## Run on console
+## Run in console
 
 ### Manual execution
 
-#### MIP Reflective color LCD module, SHARP Memory Display or E-Ink displays
+#### JDI & SHARP MIP display
+
+For JDI MIP Reflective color LCD module and Adafruit SHARP Memory Display Breakout.
 
 Before run the program, add the following environment variable.
 
 ```
 $ QT_QPA_PLATFORM=offscreen python3 pizero_bikecomputer.py
 ```
+
+`cntl + C` to exit the application.
 
 #### PiTFT
 
@@ -316,6 +354,20 @@ The output of the log file will be in "/home/pi/pizero_bikecomputer/log/debug.tx
 $ sudo systemctl start pizero_bikecomputer.service
 ```
 
+## Run with VNC
+
+Do not enable VNC in raspi-config if you want to access pizero_bikecomputer.
+The software has an inbuilt VNC server that allows you to access the program without needing to enable VNC in raspi-config.
+
+```
+$ QT_QPA_PLATFORM=vnc python3 pizero_bikecomputer.py
+```
+
+Access from the vnc viewer in your environment.
+
+- Windows: RealVNC
+- Linux: RealVNC, TigerVNC, Tight VNC
+- macOS: Finder (`Cmd + K`)
 
 # Usage
 
@@ -564,7 +616,7 @@ Right side
   - Specify the device to use for bluetooth tethering.
 - Live Track
   - Enable real-time data upload to the [ThingsBoard](https://thingsboard.io) dashboard.
-  - `tb-mqtt-client` package, which can be installed with the `pip3` command, is required.
+  - `tb-mqtt-client` package, which can be installed with the `pip` command, is required.
   - Also, thingsboard device access token is required in [THINGSBOARD_API](#thingsboard_api-section) of setting.conf.
   - You will also need to upload and set up a dashboard.　For more details of Thingboard setup, see [thingsboard_setup.md](./thingsboard_setup.md).
 
@@ -646,7 +698,7 @@ If ANT+ powermeter is available, set both parameters are used in W'balance (%). 
   - Show IP address. This can be used for ssh access while tethering a smartphone.
 - GadgetBridge
   - Recieve notifications and GPS location from a smartphone. Install [GadgetBridge](https://gadgetbridge.org) Android app and toggle on.
-  - `dbus-next` and `bluez-peripheral` packages, which can be installed with the `pip3` command, is required.
+  - `dbus-next` and `bluez-peripheral` packages, which can be installed with the `pip` command, is required.
   - GadgetBridge app settings
     - Enable all permissions.
     - `Settings` > `Discovery and Pairing options` > `Ignore bonded devices`: Off, `CompanionDevice Pairing`: On, `Discover unsupported devices`: On, `Scanning intensity`: 2 or 3
