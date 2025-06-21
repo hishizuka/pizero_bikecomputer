@@ -9,6 +9,7 @@
 /courses/*html*
 /fonts/*
 /.idea/
+*.iml
 /.vscode/
 /.venv/
 __pycache__/
