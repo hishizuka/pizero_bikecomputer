@@ -52,7 +52,7 @@ def make_ext(modname, pyxfilename):
             extra_link_args.extend(i2c_sensors[s]['extra_lib'])
             define_macros.append(i2c_sensors[s]['macro'])
     if len(sources) > 0:
-        sources = [pyxfilename, 'i2c_common.c'] + sources
+        sources = [pyxfilename, 'common.c'] + sources
     else:
         return None
 

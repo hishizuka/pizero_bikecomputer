@@ -10,12 +10,12 @@ extern "C" {
 
 #ifdef USE_BMM150
 
-#include "i2c_common.h"
+#include "common.h"
 
 #include "bmm150.h"
 
 #define I2C_DEVICE "/dev/i2c-1"
-#define I2C_BUS 1
+//#define I2C_BUS 1
 #define BMM150_I2C_ADDR 0x13
 
 int8_t i2c_bmm150_init();
