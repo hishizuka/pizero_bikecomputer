@@ -1,0 +1,24 @@
+This project includes code adapted from an Apache License 2.0 project.
+
+Portions of the code in the following files are
+adapted from code originally developed by Azumo (Copyright 2024)
+and licensed under the Apache License, Version 2.0:
+
+- modules/display/mip_display_base.py
+- modules/display/cython/mip_display.cpp
+
+The full text of the Apache License 2.0 is available at:
+third_party/apache/LICENSE.Apache2
+
+---
+
+This project also includes code adapted from a BSD 3-Clause licensed project.
+
+Portions of the code in the following file are
+adapted from code originally developed by Bosch Sensortec GmbH (Copyright 2025)
+and licensed under the BSD 3-Clause License:
+
+- modules/sensor/i2c/cython/bhi360_shuttle_board_3/common.c
+- modules/sensor/i2c/cython/bhi360_shuttle_board_3/common.h
+
+The full text of the BSD 3-Clause License is available at the top of the source file.

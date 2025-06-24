@@ -6,16 +6,18 @@ An open-source bike computer based on  Raspberry Pi Zero (W, WH, 2 W) with GPS a
 https://github.com/hishizuka/pizero_bikecomputer
 
 # News
+- 2025/6/24 Now major packages can now be installed with a 1-line command.
+  - `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/hishizuka/pizero_bikecomputer/refs/heads/master/install.sh)"`
+- 2025/6/24 The pins used for SPI in the MIP display were changed to match SPI0.
+- 2025/6/24 Add support [BOSCH BHI360](https://www.bosch-sensortec.com/products/smart-sensor-systems/bhi360/)
 - 2025/3/17 PCBs are under development.
   - <img width="320" alt="4inch-01" src="https://github.com/user-attachments/assets/d31f1cd3-5472-47b1-8995-1efe8fb5ef97" /> <img width="320" alt="4inch-02" src="https://github.com/user-attachments/assets/87afa6c3-ba28-4dbc-970b-e3c7c9a55806" /> <img width="320" alt="4inch-03" src="https://github.com/user-attachments/assets/3b9528d5-9e02-437a-a13f-2607aac2f90d" />
 - 2024/6/21 Changed the value for `display` in `setting.conf` when using JDI/Sharp MIP LCD. See `modules/display/display_core.py` for setting values.
   - `MIP_JDI_color_400x240`
   - `MIP_JDI_color_640x480`
-  - `MIP_Azumo_color_272x451` (WIP)
+  - `MIP_Azumo_color_272x451`
   - `MIP_Sharp_mono_400x240`
   - `MIP_Sharp_mono_320x240`
-- 2024/6/21 Vertical layouts is available. Set from the initial display resolution at startup. If you want to try it in a desktop environment, change `DEFAULT_RESOLUTION` in `modules/display/display_core.py`. For individual hardware displays, specify the appropriate value.
-  - ![verticai-layout-01](https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/ac7f2000-68ec-4f89-a1f5-afd71aacd173) ![verticai-layout-02](https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/e4b67398-455c-40cd-80fd-f8ec05c155a0)
 
 ## Stargazers over time
 [![Stargazers over time](https://starchart.cc/hishizuka/pizero_bikecomputer.svg?variant=dark)](https://starchart.cc/hishizuka/pizero_bikecomputer)
@@ -233,6 +235,16 @@ See [software_installation.md](/doc/software_installation.md).
 # License
 
 This repository is available under the [GNU General Public License v3.0](https://github.com/hishizuka/pizero_bikecomputer/blob/master/LICENSE)
+
+The code shown below is ported and modified from Azumo's code under the Apache License 2.0 (third_party/apache/LICENSE.Apache2). See the NOTICE file for details.
+- modules/display/mip_display_base.py
+- modules/display/cython/mip_display.cpp
+
+This project also includes code ported and modified from Bosch Sensortec GmbH's code under the BSD 3-Clause License. See the NOTICE file for details.
+- [BHI360_SensorAPI](https://github.com/boschsensortec/BHI360_SensorAPI)
+  - modules/sensor/i2c/cython/bhi360_shuttle_board_3/common.c
+  - modules/sensor/i2c/cython/bhi360_shuttle_board_3/common.h
+
 
 # Author
 
