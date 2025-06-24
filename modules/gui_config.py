@@ -235,6 +235,7 @@ class GUI_Config:
             G_UNIT["Int"],
             "int(180/3.1415*self.sensor.values['I2C']['roll'])"
         ),
+        "Grade(pitch)": (G_UNIT["Percent"],"self.sensor.values['I2C']['grade_pitch']"),
         # General
         "Timer": (("timer", ""), "self.logger.values['count']"),
         "LapTime": (("timer", ""), "self.logger.values['count_lap']"),

@@ -1,0 +1,53 @@
+def make_ext(modname, pyxfilename):
+    from distutils.extension import Extension
+    import os
+    
+    i2c_sensors = {
+        'bhi3_s': {
+            'src': 'bhi3_s.c',
+            'lib': 'libbhi3.so',
+            'extra_lib': ['-lpigpiod_if2'],
+            'macro': [('USE_BHI3_S', '1'),],  # for SPI
+            #'macro': [('USE_BHI3_S', '1'), ('BHY_USE_I2C', '1')],  # for I2C
+        },
+    }
+    
+    base_path = os.getcwd()
+    include_dirs = ['modules/sensor/i2c/cython/bhi360_shuttle_board_3']
+    if base_path.endswith(include_dirs[0]):
+        base_path = '../../../../../'
+        include_dirs = ['.']
+    define_macros = [('NOUSE_MAIN', '1')]
+    extra_link_args = []
+    lib_paths = os.environ.get("LD_LIBRARY_PATH", "").split(":") + ["/usr/lib", "/usr/local/lib", include_dirs[0]]
+
+    def check_lib(lib, lib_paths):
+        for path in lib_paths:
+            if os.path.exists(os.path.join(path, lib)):
+                return True
+        return False
+    
+    sources = []
+    for s in i2c_sensors:
+        if check_lib(i2c_sensors[s]['lib'], lib_paths):
+            sources.append(i2c_sensors[s]['src'])
+            extra_link_args.append('-l' + os.path.splitext(i2c_sensors[s]['lib'])[0][3:])
+            extra_link_args.extend(i2c_sensors[s]['extra_lib'])
+            define_macros.extend(i2c_sensors[s]['macro'])
+    if len(sources) > 0:
+        sources = [pyxfilename, 'common.c'] + sources
+    else:
+        return None
+
+    ext = Extension(
+        name = modname,
+        sources=sources,
+        include_dirs=include_dirs,
+        extra_link_args=extra_link_args,
+        define_macros=define_macros,
+    )
+    return ext
+
+#for print
+def make_setup_args():
+    return dict(script_args=['--verbose'])

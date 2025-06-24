@@ -76,6 +76,7 @@ class SensorI2C(Sensor):
         "fixed_pitch",
         "fixed_roll",
         "modified_pitch",
+        "grade_pitch"
         "raw_heading",
         "heading",
         "heading_str",
@@ -96,6 +97,8 @@ class SensorI2C(Sensor):
         "gyro_mod",
         "gyro",
         "mag_raw",
+        "mag_center",
+        "mag_scale",
         "mag_mod",
         "mag",
         "quaternion",
@@ -155,24 +158,8 @@ class SensorI2C(Sensor):
             return
 
         if self.config.G_USE_PCB_PIZERO_BIKECOMPUTER:
-            if self.detect_pressure_bmp581():
-                self.available_sensors["PRESSURE"]["BMP581"] = True
-                self.sensor["i2c_baro_temp"] = self.sensor_bmp581
-            if self.detect_motion_bmi270():
-                self.available_sensors["MOTION"]["BMI270"] = True
-                self.motion_sensor["ACC"] = True
-                self.motion_sensor["GYRO"] = True
-                self.sensor["i2c_imu"] = self.sensor_bmi270
-            if self.detect_motion_bmm150():
-                self.available_sensors["MOTION"]["BMM150"] = True
-                self.motion_sensor["MAG"] = True
-                self.sensor_label["MAG"] = "BMM150"
-                self.sensor["i2c_mag"] = self.sensor_bmm150
-            if self.detect_motion_bmm350():
-                self.available_sensors["MOTION"]["BMM350"] = True
-                self.motion_sensor["MAG"] = True
-                self.sensor_label["MAG"] = "BMM350"
-                self.sensor["i2c_mag"] = self.sensor_bmm350
+            # BHI360 Shuttle Board 3.0
+            self.set_bhi360_s()
             if self.detect_light_vncl4040():
                 self.available_sensors["LIGHT"]["VCNL4040"] = True
                 self.sensor["lux"] = self.sensor_vcnl4040
@@ -196,9 +183,12 @@ class SensorI2C(Sensor):
                 self.values_mod[k] = self.config.state.get_value(
                     f"{k}_{self.sensor_label['MAG']}", None
                 )
+            if self.values_mod["mag_min"] is not None and self.values_mod["mag_max"] is not None:
+                self.calc_mag_scales()
         else:
             self.values_mod["mag_min"] = None
             self.values_mod["mag_max"] = None
+            self.raw_mags = []
 
         if not self.config.G_IMU_CALIB["PITCH_ROLL"]:
             for k in ("fixed_pitch", "fixed_roll"):
@@ -291,6 +281,7 @@ class SensorI2C(Sensor):
         self.available_sensors["MOTION"]["BMI270"] = self.detect_motion_bmi270()
         self.available_sensors["MOTION"]["BMM150"] = self.detect_motion_bmm150()
         self.available_sensors["MOTION"]["BMM350"] = self.detect_motion_bmm350()
+
         if self.available_sensors["MOTION"]["LSM303_ORIG"]:
             self.motion_sensor["ACC"] = True
             self.motion_sensor["MAG"] = True
@@ -360,15 +351,31 @@ class SensorI2C(Sensor):
         self.available_sensors["BATTERY"]["PIJUICE"] = self.detect_battery_pijuice()
         self.available_sensors["BATTERY"]["PISUGAR3"] = self.detect_battery_pisugar3()
 
+        # BHI360 Shuttle Board 3.0
+        self.set_bhi360_s()
+
         # print
         self.print_sensors()
 
     def print_sensors(self):
-        app_logger.info("detected I2c sensors:")
+        app_logger.info("detected I2C sensors:")
         for k in self.available_sensors.keys():
             for kk in self.available_sensors[k]:
                 if self.available_sensors[k][kk]:
                     app_logger.info(f"  {k}: {kk}")
+
+    def set_bhi360_s(self):
+        if self.detect_bhi360_s_c():
+            self.available_sensors["MOTION"]["BHI3_S"] = True
+            self.sensor["i2c_imu"] = self.sensor_bhi3_s
+            self.motion_sensor["ACC"] = True
+            self.available_sensors["PRESSURE"]["BHI3_S"] = True  # includes BMP581 and BME688
+            if (
+                not self.config.G_IMU_AXIS_SWAP_XY["STATUS"]
+                and self.config.G_IMU_AXIS_CONVERSION["STATUS"]
+                and list(self.config.G_IMU_AXIS_CONVERSION["COEF"]) == [1.0, -1.0, -1.0]
+            ):
+                self.bhi360_s_heading_corr = 90
 
     def set_sensors(self):
         # barometic pressure & temperature sensor
@@ -435,6 +442,9 @@ class SensorI2C(Sensor):
         # gas sensor
         if self.available_sensors["GAS"].get("SGP40"):
             self.sensor["gas"] = self.sensor_sgp40
+        
+        if self.available_sensors["MOTION"].get("BHI3_S"):
+            self.sensor["i2c_baro_temp"] = self.sensor_bhi3_s
 
     def reset(self):
         for key in self.elements:
@@ -498,12 +508,16 @@ class SensorI2C(Sensor):
         self.quit_status = True
         if self.available_sensors["BUTTON"].get("MCP23008", False):
             self.sensor_mcp23008.quit()
+        if self.config.G_IMU_CALIB["MAG"]:
+            np.savetxt('log/raw_mags.csv', self.raw_mags, delimiter=',', fmt='%.6f')
 
     async def update(self):
         # timestamp
         self.values["timestamp"] = datetime.now()
         self.timestamp_array[0:-1] = self.timestamp_array[1:]
         self.timestamp_array[-1] = self.values["timestamp"]
+
+        self.read_bhi3_s()
 
         self.read_acc()
         self.read_gyro()
@@ -518,6 +532,23 @@ class SensorI2C(Sensor):
         self.read_gas()
 
         self.read_battery()
+
+    def read_bhi3_s(self):
+        if not self.available_sensors["MOTION"].get("BHI3_S"):
+            return
+        
+        self.values["raw_heading"] = (
+            int(self.sensor["i2c_imu"].heading) - self.bhi360_s_heading_corr + self.config.G_IMU_MAG_DECLINATION
+            ) % 360
+        self.values["heading"] = self.values["raw_heading"]
+        self.values["heading_str"] = get_track_str(self.values["heading"])
+        
+        # WIP code
+        # pitch: the x-axis of acceleration and the sign are opposite.
+        # roll : same as acc y: to West (up rotation is plus)
+        self.values["pitch"] = math.radians(-1 * ((self.sensor["i2c_imu"].roll + 360) % 360 - 180))
+        self.values["roll"] = math.radians(self.sensor["i2c_imu"].pitch)
+        self.values["grade_pitch"] = 100 * math.tan(self.values["pitch"])
 
     def read_light(self):
         if not self.available_sensors["LIGHT"] and not self.available_sensors["UV"]:
@@ -617,7 +648,9 @@ class SensorI2C(Sensor):
             return
         try:
             # get raw acc (normalized by gravitational acceleration, g = 9.80665)
-            if (
+            if self.available_sensors["MOTION"].get("BHI3_S"):
+                self.values["acc_raw"] = np.array(self.sensor["i2c_imu"].acc)
+            elif (
                 self.available_sensors["MOTION"].get("LSM303_ORIG")
                 or self.available_sensors["MOTION"].get("BMI270")
             ):
@@ -646,7 +679,7 @@ class SensorI2C(Sensor):
         if return_raw:
             return
 
-        self.values["acc_mod"] = self.values["acc_raw"]
+        self.values["acc_mod"] = self.values["acc_raw"].copy()
         # LP filter
         # self.lp_filter('acc_mod', 4)
 
@@ -687,7 +720,7 @@ class SensorI2C(Sensor):
         self.gyro_average_array[:, -1] = self.values["gyro_raw"]
         #if self.do_position_calibration:
         #    self.values_mod["gyro_ave"] = np.nanmean(self.gyro_average_array, axis=1)
-        self.values["gyro_mod"] = self.values["gyro_raw"]# - self.values_mod["gyro_ave"]
+        self.values["gyro_mod"] = self.values["gyro_raw"].copy()  # - self.values_mod["gyro_ave"]
 
         # LP filter
         self.lp_filter("gyro_mod", 5)
@@ -736,7 +769,7 @@ class SensorI2C(Sensor):
             return
         self.values["mag_raw"] = self.change_axis(self.values["mag_raw"], is_mag=True)
 
-        self.values["mag_mod"] = self.values["mag_raw"]
+        self.values["mag_mod"] = self.values["mag_raw"].copy()
 
         # calibration(hard/soft iron distortion)
         if self.config.G_IMU_CALIB["MAG"]:
@@ -751,25 +784,22 @@ class SensorI2C(Sensor):
             self.values_mod["mag_max"] = np.maximum(pre_max, self.values["mag_mod"])
 
             # store
+            update_mag_min_max = False
             for pre, k in zip((pre_min, pre_max), ("mag_min", "mag_max")):
                 if np.any(pre != self.values_mod[k]):
+                    update_mag_min_max = True
                     self.config.state.set_value(
                         k + "_" + self.sensor_label["MAG"], self.values_mod[k]
                     )
                     app_logger.info(f"update {k}: {self.values_mod[k]}")
+            if update_mag_min_max:
+                self.calc_mag_scales()
+            self.raw_mags.append(list(self.values["mag_raw"]))
 
-        if self.values_mod["mag_min"] is not None and self.values_mod["mag_max"] is not None:
-            # hard iron distortion
-            self.values["mag_mod"] = (
-                self.values["mag_mod"]
-                - (self.values_mod["mag_min"] + self.values_mod["mag_max"]) / 2
-            )
-            # soft iron distortion
-            avg_delta = (self.values_mod["mag_max"] - self.values_mod["mag_min"]) / 2
-            avg_delta_all = np.sum(avg_delta) / 3
-            if not np.any(avg_delta == 0):
-                scale = avg_delta_all / avg_delta
-                self.values["mag_mod"] = self.values["mag_mod"] * scale
+        if all((all(self.values_mod["mag_min"]), all(self.values_mod["mag_max"]))):
+            # hard iron distortion: - self.values['mag_center']
+            # soft iron distortion: * self.values['mag_scale']
+            self.values["mag_mod"] = (self.values["mag_mod"] - self.values['mag_center']) * self.values['mag_scale']
 
         # LP filter
         # self.lp_filter('mag_mod', 4)
@@ -777,16 +807,11 @@ class SensorI2C(Sensor):
         # finalize mag
         self.values["mag"] = self.values["mag_mod"]
 
-        self.values["raw_heading"] = int(
-            math.degrees(
-                math.atan2(self.values['mag'][1], self.values['mag'][0])
-            )
-            - self.config.G_IMU_MAG_DECLINATION
-        )
-        if self.values["raw_heading"] < 0:
-            self.values["raw_heading"] += 360
-        elif self.values["raw_heading"] > 360:
-            self.values["raw_heading"] -= 360
+    def calc_mag_scales(self):
+        self.values['mag_center'] = (self.values_mod["mag_max"] + self.values_mod["mag_min"]) / 2
+        axis = (self.values_mod["mag_max"] - self.values_mod["mag_min"]) / 2
+        if not np.any(axis == 0):
+            self.values['mag_scale'] = np.mean(axis) / axis
 
     def read_quaternion(self):
         if not self.motion_sensor["QUATERNION"]:
@@ -838,7 +863,7 @@ class SensorI2C(Sensor):
             self.values["pitch"] = math.asin(sinp)
 
         self.values["yaw"] = math.atan2(1 - 2 * (y2 + z * z), 2 * (w * z + x * y))
-        self.calc_heading(self.values["yaw"])
+        self.values["yaw_for_heading"] = self.values["yaw"]
 
     def calc_pitch_roll_yaw_from_acc_mag(self):
         if not self.motion_sensor["ACC"] or not self.motion_sensor["MAG"]:
@@ -856,8 +881,6 @@ class SensorI2C(Sensor):
         )
 
     def calc_heading(self, yaw):
-        if np.isnan(yaw):
-            return
 
         # true north modification
         if (
@@ -881,8 +904,20 @@ class SensorI2C(Sensor):
                 except:
                     pass
 
+        if np.isnan(yaw):
+            if self.motion_sensor["MAG"]:
+                self.values["raw_heading"] = int(
+                    math.degrees(
+                        math.atan2(self.values['mag'][1], self.values['mag'][0])
+                    )
+                    + self.config.G_IMU_MAG_DECLINATION
+                ) % 360        
+                self.values["heading_str"] = get_track_str(self.values["raw_heading"])
+                self.values["heading"] = self.values["raw_heading"]
+            return
+
         # set heading with yaw
-        tilt_heading = yaw - math.radians(self.config.G_IMU_MAG_DECLINATION)
+        tilt_heading = yaw + math.radians(self.config.G_IMU_MAG_DECLINATION)
         if tilt_heading < 0:
             tilt_heading += 2 * math.pi
         elif tilt_heading > 2 * math.pi:
@@ -1092,9 +1127,11 @@ class SensorI2C(Sensor):
                 self.sensor["i2c_baro_temp"].temperature, 1
             )
             self.values["pressure_raw"] = self.sensor["i2c_baro_temp"].pressure
-            if "BME280" in sp and sp["BME280"]:
+            if sp.get("BME280"):
                 self.values["humidity"] = self.sensor["i2c_baro_temp"].relative_humidity
                 # discomfort_index = 0.81*self.values['temperature'] + 0.01*self.values['humidity']*(0.99*self.values['temperature']-14.3) + 46.3
+            elif sp.get("BHI3_S"):
+                self.values["humidity"] = self.sensor["i2c_baro_temp"].humidity
         except:
             return
 
@@ -1282,6 +1319,21 @@ class SensorI2C(Sensor):
             self.sensor_button_shim.set_pixel(0x00, 0x00, 0x00)
             await asyncio.sleep(0.5)
             t -= 1
+
+    def detect_bhi360_s_c(self):
+        try:
+            import pyximport
+            pyximport.install()
+            from .i2c.cython.bhi360_shuttle_board_3.bhi3_s_helper import BHI3_S
+
+            self.sensor_bhi3_s = BHI3_S(1)
+            if self.sensor_bhi3_s.status:
+                return True
+            else:
+                del(self.sensor_bhi3_s)
+                return False
+        except:
+            return False
 
     def detect_pressure_bmp280(self):
         try:
