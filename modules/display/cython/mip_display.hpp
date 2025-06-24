@@ -1,3 +1,6 @@
+#ifndef __MIP_DISPLAY
+#define __MIP_DISPLAY
+
 #include <unistd.h>
 #include <cstdint>
 #include <cstring>
@@ -13,11 +16,19 @@
 #include <pigpiod_if2.h>
 
 // GPIO.BCM
-#define GPIO_DISP 27  // 13 in GPIO.BOARD
-#define GPIO_SCS 23  // 16 in GPIO.BOARD
-#define GPIO_VCOMSEL 17  // 11 in GPIO.BOARD
-#define GPIO_BACKLIGHT 18  // 12 in GPIO.BOARD with hardware PWM in pigpio
-#define GPIO_BACKLIGHT_SWITCH 24  // 18 in GPIO.BOARD
+#ifdef NO_USE_SPI_CE0
+//#define GPIO_SCS 23  // 16pin
+//#define GPIO_DISP 27  // 13pin
+//#define GPIO_VCOMSEL 17  // 11pin
+#define GPIO_SCS 8
+#define GPIO_DISP 25  // 22pin
+#define GPIO_VCOMSEL 24  // 18pin
+#else
+#define GPIO_DISP 25  // 22pin
+#define GPIO_VCOMSEL 24  // 18pin
+#endif
+#define GPIO_BACKLIGHT 18  // 12pin with hardware PWM in pigpio
+#define GPIO_BACKLIGHT_SWITCH 24  // 18pin
 #define GPIO_BACKLIGHT_FREQ 64
 
 
@@ -34,12 +45,15 @@ class MipDisplay {
     int BPP = 3;
     int COLORS = 8;
     int BUF_WIDTH;
+    int HALF_BUF_WIDTH_64COLORS;
+  
     char* buf_image;
     char* pre_buf_image;
+
     char buf_clear[2] = {0x20,0x00};
     char buf_no_update[2] = {0x00,0x00};
-    float inversion_interval = 0.25;
     char buf_inversion[2] = {0b00010100,0x00};
+    float inversion_interval = 0.25;
     
     const char thresholds[2] = {216, 128};
     const char add_bit[8] = {0b10000000, 0b01000000, 0b00100000, 0b00010000, 0b00001000, 0b00000100, 0b00000010, 0b00000001};
@@ -85,3 +99,5 @@ class MipDisplay {
     void quit();
 
 };
+
+#endif

@@ -8,7 +8,8 @@ def make_ext(modname, pyxfilename):
         language='c++',
         include_dirs = ['modules/display/cython', numpy.get_include()],
         extra_link_args = ['-lpigpiod_if2'],
-        define_macros=[("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")],
+        define_macros = [('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION'), ('NO_USE_SPI_CE0', '1')],
+        #define_macros = [('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')],
     )
     return ext
 
