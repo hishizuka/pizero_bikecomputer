@@ -78,7 +78,7 @@ This command will install following ranges and you can at a minimum run the prog
 - [Bluetooth and Cloud](#bluetooth-and-cloud)
 - [GPS module / UART GPS](#uart-gps)
 - [ANT+ USB dongle](#ant-usb-dongle)
-- [Display / JDI & SHARP display](#jdi--sharp-display).
+- [Display / JDI & SHARP display](#jdi--sharp-display)
 
 After executing the command, reboot and resume from [Quick Start](#quick-start).
 Or, if you want to use a specific display/sensor, please read the following sections carefully.
@@ -145,7 +145,7 @@ Check with [pa1010d example program](https://github.com/pimoroni/pa1010d-python/
 
 ```
 $ sudo apt install libusb-1.0-0 python3-usb python3-pip
-# sudo pip3 install git+https://github.com/hishizuka/openant.git --break-system-packages
+$ sudo pip3 install git+https://github.com/hishizuka/openant.git --break-system-packages
 ```
  
 
@@ -204,7 +204,8 @@ $ pip install adafruit-circuitpython-bmp280
 | [Bosch BMP581](https://www.sparkfun.com/products/20170) | [SparkFun](https://www.sparkfun.com/products/20170) | o | None(*1) |
 | [Bosch BMI270](https://www.bosch-sensortec.com/products/motion-sensors/imus/bmi270/) | | o | None(*1) |
 | [Bosch BMM150 (Obsolete)](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm150/) | | | None(*1) |
-| [Bosch BMM350](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm350/) | | o | None(*1, 1') |
+| [Bosch BMM350](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm350/) | | o | None(*1) |
+| [Bosch BMM350](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm350/) | | o | None(*1) |
 | [Bosch BNO055](https://www.bosch-sensortec.com/products/smart-sensor-systems/bno055/) | [Adafruit](https://www.adafruit.com/product/4646) | | adafruit-circuitpython-bno055(*2) | 
 | [MEMSIC MMC5983MA](https://www.memsic.com/magnetometer-5) | [SparkFun](https://www.sparkfun.com/products/19895) | | None |
 | [STMicroelectronics LIS3MDL](https://www.st.com/en/mems-and-sensors/lis3mdl.html) | [Adafruit](https://www.adafruit.com/product/4485) | | adafruit-circuitpython-lis3mdl |
@@ -221,6 +222,7 @@ $ pip install adafruit-circuitpython-bmp280
 
 *1 It is also possible to use the official BOSCH C library with cython. Create a shared library with the following command and name and place it under LD_LIBRARY_PATH (e.g. /usr/local/lib).
 Also, place the header files in LD_INCLUDE_PATH (/usr/local/include, etc.).
+
 - [BMP5_SensorAPI](https://github.com/boschsensortec/BMP5_SensorAPI)
   - 
   ```
@@ -254,7 +256,15 @@ Also, place the header files in LD_INCLUDE_PATH (/usr/local/include, etc.).
   $ sudo ldconfig
   ```
 
-*1' Only the official C library of BOSCH is supported. Build BMM350_SensorAPI.
+- [BHI360_SensorAPI](https://github.com/boschsensortec/BHI360_SensorAPI)
+  - 
+  ```
+  $ gcc -shared -fPIC -O2 -o libbhi3.so bhy*.c
+  $ sudo mv libbhi3.so /usr/local/lib/
+  $ sudo cp bhy*.h /usr/local/include/
+  $ sudo cp -a firmware/bhi360 /usr/local/include/
+  $ sudo ldconfig
+  ```
 
 *2 You must enable i2c slowdown. Follow [the adafruit guide](https://learn.adafruit.com/circuitpython-on-raspberrypi-linux/i2c-clock-stretching).
 
@@ -273,7 +283,7 @@ $ pip install magnetic-field-calculator
 $ sudo apt install python3-buttonshim
 ```
 
-#### IO Expander (with MCP230009 and some buttons)
+#### IO Expander (with MCP23008/MCP23009 and some buttons)
 
 ```
 $ sudo apt install adafruit-circuitpython-mcp230xx
@@ -316,7 +326,7 @@ Before run the program, add the following environment variable.
 $ QT_QPA_PLATFORM=offscreen python3 pizero_bikecomputer.py
 ```
 
-`cntl + C` to exit the application.
+`ctrl + c` to exit the application.
 
 #### PiTFT
 
@@ -726,6 +736,7 @@ Set the value before starting the program. If the value is set during running, i
   - `None`: default (no hardware control)
   - `MIP_JDI_color_400x240`: JDI 2.7 inch MIP reflective color LCD module. (LPM027M128C/LPM027M128B)
   - `MIP_JDI_color_640x480`: JDI 4.4 inch MIP reflective color LCD module. (LPM044M141A)
+  - `MIP_Azumo_color_272x451`: Azumo 3.4 inch MIP reflective color LCD module. (14793-06, AUO U340QBN01.1)
   - `MIP_Sharp_mono_400x240`: SHARP 2.7 inch MIP monochrome LCD module. (Sharp LS027B7DH01)
   - `MIP_Sharp_mono_320x240`: SHARP 4.4 inch MIP monochrome LCD module. (Sharp LS044Q7DH01)
   - `Papirus`: PaPiRus ePaper / eInk Screen HAT

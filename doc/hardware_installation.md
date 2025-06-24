@@ -192,6 +192,7 @@ The accelerometer is used for stop detection when using GPS. The magnetometer is
 - [BMI270](https://www.bosch-sensortec.com/products/motion-sensors/imus/bmi270/): Accel / Gyro
 - [BMM150](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm150/): Mag
 - [BMM350](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm350/): Mag
+- [BHI360](https://www.bosch-sensortec.com/products/smart-sensor-systems/bhi360/): Accel / Gyro
 
 ### Light
 
