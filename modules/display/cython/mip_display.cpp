@@ -194,11 +194,40 @@ void MipDisplay::inversion(float sec) {
     gpio_write(pigpio, GPIO_SCS, 1);
     usleep(6);
 #endif
-    if(state) {
-      spi_write(pigpio, spi, buf_inversion, 2);
-    }
-    else {
-      spi_write(pigpio, spi, buf_no_update, 2);
+    if(WIDTH == 272 && HEIGHT == 451) {
+      l = BUF_WIDTH * int(HEIGHT/2);
+      l2 = BUF_WIDTH*HEIGHT - l;
+      std::vector<char> buf1(l + 2), buf2(l2 + 2);
+
+      // copy the buffer
+      memcpy(buf1.data(), buf_image, l);
+      memcpy(buf2.data(), buf_image+l, l2);
+
+      // Invert the buffer if state is true
+      if(state) {
+        for(int i = 2; i < l; i++) {
+          buf1[i] = ~buf1[i];
+        }
+        for(int i = 2; i < l2; i++) {
+          buf2[i] = ~buf2[i];
+        }
+      }
+
+      // fill footer
+      buf1[l] = 0;
+      buf1[l + 1] = 0;
+      buf2[l2] = 0;
+      buf2[l2 + 1] = 0;
+
+      spi_write(pigpio, spi, buf1, 2);
+      spi_write(pigpio, spi, buf2, 2);
+    } else {
+      if(state) {
+        spi_write(pigpio, spi, buf_inversion, 2);
+      }
+      else {
+        spi_write(pigpio, spi, buf_no_update, 2);
+      }
     }
 #ifdef NO_USE_SPI_CE0
     gpio_write(pigpio, GPIO_SCS, 0);

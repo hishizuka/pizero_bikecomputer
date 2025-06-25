@@ -197,7 +197,7 @@ class MipDisplayBase(Display):
     def inversion(self, sec):
         s = sec
         state = True
-        disp_cond = self.config.G_DISPLAY.startswith((
+        do_manual_inversion = self.config.G_DISPLAY.startswith((
             "MIP_Azumo_color_272x451",
             "MIP_Sharp_mono"
         ))
@@ -206,7 +206,7 @@ class MipDisplayBase(Display):
             self.gpio_write(self.SCS, 1)
             time.sleep(0.000006)
             if state:
-                if not disp_cond:
+                if not do_manual_inversion:
                     self.spi_write([0b00010100, 0])  # INVERSION MODE
                 else:
                     buf = self.img_buff_rgb8.copy()
@@ -217,7 +217,7 @@ class MipDisplayBase(Display):
                         buf[:,2:] = np.invert(buf[:,2:])
                     self.inversion_draw(buf)
             else:
-                if not disp_cond:
+                if not do_manual_inversion:
                     self.no_update()
                 else:
                     self.inversion_draw(self.img_buff_rgb8)
