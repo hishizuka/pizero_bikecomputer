@@ -112,7 +112,7 @@ Strava, Garmin and ThingsBoard
 
 ```
 $ sudo apt install -y bluez-obexd
-$ pip install garminconnect stravacookies dbus-next bluez-peripheral tb-mqtt-client mmh3 timezonefinder
+$ pip install garminconnect stravacookies bluez-peripheral==0.2.0a3 tb-mqtt-client mmh3 timezonefinder
 ```
 
 ### GPS module
@@ -708,7 +708,7 @@ If ANT+ powermeter is available, set both parameters are used in W'balance (%). 
   - Show IP address. This can be used for ssh access while tethering a smartphone.
 - GadgetBridge
   - Recieve notifications and GPS location from a smartphone. Install [GadgetBridge](https://gadgetbridge.org) Android app and toggle on.
-  - `dbus-next` and `bluez-peripheral` packages, which can be installed with the `pip` command, is required.
+  - `bluez-peripheral`(`bluez-peripheral==0.2.0a3` above) packages, which can be installed with the `pip` command, is required.
   - GadgetBridge app settings
     - Enable all permissions.
     - `Settings` > `Discovery and Pairing options` > `Ignore bonded devices`: Off, `CompanionDevice Pairing`: On, `Discover unsupported devices`: On, `Scanning intensity`: 2 or 3
