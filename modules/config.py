@@ -129,6 +129,9 @@ class Config:
     # enable headless mode (keyboard operation)
     G_HEADLESS = False
 
+    # for first run
+    G_INIT_ONLY = False
+
     # Raspberry Pi detection (detect in __init__())
     G_IS_RASPI = False
 
@@ -428,6 +431,7 @@ class Config:
         parser.add_argument("--layout")
         parser.add_argument("--gui")
         parser.add_argument("--headless", action="store_true", default=False)
+        parser.add_argument("--init", action="store_true", default=False)
         parser.add_argument("--output_log", action="store_true", default=False)
         parser.add_argument("--calib_mag", action="store_true", default=False)
         parser.add_argument("--calib_pitch_roll", action="store_true", default=False)
@@ -447,6 +451,8 @@ class Config:
             self.G_GUI_MODE = args.gui
         if args.headless:
             self.G_HEADLESS = True
+        if args.init:
+            self.G_INIT_ONLY = True
         if args.output_log:
             self.G_LOG_OUTPUT_FILE = True
         if args.calib_mag:
@@ -577,15 +583,15 @@ class Config:
             from modules.helper.bt_pan import (
                 BTPanDbus,
                 BTPanDbusNext,
-                HAS_DBUS_NEXT,
+                HAS_DBUS_FAST,
                 HAS_DBUS,
             )
 
-            if HAS_DBUS_NEXT:
+            if HAS_DBUS_FAST:
                 self.bt_pan = BTPanDbusNext()
             elif HAS_DBUS:
                 self.bt_pan = BTPanDbus()
-            if HAS_DBUS_NEXT or HAS_DBUS:
+            if HAS_DBUS_FAST or HAS_DBUS:
                 is_available = await self.bt_pan.check_dbus()
                 if is_available:
                     self.G_BT_ADDRESSES = await self.bt_pan.find_bt_pan_devices()
@@ -623,6 +629,10 @@ class Config:
         self.boot_time += delta
 
         await self.logger.resume_start_stop()
+
+        if self.G_INIT_ONLY:
+            await asyncio.sleep(30)
+            await self.quit()
 
     async def keyboard_check(self):
         try:
