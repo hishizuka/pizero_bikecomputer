@@ -49,6 +49,10 @@ prompt_and_store() {
     esac
 }
 
+#############################################################
+# get user input
+#############################################################
+
 # temporarily disable error checking to allow for user input
 set +e
 prompt_and_store "Setup Python virtual environment?" setup_python_venv
@@ -63,7 +67,15 @@ prompt_and_store "Install GPS packages?" install_gps
 prompt_and_store "Install Bluetooth packages?" install_bluetooth
 prompt_and_store "Enable I2C?" enable_i2c
 prompt_and_store "Enable SPI?" enable_spi
+prompt_and_store "Install services?" install_services
+if [[ "$install_services" == "true" ]]; then
+    prompt_and_store "Using TFT/XWindow to start pizero_bikecomputer.service?" install_services_use_x
+fi
 set -e
+
+#############################################################
+# install packages
+#############################################################
 
 # system update
 sudo apt update
@@ -177,6 +189,10 @@ if [[ "$enable_spi" == "true" ]]; then
     echo "✅ SPI enabled successfully"
 fi
 
+#############################################################
+# disable raspberry pi specific hardware
+#############################################################
+
 BOOT_CONFIG_FILE="/boot/firmware/config.txt"
 
 # Disable audio on Raspberry Pi
@@ -197,6 +213,10 @@ if [[ "$has_raspi_config" == "true" ]]; then
     echo "🔧 Disabling Raspberry Pi camera..."
     sudo raspi-config nonint do_camera 1
 fi
+
+#############################################################
+# test run
+#############################################################
 
 echo "🔧 Starting pizero_bikecomputer.py for initialize..."
 pgm_dir=~/pizero_bikecomputer
@@ -234,13 +254,65 @@ while IFS= read -r line; do
     fi
 done < "$OUT_PIPE"
 
-echo "✅ Startup test completed successfully."
+# check setting.conf
+if [ -f setting.conf ]; then
+    echo "✅ Startup test completed successfully."
+else
+    echo "❌ Application did not start correctly. Check logs or errors."
+fi
 
-# WIP: Install Services
+#############################################################
+# Install Services
+#############################################################
 
-# GPS service configuration
-if [[ "$install_gps" == "true" ]]; then
-    sudo cp scripts/install/etc/default/gpsd /etc/default/gpsd
+if [[ "$install_services" == "true" ]]; then
+
+    # GPS service configuration
+    if [[ "$install_gps" == "true" ]]; then
+        sudo cp scripts/install/etc/default/gpsd /etc/default/gpsd
+    fi
+
+    # install pizero_bikecomputer.service
+    current_dir=$(pwd)
+    script="$current_dir/pizero_bikecomputer.py"
+
+    i_service_file="scripts/install/etc/systemd/system/pizero_bikecomputer.service"
+    o_service_file="/etc/systemd/system/pizero_bikecomputer.service"
+
+    # check if venv is set, in that case default to using venv to run the script
+    #read -p "Use current virtualenv? [y/n] (y): " use_venv
+    if [[ -n "$VIRTUAL_ENV" ]]; then
+        script="$VIRTUAL_ENV/bin/python $script --output_log"
+    else
+    echo "No virtualenv used/activated. Default python will be used"
+    fi
+
+    if [[ "$install_services_use_x" == "true" ]]; then
+        # add fullscreen option
+        script="$script -f"
+        envs="Environment=\"QT_QPA_PLATFORM=xcb\"\\nEnvironment=\"DISPLAY=:0\"\\nEnvironment=\"XAUTHORITY=/home/$USER/.Xauthority\"\\n"
+        after="After=display-manager.service\\n"
+    else
+        envs="Environment=\"QT_QPA_PLATFORM=offscreen\"\\n"
+        after=""
+    fi
+
+    if [ -f "$i_service_file" ]; then
+        content=$(<"$i_service_file")
+        content="${content/WorkingDirectory=/WorkingDirectory=$current_dir}"
+        content="${content/ExecStart=/ExecStart=$script}"
+        content="${content/User=/User=$USER}"
+        content="${content/Group=/Group=$USER}"
+
+        # inject environment variables
+        content=$(echo "$content" | sed "/\[Install\]/i $envs")
+
+        if [[ -n "$after" ]]; then
+            content=$(echo "$content" | sed "/\[Service\]/i $after")
+        fi
+        echo "$content" | sudo tee $o_service_file > /dev/null
+        sudo systemctl enable pizero_bikecomputer
+    fi
 fi
 
 echo "✅ pizero_bikecomputer initial setup completed successfully! Please reboot."  # or "Now rebooting"
