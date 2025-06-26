@@ -10,7 +10,7 @@ extern "C" {
 
 #ifdef USE_BMP5
 
-#include "i2c_common.h"
+#include "common.h"
 
 #include "bmp5.h"
 

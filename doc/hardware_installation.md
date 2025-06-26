@@ -43,11 +43,13 @@ Pros&Cons
 - <img src="https://user-images.githubusercontent.com/12926652/206317535-71345000-8dfa-4051-a674-15e21afb4203.jpeg" width=480 />
 
 Display alternatives: 
+- [Aliexpress LCD Screen Matrix For Wahoo WFCC5 Elemnt Bolt V1 Bike Computer Assembly Replacement Display](https://www.aliexpress.com/item/3256808580930078.html)
+- [Aliexpress LCD Screen Matrix For Wahoo WFCC5 Elemnt Bolt V1 Bike Computer Assembly Replacement Display](https://www.aliexpress.com/item/3256808586674293.html)
+- [Aliexpress A42Z-LCD Screen Matrix For Wahoo WFCC5 Elemnt Bolt V1 Bike Computer Assembly Replacement Display](https://www.aliexpress.com/item/3256808685919139.html)
 - [Aliexpress New LPM027M128B LPM027M128C LTPS TFT-LCD, LCM 2.7 inch 400X240 display](https://www.aliexpress.com/item/1005002351792191.html)
-- ELEMNT ROAM V1 (WFCC4) display
-  - [Aliexpress New Wahoo Element Roam WFCC4 Screen Lcd Display Replacement/Repair](https://www.aliexpress.com/item/1005008210004927.html): Protector panel is included.
-  - [Aliexpress LCD Screen Matrix For Wahoo WFCC5 Elemnt Bolt V1 V2 Bike Computer Assembly Replacement Display](https://www.aliexpress.com/item/1005007797291187.html): choose "V1"
-  - [Aliexpress LCD Screen Matrix For Wahoo WFCC5 Elemnt Bolt V1 V2 Bike Computer Assembly Replacement Display](https://www.aliexpress.com/item/1005007782333344.html): differnt page, choose "V1"
+- [Aliexpress New Wahoo Element Roam WFCC4 Screen Lcd Display Replacement/Repair](https://www.aliexpress.com/item/1005008210004927.html): Protector panel is included.
+- [Aliexpress LCD Screen Matrix For Wahoo WFCC5 Elemnt Bolt V1 V2 Bike Computer Assembly Replacement Display](https://www.aliexpress.com/item/1005007797291187.html): choose "V1"
+- [Aliexpress LCD Screen Matrix For Wahoo WFCC5 Elemnt Bolt V1 V2 Bike Computer Assembly Replacement Display](https://www.aliexpress.com/item/1005007782333344.html): different page, choose "V1"
   - <img src="https://user-images.githubusercontent.com/12926652/206317870-dfb424bf-f16f-49bc-a39f-3310ae243257.png" width=320 />
 - [Digikey LPM027M128B](https://www.digikey.com/en/products/detail/azumo/12380-06-T2/9602620): backlight cable is different from original
 - [MIP Reflective color LCD module 2.7" w/ backlight (LPM027M128C)](https://international.switch-science.com/catalog/5395/) from Switch Science(JP): sold out
@@ -190,6 +192,7 @@ The accelerometer is used for stop detection when using GPS. The magnetometer is
 - [BMI270](https://www.bosch-sensortec.com/products/motion-sensors/imus/bmi270/): Accel / Gyro
 - [BMM150](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm150/): Mag
 - [BMM350](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm350/): Mag
+- [BHI360](https://www.bosch-sensortec.com/products/smart-sensor-systems/bhi360/): Accel / Gyro
 
 ### Light
 
@@ -213,7 +216,7 @@ This is essential for displays without buttons, like MIP displays.
 
 - [Button SHIM](https://shop.pimoroni.com/products/button-shim)
 - <img src="https://user-images.githubusercontent.com/12926652/91799330-cfc50580-ec61-11ea-9045-e1991aed205c.png" width=240 />
-- MCP230008 or some variants
+- MCP23008/MCP23009 or some variants
 - <img width="526" alt="Image" src="https://github.com/user-attachments/assets/8d2532a1-5e8b-4710-9c9f-fc227330d6f0" />
 
 ### Battery
@@ -223,7 +226,6 @@ get battery percent, etc.
 - [PiJuice HAT](https://uk.pi-supply.com/products/pijuice-standard) / [PiJuice Zero](https://uk.pi-supply.com/products/pijuice-zero)
 - <img src="https://user-images.githubusercontent.com/12926652/91799334-d0f63280-ec61-11ea-9a96-429991011b08.png" width=240 />
 - [PiSugar3](https://www.pisugar.com) ([Github](https://github.com/PiSugar/PiSugar/wiki/PiSugar-3-Series))
-
 
 
 ## ANT+ USB dongle
@@ -275,22 +277,22 @@ Note that the connection between Raspberry Pi and SHARP Memory Display is differ
 
 | Name | Raspberry Pi | SHARP Memory Display Breakout | MIP Interface Board |
 |:-|:-:|:-:|:-:|
-| GND      | IO25 | GND   | CN1-4 |
-| VCOMSEL  | IO11 (GPIO17) | EXTIN | CN2-3 |
-| DISP     | IO13 (GPIO27) | DISP  | CN1-9 |
-| CS       | IO16 (GIOP23) | CS    | CN1-8 |
-| 3.3V     | IO17 | VIN   | CN1-6 |
-| SPI MOSI | IO19 (GPIO10) | MOSI  | CN1-7 |
-| SPI SCLK | IO23 (GPIO11) | SCLK  | CN1-5 |
+| GND       | IO25 | GND   | CN1-4 |
+| VCOMSEL   | IO 18 (GPIO 24) | EXTIN | CN2-3 |
+| DISP      | IO 22 (GPIO 25) | DISP  | CN1-9 |
+| SPI0 CE0  | IO 24 (GPIO 8) | CS    | CN1-8 |
+| 3.3V      | IO 17 | VIN   | CN1-6 |
+| SPI0 MOSI | IO 19 (GPIO 10) | MOSI  | CN1-7 |
+| SPI0 SCLK | IO 23 (GPIO 11) | SCLK  | CN1-5 |
 
 
 for backlight (MIP Interface Board)
 
 | Name | Raspberry Pi | MIP Interface Board |
 |:-|:-:|:-:|
-| LEDPWM   | IO12 (GPIO18) | CN2-1 |
-| VBUS-5V  | IO02/04 (5V) | CN3-5 |
-| BL2-CTRL | IO06/09/14/20/25/34/39 (GND) | CN4-3 |
+| LEDPWM   | IO 12 (GPIO 18) | CN2-1 |
+| VBUS-5V  | IO 02/04 (5V) | CN3-5 |
+| BL2-CTRL | IO 06/09/14/20/25/34/39 (GND) | CN4-3 |
 
 
 Reference:

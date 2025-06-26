@@ -70,7 +70,9 @@ class MipDisplayPigpio(MipDisplayBase):
 
     def init_spi(self):
         self.pi = pigpio.pi()
-        self.spi = self.pi.spi_open(0, self.config.G_DISPLAY_PARAM["SPI_CLOCK"], 0)
+        ce_setting = 0b00100000  # no use ce0
+        #ce_setting = 0b00000100  # use ce0
+        self.spi = self.pi.spi_open(0, self.config.G_DISPLAY_PARAM["SPI_CLOCK"], ce_setting)
 
     def init_gpio(self):
         self.pi.set_mode(self.DISP, pigpio.OUTPUT)

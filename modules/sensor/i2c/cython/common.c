@@ -1,4 +1,4 @@
-#include "i2c_common.h"
+#include "common.h"
 
 int8_t i2c_open(const char *device, uint8_t addr) {
     int fd = open(device, O_RDWR);
@@ -8,7 +8,6 @@ int8_t i2c_open(const char *device, uint8_t addr) {
     }
     
     if (ioctl(fd, I2C_SLAVE, addr) < 0) {
-        printf("error\n");
         perror("Failed to acquire bus access and/or talk to slave");
         close(fd);
         return -1;
@@ -32,9 +31,7 @@ int8_t i2c_write(uint8_t reg_addr, const uint8_t *data, uint32_t len, void *intf
     int fd = *(int *)intf_ptr;
     uint8_t buffer[len + 1];
     buffer[0] = reg_addr;
-    for (uint32_t i = 0; i < len; i++) {
-        buffer[i + 1] = data[i];
-    }
+    memcpy(&buffer[1], data, len);
     if (write(fd, buffer, len + 1) != (ssize_t)(len + 1)) return -1;
     return 0;
 }

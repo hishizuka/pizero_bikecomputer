@@ -1,7 +1,8 @@
-#ifndef __I2C_COMMON
-#define __I2C_COMMON
+#ifndef __COMMON
+#define __COMMON
 
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 #include <stdint.h>
 #include <fcntl.h>

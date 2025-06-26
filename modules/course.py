@@ -1031,8 +1031,12 @@ class Course:
 
             # grade check if available
             grade = self.config.logger.sensor.values["integrated"]["grade"]
-            if not np.isnan(grade) and (grade > self.config.G_SLOPE_CUTOFF[0]) != (
-                self.slope_smoothing[m] > self.config.G_SLOPE_CUTOFF[0]
+            if (
+                not np.isnan(grade)
+                and len(self.slope_smoothing) > 0
+                # prevent directional false detection on uphill round-trip courses.
+                # both in climbing condition or not.
+                and (grade > self.config.G_SLOPE_CUTOFF[0]) != (self.slope_smoothing[m] > self.config.G_SLOPE_CUTOFF[0])
             ):
                 continue
 

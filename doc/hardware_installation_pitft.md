@@ -74,7 +74,7 @@ It is more reliable to solder the PiTFT directly to the header of Raspberry Pi Z
 
 Follow [official setup guide](https://learn.adafruit.com/adafruit-2-4-pitft-hat-with-resistive-touchscreen-mini-kit/overview) of Adafruit, or [my setup guide (Japanese)](https://qiita.com/hishi/items/bdd630666277e4f8162a).
 
-If you run the program in a console, you need to build Qt5 and PyQt5 because the package python3-pyqt5 provided with Raspbian OS does not include a touchscreen library(tslib).
+If you run the program in a console, you need to build Qt6 and PyQt6 because the package python3-pyqt6 provided with Raspbian OS does not include a touchscreen library(tslib).
 
 Note:
 
@@ -92,21 +92,21 @@ You will need libts-dev package before configure of Qt. (from [RaspberryPi2EGLFS
 sudo apt-get install libudev-dev libinput-dev libts-dev libxcb-xinerama0-dev libxcb-xinerama0
 ```
 
-##### Build PyQt5
+##### Build PyQt6
 
-Follow [PyQt Reference Guide](https://www.riverbankcomputing.com/static/Docs/PyQt5/installation.html).
-The source is available [here](https://pypi.org/project/PyQt5/#files)
+Follow [PyQt Reference Guide](https://www.riverbankcomputing.com/static/Docs/PyQt6/installation.html).
+The source is available [here](https://pypi.org/project/PyQt6/#files)
 
 ```
 $ cd
 $ mkdir work; cd work
-$ wget NEWEST-PYQT5-PACKAGE-SOURCE-FILE
+$ wget NEWEST-PYQT6-PACKAGE-SOURCE-FILE
 $ sudo pip3 install PyQt-builder
 $ sip-build --no-make --qmake PATH-TO-YOUR-QMAKE
 $ cd build
 $ make -j4
 $ sudo make install
-$ sudo pip3 install PyQt5-sip
+$ sudo pip3 install PyQt6-sip
 ```
 
 

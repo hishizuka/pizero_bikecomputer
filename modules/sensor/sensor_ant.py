@@ -54,7 +54,7 @@ class SensorANT(Sensor):
 
         # initialize scan channel (reserve ch0)
         if _SENSOR_ANT:
-            app_logger.info("detected ANT+ sensors")
+            app_logger.info("detected ANT+ sensors:")
         self.scanner = ant_device_multiscan.ANT_Device_MultiScan(self.node, self.config)
         self.searcher = ant_device_search.ANT_Device_Search(
             self.node, self.config, self.values

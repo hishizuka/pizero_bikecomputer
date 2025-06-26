@@ -3,36 +3,19 @@ def make_ext(modname, pyxfilename):
     import os
     
     i2c_sensors = {
-        'bmm150': {
-            'src': 'i2c_bmm150.c',
-            'lib': 'libbmm150.so',
-            'extra_lib': [],
-            'macro': ('USE_BMM150', '1'),
-        },
-        'bmm350': {
-            'src': 'i2c_bmm350.c',
-            'lib': 'libbmm350.so',
-            'extra_lib': [],
-            'macro': ('USE_BMM350', '1'),
-        },
-        'bmi270': {
-            'src': 'i2c_bmi270.c',
-            'lib': 'libbmi270.so',
-            'extra_lib': ['-lm'],
-            'macro': ('USE_BMI270', '1'),
-        },
-        'bmp581': {
-            'src': 'i2c_bmp5.c',
-            'lib': 'libbmp5.so',
-            'extra_lib': [],
-            'macro': ('USE_BMP5', '1'),
+        'bhi3_s': {
+            'src': 'bhi3_s.c',
+            'lib': 'libbhi3.so',
+            'extra_lib': ['-lpigpiod_if2'],
+            'macro': [('USE_BHI3_S', '1'),],  # for SPI
+            #'macro': [('USE_BHI3_S', '1'), ('BHY_USE_I2C', '1')],  # for I2C
         },
     }
     
     base_path = os.getcwd()
-    include_dirs = ['modules/sensor/i2c/cython']
+    include_dirs = ['modules/sensor/i2c/cython/bhi360_shuttle_board_3']
     if base_path.endswith(include_dirs[0]):
-        base_path = '../../../../'
+        base_path = '../../../../../'
         include_dirs = ['.']
     define_macros = [('NOUSE_MAIN', '1')]
     extra_link_args = []
@@ -50,7 +33,7 @@ def make_ext(modname, pyxfilename):
             sources.append(i2c_sensors[s]['src'])
             extra_link_args.append('-l' + os.path.splitext(i2c_sensors[s]['lib'])[0][3:])
             extra_link_args.extend(i2c_sensors[s]['extra_lib'])
-            define_macros.append(i2c_sensors[s]['macro'])
+            define_macros.extend(i2c_sensors[s]['macro'])
     if len(sources) > 0:
         sources = [pyxfilename, 'common.c'] + sources
     else:

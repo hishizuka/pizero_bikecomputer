@@ -115,7 +115,7 @@ class GUI_Qt_Base(QtCore.QObject):
             if has_color:
                 self.screen_shape = (p.height(), p.width(), 3)
             else:
-                self.screen_shape = (p.height(), int(p.width() / 8))
+                self.screen_shape = (p.height(), int(p.width() / 8), 1)
                 self.remove_bytes = p.bytesPerLine() - int(p.width() / 8)
 
     def add_font(self):

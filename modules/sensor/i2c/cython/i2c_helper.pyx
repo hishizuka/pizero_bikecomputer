@@ -1,7 +1,6 @@
 # cython: language_level=3
 
 #cimport cython
-import os
 
 
 cdef extern from "i2c_bmm150.h":
