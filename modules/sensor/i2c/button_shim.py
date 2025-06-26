@@ -36,7 +36,6 @@ class ButtonShim:
         # update hold_time of buttons
         for b in buttonshim._handlers:
             b.hold_time = self.button_config.G_BUTTON_LONG_PRESS
-        global _FUNC
         _FUNC["A"] = self.press_A
         _FUNC["A_LONG"] = self.press_A_LONG
         _FUNC["B"] = self.press_B
@@ -88,89 +87,74 @@ class ButtonShim:
     # Button A
     @buttonshim.on_press(buttonshim.BUTTON_A)
     def press_handler_a(button, pressed):
-        global _HOLD_STATUS
         _HOLD_STATUS["A"] = False
 
     @buttonshim.on_release(buttonshim.BUTTON_A)
     def release_handler_a(button, pressed):
-        global _FUNC
         if not _HOLD_STATUS["A"]:
             _FUNC["A"]()
 
     @buttonshim.on_hold(buttonshim.BUTTON_A)
     def hold_handler_a(button):
-        global _HOLD_STATUS, _FUNC
         _HOLD_STATUS["A"] = True
         _FUNC["A_LONG"]()
 
     # Button B
     @buttonshim.on_press(buttonshim.BUTTON_B)
     def press_handler_b(button, pressed):
-        global _HOLD_STATUS
         _HOLD_STATUS["B"] = False
 
     @buttonshim.on_release(buttonshim.BUTTON_B)
     def release_handler_b(button, pressed):
-        global _FUNC
         if not _HOLD_STATUS["B"]:
             _FUNC["B"]()
 
     @buttonshim.on_hold(buttonshim.BUTTON_B)
     def hold_handler_b(button):
-        global _HOLD_STATUS, _FUNC
         _HOLD_STATUS["B"] = True
         _FUNC["B_LONG"]()
 
     # Button C
     @buttonshim.on_press(buttonshim.BUTTON_C)
     def press_handler_c(button, pressed):
-        global _HOLD_STATUS
         _HOLD_STATUS["C"] = False
 
     @buttonshim.on_release(buttonshim.BUTTON_C)
     def release_handler_c(button, pressed):
-        global _FUNC
         if not _HOLD_STATUS["C"]:
             _FUNC["C"]()
 
     @buttonshim.on_hold(buttonshim.BUTTON_C)
     def hold_handler_c(button):
-        global _HOLD_STATUS, _FUNC
         _HOLD_STATUS["C"] = True
         _FUNC["C_LONG"]()
 
     # Button D
     @buttonshim.on_press(buttonshim.BUTTON_D)
     def press_handler_d(button, pressed):
-        global _HOLD_STATUS
         _HOLD_STATUS["D"] = False
 
     @buttonshim.on_release(buttonshim.BUTTON_D)
     def release_handler_d(button, pressed):
-        global _FUNC
         if not _HOLD_STATUS["D"]:
             _FUNC["D"]()
 
     @buttonshim.on_hold(buttonshim.BUTTON_D)
     def hold_handler_d(button):
-        global _HOLD_STATUS, _FUNC
         _HOLD_STATUS["D"] = True
         _FUNC["D_LONG"]()
 
     # Button E
     @buttonshim.on_press(buttonshim.BUTTON_E)
     def press_handler_e(button, pressed):
-        global _HOLD_STATUS
         _HOLD_STATUS["E"] = False
 
     @buttonshim.on_release(buttonshim.BUTTON_E)
     def release_handler_e(button, pressed):
-        global _FUNC
         if not _HOLD_STATUS["E"]:
             _FUNC["E"]()
 
     @buttonshim.on_hold(buttonshim.BUTTON_E)
     def hold_handler_e(button):
-        global _HOLD_STATUS, _FUNC
         _HOLD_STATUS["E"] = True
         _FUNC["E_LONG"]()

@@ -44,7 +44,6 @@ class SensorANT(Sensor):
     device = {}
 
     def sensor_init(self):
-        global _SENSOR_ANT
         if self.config.G_ANT["STATUS"] and not _SENSOR_ANT:
             self.config.G_ANT["STATUS"] = False
 
