@@ -1,5 +1,4 @@
 import os
-from datetime import datetime
 import time
 import shutil
 import asyncio
@@ -416,6 +415,28 @@ class Network:
         status = check_bnep0()
         app_logger.info(f"[BT] disconnect, bnep0_status={status}, {f_name=}")
         return not status
+    
+    async def wifi_connect_with_wps(self):
+        if not self.config.G_IS_RASPI:
+            return False
+
+        app_logger.info(f"Wifi connect with WPS")
+        # Start the wpa_cli process
+        res, err = exec_cmd_return_value(['sudo', 'wpa_cli', 'wps_pbc'], cmd_print=True)
+
+        # Wait for connection (may take up to 30 seconds)
+        self.config.gui.change_dialog(
+            title="Wait for connection.", button_label="OK"
+        )
+        await asyncio.sleep(15)
+
+        # Check connection status
+        res, err = exec_cmd_return_value(['sudo', 'wpa_cli', 'status'], cmd_print=True)
+
+        if "wpa_state=COMPLETED" in res:
+            return True
+        else:
+            return False
     
     def get_wifi_bt_status(self):
         if not self.config.G_IS_RASPI:

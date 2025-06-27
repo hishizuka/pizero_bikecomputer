@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from functools import partial
 
 from modules.app_logger import app_logger
@@ -6,6 +7,7 @@ from modules._qt_qtwidgets import (
     QT_TEXTEDIT_NOWRAP,
     QT_SCROLLBAR_ALWAYSOFF,
     QtWidgets,
+    qasync,
 )
 from modules.utils.network import detect_network
 from .pyqt_menu_widget import MenuWidget, ListWidget
@@ -56,6 +58,11 @@ class NetworkMenuWidget(MenuWidget):
             ("Bluetooth", "toggle", wifi_bt_button_func_bt),
             ("BT Tethering", "submenu", self.bt_tething),
             ("IP Address", "dialog", self.show_ip_address),
+            (
+                "WIFI with WPS",
+                "dialog",
+                lambda: self.config.gui.show_dialog(self.wifi_connect_with_wps, "Connect to Wifi with WPS?")
+            ),
         )
         self.add_buttons(button_conf)
 
@@ -84,6 +91,22 @@ class NetworkMenuWidget(MenuWidget):
         address = detect_network() or "No address"
         # Button is OK only
         self.config.gui.show_dialog_ok_only(None, address)
+
+    @qasync.asyncSlot()
+    async def wifi_connect_with_wps(self):
+        self.config.gui.show_dialog_cancel_only(None, "Trying to connect...")
+        await asyncio.sleep(1)  # wait for dialog to show
+        connect_status = await self.config.network.wifi_connect_with_wps()
+
+        # Show final result
+        if connect_status:
+            self.config.gui.change_dialog(
+                title="Connection succeeded!", button_label="OK"
+            )
+        else:
+            self.config.gui.change_dialog(
+                title="Connection failed for some reason!", button_label="OK"
+            )
 
 
 class DebugMenuWidget(MenuWidget):
