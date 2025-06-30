@@ -273,44 +273,59 @@ class GUI_PyQt(GUI_Qt_Base):
             main_widget.setContentsMargins(0, 0, 0, 0)
             self.stack_widget.addWidget(main_widget)
 
+
+
+            # register all the widgets in gui_config
             # reverse order (make children widget first, then make parent widget)
             menus = [
-                ("ANT+ Detail", ANTListWidget),
-                ("ANT+ Sensors", ANTMenuWidget),
-                ("Wheel Size", AdjustWheelCircumferenceWidget),
-                ("Adjust Altitude", AdjustAltitudeWidget),
-                ("Sensors", SensorMenuWidget),
-                ("BT Tethering", BluetoothTetheringListWidget),
-                ("Network", NetworkMenuWidget),
-                ("Debug Log", DebugLogViewerWidget),
-                ("Debug", DebugMenuWidget),
-                ("System", SystemMenuWidget),
-                ("CP", AdjustCPWidget),
-                ("W Prime Balance", AdjustWPrimeBalanceWidget),
-                ("Profile", ProfileWidget),
-                ("Connectivity", ConnectivityMenuWidget),
-                ("Upload Activity", UploadActivityMenuWidget),
-                ("DEM Tile source", DEMTileListWidget),
-                ("Wind Source", WindSourceListWidget),
-                ("External Data Sources", ExternalDataSourceMenuWidget),
-                ("Wind map List", WindmapListWidget),
-                ("Rain map List", RainmapListWidget),
-                ("Heatmap List", HeatmapListWidget),
-                ("Map Overlay", MapOverlayMenuWidget),
-                ("Select Map", MapListWidget),
-                ("Map and Data", MapMenuWidget),
-                # ("Google Directions API mode", GoogleDirectionsAPISettingMenuWidget),
-                ("Course Detail", CourseDetailWidget),
-                ("Courses List", CourseListWidget),
-                ("Courses", CoursesMenuWidget),
-                ("Menu", TopMenuWidget),
+                # Sensors menu & sub menus
+                ("ANT_PLUS_DETAIL", "ANT+ Detail", ANTListWidget),
+                ("ANT_PLUS_SENSORS", "ANT+ Sensors", ANTMenuWidget),
+                ("WHEEL_SIZE", "Wheel Size", AdjustWheelCircumferenceWidget),
+                ("ADJUST_ALTITUDE", "Adjust Altitude", AdjustAltitudeWidget),
+                ("SENSORS", "Sensors", SensorMenuWidget),
+                # System menu & sub menus
+                ("NETWORK", "Network", NetworkMenuWidget),
+                ("DEBUG_LOG", "Debug Log", DebugLogViewerWidget),
+                ("DEBUG", "Debug", DebugMenuWidget),
+                ("SYSTEM", "System", SystemMenuWidget),
+                # Profile & sub menus
+                ("CP", "CP", AdjustCPWidget),
+                ("W_PRIME_BALANCE", "W Prime Balance", AdjustWPrimeBalanceWidget),
+                ("PROFILE", "Profile", ProfileWidget),
+                # Connectivity menu & sub menus
+                ("AUTO_BT_TETHERING", "BT Tethering", BluetoothTetheringListWidget),
+                ("CONNECTIVITY", "Connectivity", ConnectivityMenuWidget),
+                # Upload Activity menu
+                ("UPLOAD_ACTIVITY", "Upload Activity", UploadActivityMenuWidget),
+                # Map and Data menu & sub menus
+                ("DEM_TILE_SOURCE", "DEM Tile source", DEMTileListWidget),
+                ("WIND_SOURCE", "Wind Source", WindSourceListWidget),
+                ("EXTERNAL_DATA_SOURCES", "External Data Sources", ExternalDataSourceMenuWidget),
+                ("WIND_MAP_LIST", "Wind map List", WindmapListWidget),
+                ("RAIN_MAP_LIST", "Rain map List", RainmapListWidget),
+                ("HEATMAP_LIST", "Heatmap List", HeatmapListWidget),
+                ("MAP_OVERLAY", "Map Overlay", MapOverlayMenuWidget),
+                ("SELECT_MAP", "Select Map", MapListWidget),
+                ("MAP_AND_DATA", "Map and Data", MapMenuWidget),
+                # Courses menu & sub menus
+                ("COURSE_DETAIL", "Course Detail", CourseDetailWidget),
+                ("COURSES_LIST", "Courses List", CourseListWidget),
+                ("COURSES", "Courses", CoursesMenuWidget),
+                # Main menu - root menu
+                ("MENU", "Menu", TopMenuWidget),
             ]
+
             menu_count = max(self.gui_config.G_GUI_INDEX.values()) + 1
-            for m in menus:
-                m_widget = m[1](self.stack_widget, m[0], self.config)
+
+            for menu_config_key, label, widget_class in menus:
+                # dont create objects if we don't need to
+                if self.menu_config.get_status(menu_config_key) is False:
+                    continue
+                m_widget = widget_class(self.stack_widget, label, self.config)
                 m_widget.setContentsMargins(0, 0, 0, 0)
                 self.stack_widget.addWidget(m_widget)
-                self.gui_config.G_GUI_INDEX[m[0]] = menu_count
+                self.gui_config.G_GUI_INDEX[label] = menu_count
                 menu_count += 1
 
             self.stack_widget.setCurrentIndex(1)
