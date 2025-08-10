@@ -17,6 +17,10 @@ class AppState:
         except FileNotFoundError:
             self.values = {}
 
+    def write(self):
+        with open(self.pickle_file, "wb") as f:
+            pickle.dump(self.values, f)
+
     def set_value(self, key, value, force_apply=False):
         self.values[key] = value
 
@@ -28,8 +32,7 @@ class AppState:
         ):
             return
 
-        with open(self.pickle_file, "wb") as f:
-            pickle.dump(self.values, f)
+        self.write()
         self.last_write_time = now
 
     def get_value(self, key, default_value):
@@ -47,13 +50,36 @@ class AppState:
         for k, v in list(self.values.items()):
             if k.startswith(("G_MANUAL_STATUS", "sealevel_", "ant+_")):
                 del self.values[k]
-        with open(self.pickle_file, "wb") as f:
-            pickle.dump(self.values, f)
+        self.write()
 
     # quit (power_off)
     def delete(self):
         for k, v in list(self.values.items()):
             if k.startswith("ant+_"):
                 del self.values[k]
-        with open(self.pickle_file, "wb") as f:
-            pickle.dump(self.values, f)
+        self.write()
+
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--delete")
+    parser.add_argument("-r", "--reset", action="store_true", default=False)
+    args = parser.parse_args()
+
+    s = AppState()
+
+    if args.delete:
+        del_key = args.delete
+    else:
+        del_key = None
+    if args.reset:
+        s.reset()
+    elif del_key is not None and del_key in s.values:
+        print(f"delete {del_key}")
+        del s.values[del_key]
+        s.write()
+
+    print(s.values)
+
+
