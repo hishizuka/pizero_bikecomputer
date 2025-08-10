@@ -60,6 +60,11 @@ class NetworkMenuWidget(MenuWidget):
             ("BT Pairing", "submenu", self.bt_pairing),
             ("BT Paired Devices", "submenu", self.bt_paired_devices),
             ("BT Tethering", "submenu", self.bt_tething),  ### move to BluetoothPairedDeviceListWidget
+            (
+                "connect Wifi via WPS",
+                "dialog",
+                lambda: self.config.gui.show_dialog(self.wifi_connect_with_wps, "Connect to Wifi with WPS?")
+            ),
             ("IP Address", "dialog", self.show_ip_address),
         )
         self.add_buttons(button_conf)
@@ -91,9 +96,24 @@ class NetworkMenuWidget(MenuWidget):
     def bt_paired_devices(self):
         self.change_page("BT Paired Devices", preprocess=True)
 
-
     def bt_tething(self):
         self.change_page("BT Tethering", preprocess=True)
+
+    @qasync.asyncSlot()
+    async def wifi_connect_with_wps(self):
+        self.config.gui.show_dialog_cancel_only(None, "Trying to connect...")
+        await asyncio.sleep(1)  # wait for dialog to show
+        connect_status = await self.config.network.wifi_connect_with_wps()
+
+        # Show final result
+        if connect_status:
+            self.config.gui.change_dialog(
+                title="Connection succeeded!", button_label="OK"
+            )
+        else:
+            self.config.gui.change_dialog(
+                title="Connection failed for some reason!", button_label="OK"
+            )
 
     def show_ip_address(self):
         address = detect_network() or "No address"

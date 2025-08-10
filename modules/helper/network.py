@@ -693,3 +693,25 @@ class Network:
                     ],
                     False,
                 )
+
+    async def wifi_connect_with_wps(self):
+        if shutil.which("wpa_cli") is None:
+            return False
+
+        app_logger.info(f"Wifi connect with WPS")
+        # Start the wpa_cli process
+        res, err = exec_cmd_return_value(['sudo', 'wpa_cli', 'wps_pbc'], cmd_print=True)
+
+        # Wait for connection (may take up to 30 seconds)
+        self.config.gui.change_dialog(
+            title="Wait for connection.", button_label="OK"
+        )
+        await asyncio.sleep(15)
+
+        # Check connection status
+        res, err = exec_cmd_return_value(['sudo', 'wpa_cli', 'status'], cmd_print=True)
+
+        if "wpa_state=COMPLETED" in res:
+            return True
+        else:
+            return False
