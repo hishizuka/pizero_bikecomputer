@@ -115,8 +115,11 @@ class GUI_PyQt(GUI_Qt_Base):
     signal_reset_count = Signal()
     signal_boot_status = Signal(str)
     signal_change_overlay = Signal()
+    signal_overlay_prev_time = Signal()
+    signal_overlay_next_time = Signal()
     signal_modify_map_tile = Signal()
     signal_turn_on_off_light = Signal()
+    signal_tb_message = Signal(str, str, bool)
 
     # for dialog
     display_dialog = False
@@ -161,6 +164,12 @@ class GUI_PyQt(GUI_Qt_Base):
 
         self.exec()
 
+    def check_resolution(self):
+        if self.main_window.width() >= self.main_window.height():
+            self.horizontal = True
+        else:
+            self.horizontal = False
+
     async def set_boot_status(self, text):
         self.signal_boot_status.emit(text)
         self.draw_display(direct_update=True)
@@ -195,9 +204,12 @@ class GUI_PyQt(GUI_Qt_Base):
             self.signal_reset_count.connect(self.reset_count_internal)
 
             self.signal_change_overlay.connect(self.change_map_overlays_internal)
+            self.signal_overlay_prev_time.connect(self.map_overlay_prev_time_internal)
+            self.signal_overlay_next_time.connect(self.map_overlay_next_time_internal)
             self.signal_modify_map_tile.connect(self.modify_map_tile_internal)
 
             self.signal_turn_on_off_light.connect(self.turn_on_off_light_internal)
+            self.signal_tb_message.connect(self.popup_tb_message_internal)
 
             self.msg_queue = asyncio.Queue()
             self.msg_event = asyncio.Event()
@@ -217,6 +229,8 @@ class GUI_PyQt(GUI_Qt_Base):
             from modules.pyqt.menu.pyqt_system_menu_widget import (
                 SystemMenuWidget,
                 NetworkMenuWidget,
+                BluetoothPairingListWidget,
+                BluetoothPairedDeviceListWidget,
                 BluetoothTetheringListWidget,
                 DebugMenuWidget,
                 DebugLogViewerWidget,
@@ -280,6 +294,8 @@ class GUI_PyQt(GUI_Qt_Base):
                 ("Wheel Size", AdjustWheelCircumferenceWidget),
                 ("Adjust Altitude", AdjustAltitudeWidget),
                 ("Sensors", SensorMenuWidget),
+                ("BT Pairing", BluetoothPairingListWidget),
+                ("BT Paired Devices", BluetoothPairedDeviceListWidget),
                 ("BT Tethering", BluetoothTetheringListWidget),
                 ("Network", NetworkMenuWidget),
                 ("Debug Log", DebugLogViewerWidget),
@@ -523,15 +539,29 @@ class GUI_PyQt(GUI_Qt_Base):
         if self.map_widget is not None:
             self.signal_change_overlay.emit()
 
+    def change_map_overlays_internal(self):
+        self.map_widget.change_map_overlays()
+
     def modify_map_tile(self):
         if self.map_widget is not None:
             self.signal_modify_map_tile.emit()
 
-    def change_map_overlays_internal(self):
-        self.map_widget.change_map_overlays()
-
     def modify_map_tile_internal(self):
         self.map_widget.modify_map_tile()
+
+    def map_overlay_prev_time(self):
+        if self.map_widget is not None:
+            self.signal_overlay_prev_time.emit()
+
+    def map_overlay_prev_time_internal(self):
+        self.map_widget.update_overlay_time(False)
+
+    def map_overlay_next_time(self):
+        if self.map_widget is not None:
+            self.signal_overlay_next_time.emit()
+
+    def map_overlay_next_time_internal(self):
+        self.map_widget.update_overlay_time(True)
 
     def map_move_x_plus(self):
         self.map_method("move_x_plus")
@@ -644,6 +674,12 @@ class GUI_PyQt(GUI_Qt_Base):
 
     def turn_on_off_light(self):
         self.signal_turn_on_off_light.emit()
+
+    def popup_tb_message(self, name, body, limit):
+        self.signal_tb_message.emit(name, body, limit)
+
+    def popup_tb_message_internal(self, name, body, limit):
+        self.show_message(name, body, limit)
 
     def turn_on_off_light_internal(self):
         self.config.logger.sensor.sensor_ant.set_light_mode("ON_OFF_FLASH_LOW")
