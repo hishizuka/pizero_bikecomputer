@@ -1,6 +1,6 @@
 import numpy as np
 
-from modules._qt_qtwidgets import pg, qasync, Signal
+from modules._qt_qtwidgets import pg, qasync, Signal, QT_MOUSEBUTTON_LEFTBUTTON
 from modules.pyqt.pyqt_screen_widget import ScreenWidget
 from .pyqt_map_button import (
     ZoomInButton,
@@ -12,6 +12,37 @@ from .pyqt_map_button import (
     ArrowEastButton,
 )
 
+
+class CustomPlotWidget(pg.PlotWidget):
+    signal_drag_started = Signal()
+    signal_drag_ended = Signal(int, int)
+    signal_wheel_scroll = Signal(int)
+
+    def __init__(self):
+        super().__init__()
+        self._dragging = False
+        self._start_pos = None
+
+    def mousePressEvent(self, event):
+        if event.button() == QT_MOUSEBUTTON_LEFTBUTTON:
+            self._dragging = True
+            self._start_pos = event.position().toPoint()
+            self.signal_drag_started.emit()
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == QT_MOUSEBUTTON_LEFTBUTTON and self._dragging:
+            self._dragging = False
+            end_pos = event.position().toPoint()
+            dx = end_pos.x() - self._start_pos.x()
+            dy = end_pos.y() - self._start_pos.y()
+            self.signal_drag_ended.emit(dx, dy)
+        super().mouseReleaseEvent(event)
+
+    def wheelEvent(self, event):
+        delta = event.angleDelta().y()
+        self.signal_wheel_scroll.emit(delta)
+        event.accept()
 
 class BaseMapWidget(ScreenWidget):
     max_height = 1
@@ -63,7 +94,13 @@ class BaseMapWidget(ScreenWidget):
 
     def setup_ui_extra(self):
         # main graph from pyqtgraph
-        self.plot = pg.PlotWidget()
+        if self.config.display.has_touch:
+            self.plot = CustomPlotWidget()
+            self.plot.signal_drag_started.connect(self.on_drag_started)
+            self.plot.signal_drag_ended.connect(self.on_drag_ended)
+            self.plot.signal_wheel_scroll.connect(self.on_wheel_scrolled)
+        else:
+            self.plot = pg.PlotWidget()
         self.plot.setBackground(None)
         self.plot.hideAxis("left")
         self.plot.hideAxis("bottom")
@@ -171,3 +208,18 @@ class BaseMapWidget(ScreenWidget):
         self.zoom *= 2
         self.zoomlevel -= 1
         await self.update_display()
+
+    @qasync.asyncSlot()
+    async def on_drag_started(self):
+        self.timer.stop()
+
+    @qasync.asyncSlot(int, int)
+    async def on_drag_ended(self, dx, dy):
+        self.timer.start()
+
+    def on_wheel_scrolled(self, delta):
+        if delta > 0:
+            self.zoom_plus()
+        else:
+            self.zoom_minus()
+

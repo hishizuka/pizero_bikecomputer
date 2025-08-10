@@ -116,6 +116,26 @@ class CourseProfileGraphWidget(BaseMapWidget):
         self.course_loaded = False
         self.resizeEvent(None)
 
+    def wheelEvent(self, event):
+        delta = event.angleDelta().y()
+        if delta > 0:
+            self.zoom_in()
+        else:
+            self.zoom_out()
+        event.accept()
+
+    @qasync.asyncSlot(int, int)
+    async def on_drag_ended(self, dx, dy):
+        widget_width = self.plot.width()
+        if widget_width == 0:
+            return
+
+        x_width = self.zoom
+        dmove = -dx / widget_width * x_width
+        self.move_pos["x"] += dmove
+
+        await self.update_display()
+
     @qasync.asyncSlot()
     async def update_display(self):
         if not self.course.is_set or not len(self.course.altitude):
