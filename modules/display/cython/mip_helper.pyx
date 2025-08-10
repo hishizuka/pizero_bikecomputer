@@ -44,7 +44,7 @@ cdef class MipDisplay_CPP:
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.nonecheck(False)
-cpdef conv_3bit_color(cnp.uint8_t[:,:,::1] im_array):
+cpdef conv_3bit_8colors_cy(const cnp.uint8_t[:,:,::1] im_array):
   cdef int i, j, k, h, w, d, bit_count
   cdef int bit_index = 0
   cdef int[2] thresholds = [216, 128]
@@ -54,7 +54,7 @@ cpdef conv_3bit_color(cnp.uint8_t[:,:,::1] im_array):
   w = im_array.shape[1]
   d = im_array.shape[2]
   
-  im_bits = np.zeros((h,w*d/8), dtype=np.uint8)
+  im_bits = np.zeros((h, int(w*d/8)), dtype=np.uint8)
   cdef cnp.uint8_t[:,::1] im_bits_view = im_bits
 
   for i in range(h):

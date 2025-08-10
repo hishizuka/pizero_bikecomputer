@@ -26,11 +26,11 @@ class MipDisplayMraa(MipDisplayBase):
         super().__init__(config, size, color)
 
         if self.color == 2:
-            self.conv_color = self.conv_1bit_color_py
+            self.conv_color = self.conv_1bit_2colors_py
         elif self.color == 8:
-            self.conv_color = self.conv_3bit_color_py
+            self.conv_color = self.conv_3bit_27colors_py
         if self.color == 64:
-            self.conv_color = self.conv_4bit_color_py
+            self.conv_color = self.conv_4bit_64colors_py
 
     def init_spi(self):
         self.spi = mraa.Spi(1)

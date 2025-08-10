@@ -10,7 +10,7 @@ try:
 
     import pyximport
     pyximport.install()
-    from .cython.mip_helper import conv_3bit_color, MipDisplay_CPP
+    from .cython.mip_helper import conv_3bit_8colors_cy, MipDisplay_CPP
     MODE = "Cython_full"
 except ImportError:
     pass
@@ -39,19 +39,19 @@ class MipDisplayPigpio(MipDisplayBase):
             return True
         elif MODE == "Cython":
             if self.color == 2:
-                self.conv_color = self.conv_1bit_color_py
+                self.conv_color = self.conv_1bit_2colors_py
             elif self.color == 8:
-                self.conv_color = conv_3bit_color
+                self.conv_color = conv_3bit_8colors_cy
             elif self.color == 64:
-                self.conv_color = self.conv_4bit_color_py
+                self.conv_color = self.conv_4bit_64colors_py
             return False
         else:
             if self.color == 2:
-                self.conv_color = self.conv_1bit_color_py
+                self.conv_color = self.conv_1bit_2colors_py
             elif self.color == 8:
-                self.conv_color = self.conv_3bit_color_py
+                self.conv_color = self.conv_3bit_27colors_py
             if self.color == 64:
-                self.conv_color = self.conv_4bit_color_py
+                self.conv_color = self.conv_4bit_64colors_py
             return False
 
     def get_pcb_backlight(self):
