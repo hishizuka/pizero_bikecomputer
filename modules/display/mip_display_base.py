@@ -205,22 +205,25 @@ class MipDisplayBase(Display):
         while s > 0:
             self.gpio_write(self.SCS, 1)
             time.sleep(0.000006)
-            if state:
-                if not do_manual_inversion:
-                    self.spi_write([0b00010100, 0])  # INVERSION MODE
-                else:
+
+            if do_manual_inversion:
+                if state:
                     buf = self.img_buff_rgb8.copy()
-                    if self.config.G_DISPLAY == "MIP_Azumo_color_272x451":
+                    if self.config.G_DISPLAY == "MIP_Azumo_color_272x451" and self.color == 64:
                         buf[:,2:2+102] = np.invert(buf[:,2:2+102])
                         buf[:,2+102+2:] = np.invert(buf[:,2+102+2:])
-                    elif self.config.G_DISPLAY.startswith("MIP_Sharp_mono"):
+                    else:
                         buf[:,2:] = np.invert(buf[:,2:])
                     self.inversion_draw(buf)
-            else:
-                if not do_manual_inversion:
-                    self.no_update()
                 else:
                     self.inversion_draw(self.img_buff_rgb8)
+            else:
+                # use inversion mode
+                if state:
+                    self.spi_write([0b00010100, 0])  # INVERSION MODE
+                else:
+                    self.no_update()
+
             self.gpio_write(self.SCS, 0)
             time.sleep(self.interval)
             s -= self.interval
@@ -301,28 +304,23 @@ class MipDisplayBase(Display):
         bytes_data[-2:] = 0
         return bytes_data
 
-    def conv_1bit_color_py(self, im_array):
+    def conv_1bit_2colors_py(self, im_array):
         return ~im_array.reshape(im_array.shape[:2])
 
-    def conv_2bit_color_py(self, im_array):
+    def conv_3bit_8colors_py(self, im_array):
         return np.packbits(
             (im_array >> 7).astype("bool").reshape(self.size[1], self.size[0] * 3),
             axis=1,
         )
 
-    def conv_3bit_color_py(self, im_array, th=216):
-        # pseudo 3bit color
-        # set even pixel and odd pixel to 0
+    def conv_3bit_27colors_py(self, im_array, th=216):
+        # pseudo 27 colors
+
         # 1. convert 2bit color
-        # im_array_bin = (im_array >= 128)
-
-        # 2. set even pixel (2n, 2n) to 0
-        # im_array_bin[0::2, 0::2, :][im_array[0::2, 0::2, :] <= 216] = False
-        # 3. set odd pixel (2n+1, 2n+1) to 0
-        # im_array_bin[1::2, 1::2, :][im_array[1::2, 1::2, :] <= 216] = False
-
         im_array_bin = (im_array >> 7).astype("bool")
+        # 2. set even pixel (2n, 2n) to 0
         im_array_bin[0::2, 0::2, :][im_array[0::2, 0::2, :] <= th] = False
+        # 3. set odd pixel (2n+1, 2n+1) to 0
         im_array_bin[1::2, 1::2, :][im_array[1::2, 1::2, :] <= th] = False
 
         return np.packbits(im_array_bin.reshape(self.size[1], self.size[0] * 3), axis=1)
@@ -339,7 +337,7 @@ class MipDisplayBase(Display):
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-    def conv_4bit_color_py(self, im_array):
+    def conv_4bit_64colors_py(self, im_array):
         im_array_u8 = np.zeros((self.size[1], self.buff_width)).astype("uint8")
         im_array_u8[:,2:2+102] = np.packbits(
             ((im_array >> 6)&0b01).reshape(
