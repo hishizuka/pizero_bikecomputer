@@ -388,19 +388,20 @@ class LoggerCore:
         app_logger.info(f"->LAP:{self.values['lap']}{self.get_time_str()}")
 
         # show message
+        newline = "<br />" if not self.config.gui.horizontal else ""
         pre_lap_avg = self.record_stats["pre_lap_avg"]
         dist_str = round(pre_lap_avg["distance"] / 1000, 1)
         hour_sec = divmod(lap_time, 3600)
         min_sec = divmod(hour_sec[1], 60)
         lap_time_str = f"{hour_sec[0]}:{min_sec[0]:02}"
-        lap_message = f"LAP {self.values['lap']} ({dist_str} km, {lap_time_str})"
+        lap_message = f"LAP {self.values['lap']} {newline}({dist_str} km, {lap_time_str})"
  
         u = self.config.gui.gui_config.G_UNIT
         value_message = f"{(pre_lap_avg['speed'] * 3.6):{u['Speed'][0]}} {u['Speed'][1]}"
         if self.config.G_ANT["USE"]["HR"]:
-            value_message += f", {pre_lap_avg['heart_rate']:{u['HeartRate'][0]}} {u['HeartRate'][1]}"
+            value_message += f", {newline}{pre_lap_avg['heart_rate']:{u['HeartRate'][0]}} {u['HeartRate'][1]}"
         if self.config.G_ANT["USE"]["PWR"]:
-            value_message += f", {pre_lap_avg['power']:{u['Power'][0]}} {u['Power'][1]}"
+            value_message += f", {newline}{pre_lap_avg['power']:{u['Power'][0]}} {u['Power'][1]}"
 
         self.config.gui.show_popup_multiline(
             lap_message,

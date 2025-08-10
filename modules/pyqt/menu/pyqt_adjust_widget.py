@@ -77,11 +77,7 @@ class AdjustWidget(MenuWidget):
     def setup_menu(self):
         self.make_menu_layout(QtWidgets.QGridLayout)
 
-        max_width = 5
-        horizontal = True
-        if self.parent().size().height() > self.parent().size().width():
-            horizontal = False
-            max_width = 2
+        max_width = 5 if self.config.gui.horizontal else 2
 
         self.display = AdjustEdit("")
         self.menu_layout.addWidget(self.display, 0, 0, 1, max_width)
@@ -90,11 +86,11 @@ class AdjustWidget(MenuWidget):
         self.menu_layout.addWidget(unit_label, 0, max_width)
 
         num_buttons = {}
-        cols = 5 if horizontal else 3
+        cols = 5 if self.config.gui.horizontal else 3
         grid_position = []
         for i in range(1, 10):
             grid_position.append((1 + (i - 1) // cols, (i - 1) % cols))
-        if horizontal:
+        if self.config.gui.horizontal:
             grid_position.append((2, 4)) # 0
             grid_position.append((1, 5)) # clear button
             grid_position.append((2, 5)) # set button

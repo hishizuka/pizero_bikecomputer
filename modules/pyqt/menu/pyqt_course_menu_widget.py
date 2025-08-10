@@ -315,12 +315,9 @@ class CourseDetailWidget(MenuWidget):
     map_image_size = None
     profile_image_size = None
     next_button = None
-    horizontal = True
     font_size = 20
 
     def setup_menu(self):
-        if self.parent().size().height() > self.parent().size().width():
-            self.horizontal = False
 
         self.make_menu_layout(QtWidgets.QVBoxLayout)
 
@@ -351,7 +348,7 @@ class CourseDetailWidget(MenuWidget):
         outer_layout.setContentsMargins(0, 0, 0, 0)
         outer_layout.setSpacing(0)
         
-        if self.horizontal:
+        if self.config.gui.horizontal:
             info_layout = QtWidgets.QVBoxLayout()
             info_layout.setContentsMargins(0, 0, 0, 0)
             info_layout.setSpacing(0)
@@ -490,7 +487,7 @@ class CourseDetailWidget(MenuWidget):
                 return False
 
             ratio = 1 # ratio against window width (for vertical layout)
-            if self.horizontal:
+            if self.config.gui.horizontal:
                 ratio = 0.5
             scale = (self.size().width() * ratio) / self.map_image_size[0]
             im = im.resize((
@@ -548,4 +545,4 @@ class GoogleDirectionsAPISettingMenuWidget(ListWidget):
     async def button_func_extra(self):
         self.config.G_GOOGLE_DIRECTION_API[
             "API_MODE_SETTING"
-        ] = self.selected_item.title_label.text()
+        ] = self.selected_item.title

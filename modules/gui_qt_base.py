@@ -37,6 +37,8 @@ class GUI_Qt_Base(QtCore.QObject):
     remove_bytes = 0
     bufsize = 0
 
+    horizontal = True
+
     @property
     def logger(self):
         return self.config.logger
@@ -132,6 +134,7 @@ class GUI_Qt_Base(QtCore.QObject):
                 app_logger.info(f"add font: {font_name}")
 
     def draw_display(self, direct_update=False):
+        self.check_resolution()
         if not self.bufsize:
             return
 
