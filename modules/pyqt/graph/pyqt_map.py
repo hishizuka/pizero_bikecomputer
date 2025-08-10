@@ -2,9 +2,10 @@ import io
 import os
 import sqlite3
 from datetime import datetime, timezone
+import shutil
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageEnhance
 
 from modules.app_logger import app_logger
 from modules._qt_qtwidgets import QT_COMPOSITION_MODE_DARKEN, pg, qasync, Signal
@@ -22,10 +23,13 @@ from modules.utils.map import (
     get_tilexy_and_xy_in_tile,
 )
 from modules.utils.timer import Timer, log_timers
+from modules.utils.cmd import exec_cmd
 from .pyqt_base_map import BaseMapWidget
 from .pyqt_map_button import (
     DirectionButton,
     MapLayersButton,
+    MapNextButton,
+    MapPrevButton,
 )
 from modules.helper.maptile import conv_image
 
@@ -97,9 +101,19 @@ class MapWidget(BaseMapWidget):
         color=(0, 0, 0),
     )
 
-    overlay_validtime = {
-        "RAIN": None,
-        "WIND": None,
+    overlay_time = {
+        "RAIN": {
+            "display_time": None,
+            "prev_time": None,
+            "next_time": None,
+        },
+        "WIND": {
+            "display_time": None,
+            "prev_time": None,
+            "next_time": None,
+            "prev_subdomain": None,  # for jpn_scw
+            "next_subdomain": None,  # for jpn_scw
+        },
     }
     overlay_order = ["NONE", "WIND", "RAIN", "HEATMAP"]
     overlay_order_index = {
@@ -110,7 +124,16 @@ class MapWidget(BaseMapWidget):
     overlay_index = 0
 
     tile_modify_mode = 0
+    tile_didder_pallete = {
+        2: "000000 FFFFFF",
+        8: None,
+        64: None,
+        #64: "000000 FF0000 00FF00 0000FF 00FFFF FF00FF FFFF00 FFFFFF",
+    }
 
+    @property
+    def maptile_with_values(self):
+        return self.config.api.maptile_with_values
 
     def setup_ui_extra(self):
         super().setup_ui_extra()
@@ -196,10 +219,10 @@ class MapWidget(BaseMapWidget):
             self.layout.addWidget(self.buttons["lock"], 1, 0)
             self.layout.addWidget(self.buttons["zoomup"], 2, 0)
             # arrow
-            self.layout.addWidget(self.buttons["left"], 0, 2)
-            self.layout.addWidget(self.buttons["up"], 1, 2)
-            self.layout.addWidget(self.buttons["down"], 2, 2)
-            self.layout.addWidget(self.buttons["right"], 3, 2)
+            self.layout.addWidget(self.buttons["left"], 0, 4)
+            self.layout.addWidget(self.buttons["up"], 1, 4)
+            self.layout.addWidget(self.buttons["down"], 2, 4)
+            self.layout.addWidget(self.buttons["right"], 3, 4)
             
             if self.config.G_GOOGLE_DIRECTION_API["HAVE_API_TOKEN"]:
                 self.buttons["go"] = DirectionButton()
@@ -211,6 +234,15 @@ class MapWidget(BaseMapWidget):
             self.buttons["layers"].clicked.connect(self.change_map_overlays)
             self.enable_overlay_button()
 
+            # for time series of overlay map tiles
+            self.buttons["prev_time"] = MapPrevButton()
+            self.buttons["next_time"] = MapNextButton()
+            self.layout.addWidget(self.buttons["prev_time"], max_height-1, 2)
+            self.layout.addWidget(self.buttons["next_time"], max_height-1, 4)
+            self.buttons["prev_time"].clicked.connect(lambda: self.update_overlay_time(False))
+            self.buttons["next_time"].clicked.connect(lambda: self.update_overlay_time(True))
+            self.enable_overlay_time_and_button()
+
         # cue sheet and instruction
         self.init_cuesheet_and_instruction()
 
@@ -218,6 +250,30 @@ class MapWidget(BaseMapWidget):
         self.layout.setColumnMinimumWidth(0, 40)
         self.layout.setColumnStretch(1, 1)
         self.layout.setColumnMinimumWidth(2, 40)
+        self.layout.setColumnMinimumWidth(3, 5)
+        self.layout.setColumnMinimumWidth(4, 40)
+
+        def palette_rgb_multilevel(levels=2):
+            if levels < 2:
+                return
+
+            # Evenly spaced step values from 0 to 255 (e.g., 2 levels → [0,255], 4 levels → [0,85,170,255])
+            vals = [round(i * 255 / (levels - 1)) for i in range(levels)]
+
+            def hex2(v: int) -> str:
+                return f"{v:02X}"
+
+            colors = []
+            for r in vals:
+                for g in vals:
+                    for b in vals:
+                        colors.append(f"{hex2(r)}{hex2(g)}{hex2(b)}")
+
+            return " ".join(colors)
+
+        if shutil.which("didder"):
+            self.tile_didder_pallete[8] = palette_rgb_multilevel(2)
+            self.tile_didder_pallete[64] = palette_rgb_multilevel(4)
 
     def reset_map(self):
         # adjust zoom level for large tiles
@@ -252,7 +308,8 @@ class MapWidget(BaseMapWidget):
         elif self.overlay_index == self.overlay_order_index["WIND"]:
             map_settings = self.config.G_WIND_OVERLAY_MAP_CONFIG[self.config.G_WIND_OVERLAY_MAP]
         if map_settings is not None:
-            attribution_text += f" / {map_settings['attribution']}"
+            split_char = " / " if self.config.gui.horizontal else "<br />"
+            attribution_text += f"{split_char}{map_settings['attribution']}"
             b, v = self.add_attribution_extra_text(map_settings)
             if b != "" and v != "":
                 attribution_text += f" ({b}/{v})"
@@ -269,7 +326,7 @@ class MapWidget(BaseMapWidget):
             self.map_attribution.setZValue(100)
 
     def add_attribution_extra_text(self, map_settings):
-        basetime_str = validtime_str = break_str = ""
+        basetime_str = validtime_str = ""
         if self.overlay_index == self.overlay_order_index["RAIN"]:
             if self.config.G_RAIN_OVERLAY_MAP == "jpn_jma_bousai" and map_settings['basetime'] is not None:
                 basetime_str = map_settings['basetime'][-6:]
@@ -420,8 +477,31 @@ class MapWidget(BaseMapWidget):
             app_logger.info("Plotting course:")
             log_timers(timers, text_total=f"  total        : {0:.3f} sec")
 
+    @qasync.asyncSlot(int, int)
+    async def on_drag_ended(self, dx, dy):
+        w, h = self.get_geo_area(self.map_pos["x"], self.map_pos["y"])
+
+        widget_width = self.plot.width()
+        widget_height = self.plot.height()
+
+        if widget_width == 0 or widget_height == 0:
+            return
+
+        dlon = (dx / widget_width) * w
+        dlat = (dy / widget_height) * h
+
+        dlat = -dlat
+
+        self.map_pos["x"] -= dlon
+        self.map_pos["y"] -= dlat
+
+        await self.update_display()
+
+        self.timer.start()
+
     @qasync.asyncSlot()
     async def update_display(self):
+
         # display current position
         if len(self.location):
             self.plot.removeItem(self.current_point)
@@ -622,6 +702,51 @@ class MapWidget(BaseMapWidget):
         )
         self.init_course()
 
+    async def update_prev_next_overlay_time(self, overlay_type, map_config, map_name):
+        p_vt, p_sd, n_vt, n_sd = await self.maptile_with_values.get_prev_next_validtime(
+            overlay_type, map_config, map_name
+        )
+
+        # update overlay_time
+        self.overlay_time[overlay_type]["prev_time"] = p_vt
+        self.overlay_time[overlay_type]["next_time"] = n_vt
+        if map_name.startswith("jpn_scw"):
+            self.overlay_time[overlay_type]["prev_subdomain"] = p_sd
+            self.overlay_time[overlay_type]["next_subdomain"] = n_sd
+        
+        # update button status
+        if self.config.display.has_touch:
+            for key in ("prev_time", "next_time"):
+                self.buttons[key].setEnabled(self.overlay_time[overlay_type][key] is not None)
+
+    @qasync.asyncSlot()
+    async def update_overlay_time(self, goto_next=True):
+        overlay_type = self.overlay_order[self.overlay_index]
+        if overlay_type not in ["WIND", "RAIN"]:
+            return
+        
+        map_config = getattr(self.config, f"G_{overlay_type}_OVERLAY_MAP_CONFIG")
+        map_name = getattr(self.config, f"G_{overlay_type}_OVERLAY_MAP")
+        map_settings = map_config[map_name]
+
+        time = "next_time" if goto_next else "prev_time"
+        sd = "next_subdomain" if goto_next else "prev_subdomain"
+        time_value = self.overlay_time[overlay_type].get(time)
+
+        if time_value is not None:
+            map_settings["validtime"] = time_value
+            if map_name.startswith("jpn_scw"):
+                map_settings["subdomain"] = self.overlay_time[overlay_type].get(sd)
+            elif map_name.startswith("jpn_jma_bousai"):
+                vt = datetime.strptime(map_settings["validtime"], map_settings["time_format"])
+                ct = map_settings["current_time"]
+                if vt < ct:
+                    map_settings["basetime"] = map_settings["validtime"]
+                else:
+                    map_settings["basetime"] = ct.strftime(map_settings["time_format"])
+            self.update_display()  # or await self.overlay_map(False, p0, p1, map_config, map_name)
+            await self.update_prev_next_overlay_time(overlay_type, map_config, map_name)
+
     async def draw_map_tile(self, x_start, x_end, y_start, y_end):
         # get tile coordinates of display border points
         p0 = {"x": min(x_start, x_end), "y": min(y_start, y_end)}
@@ -655,28 +780,32 @@ class MapWidget(BaseMapWidget):
         )
 
     async def overlay_rainmap(self, drawn_main_map, p0, p1):
-        map_config = self.config.G_RAIN_OVERLAY_MAP_CONFIG
-        map_name = self.config.G_RAIN_OVERLAY_MAP
-
-        await self.config.api.maptile_with_values.update_overlay_rainmap_timeline(
-            map_config[map_name], map_name
+        await self.overlay_map_internal(
+            overlay_type="RAIN",
+            drawn_main_map=drawn_main_map,
+            p0=p0,
+            p1=p1,
+            update_func=self.maptile_with_values.update_overlay_rainmap_timeline,
         )
-        if self.overlay_validtime["RAIN"] != map_config[map_name]["validtime"]:
-            self.overlay_validtime["RAIN"] = map_config[map_name]["validtime"]
-            self.reset_overlay(map_name)
-            # re-draw from self.config.G_MAP first
-        else:
-            await self.overlay_map(drawn_main_map, p0, p1, map_config, map_name)
 
     async def overlay_windmap(self, drawn_main_map, p0, p1):
-        map_config = self.config.G_WIND_OVERLAY_MAP_CONFIG
-        map_name = self.config.G_WIND_OVERLAY_MAP
-
-        await self.config.api.maptile_with_values.update_overlay_windmap_timeline(
-            map_config[map_name], map_name
+        await self.overlay_map_internal(
+            overlay_type="WIND",
+            drawn_main_map=drawn_main_map,
+            p0=p0,
+            p1=p1,
+            update_func=self.maptile_with_values.update_overlay_windmap_timeline,
         )
-        if self.overlay_validtime["WIND"] != map_config[map_name]["validtime"]:
-            self.overlay_validtime["WIND"] = map_config[map_name]["validtime"]
+
+    async def overlay_map_internal(self, overlay_type, drawn_main_map, p0, p1, update_func):
+        map_config = getattr(self.config, f"G_{overlay_type}_OVERLAY_MAP_CONFIG")
+        map_name = getattr(self.config, f"G_{overlay_type}_OVERLAY_MAP")
+
+        await update_func(map_config[map_name], map_name)
+
+        display_time = f"{map_config[map_name]['basetime']}/{map_config[map_name]['validtime']}"
+        if self.overlay_time[overlay_type]["display_time"] != display_time:
+            self.overlay_time[overlay_type]["display_time"] = display_time
             self.reset_overlay(map_name)
             # re-draw from self.config.G_MAP first
         else:
@@ -779,14 +908,15 @@ class MapWidget(BaseMapWidget):
                     x_start, y_start, x_start + w_h, y_start + w_h
                 )).convert("RGBA")
 
-
+            #########################
             if (
-                self.config.G_DISPLAY.startswith(("MIP_JDI", "MIP_Azumo"))
-                and (
-                    map_name.startswith("jpn_scw")
-                    or map_name.startswith("jpn_jma_bousai")
-                )
+                map_config == self.config.G_MAP_CONFIG
+                and self.tile_modify_mode != 0
             ):
+                img_pil = self.enhance_image(img_pil)
+            #########################
+
+            if map_name.startswith(("jpn_scw", "jpn_jma_bousai")):
                 imgarray = conv_image(img_pil, map_name)
             else:
                 imgarray = np.asarray(img_pil)
@@ -1101,6 +1231,8 @@ class MapWidget(BaseMapWidget):
                 break
 
         self.reset_map()
+        self.enable_overlay_time_and_button()
+        self.update_display()
     
     def remove_overlay(self):
         if self.overlay_index != 0:
@@ -1124,3 +1256,44 @@ class MapWidget(BaseMapWidget):
             self.tile_modify_mode += 1
         self.config.display.screen_flash_short()
         self.reset_map()
+
+    @qasync.asyncSlot()
+    async def enable_overlay_time_and_button(self):
+        overlay_type = self.overlay_order[self.overlay_index]
+
+        if overlay_type in ("WIND", "RAIN"):
+            map_config = getattr(self.config, f"G_{overlay_type}_OVERLAY_MAP_CONFIG")
+            map_name = getattr(self.config, f"G_{overlay_type}_OVERLAY_MAP")
+            await self.update_prev_next_overlay_time(overlay_type, map_config, map_name)
+
+        enabled = overlay_type in ("WIND", "RAIN")
+        if self.config.display.has_touch:
+            self.buttons["prev_time"].setVisible(enabled)
+            self.buttons["next_time"].setVisible(enabled)
+
+    def enhance_image(self, img_pil):
+        # 0: None
+        # 1: pil
+        # 2: didder
+        # 3: pil + didder
+        filename = "/tmp/tile.png"
+        
+        if self.tile_modify_mode in [1, 3]:
+            img_pil = ImageEnhance.Contrast(img_pil).enhance(2.0)
+
+        if self.tile_modify_mode in [2, 3] and shutil.which("didder"):
+            img_pil.save(filename)
+            exec_cmd(
+                [
+                    "didder",
+                    "-i", filename,
+                    "-o", filename,
+                    "--strength", "0.8",
+                    "--palette", self.tile_didder_pallete[self.config.display.color],
+                    "edm", "--serpentine", "FloydSteinberg"
+                ],
+                cmd_print=False
+            )
+            img_pil = Image.open(filename).convert("RGBA")
+            
+        return img_pil
