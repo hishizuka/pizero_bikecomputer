@@ -194,6 +194,7 @@ class GUI_Config:
         "Pressure": (("4.0f", "hPa"), "self.sensor.values['I2C']['pressure']"),
         "Altitude": (G_UNIT["Altitude"], "self.sensor.values['I2C']['altitude']"),
         "Humidity": (G_UNIT["Percent"], "self.sensor.values['I2C']['humidity']"),
+        "D_INDEX": (G_UNIT["Int"], "self.sensor.values['I2C']['discomfort_index']"),
         "Accum.Alt.": (
             G_UNIT["Altitude"],
             "self.sensor.values['I2C']['accumulated_altitude']",

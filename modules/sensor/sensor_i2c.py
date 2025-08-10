@@ -60,6 +60,7 @@ class SensorI2C(Sensor):
         "pressure_mod",
         "pressure",
         "humidity",
+        "discomfort_index",
         "altitude",
         "pre_altitude",
         "altitude_kalman",
@@ -1129,9 +1130,10 @@ class SensorI2C(Sensor):
             self.values["pressure_raw"] = self.sensor["i2c_baro_temp"].pressure
             if sp.get("BME280"):
                 self.values["humidity"] = self.sensor["i2c_baro_temp"].relative_humidity
-                # discomfort_index = 0.81*self.values['temperature'] + 0.01*self.values['humidity']*(0.99*self.values['temperature']-14.3) + 46.3
             elif sp.get("BHI3_S"):
                 self.values["humidity"] = self.sensor["i2c_baro_temp"].humidity
+            if not any(np.isnan([self.values["humidity"], self.values["temperature"]])):
+                self.values["discomfort_index"] = 0.81*self.values["temperature"] + 0.01*self.values["humidity"]*(0.99*self.values["temperature"]-14.3) + 46.3
         except:
             return
 
