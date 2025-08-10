@@ -3,6 +3,7 @@ import os
 from modules.app_logger import app_logger
 
 DEFAULT_RESOLUTION = (400, 240) #(272, 451) #(400, 240)
+DEFAULT_COLOR = 8
 
 SUPPORTED_DISPLAYS = {
     # display name, resolution, colors if different from its class default
@@ -57,6 +58,10 @@ class Display:
     @property
     def resolution(self):
         return getattr(self, "size", DEFAULT_RESOLUTION)
+
+    @property
+    def colors(self):
+        return getattr(self, "color", DEFAULT_COLOR)
 
     def start_coroutine(self):
         pass
