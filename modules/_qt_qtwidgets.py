@@ -111,3 +111,8 @@ QT_COMPOSITION_MODE_DARKEN = (
     if USE_QT6
     else QtGui.QPainter.CompositionMode_Darken
 )
+QT_MOUSEBUTTON_LEFTBUTTON = (
+    QtCore.Qt.MouseButton.LeftButton
+    if USE_QT6
+    else QtCore.Qt.MouseButton.LeftButton
+)

@@ -10,6 +10,8 @@ from modules.pyqt.components.icons import (
     ArrowEastIcon,
     DirectionsIcon,
     MapLayersIcon,
+    MapNextIcon,
+    MapPrevIcon,
 )
 
 class MapButton(QtWidgets.QPushButton):
@@ -85,3 +87,11 @@ class DirectionButton(MapButton):
 class MapLayersButton(MapButton):
     def __init__(self, *args):
         super().__init__(MapLayersIcon(color="black"), "", *args)
+
+class MapNextButton(MapButton):
+    def __init__(self, *args):
+        super().__init__(MapNextIcon(color="black"), "", *args)
+
+class MapPrevButton(MapButton):
+    def __init__(self, *args):
+        super().__init__(MapPrevIcon(color="black"), "", *args)

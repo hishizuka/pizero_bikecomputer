@@ -113,6 +113,14 @@ class MapLayersIcon(_QIconWithPath):
     path = "img/map_layers.svg"
 
 
+class MapNextIcon(_QIconWithPath):
+    path = "img/chevron_forward.svg"
+
+
+class MapPrevIcon(_QIconWithPath):
+    path = "img/chevron_backward.svg"
+
+
 # "Icons label"
 class BaseMenuIcon(QtWidgets.QLabel):
     icon = None  # icon class

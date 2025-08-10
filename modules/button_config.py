@@ -28,10 +28,10 @@ class Button_Config:
             },
             "MAP": {
                 "A": ("scroll_prev", "get_screenshot"),
-                "B": ("map_zoom_minus", "modify_map_tile"),
+                "B": ("map_zoom_minus", "map_overlay_prev_time"),
                 "C": ("change_map_overlays", "change_mode"),
-                "D": ("map_zoom_plus", ""),
-                "E": ("scroll_next", "enter_menu"),
+                "D": ("map_zoom_plus", "map_overlay_next_time"),
+                "E": ("scroll_next", "modify_map_tile"),
             },
             "MAP_1": {
                 "A": ("map_move_x_minus", "get_screenshot"),
@@ -39,14 +39,8 @@ class Button_Config:
                 "C": ("change_map_overlays", "change_mode"),
                 "D": ("map_move_y_plus", "map_zoom_plus"),
                 "E": ("map_move_x_plus", "map_search_route"),
+                # todo: move_past, move_future
             },
-            #"MAP_2": {
-            #    "A": ("timeline_past", ""),
-            #    "B": ("map_zoom_minus", ""),
-            #    "C": ("timeline_reset", "change_mode"),
-            #    "D": ("map_zoom_plus", ""),
-            #    "E": ("timeline_future", ""),
-            #},
             "COURSE_PROFILE": {
                 "A": ("scroll_prev", ""),
                 "B": ("map_zoom_minus", ""),
@@ -185,6 +179,7 @@ class Button_Config:
     # change button keys
     ioexpander_change_keys = {
         "A": "GP0", "B": "GP1", "C": "GP2", "D": "GP3", "E": "GP4",
+        #"A": "GP1", "B": "GP2", "C": "GP3", "D": "GP4", "E": "GP6",
     }
     for k1 in G_BUTTON_DEF["IOExpander"]:
         b = G_BUTTON_DEF["IOExpander"][k1]

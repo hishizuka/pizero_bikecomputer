@@ -78,7 +78,7 @@ def add_map_config(config):
 
     # worldwide rain tile
     config.G_RAIN_OVERLAY_MAP_CONFIG["rainviewer"] = {
-        "url": "https://tilecache.rainviewer.com/v2/radar/{basetime}/256/{z}/{x}/{y}/6/1_1.png",
+        "url": "https://tilecache.rainviewer.com/v2/radar/{validtime}/256/{z}/{x}/{y}/6/1_1.png",
         "attribution": "RainViewer",
         "tile_size": 256,
         "max_zoomlevel": 18,
@@ -90,6 +90,8 @@ def add_map_config(config):
         "validtime": None,
         "time_interval": 10,  # [minutes]
         "update_minutes": 1,  # typically int(time_interval/2) [minutes]
+        "max_validtime": 0,  # [minutes]
+        "min_validtime": -120,  # [minutes]
         "time_format": "unix_timestamp",
     }
     # japanese rain tile
@@ -107,6 +109,8 @@ def add_map_config(config):
         "validtime": None,
         "time_interval": 5,  # [minutes]
         "update_minutes": 1,  # [minutes]
+        "max_validtime": 60,  # [minutes]
+        "min_validtime": -180,  # [minutes]
         "time_format": "%Y%m%d%H%M%S",
     }
 
@@ -124,6 +128,8 @@ def add_map_config(config):
         "validtime": None,
         "time_interval": 60,  # [minutes]
         "update_minutes": 0,  # [minutes]
+        "max_validtime": 0,  # [minutes]  # 6h, 12h, 24h, 36h, 48h, 60h, 72h. not suitable for cycling.
+        "min_validtime": 0,  # [minutes]
         "time_format": "%H%MZ%d%b%Y",
     }
     # japanese wind tile
