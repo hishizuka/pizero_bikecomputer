@@ -46,6 +46,8 @@ except ImportError:
 _IMPORT_THINGSBOARD = False
 try:
     from tb_device_mqtt import TBDeviceMqttClient, TBPublishInfo
+    import logging
+    logging.getLogger("tb_connection").setLevel(logging.ERROR)
 
     _IMPORT_THINGSBOARD = True
 except ImportError:
@@ -56,6 +58,10 @@ class api:
     config = None
 
     thingsboard_client = None
+    tb_message = {
+        "name": None,
+        "message": None,
+    }
     course_send_status = "RESET"
     
     maptile_with_values = None
@@ -138,14 +144,14 @@ class api:
         # response["elevation"], response["current"][{vars}]
         return response
 
-    async def get_openmeteo_current_wind_data(self, pos):
+    async def get_openmeteo_current_wind_data(self, pos, forcast_time=None):
 
         # check pos
         if np.any(np.isnan(pos)):
             return [np.nan, np.nan]
 
         # check interval
-        if not self.check_time_interval(
+        if forcast_time is None and not self.check_time_interval(
             "OPENMETEO_WIND",
             self.config.G_OPENMETEO_API["INTERVAL_SEC"],
             False
@@ -156,22 +162,31 @@ class api:
         if not self.config.G_AUTO_BT_TETHERING and not detect_network():
             return self.pre_value["OPENMETEO_WIND"]
 
-        asyncio.create_task(self.get_openmeteo_current_wind_data_internal(pos))
-        return self.pre_value["OPENMETEO_WIND"]
+        return await self.get_openmeteo_current_wind_data_internal(pos, forcast_time)
     
-    async def get_openmeteo_current_wind_data_internal(self, pos):
+    async def get_openmeteo_current_wind_data_internal(self, pos, forcast_time=None):
 
         # open connection
         f_name = self.get_openmeteo_current_wind_data_internal.__name__
         if not await self.config.network.open_bt_tethering(f_name):
             return
 
+        # https://open-meteo.com/en/docs
+        # hourly=temperature_2m,precipitation,weathercode,windspeed_10m,winddirection_10m
         vars_str = "wind_speed_10m,wind_direction_10m,wind_gusts_10m"
-        url = "{}?latitude={}&longitude={}&current={}&wind_speed_unit=ms".format(
+        time_str = "current"
+        forecast_time_str = ""
+        if forcast_time is not None:
+            time_str = "hourly"
+            f = forcast_time.strftime("%Y-%m-%dT%H:%M")
+            forecast_time_str = "&start_hour={}&end_hour={}".format(f, f)
+        url = "{}?latitude={}&longitude={}&wind_speed_unit=ms&{}={}{}".format(
             self.config.G_OPENMETEO_API["URL"],
             pos[1],
             pos[0],
-            vars_str
+            time_str,
+            vars_str,
+            forecast_time_str,
         )
         response = await get_json(url)
         # response["elevation"], response["current"][{vars}]
@@ -179,11 +194,14 @@ class api:
         # close connection
         await self.config.network.close_bt_tethering(f_name)
 
-        if "current" in response:
+        if forcast_time is None and "current" in response:
             self.pre_value["OPENMETEO_WIND"] = [
                 response["current"]["wind_speed_10m"],
                 response["current"]["wind_direction_10m"]
             ]
+            return self.pre_value["OPENMETEO_WIND"]
+        elif forcast_time is not None and "hourly" in response:
+            return [response["hourly"]["wind_speed_10m"][0], response["hourly"]["wind_direction_10m"][0]]
 
     async def get_ridewithgps_route(self, add=False, reset=False):
         if (
@@ -588,8 +606,27 @@ class api:
             return False
         return True
 
-    async def send_livetrack_data_internal(self, quick_send=False):
+    def get_tb_message(self, result, exception):
+        if exception is not None:
+            app_logger.error(f"[BT] thingsboard attributes error: {exception}")
+        elif "shared" in result and "message_name" in result["shared"] and "message_body" in result["shared"]:
+            res = result["shared"]
+            if self.tb_message["name"] is None and self.tb_message["message"] is None:
+                self.tb_message["name"] = res["message_name"]
+                self.tb_message["message"] =  res["message_body"]
+                return
+            if (
+                self.tb_message["message"] != res["message_body"]
+                and res["message_body"].strip()
+            ):
+                self.tb_message["name"] = res["message_name"]
+                self.tb_message["message"] =  res["message_body"]
+                self.config.gui.popup_tb_message(
+                    self.tb_message["name"], self.tb_message["message"].strip(), True
+                )
+                # Todo: empty message and name / add timestamp
 
+    async def send_livetrack_data_internal(self, quick_send=False):
         self.send_livetrack_data_lock = True
         f_name = self.send_livetrack_data_internal.__name__
         timestamp_str = ""
@@ -610,7 +647,7 @@ class api:
             speed = int(speed * 3.6)
         distance = v["integrated"]["distance"]
         if not np.isnan(distance):
-            distance = round(distance / 1000, 1)
+            distance = float(round(distance / 1000, 1))
 
         data = {
             "ts": t * 1000,
@@ -623,9 +660,9 @@ class api:
                 "work": int(v["integrated"]["accumulated_power"] / 1000),
                 # 'w_prime_balance': v["integrated"]["w_prime_balance_normalized"],
                 "temperature": v["integrated"]["temperature"],
-                # 'altitude': v["I2C"]["altitude"],
-                "latitude": v["GPS"]["lat"],
-                "longitude": v["GPS"]["lon"],
+                # 'altitude': float(v["I2C"]["altitude"]),
+                "latitude": float(v["GPS"]["lat"]),
+                "longitude": float(v["GPS"]["lon"]),
             },
         }
 
@@ -636,10 +673,23 @@ class api:
                 app_logger.error(f"[BT] thingsboard upload error: {res}")
             else:
                 v["integrated"]["send_time"] = datetime.now().strftime("%H:%M")
+            self.thingsboard_client.request_attributes(
+                shared_keys=["message_name", "message_body"],
+                callback=self.get_tb_message
+            )
+            await asyncio.sleep(1)
         except socket.timeout as e:
             app_logger.error(f"[BT] socket timeout: {e}")
         except socket.error as e:
             app_logger.error(f"[BT] socket error: {e}")
+        except ValueError as e:
+            app_logger.error(f"[BT] ThingsBoard invalid data: {e}\n{data=}")
+            for d in data["values"].values():
+                app_logger.error(f"{d} ({type(d)})")
+        except TypeError as e:
+            app_logger.error(f"[BT] ThingsBoard invalid data: {e}\n{data=}")
+            for d in data["values"].values():
+                app_logger.error(f"{d} ({type(d)})")
         finally:
             self.thingsboard_client.disconnect()
         await asyncio.sleep(5)
@@ -713,16 +763,19 @@ class api:
         self.send_time[time_key] = t
         return True
 
-    async def get_wind(self, pos, track):
+    async def get_wind(self, pos, track=None, forecast_time=None):
         if self.config.G_WIND_DATA_SOURCE.startswith("jpn_scw"):
-            w_spd, w_dir = await self.maptile_with_values.get_wind(pos)
+            w_spd, w_dir = await self.maptile_with_values.get_wind(pos, forecast_time)
         else:
-            [w_spd, w_dir] = await self.get_openmeteo_current_wind_data(pos)
-        
+            [w_spd, w_dir] = await self.get_openmeteo_current_wind_data(pos, forecast_time)
+
         w_dir_str = get_track_str(w_dir)
-        
-        headwind = get_headwind(w_spd, w_dir, track)
-        
+
+        if track is not None:
+            headwind = get_headwind(w_spd, w_dir, track)
+        else:
+            headwind = np.nan
+
         # app_logger.info(f"pos:[{pos[0]:.5f},{pos[1]:.5f}], w_spd:{w_spd}, w_dir:{w_dir}, w_dir_str:{w_dir_str}, headwind:{headwind}")
         return w_spd, w_dir, w_dir_str, headwind
     
