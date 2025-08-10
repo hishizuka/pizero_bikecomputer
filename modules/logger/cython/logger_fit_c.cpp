@@ -1,5 +1,9 @@
 #include "logger_fit_c.hpp"
 
+static  int message_num, local_message_num;
+static time_t epoch_datetime_sec;
+
+
 void set_config_c(const config& _cfg) {
   cfg.G_UNIT_ID_HEX = _cfg.G_UNIT_ID_HEX;
 }
@@ -276,6 +280,7 @@ unsigned int convert_value(const char* value_str, const int data_type) {
   return value;
 }
 
+/*
 static int parse_single_str(void *user_data, int argc, char **argv, char **azColName) {
   char *data_str = (char*)user_data;
   for(int i = 0; i < argc; ++i) {
@@ -283,6 +288,7 @@ static int parse_single_str(void *user_data, int argc, char **argv, char **azCol
   }
   return 0;
 }
+*/
 
 static int parse_single_num(void *user_data, int argc, char **argv, char **azColName) {
   int *num = (int*)user_data;

@@ -47,6 +47,19 @@
 static void my_spi_open(const char *device);
 static void my_i2c_open(const char *device, uint8_t addr);
 
+//static int mode = SPI_MODE_0;
+//static uint8_t bits_per_word = 8;
+static uint32_t spi_speed = 1000000; // 1MHz
+//static uint32_t spi_speed = 10000000; // 10MHz
+
+static int fd = 0;
+static int pigpio;
+static int spi;
+//static int callback_id;
+//static struct gpiod_chip *gchip;
+//static struct gpiod_line *gintpin;
+
+
 bool get_interrupt_status(void)
  {
     // for pigpiod    

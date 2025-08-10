@@ -17,9 +17,7 @@
 
 static std::vector<uint8_t> fit_data;
 
-static  int message_num, local_message_num;
-
-static  std::unordered_map<int, std::vector<int> > profile_indexes;
+static std::unordered_map<int, std::vector<int> > profile_indexes;
 //for lap and session, divide profile_indexes into 2 group
 static std::unordered_map<int, std::vector<std::vector<int> > > sql_indexes;
 static std::unordered_map<int, std::unordered_map<int, std::vector<std::string> > > profile_name_type;
@@ -34,8 +32,6 @@ static std::vector<int> base_type_size;
 static std::unordered_map<int, std::unordered_map<int, std::string> > sql;
 static std::unordered_map<int, std::vector<std::string> > sql_items;
 static std::unordered_map<int, std::vector<std::string> > base_sql;
-
-static time_t epoch_datetime_sec;
 
 struct lap_summary_data{
   bool is_null = false;
@@ -65,16 +61,10 @@ unsigned int crc16(std::vector<uint8_t>& data);
 
 unsigned int convert_value(const char* value_str, const int data_type);
 
-static int parse_single_str(void *user_data, int argc, char **argv, char **azColName);
-static int parse_single_num(void *user_data, int argc, char **argv, char **azColName);
-
 void add_fit_data(std::vector<uint8_t>& _bytes, std::vector<int>& _data, std::vector<int>& _size);
 void get_struct_def(std::vector<int>& _size, int l_num, bool l_num_used);
 int get_local_message_num(std::vector<int>& available_fields);
 void write_definition();
-
-static int parse_records_message_num_18_19(void *user_data, int argc, char **argv, char **azColName);
-static int parse_records_message_num_20(void *user_data, int argc, char **argv, char **azColName);
 
 bool get_summary(int lap_num, sqlite3 *db);
 

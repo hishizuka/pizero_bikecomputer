@@ -73,21 +73,9 @@ extern "C" {
 
 #define SPI_CHANNEL 1
 #define SPI_DEVICE "/dev/spidev0.1"
-//static int mode = SPI_MODE_0;
-//static uint8_t bits_per_word = 8;
-static uint32_t spi_speed = 1000000; // 1MHz
-//static uint32_t spi_speed = 10000000; // 10MHz
-
 #define I2C_DEVICE "/dev/i2c-1"
 //#define I2C_BUS 1
 #define BHI360_I2C_ADDR 0x28
-
-static int fd = 0;
-static int pigpio;
-static int spi;
-//static int callback_id;
-//static struct gpiod_chip *gchip;
-//static struct gpiod_line *gintpin;
 
 void cb(int pi, unsigned gpio, unsigned level, uint32_t tick);
 char *get_intf_error(int16_t rslt);
