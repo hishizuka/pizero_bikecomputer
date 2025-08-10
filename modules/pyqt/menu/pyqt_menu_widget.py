@@ -215,6 +215,7 @@ class ListWidget(MenuWidget):
     list_type = None
     selected_item = None
     size_hint = None
+    use_detail = False
 
     # for simple list
     settings = None
@@ -227,14 +228,30 @@ class ListWidget(MenuWidget):
         self.list.setVerticalScrollBarPolicy(QT_SCROLLBAR_ALWAYSOFF)
         self.list.setFocusPolicy(QT_NO_FOCUS)
         self.list.setStyleSheet(self.STYLES)
-
         self.menu_layout.addWidget(self.list)
+        self.update_list()
 
-        if self.settings and self.settings.keys():
-            for k in self.settings.keys():
-                item = ListItemWidget(self, k)
-                item.enter_signal.connect(self.button_func)
-                self.add_list_item(item)
+    def update_list(self):
+        if type(self.settings) == dict:
+            self.add_list_items_internal(self.settings)
+
+    def add_list(self, add_list):
+        new_items = {k: add_list[k] for k in add_list if k not in self.settings}
+        self.settings.update(new_items)
+        self.add_list_items_internal(new_items)
+
+    def add_list_items_internal(self, items):
+        for k, v in items.items():
+            detail = v if self.use_detail else None
+            item = ListItemWidget(self, k, detail)
+            item.enter_signal.connect(self.button_func)
+            self.add_list_item(item)
+
+    def add_list_item(self, item):
+        list_item = QtWidgets.QListWidgetItem(self.list)
+        if self.size_hint:
+            list_item.setSizeHint(self.size_hint)
+        self.list.setItemWidget(list_item, item)
 
     # override for custom list
     def connect_buttons(self):
@@ -284,21 +301,19 @@ class ListWidget(MenuWidget):
             if k == default_value:
                 default_index = i
                 break
-        if default_index is not None:
+        c = self.list.itemWidget(self.list.currentItem())
+        if default_index is not None and c is not None:
             self.list.setCurrentRow(default_index)
-            self.list.itemWidget(self.list.currentItem()).setFocus()
+            c.setFocus()
 
     def get_default_value(self):
         return None
 
-    def add_list_item(self, item):
-        list_item = QtWidgets.QListWidgetItem(self.list)
-        if self.size_hint:
-            list_item.setSizeHint(self.size_hint)
-        self.list.setItemWidget(list_item, item)
-
 
 class ListItemWidget(QtWidgets.QWidget):
+    title = None
+    detail = None
+
     enter_signal = Signal()
 
     def get_styles(self):

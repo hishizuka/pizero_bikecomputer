@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from functools import partial
 
@@ -6,9 +7,11 @@ from modules._qt_qtwidgets import (
     QT_TEXTEDIT_NOWRAP,
     QT_SCROLLBAR_ALWAYSOFF,
     QtWidgets,
+    QtCore,
+    qasync,
 )
 from modules.utils.network import detect_network
-from .pyqt_menu_widget import MenuWidget, ListWidget
+from .pyqt_menu_widget import MenuWidget, ListWidget, ListItemWidget
 
 
 class SystemMenuWidget(MenuWidget):
@@ -54,15 +57,20 @@ class NetworkMenuWidget(MenuWidget):
             # Name(page_name), button_attribute, connected functions, layout
             ("Wifi", "toggle", wifi_bt_button_func_wifi),
             ("Bluetooth", "toggle", wifi_bt_button_func_bt),
-            ("BT Tethering", "submenu", self.bt_tething),
+            ("BT Pairing", "submenu", self.bt_pairing),
+            ("BT Paired Devices", "submenu", self.bt_paired_devices),
+            ("BT Tethering", "submenu", self.bt_tething),  ### move to BluetoothPairedDeviceListWidget
             ("IP Address", "dialog", self.show_ip_address),
         )
         self.add_buttons(button_conf)
 
-        if (
-            not self.config.G_BT_ADDRESSES
-        ):  # if bt_pan is None there won't be any addresses
+        if self.config.bt_pan is None:
             self.buttons["BT Tethering"].disable()
+        
+        if not self.config.G_IS_RASPI:
+            self.buttons["BT Tethering"].disable()
+            self.buttons["BT Paired Devices"].disable()
+            self.buttons["BT Pairing"].disable()
 
     def preprocess(self):
         # initialize toggle button status
@@ -77,6 +85,13 @@ class NetworkMenuWidget(MenuWidget):
         status["Wifi"], status["Bluetooth"] = self.config.network.get_wifi_bt_status()
         self.buttons[key].change_toggle(status[key])
 
+    def bt_pairing(self):
+        self.change_page("BT Pairing", preprocess=True)
+
+    def bt_paired_devices(self):
+        self.change_page("BT Paired Devices", preprocess=True)
+
+
     def bt_tething(self):
         self.change_page("BT Tethering", preprocess=True)
 
@@ -84,6 +99,106 @@ class NetworkMenuWidget(MenuWidget):
         address = detect_network() or "No address"
         # Button is OK only
         self.config.gui.show_dialog_ok_only(None, address)
+
+
+class BluetoothTetheringListWidget(ListWidget):
+    run_bt_tethering = False
+
+    def __init__(self, parent, page_name, config):
+        # keys are used for item label
+        self.settings = {}
+        super().__init__(parent=parent, page_name=page_name, config=config)
+
+    def preprocess(self, run_bt_tethering=True):
+        super().preprocess(reset=True)
+        if self.config.bt_pan is not None:
+            self.settings = self.config.bt_pan.get_bt_pan_devices()
+            self.update_list()
+        self.run_bt_tethering = run_bt_tethering
+
+    def get_default_value(self):
+        return self.config.G_BT_PAN_DEVICE
+
+    async def button_func_extra(self):
+        self.config.G_BT_PAN_DEVICE = self.selected_item.title
+        if self.run_bt_tethering:
+            await self.config.network.bluetooth_tethering()
+            self.config.setting.write_config()
+
+
+class BluetoothPairingListWidget(ListWidget):
+
+    def __init__(self, parent, page_name, config):
+        self.settings = {}
+        self.use_detail = True
+        super().__init__(parent, page_name, config)
+
+    def setup_menu(self):
+        super().setup_menu()
+        # update panel for every 1 seconds
+        self.timer = QtCore.QTimer(parent=self)
+        self.timer.timeout.connect(self.update_display)
+
+    @qasync.asyncSlot()
+    async def button_func(self):
+        if self.selected_item is None:
+            return
+        self.config.gui.show_dialog(
+            self.pair_bt_device,
+            "Pair with this device?",
+        )
+    
+    @qasync.asyncSlot()
+    async def pair_bt_device(self):
+        self.config.gui.show_dialog_cancel_only(
+            self.back, "Pair with your phone."
+        )
+        res = await self.config.network.pair_bt_device(self.selected_item.detail)
+        await asyncio.sleep(2)
+        msg = ""
+        if res:
+            msg = "Bluetooth pairing successful!"
+        else:
+            msg = "Bluetooth pairing failed."
+        self.config.gui.show_forced_message(msg)
+
+    def on_back_menu(self):
+        self.timer.stop()
+        asyncio.create_task(self.config.network.stop_bt_pairing())
+
+    def preprocess(self):
+        super().preprocess(reset=True)
+
+    def preprocess_extra(self):
+        self.settings.clear()
+        asyncio.create_task(self.config.network.start_bt_pairing())
+        self.timer.start(self.config.G_DRAW_INTERVAL)
+        super().preprocess_extra()
+
+    def update_display(self):
+        self.add_list(self.config.network.get_bt_pairing_list())
+ 
+
+class BluetoothPairedDeviceListWidget(ListWidget):
+    settings = {}
+    
+    def preprocess(self):
+        super().preprocess(reset=True)
+        self.settings = self.config.network.get_paired_bt_devices()
+        self.update_list()
+
+    @qasync.asyncSlot()
+    async def button_func(self):
+        self.config.gui.show_dialog(
+            self.remove_bt_device,
+            "Delete this device?",
+        )
+    
+    @qasync.asyncSlot()
+    async def remove_bt_device(self):
+        await self.config.network.remove_bt_device(self.settings[self.selected_item.title])
+        self.back()
+        
 
 
 class DebugMenuWidget(MenuWidget):
@@ -143,27 +258,6 @@ class DebugMenuWidget(MenuWidget):
                 app_logger.setLevel(level=logging.DEBUG)
                 self.is_log_level_debug = True
         self.buttons["Debug Level Log"].change_toggle(self.is_log_level_debug)
-
-
-class BluetoothTetheringListWidget(ListWidget):
-    run_bt_tethering = False
-
-    def __init__(self, parent, page_name, config):
-        # keys are used for item label
-        self.settings = config.G_BT_ADDRESSES
-        super().__init__(parent=parent, page_name=page_name, config=config)
-
-    def preprocess(self, run_bt_tethering=True):
-        super().preprocess()
-        self.run_bt_tethering = run_bt_tethering
-
-    def get_default_value(self):
-        return self.config.G_BT_PAN_DEVICE
-
-    async def button_func_extra(self):
-        self.config.G_BT_PAN_DEVICE = self.selected_item.title_label.text()
-        if self.run_bt_tethering:
-            await self.config.network.bluetooth_tethering()
 
 
 class DebugLogViewerWidget(MenuWidget):

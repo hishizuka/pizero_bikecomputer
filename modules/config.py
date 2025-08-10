@@ -391,7 +391,6 @@ class Config:
     }
 
     # Bluetooth tethering
-    G_BT_ADDRESSES = {}
     G_BT_PAN_DEVICE = ""
     G_AUTO_BT_TETHERING = False
 
@@ -582,19 +581,17 @@ class Config:
 
             from modules.helper.bt_pan import (
                 BTPanDbus,
-                BTPanDbusNext,
+                BTPanDbusFast,
                 HAS_DBUS_FAST,
                 HAS_DBUS,
             )
 
             if HAS_DBUS_FAST:
-                self.bt_pan = BTPanDbusNext()
+                self.bt_pan = BTPanDbusFast()
             elif HAS_DBUS:
                 self.bt_pan = BTPanDbus()
             if HAS_DBUS_FAST or HAS_DBUS:
-                is_available = await self.bt_pan.check_dbus()
-                if is_available:
-                    self.G_BT_ADDRESSES = await self.bt_pan.find_bt_pan_devices()
+                await self.bt_pan.update_bt_pan_devices()
 
         # logger, sensor
         await self.gui.set_boot_status("initialize sensor...")
@@ -666,6 +663,9 @@ class Config:
                     self.gui.press_shift_tab()
                 elif key == "b" and self.gui:
                     self.gui.back_menu()
+                # test other functions #
+                elif key == "i" and self.gui and self.gui.map_widget:
+                    self.gui.map_widget.modify_map_tile()
         except asyncio.CancelledError:
             pass
 

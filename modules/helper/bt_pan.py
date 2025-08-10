@@ -35,8 +35,22 @@ class BTPan:
     remote_addr = ""
     interface = None
 
+    bt_pan_devices = {}
 
-class BTPanDbusNext(BTPan):
+    async def update_bt_pan_devices(self):
+        if await self.check_dbus():
+            self.bt_pan_devices =  await self.find_bt_pan_devices()
+        return self.bt_pan_devices
+
+    def get_bt_pan_devices(self):
+        return self.bt_pan_devices
+
+    def get_bt_pan_device_mac_address(self, device):
+        return self.bt_pan_devices.get(device)
+
+
+class BTPanDbusFast(BTPan):
+
     async def check_dbus(self):
         try:
             self.bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
@@ -112,6 +126,7 @@ class BTPanDbusNext(BTPan):
 
 # based on bluez(https://github.com/bluez/bluez) test/test-network
 class BTPanDbus(BTPan):
+
     async def check_dbus(self):
         try:
             self.bus = dbus.SystemBus()
