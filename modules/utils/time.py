@@ -1,13 +1,6 @@
 from datetime import datetime
 import sys
 
-_TIMEZONE_FINDER = False
-try:
-    from timezonefinder import TimezoneFinder
-    _TIMEZONE_FINDER =True
-except:
-    pass
-
 from modules.utils.cmd import exec_cmd, exec_cmd_return_value
 from modules.app_logger import app_logger
 
@@ -45,6 +38,12 @@ def set_time(time_info):
 
 
 async def set_timezone(lat, lon):
+    _TIMEZONE_FINDER = False
+    try:
+        from timezonefinder import TimezoneFinder
+        _TIMEZONE_FINDER =True
+    except:
+        pass
     if not _TIMEZONE_FINDER:
         return
 

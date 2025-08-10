@@ -14,7 +14,7 @@ _SENSOR_GPS_GPSD = False  # To be deprecated in the next Debian (trixie)
 _SENSER_GPS_STR = ""
 
 try:
-    #raise Exception
+    raise Exception  # unstable
     from gps import aiogps
     from gps.gps import MODE_SET
     _SENSOR_GPS_AIOGPS = True

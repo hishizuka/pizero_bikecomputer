@@ -2,7 +2,7 @@ import os
 
 from modules.app_logger import app_logger
 
-DEFAULT_RESOLUTION = (400, 240)#(272, 451)#(400, 240)
+DEFAULT_RESOLUTION = (400, 240) #(272, 451) #(400, 240)
 
 SUPPORTED_DISPLAYS = {
     # display name, resolution, colors if different from its class default
@@ -13,6 +13,7 @@ SUPPORTED_DISPLAYS = {
     "MIP_JDI_color_640x480": ((640, 480), 8), # JDI LPM044M141A
     #"MIP_JDI_color_640x480": ((640, 480), 2), # JDI LPM044M141A
     "MIP_Azumo_color_272x451": ((272, 451), 64), # Azumo 14793-06
+    #"MIP_Azumo_color_272x451": ((272, 451), 8), # Azumo 14793-06
     "MIP_Sharp_mono_400x240": (DEFAULT_RESOLUTION, 2), # Sharp LS027B7DH01
     "MIP_Sharp_mono_320x240": ((320, 240), 2), # Sharp LS044Q7DH01
 

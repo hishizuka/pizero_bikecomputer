@@ -875,10 +875,13 @@ class Course:
                 )
 
     async def get_course_wind(self):
+        if not self.config.G_USE_WIND_DATA_SOURCE:
+            return
+
         if not self.is_set or not detect_network():
             return
         
-        current_time = datetime.now(timezone.utc)
+        current_time = datetime.now(timezone.utc).replace(second=0, microsecond=0)
         self.wind_coordinates.append([self.longitude[0], self.latitude[0]])
         self.wind_timeline.append(current_time)
 
@@ -891,21 +894,12 @@ class Course:
             self.wind_timeline.append(current_time)
             dist += self.config.G_GROSS_AVE_SPEED
         
-        rest_dist = int(self.distance[-1]%self.config.G_GROSS_AVE_SPEED)
+        rest_dist = int(self.distance[-1] % self.config.G_GROSS_AVE_SPEED)
         if rest_dist > 0:
             self.wind_coordinates.append([self.longitude[-1], self.latitude[-1]])
             current_time += timedelta(hours=rest_dist/self.config.G_GROSS_AVE_SPEED)
             self.wind_timeline.append(current_time)
-
-        #self.wind_speed, self.wind_direction = await self.config.logger.sensor.maptile_with_values.get_wind(
-        #    self.wind_coordinates, 
-        #    self.wind_timeline,
-        #    self.config.G_WIND_OVERLAY_MAP_CONFIG[
-        #        self.config.G_WIND_OVERLAY_MAP
-        #    ],
-        #    self.config.G_WIND_OVERLAY_MAP,
-        #)
-
+    
     def get_index(self, lat, lon, track, search_range, on_route_cutoff, azimuth_cutoff):
         if not self.config.G_COURSE_INDEXING:
             self.index.on_course_status = False

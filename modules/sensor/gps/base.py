@@ -134,6 +134,7 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
             or mode is None
             or mode < NMEA_MODE_3D
             or None in dop
+            or any([self.is_null_value(x) for x in dop])
             or any([x >= self.valid_cutoff_dof[i] for i, x in enumerate(dop)])
             or (not self.check_3DGPS_FIX_status(status) and satellites[0] <= USED_SAT_CUTOFF)
         ):
@@ -191,6 +192,9 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
         else:  # copy from pre value
             self.values["lat"] = self.values["pre_lat"]
             self.values["lon"] = self.values["pre_lon"]
+        for l in ["lat", "lon"]:
+            if np.isnan(self.values[l]) and type(self.values[l]) != float:
+                self.values[l] = np.nan
 
         # altitude
         if valid_pos and alt is not None:

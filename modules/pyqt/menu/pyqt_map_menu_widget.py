@@ -33,7 +33,7 @@ class MapListWidget(ListWidget):
         return self.config.G_MAP
 
     async def button_func_extra(self):
-        self.config.G_MAP = self.selected_item.title_label.text()
+        self.config.G_MAP = self.selected_item.title
         # reset map
         self.config.check_map_dir()
         self.config.gui.map_widget.reset_map()
@@ -112,7 +112,7 @@ class HeatmapListWidget(ListWidget):
         return self.config.G_HEATMAP_OVERLAY_MAP
 
     async def button_func_extra(self):
-        self.config.G_HEATMAP_OVERLAY_MAP = self.selected_item.title_label.text()
+        self.config.G_HEATMAP_OVERLAY_MAP = self.selected_item.title
         # reset map
         self.config.check_map_dir()
         self.config.gui.map_widget.reset_map()
@@ -133,7 +133,7 @@ class RainmapListWidget(ListWidget):
         return self.config.G_RAIN_OVERLAY_MAP
 
     async def button_func_extra(self):
-        self.config.G_RAIN_OVERLAY_MAP = self.selected_item.title_label.text()
+        self.config.G_RAIN_OVERLAY_MAP = self.selected_item.title
         # reset map
         self.config.check_map_dir()
         self.config.gui.map_widget.reset_map()
@@ -149,7 +149,7 @@ class WindmapListWidget(ListWidget):
         return self.config.G_WIND_OVERLAY_MAP
 
     async def button_func_extra(self):
-        self.config.G_WIND_OVERLAY_MAP = self.selected_item.title_label.text()
+        self.config.G_WIND_OVERLAY_MAP = self.selected_item.title
         # reset map
         self.config.check_map_dir()
         self.config.gui.map_widget.reset_map()
@@ -204,7 +204,7 @@ class WindSourceListWidget(ListWidget):
         return self.config.G_WIND_DATA_SOURCE
 
     async def button_func_extra(self):
-        self.config.G_WIND_DATA_SOURCE = self.selected_item.title_label.text()
+        self.config.G_WIND_DATA_SOURCE = self.selected_item.title
         # reset map
         self.config.check_map_dir()
 
@@ -219,6 +219,6 @@ class DEMTileListWidget(ListWidget):
         return self.config.G_DEM_MAP
 
     async def button_func_extra(self):
-        self.config.G_DEM_MAP = self.selected_item.title_label.text()
+        self.config.G_DEM_MAP = self.selected_item.title
         # reset map
         self.config.check_map_dir()
