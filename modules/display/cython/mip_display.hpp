@@ -55,8 +55,20 @@ class MipDisplay {
     char buf_inversion[2] = {0b00010100,0x00};
     float inversion_interval = 0.25;
     
-    const char thresholds[2] = {216, 128};
+    const char thresholds_3bit_27colors[2] = {216, 128};
+    const char thresholds_4bit_343colors[2][3] = {{96, 160, 226}, {64, 128, 192}};
     const char add_bit[8] = {0b10000000, 0b01000000, 0b00100000, 0b00010000, 0b00001000, 0b00000100, 0b00000010, 0b00000001};
+
+    // for riemersma dithering
+    int weights[16];
+    int error_r[16] = {0};
+    int error_g[16] = {0};
+    int error_b[16] = {0};
+    int error_index = 0;
+    int color_4_levels[4] = {0, 85, 170, 255};
+    int quantize_lut[256];
+    unsigned char *img_ptr;
+    int cur_x = 0, cur_y = 0;
 
     int SPI_MAX_BUF_SIZE = 65536;
     int SPI_MAX_ROWS = 0;
@@ -75,10 +87,21 @@ class MipDisplay {
     void no_update();
 
     int (MipDisplay::*conv_color)(unsigned char* image);
-    int conv_1bit_color(unsigned char* image);
-    int conv_2bit_color(unsigned char* image);
-    int conv_3bit_color(unsigned char* image);
-    int conv_4bit_color(unsigned char* image);
+    int conv_1bit_2colors(unsigned char* image);
+    int conv_3bit_8colors(unsigned char* image);
+    int conv_3bit_27colors(unsigned char* image);
+    int conv_4bit_64colors(unsigned char* image);
+    int conv_4bit_343colors(unsigned char* image);
+
+    // for riemersma dithering
+    void init_weights();
+    int quantize_4level(int value);
+    void dither_pixel_rgb(unsigned char *pixel);
+    void dither_pixel_rgb_64(unsigned char *pixel);
+    void move(int direction);
+    void hilbert_level(int level, int direction);
+    int log2int(int value);
+    void riemersma_dithering(unsigned char *image);
 
     void (MipDisplay::*set_PWM)(int b);
     void set_PWM_switch_science_mip_board(int b);
