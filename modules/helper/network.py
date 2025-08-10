@@ -5,6 +5,7 @@ import shutil
 import asyncio
 import json
 import concurrent
+import time
 
 import aiohttp
 import aiofiles
@@ -41,34 +42,45 @@ async def post(url, headers=None, params=None, data=None):
             return json
 
 
-async def get_http_request(session, url, save_path, headers, params):
-    try:
-        async with session.get(url, headers=headers, params=params) as dl_file:
-            if dl_file.status == 200:
-                async with aiofiles.open(save_path, mode="wb") as f:
-                    await f.write(await dl_file.read())
-                return True
-            else:
-                app_logger.info(
-                    f"dl_file status {dl_file.status}: {dl_file.reason}\n{url}"
-                )
-                return False
-    except asyncio.CancelledError:
-        return False
-    except:
-        return False
+async def get_http_request(session, url, save_path, headers, params, semaphore, timeout=60):
+    start_time = datetime.now().strftime('%H:%M:%S')
+    async with semaphore:
+        start = time.time()
+        try:
+            async with session.get(url, headers=headers, params=params, timeout=timeout) as dl_file:
+                if dl_file.status == 200:
+                    #data = await dl_file.read()
+                    #elapsed = time.time() - start
+                    #size_kb = len(data) / 1024
+                    #speed = size_kb / elapsed if elapsed > 0 else 0
+                    
+                    async with aiofiles.open(save_path, mode="wb") as f:
+                        await f.write(await dl_file.read())
+                        #await f.write(data)
+                    #app_logger.error(f"Downloaded ({start_time}->{datetime.now().strftime('%H:%M:%S')}) {size_kb:.1f}KB in {elapsed:.2f}s ({speed:.1f}KB/s)\n{url}")
+                    return True
+                else:
+                    app_logger.info(
+                        f"dl_file status {dl_file.status}: {dl_file.reason}\n{url}"
+                    )
+                    return False
+        except asyncio.CancelledError:
+            return False
+        except Exception as e:
+            app_logger.error(f"Download Error ({start_time}->{datetime.now().strftime('%H:%M:%S')}): {e}\n{url}")
+            return False
+        #except:
+        #    return False    
 
-
-async def download_files(urls, save_paths, headers=None, params=None, limit=None):
+async def download_files(urls, save_paths, headers=None, params=None, retry_count=None, limit=None,):
     sem = 3 if limit else COROUTINE_SEM
-    tasks = []
-    async with asyncio.Semaphore(sem):
-        async with aiohttp.ClientSession() as session:
-            for url, save_path in zip(urls, save_paths):
-                tasks.append(
-                    get_http_request(session, url, save_path, headers, params)
-                )
-            res = await asyncio.gather(*tasks)
+    semaphore = asyncio.Semaphore(sem)
+    async with aiohttp.ClientSession() as session:
+        tasks = [
+            get_http_request(session, url, save_path, headers, params, semaphore)
+            for url, save_path in zip(urls, save_paths)
+        ]
+        res = await asyncio.gather(*tasks)
     return res
 
 
@@ -101,10 +113,19 @@ class Network:
     }
     bt_error_limit = 15
 
-    DOWNLOAD_WORKER_RETRY_SEC = 300
+    bt_pairing_proc = None
+    bt_paired_devices = {}
+
+    #DOWNLOAD_WORKER_RETRY_SEC_TABLE = [6, 36, 216]
+    DOWNLOAD_WORKER_RETRY_SEC_TABLE = [6, ]
+
+    @property
+    def bt_pan(self):
+        return self.config.bt_pan
 
     def __init__(self, config):
         self.config = config
+        
         self.download_queue = asyncio.Queue()
         asyncio.create_task(self.download_worker())
 
@@ -113,6 +134,118 @@ class Network:
         if self.config.G_IS_RASPI and check_bnep0():
             await self.bluetooth_tethering(disconnect=True)
             await asyncio.sleep(5)
+
+    async def start_bt_pairing(self):
+        if self.bt_pairing_proc is not None:
+            return
+        if shutil.which("bluetoothctl") is None:
+            return
+
+        self.get_paired_bt_devices()
+        await self.open_btctl_proc()
+        await self.btctl_write("scan on")
+
+    async def open_btctl_proc(self):
+        if self.bt_pairing_proc is not None:
+            return
+        self.bt_pairing_proc = await asyncio.create_subprocess_exec(
+            "bluetoothctl",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        await self.btctl_write("agent DisplayOnly")
+        await self.btctl_write("default-agent")
+        await self.btctl_write("discoverable on")
+
+    async def stop_bt_pairing(self):
+        await self.close_btctl_proc()
+
+    async def btctl_write(self, cmd):
+        if self.bt_pairing_proc is None:
+            return
+        self.bt_pairing_proc.stdin.write(cmd.encode() + b"\n")
+        await self.bt_pairing_proc.stdin.drain()
+
+    async def close_btctl_proc(self):
+        if self.bt_pairing_proc:
+            self.bt_pairing_proc.terminate()
+            await self.bt_pairing_proc.wait()
+            self.bt_pairing_proc = None
+
+    async def pair_bt_device(self, mac):
+        if self.bt_pairing_proc is None:
+            return False
+
+        await self.btctl_write("scan off")
+        await self.btctl_write(f"pair {mac}")
+
+        input_yes = False
+        res = False
+        start_time = time.time()
+        while True:
+            line = await self.bt_pairing_proc.stdout.readline()
+            text = line.decode().strip()
+            if "yes/no" in text and not input_yes:
+                await self.btctl_write("yes")
+                input_yes = True
+            if "Paired: yes" in text:
+                await self.btctl_write(f"trust {mac}")
+                res = True
+                if self.bt_pan is not None:
+                    await self.bt_pan.update_bt_pan_devices()
+                break
+            if "Failed to pair" in text:
+                break
+            if time.time() - start_time > 30:
+                break
+        return res
+
+    def get_bt_pairing_list(self):
+        if shutil.which("bluetoothctl") is None:
+            return {}
+        
+        skip_str = (": yes", )
+        result = {}
+        paired_macs = set(self.bt_paired_devices.values())
+        
+        stdout, _ = exec_cmd_return_value(["bluetoothctl", "devices"], cmd_print=False)
+        for line in stdout.splitlines():
+            if line.endswith(skip_str):
+                continue
+            parts = line.strip().split(" ", 2)
+            if parts[0] != "Device":
+                continue
+            if len(parts) == 3:
+                _, mac, name = parts
+                if mac not in paired_macs:
+                    result[name] = mac
+        return result
+
+    def get_paired_bt_devices(self):
+        if shutil.which("bluetoothctl") is None:
+            return {}
+
+        skip_str = (": yes", )
+        self.bt_paired_devices = {}
+        stdout, _ = exec_cmd_return_value(["bluetoothctl", "devices", "Paired"], cmd_print=False)
+
+        for line in stdout.splitlines():
+            if line.endswith(skip_str):
+                continue
+            parts = line.strip().split(" ", 2)
+            if parts[0] != "Device":
+                continue
+            if len(parts) == 3:
+                _, mac, name = parts
+                self.bt_paired_devices[name] = mac
+        return self.bt_paired_devices
+
+    async def remove_bt_device(self, bt_address):
+        if shutil.which("bluetoothctl") is not None:
+            exec_cmd(["bluetoothctl", "remove", bt_address])
+            if self.bt_pan is not None:
+                await self.bt_pan.update_bt_pan_devices()
 
     def reset_bt_error_counts(self):
         for k in self.bt_error_counts:
@@ -125,8 +258,8 @@ class Network:
             return False
 
     async def download_worker(self):
-        failed = []
         f_name = self.download_worker.__name__
+
         # for urls, header, save_paths, params:
         while True:
             if self.download_queue.qsize() == 0:
@@ -135,6 +268,7 @@ class Network:
             if q is None:
                 break
 
+            retry_count = q.get("retry_count", 0)
             res = None
             try:
                 await self.open_bt_tethering(f_name)
@@ -143,30 +277,35 @@ class Network:
             except concurrent.futures._base.CancelledError:
                 return
 
+            retry_urls = []
+            retry_save_paths = []
             # all False
             if not any(res) or res is None:
-                failed.append((int(time.time()), q))
-                app_logger.error(f"failed download ({len(q['urls'])}), network: {bool(detect_network())}")
-                app_logger.error(q["urls"])
-            # retry
+                retry_urls = q["urls"]
+                retry_save_paths = q["save_paths"]
+            # partially failed
             elif not all(res) and len(q["urls"]) and len(q["urls"]) == len(res):
-                retry_urls = []
-                retry_save_paths = []
                 for url, save_path, status in zip(q["urls"], q["save_paths"], res):
                     if not status:
                         retry_urls.append(url)
                         retry_save_paths.append(save_path)
-                if len(retry_urls):
+
+            if retry_urls:
+                app_logger.warning(f"Download failed({len(retry_urls)}/{len(q['urls'])}).")
+                if retry_count < len(self.DOWNLOAD_WORKER_RETRY_SEC_TABLE):
+                    wait_sec = self.DOWNLOAD_WORKER_RETRY_SEC_TABLE[retry_count]
+                    app_logger.warning(f"Retry{retry_count + 1} after {wait_sec}s")
                     q["urls"] = retry_urls
                     q["save_paths"] = retry_save_paths
+                    q["retry_count"] = retry_count + 1
+                    await asyncio.sleep(wait_sec)
                     await self.download_queue.put(q)
-
-            # retry for failed
-            #if len(failed):
-            #    t = int(time.time())
-            #    for i in range(len(failed)):
-            #        if t - failed[i][0] > self.DOWNLOAD_WORKER_RETRY_SEC:
-            #            await self.download_queue.put(failed.pop(i)[1]) ############ causes index error
+                else:
+                    app_logger.error(
+                        f"Download failed after {retry_count} retries: {retry_urls}"
+                    )
+            #else:
+            #    app_logger.info(f"Download succeeded({len(q['urls'])}).")
 
     # tiles functions
     async def download_maptile(
@@ -189,11 +328,8 @@ class Network:
             additional_var["key_pair_id"] = self.config.G_STRAVA_COOKIE["KEY_PAIR_ID"]
             additional_var["policy"] = self.config.G_STRAVA_COOKIE["POLICY"]
             additional_var["signature"] = self.config.G_STRAVA_COOKIE["SIGNATURE"]
-        # for overlay map (rainmap/windmap)
-        elif map_config in [
-            self.config.G_RAIN_OVERLAY_MAP_CONFIG,
-            self.config.G_WIND_OVERLAY_MAP_CONFIG,
-        ]:
+        # for overlay map (rainmap/windmap with time series data)
+        elif "basetime" in map_settings and "validtime" in map_settings:
             if map_settings["basetime"] is None or map_settings["validtime"] is None:
                 return False
             additional_var["basetime"] = map_settings["basetime"]
@@ -295,11 +431,11 @@ class Network:
         if (
             not self.config.G_IS_RASPI
             or not self.config.G_BT_PAN_DEVICE
-            or not self.config.bt_pan
+            or not self.bt_pan
         ):
             return False
 
-        bt_address = self.config.G_BT_ADDRESSES[self.config.G_BT_PAN_DEVICE]
+        bt_address = self.bt_pan.get_bt_pan_device_mac_address(self.config.G_BT_PAN_DEVICE)
         if shutil.which("nmcli") is not None:
             connect = "connect"
             if disconnect:
@@ -311,9 +447,9 @@ class Network:
             )
         else:
             if not disconnect:
-                res_err = await self.config.bt_pan.connect_tethering(bt_address)
+                res_err = await self.bt_pan.connect_tethering(bt_address)
             else:
-                res_err = await self.config.bt_pan.disconnect_tethering(bt_address)
+                res_err = await self.bt_pan.disconnect_tethering(bt_address)
 
         return res_err
 
@@ -323,7 +459,7 @@ class Network:
         elif not self.config.G_AUTO_BT_TETHERING:
             return True
         elif self.config.G_AUTO_BT_TETHERING:
-            if not self.config.G_BT_PAN_DEVICE or not self.config.G_BT_ADDRESSES:
+            if not self.config.G_BT_PAN_DEVICE or not self.bt_pan.get_bt_pan_devices():
                 return False
 
         # if other network exists, return
@@ -389,7 +525,7 @@ class Network:
         elif not self.config.G_AUTO_BT_TETHERING:
             return True
         elif self.config.G_AUTO_BT_TETHERING:
-            if not self.config.G_BT_PAN_DEVICE or not self.config.G_BT_ADDRESSES:
+            if not self.config.G_BT_PAN_DEVICE or not self.bt_pan.get_bt_pan_devices():
                 return True
 
         self.bt_tethering_status[f_name] = False
