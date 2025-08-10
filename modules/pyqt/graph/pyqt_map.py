@@ -908,13 +908,11 @@ class MapWidget(BaseMapWidget):
                     x_start, y_start, x_start + w_h, y_start + w_h
                 )).convert("RGBA")
 
-            #########################
             if (
                 map_config == self.config.G_MAP_CONFIG
                 and self.tile_modify_mode != 0
             ):
                 img_pil = self.enhance_image(img_pil)
-            #########################
 
             if map_name.startswith(("jpn_scw", "jpn_jma_bousai")):
                 imgarray = conv_image(img_pil, map_name)
