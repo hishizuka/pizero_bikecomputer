@@ -3,6 +3,7 @@ import os
 import sqlite3
 from datetime import datetime, timezone
 import shutil
+import tempfile
 
 import numpy as np
 from PIL import Image, ImageEnhance
@@ -1274,24 +1275,26 @@ class MapWidget(BaseMapWidget):
         # 1: pil
         # 2: didder
         # 3: pil + didder
-        filename = "/tmp/tile.png"
-        
+
         if self.tile_modify_mode in [1, 3]:
             img_pil = ImageEnhance.Contrast(img_pil).enhance(2.0)
 
-        if self.tile_modify_mode in [2, 3] and shutil.which("didder"):
-            img_pil.save(filename)
-            exec_cmd(
-                [
-                    "didder",
-                    "-i", filename,
-                    "-o", filename,
-                    "--strength", "0.8",
-                    "--palette", self.tile_didder_pallete[self.config.display.color],
-                    "edm", "--serpentine", "FloydSteinberg"
-                ],
-                cmd_print=False
-            )
-            img_pil = Image.open(filename).convert("RGBA")
+        with tempfile.NamedTemporaryFile(suffix=".png") as tmp_file:
+            filename = tmp_file.name
+
+            if self.tile_modify_mode in [2, 3] and shutil.which("didder"):
+                img_pil.save(filename)
+                exec_cmd(
+                    [
+                        "didder",
+                        "-i", filename,
+                        "-o", filename,
+                        "--strength", "0.8",
+                        "--palette", self.tile_didder_pallete[self.config.display.color],
+                        "edm", "--serpentine", "FloydSteinberg"
+                    ],
+                    cmd_print=False
+                )
+                img_pil = Image.open(filename).convert("RGBA")
             
         return img_pil
