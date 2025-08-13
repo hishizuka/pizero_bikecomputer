@@ -55,21 +55,23 @@ extern "C" {
 #include <pigpiod_if2.h>
 //#include <gpiod.h>
 
-#include "bhy.h"
-#include "bhi3_defs.h"
-#include "bhy_activity_param.h"
-#include "bhy_bsec_param.h"
-#include "bhy_bsx_algo_param.h"
-#include "bhy_head_orientation_param.h"
-#include "bhy_multi_tap_param.h"
-#include "bhy_phy_sensor_ctrl_param.h"
-#include "bhy_system_param.h"
-#include "bhy_virtual_sensor_conf_param.h"
-#include "bhy_virtual_sensor_info_param.h"
+#include "bhi360.h"
+#include "bhi360_defs.h"
+#include "bhi360_activity_param.h"
+#include "bhi360_bsec_param.h"
+#include "bhi360_bsx_algo_param.h"
+#include "bhi360_head_orientation_param.h"
+#include "bhi360_multi_tap_param.h"
+#include "bhi360_phy_sensor_ctrl_param.h"
+#include "bhi360_system_param.h"
+#include "bhi360_virtual_sensor_conf_param.h"
+#include "bhi360_virtual_sensor_info_param.h"
 
 #include "intf_codes.h"
 
-#define BHY_RD_WR_LEN           256   /* MCU maximum read write length */
+#define INT_PIN 22
+
+#define BHI360_RD_WR_LEN           256   /* MCU maximum read write length */
 
 #define SPI_CHANNEL 1
 #define SPI_DEVICE "/dev/spidev0.1"
@@ -89,13 +91,13 @@ char *get_sensor_si_unit(uint8_t sensor_id);
 char *get_sensor_parse_format(uint8_t sensor_id);
 char *get_sensor_axis_names(uint8_t sensor_id);
 
-void setup_interfaces(bool reset_power, enum bhy_intf intf);
-void close_interfaces(enum bhy_intf intf);
-int8_t bhy_spi_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t length, void *intf_ptr);
-int8_t bhy_spi_write(uint8_t reg_addr, const uint8_t *reg_data, uint32_t length, void *intf_ptr);
-int8_t bhy_i2c_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t length, void *intf_ptr);
-int8_t bhy_i2c_write(uint8_t reg_addr, const uint8_t *reg_data, uint32_t length, void *intf_ptr);
-void bhy_delay_us(uint32_t us, void *private_data);
+void setup_interfaces(bool reset_power, enum bhi360_intf intf);
+void close_interfaces(enum bhi360_intf intf);
+int8_t bhi360_spi_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t length, void *intf_ptr);
+int8_t bhi360_spi_write(uint8_t reg_addr, const uint8_t *reg_data, uint32_t length, void *intf_ptr);
+int8_t bhi360_i2c_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t length, void *intf_ptr);
+int8_t bhi360_i2c_write(uint8_t reg_addr, const uint8_t *reg_data, uint32_t length, void *intf_ptr);
+void bhi360_delay_us(uint32_t us, void *private_data);
 bool get_interrupt_status(void);
 
 #ifdef __cplusplus

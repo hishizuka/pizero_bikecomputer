@@ -42,7 +42,7 @@
  #include <stdbool.h>
  #include <stdlib.h>
  
- #include "bhy_parse.h"
+ #include "bhi360_parse.h"
 
 static void my_spi_open(const char *device);
 static void my_i2c_open(const char *device, uint8_t addr);
@@ -63,13 +63,13 @@ static int spi;
 bool get_interrupt_status(void)
  {
     // for pigpiod    
-    //return gpio_read(pigpio, INT_PIN) == 1;
+    return gpio_read(pigpio, INT_PIN) == 1;
 
     // for gpiod
     //return gpiod_line_get_value(gintpin) == 1;
 
     //return false;
-    return true;
+    //return true;
  }
 
 char *get_intf_error(int16_t rslt)
@@ -144,39 +144,39 @@ char *get_intf_error(int16_t rslt)
      return ret;
  }
 
- char *get_api_error(int8_t error_code)
+char *get_api_error(int8_t error_code)
 {
     char *ret = " ";
 
     switch (error_code)
     {
-        case BHY_OK:
+        case BHI360_OK:
             break;
-        case BHY_E_NULL_PTR:
+        case BHI360_E_NULL_PTR:
             ret = "[API Error] Null pointer";
             break;
-        case BHY_E_INVALID_PARAM:
+        case BHI360_E_INVALID_PARAM:
             ret = "[API Error] Invalid parameter";
             break;
-        case BHY_E_IO:
+        case BHI360_E_IO:
             ret = "[API Error] IO error";
             break;
-        case BHY_E_MAGIC:
+        case BHI360_E_MAGIC:
             ret = "[API Error] Invalid firmware";
             break;
-        case BHY_E_TIMEOUT:
+        case BHI360_E_TIMEOUT:
             ret = "[API Error] Timed out";
             break;
-        case BHY_E_BUFFER:
+        case BHI360_E_BUFFER:
             ret = "[API Error] Invalid buffer";
             break;
-        case BHY_E_INVALID_FIFO_TYPE:
+        case BHI360_E_INVALID_FIFO_TYPE:
             ret = "[API Error] Invalid FIFO type";
             break;
-        case BHY_E_INVALID_EVENT_SIZE:
+        case BHI360_E_INVALID_EVENT_SIZE:
             ret = "[API Error] Invalid Event size";
             break;
-        case BHY_E_PARAM_NOT_SET:
+        case BHI360_E_PARAM_NOT_SET:
             ret = "[API Error] Parameter not set";
             break;
         default:
@@ -193,11 +193,11 @@ void cb(int pi, unsigned gpio, unsigned level, uint32_t tick)
     else if (level == 0) {}
 }
 
-void setup_interfaces(bool reset_power, enum bhy_intf intf)
+void setup_interfaces(bool reset_power, enum bhi360_intf intf)
 {
     pigpio = pigpio_start(NULL, NULL);
     
-#ifdef BHY_USE_I2C
+#ifdef BHI3_USE_I2C
     my_i2c_open(I2C_DEVICE, BHI360_I2C_ADDR);
 #else
     my_spi_open(SPI_DEVICE);
@@ -275,9 +275,9 @@ void my_i2c_open(const char *device, uint8_t addr) {
     }
 }
 
-void close_interfaces(enum bhy_intf intf)
+void close_interfaces(enum bhi360_intf intf)
 {
-#ifdef BHY_USE_I2C
+#ifdef BHI3_USE_I2C
     close(fd);
 #else
     spi_close(pigpio, spi);
@@ -289,7 +289,7 @@ void close_interfaces(enum bhy_intf intf)
     //gpiod_chip_close(gchip);
 }
 
-int8_t bhy_spi_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t length, void *intf_ptr)
+int8_t bhi360_spi_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t length, void *intf_ptr)
 {
     //int fd = *(int *)intf_ptr;
     uint8_t tx[length + 1];
@@ -318,7 +318,7 @@ int8_t bhy_spi_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t length, void *
     return 0;
 }
 
-int8_t bhy_spi_write(uint8_t reg_addr, const uint8_t *reg_data, uint32_t length, void *intf_ptr)
+int8_t bhi360_spi_write(uint8_t reg_addr, const uint8_t *reg_data, uint32_t length, void *intf_ptr)
 {
     //int fd = *(int *)intf_ptr;
     uint8_t tx[length + 1];
@@ -347,7 +347,7 @@ int8_t bhy_spi_write(uint8_t reg_addr, const uint8_t *reg_data, uint32_t length,
 }
 
 
-int8_t bhy_i2c_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t length, void *intf_ptr)
+int8_t bhi360_i2c_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t length, void *intf_ptr)
 {
     //int fd = *(int *)intf_ptr;
     if (write(fd, &reg_addr, 1) != 1) return -1;
@@ -355,7 +355,7 @@ int8_t bhy_i2c_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t length, void *
     return 0;
 }
 
-int8_t bhy_i2c_write(uint8_t reg_addr, const uint8_t *reg_data, uint32_t length, void *intf_ptr)
+int8_t bhi360_i2c_write(uint8_t reg_addr, const uint8_t *reg_data, uint32_t length, void *intf_ptr)
 {
     //int fd = *(int *)intf_ptr;
     uint8_t buffer[length + 1];
@@ -365,7 +365,7 @@ int8_t bhy_i2c_write(uint8_t reg_addr, const uint8_t *reg_data, uint32_t length,
     return 0;
 }
 
-void bhy_delay_us(uint32_t us, void *private_data)
+void bhi360_delay_us(uint32_t us, void *private_data)
 {
     (void)private_data;
     usleep(us);
@@ -614,80 +614,79 @@ char *get_sensor_error_text(uint8_t sensor_error)
     return ret;
 }
 
-
 char *get_physical_sensor_name(uint8_t sensor_id)
 {
     char *ret;
 
     switch (sensor_id)
     {
-        case BHY_PHYS_SENSOR_ID_ACCELEROMETER:
+        case BHI360_PHYS_SENSOR_ID_ACCELEROMETER:
             ret = "Accelerometer";
             break;
-        case BHY_PHYS_SENSOR_ID_NOT_SUPPORTED:
+        case BHI360_PHYS_SENSOR_ID_NOT_SUPPORTED:
             ret = "Not supported now";
             break;
-        case BHY_PHYS_SENSOR_ID_GYROSCOPE:
+        case BHI360_PHYS_SENSOR_ID_GYROSCOPE:
             ret = "Gyroscope";
             break;
-        case BHY_PHYS_SENSOR_ID_MAGNETOMETER:
+        case BHI360_PHYS_SENSOR_ID_MAGNETOMETER:
             ret = "Magnetometer";
             break;
-        case BHY_PHYS_SENSOR_ID_TEMP_GYRO:
+        case BHI360_PHYS_SENSOR_ID_TEMP_GYRO:
             ret = "Temperature Gyroscope";
             break;
-        case BHY_PHYS_SENSOR_ID_ANY_MOTION:
+        case BHI360_PHYS_SENSOR_ID_ANY_MOTION:
             ret = "Any Motion not available now";
             break;
-        case BHY_PHYS_SENSOR_ID_PRESSURE:
+        case BHI360_PHYS_SENSOR_ID_PRESSURE:
             ret = "Pressure";
             break;
-        case BHY_PHYS_SENSOR_ID_POSITION:
+        case BHI360_PHYS_SENSOR_ID_POSITION:
             ret = "Position";
             break;
-        case BHY_PHYS_SENSOR_ID_HUMIDITY:
+        case BHI360_PHYS_SENSOR_ID_HUMIDITY:
             ret = "Humidity";
             break;
-        case BHY_PHYS_SENSOR_ID_TEMPERATURE:
+        case BHI360_PHYS_SENSOR_ID_TEMPERATURE:
             ret = "Temperature";
             break;
-        case BHY_PHYS_SENSOR_ID_GAS_RESISTOR:
+        case BHI360_PHYS_SENSOR_ID_GAS_RESISTOR:
             ret = "Gas Resistor";
             break;
-        case BHY_PHYS_SENSOR_ID_PHYS_STEP_COUNTER:
+        case BHI360_PHYS_SENSOR_ID_PHYS_STEP_COUNTER:
             ret = "Step Counter";
             break;
-        case BHY_PHYS_SENSOR_ID_PHYS_STEP_DETECTOR:
+        case BHI360_PHYS_SENSOR_ID_PHYS_STEP_DETECTOR:
             ret = "Step Detector";
             break;
-        case BHY_PHYS_SENSOR_ID_PHYS_SIGN_MOTION:
+        case BHI360_PHYS_SENSOR_ID_PHYS_SIGN_MOTION:
             ret = "Significant Motion";
             break;
-        case BHY_PHYS_SENSOR_ID_PHYS_ANY_MOTION:
+        case BHI360_PHYS_SENSOR_ID_PHYS_ANY_MOTION:
             ret = "Any Motion";
             break;
-        case BHY_PHYS_SENSOR_ID_EX_CAMERA_INPUT:
+        case BHI360_PHYS_SENSOR_ID_EX_CAMERA_INPUT:
             ret = "External Camera Input";
             break;
-        case BHY_PHYS_SENSOR_ID_GPS:
+        case BHI360_PHYS_SENSOR_ID_GPS:
             ret = "GPS";
             break;
-        case BHY_PHYS_SENSOR_ID_LIGHT:
+        case BHI360_PHYS_SENSOR_ID_LIGHT:
             ret = "Light";
             break;
-        case BHY_PHYS_SENSOR_ID_PROXIMITY:
+        case BHI360_PHYS_SENSOR_ID_PROXIMITY:
             ret = "Proximity";
             break;
-        case BHY_PHYS_SENSOR_ID_ACT_REC:
+        case BHI360_PHYS_SENSOR_ID_ACT_REC:
             ret = "Activity Recognition";
             break;
-        case BHY_PHYS_SENSOR_ID_PHYS_NO_MOTION:
+        case BHI360_PHYS_SENSOR_ID_PHYS_NO_MOTION:
             ret = "No Motion";
             break;
-        case BHY_PHYS_SENSOR_ID_WRIST_GESTURE_DETECT:
+        case BHI360_PHYS_SENSOR_ID_WRIST_GESTURE_DETECT:
             ret = "Wrist Gesture Detector";
             break;
-        case BHY_PHYS_SENSOR_ID_WRIST_WEAR_WAKEUP:
+        case BHI360_PHYS_SENSOR_ID_WRIST_WEAR_WAKEUP:
             ret = "Wrist Wear Wakeup";
             break;
         default:
@@ -703,34 +702,34 @@ uint8_t get_physical_sensor_id(uint8_t virt_sensor_id)
 
     switch (virt_sensor_id)
     {
-        case BHY_SENSOR_ID_ACC_PASS:
-        case BHY_SENSOR_ID_ACC_RAW:
-        case BHY_SENSOR_ID_ACC:
-        case BHY_SENSOR_ID_ACC_BIAS:
-        case BHY_SENSOR_ID_ACC_WU:
-        case BHY_SENSOR_ID_ACC_RAW_WU:
-            ret = BHY_PHYS_SENSOR_ID_ACCELEROMETER;
+        case BHI360_SENSOR_ID_ACC_PASS:
+        case BHI360_SENSOR_ID_ACC_RAW:
+        case BHI360_SENSOR_ID_ACC:
+        case BHI360_SENSOR_ID_ACC_BIAS:
+        case BHI360_SENSOR_ID_ACC_WU:
+        case BHI360_SENSOR_ID_ACC_RAW_WU:
+            ret = BHI360_PHYS_SENSOR_ID_ACCELEROMETER;
             break;
-        case BHY_SENSOR_ID_GYRO_PASS:
-        case BHY_SENSOR_ID_GYRO_RAW:
-        case BHY_SENSOR_ID_GYRO:
-        case BHY_SENSOR_ID_GYRO_BIAS:
-        case BHY_SENSOR_ID_GYRO_WU:
-        case BHY_SENSOR_ID_GYRO_RAW_WU:
-        case BHY_SENSOR_ID_GYRO_BIAS_WU:
-            ret = BHY_PHYS_SENSOR_ID_GYROSCOPE;
+        case BHI360_SENSOR_ID_GYRO_PASS:
+        case BHI360_SENSOR_ID_GYRO_RAW:
+        case BHI360_SENSOR_ID_GYRO:
+        case BHI360_SENSOR_ID_GYRO_BIAS:
+        case BHI360_SENSOR_ID_GYRO_WU:
+        case BHI360_SENSOR_ID_GYRO_RAW_WU:
+        case BHI360_SENSOR_ID_GYRO_BIAS_WU:
+            ret = BHI360_PHYS_SENSOR_ID_GYROSCOPE;
             break;
-        case BHY_SENSOR_ID_MAG_PASS:
-        case BHY_SENSOR_ID_MAG_RAW:
-        case BHY_SENSOR_ID_MAG:
-        case BHY_SENSOR_ID_MAG_BIAS:
-        case BHY_SENSOR_ID_MAG_WU:
-        case BHY_SENSOR_ID_MAG_RAW_WU:
-        case BHY_SENSOR_ID_MAG_BIAS_WU:
-            ret = BHY_PHYS_SENSOR_ID_MAGNETOMETER;
+        case BHI360_SENSOR_ID_MAG_PASS:
+        case BHI360_SENSOR_ID_MAG_RAW:
+        case BHI360_SENSOR_ID_MAG:
+        case BHI360_SENSOR_ID_MAG_BIAS:
+        case BHI360_SENSOR_ID_MAG_WU:
+        case BHI360_SENSOR_ID_MAG_RAW_WU:
+        case BHI360_SENSOR_ID_MAG_BIAS_WU:
+            ret = BHI360_PHYS_SENSOR_ID_MAGNETOMETER;
             break;
         default:
-            ret = BHY_PHYS_SENSOR_ID_NOT_SUPPORTED;
+            ret = BHI360_PHYS_SENSOR_ID_NOT_SUPPORTED;
             break;
     }
 
@@ -743,257 +742,257 @@ char *get_sensor_name(uint8_t sensor_id)
 
     switch (sensor_id)
     {
-        case BHY_SENSOR_ID_ACC_PASS:
+        case BHI360_SENSOR_ID_ACC_PASS:
             ret = "Accelerometer passthrough";
             break;
-        case BHY_SENSOR_ID_ACC_RAW:
+        case BHI360_SENSOR_ID_ACC_RAW:
             ret = "Accelerometer uncalibrated";
             break;
-        case BHY_SENSOR_ID_ACC:
+        case BHI360_SENSOR_ID_ACC:
             ret = "Accelerometer corrected";
             break;
-        case BHY_SENSOR_ID_ACC_BIAS:
+        case BHI360_SENSOR_ID_ACC_BIAS:
             ret = "Accelerometer offset";
             break;
-        case BHY_SENSOR_ID_ACC_WU:
+        case BHI360_SENSOR_ID_ACC_WU:
             ret = "Accelerometer corrected wake up";
             break;
-        case BHY_SENSOR_ID_ACC_RAW_WU:
+        case BHI360_SENSOR_ID_ACC_RAW_WU:
             ret = "Accelerometer uncalibrated wake up";
             break;
-        case BHY_SENSOR_ID_GYRO_PASS:
+        case BHI360_SENSOR_ID_GYRO_PASS:
             ret = "Gyroscope passthrough";
             break;
-        case BHY_SENSOR_ID_GYRO_RAW:
+        case BHI360_SENSOR_ID_GYRO_RAW:
             ret = "Gyroscope uncalibrated";
             break;
-        case BHY_SENSOR_ID_GYRO:
+        case BHI360_SENSOR_ID_GYRO:
             ret = "Gyroscope corrected";
             break;
-        case BHY_SENSOR_ID_GYRO_BIAS:
+        case BHI360_SENSOR_ID_GYRO_BIAS:
             ret = "Gyroscope offset";
             break;
-        case BHY_SENSOR_ID_GYRO_WU:
+        case BHI360_SENSOR_ID_GYRO_WU:
             ret = "Gyroscope wake up";
             break;
-        case BHY_SENSOR_ID_GYRO_RAW_WU:
+        case BHI360_SENSOR_ID_GYRO_RAW_WU:
             ret = "Gyroscope uncalibrated wake up";
             break;
-        case BHY_SENSOR_ID_MAG_PASS:
+        case BHI360_SENSOR_ID_MAG_PASS:
             ret = "Magnetometer passthrough";
             break;
-        case BHY_SENSOR_ID_MAG_RAW:
+        case BHI360_SENSOR_ID_MAG_RAW:
             ret = "Magnetometer uncalibrated";
             break;
-        case BHY_SENSOR_ID_MAG:
+        case BHI360_SENSOR_ID_MAG:
             ret = "Magnetometer corrected";
             break;
-        case BHY_SENSOR_ID_MAG_BIAS:
+        case BHI360_SENSOR_ID_MAG_BIAS:
             ret = "Magnetometer offset";
             break;
-        case BHY_SENSOR_ID_MAG_WU:
+        case BHI360_SENSOR_ID_MAG_WU:
             ret = "Magnetometer wake up";
             break;
-        case BHY_SENSOR_ID_MAG_RAW_WU:
+        case BHI360_SENSOR_ID_MAG_RAW_WU:
             ret = "Magnetometer uncalibrated wake up";
             break;
-        case BHY_SENSOR_ID_GRA:
+        case BHI360_SENSOR_ID_GRA:
             ret = "Gravity vector";
             break;
-        case BHY_SENSOR_ID_GRA_WU:
+        case BHI360_SENSOR_ID_GRA_WU:
             ret = "Gravity vector wake up";
             break;
-        case BHY_SENSOR_ID_LACC:
+        case BHI360_SENSOR_ID_LACC:
             ret = "Linear acceleration";
             break;
-        case BHY_SENSOR_ID_LACC_WU:
+        case BHI360_SENSOR_ID_LACC_WU:
             ret = "Linear acceleration wake up";
             break;
-        case BHY_SENSOR_ID_RV:
+        case BHI360_SENSOR_ID_RV:
             ret = "Rotation vector";
             break;
-        case BHY_SENSOR_ID_RV_WU:
+        case BHI360_SENSOR_ID_RV_WU:
             ret = "Rotation vector wake up";
             break;
-        case BHY_SENSOR_ID_GAMERV:
+        case BHI360_SENSOR_ID_GAMERV:
             ret = "Game rotation vector";
             break;
-        case BHY_SENSOR_ID_GAMERV_WU:
+        case BHI360_SENSOR_ID_GAMERV_WU:
             ret = "Game rotation vector wake up";
             break;
-        case BHY_SENSOR_ID_GEORV:
+        case BHI360_SENSOR_ID_GEORV:
             ret = "Geo-magnetic rotation vector";
             break;
-        case BHY_SENSOR_ID_GEORV_WU:
+        case BHI360_SENSOR_ID_GEORV_WU:
             ret = "Geo-magnetic rotation vector wake up";
             break;
-        case BHY_SENSOR_ID_ORI:
+        case BHI360_SENSOR_ID_ORI:
             ret = "Orientation";
             break;
-        case BHY_SENSOR_ID_ORI_WU:
+        case BHI360_SENSOR_ID_ORI_WU:
             ret = "Orientation wake up";
             break;
-        case BHY_SENSOR_ID_ACC_BIAS_WU:
+        case BHI360_SENSOR_ID_ACC_BIAS_WU:
             ret = "Accelerometer offset wake up";
             break;
-        case BHY_SENSOR_ID_GYRO_BIAS_WU:
+        case BHI360_SENSOR_ID_GYRO_BIAS_WU:
             ret = "Gyroscope offset wake up";
             break;
-        case BHY_SENSOR_ID_MAG_BIAS_WU:
+        case BHI360_SENSOR_ID_MAG_BIAS_WU:
             ret = "Magnetometer offset wake up";
             break;
-        case BHY_SENSOR_ID_TEMP:
+        case BHI360_SENSOR_ID_TEMP:
             ret = "Temperature";
             break;
-        case BHY_SENSOR_ID_BARO:
+        case BHI360_SENSOR_ID_BARO:
             ret = "Barometer";
             break;
-        case BHY_SENSOR_ID_HUM:
+        case BHI360_SENSOR_ID_HUM:
             ret = "Humidity";
             break;
-        case BHY_SENSOR_ID_GAS:
+        case BHI360_SENSOR_ID_GAS:
             ret = "Gas";
             break;
-        case BHY_SENSOR_ID_TEMP_WU:
+        case BHI360_SENSOR_ID_TEMP_WU:
             ret = "Temperature wake up";
             break;
-        case BHY_SENSOR_ID_BARO_WU:
+        case BHI360_SENSOR_ID_BARO_WU:
             ret = "Barometer wake up";
             break;
-        case BHY_SENSOR_ID_HUM_WU:
+        case BHI360_SENSOR_ID_HUM_WU:
             ret = "Humidity wake up";
             break;
-        case BHY_SENSOR_ID_GAS_WU:
+        case BHI360_SENSOR_ID_GAS_WU:
             ret = "Gas wake up";
             break;
-        case BHY_SENSOR_ID_SI_ACCEL:
+        case BHI360_SENSOR_ID_SI_ACCEL:
             ret = "SI Accel";
             break;
-        case BHY_SENSOR_ID_SI_GYROS:
+        case BHI360_SENSOR_ID_SI_GYROS:
             ret = "SI Gyro";
             break;
-        case BHY_SENSOR_ID_LIGHT:
+        case BHI360_SENSOR_ID_LIGHT:
             ret = "Light";
             break;
-        case BHY_SENSOR_ID_LIGHT_WU:
+        case BHI360_SENSOR_ID_LIGHT_WU:
             ret = "Light wake up";
             break;
-        case BHY_SENSOR_ID_PROX:
+        case BHI360_SENSOR_ID_PROX:
             ret = "Proximity";
             break;
-        case BHY_SENSOR_ID_PROX_WU:
+        case BHI360_SENSOR_ID_PROX_WU:
             ret = "Proximity wake up";
             break;
-        case BHY_SENSOR_ID_STC:
+        case BHI360_SENSOR_ID_STC:
             ret = "Step counter";
             break;
-        case BHY_SENSOR_ID_STC_WU:
+        case BHI360_SENSOR_ID_STC_WU:
             ret = "Step counter wake up";
             break;
-        case BHY_SENSOR_ID_STC_LP:
+        case BHI360_SENSOR_ID_STC_LP:
             ret = "Low Power Step counter";
             break;
-        case BHY_SENSOR_ID_STC_LP_WU:
+        case BHI360_SENSOR_ID_STC_LP_WU:
             ret = "Low Power Step counter wake up";
             break;
-        case BHY_SENSOR_ID_SIG:
+        case BHI360_SENSOR_ID_SIG:
             ret = "Significant motion";
             break;
-        case BHY_SENSOR_ID_STD:
+        case BHI360_SENSOR_ID_STD:
             ret = "Step detector";
             break;
-        case BHY_SENSOR_ID_STD_WU:
+        case BHI360_SENSOR_ID_STD_WU:
             ret = "Step detector wake up";
             break;
-        case BHY_SENSOR_ID_TILT_DETECTOR:
+        case BHI360_SENSOR_ID_TILT_DETECTOR:
             ret = "Tilt detector";
             break;
-        case BHY_SENSOR_ID_WAKE_GESTURE:
+        case BHI360_SENSOR_ID_WAKE_GESTURE:
             ret = "Wake gesture";
             break;
-        case BHY_SENSOR_ID_GLANCE_GESTURE:
+        case BHI360_SENSOR_ID_GLANCE_GESTURE:
             ret = "Glance gesture";
             break;
-        case BHY_SENSOR_ID_PICKUP_GESTURE:
+        case BHI360_SENSOR_ID_PICKUP_GESTURE:
             ret = "Pickup gesture";
             break;
-        case BHY_SENSOR_BMP_TEMPERATURE:
+        case BHI360_SENSOR_BMP_TEMPERATURE:
             ret = "BMP Temperature";
             break;
-        case BHY_SENSOR_ID_SIG_LP_WU:
+        case BHI360_SENSOR_ID_SIG_LP_WU:
             ret = "Low Power Significant motion wake up";
             break;
-        case BHY_SENSOR_ID_STD_LP:
+        case BHI360_SENSOR_ID_STD_LP:
             ret = "Low Power Step detector";
             break;
-        case BHY_SENSOR_ID_STD_LP_WU:
+        case BHI360_SENSOR_ID_STD_LP_WU:
             ret = "Low Power Step detector wake up";
             break;
-        case BHY_SENSOR_ID_AR:
+        case BHI360_SENSOR_ID_AR:
             ret = "Activity recognition";
             break;
-        case BHY_SENSOR_ID_EXCAMERA:
+        case BHI360_SENSOR_ID_EXCAMERA:
             ret = "External camera trigger";
             break;
-        case BHY_SENSOR_ID_GPS:
+        case BHI360_SENSOR_ID_GPS:
             ret = "GPS";
             break;
-        case BHY_SENSOR_ID_WRIST_TILT_GESTURE:
+        case BHI360_SENSOR_ID_WRIST_TILT_GESTURE:
             ret = "Wrist tilt gesture";
             break;
-        case BHY_SENSOR_ID_DEVICE_ORI:
+        case BHI360_SENSOR_ID_DEVICE_ORI:
             ret = "Device orientation";
             break;
-        case BHY_SENSOR_ID_DEVICE_ORI_WU:
+        case BHI360_SENSOR_ID_DEVICE_ORI_WU:
             ret = "Device orientation wake up";
             break;
-        case BHY_SENSOR_ID_STATIONARY_DET:
+        case BHI360_SENSOR_ID_STATIONARY_DET:
             ret = "Stationary detect";
             break;
-        case BHY_SENSOR_BMP_TEMPERATURE_WU:
+        case BHI360_SENSOR_BMP_TEMPERATURE_WU:
             ret = "BMP Temperature wake up";
             break;
-        case BHY_SENSOR_ID_ANY_MOTION_LP_WU:
+        case BHI360_SENSOR_ID_ANY_MOTION_LP_WU:
             ret = "Low Power Any motion wake up";
             break;
-        case BHI3_SENSOR_ID_NO_MOTION_LP_WU:
+        case BHI360_SENSOR_ID_NO_MOTION_LP_WU:
             ret = "Low Power No Motion wake up";
             break;
-        case BHY_SENSOR_ID_MOTION_DET:
+        case BHI360_SENSOR_ID_MOTION_DET:
             ret = "Motion detect";
             break;
-        case BHI3_SENSOR_ID_AR_WEAR_WU:
+        case BHI360_SENSOR_ID_AR_WEAR_WU:
             ret = "Activity recognition for Wearables";
             break;
-        case BHI3_SENSOR_ID_WRIST_WEAR_LP_WU:
+        case BHI360_SENSOR_ID_WRIST_WEAR_LP_WU:
             ret = "Low Power Wrist Wear wake up";
             break;
-        case BHI3_SENSOR_ID_WRIST_GEST_DETECT_LP_WU:
+        case BHI360_SENSOR_ID_WRIST_GEST_DETECT_LP_WU:
             ret = "Low Power Wrist Gesture wake up";
             break;
-        case BHI3_SENSOR_ID_MULTI_TAP:
+        case BHI360_SENSOR_ID_MULTI_TAP:
             ret = "Multi Tap Detector";
             break;
-        case BHY_SENSOR_ID_AIR_QUALITY:
+        case BHI360_SENSOR_ID_AIR_QUALITY:
             ret = "Air Quality";
             break;
-        case BHY_SENSOR_ID_HEAD_ORI_MIS_ALG:
+        case BHI360_SENSOR_ID_HEAD_ORI_MIS_ALG:
             ret = "Head Misalignment Calibrator";
             break;
-        case BHY_SENSOR_ID_IMU_HEAD_ORI_Q:
+        case BHI360_SENSOR_ID_IMU_HEAD_ORI_Q:
             ret = "IMU Head Orientation Quaternion";
             break;
-        case BHY_SENSOR_ID_NDOF_HEAD_ORI_Q:
+        case BHI360_SENSOR_ID_NDOF_HEAD_ORI_Q:
             ret = "NDOF Head Orientation Quaternion";
             break;
-        case BHY_SENSOR_ID_IMU_HEAD_ORI_E:
+        case BHI360_SENSOR_ID_IMU_HEAD_ORI_E:
             ret = "IMU Head Orientation Euler";
             break;
-        case BHY_SENSOR_ID_NDOF_HEAD_ORI_E:
+        case BHI360_SENSOR_ID_NDOF_HEAD_ORI_E:
             ret = "NDOF Head Orientation Euler";
             break;
         default:
-            if ((sensor_id >= BHY_SENSOR_ID_CUSTOM_START) && (sensor_id <= BHY_SENSOR_ID_CUSTOM_END))
+            if ((sensor_id >= BHI360_SENSOR_ID_CUSTOM_START) && (sensor_id <= BHI360_SENSOR_ID_CUSTOM_END))
             {
                 ret = "Custom sensor ID ";
             }
@@ -1012,30 +1011,30 @@ float get_sensor_dynamic_range_scaling(uint8_t sensor_id, float dynamic_range)
 
     switch (sensor_id)
     {
-        case BHY_SENSOR_ID_ACC_PASS:
-        case BHY_SENSOR_ID_ACC_RAW:
-        case BHY_SENSOR_ID_ACC:
-        case BHY_SENSOR_ID_ACC_BIAS:
-        case BHY_SENSOR_ID_ACC_WU:
-        case BHY_SENSOR_ID_ACC_RAW_WU:
+        case BHI360_SENSOR_ID_ACC_PASS:
+        case BHI360_SENSOR_ID_ACC_RAW:
+        case BHI360_SENSOR_ID_ACC:
+        case BHI360_SENSOR_ID_ACC_BIAS:
+        case BHI360_SENSOR_ID_ACC_WU:
+        case BHI360_SENSOR_ID_ACC_RAW_WU:
             scaling = dynamic_range / 32768.0f;
             break;
-        case BHY_SENSOR_ID_GYRO_PASS:
-        case BHY_SENSOR_ID_GYRO_RAW:
-        case BHY_SENSOR_ID_GYRO:
-        case BHY_SENSOR_ID_GYRO_BIAS:
-        case BHY_SENSOR_ID_GYRO_WU:
-        case BHY_SENSOR_ID_GYRO_RAW_WU:
-        case BHY_SENSOR_ID_GYRO_BIAS_WU:
+        case BHI360_SENSOR_ID_GYRO_PASS:
+        case BHI360_SENSOR_ID_GYRO_RAW:
+        case BHI360_SENSOR_ID_GYRO:
+        case BHI360_SENSOR_ID_GYRO_BIAS:
+        case BHI360_SENSOR_ID_GYRO_WU:
+        case BHI360_SENSOR_ID_GYRO_RAW_WU:
+        case BHI360_SENSOR_ID_GYRO_BIAS_WU:
             scaling = dynamic_range / 32768.0f;
             break;
-        case BHY_SENSOR_ID_MAG_PASS:
-        case BHY_SENSOR_ID_MAG_RAW:
-        case BHY_SENSOR_ID_MAG:
-        case BHY_SENSOR_ID_MAG_BIAS:
-        case BHY_SENSOR_ID_MAG_WU:
-        case BHY_SENSOR_ID_MAG_RAW_WU:
-        case BHY_SENSOR_ID_MAG_BIAS_WU:
+        case BHI360_SENSOR_ID_MAG_PASS:
+        case BHI360_SENSOR_ID_MAG_RAW:
+        case BHI360_SENSOR_ID_MAG:
+        case BHI360_SENSOR_ID_MAG_BIAS:
+        case BHI360_SENSOR_ID_MAG_WU:
+        case BHI360_SENSOR_ID_MAG_RAW_WU:
+        case BHI360_SENSOR_ID_MAG_BIAS_WU:
             scaling = dynamic_range / 32768.0f;
             break;
         default:
@@ -1052,30 +1051,30 @@ char *get_sensor_si_unit(uint8_t sensor_id)
 
     switch (sensor_id)
     {
-        case BHY_SENSOR_ID_ACC_PASS:
-        case BHY_SENSOR_ID_ACC_RAW:
-        case BHY_SENSOR_ID_ACC:
-        case BHY_SENSOR_ID_ACC_BIAS:
-        case BHY_SENSOR_ID_ACC_WU:
-        case BHY_SENSOR_ID_ACC_RAW_WU:
+        case BHI360_SENSOR_ID_ACC_PASS:
+        case BHI360_SENSOR_ID_ACC_RAW:
+        case BHI360_SENSOR_ID_ACC:
+        case BHI360_SENSOR_ID_ACC_BIAS:
+        case BHI360_SENSOR_ID_ACC_WU:
+        case BHI360_SENSOR_ID_ACC_RAW_WU:
             ret = "Earth g-s";
             break;
-        case BHY_SENSOR_ID_GYRO_PASS:
-        case BHY_SENSOR_ID_GYRO_RAW:
-        case BHY_SENSOR_ID_GYRO:
-        case BHY_SENSOR_ID_GYRO_BIAS:
-        case BHY_SENSOR_ID_GYRO_WU:
-        case BHY_SENSOR_ID_GYRO_RAW_WU:
-        case BHY_SENSOR_ID_GYRO_BIAS_WU:
+        case BHI360_SENSOR_ID_GYRO_PASS:
+        case BHI360_SENSOR_ID_GYRO_RAW:
+        case BHI360_SENSOR_ID_GYRO:
+        case BHI360_SENSOR_ID_GYRO_BIAS:
+        case BHI360_SENSOR_ID_GYRO_WU:
+        case BHI360_SENSOR_ID_GYRO_RAW_WU:
+        case BHI360_SENSOR_ID_GYRO_BIAS_WU:
             ret = "degrees/second";
             break;
-        case BHY_SENSOR_ID_MAG_PASS:
-        case BHY_SENSOR_ID_MAG_RAW:
-        case BHY_SENSOR_ID_MAG:
-        case BHY_SENSOR_ID_MAG_BIAS:
-        case BHY_SENSOR_ID_MAG_WU:
-        case BHY_SENSOR_ID_MAG_RAW_WU:
-        case BHY_SENSOR_ID_MAG_BIAS_WU:
+        case BHI360_SENSOR_ID_MAG_PASS:
+        case BHI360_SENSOR_ID_MAG_RAW:
+        case BHI360_SENSOR_ID_MAG:
+        case BHI360_SENSOR_ID_MAG_BIAS:
+        case BHI360_SENSOR_ID_MAG_WU:
+        case BHI360_SENSOR_ID_MAG_RAW_WU:
+        case BHI360_SENSOR_ID_MAG_BIAS_WU:
             ret = "microtesla";
             break;
         default:
@@ -1091,120 +1090,120 @@ char *get_sensor_parse_format(uint8_t sensor_id)
 
     switch (sensor_id)
     {
-        case BHY_SENSOR_ID_ACC_PASS:
-        case BHY_SENSOR_ID_ACC_RAW:
-        case BHY_SENSOR_ID_ACC:
-        case BHY_SENSOR_ID_ACC_BIAS:
-        case BHY_SENSOR_ID_ACC_BIAS_WU:
-        case BHY_SENSOR_ID_ACC_WU:
-        case BHY_SENSOR_ID_ACC_RAW_WU:
-        case BHY_SENSOR_ID_GYRO_PASS:
-        case BHY_SENSOR_ID_GYRO_RAW:
-        case BHY_SENSOR_ID_GYRO:
-        case BHY_SENSOR_ID_GYRO_BIAS:
-        case BHY_SENSOR_ID_GYRO_BIAS_WU:
-        case BHY_SENSOR_ID_GYRO_WU:
-        case BHY_SENSOR_ID_GYRO_RAW_WU:
-        case BHY_SENSOR_ID_MAG_PASS:
-        case BHY_SENSOR_ID_MAG_RAW:
-        case BHY_SENSOR_ID_MAG:
-        case BHY_SENSOR_ID_MAG_BIAS:
-        case BHY_SENSOR_ID_MAG_BIAS_WU:
-        case BHY_SENSOR_ID_MAG_WU:
-        case BHY_SENSOR_ID_MAG_RAW_WU:
-        case BHY_SENSOR_ID_GRA:
-        case BHY_SENSOR_ID_GRA_WU:
-        case BHY_SENSOR_ID_LACC:
-        case BHY_SENSOR_ID_LACC_WU:
+        case BHI360_SENSOR_ID_ACC_PASS:
+        case BHI360_SENSOR_ID_ACC_RAW:
+        case BHI360_SENSOR_ID_ACC:
+        case BHI360_SENSOR_ID_ACC_BIAS:
+        case BHI360_SENSOR_ID_ACC_BIAS_WU:
+        case BHI360_SENSOR_ID_ACC_WU:
+        case BHI360_SENSOR_ID_ACC_RAW_WU:
+        case BHI360_SENSOR_ID_GYRO_PASS:
+        case BHI360_SENSOR_ID_GYRO_RAW:
+        case BHI360_SENSOR_ID_GYRO:
+        case BHI360_SENSOR_ID_GYRO_BIAS:
+        case BHI360_SENSOR_ID_GYRO_BIAS_WU:
+        case BHI360_SENSOR_ID_GYRO_WU:
+        case BHI360_SENSOR_ID_GYRO_RAW_WU:
+        case BHI360_SENSOR_ID_MAG_PASS:
+        case BHI360_SENSOR_ID_MAG_RAW:
+        case BHI360_SENSOR_ID_MAG:
+        case BHI360_SENSOR_ID_MAG_BIAS:
+        case BHI360_SENSOR_ID_MAG_BIAS_WU:
+        case BHI360_SENSOR_ID_MAG_WU:
+        case BHI360_SENSOR_ID_MAG_RAW_WU:
+        case BHI360_SENSOR_ID_GRA:
+        case BHI360_SENSOR_ID_GRA_WU:
+        case BHI360_SENSOR_ID_LACC:
+        case BHI360_SENSOR_ID_LACC_WU:
             ret = "s16,s16,s16";
             break;
-        case BHY_SENSOR_ID_RV:
-        case BHY_SENSOR_ID_RV_WU:
-        case BHY_SENSOR_ID_GAMERV:
-        case BHY_SENSOR_ID_GAMERV_WU:
-        case BHY_SENSOR_ID_GEORV:
-        case BHY_SENSOR_ID_GEORV_WU:
+        case BHI360_SENSOR_ID_RV:
+        case BHI360_SENSOR_ID_RV_WU:
+        case BHI360_SENSOR_ID_GAMERV:
+        case BHI360_SENSOR_ID_GAMERV_WU:
+        case BHI360_SENSOR_ID_GEORV:
+        case BHI360_SENSOR_ID_GEORV_WU:
             ret = "s16,s16,s16,s16,u16";
             break;
-        case BHY_SENSOR_ID_ORI:
-        case BHY_SENSOR_ID_ORI_WU:
+        case BHI360_SENSOR_ID_ORI:
+        case BHI360_SENSOR_ID_ORI_WU:
             ret = "s16,s16,s16";
             break;
-        case BHY_SENSOR_ID_DEVICE_ORI:
-        case BHY_SENSOR_ID_DEVICE_ORI_WU:
-        case BHY_SENSOR_ID_HUM:
-        case BHY_SENSOR_ID_HUM_WU:
-        case BHY_SENSOR_ID_PROX:
-        case BHY_SENSOR_ID_PROX_WU:
-        case BHY_SENSOR_ID_EXCAMERA:
-        case BHI3_SENSOR_ID_MULTI_TAP:
+        case BHI360_SENSOR_ID_DEVICE_ORI:
+        case BHI360_SENSOR_ID_DEVICE_ORI_WU:
+        case BHI360_SENSOR_ID_HUM:
+        case BHI360_SENSOR_ID_HUM_WU:
+        case BHI360_SENSOR_ID_PROX:
+        case BHI360_SENSOR_ID_PROX_WU:
+        case BHI360_SENSOR_ID_EXCAMERA:
+        case BHI360_SENSOR_ID_MULTI_TAP:
             ret = "u8";
             break;
-        case BHY_SENSOR_ID_TEMP:
-        case BHY_SENSOR_ID_TEMP_WU:
-        case BHY_SENSOR_BMP_TEMPERATURE:
-        case BHY_SENSOR_BMP_TEMPERATURE_WU:
+        case BHI360_SENSOR_ID_TEMP:
+        case BHI360_SENSOR_ID_TEMP_WU:
+        case BHI360_SENSOR_BMP_TEMPERATURE:
+        case BHI360_SENSOR_BMP_TEMPERATURE_WU:
             ret = "s16";
             break;
-        case BHY_SENSOR_ID_BARO:
-        case BHY_SENSOR_ID_BARO_WU:
+        case BHI360_SENSOR_ID_BARO:
+        case BHI360_SENSOR_ID_BARO_WU:
             ret = "u24";
             break;
-        case BHY_SENSOR_ID_GAS:
-        case BHY_SENSOR_ID_GAS_WU:
-        case BHY_SENSOR_ID_STC:
-        case BHY_SENSOR_ID_STC_WU:
-        case BHY_SENSOR_ID_STC_LP:
-        case BHY_SENSOR_ID_STC_LP_WU:
+        case BHI360_SENSOR_ID_GAS:
+        case BHI360_SENSOR_ID_GAS_WU:
+        case BHI360_SENSOR_ID_STC:
+        case BHI360_SENSOR_ID_STC_WU:
+        case BHI360_SENSOR_ID_STC_LP:
+        case BHI360_SENSOR_ID_STC_LP_WU:
             ret = "u32";
             break;
-        case BHY_SENSOR_ID_SI_ACCEL:
-        case BHY_SENSOR_ID_SI_GYROS:
+        case BHI360_SENSOR_ID_SI_ACCEL:
+        case BHI360_SENSOR_ID_SI_GYROS:
             ret = "f,f,f";
             break;
-        case BHY_SENSOR_ID_LIGHT:
-        case BHY_SENSOR_ID_LIGHT_WU:
+        case BHI360_SENSOR_ID_LIGHT:
+        case BHI360_SENSOR_ID_LIGHT_WU:
             ret = "s16";
             break;
-        case BHY_SENSOR_ID_SIG:
-        case BHY_SENSOR_ID_STD:
-        case BHY_SENSOR_ID_STD_WU:
-        case BHY_SENSOR_ID_TILT_DETECTOR:
-        case BHY_SENSOR_ID_WAKE_GESTURE:
-        case BHY_SENSOR_ID_GLANCE_GESTURE:
-        case BHY_SENSOR_ID_PICKUP_GESTURE:
-        case BHY_SENSOR_ID_SIG_LP_WU:
-        case BHY_SENSOR_ID_STD_LP:
-        case BHY_SENSOR_ID_STD_LP_WU:
-        case BHY_SENSOR_ID_WRIST_TILT_GESTURE:
-        case BHY_SENSOR_ID_STATIONARY_DET:
-        case BHY_SENSOR_ID_ANY_MOTION_LP_WU:
-        case BHI3_SENSOR_ID_NO_MOTION_LP_WU:
-        case BHY_SENSOR_ID_MOTION_DET:
-        case BHI3_SENSOR_ID_WRIST_WEAR_LP_WU:
+        case BHI360_SENSOR_ID_SIG:
+        case BHI360_SENSOR_ID_STD:
+        case BHI360_SENSOR_ID_STD_WU:
+        case BHI360_SENSOR_ID_TILT_DETECTOR:
+        case BHI360_SENSOR_ID_WAKE_GESTURE:
+        case BHI360_SENSOR_ID_GLANCE_GESTURE:
+        case BHI360_SENSOR_ID_PICKUP_GESTURE:
+        case BHI360_SENSOR_ID_SIG_LP_WU:
+        case BHI360_SENSOR_ID_STD_LP:
+        case BHI360_SENSOR_ID_STD_LP_WU:
+        case BHI360_SENSOR_ID_WRIST_TILT_GESTURE:
+        case BHI360_SENSOR_ID_STATIONARY_DET:
+        case BHI360_SENSOR_ID_ANY_MOTION_LP_WU:
+        case BHI360_SENSOR_ID_NO_MOTION_LP_WU:
+        case BHI360_SENSOR_ID_MOTION_DET:
+        case BHI360_SENSOR_ID_WRIST_WEAR_LP_WU:
             ret = "";
             break;
-        case BHY_SENSOR_ID_AR:
-        case BHI3_SENSOR_ID_AR_WEAR_WU:
+        case BHI360_SENSOR_ID_AR:
+        case BHI360_SENSOR_ID_AR_WEAR_WU:
             ret = "u16";
             break;
-        case BHY_SENSOR_ID_GPS:
+        case BHI360_SENSOR_ID_GPS:
             ret = "st";
             break;
-        case BHI3_SENSOR_ID_WRIST_GEST_DETECT_LP_WU:
+        case BHI360_SENSOR_ID_WRIST_GEST_DETECT_LP_WU:
             ret = "u8";
             break;
-        case BHY_SENSOR_ID_AIR_QUALITY:
+        case BHI360_SENSOR_ID_AIR_QUALITY:
             ret = "f32,f32,f32,f32,f32,f32,f32,u8";
             break;
-        case BHY_SENSOR_ID_HEAD_ORI_MIS_ALG:
-        case BHY_SENSOR_ID_IMU_HEAD_ORI_Q:
-        case BHY_SENSOR_ID_NDOF_HEAD_ORI_Q:
+        case BHI360_SENSOR_ID_HEAD_ORI_MIS_ALG:
+        case BHI360_SENSOR_ID_IMU_HEAD_ORI_Q:
+        case BHI360_SENSOR_ID_NDOF_HEAD_ORI_Q:
             ret = "s16,s16,s16,s16";
             break;
 
-        case BHY_SENSOR_ID_IMU_HEAD_ORI_E:
-        case BHY_SENSOR_ID_NDOF_HEAD_ORI_E:
+        case BHI360_SENSOR_ID_IMU_HEAD_ORI_E:
+        case BHI360_SENSOR_ID_NDOF_HEAD_ORI_E:
             ret = "s16,s16,s16";
             break;
         default:
@@ -1220,125 +1219,125 @@ char *get_sensor_axis_names(uint8_t sensor_id)
 
     switch (sensor_id)
     {
-        case BHY_SENSOR_ID_ACC_PASS:
-        case BHY_SENSOR_ID_ACC_RAW:
-        case BHY_SENSOR_ID_ACC:
-        case BHY_SENSOR_ID_ACC_BIAS:
-        case BHY_SENSOR_ID_ACC_BIAS_WU:
-        case BHY_SENSOR_ID_ACC_WU:
-        case BHY_SENSOR_ID_ACC_RAW_WU:
-        case BHY_SENSOR_ID_GYRO_PASS:
-        case BHY_SENSOR_ID_GYRO_RAW:
-        case BHY_SENSOR_ID_GYRO:
-        case BHY_SENSOR_ID_GYRO_BIAS:
-        case BHY_SENSOR_ID_GYRO_BIAS_WU:
-        case BHY_SENSOR_ID_GYRO_WU:
-        case BHY_SENSOR_ID_GYRO_RAW_WU:
-        case BHY_SENSOR_ID_MAG_PASS:
-        case BHY_SENSOR_ID_MAG_RAW:
-        case BHY_SENSOR_ID_MAG:
-        case BHY_SENSOR_ID_MAG_BIAS:
-        case BHY_SENSOR_ID_MAG_BIAS_WU:
-        case BHY_SENSOR_ID_MAG_WU:
-        case BHY_SENSOR_ID_MAG_RAW_WU:
-        case BHY_SENSOR_ID_GRA:
-        case BHY_SENSOR_ID_GRA_WU:
-        case BHY_SENSOR_ID_LACC:
-        case BHY_SENSOR_ID_LACC_WU:
-        case BHY_SENSOR_ID_SI_ACCEL:
-        case BHY_SENSOR_ID_SI_GYROS:
+        case BHI360_SENSOR_ID_ACC_PASS:
+        case BHI360_SENSOR_ID_ACC_RAW:
+        case BHI360_SENSOR_ID_ACC:
+        case BHI360_SENSOR_ID_ACC_BIAS:
+        case BHI360_SENSOR_ID_ACC_BIAS_WU:
+        case BHI360_SENSOR_ID_ACC_WU:
+        case BHI360_SENSOR_ID_ACC_RAW_WU:
+        case BHI360_SENSOR_ID_GYRO_PASS:
+        case BHI360_SENSOR_ID_GYRO_RAW:
+        case BHI360_SENSOR_ID_GYRO:
+        case BHI360_SENSOR_ID_GYRO_BIAS:
+        case BHI360_SENSOR_ID_GYRO_BIAS_WU:
+        case BHI360_SENSOR_ID_GYRO_WU:
+        case BHI360_SENSOR_ID_GYRO_RAW_WU:
+        case BHI360_SENSOR_ID_MAG_PASS:
+        case BHI360_SENSOR_ID_MAG_RAW:
+        case BHI360_SENSOR_ID_MAG:
+        case BHI360_SENSOR_ID_MAG_BIAS:
+        case BHI360_SENSOR_ID_MAG_BIAS_WU:
+        case BHI360_SENSOR_ID_MAG_WU:
+        case BHI360_SENSOR_ID_MAG_RAW_WU:
+        case BHI360_SENSOR_ID_GRA:
+        case BHI360_SENSOR_ID_GRA_WU:
+        case BHI360_SENSOR_ID_LACC:
+        case BHI360_SENSOR_ID_LACC_WU:
+        case BHI360_SENSOR_ID_SI_ACCEL:
+        case BHI360_SENSOR_ID_SI_GYROS:
             ret = "x,y,z";
             break;
-        case BHY_SENSOR_ID_RV:
-        case BHY_SENSOR_ID_RV_WU:
-        case BHY_SENSOR_ID_GAMERV:
-        case BHY_SENSOR_ID_GAMERV_WU:
-        case BHY_SENSOR_ID_GEORV:
-        case BHY_SENSOR_ID_GEORV_WU:
+        case BHI360_SENSOR_ID_RV:
+        case BHI360_SENSOR_ID_RV_WU:
+        case BHI360_SENSOR_ID_GAMERV:
+        case BHI360_SENSOR_ID_GAMERV_WU:
+        case BHI360_SENSOR_ID_GEORV:
+        case BHI360_SENSOR_ID_GEORV_WU:
             ret = "x,y,z,w,ar";
             break;
-        case BHY_SENSOR_ID_ORI:
-        case BHY_SENSOR_ID_ORI_WU:
+        case BHI360_SENSOR_ID_ORI:
+        case BHI360_SENSOR_ID_ORI_WU:
             ret = "h,p,r";
             break;
-        case BHY_SENSOR_ID_DEVICE_ORI:
-        case BHY_SENSOR_ID_DEVICE_ORI_WU:
+        case BHI360_SENSOR_ID_DEVICE_ORI:
+        case BHI360_SENSOR_ID_DEVICE_ORI_WU:
             ret = "o";
             break;
-        case BHY_SENSOR_ID_TEMP:
-        case BHY_SENSOR_ID_TEMP_WU:
-        case BHY_SENSOR_BMP_TEMPERATURE:
-        case BHY_SENSOR_BMP_TEMPERATURE_WU:
+        case BHI360_SENSOR_ID_TEMP:
+        case BHI360_SENSOR_ID_TEMP_WU:
+        case BHI360_SENSOR_BMP_TEMPERATURE:
+        case BHI360_SENSOR_BMP_TEMPERATURE_WU:
             ret = "t";
             break;
-        case BHY_SENSOR_ID_BARO:
-        case BHY_SENSOR_ID_BARO_WU:
+        case BHI360_SENSOR_ID_BARO:
+        case BHI360_SENSOR_ID_BARO_WU:
             ret = "p";
             break;
-        case BHY_SENSOR_ID_HUM:
-        case BHY_SENSOR_ID_HUM_WU:
+        case BHI360_SENSOR_ID_HUM:
+        case BHI360_SENSOR_ID_HUM_WU:
             ret = "h";
             break;
-        case BHY_SENSOR_ID_GAS:
-        case BHY_SENSOR_ID_GAS_WU:
+        case BHI360_SENSOR_ID_GAS:
+        case BHI360_SENSOR_ID_GAS_WU:
             ret = "g";
             break;
-        case BHY_SENSOR_ID_LIGHT:
-        case BHY_SENSOR_ID_LIGHT_WU:
+        case BHI360_SENSOR_ID_LIGHT:
+        case BHI360_SENSOR_ID_LIGHT_WU:
             ret = "l";
             break;
-        case BHY_SENSOR_ID_PROX:
-        case BHY_SENSOR_ID_PROX_WU:
+        case BHI360_SENSOR_ID_PROX:
+        case BHI360_SENSOR_ID_PROX_WU:
             ret = "p";
             break;
-        case BHY_SENSOR_ID_STC:
-        case BHY_SENSOR_ID_STC_WU:
-        case BHY_SENSOR_ID_STC_LP:
-        case BHY_SENSOR_ID_STC_LP_WU:
-        case BHY_SENSOR_ID_EXCAMERA:
+        case BHI360_SENSOR_ID_STC:
+        case BHI360_SENSOR_ID_STC_WU:
+        case BHI360_SENSOR_ID_STC_LP:
+        case BHI360_SENSOR_ID_STC_LP_WU:
+        case BHI360_SENSOR_ID_EXCAMERA:
             ret = "c";
             break;
-        case BHY_SENSOR_ID_SIG:
-        case BHY_SENSOR_ID_STD:
-        case BHY_SENSOR_ID_STD_WU:
-        case BHY_SENSOR_ID_TILT_DETECTOR:
-        case BHY_SENSOR_ID_WAKE_GESTURE:
-        case BHY_SENSOR_ID_GLANCE_GESTURE:
-        case BHY_SENSOR_ID_PICKUP_GESTURE:
-        case BHY_SENSOR_ID_SIG_LP_WU:
-        case BHY_SENSOR_ID_STD_LP:
-        case BHY_SENSOR_ID_STD_LP_WU:
-        case BHY_SENSOR_ID_WRIST_TILT_GESTURE:
-        case BHY_SENSOR_ID_STATIONARY_DET:
-        case BHY_SENSOR_ID_ANY_MOTION_LP_WU:
-        case BHI3_SENSOR_ID_NO_MOTION_LP_WU:
-        case BHY_SENSOR_ID_MOTION_DET:
-        case BHI3_SENSOR_ID_WRIST_WEAR_LP_WU:
+        case BHI360_SENSOR_ID_SIG:
+        case BHI360_SENSOR_ID_STD:
+        case BHI360_SENSOR_ID_STD_WU:
+        case BHI360_SENSOR_ID_TILT_DETECTOR:
+        case BHI360_SENSOR_ID_WAKE_GESTURE:
+        case BHI360_SENSOR_ID_GLANCE_GESTURE:
+        case BHI360_SENSOR_ID_PICKUP_GESTURE:
+        case BHI360_SENSOR_ID_SIG_LP_WU:
+        case BHI360_SENSOR_ID_STD_LP:
+        case BHI360_SENSOR_ID_STD_LP_WU:
+        case BHI360_SENSOR_ID_WRIST_TILT_GESTURE:
+        case BHI360_SENSOR_ID_STATIONARY_DET:
+        case BHI360_SENSOR_ID_ANY_MOTION_LP_WU:
+        case BHI360_SENSOR_ID_NO_MOTION_LP_WU:
+        case BHI360_SENSOR_ID_MOTION_DET:
+        case BHI360_SENSOR_ID_WRIST_WEAR_LP_WU:
             ret = "e";
             break;
-        case BHY_SENSOR_ID_AR:
-        case BHI3_SENSOR_ID_AR_WEAR_WU:
+        case BHI360_SENSOR_ID_AR:
+        case BHI360_SENSOR_ID_AR_WEAR_WU:
             ret = "a";
             break;
-        case BHY_SENSOR_ID_GPS:
+        case BHI360_SENSOR_ID_GPS:
             ret = "g";
             break;
-        case BHI3_SENSOR_ID_WRIST_GEST_DETECT_LP_WU:
+        case BHI360_SENSOR_ID_WRIST_GEST_DETECT_LP_WU:
             ret = "wrist_gesture";
             break;
-        case BHI3_SENSOR_ID_MULTI_TAP:
+        case BHI360_SENSOR_ID_MULTI_TAP:
             ret = "taps";
             break;
-        case BHY_SENSOR_ID_AIR_QUALITY:
+        case BHI360_SENSOR_ID_AIR_QUALITY:
             ret = "t,h,g,i,si,c,v,a";
             break;
-        case BHY_SENSOR_ID_HEAD_ORI_MIS_ALG:
-        case BHY_SENSOR_ID_IMU_HEAD_ORI_Q:
-        case BHY_SENSOR_ID_NDOF_HEAD_ORI_Q:
+        case BHI360_SENSOR_ID_HEAD_ORI_MIS_ALG:
+        case BHI360_SENSOR_ID_IMU_HEAD_ORI_Q:
+        case BHI360_SENSOR_ID_NDOF_HEAD_ORI_Q:
             ret = "x,y,z,w";
             break;
-        case BHY_SENSOR_ID_IMU_HEAD_ORI_E:
-        case BHY_SENSOR_ID_NDOF_HEAD_ORI_E:
+        case BHI360_SENSOR_ID_IMU_HEAD_ORI_E:
+        case BHI360_SENSOR_ID_NDOF_HEAD_ORI_E:
             ret = "h,p,r";
             break;
         default:
@@ -1347,3 +1346,14 @@ char *get_sensor_axis_names(uint8_t sensor_id)
 
     return ret;
 }
+
+#ifndef PC
+void default_verbose_write(uint8_t *buffer, uint16_t length)
+{
+    //coines_write_intf(COINES_COMM_INTF_USB, buffer, length);
+}
+
+void verbose_write(uint8_t *buffer, uint16_t length) __attribute__ ((weak, alias("default_verbose_write")));
+
+
+#endif

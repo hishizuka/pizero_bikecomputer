@@ -259,9 +259,10 @@ Also, place the header files in LD_INCLUDE_PATH (/usr/local/include, etc.).
 - [BHI360_SensorAPI](https://github.com/boschsensortec/BHI360_SensorAPI)
   - 
   ```
-  $ gcc -shared -fPIC -O2 -o libbhi3.so bhy*.c
+  $ gcc -shared -fPIC -O2 -o libbhi3.so bhi*.c examples/common/verbose.c -I./examples/common/
   $ sudo mv libbhi3.so /usr/local/lib/
-  $ sudo cp bhy*.h /usr/local/include/
+  $ sudo cp bhi*.h /usr/local/include/
+  $ sudo cp examples/common/verbose.h /usr/local/include/
   $ sudo cp -a firmware/bhi360 /usr/local/include/
   $ sudo ldconfig
   ```

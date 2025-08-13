@@ -15,10 +15,10 @@ extern "C" {
 
 #include "common.h"
 
-#include "bhy.h"
-#include "bhy_parse.h"
-#include "bhy_virtual_sensor_conf_param.h"
-#include "bhy_event_data.h"
+#include "bhi360.h"
+#include "bhi360_parse.h"
+#include "bhi360_virtual_sensor_conf_param.h"
+#include "bhi360_event_data.h"
 
 #include "common.h"
 
