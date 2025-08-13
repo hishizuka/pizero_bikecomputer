@@ -154,11 +154,10 @@ class ScreenWidget(QtWidgets.QWidget):
                 )
             except KeyError:
                 pass
-                # item.update_value(None)
-                # print("KeyError :", self.config.gui.gui_config.G_ITEM_DEF[item.name][1])
-                # traceback.print_exc()
             except Exception:  # noqa
                 item.update_value(None)
-                app_logger.exception(
-                    f"not found in items: {item.name} {eval(self.config.gui.gui_config.G_ITEM_DEF[item.name][1])}",
-                )
+                app_logger.exception(f"not found in items: {item.name}")
+                try:
+                    app_logger.exception(f"    {eval(self.config.gui.gui_config.G_ITEM_DEF[item.name][1])}")
+                except:
+                    pass
