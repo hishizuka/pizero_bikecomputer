@@ -5,7 +5,7 @@ def make_ext(modname, pyxfilename):
     i2c_sensors = {
         'bhi3_s': {
             'src': 'bhi3_s.c',
-            'lib': 'libbhi3.so',
+            'lib': 'libbhi360.so',
             'extra_lib': ['-lpigpiod_if2'],
             'macro': [('USE_BHI3_S', '1'),],  # for SPI
             #'macro': [('USE_BHI3_S', '1'), ('BHI3_USE_I2C', '1')],  # for I2C
