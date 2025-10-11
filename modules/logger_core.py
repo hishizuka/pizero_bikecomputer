@@ -179,6 +179,7 @@ class LoggerCore:
         self.con.close()
 
     def remove_handler(self):
+        signal.setitimer(signal.ITIMER_REAL, 0)
         self.config.loop.remove_signal_handler(signal.SIGALRM)
 
     async def sql_worker(self):
@@ -311,7 +312,7 @@ class LoggerCore:
         display_flash_short = True
 
         if self.config.G_MANUAL_STATUS != "START":
-            app_logger.info(f"->M START{self.get_time_str()}")
+            app_logger.info(f"->M START {self.get_time_str()}")
             self.start_and_stop("STOP")
             self.config.G_MANUAL_STATUS = "START"
             if self.config.gui is not None:
@@ -333,7 +334,7 @@ class LoggerCore:
 
         elif self.config.G_MANUAL_STATUS == "START":
             display_flash_short = False
-            app_logger.info(f"->M STOP{self.get_time_str()}")
+            app_logger.info(f"->M STOP  {self.get_time_str()}")
             self.start_and_stop("START")
             self.config.G_MANUAL_STATUS = "STOP"
             if self.config.gui is not None:
@@ -359,14 +360,14 @@ class LoggerCore:
             self.config.G_STOPWATCH_STATUS = status
         if self.config.G_STOPWATCH_STATUS != "START":
             self.config.G_STOPWATCH_STATUS = "START"
-            app_logger.info(f"->START{self.get_time_str()}")
+            app_logger.info(f"->START   {self.get_time_str()}")
         elif self.config.G_STOPWATCH_STATUS == "START":
             self.config.G_STOPWATCH_STATUS = "STOP"
-            app_logger.info(f"->STOP{self.get_time_str()}")
+            app_logger.info(f"->STOP    {self.get_time_str()}")
         
     def get_time_str(self):
         if not self.config.G_LOG_OUTPUT_FILE:
-            return datetime.now().strftime("  %Y%m%d %H:%M:%S")
+            return datetime.now().strftime("%Y%m%d %H:%M:%S")
         else:
             return ""
 

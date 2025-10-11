@@ -132,10 +132,7 @@ class GUI_PyQt(GUI_Qt_Base):
         super().__init__(config)
 
     def init_window(self):
-        self.app = QtWidgets.QApplication(sys.argv)
-        self.config.loop = qasync.QEventLoop(self.app)
-        self.config.loop.set_debug(True)
-        self.config.init_loop(call_from_gui=True)
+        self.app = qasync.QApplication(sys.argv)
 
         self.main_window = MainWindow(
             self.config.G_PRODUCT, self.config.display.resolution
@@ -177,6 +174,8 @@ class GUI_PyQt(GUI_Qt_Base):
             await asyncio.sleep(0.01)  # need for changing QLabel in the event loop
 
     def delay_init(self):
+        asyncio.create_task(super().delay_init())
+
         # ensure visually alignment for log
         timers = [
             Timer(auto_start=False, text="  misc  : {0:.3f} sec"),

@@ -1,7 +1,7 @@
 import os
+import sys
 import signal
 import asyncio
-from datetime import datetime, timezone
 
 import numpy as np
 
@@ -57,15 +57,17 @@ class GUI_Qt_Base(QtCore.QObject):
 
         self.gui_config = GUI_Config(config.G_LAYOUT_FILE)
 
+        self.init_window()
+
+    async def delay_init(self):
+        loop = asyncio.get_running_loop()
         try:
-            signal.signal(signal.SIGTERM, self.quit_by_ctrl_c)
-            signal.signal(signal.SIGINT, self.quit_by_ctrl_c)
-            signal.signal(signal.SIGQUIT, self.quit_by_ctrl_c)
-            signal.signal(signal.SIGHUP, self.quit_by_ctrl_c)
+            loop.add_signal_handler(signal.SIGTERM, self.app.quit)
+            loop.add_signal_handler(signal.SIGINT, self.app.quit)
+            loop.add_signal_handler(signal.SIGQUIT, self.app.quit)
+            loop.add_signal_handler(signal.SIGHUP, self.app.quit)
         except:
             pass
-
-        self.init_window()
 
     async def msg_worker(self):
         while True:
@@ -80,25 +82,18 @@ class GUI_Qt_Base(QtCore.QObject):
             await self.msg_event.wait()
             self.msg_event.clear()
             await asyncio.sleep(0.1)
-
-    @qasync.asyncSlot(object, object)
-    async def quit_by_ctrl_c(self, signal, frame):
-        await self.quit()
     
     async def quit(self):
         self.msg_event.set()
         await self.msg_queue.put(None)
         await self.config.quit()
-
-        # with loop.close, so execute at the end
-        # not need PyQt 6.7
-        #self.app.quit()
     
     def exec(self):
-        with self.config.loop:
-            self.config.loop.run_forever()
-            # loop is stopped
-        # loop is closed
+        py_312 = sys.version_info >= (3, 12)
+        if py_312:
+            asyncio.run(self.config.start_coroutine(), loop_factory=qasync.QEventLoop)
+        else:
+            qasync.run(self.config.start_coroutine())
 
     def init_buffer(self, display):
         if display.send:
