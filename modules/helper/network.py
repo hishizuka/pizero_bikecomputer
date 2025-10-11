@@ -6,6 +6,7 @@ import asyncio
 import json
 import concurrent
 import time
+from pathlib import Path
 
 import aiohttp
 import aiofiles
@@ -24,7 +25,7 @@ BT_TETHERING_TIMEOUT_SEC = 15
 BOOT_FILE = "/boot/config.txt"
 
 
-async def get_json(url, params=None, headers=None, timeout=10):
+async def get_json(url, params=None, headers=None, timeout=30):
     async with aiohttp.ClientSession() as session:
         async with session.get(
             url, params=params, headers=headers, timeout=timeout
@@ -42,46 +43,46 @@ async def post(url, headers=None, params=None, data=None):
             return json
 
 
-async def get_http_request(session, url, save_path, headers, params, semaphore, timeout=60):
+async def get_http_request(session, url, save_path, headers, params, semaphore, timeout=120):
     start_time = datetime.now().strftime('%H:%M:%S')
     async with semaphore:
-        start = time.time()
+        #start = time.time()
+        res = None
         try:
             async with session.get(url, headers=headers, params=params, timeout=timeout) as dl_file:
-                if dl_file.status == 200:
-                    #data = await dl_file.read()
-                    #elapsed = time.time() - start
-                    #size_kb = len(data) / 1024
-                    #speed = size_kb / elapsed if elapsed > 0 else 0
-                    
-                    async with aiofiles.open(save_path, mode="wb") as f:
-                        await f.write(await dl_file.read())
-                        #await f.write(data)
-                    #app_logger.error(f"Downloaded ({start_time}->{datetime.now().strftime('%H:%M:%S')}) {size_kb:.1f}KB in {elapsed:.2f}s ({speed:.1f}KB/s)\n{url}")
-                    return True
-                else:
-                    app_logger.info(
-                        f"dl_file status {dl_file.status}: {dl_file.reason}\n{url}"
-                    )
-                    return False
+                res = dl_file.status
+                if dl_file.status != 200:
+                    app_logger.info(f"dl_file status {dl_file.status}: {dl_file.reason}\n{url}")
+                    return res
+                
+                #data = await dl_file.read()
+                #elapsed = time.time() - start
+                #size_kb = len(data) / 1024
+                #speed = size_kb / elapsed if elapsed > 0 else 0
+                
+                async with aiofiles.open(save_path, mode="wb") as f:
+                    await f.write(await dl_file.read())
+                    #await f.write(data)
+                #app_logger.error(f"Downloaded ({start_time}->{datetime.now().strftime('%H:%M:%S')}) {size_kb:.1f}KB in {elapsed:.2f}s ({speed:.1f}KB/s)\n{url}")
+
         except asyncio.CancelledError:
-            return False
+            pass
         except Exception as e:
             app_logger.error(f"Download Error ({start_time}->{datetime.now().strftime('%H:%M:%S')}): {e}\n{url}")
-            return False
-        #except:
-        #    return False    
+            if 'name resolution' in str(e).lower():
+                res = -1
+        finally:
+            return res
 
 async def download_files(urls, save_paths, headers=None, params=None, retry_count=None, limit=None,):
-    sem = 3 if limit else COROUTINE_SEM
+    sem = 1 if limit else COROUTINE_SEM
     semaphore = asyncio.Semaphore(sem)
     async with aiohttp.ClientSession() as session:
         tasks = [
             get_http_request(session, url, save_path, headers, params, semaphore)
             for url, save_path in zip(urls, save_paths)
         ]
-        res = await asyncio.gather(*tasks)
-    return res
+        return await asyncio.gather(*tasks)
 
 
 def check_bnep0():
@@ -272,40 +273,42 @@ class Network:
             res = None
             try:
                 await self.open_bt_tethering(f_name)
-                res = await download_files(**q, limit=self.get_bt_limit())
+                #res = await download_files(**q, limit=self.get_bt_limit())
+                res = await download_files(**q, limit=False)
                 self.download_queue.task_done()
             except concurrent.futures._base.CancelledError:
                 return
 
             retry_urls = []
             retry_save_paths = []
-            # all False
-            if not any(res) or res is None:
-                retry_urls = q["urls"]
-                retry_save_paths = q["save_paths"]
-            # partially failed
-            elif not all(res) and len(q["urls"]) and len(q["urls"]) == len(res):
-                for url, save_path, status in zip(q["urls"], q["save_paths"], res):
-                    if not status:
-                        retry_urls.append(url)
-                        retry_save_paths.append(save_path)
+            
+            for url, save_path, status in zip(q["urls"], q["save_paths"], res):
+                # 200: OK
+                # 404: notify with empty file
+                if status == 404:
+                    Path(save_path).touch()
+                # 403: giveup (do nothing)
+                # -1 : retry after then giveup
+                elif status == -1 and retry_count < 2:
+                    retry_urls.append(url)
+                    retry_save_paths.append(save_path)
+                # None: other error (giveup) or exit
+                elif status == -1 or status is None:
+                    # give up
+                    pass
 
             if retry_urls:
-                app_logger.warning(f"Download failed({len(retry_urls)}/{len(q['urls'])}).")
-                if retry_count < len(self.DOWNLOAD_WORKER_RETRY_SEC_TABLE):
-                    wait_sec = self.DOWNLOAD_WORKER_RETRY_SEC_TABLE[retry_count]
-                    app_logger.warning(f"Retry{retry_count + 1} after {wait_sec}s")
-                    q["urls"] = retry_urls
-                    q["save_paths"] = retry_save_paths
-                    q["retry_count"] = retry_count + 1
-                    await asyncio.sleep(wait_sec)
-                    await self.download_queue.put(q)
-                else:
-                    app_logger.error(
-                        f"Download failed after {retry_count} retries: {retry_urls}"
-                    )
+                await asyncio.sleep(120)
+                q["urls"] = retry_urls
+                q["save_paths"] = retry_save_paths
+                q["retry_count"] = retry_count + 1
+                await self.download_queue.put(q)
+
             #else:
-            #    app_logger.info(f"Download succeeded({len(q['urls'])}).")
+            #    # give up or notify
+            #    app_logger.error(
+            #        f"Download failed after {retry_count} retries: {retry_urls}"
+            #    )
 
     # tiles functions
     async def download_maptile(
