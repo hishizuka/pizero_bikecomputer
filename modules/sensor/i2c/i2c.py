@@ -1,7 +1,7 @@
 import time
 
 import numpy as np
-import smbus
+import smbus2
 
 
 class i2c:
@@ -25,7 +25,7 @@ class i2c:
     values = {}
 
     def __init__(self, bus=1, reset=True, address=None):
-        self.bus = smbus.SMBus(bus)
+        self.bus = smbus2.SMBus(bus)
         if address is not None:
             self.SENSOR_ADDRESS = address
         if reset:
@@ -41,7 +41,7 @@ class i2c:
         if address is not None:
             cls.SENSOR_ADDRESS = address
         try:
-            bus = smbus.SMBus(bus)
+            bus = smbus2.SMBus(bus)
             v = bus.read_byte_data(cls.SENSOR_ADDRESS, cls.TEST_ADDRESS)
             if v in cls.TEST_VALUE:
                 return True

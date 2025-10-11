@@ -13,7 +13,7 @@ from .sensor import Sensor
 # I2C
 _SENSOR_I2C = False
 try:
-    import smbus
+    import smbus2
     _SENSOR_I2C = True
 except ImportError:
     pass
@@ -371,6 +371,7 @@ class SensorI2C(Sensor):
             self.sensor["i2c_imu"] = self.sensor_bhi3_s
             self.motion_sensor["ACC"] = True
             self.available_sensors["PRESSURE"]["BHI3_S"] = True  # includes BMP581 and BME688
+            self.bhi360_s_heading_corr = 0
             if (
                 not self.config.G_IMU_AXIS_SWAP_XY["STATUS"]
                 and self.config.G_IMU_AXIS_CONVERSION["STATUS"]
