@@ -188,6 +188,12 @@ Follow [official setup guide](https://wiki.dfrobot.com/Raspberry_Pi_e-ink_Displa
 
 Assume I2C interface is on in raspi-config.
 
+Next, install `smbus2` if not installed. `smbus2` is installed by default on Raspberry Pi OS Bookworm and later.
+
+```
+$ sudo apt install python3-smbus2
+```
+
 #### Main sensors (pressure, temperature, IMU and light)
 
 Install pip packages of the sensors you own.
@@ -206,6 +212,7 @@ $ pip install adafruit-circuitpython-bmp280
 | [Bosch BMM150 (Obsolete)](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm150/) | | | None(*1) |
 | [Bosch BMM350](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm350/) | | o | None(*1) |
 | [Bosch BHI360](https://www.bosch-sensortec.com/products/smart-sensor-systems/bhi360/) | | | None(*1) |
+| [Bosch BHI385](https://www.bosch-sensortec.com/products/smart-sensor-systems/bhi385/) | | | None(*1) |
 | [Bosch BNO055](https://www.bosch-sensortec.com/products/smart-sensor-systems/bno055/) | [Adafruit](https://www.adafruit.com/product/4646) | | adafruit-circuitpython-bno055(*2) | 
 | [MEMSIC MMC5983MA](https://www.memsic.com/magnetometer-5) | [SparkFun](https://www.sparkfun.com/products/19895) | | None |
 | [STMicroelectronics LIS3MDL](https://www.st.com/en/mems-and-sensors/lis3mdl.html) | [Adafruit](https://www.adafruit.com/product/4485) | | adafruit-circuitpython-lis3mdl |
@@ -259,11 +266,22 @@ Also, place the header files in LD_INCLUDE_PATH (/usr/local/include, etc.).
 - [BHI360_SensorAPI](https://github.com/boschsensortec/BHI360_SensorAPI)
   - 
   ```
-  $ gcc -shared -fPIC -O2 -o libbhi3.so bhi*.c examples/common/verbose.c -I./examples/common/
-  $ sudo mv libbhi3.so /usr/local/lib/
+  $ gcc -shared -fPIC -O2 -o libbhi360.so bhi*.c examples/common/verbose.c -I./examples/common/
+  $ sudo mv libbhi360.so /usr/local/lib/
   $ sudo cp bhi*.h /usr/local/include/
   $ sudo cp examples/common/verbose.h /usr/local/include/
   $ sudo cp -a firmware/bhi360 /usr/local/include/
+  $ sudo ldconfig
+  ```
+
+- [BHI385_SensorAPI](https://github.com/boschsensortec/BHI385_SensorAPI)
+  - 
+  ```
+  $ gcc -shared -fPIC -O2 -o libbhi385.so bhi*.c examples/common/verbose.c -I./examples/common/
+  $ sudo mv libbhi385.so /usr/local/lib/
+  $ sudo cp bhi*.h /usr/local/include/
+  $ sudo cp examples/common/verbose.h /usr/local/include/
+  $ sudo cp -a firmware/bhi385 /usr/local/include/
   $ sudo ldconfig
   ```
 
@@ -692,7 +710,7 @@ If ANT+ powermeter is available, set both parameters are used in W'balance (%). 
   - See below.
 - Debug (experimental)
   - Debug log: view "log/debug.log".
-  - Disable Wifi/BT, Enable Wifi/BT: modify /boot/config.txt to turn Wifi and BT On/Off at the hardware level. Reboot required for settings to take effect.
+  - Disable Wifi/BT, Enable Wifi/BT: modify /boot/firmware/config.txt to turn Wifi and BT On/Off at the hardware level. Reboot required for settings to take effect.
   - Update: execite `git pull origin master`.
 - Power Off
   - Power off the raspberry pi zero when the program is started with the service.
