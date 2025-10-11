@@ -9,17 +9,26 @@ def add_map_config(config):
     #     "attribution": "Map tiles by Stamen Design, under CC BY 3.0.<br />Data by OpenStreetMap, under ODbL",
     #     "tile_size": 256,
     # }
-    config.G_MAP_CONFIG["wikimedia"] = {
-        "url": "https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png",
+
+    config.G_MAP_CONFIG["openstreetmap"] = {
+        "url": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
         "attribution": "© OpenStreetMap contributors",
-        "referer": "https://maps.wikimedia.org/",
         "tile_size": 256,
+        #"user_agent": True,
+    }
+    config.G_MAP_CONFIG["wikimedia"] = {
+        "url": "https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png?lang=en",  # G_LANG: en/ja
+        "attribution": "© OpenStreetMap contributors",
+        "referer": "https://commons.wikimedia.org/wiki/",
+        "tile_size": 256,
+        "user_agent": True,
     }
     config.G_MAP_CONFIG["wikimedia_2x"] = {
-        "url": "https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}@2x.png",
+        "url": "https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}@2x.png?lang=en",  # G_LANG: en/ja
         "attribution": "© OpenStreetMap contributors",
-        "referer": "https://maps.wikimedia.org/",
+        "referer": "https://commons.wikimedia.org/wiki/",
         "tile_size": 512,
+        "user_agent": True,
     }
     # japanese tile
     config.G_MAP_CONFIG["jpn_kokudo_chiri_in"] = {
@@ -156,35 +165,19 @@ def add_map_config(config):
 
     # worldwide DEM(Digital Elevation Model) map
     # Mapbox Terrain-DEM v1
-    #config.G_DEM_MAP_CONFIG["mapbox_terrain_rgb"] = {
-    #    "url": "https://api.mapbox.com/v4/mapbox.terrain-rgb/{z}/{x}/{y}.pngraw?access_token=YOUR_MAPBOX_ACCESS_TOKEN",
-    #    "attribution": "© Mapbox, © OpenStreetMap",
-    #    "fix_zoomlevel": 15,
-    #    "tile_size": 256,
-    #}
+    config.G_DEM_MAP_CONFIG["mapbox_terrain_rgb"] = {
+        "url": "https://api.mapbox.com/v4/mapbox.terrain-rgb/{z}/{x}/{y}.pngraw?access_token=YOUR_MAPBOX_ACCESS_TOKEN",
+        "attribution": "© Mapbox, © OpenStreetMap",
+        "fix_zoomlevel": 15,
+        "tile_size": 256,
+    }
 
     # japanese DEM(Digital Elevation Model) map
-    config.G_DEM_MAP_CONFIG["jpn_kokudo_chiri_in_DEM5A"] = {
-        "url": "https://cyberjapandata.gsi.go.jp/xyz/dem5a_png/{z}/{x}/{y}.png",  # DEM5A
+    config.G_DEM_MAP_CONFIG["jpn_kokudo_chiri_in_DEM"] = {
+        "url": "https://cyberjapandata.gsi.go.jp/xyz/dem5a_png/{z}/{x}/{y}.png",  # DEM5A(zoom: 1-15)
         "attribution": "国土地理院",
         "fix_zoomlevel": 15,
         "tile_size": 256,
-    }
-    config.G_DEM_MAP_CONFIG["jpn_kokudo_chiri_in_DEM5B"] = {
-        "url": "https://cyberjapandata.gsi.go.jp/xyz/dem5b_png/{z}/{x}/{y}.png",  # DEM5B
-        "attribution": "国土地理院",
-        "fix_zoomlevel": 15,
-        "tile_size": 256,
-    }
-    config.G_DEM_MAP_CONFIG["jpn_kokudo_chiri_in_DEM5C"] = {
-        "url": "https://cyberjapandata.gsi.go.jp/xyz/dem5c_png/{z}/{x}/{y}.png",  # DEM5C
-        "attribution": "国土地理院",
-        "fix_zoomlevel": 15,
-        "tile_size": 256,
-    }
-    config.G_DEM_MAP_CONFIG["jpn_kokudo_chiri_in_DEM10B"] = {
-        "url": "https://cyberjapandata.gsi.go.jp/xyz/dem_png/{z}/{x}/{y}.png",  # DEM10B
-        "attribution": "国土地理院",
-        "fix_zoomlevel": 14,
-        "tile_size": 256,
+        "retry_url": "https://cyberjapandata.gsi.go.jp/xyz/dem_png/{z}/{x}/{y}.png",  # DEM10B(zoom: 1-14)
+        "retry_zoomlevel": 14,
     }
