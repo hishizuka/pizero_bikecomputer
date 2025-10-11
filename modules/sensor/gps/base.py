@@ -264,6 +264,7 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
         else:
             self.values["track"] = self.values["pre_track"]
 
+        # distance in the course
         self.course.get_index(
             self.values["lat"],
             self.values["lon"],

@@ -93,7 +93,7 @@ class GUI_Config:
         "GPS Fix": (("d", ""), "self.sensor.values['GPS']['mode']"),
         "Course Dist.": (
             G_UNIT["Distance"],
-            "self.sensor.values['GPS']['course_distance']",
+            "self.course.index.distance",
         ),
         # ANT+ raw
         "HR(ANT+)": (

@@ -30,7 +30,7 @@ class LoggerCsv(Logger):
                 + filename
             )
             sqlite3_cmd = ["sh", "-c", sql_cmd]
-            exec_cmd(sqlite3_cmd)
+            exec_cmd(sqlite3_cmd, cmd_print=False)
         else:
             con = sqlite3.connect(
                 self.config.G_LOG_DB,

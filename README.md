@@ -6,18 +6,13 @@ An open-source bike computer based on  Raspberry Pi Zero (W, WH, 2 W) with GPS a
 https://github.com/hishizuka/pizero_bikecomputer
 
 # News
+- 2025/10/12 Supports Raspberry Pi OS Trixie. For new installations, it is highly recommended to install Trixie due to compatibility with asyncio and asynqt. The following will no longer be supported going forward:
+  - Raspberry Pi OS Bookworm and earlier
+  - PyQt5
 - 2025/6/24 Now major packages can now be installed with a 1-line command.
   - `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/hishizuka/pizero_bikecomputer/refs/heads/master/install.sh)"`
-- 2025/6/24 The pins used for SPI in the MIP display were changed to match SPI0.
-- 2025/6/24 Add support [BOSCH BHI360](https://www.bosch-sensortec.com/products/smart-sensor-systems/bhi360/)
 - 2025/3/17 PCBs are under development.
   - <img width="320" alt="4inch-01" src="https://github.com/user-attachments/assets/d31f1cd3-5472-47b1-8995-1efe8fb5ef97" /> <img width="320" alt="4inch-02" src="https://github.com/user-attachments/assets/87afa6c3-ba28-4dbc-970b-e3c7c9a55806" /> <img width="320" alt="4inch-03" src="https://github.com/user-attachments/assets/3b9528d5-9e02-437a-a13f-2607aac2f90d" />
-- 2024/6/21 Changed the value for `display` in `setting.conf` when using JDI/Sharp MIP LCD. See `modules/display/display_core.py` for setting values.
-  - `MIP_JDI_color_400x240`
-  - `MIP_JDI_color_640x480`
-  - `MIP_Azumo_color_272x451`
-  - `MIP_Sharp_mono_400x240`
-  - `MIP_Sharp_mono_320x240`
 
 ## Stargazers over time
 [![Stargazers over time](https://starchart.cc/hishizuka/pizero_bikecomputer.svg?variant=dark)](https://starchart.cc/hishizuka/pizero_bikecomputer)
