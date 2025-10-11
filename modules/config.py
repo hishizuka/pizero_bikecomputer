@@ -95,7 +95,7 @@ class Config:
 
     # map setting
     # default map (can overwrite in settings.conf)
-    G_MAP = "wikimedia"
+    G_MAP = "openstreetmap"
     G_MAP_CONFIG = {}
     # external input of G_MAP_CONFIG
     G_MAP_LIST = "map.yaml"
@@ -113,7 +113,7 @@ class Config:
 
     # DEM tile (Digital Elevation Model)
     G_USE_DEM_TILE = False
-    G_DEM_MAP = "jpn_kokudo_chiri_in_DEM5A" #mapbox_terrain_rgb, jpn_kokudo_chiri_in_DEM5A
+    G_DEM_MAP = "jpn_kokudo_chiri_in" #mapbox_terrain_rgb, jpn_kokudo_chiri_in
     G_DEM_MAP_CONFIG = {}
 
     # wind speed, direction and headwind
@@ -511,7 +511,7 @@ class Config:
 
         if self.G_MAP not in self.G_MAP_CONFIG:
             app_logger.error(f"{self.G_MAP} does not exist in {self.G_MAP_LIST}")
-            self.G_MAP = "wikimedia"
+            self.G_MAP = "openstreetmap"
         if self.G_MAP_CONFIG[self.G_MAP].get("use_mbtiles") and not os.path.exists(
             os.path.join("maptile", f"{self.G_MAP}.mbtiles")
         ):
@@ -533,35 +533,22 @@ class Config:
         else:
             self.G_ANT["INTERVAL"] = 2
 
-        # coroutine loop
-        self.init_loop()
-
         self.log_time = datetime.now()
 
         self.button_config = Button_Config(self)
 
-    def init_loop(self, call_from_gui=False):
-        if self.G_GUI_MODE in ["PyQt", "QML"]:
-            if call_from_gui:
-                # workaround for latest qasync and older version(~0.24.0)
-                asyncio.events._set_running_loop(self.loop)
-                asyncio.set_event_loop(self.loop)
-                self.start_coroutine()
-        else:
-            if call_from_gui:
-                self.loop = asyncio.get_event_loop()
-                self.loop.set_debug(True)
-                asyncio.set_event_loop(self.loop)
-
-    def start_coroutine(self):
+    @property
+    def loop(self):
+        return asyncio.get_running_loop()
+    
+    async def start_coroutine(self):
+        self.app_close_event = asyncio.Event()
         self.logger.start_coroutine()
         self.display.start_coroutine()
 
         # delay init start
         asyncio.create_task(self.delay_init())
-    
-    async def start_coroutine_async(self):
-        self.start_coroutine()
+        await self.app_close_event.wait()
 
     async def delay_init(self):
         await asyncio.sleep(0.01)
@@ -738,27 +725,32 @@ class Config:
                 pass
 
     async def quit(self):
-        app_logger.info("quit")
+        app_logger.info("########## QUIT START ##########")
 
         if self.ble_uart is not None:
             await self.ble_uart.quit()
         await self.network.quit()
+        app_logger.info(" 1: network")
 
         if self.G_MANUAL_STATUS == "START":
             self.logger.start_and_stop_manual()
+        self.logger.remove_handler()
         self.display.quit()
+        app_logger.info(" 2: display")
 
         await self.logger.quit()
         self.setting.write_config()
         self.state.delete()
+        app_logger.info(" 3: logger & state")
 
         self.delete_weather_overlay_tiles()
+        app_logger.info(" 4: overlay tiles")
 
+        self.app_close_event.set()
         await asyncio.sleep(0.5)
         await self.kill_tasks()
-        self.logger.remove_handler()
 
-        app_logger.info("quit done")
+        app_logger.info("########## QUIT END   ##########")
 
     async def power_off(self):
         service_state = is_running_as_service() if self.G_IS_RASPI else False
