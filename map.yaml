@@ -10,11 +10,6 @@
 #  attribution: Map tiles by Stamen Design, under CC BY 3.0.<br />Data by OpenStreetMap, under ODbL
 #  tile_size: 512
 
-openstreetmap:
-  url: https://tile.openstreetmap.org/{z}/{x}/{y}.png
-  attribution: © OpenStreetMap contributors
-  user_agent: true
-
 # need API key
 opencyclemap:
   url: http://tile.thunderforest.com/cycle/{z}/{x}/{y}.png
