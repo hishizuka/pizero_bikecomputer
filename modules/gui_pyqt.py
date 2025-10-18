@@ -697,7 +697,15 @@ class GUI_PyQt(GUI_Qt_Base):
                 focus_widget.clearFocus()
 
     def change_menu_back(self):
-        self.stack_widget.currentWidget().back()
+        current_widget = self.stack_widget.currentWidget()
+        back_method = getattr(current_widget, "back", None)
+        if callable(back_method):
+            back_method()
+        else:
+            app_logger.warning(
+                "change_menu_back skipped: current widget %s has no back() method",
+                type(current_widget).__name__,
+            )
 
     def goto_menu(self):
         self.change_menu_page(self.gui_config.G_GUI_INDEX["Menu"])
