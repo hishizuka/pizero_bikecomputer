@@ -117,28 +117,16 @@ $ pip install garminconnect stravacookies bluez-peripheral==0.2.0a3 tb-mqtt-clie
 
 ### GPS module
 
-#### UART GPS
-
 Assume Serial interface is on and login shell is off in raspi-config and GPS device is connected as /dev/ttyS0. If GPS device is /dev/ttyAMA0, modify gpsd config file(/etc/default/gpsd).
 
 ```
-$ sudo apt install gpsd gpsd-clients
-$ pip install gps3 timezonefinder 
+$ sudo apt install gpsd python3-gps
+$ pip install timezonefinder
 $ sudo cp install/etc/default/gpsd /etc/default/gpsd
 $ sudo systemctl enable gpsd
 ```
 
 Check with `cgps` or `gpsmon` command.
-
-#### I2C GPS (obsoleted)
-
-Assume I2C interface is on in raspi-config.
-
-```
-$ pip install timezonefinder pa1010d
-```
-
-Check with [pa1010d example program](https://github.com/pimoroni/pa1010d-python/blob/master/examples/latlon.py)
 
 
 ### ANT+ USB dongle

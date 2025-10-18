@@ -147,7 +147,7 @@ if [[ "$install_gps" == "true" ]]; then
     #sudo apt install -y gpsd
     # trixie
     sudo apt install -y gpsd python3-gps libffi-dev
-    pip install gps3 timezonefinder
+    pip install timezonefinder
     if [[ "$has_raspi_config" == "true" ]]; then
         sudo raspi-config nonint do_serial_cons 1
         sudo raspi-config nonint do_serial_hw 0
