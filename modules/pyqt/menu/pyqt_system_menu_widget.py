@@ -65,6 +65,13 @@ class NetworkMenuWidget(MenuWidget):
                 "dialog",
                 lambda: self.config.gui.show_dialog(self.wifi_connect_with_wps, "Connect to Wifi with WPS?")
             ),
+            (
+                "Reset Bluetooth",
+                "dialog",
+                lambda: self.config.gui.show_dialog(
+                    self.config.network.restart_bluetooth, "Restart Bluetooth"
+                ),
+            ),
             ("IP Address", "dialog", self.show_ip_address),
         )
         self.add_buttons(button_conf)

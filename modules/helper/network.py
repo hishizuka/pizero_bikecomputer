@@ -71,8 +71,7 @@ async def get_http_request(session, url, save_path, headers, params, semaphore, 
             app_logger.error(f"Download Error ({start_time}->{datetime.now().strftime('%H:%M:%S')}): {e}\n{url}")
             if 'name resolution' in str(e).lower():
                 res = -1
-        finally:
-            return res
+        return res
 
 async def download_files(urls, save_paths, headers=None, params=None, retry_count=None, limit=None,):
     sem = 1 if limit else COROUTINE_SEM
@@ -135,6 +134,10 @@ class Network:
         if self.config.G_IS_RASPI and check_bnep0():
             await self.bluetooth_tethering(disconnect=True)
             await asyncio.sleep(5)
+
+    def restart_bluetooth(self):
+        if self.config.G_IS_RASPI:
+            exec_cmd(["sudo", "systemctl", "restart", "bluetooth"])
 
     async def start_bt_pairing(self):
         if self.bt_pairing_proc is not None:
@@ -273,8 +276,7 @@ class Network:
             res = None
             try:
                 await self.open_bt_tethering(f_name)
-                #res = await download_files(**q, limit=self.get_bt_limit())
-                res = await download_files(**q, limit=False)
+                res = await download_files(**q, limit=self.get_bt_limit())
                 self.download_queue.task_done()
             except concurrent.futures._base.CancelledError:
                 return
