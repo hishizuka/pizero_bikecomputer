@@ -69,7 +69,7 @@ class NetworkMenuWidget(MenuWidget):
                 "Reset Bluetooth",
                 "dialog",
                 lambda: self.config.gui.show_dialog(
-                    self.config.network.restart_bluetooth, "Restart Bluetooth"
+                    self.config.network.reset_bluetooth, "Reset Bluetooth"
                 ),
             ),
             ("IP Address", "dialog", self.show_ip_address),
