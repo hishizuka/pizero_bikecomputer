@@ -5,6 +5,7 @@ from datetime import datetime
 import socket
 import urllib.parse
 import asyncio
+import json
 
 import numpy as np
 
@@ -89,6 +90,10 @@ class api:
 
         self.maptile_with_values = MapTileWithValues(self.config)
 
+    @property
+    def network(self):
+        return self.config.network
+
     async def get_google_routes(self, x1, y1, x2, y2):
         if not detect_network() or self.config.G_GOOGLE_DIRECTION_API["TOKEN"] == "":
             return None
@@ -158,8 +163,8 @@ class api:
         ):
             return self.pre_value["OPENMETEO_WIND"]
         
-        # check network
-        if not self.config.G_AUTO_BT_TETHERING and not detect_network():
+        # Skip if there is no connectivity path available.
+        if not self.network.check_network_with_bt_tethering():
             return self.pre_value["OPENMETEO_WIND"]
 
         return await self.get_openmeteo_current_wind_data_internal(pos, forcast_time)
@@ -168,7 +173,8 @@ class api:
 
         # open connection
         f_name = self.get_openmeteo_current_wind_data_internal.__name__
-        if not await self.config.network.open_bt_tethering(f_name):
+        bt_open_result = await self.network.open_bt_tethering(f_name)
+        if not bt_open_result.is_success():
             return
 
         # https://open-meteo.com/en/docs
@@ -192,7 +198,7 @@ class api:
         # response["elevation"], response["current"][{vars}]
 
         # close connection
-        await self.config.network.close_bt_tethering(f_name)
+        await self.network.close_bt_tethering(f_name)
 
         if forcast_time is None and "current" in response:
             self.pre_value["OPENMETEO_WIND"] = [
@@ -297,7 +303,7 @@ class api:
             ).format(route_id=route_id),
             # (self.config.G_RIDEWITHGPS_API["URL_ROUTE_DOWNLOAD_DIR"]+"thumb-{route_id}.png").format(route_id=route_id),
         ]
-        await self.config.network.download_queue.put(
+        await self.network.download_queue_put(
             {
                 "urls": urls,
                 "save_paths": save_paths,
@@ -327,7 +333,7 @@ class api:
                 + "course-{route_id}.tcx"
             ).format(route_id=route_id),
         ]
-        await self.config.network.download_queue.put(
+        await self.network.download_queue_put(
             {
                 "urls": urls,
                 "save_paths": save_paths,
@@ -598,11 +604,9 @@ class api:
     def check_livetrack(self):
         # import check
         if not _IMPORT_THINGSBOARD:
-            # print("Install tb-mqtt-client")
             return False
-        # network check
-        if not self.config.G_AUTO_BT_TETHERING and not detect_network():
-            # print("No Internet connection")
+        # Skip if there is no connectivity path available.
+        if not self.network.check_network_with_bt_tethering():
             return False
         return True
 
@@ -637,7 +641,8 @@ class api:
 
         # open connection
         v = self.config.logger.sensor.values
-        if not await self.config.network.open_bt_tethering(f_name):
+        bt_open_result = await self.network.open_bt_tethering(f_name)
+        if not bt_open_result.is_success():
             v["integrated"]["send_time"] = (datetime.now().strftime("%H:%M") + "OE")
             self.send_livetrack_data_lock = False
             return
@@ -682,11 +687,9 @@ class api:
             app_logger.error(f"[BT] socket timeout: {e}")
         except socket.error as e:
             app_logger.error(f"[BT] socket error: {e}")
-        except ValueError as e:
-            app_logger.error(f"[BT] ThingsBoard invalid data: {e}\n{data=}")
-            for d in data["values"].values():
-                app_logger.error(f"{d} ({type(d)})")
-        except TypeError as e:
+        #except ValueError as e:
+        #except TypeError as e:
+        except json.JSONDecodeError as e:
             app_logger.error(f"[BT] ThingsBoard invalid data: {e}\n{data=}")
             for d in data["values"].values():
                 app_logger.error(f"{d} ({type(d)})")
@@ -700,7 +703,7 @@ class api:
             await self.send_livetrack_course(reset=True)
 
         # close connection
-        if not await self.config.network.close_bt_tethering(f_name):
+        if not await self.network.close_bt_tethering(f_name):
             v["integrated"]["send_time"] = (datetime.now().strftime("%H:%M") + "CE")
         # app_logger.info(f"[TB] end, network: {bool(detect_network())}")
 
@@ -729,7 +732,8 @@ class api:
 
         # open connection
         f_name = self.send_livetrack_course.__name__
-        if not await self.config.network.open_bt_tethering(f_name):
+        bt_open_result = await self.network.open_bt_tethering(f_name)
+        if not bt_open_result.is_success():
             return
 
         self.thingsboard_client.connect()
@@ -739,7 +743,7 @@ class api:
         self.thingsboard_client.disconnect()
 
         # close connection
-        await self.config.network.close_bt_tethering(f_name)
+        await self.network.close_bt_tethering(f_name)
         
         self.course_send_status = ""
 
@@ -781,4 +785,3 @@ class api:
     
     async def get_altitude(self, pos):
         return await self.maptile_with_values.get_altitude_from_tile(pos)
-
