@@ -147,12 +147,18 @@ class GadgetbridgeService(Service):
                 set_time(utctime)
 
         elif message.startswith("GB("):
-            message = message.lstrip("GB(").rstrip(")")
+            message = message[len("GB(") :]
+            if message.endswith(")"):
+                message = message[:-1]
             # GadgetBridge uses a json-ish message format ('{t:"is_gps_active"}'), so we need to add "" to keys
             # It can also encode value in base64-ish using {key: atob("...")}
             try:
-                message = re.sub(r'(\w+):("?\w*"?)', '"\\1":\\2', message)
-                message = re.sub(r"atob\(\"(\S+)\"\)", self.decode_b64, message)
+                message = re.sub(
+                    r'([{,]\s*)([A-Za-z_][\w-]*)\s*:',
+                    r'\1"\2":',
+                    message,
+                )
+                message = re.sub(r'atob\("([^\"]+)"\)', self.decode_b64, message)
 
                 message = json.loads(message, strict=False)
 
