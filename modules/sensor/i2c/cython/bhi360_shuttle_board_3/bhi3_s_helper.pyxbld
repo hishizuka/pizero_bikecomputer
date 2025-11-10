@@ -6,8 +6,7 @@ def make_ext(modname, pyxfilename):
         'bhi3_s': {
             'src': 'bhi3_s.c',
             'lib': 'libbhi360.so',
-            'extra_lib': ['-lpigpiod_if2'],
-            'macro': [('USE_BHI3_S', '1'),],  # for SPI
+            'macro': [('USE_BHI3_S', '1')],  # for SPI
             #'macro': [('USE_BHI3_S', '1'), ('BHI3_USE_I2C', '1')],  # for I2C
         },
     }
@@ -19,6 +18,24 @@ def make_ext(modname, pyxfilename):
         include_dirs = ['.']
     define_macros = [('NOUSE_MAIN', '1')]
     extra_link_args = []
+
+    int_mode = os.environ.get("BHI3_INT_MODE", "").lower()
+    interrupt_libs = ['-lpigpiod_if2']
+    if int_mode == "pigpio_cb":
+        define_macros.append(('BHI3_INT_MODE_PIGPIO_CB', '1'))
+    elif int_mode == "pigpio_poll":
+        define_macros.append(('BHI3_INT_MODE_PIGPIO_POLL', '1'))
+    elif int_mode == "gpiod":
+        define_macros.append(('BHI3_INT_MODE_GPIOD', '1'))
+        interrupt_libs = ['-lpigpiod_if2']
+
+    poll_interval = os.environ.get("BHI3_INT_POLL_INTERVAL_US")
+    if poll_interval:
+        define_macros.append(('BHI3_INT_POLL_INTERVAL_US', poll_interval))
+
+    gpiod_device = os.environ.get("BHI3_GPIOD_DEVICE")
+    if gpiod_device:
+        define_macros.append(('BHI3_GPIOD_DEVICE', '"%s"' % gpiod_device))
     lib_paths = os.environ.get("LD_LIBRARY_PATH", "").split(":") + ["/usr/lib", "/usr/local/lib", include_dirs[0]]
 
     def check_lib(lib, lib_paths):
@@ -32,10 +49,11 @@ def make_ext(modname, pyxfilename):
         if check_lib(i2c_sensors[s]['lib'], lib_paths):
             sources.append(i2c_sensors[s]['src'])
             extra_link_args.append('-l' + os.path.splitext(i2c_sensors[s]['lib'])[0][3:])
-            extra_link_args.extend(i2c_sensors[s]['extra_lib'])
+            extra_link_args.extend(interrupt_libs)
             define_macros.extend(i2c_sensors[s]['macro'])
     if len(sources) > 0:
         sources = [pyxfilename, 'common.c'] + sources
+        extra_link_args.append('-lpthread')
     else:
         return None
 

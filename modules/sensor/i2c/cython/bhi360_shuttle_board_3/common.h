@@ -50,10 +50,24 @@ extern "C" {
 #include <string.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
-//#include <linux/spi/spidev.h>
+#include <pthread.h>
+#include <time.h>
+#include <linux/spi/spidev.h>
 #include <linux/i2c-dev.h>
+
+#if !defined(BHI3_INT_MODE_PIGPIO_POLL) && !defined(BHI3_INT_MODE_PIGPIO_CB) && !defined(BHI3_INT_MODE_GPIOD)
+#define BHI3_INT_MODE_PIGPIO_POLL 1
+#endif
+
+#if defined(BHI3_INT_MODE_PIGPIO_POLL) || defined(BHI3_INT_MODE_PIGPIO_CB)
 #include <pigpiod_if2.h>
-//#include <gpiod.h>
+#define BHI3_USE_PIGPIO 1
+#endif
+
+#if defined(BHI3_INT_MODE_GPIOD)
+#include <gpiod.h>
+#define BHI3_USE_GPIOD 1
+#endif
 
 #include "bhi360.h"
 #include "bhi360_defs.h"
@@ -99,6 +113,9 @@ int8_t bhi360_i2c_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t length, voi
 int8_t bhi360_i2c_write(uint8_t reg_addr, const uint8_t *reg_data, uint32_t length, void *intf_ptr);
 void bhi360_delay_us(uint32_t us, void *private_data);
 bool get_interrupt_status(void);
+bool bhi3_wait_for_interrupt(uint32_t timeout_ms);
+void bhi3_interrupt_init(void);
+void bhi3_interrupt_deinit(void);
 
 #ifdef __cplusplus
 }

@@ -47,6 +47,8 @@ typedef struct bhi3_s_data
 
 int8_t bhi3_s_init();
 void bhi3_s_read_data(bhi3_s_data *data);
+bool bhi3_s_ready();
+int8_t bhi3_s_last_error();
 void bhi3_s_close();
 
 #else
@@ -55,6 +57,8 @@ int8_t bhi3_s_init() {
     return -1;
 }
 void bhi3_s_read_data(bhi3_s_data *data) {};
+bool bhi3_s_ready() { return false; }
+int8_t bhi3_s_last_error() { return -1; }
 void bhi3_s_close() {};
 
 #endif

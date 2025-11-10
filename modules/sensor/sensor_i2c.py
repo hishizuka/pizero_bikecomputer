@@ -538,9 +538,13 @@ class SensorI2C(Sensor):
     def read_bhi3_s(self):
         if not self.available_sensors["MOTION"].get("BHI3_S"):
             return
-        
+
+        imu = self.sensor["i2c_imu"]
+        if hasattr(imu, "ready") and not imu.ready:
+            return
+
         self.values["raw_heading"] = (
-            int(self.sensor["i2c_imu"].heading) - self.bhi360_s_heading_corr + self.config.G_IMU_MAG_DECLINATION
+            int(imu.heading) - self.bhi360_s_heading_corr + self.config.G_IMU_MAG_DECLINATION
             ) % 360
         self.values["heading"] = self.values["raw_heading"]
         self.values["heading_str"] = get_track_str(self.values["heading"])
@@ -548,8 +552,8 @@ class SensorI2C(Sensor):
         # WIP code
         # pitch: the x-axis of acceleration and the sign are opposite.
         # roll : same as acc y: to West (up rotation is plus)
-        self.values["pitch"] = math.radians(-1 * ((self.sensor["i2c_imu"].roll + 360) % 360 - 180))
-        self.values["roll"] = math.radians(self.sensor["i2c_imu"].pitch)
+        self.values["pitch"] = math.radians(-1 * ((imu.roll + 360) % 360 - 180))
+        self.values["roll"] = math.radians(imu.pitch)
         self.values["grade_pitch"] = 100 * math.tan(self.values["pitch"])
 
     def read_light(self):

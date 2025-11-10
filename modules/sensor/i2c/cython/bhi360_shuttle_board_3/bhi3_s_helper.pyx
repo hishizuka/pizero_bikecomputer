@@ -2,6 +2,8 @@
 
 #cimport cython
 
+from libc.stdint cimport int8_t
+
 
 cdef extern from "bhi3_s.h":
   cdef struct bhi3_s_data:
@@ -16,6 +18,8 @@ cdef extern from "bhi3_s.h":
     float humidity
   int bhi3_s_init()
   void bhi3_s_read_data(bhi3_s_data *data)
+  bint bhi3_s_ready()
+  int8_t bhi3_s_last_error()
   void bhi3_s_close()
 
 
@@ -32,10 +36,12 @@ cdef class BHI3_S:
 
   cdef reset_value(self):
     pass
-    
-  cpdef read_data(self):
+
+  cpdef bint read_data(self):
     if self.status:
       bhi3_s_read_data(&self.datas)
+      return bhi3_s_ready()
+    return 0
 
   @property
   def acc(self):
@@ -49,10 +55,12 @@ cdef class BHI3_S:
   
   @property
   def pitch(self):
+    self.read_data()
     return int(self.datas.pitch)
   
   @property
   def roll(self):
+    self.read_data()
     return int(self.datas.roll)
 
   @property
@@ -70,10 +78,14 @@ cdef class BHI3_S:
     self.read_data()
     return int(self.datas.humidity)
 
+  @property
+  def ready(self):
+    return bhi3_s_ready()
 
-cpdef rslt_to_bool(int rslt):
-  if rslt == 0:
-    return True
-  else:
-    return False
+  @property
+  def last_error(self):
+    return bhi3_s_last_error()
 
+
+cpdef bint rslt_to_bool(int rslt):
+  return rslt == 0
