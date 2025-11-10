@@ -9,7 +9,7 @@ from glob import glob
 import numpy as np
 import oyaml as yaml
 
-from modules.app_logger import CustomRotatingFileHandler, app_logger
+from modules.app_logger import app_logger
 from modules.map_config import add_map_config
 from modules.helper.setting import Setting
 from modules.button_config import Button_Config
@@ -90,7 +90,6 @@ class Config:
     # log setting
     G_LOG_DIR = "log"
     G_LOG_DB = os.path.join(G_LOG_DIR, "log.db")
-    G_LOG_OUTPUT_FILE = False
     G_LOG_DEBUG_FILE = os.path.join(G_LOG_DIR, "debug.log")
 
     # map setting
@@ -431,7 +430,6 @@ class Config:
         parser.add_argument("--gui")
         parser.add_argument("--headless", action="store_true", default=False)
         parser.add_argument("--init", action="store_true", default=False)
-        parser.add_argument("--output_log", action="store_true", default=False)
         parser.add_argument("--calib_mag", action="store_true", default=False)
         parser.add_argument("--calib_pitch_roll", action="store_true", default=False)
 
@@ -452,8 +450,6 @@ class Config:
             self.G_HEADLESS = True
         if args.init:
             self.G_INIT_ONLY = True
-        if args.output_log:
-            self.G_LOG_OUTPUT_FILE = True
         if args.calib_mag:
             self.G_IMU_CALIB["MAG"] = True
             self.G_I2C_INTERVAL = 0.1
@@ -477,16 +473,6 @@ class Config:
         # make sure all folders exist
         os.makedirs(self.G_SCREENSHOT_DIR, exist_ok=True)
         os.makedirs(self.G_LOG_DIR, exist_ok=True)
-
-        if self.G_LOG_OUTPUT_FILE and self.G_LOG_DEBUG_FILE:
-            delay = not os.path.exists(self.G_LOG_DEBUG_FILE)
-            fh = CustomRotatingFileHandler(self.G_LOG_DEBUG_FILE, delay=delay)
-            fh.doRollover()
-            fh_formatter = logging.Formatter(
-                "%(asctime)s %(levelname)s %(message)s", "%Y-%m-%d %H:%M:%S"
-            )
-            fh.setFormatter(fh_formatter)
-            app_logger.addHandler(fh)
 
         # layout file
         if not os.path.exists(self.G_LAYOUT_FILE):
@@ -539,9 +525,13 @@ class Config:
 
     @property
     def loop(self):
-        return asyncio.get_running_loop()
+        #return asyncio.get_running_loop()
+        if self._loop is None:
+            raise RuntimeError("Event loop has not been initialized yet.")
+        return self._loop
     
     async def start_coroutine(self):
+        self._loop = asyncio.get_running_loop()
         self.app_close_event = asyncio.Event()
         self.logger.start_coroutine()
         self.display.start_coroutine()
@@ -566,7 +556,7 @@ class Config:
         if self.G_IS_RASPI:
             await self.gui.set_boot_status("initialize bluetooth modules...")
 
-            from modules.helper.bt_pan import (
+            from modules.helper.bluetooth.bt_pan import (
                 BTPanDbus,
                 BTPanDbusFast,
                 HAS_DBUS_FAST,
@@ -586,9 +576,9 @@ class Config:
 
         # GadgetBridge (has to be before gui but after sensors for proper init state of buttons)
         if self.G_IS_RASPI:
-            try:
-                from modules.helper.ble_gatt_server import GadgetbridgeService
+            from modules.helper.bluetooth import HAS_GADGETBRIDGE, GadgetbridgeService
 
+            if HAS_GADGETBRIDGE and GadgetbridgeService is not None:
                 self.ble_uart = GadgetbridgeService(
                     self.G_PRODUCT,
                     self.logger.sensor.sensor_gps,
@@ -598,9 +588,10 @@ class Config:
                         self.G_GADGETBRIDGE["USE_GPS"],
                     ),
                 )
-
-            except Exception as e:  # noqa
-                app_logger.info(f"Gadgetbridge service not initialized: {e}")
+            else:
+                app_logger.info(
+                    "Gadgetbridge service not initialized: Gadgetbridge dependencies not installed"
+                )
 
         # gui
         await self.gui.set_boot_status("initialize screens...")
@@ -653,6 +644,9 @@ class Config:
                 # test other functions #
                 elif key == "i" and self.gui and self.gui.map_widget:
                     self.gui.map_widget.modify_map_tile()
+                elif key == "@" and self.gui and self.gui.map_widget:
+                    self.gui.show_dialog_ok_only(fn=None, title="test")
+                    #self.gui.show_popup(f"test", 3)
         except asyncio.CancelledError:
             pass
 
