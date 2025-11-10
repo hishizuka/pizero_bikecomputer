@@ -200,8 +200,10 @@ if [[ "$enable_spi" == "true" ]]; then
     #  sudo adduser "$TARGET_USER" spi
     #fi
     
-    sudo apt install -y pigpio python3-pigpio
     # workaround for trixie
+    sudo apt install -y pigpio python3-pigpio
+    # or manually install
+
     sudo systemctl enable pigpiod
     echo "ℹ️ pigpio enabled  successfully."
 
@@ -318,10 +320,14 @@ if [[ "$install_services" == "true" ]]; then
     i_service_file="scripts/install/etc/systemd/system/pizero_bikecomputer.service"
     o_service_file="/etc/systemd/system/pizero_bikecomputer.service"
 
+    log_file="$current_dir/log/debug.log"
+    i_post_exec_file="scripts/install/usr/local/bin/rotate_debug_log.sh"
+    o_post_exec_file="/usr/local/bin/rotate_debug_log.sh"
+
     # check if venv is set, in that case default to using venv to run the script
     #read -p "Use current virtualenv? [y/n] (y): " use_venv
     if [[ -n "$VIRTUAL_ENV" ]]; then
-        script="$VIRTUAL_ENV/bin/python $script --output_log"
+        script="$VIRTUAL_ENV/bin/python $script"
     else
     echo "No virtualenv used/activated. Default python will be used"
     fi
@@ -339,9 +345,12 @@ if [[ "$install_services" == "true" ]]; then
     if [ -f "$i_service_file" ]; then
         content=$(<"$i_service_file")
         content="${content/WorkingDirectory=/WorkingDirectory=$current_dir}"
+        content="${content/ExecStartPre=/ExecStartPre=$o_post_exec_file}"
         content="${content/ExecStart=/ExecStart=$script}"
+        content="${content/ExecStopPost=/ExecStopPost=$o_post_exec_file}"
         content="${content/User=/User=$TARGET_USER}"
         content="${content/Group=/Group=$TARGET_USER}"
+        content="${content/StandardOutput=/StandardOutput=append:$log_file}"
 
         # inject environment variables
         content=$(echo "$content" | sed "/\[Install\]/i $envs")
@@ -352,6 +361,15 @@ if [[ "$install_services" == "true" ]]; then
         echo "$content" | sudo tee $o_service_file > /dev/null
         sudo systemctl enable pizero_bikecomputer
     fi
+
+    if [ -f "$i_post_exec_file" ]; then
+        content=$(<"$i_post_exec_file")
+        content="${content/LOG=/LOG=$log_file}"
+
+        echo "$content" | sudo tee $o_post_exec_file > /dev/null
+        chown $TARGET_USER:$TARGET_USER
+    fi
+
 fi
 
 echo "✅ pizero_bikecomputer initial setup completed successfully! Please reboot."  # or "Now rebooting"

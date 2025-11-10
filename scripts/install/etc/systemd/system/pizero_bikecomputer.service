@@ -7,13 +7,19 @@ Description=PizeroBikecomputer
 
 [Service]
 WorkingDirectory=
+ExecStartPre=
 ExecStart=
-
-Restart=no
-Type=simple
+ExecStopPost=
 
 User=
 Group=
+Type=simple
+Restart=no
+#Restart=on-failure
+
+StandardOutput=
+#StandardOutput=journal
+StandardError=inherit
 
 [Install]
 WantedBy=multi-user.target
