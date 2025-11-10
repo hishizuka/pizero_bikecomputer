@@ -13,7 +13,6 @@ from modules.app_logger import app_logger
 from modules.loaders import TcxLoader
 from modules.utils.filters import savitzky_golay
 from modules.utils.geo import calc_azimuth, get_dist_on_earth, get_dist_on_earth_array
-from modules.utils.network import detect_network
 from modules.utils.timer import Timer, log_timers
 
 POLYLINE_DECODER = False
@@ -107,6 +106,7 @@ class Course:
     climb_segment = []
 
     # for wind
+    load_weather_status = 0
     #wind_distance = []
     wind_coordinates = []
     wind_timeline = []
@@ -136,6 +136,10 @@ class Course:
     @property
     def has_altitude(self):
         return bool(len(self.altitude))
+
+    @property
+    def has_weather(self):
+        return bool(len(self.wind_speed))
     
     def reset(self, delete_course_file=False, replace=False):
         # for course
@@ -152,6 +156,7 @@ class Course:
         self.slope_smoothing = np.array([])
         self.colored_altitude = np.array([])
         self.climb_segment = []
+        self.load_weather_status = 0
         #self.wind_distance = []
         self.wind_coordinates = []
         self.wind_timeline = []
@@ -185,7 +190,6 @@ class Course:
             Timer(auto_start=False, text="  downsample          : {0:.3f} sec"),
             Timer(auto_start=False, text="  calc_slope_smoothing: {0:.3f} sec"),
             Timer(auto_start=False, text="  modify_course_points: {0:.3f} sec"),
-            Timer(auto_start=False, text="  get_course_wind     : {0:.3f} sec"),
         ]
 
         with timers[0]:
@@ -225,15 +229,12 @@ class Course:
         with timers[3]:
             self.modify_course_points()
 
-        with timers[4]:
-            asyncio.create_task(self.get_course_wind())
-
         if self.is_set:
             app_logger.info("[logger] Loading course:")
             log_timers(timers, text_total="  total               : {0:.3f} sec")
 
-        if self.config.G_THINGSBOARD_API["STATUS"]:
-            self.config.api.send_livetrack_course_load()
+        asyncio.create_task(self.get_course_wind())
+        self.config.api.send_livetrack_course_load()
 
     async def load_google_map_route(self, load_html=False, html_file=None):
         self.reset()
@@ -253,8 +254,8 @@ class Course:
         self.calc_slope_smoothing()
         self.modify_course_points()
 
-        if self.config.G_THINGSBOARD_API["STATUS"]:
-            self.config.api.send_livetrack_course_load()
+        asyncio.create_task(self.get_course_wind())
+        self.config.api.send_livetrack_course_load()
 
         self.config.gui.init_course()
 
@@ -349,8 +350,8 @@ class Course:
         self.calc_slope_smoothing()
         self.modify_course_points()
 
-        if self.config.G_THINGSBOARD_API["STATUS"]:
-            self.config.api.send_livetrack_course_load()
+        asyncio.create_task(self.get_course_wind())
+        self.config.api.send_livetrack_course_load()
 
     async def get_google_route(self, x1, y1, x2, y2):
         if not POLYLINE_DECODER:
@@ -878,28 +879,39 @@ class Course:
         if not self.config.G_USE_WIND_DATA_SOURCE:
             return
 
-        if not self.is_set or not detect_network():
+        if not self.is_set:
             return
         
+        #self.wind_distance = []
+        self.wind_coordinates = []
+        self.wind_timeline = []
+        self.wind_speed = []
+        self.wind_direction = []
+        self.load_weather_status = 1  # 0:no update, 1:updating, 2:updated 
+
+        # Todo: consider start point with course_distance
         current_time = datetime.now(timezone.utc).replace(second=0, microsecond=0)
-        self.wind_coordinates.append([self.longitude[0], self.latitude[0]])
+        index = max(self.index.value, 0)
+        self.wind_coordinates.append([self.longitude[index], self.latitude[index]])
         self.wind_timeline.append(current_time)
 
-        dist = self.config.G_GROSS_AVE_SPEED
-        index = 0
+        dist = int(self.index.distance/1000) + self.config.G_GROSS_AVE_SPEED  # [m] -> [km]
         while dist < self.distance[-1]:
             index += np.argmin(np.abs(self.distance[index:] - dist))
             self.wind_coordinates.append([self.longitude[index], self.latitude[index]])
-            current_time += timedelta(hours=1)
+            current_time += timedelta(hours=1) ####### need pace model
             self.wind_timeline.append(current_time)
-            dist += self.config.G_GROSS_AVE_SPEED
+            dist += self.config.G_GROSS_AVE_SPEED ####### [km], need pace model
         
         rest_dist = int(self.distance[-1] % self.config.G_GROSS_AVE_SPEED)
-        if rest_dist > 0:
+        if rest_dist > 0 and rest_dist / self.config.G_GROSS_AVE_SPEED > 0.5: ####### need pace model
             self.wind_coordinates.append([self.longitude[-1], self.latitude[-1]])
             current_time += timedelta(hours=rest_dist/self.config.G_GROSS_AVE_SPEED)
             self.wind_timeline.append(current_time)
     
+    def reset_load_weather_status(self):
+        self.load_weather_status = 0
+
     def get_index(self, lat, lon, track, search_range, on_route_cutoff, azimuth_cutoff):
         if not self.config.G_COURSE_INDEXING:
             self.index.on_course_status = False

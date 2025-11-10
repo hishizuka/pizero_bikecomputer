@@ -152,6 +152,7 @@ def get_headwind(wind_speed, wind_track, track):
     return round(math.cos(rad_diff) * wind_speed, 1)
     # abs(round(math.sin(rad_diff) * wind_speed, 1))  # crosswind
 
+
 def conv_image(image, map_name):
     res = None
     if map_name.startswith("jpn_scw"):
@@ -159,6 +160,15 @@ def conv_image(image, map_name):
     elif map_name.startswith("jpn_jma_bousai"):
         res = conv_image_internal(image, JMA_RAIN_COLOR, JMA_RAIN_COLOR_CONV)
     return res
+
+
+def get_wind_color(wind_speed):
+    if wind_speed < 0:
+        return [0, 0, 0, 0]
+    idx = int(wind_speed)
+    if idx > len(SCW_WIND_SPEED_ARROW_CONV):
+        idx = -1
+    return list(SCW_WIND_SPEED_ARROW_CONV[idx])
 
 
 def conv_image_internal(image, orig_colors, conv_colors):
@@ -450,14 +460,14 @@ class MapTileWithValues():
     pre_wind_tiles_cond = None
     pre_wind_speed = np.nan
     pre_wind_direction = np.nan
-    downloaded_wind_tiles = {}
+    existing_tiles = {}
     wind_image = None
     wind_im_array = None
     scw_wind_validtime = None
     
     # for jpn_kokudo_chiri_in_DEM~
-    pre_alt_tile_xy = (np.nan, np.nan)
-    pre_alt_xy_in_tile = (np.nan, np.nan)
+    pre_alt_tile_xy = (np.nan, np.nan, np.nan)
+    pre_alt_xy_in_tile = (np.nan, np.nan, np.nan)
     pre_altitude = np.nan
     dem_array = None
 
@@ -465,6 +475,10 @@ class MapTileWithValues():
 
     def __init__(self, config):
         self.config = config
+
+    @property
+    def network(self):
+        return self.config.network
 
     @staticmethod
     def get_tiles(tile_x, tile_y, tiles_cond):
@@ -490,38 +504,62 @@ class MapTileWithValues():
                 tiles.append([tile_x + x_delta - 1, tile_y + y_delta - 1])
         return tiles
 
-    async def download_tiles(self, tiles, map_config, map_name, z):
-        map_settings = map_config[map_name]
+    def check_existing_tiles(self, filename):
+        return self.existing_tiles.get(filename, False)
+
+    def delete_existing_tiles(self, filenames):
+        for f in filenames:
+            self.existing_tiles.pop(f, None)
+
+    async def download_maptiles(self, tiles, map_config, map_name, z, additional_download=False):
         download_tile = []
+        basetime = map_config[map_name].get("basetime", None)
+        validtime = map_config[map_name].get("validtime", None)
+
         for tile in tiles:
             filename = get_maptile_filename(
-                map_name, z, *tile, map_settings["basetime"], map_settings["validtime"]
+                map_name, z, *tile, basetime=basetime, validtime=validtime
             )
+            
+            # the file has already been downloaded.
             if os.path.exists(filename) and os.path.getsize(filename) > 0:
-                self.downloaded_wind_tiles[filename] = True
+                self.existing_tiles[filename] = True
+                continue
+
+            # 404 not found. do nothing anymore with this file.
+            elif os.path.exists(filename) and os.path.getsize(filename) == 0:
                 continue
 
             # download is in progress
-            if filename in self.downloaded_wind_tiles:
+            elif filename in self.existing_tiles:
                 continue
 
-            self.downloaded_wind_tiles[filename] = False
+            # entry to download tiles
+            self.existing_tiles[filename] = False
             download_tile.append(tile)
 
         # start downloading
         if len(download_tile):
-            await self.config.network.download_maptile(
-                map_config, map_name, z, download_tile,
-            )
+            if not await self.network.download_maptiles(
+                map_config, map_name, z, download_tile, additional_download=additional_download
+            ):
+                # failed to put queue, then retry (can't connect internet anymore)
+                for tile in download_tile:
+                    filename = get_maptile_filename(
+                        map_name, z, *tile, basetime=basetime, validtime=validtime
+                    )
+                    if filename in self.existing_tiles:
+                        self.existing_tiles.pop(filename)
 
     async def update_overlay_windmap_timeline(self, map_settings, map_name, wait=False):
         if map_name.startswith("jpn_scw"):
             # check lock
             if self.get_scw_lock:
                 return
-            # check network
-            if not self.config.G_AUTO_BT_TETHERING and not detect_network():
+            # Skip if there is no connectivity path available.
+            if not self.network.check_network_with_bt_tethering():
                 return
+
             if wait:
                 await self.update_jpn_scw_timeline(map_settings, self.update_overlay_wind_basetime)
             else:
@@ -547,7 +585,8 @@ class MapTileWithValues():
         # open connection
         self.get_scw_lock = True
         f_name = self.update_jpn_scw_timeline.__name__
-        if not await self.config.network.open_bt_tethering(f_name):
+        bt_open_result = await self.network.open_bt_tethering(f_name)
+        if not bt_open_result.is_success():
             self.get_scw_lock = False
             return
 
@@ -556,7 +595,7 @@ class MapTileWithValues():
         init_time_list = await get_scw_list(url, map_settings["referer"])
         if init_time_list is None:
             # close connection
-            await self.config.network.close_bt_tethering(f_name)
+            await self.network.close_bt_tethering(f_name)
             self.get_scw_lock = False
             return
         basetime = init_time_list[0]["it"]
@@ -565,7 +604,7 @@ class MapTileWithValues():
         timeline = await get_scw_list(url, map_settings["referer"])
         
         # close connection
-        await self.config.network.close_bt_tethering(f_name)
+        await self.network.close_bt_tethering(f_name)
         self.get_scw_lock = False
 
         if timeline is None:
@@ -723,6 +762,8 @@ class MapTileWithValues():
         _map_config = map_config
         _map_settings = map_settings
         if forcast_time is not None:
+            if map_settings["timeline"] is None:
+                return np.nan, np.nan
             current_locale = locale.getlocale(locale.LC_TIME)
             locale.setlocale(locale.LC_TIME, "C")
             _map_config = map_config.copy()
@@ -737,14 +778,14 @@ class MapTileWithValues():
             _map_config[map_name]["validtime"] = closest["it"]
             _map_config[map_name]["subdomain"] = closest["sd"]
             locale.setlocale(locale.LC_TIME, current_locale)
-        await self.download_tiles(tiles, _map_config, map_name, z)
+        await self.download_maptiles(tiles, _map_config, map_name, z)
 
         tile_files = []
         for t in tiles:
             filename = get_maptile_filename(
                 map_name, z, *t, _map_settings["basetime"], _map_settings["validtime"]
             )
-            if not os.path.exists(filename) or os.path.getsize(filename) == 0:
+            if not self.check_existing_tiles(filename):
                 continue
             tile_files.append(filename)
         # download in progress
@@ -793,11 +834,12 @@ class MapTileWithValues():
         
         return wind_speed, wind_direction
     
-    async def get_altitude_from_tile(self, pos):
+    async def get_altitude_from_tile(self, pos, map_config=None):
         if np.any(np.isnan(pos)):
             return np.nan
         
-        map_config = self.config.G_DEM_MAP_CONFIG
+        if map_config is None:
+            map_config = self.config.G_DEM_MAP_CONFIG
         map_name = self.config.G_DEM_MAP
         map_settings = map_config[map_name]
         z = map_settings["fix_zoomlevel"]
@@ -806,38 +848,51 @@ class MapTileWithValues():
             z, *pos, map_settings["tile_size"]
         )
         if (
-            self.pre_alt_tile_xy == (tile_x, tile_y)
-            and self.pre_alt_xy_in_tile == (x_in_tile, y_in_tile)
+            self.pre_alt_tile_xy == (tile_x, tile_y, z)
+            and self.pre_alt_xy_in_tile == (x_in_tile, y_in_tile, z)
         ):
             return self.pre_altitude
 
-        # tile check and download
+        tiles = [(tile_x, tile_y), ]
+        await self.download_maptiles(tiles, map_config, map_name, z)
+
         filename = get_maptile_filename(map_name, z, tile_x, tile_y)
-        if not os.path.exists(filename):
-            await self.config.network.download_maptile(
-                map_config, map_name, z, [[tile_x, tile_y],],
-            )
-            return np.nan
-        if os.path.getsize(filename) == 0:
-            return np.nan
+
+        if not self.check_existing_tiles(filename):
+            if self.network.get_file_download_status(filename) != 404:
+                return np.nan
+
+            # 404 not found: change from dem5a(zoom_level=15) to dem10(zoom_level=14)
+            if map_name != "jpn_kokudo_chiri_in_DEM":
+                return np.nan
+            if map_settings["url"] == map_settings["retry_url"]:
+                return np.nan
+            _map_config = map_config.copy()
+            _map_config[map_name]["url"] = _map_config[map_name]["retry_url"]
+            _map_config[map_name]["fix_zoomlevel"] = _map_config[map_name]["retry_zoomlevel"]
+            self.pre_alt_tile_xy = (np.nan, np.nan, np.nan)
+            self.pre_alt_xy_in_tile = (np.nan, np.nan, np.nan)
+            altitude = await self.get_altitude_from_tile(pos, _map_config)
+            return altitude
 
         # get altitude
-        if self.pre_alt_tile_xy != (tile_x, tile_y):
+        if self.pre_alt_tile_xy != (tile_x, tile_y, z):
             self.dem_array = np.asarray(Image.open(filename))
-            self.pre_alt_tile_xy = (tile_x, tile_y)
-            self.pre_alt_xy_in_tile = (x_in_tile, y_in_tile)
+            self.pre_alt_tile_xy = (tile_x, tile_y, z)
+            self.pre_alt_xy_in_tile = (x_in_tile, y_in_tile, z)
         rgb_pos = self.dem_array[y_in_tile, x_in_tile]
 
+        r, g, b = int(rgb_pos[0]), int(rgb_pos[1]), int(rgb_pos[2]) 
+        v = (r << 16) | (g << 8) | b
         if map_name.startswith("jpn_kokudo_chiri_in_DEM"):
-            altitude = rgb_pos[0] * (2**16) + rgb_pos[1] * (2**8) + rgb_pos[2]
-            if altitude < 2**23:
-                altitude = round(altitude * 0.01, 1)
-            elif altitude == 2**23:
-                altitude = np.nan
+            if v < (1 << 23):
+                altitude = round(v * 0.01, 1)
+            elif v == (1 << 23):
+                altitude =  np.nan
             else:
-                altitude = round((altitude - 2**24) * 0.01, 1)
+                altitude =  round(((v - (1 << 24)) * 0.01), 1)
         elif map_name.startswith("mapbox_terrain"):
-            altitude = round(-10000 + ((rgb_pos[0] * 256 * 256 + rgb_pos[1] * 256 + rgb_pos[2]) * 0.1), 1)
+            altitude =  round(-10000 + (v * 0.1), 1)
         else:
             altitude = np.nan
 
@@ -845,4 +900,3 @@ class MapTileWithValues():
         self.pre_altitude = altitude
 
         return altitude
-

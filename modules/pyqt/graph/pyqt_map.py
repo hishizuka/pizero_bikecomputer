@@ -1,5 +1,4 @@
 import io
-import os
 import sqlite3
 from datetime import datetime, timezone
 import shutil
@@ -25,6 +24,7 @@ from modules.utils.map import (
 )
 from modules.utils.timer import Timer, log_timers
 from modules.utils.cmd import exec_cmd
+from modules.utils.asyncio import run_after
 from .pyqt_base_map import BaseMapWidget
 from .pyqt_map_button import (
     DirectionButton,
@@ -32,7 +32,10 @@ from .pyqt_map_button import (
     MapNextButton,
     MapPrevButton,
 )
-from modules.helper.maptile import conv_image
+from modules.helper.maptile import (
+    conv_image,
+    get_wind_color,
+)
 
 
 class MapWidget(BaseMapWidget):
@@ -57,6 +60,7 @@ class MapWidget(BaseMapWidget):
     course_plot = None
     plot_verification = None
     course_points_plot = None
+    course_winds = []
     instruction = None
 
     cuesheet_widget = None
@@ -71,7 +75,6 @@ class MapWidget(BaseMapWidget):
     pre_zoomlevel = {}
 
     drawn_tile = {}
-    existing_tiles = {}
     map_cuesheet_ratio = 1  # map:cuesheet = 1:0
 
     zoom_delta_from_tilesize = 0
@@ -474,9 +477,34 @@ class MapWidget(BaseMapWidget):
                 self.course_points_plot.setData(formatted_course_points)
                 self.plot.addItem(self.course_points_plot)
 
+        self.add_course_wind()
+
         if not disable_print_timers:
             app_logger.info("Plotting course:")
             log_timers(timers, text_total=f"  total        : {0:.3f} sec")
+
+    def add_course_wind(self):
+        if not self.course.has_weather:
+            return
+
+        for cs in self.course_winds:
+            self.plot.removeItem(cs)
+
+        self.course_winds = []
+        for wc, wd, ws in zip(self.course.wind_coordinates, self.course.wind_direction, self.course.wind_speed):
+            arrow = pg.ArrowItem(
+                angle=wd-90,
+                tipAngle=60,
+                baseAngle=30,
+                headLen=20,
+                tailLen=20,
+                tailWidth=6,
+                pen={'color': 'k', 'width': 2},
+                brush=get_wind_color(ws)
+            )
+            arrow.setPos(wc[0], get_mod_lat(wc[1]))
+            self.course_winds.append(arrow)
+            self.plot.addItem(arrow)
 
     @qasync.asyncSlot(int, int)
     async def on_drag_ended(self, dx, dy):
@@ -680,6 +708,8 @@ class MapWidget(BaseMapWidget):
         ]:
             if p is not None:
                 self.plot.removeItem(p)
+        for cs in self.course_winds:
+            self.plot.removeItem(cs) 
 
         if self.cuesheet_widget is not None:
             self.cuesheet_widget.reset()
@@ -790,27 +820,53 @@ class MapWidget(BaseMapWidget):
         )
 
     async def overlay_windmap(self, drawn_main_map, p0, p1):
-        await self.overlay_map_internal(
+        updated = await self.overlay_map_internal(
             overlay_type="WIND",
             drawn_main_map=drawn_main_map,
             p0=p0,
             p1=p1,
             update_func=self.maptile_with_values.update_overlay_windmap_timeline,
         )
+        if updated:
+            run_after(
+                a_func=self.course.get_course_wind,
+                b_func=self.add_course_wind,
+            )
 
-    async def overlay_map_internal(self, overlay_type, drawn_main_map, p0, p1, update_func):
+    async def overlay_map_internal(self, overlay_type, drawn_main_map, p0, p1, update_func) -> bool:
+        """
+        Update overlay tiles' timeline and return whether this was a *change after initialization*.
+
+        Returns
+        -------
+        bool
+            True  : display_time changed from a previous value (i.e., not the very first set).
+            False : no change, or this was the initial set (prev was None).
+        """
+
+        # Resolve map config/name once
         map_config = getattr(self.config, f"G_{overlay_type}_OVERLAY_MAP_CONFIG")
         map_name = getattr(self.config, f"G_{overlay_type}_OVERLAY_MAP")
+        map_settings = map_config[map_name]
 
-        await update_func(map_config[map_name], map_name)
+        # Let the timeline updater modify basetime/validtime for the current overlay map
+        await update_func(map_settings, map_name)
 
-        display_time = f"{map_config[map_name]['basetime']}/{map_config[map_name]['validtime']}"
-        if self.overlay_time[overlay_type]["display_time"] != display_time:
-            self.overlay_time[overlay_type]["display_time"] = display_time
-            self.reset_overlay(map_name)
-            # re-draw from self.config.G_MAP first
-        else:
+        # Compute new/prev display_time
+        new_display_time = f"{map_settings['basetime']}/{map_settings['validtime']}"
+        prev_display_time = self.overlay_time[overlay_type]["display_time"]
+
+        # If unchanged, just draw overlay and exit
+        if prev_display_time == new_display_time:
             await self.overlay_map(drawn_main_map, p0, p1, map_config, map_name)
+            return False
+
+        # Changed: record and reset tiles
+        self.overlay_time[overlay_type]["display_time"] = new_display_time
+        self.reset_overlay(map_name)
+
+        # Return True only if this is not the very first time (prev was already set)
+        return prev_display_time is not None
 
     def reset_overlay(self, map_name):
         # clear tile because overlay map changes over time
@@ -874,7 +930,7 @@ class MapWidget(BaseMapWidget):
             tiles = self.get_tiles_for_drawing(tile_x, tile_y, z_conv_factor, expand)
 
             # download
-            await self.download_tiles(tiles, map_config, map_name, z_draw)
+            await self.maptile_with_values.download_maptiles(tiles, map_config, map_name, z_draw, additional_download=True)
 
         # tile check
         if use_mbtiles:
@@ -993,41 +1049,6 @@ class MapWidget(BaseMapWidget):
 
         return tiles
 
-    async def download_tiles(self, tiles, map_config, map_name, z_draw):
-        download_tile = []
-        basetime = map_config[map_name].get("basetime", None)
-        validtime = map_config[map_name].get("validtime", None)
-
-        for tile in tiles:
-            filename = get_maptile_filename(
-                map_name, z_draw, *tile, basetime=basetime, validtime=validtime
-            )
-
-            if os.path.exists(filename) and os.path.getsize(filename) > 0:
-                self.existing_tiles[filename] = True
-                continue
-
-            # download is in progress
-            if filename in self.existing_tiles:
-                continue
-
-            # entry to download tiles
-            self.existing_tiles[filename] = False
-            download_tile.append(tile)
-
-        # start downloading
-        if len(download_tile):
-            if not await self.config.network.download_maptile(
-                map_config, map_name, z_draw, download_tile, additional_download=True
-            ):
-                # failed to put queue, then retry
-                for tile in download_tile:
-                    filename = get_maptile_filename(
-                        map_name, z_draw, *tile, basetime=basetime, validtime=validtime
-                    )
-                    if filename in self.existing_tiles:
-                        self.existing_tiles.pop(filename)
-
     def check_drawn_tile(
         self, use_mbtiles, map_config, map_name, z, z_draw, z_conv_factor, tile_x, tile_y, expand
     ):
@@ -1069,16 +1090,13 @@ class MapWidget(BaseMapWidget):
             filename = get_maptile_filename(
                 map_name, z_draw, *key, basetime=basetime, validtime=validtime
             )
-            if (filename, True) in self.existing_tiles.items():
-                return True
+            return self.maptile_with_values.check_existing_tiles(filename)
         else:
             sql = (
                 f"select count(*) from tiles where "
                 f"zoom_level={z_draw} and tile_column={key[0]} and tile_row={2**z_draw - 1 - key[1]}"
             )
-            if (self.cur.execute(sql).fetchone())[0] == 1:
-                return True
-        return False
+            return (self.cur.execute(sql).fetchone())[0] == 1
 
     def get_image_file(self, use_mbtiles, map_config, map_name, z_draw, x, y):
         if not use_mbtiles:
