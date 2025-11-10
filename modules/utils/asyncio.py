@@ -6,15 +6,19 @@ from modules.app_logger import app_logger
 
 async def _call_with_delay(callback, delay):
     is_async = inspect.iscoroutinefunction(callback)
-    await asyncio.sleep(delay)
-    if is_async:
-        await callback()
-    else:
-        callback()
+    try:
+        await asyncio.sleep(delay)
+        if is_async:
+            await callback()
+        else:
+            callback()
+    except asyncio.CancelledError:
+        # Silently ignore cancellations to avoid warning logs.
+        return
 
 
 def call_with_delay(callback, delay=1):
-    asyncio.create_task(_call_with_delay(callback, delay))
+    return asyncio.create_task(_call_with_delay(callback, delay))
 
 
 def _as_coro(func_or_coro, *args, **kwargs):

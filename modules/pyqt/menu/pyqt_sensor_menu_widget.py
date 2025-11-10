@@ -140,10 +140,9 @@ class ANTListWidget(ListWidget):
             self.parentWidget().widget(index).update_button_label()
         else:
             app_logger.warning(
-                "on_back_menu skipped update: back_index_key %s missing in G_GUI_INDEX",
-                back_index_key,
+                f"on_back_menu skipped update: back_index_key {back_index_key} missing in G_GUI_INDEX"
             )
-            app_logger.warning(gui_index)
+            app_logger.warning(f"{gui_index}")
 
     def preprocess_extra(self):
         self.ant_sensor_types.clear()
