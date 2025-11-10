@@ -58,6 +58,7 @@ class GPSD(AbstractSensorGPS):
     valid_cutoff_ep = None
 
     gps_thread = None
+    aiogps_client = None
     
     def sensor_init(self):
         if _SENSOR_GPS_GPS3:
@@ -78,6 +79,11 @@ class GPSD(AbstractSensorGPS):
 
     async def quit(self):
         await super().quit()
+        if _SENSOR_GPS_AIOGPS and self.aiogps_client is not None:
+            try:
+                self.aiogps_client.close()  # explicitly close aiogps stream on shutdown
+            finally:
+                self.aiogps_client = None
         if _SENSOR_GPS_GPS3:
             self.gps_thread.stop()
 
@@ -99,45 +105,74 @@ class GPSD(AbstractSensorGPS):
         # https://gpsd.gitlab.io/gpsd/gpsd-client-example-code.html
         # https://gitlab.com/gpsd/gpsd/-/blob/master/gps/gps.py.in
         if _SENSOR_GPS_AIOGPS:
-            async with aiogps.aiogps() as gpsd:
-                while not self.quit_status:
-                    await gpsd.read()
-                    if not (MODE_SET & gpsd.valid):
-                        continue
-                    await self.get_basic_values(
-                        gpsd.fix.latitude,
-                        gpsd.fix.longitude,
-                        gpsd.fix.altitude,
-                        gpsd.fix.speed,
-                        gpsd.fix.track,
-                        gpsd.fix.mode,
-                        gpsd.fix.status,
-                        (gpsd.fix.epx, gpsd.fix.epy, gpsd.fix.epv),
-                        (gpsd.pdop, gpsd.hdop, gpsd.vdop),
-                        (gpsd.satellites_used, len(gpsd.satellites)),
-                        gpsd.utc,
-                    )
-                    await asyncio.sleep(0.2)
+            await self.update_with_aiogps()
 
         elif _SENSOR_GPS_GPS3:
-            g = self.gps_thread.data_stream
-            while not self.quit_status:
-                await self.sleep()
-                total, used = satellites_used(g.satellites)
-                await self.get_basic_values(
-                    g.lat,
-                    g.lon,
-                    g.alt,
-                    g.speed,
-                    g.track,
-                    g.mode,
-                    None,  # status
-                    [g.epx, g.epy, g.epv],
-                    [g.pdop, g.hdop, g.vdop],
-                    (used, total),
-                    g.time,
-                )
-                self.get_sleep_time()
+            await self.update_wigh_gps3()
+
+    async def update_with_aiogps(self):
+        rx_timeout = 5.0  # seconds; prevent aiogps from blocking forever without data
+
+        while not self.quit_status:
+            try:
+                async with aiogps.aiogps() as gpsd:
+                    self.aiogps_client = gpsd
+                    gpsd.alive_opts["rx_timeout"] = rx_timeout
+                    while not self.quit_status:
+                        await gpsd.read()
+                        if not (MODE_SET & gpsd.valid):
+                            continue
+                        await self.get_basic_values(
+                            gpsd.fix.latitude,
+                            gpsd.fix.longitude,
+                            gpsd.fix.altitude,
+                            gpsd.fix.speed,
+                            gpsd.fix.track,
+                            gpsd.fix.mode,
+                            gpsd.fix.status,
+                            (gpsd.fix.epx, gpsd.fix.epy, gpsd.fix.epv),
+                            (gpsd.pdop, gpsd.hdop, gpsd.vdop),
+                            (gpsd.satellites_used, len(gpsd.satellites)),
+                            gpsd.utc,
+                        )
+            except asyncio.CancelledError:
+                app_logger.error('[GPSd]connection cancelled')
+                self.config.gui.show_dialog_ok_only(None, '[GPSd]connection cancelled')
+                break
+            except asyncio.IncompleteReadError:
+                app_logger.error('[GPSd]Connection closed by gpsd server')
+                self.config.gui.show_dialog_ok_only(None, '[GPSd]Connection closed by gpsd server')
+                await asyncio.sleep(1.0)
+            except asyncio.TimeoutError:
+                app_logger.error('[GPSd]Timeout')
+                self.config.gui.show_dialog_ok_only(None, '[GPSd]Timeout')
+                await asyncio.sleep(1.0)
+            except Exception as exc:
+                app_logger.error(f'[GPSd]aiogps error: {exc}')
+                self.config.gui.show_dialog_ok_only(None, '[GPSd]aiogps error')
+                await asyncio.sleep(1.0)
+            finally:
+                self.aiogps_client = None
+
+    async def update_with_gps3(self):
+        g = self.gps_thread.data_stream
+        while not self.quit_status:
+            await self.sleep()
+            total, used = satellites_used(g.satellites)
+            await self.get_basic_values(
+                g.lat,
+                g.lon,
+                g.alt,
+                g.speed,
+                g.track,
+                g.mode,
+                None,  # status
+                [g.epx, g.epy, g.epv],
+                [g.pdop, g.hdop, g.vdop],
+                (used, total),
+                g.time,
+            )
+            self.get_sleep_time()
 
     def is_position_valid(self, lat, lon, mode, status, dop, satellites, error=None):
         valid = super().is_position_valid(lat, lon, mode, status, dop, satellites, error)
