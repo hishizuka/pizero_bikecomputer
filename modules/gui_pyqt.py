@@ -5,6 +5,7 @@ from datetime import datetime
 import asyncio
 
 from modules.app_logger import app_logger
+from modules.utils.network import detect_network
 import modules._qt_ver as _qt_ver
 _qt_ver.QtMode = "QtWidgets"
 
@@ -452,6 +453,7 @@ class GUI_PyQt(GUI_Qt_Base):
             res
             and self.config.G_AUTO_UPLOAD
             and any(self.config.G_AUTO_UPLOAD_SERVICE.values())
+            and self.config.network.check_network_with_bt_tethering()
         ):
             self.show_dialog(self.upload_activity, "Upload Activity?")
 
@@ -465,7 +467,8 @@ class GUI_PyQt(GUI_Qt_Base):
         }
 
         # BT tethering on
-        if not await self.config.network.open_bt_tethering(f_name):
+        bt_open_result = await self.config.network.open_bt_tethering(f_name)
+        if not bt_open_result.is_success():
             self.show_dialog_ok_only(None, "No network.")
             return
 
@@ -703,8 +706,8 @@ class GUI_PyQt(GUI_Qt_Base):
             back_method()
         else:
             app_logger.warning(
-                "change_menu_back skipped: current widget %s has no back() method",
-                type(current_widget).__name__,
+                f"change_menu_back skipped: current widget {type(current_widget).__name__} has no back() method"
+                #"change_menu_back skipped: current widget QWidget                         has no back() method"
             )
 
     def goto_menu(self):
