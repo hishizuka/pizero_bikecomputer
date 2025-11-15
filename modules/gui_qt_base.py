@@ -107,7 +107,7 @@ class GUI_Qt_Base(QtCore.QObject):
 
             p = self.grab_func.convertToFormat(self.image_format)
 
-            self.bufsize = p.sizeInBytes()  # PyQt 5.15 or later (Bullseye)
+            self.bufsize = p.sizeInBytes()
 
             if has_color:
                 self.screen_shape = (p.height(), p.width(), 3)
