@@ -59,7 +59,7 @@ class NetworkMenuWidget(MenuWidget):
             ("Bluetooth", "toggle", wifi_bt_button_func_bt),
             ("BT Pairing", "submenu", self.bt_pairing),
             ("BT Paired Devices", "submenu", self.bt_paired_devices),
-            ("BT Tethering", "submenu", self.bt_tething),  ### move to BluetoothPairedDeviceListWidget
+            ("BT Tethering", "submenu", self.bt_tething),
             (
                 "connect Wifi via WPS",
                 "dialog",
@@ -141,6 +141,8 @@ class BluetoothTetheringListWidget(ListWidget):
         if self.config.bt_pan is not None:
             self.settings = self.config.bt_pan.get_bt_pan_devices()
             self.update_list()
+            # run default selection logic again after items exist so focus is applied
+            self.preprocess_extra()
         self.run_bt_tethering = run_bt_tethering
 
     def get_default_value(self):
