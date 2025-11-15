@@ -238,7 +238,7 @@ get battery percent, etc.
 ## SD card
 - youw own (over 8GB)
 - [SanDisk MAX ENDURANCE microSD™ Card](https://www.westerndigital.com/products/memory-cards/sandisk-max-endurance-uhs-i-microsd#SDSQQVR-032G-GN6IA) is recommended if you use several years.
-- [SanDisk® High Endurance microSD™ Card](https://shop.westerndigital.com/products/memory-cards/sandisk-high-endurance-uhs-i-microsd#SDSQQNR-032G-AN6IA) is not compatible with  Raspberry Pi OS Bullseye. See [post1](https://forums.raspberrypi.com/viewtopic.php?p=2021511) and [post2](https://forums.raspberrypi.com/viewtopic.php?p=2006250)
+- [SanDisk® High Endurance microSD™ Card](https://shop.westerndigital.com/products/memory-cards/sandisk-high-endurance-uhs-i-microsd#SDSQQNR-032G-AN6IA) is not compatible with Raspberry Pi OS Bullseye. See [post1](https://forums.raspberrypi.com/viewtopic.php?p=2021511) and [post2](https://forums.raspberrypi.com/viewtopic.php?p=2006250)
 
 ## Case
 

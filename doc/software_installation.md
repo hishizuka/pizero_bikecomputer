@@ -39,7 +39,8 @@
 
 # Software Installation
 
-Assume Python version 3 environment. Version 2 is not supported.
+Requires Python version 3.13 or later.
+Raspberry Pi OS Trixie or later. Bookworm is not supported.
 
 ## macOS or Linux
 
