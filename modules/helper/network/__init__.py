@@ -53,9 +53,6 @@ class Network:
     async def remove_bt_device(self, bt_address):
         await self.bluetooth.remove_bt_device(bt_address)
 
-    def reset_bt_error_counts(self):
-        self.bluetooth.reset_bt_error_counts()
-
     def get_file_download_status(self, filename):
         return self._downloads.get_file_download_status(filename)
 

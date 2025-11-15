@@ -18,6 +18,9 @@ class DownloadManager:
         self._download_queue = asyncio.Queue()
         self._download_queue_block_until = 0.0
         self._queue_block_duration_sec = queue_block_duration_sec
+        self._dns_retry_base_delay_sec = 15
+        self._dns_retry_max_delay_sec = 120
+        self._dns_retry_max_attempts = 3
         self._worker_task = asyncio.create_task(self._download_worker())
 
     async def shutdown(self):
@@ -146,19 +149,16 @@ class DownloadManager:
         os.makedirs(map_dir, exist_ok=True)
 
     async def _download_worker_handle_task(self, queue_item, caller_name):
-        try:
-            bt_open_result = await self.bluetooth.open_bt_tethering(caller_name, wait_lock=True)
+        bt_open_result = await self.bluetooth.open_bt_tethering(caller_name, wait_lock=True)
 
-            if bt_open_result is not BtOpenResult.SUCCESS:
-                await self._cleanup_failed_downloads(queue_item["save_paths"], caller_name)
-                return None
+        if bt_open_result is not BtOpenResult.SUCCESS:
+            await self._cleanup_failed_downloads(queue_item["save_paths"], caller_name)
+            return None
 
-            results = await download_files(**queue_item, limit=self.bluetooth.get_bt_limit())
-            for status, save_path in zip(results, queue_item["save_paths"]):
-                self.file_download_status[save_path] = status
-            return results
-        finally:
-            self._download_queue.task_done()
+        results = await download_files(**queue_item, limit=self.bluetooth.get_bt_limit())
+        for status, save_path in zip(results, queue_item["save_paths"]):
+            self.file_download_status[save_path] = status
+        return results
 
     async def _download_worker(self):
         caller_name = self._download_worker.__name__
@@ -168,36 +168,55 @@ class DownloadManager:
                 await self.bluetooth.close_bt_tethering(caller_name)
             queue_item = await self._download_queue.get()
             if queue_item is None:
+                self._download_queue.task_done()
                 break
 
             retry_count = queue_item.get("retry_count", 0)
-            try:
-                results = await self._download_worker_handle_task(queue_item, caller_name)
-            except asyncio.CancelledError:
-                return
 
-            if results is None:
+            # download files with retry
+            while True:
+                try:
+                    results = await self._download_worker_handle_task(queue_item, caller_name)
+                except asyncio.CancelledError:
+                    self._download_queue.task_done()
+                    return
+
+                if results is None:
+                    break
+
+                retry_urls = []
+                retry_save_paths = []
+
+                for url, save_path, status in zip(queue_item["urls"], queue_item["save_paths"], results):
+                    if status == -1:  # DNS error
+                        retry_urls.append(url)
+                        retry_save_paths.append(save_path)
+
+                if not retry_urls:
+                    break
+
+                if retry_count >= self._dns_retry_max_attempts:
+                    await self._cleanup_failed_downloads(retry_save_paths, caller_name)
+                    break
+
+                await self.bluetooth.close_bt_tethering(caller_name)
+                delay = self._calculate_retry_delay(retry_count)
+                self._start_download_queue_block(duration=delay)
+                self.bluetooth.start_bt_open_block(duration=delay)
+                app_logger.info(
+                    "Download DNS failure detected, retrying in %ss (attempt %s/%s)",
+                    delay,
+                    retry_count + 1,
+                    self._dns_retry_max_attempts,
+                )
+                await asyncio.sleep(delay)
+                queue_item["urls"] = retry_urls
+                queue_item["save_paths"] = retry_save_paths
+                queue_item["retry_count"] = retry_count + 1
+                retry_count += 1
                 continue
 
-            #retry_urls = []
-            #retry_save_paths = []
-            forget_save_paths = []
-
-            for url, save_path, status in zip(queue_item["urls"], queue_item["save_paths"], results):
-                if status == -1:
-                    forget_save_paths.append(save_path)
-
-            if forget_save_paths:
-                # Todo: block open_bt_tethering with retry
-                await self._cleanup_failed_downloads(forget_save_paths, caller_name)
-                continue
-
-            #if retry_urls:
-            #    await asyncio.sleep(120)
-            #    queue_item["urls"] = retry_urls
-            #    queue_item["save_paths"] = retry_save_paths
-            #    queue_item["retry_count"] = retry_count + 1
-            #    await self._download_queue.put(queue_item)
+            self._download_queue.task_done()
 
     async def put(self, queue_item):
         """Public queue-like interface used by other modules."""
@@ -209,9 +228,9 @@ class DownloadManager:
         await self._download_queue.put(queue_item)
         return True
 
-    def _start_download_queue_block(self):
+    def _start_download_queue_block(self, duration=None):
         loop = asyncio.get_running_loop()
-        duration = self._queue_block_duration_sec
+        duration = duration or self._queue_block_duration_sec
         self._download_queue_block_until = max(
             self._download_queue_block_until,
             loop.time() + duration,
@@ -220,6 +239,10 @@ class DownloadManager:
     def _is_download_queue_blocked(self):
         loop = asyncio.get_running_loop()
         return loop.time() < self._download_queue_block_until
+
+    def _calculate_retry_delay(self, retry_count):
+        delay = self._dns_retry_base_delay_sec * (2 ** retry_count)
+        return min(delay, self._dns_retry_max_delay_sec)
 
     def update_queue_block_duration(self, seconds):
         self._queue_block_duration_sec = seconds

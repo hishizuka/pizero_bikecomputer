@@ -213,8 +213,12 @@ class BluetoothManager:
 
         return stderr
 
-    def _start_bt_open_block(self):
-        self._bt_open_block_until = time.time() + self.bt_open_block_duration_sec
+    def _start_bt_open_block(self, duration=None):
+        duration = duration or self.bt_open_block_duration_sec
+        self._bt_open_block_until = max(self._bt_open_block_until, time.time() + duration)
+
+    def start_bt_open_block(self, duration=None):
+        self._start_bt_open_block(duration)
 
     def _is_bt_open_block_active(self):
         return time.time() < self._bt_open_block_until
