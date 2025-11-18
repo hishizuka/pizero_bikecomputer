@@ -133,7 +133,7 @@ class GUI_Qt_Base(QtCore.QObject):
         if not painter.begin(self.screen_image):
             painter.end()
             return None
-        widget.render(painter)
+        widget.render(painter, QtCore.QPoint())
         painter.end()
         if resized:
             self._update_buffer_geometry(self.screen_image)
