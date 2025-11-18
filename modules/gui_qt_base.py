@@ -97,12 +97,8 @@ class GUI_Qt_Base(QtCore.QObject):
         await self.config.quit()
     
     def exec(self):
-        py_312 = sys.version_info >= (3, 12)
-        if py_312:
-            asyncio.run(self.config.start_coroutine(), loop_factory=qasync.QEventLoop)
-        else:
-            qasync.run(self.config.start_coroutine())
-
+        asyncio.run(self.config.start_coroutine(), loop_factory=qasync.QEventLoop)
+        
     def _grab_in_target_format(self):
         """Grab current frame and convert only if format differs."""
         image = None
