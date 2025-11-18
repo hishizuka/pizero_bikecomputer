@@ -67,6 +67,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setWindowTitle(title)
         self.setMinimumSize(*size)
         self.set_color()
+        self._paint_delegate = self._default_paint_delegate
 
     # TODO, daylight does not seem to be used at all,
     #  Could/Should be replaced by setting stylesheet on init
@@ -79,6 +80,15 @@ class MainWindow(QtWidgets.QMainWindow):
     def set_gui(self, gui):
         self.gui = gui
 
+    def _default_paint_delegate(self, event):
+        pass
+
+    def set_paint_delegate(self, delegate):
+        self._paint_delegate = delegate
+
+    def clear_paint_delegate(self):
+        self._paint_delegate = self._default_paint_delegate
+
     # override from QtWidget
     @qasync.asyncClose
     async def closeEvent(self, event):
@@ -86,7 +96,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # override from QtWidget
     def paintEvent(self, event):
-        self.gui.draw_display()
+        self._paint_delegate(event)
 
 
 class GUI_PyQt(GUI_Qt_Base):
@@ -144,6 +154,7 @@ class GUI_PyQt(GUI_Qt_Base):
         self.stack_widget = QtWidgets.QStackedWidget(self.main_window)
         self.main_window.setCentralWidget(self.stack_widget)
         self.stack_widget.setContentsMargins(0, 0, 0, 0)
+        self.set_render_widget(self.stack_widget)
 
         # stack_widget elements (splash)
         splash_widget = SplashScreen(self.stack_widget)
@@ -159,6 +170,8 @@ class GUI_PyQt(GUI_Qt_Base):
 
         # for draw_display
         self.init_buffer(self.config.display)
+        if self.display_active:
+            self.main_window.set_paint_delegate(lambda event: self.draw_display())
 
         self.exec()
 
