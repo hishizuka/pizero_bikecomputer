@@ -245,7 +245,7 @@ static int8_t bhi3_s_device_bootstrap(void)
     struct bhi360_virtual_sensor_conf_param_conf sensor_conf_pressure = { 0 };
     struct bhi360_virtual_sensor_conf_param_conf sensor_conf_humidity = { 0 };
 
-#ifdef BHI360_USE_I2C
+#ifdef BHI3_USE_I2C
     intf = BHI360_I2C_INTERFACE;
 #else
     intf = BHI360_SPI_INTERFACE;
@@ -253,7 +253,7 @@ static int8_t bhi3_s_device_bootstrap(void)
 
     setup_interfaces(true, intf);
 
-#ifdef BHI360_USE_I2C
+#ifdef BHI3_USE_I2C
     rslt = bhi360_init(BHI360_I2C_INTERFACE, bhi360_i2c_read, bhi360_i2c_write, bhi360_delay_us, BHI360_RD_WR_LEN, NULL, &bhy);
 #else
     rslt = bhi360_init(BHI360_SPI_INTERFACE, bhi360_spi_read, bhi360_spi_write, bhi360_delay_us, BHI360_RD_WR_LEN, NULL, &bhy);

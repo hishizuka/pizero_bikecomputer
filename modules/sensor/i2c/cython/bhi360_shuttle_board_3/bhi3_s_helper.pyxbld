@@ -27,7 +27,7 @@ def make_ext(modname, pyxfilename):
         define_macros.append(('BHI3_INT_MODE_PIGPIO_POLL', '1'))
     elif int_mode == "gpiod":
         define_macros.append(('BHI3_INT_MODE_GPIOD', '1'))
-        interrupt_libs = ['-lpigpiod_if2']
+        interrupt_libs = ['-lgpiod']
 
     poll_interval = os.environ.get("BHI3_INT_POLL_INTERVAL_US")
     if poll_interval:
