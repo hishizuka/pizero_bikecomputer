@@ -32,7 +32,7 @@ cdef class BHI3_S:
     self.reset_value()
   
   def __dealloc__(self):
-    bhi3_s_close()
+    self.close()
 
   cdef reset_value(self):
     pass
@@ -85,6 +85,12 @@ cdef class BHI3_S:
   @property
   def last_error(self):
     return bhi3_s_last_error()
+
+  cpdef close(self):
+    """Stop worker thread and mark instance inactive."""
+    if self.status:
+      bhi3_s_close()
+      self.status = 0
 
 
 cpdef bint rslt_to_bool(int rslt):

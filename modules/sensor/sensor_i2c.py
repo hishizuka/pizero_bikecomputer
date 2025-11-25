@@ -1,6 +1,7 @@
 from datetime import datetime
 import math
 import asyncio
+import time
 
 import numpy as np
 
@@ -1334,11 +1335,25 @@ class SensorI2C(Sensor):
             from .i2c.cython.bhi360_shuttle_board_3.bhi3_s_helper import BHI3_S
 
             self.sensor_bhi3_s = BHI3_S(1)
-            if self.sensor_bhi3_s.status:
-                return True
-            else:
-                del(self.sensor_bhi3_s)
+            if not self.sensor_bhi3_s.status:
+                self.sensor_bhi3_s.close()
+                del self.sensor_bhi3_s
                 return False
+
+            # Wait briefly so bootstrap can report failure before use.
+            for _ in range(20):  # ~1s
+                if self.sensor_bhi3_s.last_error != 0:
+                    break
+                if getattr(self.sensor_bhi3_s, "ready", False):
+                    break
+                time.sleep(0.05)
+
+            if self.sensor_bhi3_s.last_error != 0:
+                self.sensor_bhi3_s.close()
+                del self.sensor_bhi3_s
+                return False
+
+            return True
         except:
             return False
 
@@ -1794,8 +1809,8 @@ class SensorI2C(Sensor):
         try:
             from .i2c.MCP230XX import MCP23008
 
-            self.sensor_mcp23008 = MCP23008(self.config.button_config)
-            #self.sensor_mcp23008 = MCP23008(self.config.button_config, int_pin=23)
+            #self.sensor_mcp23008 = MCP23008(self.config.button_config)
+            self.sensor_mcp23008 = MCP23008(self.config.button_config, int_pin=23)
             return True
         except:
             return False
