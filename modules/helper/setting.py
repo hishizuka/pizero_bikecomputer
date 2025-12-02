@@ -155,8 +155,6 @@ class Setting:
             c = self.config_parser["DISPLAY_PARAM"]
             if "SPI_CLOCK" in c:
                 self.config.G_DISPLAY_PARAM["SPI_CLOCK"] = int(c["SPI_CLOCK"])
-            if "PCB_BACKLIGHT" in c:
-                self.config.G_PCB_BACKLIGHT = c["PCB_BACKLIGHT"].upper()
             if "USE_BACKLIGHT" in c:
                 self.config.G_DISPLAY_PARAM["USE_BACKLIGHT"] = c.getboolean("USE_BACKLIGHT")
             if "AUTO_BACKLIGHT_CUTOFF" in c:
@@ -278,7 +276,6 @@ class Setting:
         self.config_parser["DISPLAY_PARAM"] = {}
         c = self.config_parser["DISPLAY_PARAM"]
         c["SPI_CLOCK"] = str(int(self.config.G_DISPLAY_PARAM["SPI_CLOCK"]))
-        c["PCB_BACKLIGHT"] = str(self.config.G_PCB_BACKLIGHT).lower()
         c["USE_BACKLIGHT"] = str(self.config.G_DISPLAY_PARAM["USE_BACKLIGHT"])
         c["AUTO_BACKLIGHT_CUTOFF"] = str(int(self.config.G_AUTO_BACKLIGHT_CUTOFF))
 

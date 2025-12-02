@@ -73,7 +73,6 @@ class MipDisplayBase(Display):
                 self.bpp = 6
 
         self.init_minimum_brightness()
-        self.init_backlight_func()
 
         if self.init_cython():
             # switch to cython
@@ -95,9 +94,6 @@ class MipDisplayBase(Display):
             self.minimum_brightness = 10
         elif self.config.G_DISPLAY == "MIP_Azumo_color_272x451":
             self.minimum_brightness = 10
-
-    def init_backlight_func(self):
-        pass
 
     def start_coroutine(self):
         if not self.use_cpp:

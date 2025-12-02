@@ -8,7 +8,7 @@ from libcpp cimport bool
 
 cdef extern from "mip_display.hpp":
   cdef cppclass MipDisplay:
-    MipDisplay(int spi_clock, int pcb_pattern)
+    MipDisplay(int spi_clock)
     void update(unsigned char* image)
     void set_screen_size(int w, int h, int c)
     void set_brightness(int b)
@@ -19,8 +19,8 @@ cdef extern from "mip_display.hpp":
 cdef class MipDisplay_CPP:
   cdef MipDisplay* m
 
-  def __cinit__(self, int spi_clock, int pcb_pattern):
-    self.m = new MipDisplay(spi_clock, pcb_pattern)
+  def __cinit__(self, int spi_clock):
+    self.m = new MipDisplay(spi_clock)
 
   def __dealloc__(self):
     del self.m

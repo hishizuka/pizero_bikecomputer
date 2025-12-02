@@ -1,10 +1,7 @@
 #include "mip_display.hpp"
 
 
-MipDisplay::MipDisplay(int spi_clock, int pcb_pattern) {
-
-  // pcb_pattern
-  //   0: None, 1: SWITCH_SCIENCE_MIP_BOARD, 2: PIZERO_BIKECOMPUTER
+MipDisplay::MipDisplay(int spi_clock) {
 
   pigpio = pigpio_start(0, 0);
 #ifdef NO_USE_SPI_CE0
@@ -20,13 +17,6 @@ MipDisplay::MipDisplay(int spi_clock, int pcb_pattern) {
   set_mode(pigpio, GPIO_DISP, PI_OUTPUT);
   set_mode(pigpio, GPIO_VCOMSEL, PI_OUTPUT);
   set_mode(pigpio, GPIO_BACKLIGHT, PI_OUTPUT);
-  if (pcb_pattern == 1){
-    set_PWM = &MipDisplay::set_PWM_switch_science_mip_board;
-  }
-  else if(pcb_pattern == 2) {
-    set_PWM = &MipDisplay::set_PWM_pizero_bikecomputer_pcb;
-    set_mode(pigpio, GPIO_BACKLIGHT_SWITCH, PI_OUTPUT);
-  }
   usleep(6);
 
 #ifdef NO_USE_SPI_CE0
@@ -160,17 +150,8 @@ void MipDisplay::no_update() {
 #endif
 }
 
-void MipDisplay::set_PWM_switch_science_mip_board(int b) {
+void MipDisplay::set_PWM(int b) {
   hardware_PWM(pigpio, GPIO_BACKLIGHT, GPIO_BACKLIGHT_FREQ, b*10000);
-}
-
-void MipDisplay::set_PWM_pizero_bikecomputer_pcb(int b) {
-  if(b == 0) {
-    gpio_write(pigpio, GPIO_BACKLIGHT_SWITCH, 0);
-  } else {
-    gpio_write(pigpio, GPIO_BACKLIGHT_SWITCH, 1);
-  }
-  hardware_PWM(pigpio, GPIO_BACKLIGHT, GPIO_BACKLIGHT_FREQ, (100-b)*10000);
 }
 
 void MipDisplay::set_brightness(int brightness) {
@@ -184,7 +165,7 @@ void MipDisplay::set_brightness(int brightness) {
   } else if (b <= 0) {
     b = 0;
   }
-  (this->*set_PWM)(b);
+  set_PWM(b);
   pre_brightness = b;
   usleep(50000);
 }

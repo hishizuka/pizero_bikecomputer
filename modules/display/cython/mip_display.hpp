@@ -103,16 +103,14 @@ class MipDisplay {
     int log2int(int value);
     void riemersma_dithering(unsigned char *image);
 
-    void (MipDisplay::*set_PWM)(int b);
-    void set_PWM_switch_science_mip_board(int b);
-    void set_PWM_pizero_bikecomputer_pcb(int b);
+    void set_PWM(int b);
 
     void draw_worker();
     void draw(std::vector<char>& buf_queue);
     bool get_status_quit();
 
   public:
-    MipDisplay(int spi_clock, int pcb_pattern);
+    MipDisplay(int spi_clock);
     ~MipDisplay();
 
     void update(unsigned char* image);

@@ -57,7 +57,6 @@ class Config:
     G_POWER_W_PRIME_ALGORITHM = "WATERWORTH"  # WATERWORTH, DIFFERENTIAL
 
     G_USE_PCB_PIZERO_BIKECOMPUTER = False
-    G_PCB_BACKLIGHT = ""  # "PIZERO_BIKECOMPUTER", "SWITCH_SCIENCE_MIP_BOARD"
 
     ###########################
     # fixed or pointer values #
