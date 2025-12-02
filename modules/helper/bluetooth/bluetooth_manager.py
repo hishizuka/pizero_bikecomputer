@@ -235,7 +235,7 @@ class BluetoothManager:
         # Locked
         if not wait_lock and self._bt_tethering_lock.locked():
             app_logger.info(
-                f"[BT] open_bt_tethering locked - , {caller_name=} {self.bt_tethering_status}"
+                f"[BT] open_bt_tethering locked, {caller_name=} {self.bt_tethering_status}"
             )
             return BtOpenResult.LOCKED
 
@@ -249,8 +249,9 @@ class BluetoothManager:
         if detect_network():
             # Todo: disable when using wifi
             #app_logger.info(
-            #    f"[BT] skip bt open(detected network) - , {caller_name=} {self.bt_tethering_status}"
+            #    f"[BT] skip bt open(detected network), {caller_name=} {self.bt_tethering_status}"
             #)
+            self.bt_tethering_status[caller_name] = True
             return BtOpenResult.SUCCESS
 
         # Blocked (DNS error, etc.)
@@ -263,8 +264,9 @@ class BluetoothManager:
 
         if any(self.bt_tethering_status.values()):
             #app_logger.info(
-            #    f"[BT] skip bt open(other func) - , {caller_name=} {self.bt_tethering_status}"
+            #    f"[BT] skip bt open(other func), {caller_name=} {self.bt_tethering_status}"
             #)
+            self.bt_tethering_status[caller_name] = True
             return BtOpenResult.SUCCESS
 
         bt_pan_error = await self.bluetooth_tethering()
@@ -336,14 +338,14 @@ class BluetoothManager:
 
         if any(self.bt_tethering_status.values()):
             #app_logger.info(
-            #    f"[BT] skip bt close(other func) - , {caller_name=} {self.bt_tethering_status}"
+            #    f"[BT] skip bt close(other func), {caller_name=} {self.bt_tethering_status}"
             #)
             return True
 
         if not check_bnep0():
             # Todo: disable when using wifi
             #app_logger.info(
-            #    f"[BT] skip bt close(bnep0 don't exists) - , {caller_name=} {self.bt_tethering_status}"
+            #    f"[BT] skip bt close(bnep0 don't exists), {caller_name=} {self.bt_tethering_status}"
             #)
             return True
 
