@@ -76,26 +76,29 @@ class Item(QtWidgets.QVBoxLayout):
         self.addWidget(self.value)
         
         self.update_font_size(font_size)
+        self._last_value_text = None
         self.update_value(np.nan)
 
     def update_value(self, value):
-        self.value.setText(
-            self.config.gui.gui_config.format_text(
-                self.name,
-                value,
-                self.config.G_STOPWATCH_STATUS,
-                self.itemformat,
-            )
+        new_text = self.config.gui.gui_config.format_text(
+            self.name,
+            value,
+            self.config.G_STOPWATCH_STATUS,
+            self.itemformat,
         )
-        
+
         if self.unittext != "":
             if self.font_size_unit_set:
-                self.value.setText(
-                    self.value.text()
-                    + f"<span style='font-size: {self.font_size_unit}px;'> {self.unittext}</span>"
-                    )
+                new_text += f"<span style='font-size: {self.font_size_unit}px;'> {self.unittext}</span>"
             else:
-                self.value.setText(self.value.text() + f"<font size=small> {self.unittext}</font>")
+                new_text += f"<font size=small> {self.unittext}</font>"
+
+        # Skip updates when text is unchanged to avoid needless repaints
+        if new_text == self._last_value_text:
+            return
+
+        self._last_value_text = new_text
+        self.value.setText(new_text)
 
     def update_font_size(self, font_size):
         if not self.font_size_unit_set and self.font_size_unit != 0:
