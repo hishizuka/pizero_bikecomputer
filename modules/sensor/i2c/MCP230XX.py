@@ -154,7 +154,7 @@ class ButtonIOExpander(i2c.i2c):
     async def _run_int(self):
         self.loop = asyncio.get_running_loop()
         while not self.quit_status:
-            await asyncio.sleep(60)
+            await asyncio.sleep(2)
 
     def interrupt_callback(self, gpio, level, tick):
         intf = self.bus.read_byte_data(self.SENSOR_ADDRESS, INTF)
