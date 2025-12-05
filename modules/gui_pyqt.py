@@ -604,10 +604,9 @@ class GUI_PyQt(GUI_Qt_Base):
 
     def map_method(self, mode):
         w = self.main_page.widget(self.main_page.currentIndex())
-        if w == self.map_widget:
-            eval("w.signal_" + mode + ".emit()")
-        elif w == self.course_profile_graph_widget:
-            eval("w.signal_" + mode + ".emit()")
+        signal = getattr(w, f"signal_{mode}", None)
+        if signal and hasattr(signal, "emit"):
+            signal.emit()
 
     def reset_course(self):
         self.map_widget.reset_course()
