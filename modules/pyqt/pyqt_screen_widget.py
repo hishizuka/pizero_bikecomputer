@@ -1,3 +1,5 @@
+from functools import partial
+
 from modules.app_logger import app_logger
 from modules._qt_qtwidgets import QT_EXPANDING, QtCore, QtWidgets, qasync
 
@@ -14,6 +16,7 @@ class ScreenWidget(QtWidgets.QWidget):
         self.item_layout = {}
         self.max_width = self.max_height = 0
         self.font_size = 20
+        self._value_getters = {}
 
         if item_layout:
             self.item_layout = item_layout
@@ -99,6 +102,17 @@ class ScreenWidget(QtWidgets.QWidget):
         for i in range(self.max_width + 1):
             self.layout.setColumnMinimumWidth(i, w)
 
+    def _build_value_getter(self, expr):
+        """Create a plain callable without per-frame eval/exec."""
+        local_ns = {}
+        try:
+            exec(f"def _getter(self):\n    return {expr}\n", {}, local_ns)
+        except Exception:
+            app_logger.exception(f"failed to compile item expr: {expr}")
+            return lambda: None
+
+        return partial(local_ns["_getter"], self)
+
     def add_items(self):
         if self.item_layout:
             # set borders
@@ -129,6 +143,9 @@ class ScreenWidget(QtWidgets.QWidget):
                 if key.endswith("GraphWidget"):
                     continue
 
+                expr = self.config.gui.gui_config.G_ITEM_DEF[key][1]
+                self._value_getters[key] = self._build_value_getter(expr)
+
                 item = Item(
                     config=self.config,
                     name=key,
@@ -136,6 +153,8 @@ class ScreenWidget(QtWidgets.QWidget):
                     bottom_flag=bottom_flag,
                     right_flag=right_flag,
                 )
+                item.value_expr = expr
+                item.value_getter = self._value_getters[key]
 
                 self.items.append(item)
 
@@ -145,19 +164,24 @@ class ScreenWidget(QtWidgets.QWidget):
                     self.layout.addLayout(item, pos[0], pos[1])
 
     # This handles by default items displays, but each screen can implement its own logic
-    @qasync.asyncSlot()
-    async def update_display(self):
+    def update_display(self):
         for item in self.items:
+            getter = getattr(item, "value_getter", None)
+            if getter is None:
+                continue
             try:
-                item.update_value(
-                    eval(self.config.gui.gui_config.G_ITEM_DEF[item.name][1])
-                )
+                value = getter()
             except KeyError:
-                pass
+                continue
+            except ValueError:
+                # Some sensors may temporarily yield NaN; skip noisy tracebacks and render as blank
+                value = float("nan")
             except Exception:  # noqa
-                item.update_value(None)
+                value = None
                 app_logger.exception(f"not found in items: {item.name}")
                 try:
-                    app_logger.exception(f"    {eval(self.config.gui.gui_config.G_ITEM_DEF[item.name][1])}")
-                except:
+                    app_logger.exception(f"    {item.value_expr}")
+                except Exception:
                     pass
+
+            item.update_value(value)
