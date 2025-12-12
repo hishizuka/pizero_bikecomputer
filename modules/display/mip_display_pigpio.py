@@ -8,10 +8,18 @@ try:
     import pigpio
     _SENSOR_DISPLAY = True
 
-    import pyximport
-    pyximport.install()
-    from .cython.mip_helper import conv_3bit_8colors_cy, MipDisplay_CPP
-    MODE = "Cython_full"
+    # Prefer a prebuilt Cython extension if available.
+    # Falling back to pyximport keeps source builds working, while
+    # avoiding runtime recompilation on every boot.
+    try:
+        from .cython.mip_helper import conv_3bit_8colors_cy, MipDisplay_CPP
+        MODE = "Cython_full"
+    except Exception:
+        import pyximport
+        # Build in-place so the compiled .so can be imported directly next time.
+        pyximport.install(inplace=True, language_level=3)
+        from .cython.mip_helper import conv_3bit_8colors_cy, MipDisplay_CPP
+        MODE = "Cython_full"
 except ImportError:
     pass
 

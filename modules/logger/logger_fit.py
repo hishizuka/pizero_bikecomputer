@@ -10,17 +10,24 @@ from .logger import Logger
 MODE = "Python"
 
 try:
-    import pyximport
-
-    pyximport.install()
+    # Prefer a prebuilt Cython extension if available.
     from .cython.logger_fit import (
         set_config,
         write_log_cython,
     )
-
     MODE = "Cython"
-except ImportError:
-    pass
+except Exception:
+    # Fallback to an in-place build to avoid recompiling on every boot.
+    try:
+        import pyximport
+        pyximport.install(inplace=True, language_level=3)
+        from .cython.logger_fit import (
+            set_config,
+            write_log_cython,
+        )
+        MODE = "Cython"
+    except Exception:
+        pass
 
 
 class config_local:

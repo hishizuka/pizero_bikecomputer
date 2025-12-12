@@ -1,8 +1,12 @@
 import time
 
-import pyximport
-pyximport.install(inplace=True)
-from bhi3_s_helper import BHI3_S
+# Prefer a prebuilt extension if present, otherwise build in-place.
+try:
+    from bhi3_s_helper import BHI3_S
+except Exception:
+    import pyximport
+    pyximport.install(inplace=True, language_level=3)
+    from bhi3_s_helper import BHI3_S
 
 bhi3_s = BHI3_S(1)
 

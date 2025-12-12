@@ -1,8 +1,12 @@
 import time
 
-import pyximport
-pyximport.install(inplace=True)
-from i2c_helper import BMM150_C, BMI270_C, BMM350_C, BMP5_C
+# Prefer a prebuilt extension if present, otherwise build in-place.
+try:
+    from i2c_helper import BMM150_C, BMI270_C, BMM350_C, BMP5_C
+except Exception:
+    import pyximport
+    pyximport.install(inplace=True, language_level=3)
+    from i2c_helper import BMM150_C, BMI270_C, BMM350_C, BMP5_C
 
 bmm150 = BMM150_C(1)
 bmm350 = BMM350_C(1)
