@@ -52,9 +52,7 @@ static uint8_t bits_per_word = 8;
 static uint32_t spi_speed = 1000000; // 1MHz
 //static uint32_t spi_speed = 10000000; // 10MHz
 
-#ifndef BHI3_INT_POLL_INTERVAL_US
 #define BHI3_INT_POLL_INTERVAL_US 2000U
-#endif
 
 #if defined(BHI3_INT_MODE_GPIOD) && !defined(BHI3_GPIOD_DEVICE)
 #define BHI3_GPIOD_DEVICE "/dev/gpiochip4"

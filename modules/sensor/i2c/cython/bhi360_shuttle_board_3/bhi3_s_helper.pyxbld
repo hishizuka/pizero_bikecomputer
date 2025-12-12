@@ -1,71 +1,66 @@
 def make_ext(modname, pyxfilename):
+    """Build Extension for the BHI360 shuttle board (I2C)."""
+
     from distutils.extension import Extension
     import os
-    
+
+    base_dir = os.path.dirname(os.path.abspath(pyxfilename))
+
     i2c_sensors = {
         'bhi3_s': {
-            'src': 'bhi3_s.c',
+            'src': os.path.join(base_dir, 'bhi3_s.c'),
             'lib': 'libbhi360.so',
-            'macro': [('USE_BHI3_S', '1')],  # for SPI
-            #'macro': [('USE_BHI3_S', '1'), ('BHI3_USE_I2C', '1')],  # for I2C
+            #'macro': [('USE_BHI3_S', '1')],  # for SPI
+            'macro': [('USE_BHI3_S', '1'), ('BHI3_USE_I2C', '1')],  # for I2C
         },
     }
-    
-    base_path = os.getcwd()
-    include_dirs = ['modules/sensor/i2c/cython/bhi360_shuttle_board_3']
-    if base_path.endswith(include_dirs[0]):
-        base_path = '../../../../../'
-        include_dirs = ['.']
+
+    def _interrupt_settings(mode: str):
+        """Return macros and libs for a given interrupt mode."""
+        settings = {
+            'pigpio_cb': ([('BHI3_INT_MODE_PIGPIO_CB', '1')], ['-lpigpiod_if2']),
+            'pigpio_poll': ([('BHI3_INT_MODE_PIGPIO_POLL', '1')], ['-lpigpiod_if2']),
+            'gpiod': ([('BHI3_INT_MODE_GPIOD', '1')], ['-lgpiod']),
+        }
+        return settings.get(mode, ([], ['-lpigpiod_if2']))
+
+    def _check_lib_exists(lib_name: str, search_paths):
+        return any(os.path.exists(os.path.join(p, lib_name)) for p in search_paths)
+
+    include_dirs = [base_dir]
     define_macros = [('NOUSE_MAIN', '1')]
     extra_link_args = []
 
     int_mode = os.environ.get("BHI3_INT_MODE", "").lower()
-    interrupt_libs = ['-lpigpiod_if2']
-    if int_mode == "pigpio_cb":
-        define_macros.append(('BHI3_INT_MODE_PIGPIO_CB', '1'))
-    elif int_mode == "pigpio_poll":
-        define_macros.append(('BHI3_INT_MODE_PIGPIO_POLL', '1'))
-    elif int_mode == "gpiod":
-        define_macros.append(('BHI3_INT_MODE_GPIOD', '1'))
-        interrupt_libs = ['-lgpiod']
+    int_macros, interrupt_libs = _interrupt_settings(int_mode)
+    define_macros.extend(int_macros)
 
-    poll_interval = os.environ.get("BHI3_INT_POLL_INTERVAL_US")
-    if poll_interval:
-        define_macros.append(('BHI3_INT_POLL_INTERVAL_US', poll_interval))
+    env_paths = [p for p in os.environ.get("LD_LIBRARY_PATH", "").split(":") if p]
+    lib_paths = env_paths + ["/usr/lib", "/usr/local/lib", base_dir]
 
-    gpiod_device = os.environ.get("BHI3_GPIOD_DEVICE")
-    if gpiod_device:
-        define_macros.append(('BHI3_GPIOD_DEVICE', '"%s"' % gpiod_device))
-    lib_paths = os.environ.get("LD_LIBRARY_PATH", "").split(":") + ["/usr/lib", "/usr/local/lib", include_dirs[0]]
-
-    def check_lib(lib, lib_paths):
-        for path in lib_paths:
-            if os.path.exists(os.path.join(path, lib)):
-                return True
-        return False
-    
     sources = []
-    for s in i2c_sensors:
-        if check_lib(i2c_sensors[s]['lib'], lib_paths):
-            sources.append(i2c_sensors[s]['src'])
-            extra_link_args.append('-l' + os.path.splitext(i2c_sensors[s]['lib'])[0][3:])
+    for sensor in i2c_sensors.values():
+        if _check_lib_exists(sensor['lib'], lib_paths):
+            sources = [pyxfilename, os.path.join(base_dir, 'common.c'), sensor['src']]
+            extra_link_args.append('-l' + os.path.splitext(sensor['lib'])[0][3:])
             extra_link_args.extend(interrupt_libs)
-            define_macros.extend(i2c_sensors[s]['macro'])
-    if len(sources) > 0:
-        sources = [pyxfilename, 'common.c'] + sources
-        extra_link_args.append('-lpthread')
-    else:
+            define_macros.extend(sensor['macro'])
+            break
+
+    if not sources:
         return None
 
-    ext = Extension(
-        name = modname,
+    extra_link_args.append('-lpthread')
+
+    return Extension(
+        name=modname,
         sources=sources,
         include_dirs=include_dirs,
         extra_link_args=extra_link_args,
         define_macros=define_macros,
     )
-    return ext
 
-#for print
+
+# for print
 def make_setup_args():
     return dict(script_args=['--verbose'])

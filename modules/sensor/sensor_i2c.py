@@ -372,6 +372,7 @@ class SensorI2C(Sensor):
             self.sensor["i2c_imu"] = self.sensor_bhi3_s
             self.motion_sensor["ACC"] = True
             self.available_sensors["PRESSURE"]["BHI3_S"] = True  # includes BMP581 and BME688
+            self.sensor["i2c_baro_temp"] = self.sensor_bhi3_s
             self.bhi360_s_heading_corr = 0
             if (
                 not self.config.G_IMU_AXIS_SWAP_XY["STATUS"]
@@ -447,6 +448,8 @@ class SensorI2C(Sensor):
             self.sensor["gas"] = self.sensor_sgp40
         
         if self.available_sensors["MOTION"].get("BHI3_S"):
+            self.sensor["i2c_imu"] = self.sensor_bhi3_s
+        if self.available_sensors["PRESSURE"].get("BHI3_S"):
             self.sensor["i2c_baro_temp"] = self.sensor_bhi3_s
 
     def reset(self):
@@ -1330,9 +1333,13 @@ class SensorI2C(Sensor):
 
     def detect_bhi360_s_c(self):
         try:
-            import pyximport
-            pyximport.install()
-            from .i2c.cython.bhi360_shuttle_board_3.bhi3_s_helper import BHI3_S
+            # Prefer a prebuilt Cython extension if available.
+            try:
+                from .i2c.cython.bhi360_shuttle_board_3.bhi3_s_helper import BHI3_S
+            except Exception:
+                import pyximport
+                pyximport.install(inplace=True, language_level=3)
+                from .i2c.cython.bhi360_shuttle_board_3.bhi3_s_helper import BHI3_S
 
             self.sensor_bhi3_s = BHI3_S(1)
             if not self.sensor_bhi3_s.status:
@@ -1476,9 +1483,13 @@ class SensorI2C(Sensor):
     
     def detect_pressure_bmp581_c(self):
         try:
-            import pyximport
-            pyximport.install()
-            from .i2c.cython.i2c_helper import BMP5_C
+            # Prefer a prebuilt Cython extension if available.
+            try:
+                from .i2c.cython.i2c_helper import BMP5_C
+            except Exception:
+                import pyximport
+                pyximport.install(inplace=True, language_level=3)
+                from .i2c.cython.i2c_helper import BMP5_C
 
             self.sensor_bmp581 = BMP5_C(1)
             if self.sensor_bmp581.status:
@@ -1651,9 +1662,13 @@ class SensorI2C(Sensor):
 
     def detect_motion_bmi270_c(self):
         try:
-            import pyximport
-            pyximport.install(inplace=True)
-            from .i2c.cython.i2c_helper import BMI270_C
+            # Prefer a prebuilt Cython extension if available.
+            try:
+                from .i2c.cython.i2c_helper import BMI270_C
+            except Exception:
+                import pyximport
+                pyximport.install(inplace=True, language_level=3)
+                from .i2c.cython.i2c_helper import BMI270_C
 
             self.sensor_bmi270 = BMI270_C(1)
             if self.sensor_bmi270.status:
@@ -1698,9 +1713,13 @@ class SensorI2C(Sensor):
 
     def detect_motion_bmm150_c(self):
         try:
-            import pyximport
-            pyximport.install()
-            from .i2c.cython.i2c_helper import BMM150_C
+            # Prefer a prebuilt Cython extension if available.
+            try:
+                from .i2c.cython.i2c_helper import BMM150_C
+            except Exception:
+                import pyximport
+                pyximport.install(inplace=True, language_level=3)
+                from .i2c.cython.i2c_helper import BMM150_C
 
             self.sensor_bmm150 = BMM150_C(1)
             if self.sensor_bmm150.status:
@@ -1713,9 +1732,13 @@ class SensorI2C(Sensor):
 
     def detect_motion_bmm350(self):
         try:
-            import pyximport
-            pyximport.install()
-            from .i2c.cython.i2c_helper import BMM350_C
+            # Prefer a prebuilt Cython extension if available.
+            try:
+                from .i2c.cython.i2c_helper import BMM350_C
+            except Exception:
+                import pyximport
+                pyximport.install(inplace=True, language_level=3)
+                from .i2c.cython.i2c_helper import BMM350_C
 
             self.sensor_bmm350 = BMM350_C(1)
             if self.sensor_bmm350.status:
@@ -1809,8 +1832,8 @@ class SensorI2C(Sensor):
         try:
             from .i2c.MCP230XX import MCP23008
 
-            #self.sensor_mcp23008 = MCP23008(self.config.button_config)
-            self.sensor_mcp23008 = MCP23008(self.config.button_config, int_pin=23)
+            self.sensor_mcp23008 = MCP23008(self.config.button_config)
+            #self.sensor_mcp23008 = MCP23008(self.config.button_config, int_pin=23)
             return True
         except:
             return False
