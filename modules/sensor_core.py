@@ -398,11 +398,15 @@ class SensorCore:
 
             # grade (distance base)
             if dst_diff["USE"] > 0:
+                diff_sources = {
+                    "alt_diff": alt_diff,
+                    "dst_diff": dst_diff,
+                }
                 for key in ["alt_diff", "dst_diff"]:
                     self.values["integrated"][key][0:-1] = self.values[
                         "integrated"
                     ][key][1:]
-                    self.values["integrated"][key][-1] = eval(key + "['USE']")
+                    self.values["integrated"][key][-1] = diff_sources[key]["USE"]
                     # diff_sum[key] = np.mean(self.values['integrated'][key][-self.grade_window_size:])
                     diff_sum[key] = np.nansum(
                         self.values["integrated"][key][-self.grade_window_size :]
@@ -433,11 +437,15 @@ class SensorCore:
             # grade (speed base)
             if self.config.G_ANT["USE"]["SPD"]:
                 dst_diff_spd["ANT+"] = spd * self.actual_loop_interval
+                diff_sources_spd = {
+                    "alt_diff_spd": alt_diff_spd,
+                    "dst_diff_spd": dst_diff_spd,
+                }
                 for key in ["alt_diff_spd", "dst_diff_spd"]:
                     self.values["integrated"][key][0:-1] = self.values[
                         "integrated"
                     ][key][1:]
-                    self.values["integrated"][key][-1] = eval(key + "['ANT+']")
+                    self.values["integrated"][key][-1] = diff_sources_spd[key]["ANT+"]
                     diff_sum[key] = np.mean(
                         self.values["integrated"][key][-self.grade_window_size :]
                     )

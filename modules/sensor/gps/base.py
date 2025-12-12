@@ -183,9 +183,9 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
             dop = id_or_none(dop)
             # no need to check for satellites, manually computed
 
-        # coordinate
         valid_pos = self.is_position_valid(lat, lon, mode, status, dop, satellites, error)
 
+        # coordinate
         if valid_pos:
             self.values["lat"] = lat
             self.values["lon"] = lon
@@ -195,16 +195,13 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
         for l in ["lat", "lon"]:
             if np.isnan(self.values[l]) and type(self.values[l]) != float:
                 self.values[l] = np.nan
-
-        # altitude
-        if valid_pos and alt is not None:
-            # floor
-            if alt < -500:
-                self.values["alt"] = -500
-            else:
-                self.values["alt"] = alt
-        else:  # copy from pre value
-            self.values["alt"] = self.values["pre_alt"]
+        # raw coordinates
+        self.values["raw_lat"] = lat
+        self.values["raw_lon"] = lon
+        # record coordinates in state
+        if not np.any(np.isnan([self.values["lat"], self.values["lon"]])):
+            self.config.state.set_value("pos_lat", self.values["lat"])
+            self.config.state.set_value("pos_lon", self.values["lon"])
 
         # GPS distance
         if self.config.G_STOPWATCH_STATUS == "START" and not np.any(
@@ -228,6 +225,16 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
 
             # unit: m
             self.values["distance"] += dist
+        
+        # altitude
+        if valid_pos and alt is not None:
+            # floor
+            if alt < -500:
+                self.values["alt"] = -500
+            else:
+                self.values["alt"] = alt
+        else:  # copy from pre value
+            self.values["alt"] = self.values["pre_alt"]
 
         # speed
         if valid_pos and speed is not None:
@@ -239,7 +246,8 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
 
         # track
         if (
-            track is not None
+            valid_pos
+            and track is not None
             and speed is not None
             and speed > self.config.G_GPS_SPEED_CUTOFF
         ):
@@ -247,10 +255,10 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
             self.values["track_str"] = get_track_str(self.values["track"])
         # for GPS unable to get track
         elif (
-            track is None
+            valid_pos
+            and track is None
             and speed is not None
             and speed > self.config.G_GPS_SPEED_CUTOFF
-            and valid_pos
         ):
             self.values["track"] = int(
                 (
@@ -275,9 +283,12 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
         )
 
         # timezone
-        if not self.is_fixed and valid_pos and mode == NMEA_MODE_3D:
+        if valid_pos and not self.is_fixed:
             asyncio.create_task(set_timezone(lat, lon))
             self.is_fixed = True
+
+        # gps time
+        self.get_utc_time(gps_time)
 
         # modify altitude with course
         if (
@@ -290,40 +301,28 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
             )
             self.is_altitude_modified = True
 
-        # finally set the values object
-
-        # timestamp
-        self.values["timestamp"] = datetime.now()
-        # get time
-        self.get_utc_time(gps_time)
-
-        # raw coordinates
-        self.values["raw_lat"] = lat
-        self.values["raw_lon"] = lon
-
-        # record in state
-        if not np.any(np.isnan([self.values["lat"], self.values["lon"]])):
-            self.config.state.set_value("pos_lat", self.values["lat"])
-            self.config.state.set_value("pos_lon", self.values["lon"])
-
+        # mode
         self.values["mode"] = mode
+
+        # satellites
+        self.values["used_sats"] = satellites[0]
+        self.values["total_sats"] = satellites[1]
+        if satellites[1] is not None:
+            self.values["used_sats_str"] = f"{satellites[0]} / {satellites[1]}"
+        else:
+            self.values["used_sats_str"] = f"{satellites[0]}"
 
         # DOP
         for i, key in enumerate(["pdop", "hdop", "vdop"]):
             self.values[key] = dop[i]
 
-        self.values["used_sats"] = satellites[0]
-        self.values["total_sats"] = satellites[1]
-
         # TODO, save error for gpsd, could be improved, not very resilient
         if error:
             for i, key in enumerate(["epx", "epy", "epv"]):
                 self.values[key] = error[i]
-
-        if satellites[1] is not None:
-            self.values["used_sats_str"] = f"{satellites[0]} / {satellites[1]}"
-        else:
-            self.values["used_sats_str"] = f"{satellites[0]}"
+        
+        # timestamp
+        self.values["timestamp"] = datetime.now()
 
     def get_utc_time(self, gps_time):
         # UTC time

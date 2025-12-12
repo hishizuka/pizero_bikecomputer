@@ -344,6 +344,9 @@ class GUI_PyQt(GUI_Qt_Base):
 
             self.stack_widget.setCurrentIndex(1)
 
+            # hide splash to avoid accidental render when stacking all widgets
+            self.stack_widget.widget(0).hide()
+
         with timers[3]:
             # main layout
             main_layout = QtWidgets.QVBoxLayout(main_widget)

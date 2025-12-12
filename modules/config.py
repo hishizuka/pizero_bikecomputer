@@ -603,8 +603,10 @@ class Config:
         self.boot_time += delta
 
         await self.logger.resume_start_stop()
+        await self.gui.set_boot_status("")
 
         if self.G_INIT_ONLY:
+            await self.gui.set_boot_status("initializing...")
             await asyncio.sleep(30)
             await self.quit()
 
@@ -723,21 +725,19 @@ class Config:
         if self.ble_uart is not None:
             await self.ble_uart.quit()
         await self.network.quit()
+        self.delete_weather_overlay_tiles()
         app_logger.info(" 1: network")
 
         if self.G_MANUAL_STATUS == "START":
             self.logger.start_and_stop_manual()
         self.logger.remove_handler()
-        self.display.quit()
-        app_logger.info(" 2: display")
-
         await self.logger.quit()
         self.setting.write_config()
         self.state.delete()
-        app_logger.info(" 3: logger & state")
+        app_logger.info(" 2: logger & state")
 
-        self.delete_weather_overlay_tiles()
-        app_logger.info(" 4: overlay tiles")
+        self.display.quit()
+        app_logger.info(" 3: display")
 
         self.app_close_event.set()
         await asyncio.sleep(0.5)

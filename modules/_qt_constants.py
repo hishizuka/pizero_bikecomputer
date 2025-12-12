@@ -54,3 +54,6 @@ QT_BACKTAB_FOCUS_REASON = QtCore.Qt.FocusReason.BacktabFocusReason
 # for draw_display
 QT_FORMAT_RGB888 = QtGui.QImage.Format.Format_RGB888
 QT_FORMAT_MONO = QtGui.QImage.Format.Format_Mono
+
+# Color
+QT_COLOR_BLACK = QtCore.Qt.GlobalColor.black

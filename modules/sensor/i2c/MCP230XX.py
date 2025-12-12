@@ -42,7 +42,7 @@ class ButtonIOExpander(i2c.i2c):
     CHANNELS = 8
 
     # Button reads per second.
-    FPS = 20
+    FPS = 30
 
     blt = {} #bit lookup table with intf value
 
@@ -207,8 +207,8 @@ if __name__ == "__main__":
             print(f"{key}, {button}, {index}")
 
     b = button_config()
-    #mcp = MCP23008(b)
-    mcp = MCP23008(b, int_pin=23)
+    mcp = MCP23008(b)
+    #mcp = MCP23008(b, int_pin=23)
 
     while True:
         try:

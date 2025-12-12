@@ -17,6 +17,7 @@ QT_ALIGN_BOTTOM = _qt_import.QT_ALIGN_BOTTOM
 QT_ALIGN_LEFT = _qt_import.QT_ALIGN_LEFT
 QT_FORMAT_MONO = _qt_import.QT_FORMAT_MONO
 QT_FORMAT_RGB888 = _qt_import.QT_FORMAT_RGB888
+QT_COLOR_BLACK = _qt_import.QT_COLOR_BLACK
 QtCore = _qt_import.QtCore
 QtGui = _qt_import.QtGui
 qasync = _qt_import.qasync
@@ -124,6 +125,8 @@ class GUI_Qt_Base(QtCore.QObject):
         resized = self._ensure_screen_image_capacity(width, height)
         if self.screen_image is None:
             return None
+        # clear previous frame to avoid blending old content when reusing QImage buffer
+        self.screen_image.fill(QT_COLOR_BLACK)
         painter = QtGui.QPainter()
         if not painter.begin(self.screen_image):
             painter.end()
