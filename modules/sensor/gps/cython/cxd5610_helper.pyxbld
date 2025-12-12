@@ -1,0 +1,19 @@
+def make_ext(modname, pyxfilename):
+    from distutils.extension import Extension
+    import os
+
+    base_dir = os.path.dirname(os.path.abspath(pyxfilename))
+    include_dirs = [base_dir]
+    sources = [pyxfilename, os.path.join(base_dir, 'cxd5610_rpi.c')]
+    return Extension(
+        name=modname,
+        sources=sources,
+        include_dirs=include_dirs,
+        define_macros=[('CXD5610_NO_MAIN', '1')],
+        extra_link_args=['-lgpiod', '-lpthread', '-lm'],
+        extra_compile_args=['-pthread'],
+    )
+
+
+def make_setup_args():
+    return dict(script_args=['--verbose'])
