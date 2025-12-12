@@ -5,6 +5,10 @@
 /*
  * Minimal Linux userspace port of the Sony CXD5610 GNSS I2C protocol.
  *
+ * This implementation is informed by and includes portions adapted from
+ * the Apache NuttX RTOS (Apache License 2.0), specifically the Sony CXD56xx
+ * GNSS driver/protocol handling. See NOTICE for attribution and details.
+ *
  * To mirror the structure of BHI3 (bhi3_s.c), this file is organized into:
  *   1) Wire-format helpers (checksum, endian, I/O)
  *   2) Notify parsers

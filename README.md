@@ -235,6 +235,10 @@ The code shown below is ported and modified from Azumo's code under the Apache L
 - modules/display/mip_display_base.py
 - modules/display/cython/mip_display.cpp
 
+This project also includes code ported and modified from the Apache NuttX RTOS project under the Apache License 2.0 (third_party/apache/LICENSE.Apache2). See the NOTICE file for details.
+- modules/sensor/gps/cython/cxd5610_rpi.c
+- modules/sensor/gps/cython/cxd5610_rpi.h
+
 This project also includes code ported and modified from Bosch Sensortec GmbH's code under the BSD 3-Clause License. See the NOTICE file for details.
 - [BHI360_SensorAPI](https://github.com/boschsensortec/BHI360_SensorAPI)
   - modules/sensor/i2c/cython/bhi360_shuttle_board_3/common.c

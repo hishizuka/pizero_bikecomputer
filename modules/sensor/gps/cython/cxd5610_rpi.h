@@ -1,4 +1,10 @@
-/* Public API for CXD5610 GNSS access from Cython */
+/*
+ * Public API for CXD5610 GNSS access from Cython.
+ *
+ * Portions of this header and the corresponding implementation are adapted from
+ * the Apache NuttX RTOS (Apache License 2.0), specifically the Sony CXD56xx GNSS driver.
+ * See NOTICE for attribution and details.
+ */
 #ifndef CXD5610_RPI_H
 #define CXD5610_RPI_H
 

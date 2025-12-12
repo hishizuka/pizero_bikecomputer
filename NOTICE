@@ -7,6 +7,13 @@ and licensed under the Apache License, Version 2.0:
 - modules/display/mip_display_base.py
 - modules/display/cython/mip_display.cpp
 
+Portions of the code in the following files are
+adapted from the Apache NuttX RTOS project (Sony CXD56xx GNSS driver/protocol handling)
+and licensed under the Apache License, Version 2.0:
+
+- modules/sensor/gps/cython/cxd5610_rpi.c
+- modules/sensor/gps/cython/cxd5610_rpi.h
+
 The full text of the Apache License 2.0 is available at:
 third_party/apache/LICENSE.Apache2
 
