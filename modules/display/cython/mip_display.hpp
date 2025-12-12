@@ -6,6 +6,7 @@
 #include <cstring>
 #include <iostream>
 #include <chrono>
+#include <algorithm>
 
 #include <queue>
 #include <vector>

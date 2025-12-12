@@ -89,7 +89,12 @@ void MipDisplay::set_screen_size(int w, int h, int c) {
   buf_image = new char[length];
   pre_buf_image = new char[length];
 
-  SPI_MAX_ROWS = int(SPI_MAX_BUF_SIZE/BUF_WIDTH);
+  // pigpio spi_write/spi_xfer is limited to 65536 bytes per call.
+  // We always append 2 footer bytes (0x00, 0x00) to end an update.
+  SPI_MAX_ROWS = int((SPI_MAX_BUF_SIZE - 2) / BUF_WIDTH);
+  if(SPI_MAX_ROWS < 1) {
+    SPI_MAX_ROWS = 1;
+  }
 
   clear_buf();
   memcpy(pre_buf_image, buf_image, length);
@@ -251,7 +256,7 @@ void MipDisplay::draw_worker() {
         //if (status_quit) { return; }
         cv_.wait(ul);
       }
-      q = queue_.front();
+      q = std::move(queue_.front());
       queue_.pop();
     } //release
     draw(q);
@@ -264,7 +269,6 @@ bool MipDisplay::get_status_quit() {
 
 void MipDisplay::update(unsigned char* image) {
 
-  int l1, l2;
   clear_buf();
   //std::chrono::system_clock::time_point start = std::chrono::system_clock::now();
   int update_lines = (this->*conv_color)(image);
@@ -276,28 +280,31 @@ void MipDisplay::update(unsigned char* image) {
     return;
   }
 
+  // Build transfer buffers without holding the queue lock to minimize contention.
+  // The updated rows are packed from the start of buf_image by conv_color().
+  const int max_rows_per_xfer = SPI_MAX_ROWS;
+  int remaining_rows = update_lines;
+  int byte_offset = 0;
+  std::vector<std::vector<char> > bufs;
+  bufs.reserve((remaining_rows + max_rows_per_xfer - 1) / max_rows_per_xfer);
+
+  while(remaining_rows > 0) {
+    const int rows = std::min(remaining_rows, max_rows_per_xfer);
+    const int payload_bytes = BUF_WIDTH * rows;
+    std::vector<char> buf(payload_bytes + 2);
+    memcpy(buf.data(), buf_image + byte_offset, payload_bytes);
+    buf[payload_bytes] = 0;
+    buf[payload_bytes + 1] = 0;
+    bufs.emplace_back(std::move(buf));
+
+    byte_offset += payload_bytes;
+    remaining_rows -= rows;
+  }
+
   {
     std::unique_lock<std::mutex> ul(mutex_);
-    if(update_lines < SPI_MAX_ROWS) { 
-      l1 = BUF_WIDTH * update_lines;
-      std::vector<char> buf(l1 + 2);
-      memcpy(buf.data(), buf_image, l1);
-      buf[l1] = 0;
-      buf[l1 + 1] = 0;
+    for(auto &buf : bufs) {
       queue_.emplace(std::move(buf));
-    }
-    else {
-      l1 = BUF_WIDTH * int(update_lines/2);
-      l2 = BUF_WIDTH*update_lines - l1;
-      std::vector<char> buf1(l1 + 2), buf2(l2 + 2);
-      memcpy(buf1.data(), buf_image, l1);
-      memcpy(buf2.data(), buf_image + l1, l2);
-      buf1[l1] = 0;
-      buf1[l1 + 1] = 0;
-      buf2[l2] = 0;
-      buf2[l2 + 1] = 0;
-      queue_.emplace(std::move(buf1));
-      queue_.emplace(std::move(buf2));
     }
   } //release lock
   cv_.notify_all();
@@ -653,4 +660,3 @@ void MipDisplay::draw(std::vector<char>& buf_queue) {
   //int diff_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now()-start).count();
   //std::cout << "###### draw(C)   " <<  (float)diff_time / 1000000 << std::endl;
 }
-
