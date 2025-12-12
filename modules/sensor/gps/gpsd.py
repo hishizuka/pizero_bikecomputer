@@ -3,6 +3,7 @@ import shutil
 import json
 import asyncio
 import math
+import socket
 
 from modules.app_logger import app_logger
 from .base import AbstractSensorGPS
@@ -13,22 +14,57 @@ _SENSOR_GPS_GPS3 = False  # To be deprecated in the next Debian (trixie)
 _SENSOR_GPS_GPSD = False  # To be deprecated in the next Debian (trixie)
 _SENSER_GPS_STR = ""
 
+_GPSD_DEFAULT_HOST = "127.0.0.1"
+_GPSD_DEFAULT_PORT = 2947
+
+
+def _get_gpsd_host_port():
+    host = os.environ.get("GPSD_HOST", _GPSD_DEFAULT_HOST)
+    port_env = os.environ.get("GPSD_PORT", _GPSD_DEFAULT_PORT)
+    try:
+        port = int(port_env)
+    except (TypeError, ValueError):
+        port = _GPSD_DEFAULT_PORT
+    return host, port
+
+
+def _is_gpsd_reachable(timeout=0.5):
+    host, port = _get_gpsd_host_port()
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
 try:
     from gps import aiogps
     from gps.gps import MODE_SET
-    _SENSOR_GPS_AIOGPS = True
-    _SENSOR_GPS_GPSD = True
-    _SENSER_GPS_STR = "AIOGPS"
-except:
+    if _is_gpsd_reachable():
+        _SENSOR_GPS_AIOGPS = True
+        _SENSOR_GPS_GPSD = True
+        _SENSER_GPS_STR = "AIOGPS"
+    else:
+        host, port = _get_gpsd_host_port()
+        app_logger.info(
+            f"[GPSD] aiogps available, but gpsd is not reachable at {host}:{port}; disabling GPSD"
+        )
+except Exception:
     try:
         from gps3 import agps3threaded
         from gps3.misc import satellites_used
 
         # device test
         _gps3_thread = agps3threaded.AGPS3mechanism()
-        _SENSOR_GPS_GPS3 = True
-        _SENSOR_GPS_GPSD = True
-        _SENSER_GPS_STR = "GPS3"
+        if _is_gpsd_reachable():
+            _SENSOR_GPS_GPS3 = True
+            _SENSOR_GPS_GPSD = True
+            _SENSER_GPS_STR = "GPS3"
+        else:
+            host, port = _get_gpsd_host_port()
+            app_logger.info(
+                f"[GPSD] gps3 available, but gpsd is not reachable at {host}:{port}; disabling GPSD"
+            )
     except ImportError:
         pass
     except Exception:  # noqa
@@ -39,17 +75,29 @@ except:
             pass
 
 if _SENSOR_GPS_GPSD and shutil.which("gpspipe"):
-    res, error = exec_cmd_return_value(["gpspipe", "-r", "-n", "2"], cmd_print=False)
+    res, error = exec_cmd_return_value(
+        ["gpspipe", "-r", "-n", "2"],
+        cmd_print=False,
+        timeout=2,
+    )
     if res:
-        message = json.loads(res.split('\n')[1])
-        devices = message.get('devices')
-        if devices and type(devices) == list:
-            driver = devices[0].get('driver')
-            subtype1 = devices[0].get('subtype1')
-            if driver:
-                _SENSER_GPS_STR += f", {driver}"
-            if subtype1:
-                _SENSER_GPS_STR += f", {subtype1}"
+        try:
+            lines = [line for line in res.splitlines() if line.strip()]
+            if len(lines) < 2:
+                raise ValueError("gpspipe output is shorter than expected")
+            message = json.loads(lines[1])
+            devices = message.get("devices")
+            if devices and type(devices) == list:
+                driver = devices[0].get("driver")
+                subtype1 = devices[0].get("subtype1")
+                if driver:
+                    _SENSER_GPS_STR += f", {driver}"
+                if subtype1:
+                    _SENSER_GPS_STR += f", {subtype1}"
+        except Exception as exc:
+            app_logger.debug(f"[GPSD] gpspipe parse failed: {exc}")
+    elif error:
+        app_logger.debug(f"[GPSD] gpspipe failed: {error}")
 
 
 class GPSD(AbstractSensorGPS):
@@ -107,7 +155,7 @@ class GPSD(AbstractSensorGPS):
             await self.update_with_aiogps()
 
         elif _SENSOR_GPS_GPS3:
-            await self.update_wigh_gps3()
+            await self.update_with_gps3()
 
     async def update_with_aiogps(self):
         rx_timeout = 5.0  # seconds; prevent aiogps from blocking forever without data
