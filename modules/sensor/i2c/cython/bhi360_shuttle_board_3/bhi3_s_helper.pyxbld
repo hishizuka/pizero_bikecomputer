@@ -31,7 +31,7 @@ def make_ext(modname, pyxfilename):
     define_macros = [('NOUSE_MAIN', '1')]
     extra_link_args = []
 
-    int_mode = os.environ.get("BHI3_INT_MODE", "").lower()
+    int_mode = os.environ.get("BHI3_INT_MODE", "gpiod").lower()
     int_macros, interrupt_libs = _interrupt_settings(int_mode)
     define_macros.extend(int_macros)
 
