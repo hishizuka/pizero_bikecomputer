@@ -11,12 +11,6 @@ class MipDisplayBase(Display):
     # LPM027M128C, LPM027M128B,
 
     # GPIO.BCM
-    '''
-    SCS = 23  # 16pin
-    DISP = 27  # 13pin
-    VCOMSEL = 17  # 11pin
-    '''
-    SCS = 8  # 24pin (CE0)
     DISP = 25  # 22pin
     VCOMSEL = 24  # 18pin
     #'''
@@ -149,36 +143,24 @@ class MipDisplayBase(Display):
             self.update(self.pre_img[:, 2:], direct_update=True)
 
     def init_gpio_write(self):
-        self.gpio_write(self.SCS, 0)
         self.gpio_write(self.DISP, 1)
         self.gpio_write(self.VCOMSEL, 1)
 
     def clear(self):
-        self.gpio_write(self.SCS, 1)
-        time.sleep(0.000006)
         self.spi_write([0b00100000, 0])  # ALL CLEAR MODE
-        self.gpio_write(self.SCS, 0)
-        time.sleep(0.000006)
         self.set_brightness(0)
 
     def no_update(self):
-        self.gpio_write(self.SCS, 1)
-        time.sleep(0.000006)
         self.spi_write([0b00000000, 0])  # NO UPDATE MODE
-        self.gpio_write(self.SCS, 0)
-        time.sleep(0.000006)
 
     def blink(self, sec):
         s = sec
         state = True
         while s > 0:
-            self.gpio_write(self.SCS, 1)
-            time.sleep(0.000006)
             if state:
                 self.spi_write([0b00010000, 0])  # BLINK(BLACK) MODE
             else:
                 self.spi_write([0b00011000, 0])  # BLINK(WHITE) MODE
-            self.gpio_write(self.SCS, 0)
             time.sleep(self.interval)
             s -= self.interval
             state = not state
@@ -199,9 +181,6 @@ class MipDisplayBase(Display):
         ))
 
         while s > 0:
-            self.gpio_write(self.SCS, 1)
-            time.sleep(0.000006)
-
             if do_manual_inversion:
                 if state:
                     buf = self.img_buff_rgb8.copy()
@@ -219,8 +198,6 @@ class MipDisplayBase(Display):
                     self.spi_write([0b00010100, 0])  # INVERSION MODE
                 else:
                     self.no_update()
-
-            self.gpio_write(self.SCS, 0)
             time.sleep(self.interval)
             s -= self.interval
             state = not state
@@ -233,11 +210,7 @@ class MipDisplayBase(Display):
                 break
             # self.config.check_time("mip_draw_worker start")
             # t = datetime.now()
-            self.gpio_write(self.SCS, 1)
-            await asyncio.sleep(0.000006)
             self.spi_write(img_bytes)
-            await asyncio.sleep(0.000006)
-            self.gpio_write(self.SCS, 0)
             # self.config.check_time("mip_draw_worker end")
             # print("####### draw(Py)", (datetime.now()-t).total_seconds())
             self.draw_queue.task_done()
@@ -263,14 +236,9 @@ class MipDisplayBase(Display):
 
         buf = self.split_buffer(self.img_buff_rgb8, diff_lines, direct_update)
         if direct_update:
-        #if True:
-            self.gpio_write(self.SCS, 1)
-            time.sleep(0.000006)
             for b in buf:
                 if b is not None:
                     self.spi_write(b)
-            time.sleep(0.000006)
-            self.gpio_write(self.SCS, 0)
         # put queue
         else:
             for b in buf:

@@ -32,8 +32,7 @@ def make_ext(modname, pyxfilename):
 
     cpu, machine = get_arch_info()
     extra_compile_args = ['-O3', '-std=c++17']
-    define_macros = [('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION'), ('NO_USE_SPI_CE0', '1')]
-    #define_macros = [('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')]
+    define_macros = [('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')]
     DUSE_NEON = [('NEON', '1')]
     DUSE_NEON_64 = [('NEON_64', '1')]
 

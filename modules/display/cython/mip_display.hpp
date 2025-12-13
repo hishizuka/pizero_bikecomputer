@@ -17,17 +17,8 @@
 #include <pigpiod_if2.h>
 
 // GPIO.BCM
-#ifdef NO_USE_SPI_CE0
-//#define GPIO_SCS 23  // 16pin
-//#define GPIO_DISP 27  // 13pin
-//#define GPIO_VCOMSEL 17  // 11pin
-#define GPIO_SCS 8
 #define GPIO_DISP 25  // 22pin
 #define GPIO_VCOMSEL 24  // 18pin
-#else
-#define GPIO_DISP 25  // 22pin
-#define GPIO_VCOMSEL 24  // 18pin
-#endif
 #define GPIO_BACKLIGHT 18  // 12pin with hardware PWM in pigpio
 #define GPIO_BACKLIGHT_SWITCH 24  // 18pin
 #define GPIO_BACKLIGHT_FREQ 64

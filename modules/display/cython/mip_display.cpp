@@ -4,24 +4,14 @@
 MipDisplay::MipDisplay(int spi_clock) {
 
   pigpio = pigpio_start(0, 0);
-#ifdef NO_USE_SPI_CE0
-  spi = spi_open(pigpio, 0, spi_clock, 0b00100000);
-#else
   spi = spi_open(pigpio, 0, spi_clock, 0b00000100);
-#endif
   usleep(6);
 
-#ifdef NO_USE_SPI_CE0
-  set_mode(pigpio, GPIO_SCS, PI_OUTPUT);
-#endif
   set_mode(pigpio, GPIO_DISP, PI_OUTPUT);
   set_mode(pigpio, GPIO_VCOMSEL, PI_OUTPUT);
   set_mode(pigpio, GPIO_BACKLIGHT, PI_OUTPUT);
   usleep(6);
 
-#ifdef NO_USE_SPI_CE0
-  gpio_write(pigpio, GPIO_SCS, 0);
-#endif
   gpio_write(pigpio, GPIO_DISP, 1);
   gpio_write(pigpio, GPIO_VCOMSEL, 1);
   usleep(6);
@@ -132,27 +122,11 @@ void MipDisplay::clear_buf() {
 }
 
 void MipDisplay::clear() {
-#ifdef NO_USE_SPI_CE0
-  gpio_write(pigpio, GPIO_SCS, 1);
-  usleep(6);
-#endif
   spi_write(pigpio, spi, buf_clear, 2);
-#ifdef NO_USE_SPI_CE0
-  gpio_write(pigpio, GPIO_SCS, 0);
-  usleep(6);
-#endif
 }
 
 void MipDisplay::no_update() {
-#ifdef NO_USE_SPI_CE0
-  gpio_write(pigpio, GPIO_SCS, 1);
-  usleep(6);
-#endif
   spi_write(pigpio, spi, buf_no_update, 2);
-#ifdef NO_USE_SPI_CE0
-  gpio_write(pigpio, GPIO_SCS, 0);
-  usleep(6);
-#endif
 }
 
 void MipDisplay::set_PWM(int b) {
@@ -180,10 +154,6 @@ void MipDisplay::inversion(float sec) {
   bool state = true;
 
   while(s > 0) {
-#ifdef NO_USE_SPI_CE0
-    gpio_write(pigpio, GPIO_SCS, 1);
-    usleep(6);
-#endif
     if(
       (COLORS == 64 && WIDTH == 272 && HEIGHT == 451)
     ){
@@ -221,11 +191,6 @@ void MipDisplay::inversion(float sec) {
       }
       
       spi_write(pigpio, spi, buf1.data(), buf1.size());
-#ifdef NO_USE_SPI_CE0
-      gpio_write(pigpio, GPIO_SCS, 0);
-      usleep(6);
-      gpio_write(pigpio, GPIO_SCS, 1);
-#endif
       spi_write(pigpio, spi, buf2.data(), buf2.size());
     }
     else {
@@ -236,9 +201,6 @@ void MipDisplay::inversion(float sec) {
         spi_write(pigpio, spi, buf_no_update, 2);
       }
     }
-#ifdef NO_USE_SPI_CE0
-    gpio_write(pigpio, GPIO_SCS, 0);
-#endif
     usleep(inversion_interval*1000000);
     s -= inversion_interval;
     state = !state;
@@ -644,19 +606,10 @@ int MipDisplay::conv_4bit_343colors(unsigned char* image) {
   return update_lines;
 }
 
-
 void MipDisplay::draw(std::vector<char>& buf_queue) {
   //std::chrono::system_clock::time_point start = std::chrono::system_clock::now();
-#ifdef NO_USE_SPI_CE0
-  usleep(6); //0.00006
-  gpio_write(pigpio, GPIO_SCS, 1);
-#endif
   spi_write(pigpio, spi, buf_queue.data(), buf_queue.size());
   //spi_write(pigpio, spi, buf_no_update, 2);
-#ifdef NO_USE_SPI_CE0
-  gpio_write(pigpio, GPIO_SCS, 0);
-  usleep(6); //0.00006
-#endif
   //int diff_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now()-start).count();
   //std::cout << "###### draw(C)   " <<  (float)diff_time / 1000000 << std::endl;
 }

@@ -63,13 +63,11 @@ class MipDisplayPigpio(MipDisplayBase):
 
     def init_spi(self):
         self.pi = pigpio.pi()
-        ce_setting = 0b00100000  # no use ce0
-        #ce_setting = 0b00000100  # use ce0
+        ce_setting = 0b00000100  # use ce0, b00100000 for no use ce0
         self.spi = self.pi.spi_open(0, self.config.G_DISPLAY_PARAM["SPI_CLOCK"], ce_setting)
 
     def init_gpio(self):
         self.pi.set_mode(self.DISP, pigpio.OUTPUT)
-        self.pi.set_mode(self.SCS, pigpio.OUTPUT)
         self.pi.set_mode(self.VCOMSEL, pigpio.OUTPUT)
 
     def init_backlight(self):
