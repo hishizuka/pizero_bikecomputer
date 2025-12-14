@@ -148,13 +148,9 @@ def init_display(config):
         if _SENSOR_DISPLAY_PIGPIO:
             display = MipDisplayPigpio(config, *SUPPORTED_DISPLAYS[config.G_DISPLAY])
         else:
-            from .mip_display_mraa import _SENSOR_DISPLAY as _SENSOR_DISPLAY_MRAA, MipDisplayMraa
-            if _SENSOR_DISPLAY_MRAA:
-                display = MipDisplayMraa(config, *SUPPORTED_DISPLAYS[config.G_DISPLAY])
-            else:
-                from .mip_display_spidev import _SENSOR_DISPLAY as _SENSOR_DISPLAY_SPIDEV, MipDisplaySpidev
-                if _SENSOR_DISPLAY_SPIDEV:
-                    display = MipDisplaySpidev(config, *SUPPORTED_DISPLAYS[config.G_DISPLAY])
+            from .mip_display_spidev import _SENSOR_DISPLAY as _SENSOR_DISPLAY_SPIDEV, MipDisplaySpidev
+            if _SENSOR_DISPLAY_SPIDEV:
+                display = MipDisplaySpidev(config, *SUPPORTED_DISPLAYS[config.G_DISPLAY])
     elif config.G_DISPLAY == "Papirus":
         from .papirus_display import _SENSOR_DISPLAY, PapirusDisplay
 
