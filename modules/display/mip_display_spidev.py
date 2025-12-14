@@ -3,15 +3,51 @@ from .mip_display_base import MipDisplayBase
 from modules.app_logger import app_logger
 
 _SENSOR_DISPLAY = False
+MODE = "Python"
+MipDisplay_CPP = None
 try:
     import spidev
     import gpiod
+    from gpiod.line import Direction, Value
     _SENSOR_DISPLAY = True
+
+    # Prefer a prebuilt Cython extension if available.
+    # Falling back to pyximport keeps source builds working, while
+    # avoiding runtime recompilation on every boot.
+    try:
+        from .cython.mip_helper_spidev import MipDisplay_CPP
+        MODE = "Cython_full"
+    except Exception:
+        try:
+            import pyximport
+
+            # Build in-place so the compiled .so can be imported directly next time.
+            pyximport.install(inplace=True, language_level=3)
+            from .cython.mip_helper_spidev import MipDisplay_CPP
+            MODE = "Cython_full"
+        except Exception:
+            pass
+
+    if MODE != "Cython_full":
+        # Optional: conversion-only helper (no hardware deps).
+        try:
+            from .cython.mip_helper import conv_3bit_8colors_cy
+            MODE = "Cython"
+        except Exception:
+            try:
+                import pyximport
+
+                # Build in-place so the compiled .so can be imported directly next time.
+                pyximport.install(inplace=True, language_level=3)
+                from .cython.mip_helper import conv_3bit_8colors_cy
+                MODE = "Cython"
+            except Exception:
+                pass
 except ImportError:
     pass
 
 if _SENSOR_DISPLAY:
-    app_logger.info(f"MIP DISPLAY(spidev): {_SENSOR_DISPLAY}")
+    app_logger.info(f"MIP DISPLAY(spidev): {_SENSOR_DISPLAY} ({MODE})")
 
 
 class MipDisplaySpidev(MipDisplayBase):
@@ -28,13 +64,33 @@ class MipDisplaySpidev(MipDisplayBase):
         super().__init__(config, size, color)
 
     def init_cython(self):
-        if self.color == 2:
-            self.conv_color = self.conv_1bit_2colors_py
-        elif self.color == 8:
-            self.conv_color = self.conv_3bit_27colors_py
-        if self.color == 64:
-            self.conv_color = self.conv_4bit_64colors_py
-        return False
+        if MODE == "Cython_full" and not self.config.G_DISPLAY.startswith("MIP_Sharp_mono"):
+            self.mip_display_cpp = MipDisplay_CPP(
+                self.config.G_DISPLAY_PARAM["SPI_CLOCK"]
+            )
+            self.mip_display_cpp.set_screen_size(self.size[0], self.size[1], self.color)
+            self.update = self.mip_display_cpp.update
+            self.set_brightness = self.mip_display_cpp.set_brightness
+            self.inversion = self.mip_display_cpp.inversion
+            self.quit = self.mip_display_cpp.quit
+            self.use_cpp = True
+            return True
+        elif MODE == "Cython":
+            if self.color == 2:
+                self.conv_color = self.conv_1bit_2colors_py
+            elif self.color == 8:
+                self.conv_color = conv_3bit_8colors_cy
+            elif self.color == 64:
+                self.conv_color = self.conv_4bit_64colors_py
+            return False
+        else:
+            if self.color == 2:
+                self.conv_color = self.conv_1bit_2colors_py
+            elif self.color == 8:
+                self.conv_color = self.conv_3bit_27colors_py
+            if self.color == 64:
+                self.conv_color = self.conv_4bit_64colors_py
+            return False
 
     def init_spi(self):
         self.spi = spidev.SpiDev()
@@ -50,8 +106,6 @@ class MipDisplaySpidev(MipDisplayBase):
 
         # libgpiod v2 Python API only.
         try:
-            from gpiod.line import Direction, Value
-
             settings_default = gpiod.LineSettings(
                 direction=Direction.OUTPUT,
                 output_value=Value.INACTIVE,

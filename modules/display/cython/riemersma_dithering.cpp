@@ -3,7 +3,7 @@
 #include <cstring>
 #include <math.h>
 
-#include "mip_display.hpp"
+#include "mip_display_base.hpp"
 
 #define R_SIZE 16
 #define R_MAX 16
@@ -20,7 +20,7 @@ enum {
 };
 
 
-void MipDisplay::init_weights() {
+void MipDisplayBase::init_weights() {
   double m = exp(log(R_MAX) / (R_SIZE - 1));
   double v = 1.0;
   for (int i = 0; i < R_SIZE; i++) {
@@ -31,7 +31,7 @@ void MipDisplay::init_weights() {
     quantize_lut[i] = color_4_levels[(i + 42) / 85 < 4 ? (i + 42) / 85 : 3];
 }
 
-int MipDisplay::quantize_4level(int value)
+int MipDisplayBase::quantize_4level(int value)
 {
   int best = 0;
   int min_diff = 1e9;
@@ -45,7 +45,7 @@ int MipDisplay::quantize_4level(int value)
   return color_4_levels[best];
 }
 
-void MipDisplay::dither_pixel_rgb(unsigned char *pixel) {
+void MipDisplayBase::dither_pixel_rgb(unsigned char *pixel) {
   int i, pval, err;
 
   // R
@@ -76,7 +76,7 @@ void MipDisplay::dither_pixel_rgb(unsigned char *pixel) {
   pixel[2] = (unsigned char)pval;
 }
 
-void MipDisplay::dither_pixel_rgb_64(unsigned char *pixel) {
+void MipDisplayBase::dither_pixel_rgb_64(unsigned char *pixel) {
   int i, pval, err;
 
   // R
@@ -110,7 +110,7 @@ void MipDisplay::dither_pixel_rgb_64(unsigned char *pixel) {
   pixel[2] = (unsigned char)pval;
 }
 
-void MipDisplay::move(int direction) {
+void MipDisplayBase::move(int direction) {
   if (cur_x >= 0 && cur_x < WIDTH && cur_y >= 0 && cur_y < HEIGHT)
     //dither_pixel_rgb(img_ptr);
     dither_pixel_rgb_64(img_ptr);
@@ -135,7 +135,7 @@ void MipDisplay::move(int direction) {
   }
 }
 
-void MipDisplay::hilbert_level(int level, int direction) {
+void MipDisplayBase::hilbert_level(int level, int direction) {
   if (level == 1) {
     switch (direction) {
       case LEFT:  move(RIGHT); move(DOWN); move(LEFT); break;
@@ -185,7 +185,7 @@ void MipDisplay::hilbert_level(int level, int direction) {
   }
 }
 
-int MipDisplay::log2int(int value)
+int MipDisplayBase::log2int(int value)
 {
   int result = 0;
   while (value > 1) {
@@ -195,7 +195,7 @@ int MipDisplay::log2int(int value)
   return result;
 }
 
-void MipDisplay::riemersma_dithering(unsigned char *image) {
+void MipDisplayBase::riemersma_dithering(unsigned char *image) {
   int level;
   int size = MAX(WIDTH, HEIGHT);
   memset(error_r, 0, sizeof(error_r));

@@ -32,7 +32,10 @@ def make_ext(modname, pyxfilename):
 
     cpu, machine = get_arch_info()
     extra_compile_args = ['-O3', '-std=c++17']
-    define_macros = [('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')]
+    define_macros = [
+        ('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION'),
+        ('MIP_DISPLAY_BACKEND_PIGPIO', '1'),
+    ]
     DUSE_NEON = [('NEON', '1')]
     DUSE_NEON_64 = [('NEON_64', '1')]
 
@@ -50,20 +53,22 @@ def make_ext(modname, pyxfilename):
     elif cpu == "arm64":
         extra_compile_args += ['-march=armv8']
         define_macros += DUSE_NEON
-    
+
     if machine in ["arm64", "aarch64"]:
         define_macros += DUSE_NEON_64
 
     ext = Extension(
-        name = modname,
-        sources=[pyxfilename],
-        extra_compile_args = extra_compile_args,
+        name=modname,
+        sources=[pyxfilename, 'mip_display_base.cpp', 'mip_display_pigpio.cpp', 'riemersma_dithering.cpp'],
+        extra_compile_args=extra_compile_args,
         language='c++',
-        include_dirs = ['modules/display/cython', numpy.get_include()],
-        define_macros = define_macros,
+        include_dirs=['modules/display/cython', numpy.get_include()],
+        extra_link_args=['-lpigpiod_if2'],
+        define_macros=define_macros,
     )
     return ext
 
-#for print
+
+# for print
 def make_setup_args():
     return dict(script_args=['--verbose'])

@@ -1,57 +1,54 @@
-#include "mip_display.hpp"
+#include "mip_display_base.hpp"
 
 
-MipDisplay::MipDisplay(int spi_clock) {
+void MipDisplayBase::init_common() {
+  status_quit = false;
 
-  pigpio = pigpio_start(0, 0);
-  spi = spi_open(pigpio, 0, spi_clock, 0b00000100);
-  usleep(6);
-
-  set_mode(pigpio, GPIO_DISP, PI_OUTPUT);
-  set_mode(pigpio, GPIO_VCOMSEL, PI_OUTPUT);
-  set_mode(pigpio, GPIO_BACKLIGHT, PI_OUTPUT);
-  usleep(6);
-
-  gpio_write(pigpio, GPIO_DISP, 1);
-  gpio_write(pigpio, GPIO_VCOMSEL, 1);
+  gpio_write_value(GPIO_DISP, true);
+  gpio_write_value(GPIO_VCOMSEL, true);
   usleep(6);
 
   set_brightness(0);
   usleep(6);
 
-  //threads_.emplace((&MipDisplay::draw_worker, this));
-  status_quit = false;
-  threads_.push_back(std::thread(&MipDisplay::draw_worker, this));
-  
-  //init_weights();
+  threads_.push_back(std::thread(&MipDisplayBase::draw_worker, this));
 }
 
-MipDisplay::~MipDisplay() {
-}
-
-void MipDisplay::quit() {
+void MipDisplayBase::quit() {
   {
     std::unique_lock<std::mutex> ul(mutex_);
+    if(status_quit) {
+      return;
+    }
     status_quit = true;
   } //release lock
   cv_.notify_all();
   for(unsigned int i = 0; i < threads_.size(); i++) {
-    threads_.at(i).join();
+    if(threads_.at(i).joinable()) {
+      threads_.at(i).join();
+    }
   }
+  threads_.clear();
 
   set_brightness(0);
   clear();
 
-  gpio_write(pigpio, GPIO_DISP, 0); //OFF
+  gpio_write_value(GPIO_DISP, false); //OFF
   usleep(100000);
-  spi_close(pigpio, spi);
-  pigpio_stop(pigpio);
 
-  delete[] buf_image;
-  delete[] pre_buf_image;
+  close_backend();
+
+  if(buf_image != nullptr) {
+    delete[] buf_image;
+    buf_image = nullptr;
+  }
+  if(pre_buf_image != nullptr) {
+    delete[] pre_buf_image;
+    pre_buf_image = nullptr;
+  }
 }
 
-void MipDisplay::set_screen_size(int w, int h, int c) {
+void MipDisplayBase::set_screen_size(int w, int h, int c) {
   WIDTH = w;
   HEIGHT = h;
   COLORS = c;
@@ -59,27 +56,36 @@ void MipDisplay::set_screen_size(int w, int h, int c) {
   if(COLORS == 2) {
     BPP = 1;
     BUF_WIDTH = WIDTH*BPP/8 + 2;
-    conv_color = &MipDisplay::conv_1bit_2colors;
+    conv_color = &MipDisplayBase::conv_1bit_2colors;
   }
   else if(COLORS == 8) {
     BPP = 3;
     BUF_WIDTH = WIDTH*BPP/8 + 2;
-    //conv_color = &MipDisplay::conv_3bit_8colors;
-    conv_color = &MipDisplay::conv_3bit_27colors;
+    //conv_color = &MipDisplayBase::conv_3bit_8colors;
+    conv_color = &MipDisplayBase::conv_3bit_27colors;
   }
   else if(COLORS == 64) {
     BPP = 6;
     BUF_WIDTH = WIDTH*BPP/8 + 4;
     HALF_BUF_WIDTH_64COLORS = WIDTH*BPP/8/2;
-    //conv_color = &MipDisplay::conv_4bit_64colors;
-    conv_color = &MipDisplay::conv_4bit_343colors;
+    //conv_color = &MipDisplayBase::conv_4bit_64colors;
+    conv_color = &MipDisplayBase::conv_4bit_343colors;
   }
   int length = HEIGHT*BUF_WIDTH;
-  
+
+  if(buf_image != nullptr) {
+    delete[] buf_image;
+    buf_image = nullptr;
+  }
+  if(pre_buf_image != nullptr) {
+    delete[] pre_buf_image;
+    pre_buf_image = nullptr;
+  }
+
   buf_image = new char[length];
   pre_buf_image = new char[length];
 
-  // pigpio spi_write/spi_xfer is limited to 65536 bytes per call.
+  // SPI transfers are limited by the underlying driver/user-space interface.
   // We always append 2 footer bytes (0x00, 0x00) to end an update.
   SPI_MAX_ROWS = int((SPI_MAX_BUF_SIZE - 2) / BUF_WIDTH);
   if(SPI_MAX_ROWS < 1) {
@@ -90,7 +96,7 @@ void MipDisplay::set_screen_size(int w, int h, int c) {
   memcpy(pre_buf_image, buf_image, length);
 }
 
-void MipDisplay::clear_buf() {
+void MipDisplayBase::clear_buf() {
   memset(buf_image, 0, HEIGHT*BUF_WIDTH);
   for(int i = 0; i < HEIGHT; i++) {
     buf_image[i*BUF_WIDTH] = UPDATE_MODE + (i >> 8);
@@ -121,19 +127,19 @@ void MipDisplay::clear_buf() {
   }
 }
 
-void MipDisplay::clear() {
-  spi_write(pigpio, spi, buf_clear, 2);
+void MipDisplayBase::clear() {
+  spi_write_bytes(buf_clear, 2);
 }
 
-void MipDisplay::no_update() {
-  spi_write(pigpio, spi, buf_no_update, 2);
+void MipDisplayBase::no_update() {
+  spi_write_bytes(buf_no_update, 2);
 }
 
-void MipDisplay::set_PWM(int b) {
-  hardware_PWM(pigpio, GPIO_BACKLIGHT, GPIO_BACKLIGHT_FREQ, b*10000);
+void MipDisplayBase::set_PWM(int b) {
+  set_PWM_duty(b);
 }
 
-void MipDisplay::set_brightness(int brightness) {
+void MipDisplayBase::set_brightness(int brightness) {
   if(pre_brightness == brightness) {
     return;
   }
@@ -149,7 +155,7 @@ void MipDisplay::set_brightness(int brightness) {
   usleep(50000);
 }
 
-void MipDisplay::inversion(float sec) {
+void MipDisplayBase::inversion(float sec) {
   float s = sec;
   bool state = true;
 
@@ -189,33 +195,32 @@ void MipDisplay::inversion(float sec) {
           }
         }
       }
-      
-      spi_write(pigpio, spi, buf1.data(), buf1.size());
-      spi_write(pigpio, spi, buf2.data(), buf2.size());
+
+      spi_write_bytes(buf1.data(), buf1.size());
+      spi_write_bytes(buf2.data(), buf2.size());
     }
     else {
       if(state) {
-        spi_write(pigpio, spi, buf_inversion, 2);
+        spi_write_bytes(buf_inversion, 2);
       }
       else {
-        spi_write(pigpio, spi, buf_no_update, 2);
+        spi_write_bytes(buf_no_update, 2);
       }
     }
     usleep(inversion_interval*1000000);
     s -= inversion_interval;
     state = !state;
   }
-  spi_write(pigpio, spi, buf_no_update, 2);
+  spi_write_bytes(buf_no_update, 2);
 }
 
-void MipDisplay::draw_worker() {
+void MipDisplayBase::draw_worker() {
   while (1) {
     std::vector<char> q;
     {
       std::unique_lock<std::mutex> ul(mutex_);
       while (queue_.empty()) {
         if (get_status_quit()) { return; }
-        //if (status_quit) { return; }
         cv_.wait(ul);
       }
       q = std::move(queue_.front());
@@ -225,19 +230,15 @@ void MipDisplay::draw_worker() {
   }
 }
 
-bool MipDisplay::get_status_quit() {
+bool MipDisplayBase::get_status_quit() {
   return status_quit;
 }
 
-void MipDisplay::update(unsigned char* image) {
+void MipDisplayBase::update(unsigned char* image) {
 
   clear_buf();
-  //std::chrono::system_clock::time_point start = std::chrono::system_clock::now();
   int update_lines = (this->*conv_color)(image);
-  //int diff_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now()-start).count();
-  //std::cout << "###### conv_color(C)   " <<  (float)diff_time / 1000000 << std::endl;
-  
-  //std::cout << "    diff " << int(update_lines*100/HEIGHT) << "%, " << BUF_WIDTH << "*" << update_lines << "=" << BUF_WIDTH*update_lines << std::endl;
+
   if(update_lines == 0) {
     return;
   }
@@ -272,21 +273,13 @@ void MipDisplay::update(unsigned char* image) {
   cv_.notify_all();
 }
 
-int MipDisplay::conv_1bit_2colors(unsigned char* image) {
+int MipDisplayBase::conv_1bit_2colors(unsigned char* image) {
   int update_lines = 0;
-  /*
-  char *buf_image_diff_index = buf_image;
-  char *pre_buf_image_diff_index = pre_buf_image;
-  char *buf_image_update_index = buf_image;
-
-  unsigned char *image_index = image;
-  char *buf_image_index = buf_image;
-  */
-
+  (void)image;
   return update_lines;
 }
 
-int MipDisplay::conv_3bit_8colors(unsigned char* image) {
+int MipDisplayBase::conv_3bit_8colors(unsigned char* image) {
 
   unsigned char *image_index = image;
   char *buf_image_index = buf_image;
@@ -369,7 +362,7 @@ int MipDisplay::conv_3bit_8colors(unsigned char* image) {
   return update_lines;
 }
 
-int MipDisplay::conv_3bit_27colors(unsigned char* image) {
+int MipDisplayBase::conv_3bit_27colors(unsigned char* image) {
 
   unsigned char *image_index = image;
   char *buf_image_index = buf_image;
@@ -385,7 +378,7 @@ int MipDisplay::conv_3bit_27colors(unsigned char* image) {
   for(int y = 0; y < HEIGHT; y++) {
     buf_image_index += 2;
     bit_count = 0;
-    
+
     //3bit color CPU code
     for(int x = 0; x < WIDTH; x++) {
       if(*image_index++ >= thresholds_3bit_27colors[t_index]) {
@@ -409,137 +402,11 @@ int MipDisplay::conv_3bit_27colors(unsigned char* image) {
       t_index = !t_index;
     }
     t_index = !t_index;
-    
-    if(memcmp(buf_image_diff_index, pre_buf_image_diff_index, BUF_WIDTH) != 0) {
-      memcpy(pre_buf_image_diff_index, buf_image_diff_index, BUF_WIDTH);
-      memcpy(buf_image_update_index, pre_buf_image_diff_index, BUF_WIDTH);
-      update_lines++;
-      buf_image_update_index += BUF_WIDTH;
-    }
-    buf_image_diff_index += BUF_WIDTH;
-    pre_buf_image_diff_index += BUF_WIDTH;
-  }
-  return update_lines;
-}
 
-/*
- * The following function is adapted from an Apache License 2.0 project.
- * Copyright (c) Azumo 2024
- * 
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *     third-party/apache/LICENSE.Apache2
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-int MipDisplay::conv_4bit_64colors(unsigned char* image) {
-  unsigned char *image_index = image;
-  char *buf_image_index = buf_image;
-  char *buf_image_index_high = buf_image;
-  char b0, b1, b2, b3, b4, b5, b6, b7;
-
-  char *buf_image_diff_index = buf_image;
-  char *pre_buf_image_diff_index = pre_buf_image;
-  char *buf_image_update_index = buf_image;
-  int update_lines = 0;
-
-  int width_24byte = int(WIDTH*3/24);
-
-  //riemersma_dithering(image);
-
-  buf_image_index += 2;      
-  buf_image_index_high += 2 + HALF_BUF_WIDTH_64COLORS + 2;
-  for(int y = 0; y < HEIGHT; y++) {
-    for(int x = 0; x < width_24byte; x++) {
-      b0 = *image_index++;
-      b1 = *image_index++;
-      b2 = *image_index++;
-      b3 = *image_index++;
-      b4 = *image_index++;
-      b5 = *image_index++;
-      b6 = *image_index++;
-      b7 = *image_index++;
-      *buf_image_index++ = 
-        ((b0 & 0b01000000) << 1) |
-        (b1 & 0b01000000) |
-        ((b2 & 0b01000000) >> 1) |
-        ((b3 & 0b01000000) >> 2) |
-        ((b4 & 0b01000000) >> 3) |
-        ((b5 & 0b01000000) >> 4) |
-        ((b6 & 0b01000000) >> 5) |
-        ((b7 & 0b01000000) >> 6);
-      *buf_image_index_high++ =
-        (b0 & 0b10000000) |
-        ((b1 & 0b10000000) >> 1) |
-        ((b2 & 0b10000000) >> 2) |
-        ((b3 & 0b10000000) >> 3) |
-        ((b4 & 0b10000000) >> 4) |
-        ((b5 & 0b10000000) >> 5) |
-        ((b6 & 0b10000000) >> 6) |
-        ((b7 & 0b10000000) >> 7);
-      
-      b0 = *image_index++;
-      b1 = *image_index++;
-      b2 = *image_index++;
-      b3 = *image_index++;
-      b4 = *image_index++;
-      b5 = *image_index++;
-      b6 = *image_index++;
-      b7 = *image_index++;
-      *buf_image_index++ = 
-        ((b0 & 0b01000000) << 1) |
-        (b1 & 0b01000000) |
-        ((b2 & 0b01000000) >> 1) |
-        ((b3 & 0b01000000) >> 2) |
-        ((b4 & 0b01000000) >> 3) |
-        ((b5 & 0b01000000) >> 4) |
-        ((b6 & 0b01000000) >> 5) |
-        ((b7 & 0b01000000) >> 6);
-      *buf_image_index_high++ =
-        (b0 & 0b10000000) |
-        ((b1 & 0b10000000) >> 1) |
-        ((b2 & 0b10000000) >> 2) |
-        ((b3 & 0b10000000) >> 3) |
-        ((b4 & 0b10000000) >> 4) |
-        ((b5 & 0b10000000) >> 5) |
-        ((b6 & 0b10000000) >> 6) |
-        ((b7 & 0b10000000) >> 7);
-
-      b0 = *image_index++;
-      b1 = *image_index++;
-      b2 = *image_index++;
-      b3 = *image_index++;
-      b4 = *image_index++;
-      b5 = *image_index++;
-      b6 = *image_index++;
-      b7 = *image_index++;
-      *buf_image_index++ = 
-        ((b0 & 0b01000000) << 1) |
-        (b1 & 0b01000000) |
-        ((b2 & 0b01000000) >> 1) |
-        ((b3 & 0b01000000) >> 2) |
-        ((b4 & 0b01000000) >> 3) |
-        ((b5 & 0b01000000) >> 4) |
-        ((b6 & 0b01000000) >> 5) |
-        ((b7 & 0b01000000) >> 6);
-      *buf_image_index_high++ =
-        (b0 & 0b10000000) |
-        ((b1 & 0b10000000) >> 1) |
-        ((b2 & 0b10000000) >> 2) |
-        ((b3 & 0b10000000) >> 3) |
-        ((b4 & 0b10000000) >> 4) |
-        ((b5 & 0b10000000) >> 5) |
-        ((b6 & 0b10000000) >> 6) |
-        ((b7 & 0b10000000) >> 7);
-    }
     // next start
-    buf_image_index += 2 + HALF_BUF_WIDTH_64COLORS + 2;
-    buf_image_index_high += 2 + HALF_BUF_WIDTH_64COLORS + 2;
-    
+    buf_image_index += 2;
+
+    // diff check and update_lines
     if(memcmp(buf_image_diff_index, pre_buf_image_diff_index, BUF_WIDTH) != 0) {
       memcpy(pre_buf_image_diff_index, buf_image_diff_index, BUF_WIDTH);
       memcpy(buf_image_update_index, pre_buf_image_diff_index, BUF_WIDTH);
@@ -549,10 +416,18 @@ int MipDisplay::conv_4bit_64colors(unsigned char* image) {
     buf_image_diff_index += BUF_WIDTH;
     pre_buf_image_diff_index += BUF_WIDTH;
   }
+
   return update_lines;
 }
 
-int MipDisplay::conv_4bit_343colors(unsigned char* image) {
+int MipDisplayBase::conv_4bit_64colors(unsigned char* image) {
+  int update_lines = 0;
+  (void)image;
+  return update_lines;
+}
+
+int MipDisplayBase::conv_4bit_343colors(unsigned char* image) {
+
   unsigned char *image_index = image;
   char *buf_image_index = buf_image;
   char *buf_image_index_high = buf_image;
@@ -565,7 +440,7 @@ int MipDisplay::conv_4bit_343colors(unsigned char* image) {
   bool t_index = true;
   int bit_count;
 
-  buf_image_index += 2;      
+  buf_image_index += 2;
   buf_image_index_high += 2 + HALF_BUF_WIDTH_64COLORS + 2;
   for(int y = 0; y < HEIGHT; y++) {
     bit_count = 0;
@@ -576,7 +451,7 @@ int MipDisplay::conv_4bit_343colors(unsigned char* image) {
           *buf_image_index_high |= add_bit[bit_count];
         }
         if(
-          *image_index >= thresholds_4bit_343colors[t_index][2] || 
+          *image_index >= thresholds_4bit_343colors[t_index][2] ||
           (*image_index >= thresholds_4bit_343colors[t_index][0] && *image_index < thresholds_4bit_343colors[t_index][1])
         ) {
           *buf_image_index |= add_bit[bit_count];
@@ -593,7 +468,7 @@ int MipDisplay::conv_4bit_343colors(unsigned char* image) {
     // next start
     buf_image_index += 2 + HALF_BUF_WIDTH_64COLORS + 2;
     buf_image_index_high += 2 + HALF_BUF_WIDTH_64COLORS + 2;
-    
+
     if(memcmp(buf_image_diff_index, pre_buf_image_diff_index, BUF_WIDTH) != 0) {
       memcpy(pre_buf_image_diff_index, buf_image_diff_index, BUF_WIDTH);
       memcpy(buf_image_update_index, pre_buf_image_diff_index, BUF_WIDTH);
@@ -606,10 +481,7 @@ int MipDisplay::conv_4bit_343colors(unsigned char* image) {
   return update_lines;
 }
 
-void MipDisplay::draw(std::vector<char>& buf_queue) {
-  //std::chrono::system_clock::time_point start = std::chrono::system_clock::now();
-  spi_write(pigpio, spi, buf_queue.data(), buf_queue.size());
-  //spi_write(pigpio, spi, buf_no_update, 2);
-  //int diff_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now()-start).count();
-  //std::cout << "###### draw(C)   " <<  (float)diff_time / 1000000 << std::endl;
+void MipDisplayBase::draw(std::vector<char>& buf_queue) {
+  spi_write_bytes(buf_queue.data(), buf_queue.size());
 }
+

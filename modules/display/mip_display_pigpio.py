@@ -4,22 +4,42 @@ from modules.app_logger import app_logger
 
 _SENSOR_DISPLAY = False
 MODE = "Python"
+conv_3bit_8colors_cy = None
+MipDisplay_CPP = None
 try:
     import pigpio
     _SENSOR_DISPLAY = True
 
-    # Prefer a prebuilt Cython extension if available.
-    # Falling back to pyximport keeps source builds working, while
-    # avoiding runtime recompilation on every boot.
+    # Optional: full C++ implementation (pigpio backend).
     try:
-        from .cython.mip_helper import conv_3bit_8colors_cy, MipDisplay_CPP
+        from .cython.mip_helper_pigpio import MipDisplay_CPP
         MODE = "Cython_full"
     except Exception:
-        import pyximport
-        # Build in-place so the compiled .so can be imported directly next time.
-        pyximport.install(inplace=True, language_level=3)
-        from .cython.mip_helper import conv_3bit_8colors_cy, MipDisplay_CPP
-        MODE = "Cython_full"
+        try:
+            import pyximport
+
+            # Build in-place so the compiled .so can be imported directly next time.
+            pyximport.install(inplace=True, language_level=3)
+            from .cython.mip_helper_pigpio import MipDisplay_CPP
+            MODE = "Cython_full"
+        except Exception:
+            pass
+
+    if MODE != "Cython_full":
+        # Optional: conversion-only helper (no hardware deps).
+        try:
+            from .cython.mip_helper import conv_3bit_8colors_cy
+            MODE = "Cython"
+        except Exception:
+            try:
+                import pyximport
+
+                # Build in-place so the compiled .so can be imported directly next time.
+                pyximport.install(inplace=True, language_level=3)
+                from .cython.mip_helper import conv_3bit_8colors_cy
+                MODE = "Cython"
+            except Exception:
+                pass
 except ImportError:
     pass
 
