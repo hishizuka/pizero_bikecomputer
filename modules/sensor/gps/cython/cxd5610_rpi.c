@@ -833,7 +833,7 @@ static int init_i2c(struct cxd5610_ctx *ctx)
 
 static int init_gpio(struct cxd5610_ctx *ctx)
 {
-  ctx->chip = gpiod_chip_open("/dev/gpiochip4");
+  ctx->chip = gpiod_chip_open(CXD5610_GPIO_CHIP_DEV);
   if (!ctx->chip)
     {
       return -errno;
@@ -1290,6 +1290,32 @@ int cxd5610_read(struct cxd5610_ctx *ctx, struct cxd5610_data *out, int timeout_
   return (int)opc;
 }
 
+int cxd5610_peek(struct cxd5610_ctx *ctx, struct cxd5610_data *out)
+{
+  if (!ctx || !out)
+    {
+      return -EINVAL;
+    }
+
+  if (ctx->thread_started && ctx->lock_initialized)
+    {
+      int ret = 0;
+      pthread_mutex_lock(&ctx->lock);
+      if (!ctx->data_valid)
+        {
+          ret = -EAGAIN;
+        }
+      else
+        {
+          *out = ctx->last;
+        }
+      pthread_mutex_unlock(&ctx->lock);
+      return ret;
+    }
+
+  return -ENOTSUP;
+}
+
 void cxd5610_close(struct cxd5610_ctx *ctx)
 {
   if (!ctx)
@@ -1323,30 +1349,32 @@ int main(void)
   int ret = cxd5610_create(&ctx);
   if (ret < 0 || !ctx)
     {
-      fprintf(stderr, "[CLI ] Failed to init CXD5610: %s\\n", strerror(-ret));
+      fprintf(stderr, "[CLI ] Failed to init CXD5610: %s\n", strerror(-ret));
       return EXIT_FAILURE;
     }
 
-  printf("[CLI ] CXD5610 initialized. Waiting for GNSS notifications (Ctrl+C to exit)...\\n");
+  printf("[CLI ] CXD5610 initialized. Printing latest data every 1s (Ctrl+C to exit)...\n");
 
   while (!g_stop)
     {
       struct cxd5610_data d;
-      ret = cxd5610_read(ctx, &d, 1000);
-      if (ret == -ETIMEDOUT || ret == -EAGAIN)
+      ret = cxd5610_peek(ctx, &d);
+      if (ret == -EAGAIN)
         {
-          continue;
+          printf("[DATA] waiting for first fix...\n");
         }
-      if (ret < 0)
+      else if (ret < 0)
         {
-          fprintf(stderr, "[CLI ] read error: %s\\n", strerror(-ret));
-          continue;
+          fprintf(stderr, "[CLI ] read error: %s\n", strerror(-ret));
+        }
+      else
+        {
+          printf("[DATA] lat=%.7f lon=%.7f alt=%.0f[m] speed=%.1f[m/s] track=%.0f[deg] fix=%d sats=%d/%d\n",
+                 d.lat, d.lon, d.alt, d.speed, d.track,
+                 d.mode, d.used_sats, d.total_sats);
         }
 
-      printf("[DATA] opc=0x%02x lat=%.7f lon=%.7f alt=%.2f speed=%.2f track=%.2f fix=%d sats=%d/%d\\n",
-             ret,
-             d.lat, d.lon, d.alt, d.speed, d.track,
-             d.mode, d.used_sats, d.total_sats);
+      sleep(1);
     }
 
   cxd5610_close(ctx);

@@ -25,9 +25,10 @@
 #include <time.h>
 #include <unistd.h>
 
-#define CXD5610_INT_GPIO   17  /* Interrupt GPIO pin (BCM numbering) */
 #define CXD5610_I2C_DEV     "/dev/i2c-1"
 #define CXD5610_I2C_ADDR    0x24
+#define CXD5610_INT_GPIO   17  /* Interrupt GPIO pin (BCM numbering) */
+#define CXD5610_GPIO_CHIP_DEV "/dev/gpiochip4"
 
 #define PACKET_SYNC         0x7f
 #define PACKET_MAXLEN       512
@@ -91,6 +92,7 @@ struct cxd5610_data {
 
 int cxd5610_create(cxd5610_ctx **out_ctx);
 int cxd5610_read(cxd5610_ctx *ctx, struct cxd5610_data *out, int timeout_ms);
+int cxd5610_peek(cxd5610_ctx *ctx, struct cxd5610_data *out);
 void cxd5610_close(cxd5610_ctx *ctx);
 
 #ifdef __cplusplus
