@@ -1,0 +1,67 @@
+/dts-v1/;
+/plugin/;
+
+/*
+How to use spidev with MIP color displays.
+Set CS to active high (default is active low).
+
+setup
+$ dtc -@ -I dts -O dtb -o spi0-cs0-gpio8-cshigh.dtbo spi0-cs0-gpio8-cshigh.dts
+$ sudo cp spi0-cs0-gpio8-cshigh.dtbo /boot/firmware/overlays/
+
+/boot/firmware/config.txt
+dtparam=spi=on
+dtoverlay=spi0-cs0-gpio8-cshigh
+
+/boot/firmware/cmdline.txt
+~ spidev.bufsiz=65536
+*/
+
+/ {
+    compatible = "brcm,bcm2835";
+
+    fragment@0 {
+        target = <&spi0>;
+        __overlay__ {
+            status = "okay";
+
+            /* use CS0(GPIO8) as GPIO */
+            cs-gpios = <&gpio 8 0>, <&gpio 7 1>;
+
+            pinctrl-names = "default";
+            pinctrl-0 = <&spi0_pins_no_cs &spi0_cs0_gpio8 &spi0_cs1_gpio7>;
+        };
+    };
+
+    fragment@1 {
+        target = <&gpio>;
+        __overlay__ {
+            spi0_pins_no_cs: spi0_pins_no_cs {
+                brcm,pins = <9 10 11>;
+                brcm,function = <4>; /* ALT0 */
+            };
+
+            spi0_cs0_gpio8: spi0_cs0_gpio8 {
+                brcm,pins = <8>;
+                brcm,function = <1>; /* output */
+                brcm,pull = <0>;
+            };
+
+            spi0_cs1_gpio7: spi0_cs1_gpio7 {
+                brcm,pins = <7>;
+                brcm,function = <1>; /* output */
+                brcm,pull = <0>;
+            };
+        };
+    };
+
+    /* set spidev@0 to “CS active-high”  */
+    fragment@2 {
+        target-path = "/soc/spi@7e204000/spidev@0";
+        __overlay__ {
+            status = "okay";
+            spi-cs-high;
+            spi-max-frequency = <7000000>;
+        };
+    };
+};
