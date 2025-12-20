@@ -1,4 +1,4 @@
-from modules._qt_qtwidgets import QT_ALIGN_CENTER, QtCore, QtWidgets
+from modules._qt_qtwidgets import QT_ALIGN_CENTER, QT_EXPANDING, QT_PREFERRED, QtCore, QtWidgets
 
 from .icons import BackIcon, ForwardIcon
 from .navi_button import NaviButton
@@ -25,6 +25,7 @@ class TopBarLabel(QtWidgets.QLabel):
     def __init__(self, *__args):
         super().__init__(*__args)
         self.setAlignment(QT_ALIGN_CENTER)
+        self.setSizePolicy(QT_EXPANDING, QT_PREFERRED)
         self.setStyleSheet(self.STYLES)
 
 

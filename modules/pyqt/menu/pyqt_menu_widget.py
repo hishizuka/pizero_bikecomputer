@@ -55,12 +55,21 @@ class MenuWidget(QtWidgets.QWidget):
 
         self.back_button = topbar.TopBarBackButton((self.icon_x, self.icon_y))
         self.page_name_label = topbar.TopBarLabel(self.page_name)
+        self.right_button_container = QtWidgets.QWidget()
+        self.right_button_container.setFixedSize(self.icon_x, self.icon_y)
+        self.right_button_layout = QtWidgets.QHBoxLayout(
+            self.right_button_container
+        )
+        self.right_button_layout.setContentsMargins(0, 0, 0, 0)
+        self.right_button_layout.setSpacing(0)
 
         self.top_bar_layout = QtWidgets.QHBoxLayout()
         self.top_bar_layout.setContentsMargins(5, 5, 5, 5)
         self.top_bar_layout.setSpacing(0)
         self.top_bar_layout.addWidget(self.back_button)
         self.top_bar_layout.addWidget(self.page_name_label)
+        self.top_bar_layout.addWidget(self.right_button_container)
+        self.top_bar_layout.setStretch(1, 1)
 
         self.top_bar.setLayout(self.top_bar_layout)
 

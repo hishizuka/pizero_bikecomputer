@@ -375,7 +375,7 @@ class CourseDetailWidget(MenuWidget):
         self.next_button = topbar.TopBarNextButton((self.icon_x, self.icon_y))
         self.next_button.setEnabled(False)
 
-        self.top_bar_layout.addWidget(self.next_button)
+        self.right_button_layout.addWidget(self.next_button)
 
     def enable_next_button(self):
         self.next_button.setVisible(True)
