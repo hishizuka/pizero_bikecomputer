@@ -59,6 +59,7 @@ class SensorANT(Sensor):
             self.node, self.config, self.values
         )
         self.scanner.set_main_ant_device(self.device)
+        self.searcher.set_main_ant_device(self.device)
 
         # auto connect ANT+ sensor from setting.conf
         if self.config.G_ANT["STATUS"] and not self.config.G_DUMMY_OUTPUT:

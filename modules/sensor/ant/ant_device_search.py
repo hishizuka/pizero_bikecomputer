@@ -15,6 +15,8 @@ class ANT_Device_Search(ant_device.ANT_Device):
     isUse = False
     searchList = None
     searchState = False
+    mainAntDevice = None
+    _ctrl_searcher_owned = False
 
     def __init__(self, node, config, values=None):
         self.node = node
@@ -22,6 +24,19 @@ class ANT_Device_Search(ant_device.ANT_Device):
         if self.config.G_ANT["STATUS"]:
             # special use of make_channel(c_type, search=False)
             self.make_channel(self.ant_config["channel_type"], ext_assign=0x01)
+
+    def set_main_ant_device(self, device):
+        """Set reference to the main ANT device map for reusing channels."""
+        self.mainAntDevice = device
+
+    def _find_existing_ctrl_device(self):
+        """Find an existing CTRL device instance to reuse its channel when searching."""
+        if not self.mainAntDevice:
+            return None
+        for dv in self.mainAntDevice.values():
+            if isinstance(dv, ant_device_ctrl.ANT_Device_CTRL) and dv.channel is not None:
+                return dv
+        return None
 
     def on_data(self, data):
         if not self.searchState:
@@ -69,9 +84,17 @@ class ANT_Device_Search(ant_device.ANT_Device):
                 self.connect(isCheck=False, isChange=False)  # USE: False -> True
 
             elif self.antName == "CTRL":
-                self.ctrl_searcher = ant_device_ctrl.ANT_Device_CTRL(
-                    self.node, self.config, {}, antName
-                )
+                # CTRL search requires a master channel. If CTRL was previously created,
+                # reuse its channel to avoid exhausting the limited ANT channel count.
+                existing = self._find_existing_ctrl_device()
+                if existing is not None:
+                    self.ctrl_searcher = existing
+                    self._ctrl_searcher_owned = False
+                else:
+                    self.ctrl_searcher = ant_device_ctrl.ANT_Device_CTRL(
+                        self.node, self.config, {}, antName
+                    )
+                    self._ctrl_searcher_owned = True
                 self.ctrl_searcher.channel.on_acknowledge_data = self.on_data_ctrl
                 self.ctrl_searcher.send_data = True
                 self.ctrl_searcher.connect(isCheck=False, isChange=False)
@@ -92,9 +115,20 @@ class ANT_Device_Search(ant_device.ANT_Device):
                     self.set_wait_normal_mode()
 
             elif self.antName == "CTRL":
-                self.ctrl_searcher.disconnect(isCheck=False, isChange=False)
-                self.ctrl_searcher.delete()
-                del self.ctrl_searcher
+                ctrl = getattr(self, "ctrl_searcher", None)
+                if ctrl is not None:
+                    # Restore default callback and stop background sending.
+                    try:
+                        ctrl.send_data = False
+                        ctrl.channel.on_acknowledge_data = ctrl.on_data
+                    except Exception:
+                        pass
+
+                    ctrl.disconnect(isCheck=False, isChange=False)
+                    if self._ctrl_searcher_owned:
+                        ctrl.delete()
+                    self.ctrl_searcher = None
+                self._ctrl_searcher_owned = False
 
             self.searchState = False
 
