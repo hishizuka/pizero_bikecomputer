@@ -1,4 +1,9 @@
+import os
+import signal
+import sys
+
 from modules.app_logger import app_logger
+from modules.utils.cmd import start_process
 from modules._qt_qtwidgets import QtCore, QtWidgets, QtGui
 from .pyqt_menu_widget import MenuWidget, ListWidget, ListItemWidget
 
@@ -9,6 +14,7 @@ class SensorMenuWidget(MenuWidget):
         button_conf = (
             # Name(page_name), button_attribute, connected functions, layout
             ("ANT+ Sensors", "submenu", self.ant_sensors_menu),
+            ("BLE Sensors", "submenu", self.ble_sensors_menu),
             ("Wheel Size", "submenu", self.adjust_wheel_circumference),
             ("Auto Light", "toggle", lambda: self.onoff_auto_light(True)),
             ("Auto Stop", None, None),
@@ -27,6 +33,9 @@ class SensorMenuWidget(MenuWidget):
             return
         self.change_page("ANT+ Sensors")
 
+    def ble_sensors_menu(self):
+        self.change_page("BLE Sensors")
+
     def adjust_wheel_circumference(self):
         self.change_page("Wheel Size", preprocess=True)
 
@@ -37,6 +46,7 @@ class SensorMenuWidget(MenuWidget):
         if change:
             self.config.G_ANT["USE_AUTO_LIGHT"] = not self.config.G_ANT["USE_AUTO_LIGHT"] 
         self.buttons["Auto Light"].change_toggle(self.config.G_ANT["USE_AUTO_LIGHT"])
+
 
 class ANTMenuWidget(MenuWidget):
     def setup_menu(self):
@@ -186,3 +196,130 @@ class ANTListItemWidget(ListItemWidget):
         # outer layout (custom)
         self.outer_layout.insertWidget(0, icon)
         self.enter_signal.connect(self.parentWidget().button_func)
+
+
+class BLEMenuWidget(MenuWidget):
+    fake_trainer_proc = None
+
+    def setup_menu(self):
+        button_conf = (
+            # Name(page_name), button_attribute, connected functions, layout
+            ("Zwift Click V2", "toggle", lambda: self.onoff_zwift_click_v2(True)),
+            ("Fake Trainer for Zwift", "toggle", lambda: self.onoff_fake_trainer(True)),
+        )
+        self.add_buttons(button_conf)
+        self.onoff_zwift_click_v2(False)
+        #self.onoff_fake_trainer(False)
+
+        #if self.config.logger.sensor.sensor_ble.enabled():
+        #    self.buttons["Zwift Click V2"].disable()
+
+        if self.config.ble_uart is None:
+            self.buttons["Fake Trainer for Zwift"].disable()
+
+    def onoff_zwift_click_v2(self, change=True):
+        if change:
+            self.config.G_ZWIFT_CLICK_V2["STATUS"] = not self.config.G_ZWIFT_CLICK_V2["STATUS"]
+            sensor_ble = self.config.logger.sensor.sensor_ble
+            if self.config.G_ZWIFT_CLICK_V2["STATUS"]:
+                if not sensor_ble.connect_zwift_click_v2():
+                    app_logger.warning("Zwift Click V2 toggle skipped: BLE not enabled")
+            else:
+                sensor_ble.disconnect_zwift_click_v2()
+        self.buttons["Zwift Click V2"].change_toggle(self.config.G_ZWIFT_CLICK_V2["STATUS"])
+    
+    def onoff_fake_trainer(self, change=True):
+        if change:
+            if self._fake_trainer_is_running():
+                self._stop_fake_trainer_process()
+            else:
+                started = self._start_fake_trainer_process()
+                if not started:
+                    self._stop_fake_trainer_process()
+        self.buttons["Fake Trainer for Zwift"].change_toggle(self._fake_trainer_is_running())
+
+    def on_back_menu(self):
+        self._stop_fake_trainer_process()
+        self.buttons["Fake Trainer for Zwift"].change_toggle(False)
+
+    def _fake_trainer_is_running(self):
+        proc = self.fake_trainer_proc
+        return proc is not None and proc.poll() is None
+
+    def _start_fake_trainer_process(self):
+        if self._fake_trainer_is_running():
+            return True
+
+        fake_trainer_path = os.path.abspath(
+            os.path.join(
+                os.path.dirname(__file__),
+                "..",
+                "..",
+                "sensor",
+                "ble",
+                "fake_trainer.py",
+            )
+        )
+        if not os.path.isfile(fake_trainer_path):
+            app_logger.warning(f"Fake trainer not found: {fake_trainer_path}")
+            self.buttons["Fake Trainer for Zwift"].change_toggle(False)
+            return False
+
+        try:
+            self.fake_trainer_proc = start_process(
+                [sys.executable, fake_trainer_path],
+                cmd_print=False,
+            )
+        except Exception as exc:
+            app_logger.warning(f"Fake trainer start failed: {exc}")
+            self.fake_trainer_proc = None
+            self.buttons["Fake Trainer for Zwift"].change_toggle(False)
+            return False
+
+        if self.fake_trainer_proc.poll() is not None:
+            app_logger.warning("Fake trainer start failed: process exited early")
+            self.fake_trainer_proc = None
+            self.buttons["Fake Trainer for Zwift"].change_toggle(False)
+            return False
+
+        QtCore.QTimer.singleShot(200, self._check_fake_trainer_process)
+        app_logger.info("Fake trainer started")
+        return True
+
+    def _check_fake_trainer_process(self):
+        if self._fake_trainer_is_running():
+            return
+        self.fake_trainer_proc = None
+        self.buttons["Fake Trainer for Zwift"].change_toggle(False)
+        app_logger.warning("Fake trainer stopped unexpectedly")
+
+    def _stop_fake_trainer_process(self):
+        proc = self.fake_trainer_proc
+        if proc is None:
+            return
+        if proc.poll() is not None:
+            self.fake_trainer_proc = None
+            return
+
+        try:
+            proc.send_signal(signal.SIGINT)
+            proc.wait(timeout=1.0)
+        except Exception:
+            pass
+
+        if proc.poll() is None:
+            try:
+                proc.terminate()
+                proc.wait(timeout=1.0)
+            except Exception:
+                pass
+
+        if proc.poll() is None:
+            try:
+                proc.kill()
+                proc.wait(timeout=1.0)
+            except Exception:
+                pass
+
+        self.fake_trainer_proc = None
+        app_logger.info("Fake trainer stopped")

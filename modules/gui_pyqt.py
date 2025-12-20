@@ -253,6 +253,7 @@ class GUI_PyQt(GUI_Qt_Base):
                 SensorMenuWidget,
                 ANTMenuWidget,
                 ANTListWidget,
+                BLEMenuWidget,
             )
             from modules.pyqt.menu.pyqt_course_menu_widget import (
                 CoursesMenuWidget,
@@ -302,6 +303,7 @@ class GUI_PyQt(GUI_Qt_Base):
 
             # reverse order (make children widget first, then make parent widget)
             menus = [
+                ("BLE Sensors", BLEMenuWidget),
                 ("ANT+ Detail", ANTListWidget),
                 ("ANT+ Sensors", ANTMenuWidget),
                 ("Wheel Size", AdjustWheelCircumferenceWidget),

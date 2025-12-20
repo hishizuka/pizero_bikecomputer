@@ -239,6 +239,9 @@ This project also includes code ported and modified from the Apache NuttX RTOS p
 - modules/sensor/gps/cython/cxd5610_rpi.c
 - modules/sensor/gps/cython/cxd5610_rpi.h
 
+This project also includes code adapted from swiftcontrol under the GNU General Public License v3.0. See the NOTICE file for details.
+- modules/sensor/ble/zwift_click_v2.py
+
 This project also includes code ported and modified from Bosch Sensortec GmbH's code under the BSD 3-Clause License. See the NOTICE file for details.
 - [BHI360_SensorAPI](https://github.com/boschsensortec/BHI360_SensorAPI)
   - modules/sensor/i2c/cython/bhi360_shuttle_board_3/common.c

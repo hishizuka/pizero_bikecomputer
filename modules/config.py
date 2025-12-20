@@ -392,6 +392,12 @@ class Config:
     G_BT_PAN_DEVICE = ""
     G_AUTO_BT_TETHERING = False
 
+    # Zwift Click V2 (BLE remote buttons)
+    # Keep only the user-facing enable flag here; protocol/tuning defaults live in zwift_click_v2.py.
+    G_ZWIFT_CLICK_V2 = {
+        "STATUS": False,
+    }
+
     #######################
     # class objects       #
     #######################

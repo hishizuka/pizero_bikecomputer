@@ -48,6 +48,8 @@ class Setting:
                 self.config.G_BT_PAN_DEVICE = c["BT_PAN_DEVICE"]
             if "AUTO_BT_TETHERING" in c:
                 self.config.G_AUTO_BT_TETHERING = c.getboolean("AUTO_BT_TETHERING")
+            if "USE_ZWIFT_CLICK_V2" in c:
+                self.config.G_ZWIFT_CLICK_V2["STATUS"] = c.getboolean("USE_ZWIFT_CLICK_V2")
             if "GADGETBRIDGE_STATUS" in c:
                 self.config.G_GADGETBRIDGE["STATUS"] = c.getboolean("GADGETBRIDGE_STATUS")
             if "GADGETBRIDGE_USE_GPS" in c:
@@ -230,6 +232,7 @@ class Setting:
         c = self.config_parser["BT"]
         c["BT_PAN_DEVICE"] = str(self.config.G_BT_PAN_DEVICE)
         c["AUTO_BT_TETHERING"] = str(self.config.G_AUTO_BT_TETHERING)
+        c["USE_ZWIFT_CLICK_V2"] = str(self.config.G_ZWIFT_CLICK_V2["STATUS"])
         c["GADGETBRIDGE_STATUS"] = str(self.config.G_GADGETBRIDGE["STATUS"])
         c["GADGETBRIDGE_USE_GPS"] = str(self.config.G_GADGETBRIDGE["USE_GPS"])
 

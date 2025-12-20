@@ -36,6 +36,18 @@ def exec_cmd_return_value(cmd, cmd_print=True, timeout=None):
         return "", repr(e)
 
 
+# Returns a Popen handle so callers can later poll/send_signal/terminate.
+def start_process(cmd, cmd_print=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True):
+    if cmd_print:
+        app_logger.info(cmd)
+    return subprocess.Popen(
+        cmd,
+        stdout=stdout,
+        stderr=stderr,
+        start_new_session=start_new_session,
+    )
+
+
 def is_service_running(service):
     return not exec_cmd(["systemctl", "is-active", "--quiet", service], cmd_print=False)
 

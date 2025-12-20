@@ -19,6 +19,20 @@ third_party/apache/LICENSE.Apache2
 
 ---
 
+This project also includes code adapted from a GPL-3.0 licensed project.
+
+Portions of the code in the following file are
+adapted from swiftcontrol by Jonas Bark
+(https://github.com/jonasbark/swiftcontrol)
+and licensed under the GNU General Public License v3.0:
+
+- modules/sensor/ble/zwift_click_v2.py
+
+The full text of the GNU General Public License v3.0 is available at:
+LICENSE
+
+---
+
 This project also includes code adapted from a BSD 3-Clause licensed project.
 
 Portions of the code in the following file are

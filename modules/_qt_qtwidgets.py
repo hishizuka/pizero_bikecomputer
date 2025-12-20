@@ -46,6 +46,7 @@ pg.setConfigOption("foreground", "k")
 # QtWidgets
 QT_EXPANDING = QtWidgets.QSizePolicy.Policy.Expanding
 QT_FIXED = QtWidgets.QSizePolicy.Policy.Fixed
+QT_PREFERRED = QtWidgets.QSizePolicy.Policy.Preferred
 
 # for textedit
 QT_SCROLLBAR_ALWAYSOFF = QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
