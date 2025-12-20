@@ -1,5 +1,6 @@
 import abc
 import asyncio
+import time as time_module
 from datetime import datetime, time
 
 import numpy as np
@@ -71,6 +72,7 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
     valid_cutoff_dof = (99.0, 99.0, 99.0)
 
     quit_status = False
+    _TIME_SYNC_RETRY_SEC = 10.0
 
     @property
     def is_real(self):
@@ -78,6 +80,10 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
 
     def sensor_init(self):
         self.reset()
+        self._utc_time_task = None
+        self._utc_time_pending = None
+        self._utc_time_event = None
+        self._time_sync_next_allowed = 0.0
 
         for element in self.elements:
             self.values[element] = np.nan
@@ -94,6 +100,8 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
 
     async def quit(self):
         self.quit_status = True
+        if self._utc_time_task is not None and not self._utc_time_task.done():
+            self._utc_time_task.cancel()
         await self.sleep()
 
     def start_coroutine(self):
@@ -288,7 +296,7 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
             self.is_fixed = True
 
         # gps time
-        self.get_utc_time(gps_time)
+        self.get_utc_time(gps_time, mode)
 
         # modify altitude with course
         if (
@@ -324,19 +332,43 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
         # timestamp
         self.values["timestamp"] = datetime.now()
 
-    def get_utc_time(self, gps_time):
-        # UTC time
+    async def _utc_time_worker(self):
+        # Run UTC time parsing and system time sync in a thread to keep the main asyncio loop responsive.
+        while not self.quit_status:
+            try:
+                await self._utc_time_event.wait()
+            except asyncio.CancelledError:
+                raise
+
+            self._utc_time_event.clear()
+
+            while True:
+                pending = self._utc_time_pending
+                if pending is None:
+                    break
+                self._utc_time_pending = None
+                gps_time, mode = pending
+                try:
+                    await asyncio.to_thread(self._update_utc_time_sync, gps_time, mode)
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    app_logger.exception("Failed to update UTC time")
+
+    def _update_utc_time_sync(self, gps_time, mode=None):
+        # NOTE: This function is executed in a worker thread.
         if self.is_null_value(gps_time):
             return
 
         if isinstance(gps_time, datetime):
             gps_time = gps_time.isoformat()
-
         # instance time is to handle pa1010d lib (v0.0.4?),
         # by default it was retuning 1970-01-01 as a date:
-        # we keep this logic s dit will return later and not try to set the time
+        # we keep this logic so it will return later and not try to set the time
         elif isinstance(gps_time, time):
             gps_time = f"1970-01-01T{gps_time.isoformat()}+00:00"
+        elif not isinstance(gps_time, str):
+            gps_time = str(gps_time)
 
         self.values["time"] = gps_time
         self.values["utctime"] = gps_time[11:16]  # [11:19] for HH:MM:SS
@@ -347,8 +379,42 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
         if gps_time[0:4].isdecimal() and int(gps_time[0:4]) < 2000:
             return
 
-        if not self.is_time_modified:
-            self.is_time_modified = set_time(gps_time)
+        if self.is_time_modified:
+            return
+
+        # Avoid expensive system time sync attempts until we have a 3D fix.
+        # Some receivers output a plausible UTC timestamp before a full fix.
+        try:
+            mode_int = int(mode) if mode is not None else None
+        except (TypeError, ValueError):
+            mode_int = None
+        if mode_int is None or mode_int < NMEA_MODE_3D:
+            return
+
+        # Throttle time sync attempts to keep the system responsive.
+        now = time_module.monotonic()
+        if now < self._time_sync_next_allowed:
+            return
+        self._time_sync_next_allowed = now + self._TIME_SYNC_RETRY_SEC
+
+        try:
+            ok = set_time(gps_time)
+        except Exception:
+            app_logger.exception("Failed to set time")
+            ok = False
+        if ok:
+            self.is_time_modified = True
+
+    def get_utc_time(self, gps_time, mode=None):
+        # Schedule UTC time handling in a background thread.
+        if self.is_null_value(gps_time):
+            return
+        self._utc_time_pending = (gps_time, mode)
+        if self._utc_time_event is None:
+            self._utc_time_event = asyncio.Event()
+        if self._utc_time_task is None or self._utc_time_task.done():
+            self._utc_time_task = asyncio.create_task(self._utc_time_worker())
+        self._utc_time_event.set()
 
     async def output_dummy(self):
         from .dummy import Dummy_GPS
