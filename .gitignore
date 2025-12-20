@@ -13,11 +13,14 @@
 *.iml
 /.vscode/
 /.venv/
+/tmp/
+/.tmp/
 __pycache__/
 *.py[cod]
 *.qml
 *.qmlc
 *.db
+*.pdf
 *.fit
 *.tcx
 *.swp

@@ -1,7 +1,7 @@
 from functools import partial
 
 from modules.app_logger import app_logger
-from modules._qt_qtwidgets import QT_EXPANDING, QtCore, QtWidgets, qasync
+from modules._qt_qtwidgets import QT_EXPANDING, QtCore, QtWidgets
 
 from .pyqt_item import Item
 
