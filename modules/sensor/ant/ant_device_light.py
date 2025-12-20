@@ -24,7 +24,11 @@ class ANT_Device_Light(ant_device.ANT_Device):
         # "auto_on_timestamp",
     )
     page_34_count = 0
-    light_retry_timeout = 5  #[s]
+    # Bike Lights profile Rev 2.0 (section 5.4.1) suggests retrying a command
+    # (using the same sequence number) if the sequence number in Data Page 1
+    # does not match the sequence number that was sent.
+    light_retry_timeout = 1.0  # [s]
+    light_retry_max = 3
     auto_light_min_duration = 5  #[s]
     ack_retry_max = 3
     ack_retry_backoff = (1.0, 2.0, 6.0)
@@ -55,6 +59,7 @@ class ANT_Device_Light(ant_device.ANT_Device):
     auto_off_status = {}
 
     state_lock = None
+    _pending_light_setting = None
 
     def _ensure_lock(self):
         if self.state_lock is None:
@@ -132,6 +137,7 @@ class ANT_Device_Light(ant_device.ANT_Device):
             self.values["auto_state"] = False
             self.values["changed_timestamp"] = None
             self.values["auto_on_timestamp"] = datetime.now()
+            self._pending_light_setting = None
 
     def close_extra(self):
         self.send_disconnect_light()
@@ -160,26 +166,40 @@ class ANT_Device_Light(ant_device.ANT_Device):
             lock = self._ensure_lock()
             with lock:
                 self.battery_status = self.battery_levels[data[2] >> 5]
-                self.light_type = (data[2] >> 2) & 0b00011
+                # Data Page 1 (Table 7-3): Light Type is 3 bits (2:4)
+                self.light_type = (data[2] >> 2) & 0b00111
 
-                time_delta = None
-                if self.values["changed_timestamp"] is not None:
-                    time_delta = (datetime.now() - self.values["changed_timestamp"]).total_seconds()
-                if (
-                    self.values["light_mode"] is not None
-                    and time_delta is not None
-                    and mode != self.values["light_mode"]
-                    and time_delta > self.light_retry_timeout
-                ):
-                    app_logger.info(
-                        f"Retry to change light mode "
-                        f"{mode} -> {self.values['light_mode']}, "
-                        f"rx_seq_no: {seq_no}, "
-                        f"tx_seq_no: {self.page_34_count}, "
-                        f"time_delta: {round(time_delta, 2)} > "
-                        f"self.light_retry_timeout: {self.light_retry_timeout}"
-                    )
-                    resend_mode = self.values["light_mode"]
+                pending = self._pending_light_setting
+                if pending is not None:
+                    if seq_no == pending["seq_no"]:
+                        # The command was received by the light. If the mode still
+                        # doesn't match, avoid repeatedly forcing a state; the spec
+                        # warns about conflicting controllers (section 5.4.1).
+                        if mode != pending["mode"]:
+                            app_logger.warning(
+                                "ANT+ light command observed but state mismatch: "
+                                f"requested={pending['mode']}, actual={mode}, "
+                                f"seq_no={seq_no}"
+                            )
+                        self._pending_light_setting = None
+                    else:
+                        time_delta = (datetime.now() - pending["last_sent"]).total_seconds()
+                        if time_delta > self.light_retry_timeout:
+                            if pending["retry_count"] >= self.light_retry_max:
+                                app_logger.error(
+                                    "ANT+ light command retry exhausted: "
+                                    f"requested={pending['mode']}, "
+                                    f"rx_seq_no={seq_no}, tx_seq_no={pending['seq_no']}"
+                                )
+                                self._pending_light_setting = None
+                            else:
+                                app_logger.info(
+                                    "Retry ANT+ light command due to seq mismatch: "
+                                    f"requested={pending['mode']}, actual={mode}, "
+                                    f"rx_seq_no={seq_no}, tx_seq_no={pending['seq_no']}, "
+                                    f"time_delta={round(time_delta, 2)}s"
+                                )
+                                resend_mode = pending["mode"]
         elif data[0] == 0x02:
             pass
         # Common Data Page 80 (0x50): Manufacturer’s Information
@@ -191,6 +211,22 @@ class ANT_Device_Light(ant_device.ANT_Device):
 
         if resend_mode is not None:
             self.send_light_setting_on_data(resend_mode)
+
+    def _build_light_setting_payload(self, mode, seq_no):
+        light_code = self.light_modes[self.light_name][mode][1]
+        return array.array(
+            "B",
+            [
+                0x22,
+                0x01,
+                0x28,
+                seq_no,
+                0x5A,
+                0x10,
+                light_code,
+                0xFF,  # No beam adjustment (Table 7-39)
+            ],
+        )
 
     def send_connect_light(self):
         self._queue_send(
@@ -226,44 +262,30 @@ class ANT_Device_Light(ant_device.ANT_Device):
         with lock:
             self.page_34_count = (self.page_34_count + 1) % 256
             seq_no = self.page_34_count
-            light_code = self.light_modes[self.light_name][mode][1]
-            self.values["changed_timestamp"] = datetime.now()
+            now = datetime.now()
+            self.values["changed_timestamp"] = now
+            self._pending_light_setting = {
+                "mode": mode,
+                "seq_no": seq_no,
+                "retry_count": 0,
+                "last_sent": now,
+            }
 
-        payload = array.array(
-            "B",
-            [
-                0x22,
-                0x01,
-                0x28,
-                seq_no,
-                0x5A,
-                0x10,
-                light_code,
-                0x00,
-            ],
-        )
+        payload = self._build_light_setting_payload(mode, seq_no)
         self._queue_send(payload)
 
     def send_light_setting_on_data(self, mode):
         lock = self._ensure_lock()
         with lock:
-            seq_no = self.page_34_count
-            light_code = self.light_modes[self.light_name][mode][1]
-            self.values["changed_timestamp"] = datetime.now()
+            pending = self._pending_light_setting
+            if pending is None or pending["mode"] != mode:
+                # Mode changed while a retry was queued; drop the retry.
+                return
+            pending["retry_count"] += 1
+            pending["last_sent"] = datetime.now()
+            seq_no = pending["seq_no"]
 
-        payload = array.array(
-            "B",
-            [
-                0x22,
-                0x01,
-                0x28,
-                seq_no,
-                0x5A,
-                0x10,
-                light_code,
-                0x00,
-            ],
-        )
+        payload = self._build_light_setting_payload(mode, seq_no)
         self._queue_send(payload)
 
     def send_light_mode(self, mode, auto_id=None):
