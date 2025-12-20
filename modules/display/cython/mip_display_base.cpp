@@ -2,12 +2,13 @@
 
 
 void MipDisplayBase::init_common() {
-  status_quit = false;
+  status_quit.store(false, std::memory_order_relaxed);
 
   gpio_write_value(GPIO_DISP, true);
   gpio_write_value(GPIO_VCOMSEL, true);
   usleep(6);
 
+  clear();
   set_brightness(0);
   usleep(6);
 
@@ -17,10 +18,10 @@ void MipDisplayBase::init_common() {
 void MipDisplayBase::quit() {
   {
     std::unique_lock<std::mutex> ul(mutex_);
-    if(status_quit) {
+    if(status_quit.load(std::memory_order_acquire)) {
       return;
     }
-    status_quit = true;
+    status_quit.store(true, std::memory_order_release);
   } //release lock
   cv_.notify_all();
   for(unsigned int i = 0; i < threads_.size(); i++) {
@@ -30,21 +31,25 @@ void MipDisplayBase::quit() {
   }
   threads_.clear();
 
-  set_brightness(0);
-  clear();
+  // Ensure no concurrent update() is accessing buffers or backend while we tear down.
+  {
+    std::lock_guard<std::mutex> guard(update_mutex_);
 
-  gpio_write_value(GPIO_DISP, false); //OFF
-  usleep(100000);
+    clear();
+    set_brightness(0);
+    gpio_write_value(GPIO_DISP, false); //OFF
+    usleep(100000);
 
-  close_backend();
+    close_backend();
 
-  if(buf_image != nullptr) {
-    delete[] buf_image;
-    buf_image = nullptr;
-  }
-  if(pre_buf_image != nullptr) {
-    delete[] pre_buf_image;
-    pre_buf_image = nullptr;
+    if(buf_image != nullptr) {
+      delete[] buf_image;
+      buf_image = nullptr;
+    }
+    if(pre_buf_image != nullptr) {
+      delete[] pre_buf_image;
+      pre_buf_image = nullptr;
+    }
   }
 }
 
@@ -231,10 +236,17 @@ void MipDisplayBase::draw_worker() {
 }
 
 bool MipDisplayBase::get_status_quit() {
-  return status_quit;
+  return status_quit.load(std::memory_order_acquire);
 }
 
 void MipDisplayBase::update(unsigned char* image) {
+  std::lock_guard<std::mutex> guard(update_mutex_);
+  if(get_status_quit()) {
+    return;
+  }
+  if(buf_image == nullptr || pre_buf_image == nullptr || conv_color == nullptr) {
+    return;
+  }
 
   clear_buf();
   int update_lines = (this->*conv_color)(image);
@@ -403,9 +415,6 @@ int MipDisplayBase::conv_3bit_27colors(unsigned char* image) {
     }
     t_index = !t_index;
 
-    // next start
-    buf_image_index += 2;
-
     // diff check and update_lines
     if(memcmp(buf_image_diff_index, pre_buf_image_diff_index, BUF_WIDTH) != 0) {
       memcpy(pre_buf_image_diff_index, buf_image_diff_index, BUF_WIDTH);
@@ -421,8 +430,120 @@ int MipDisplayBase::conv_3bit_27colors(unsigned char* image) {
 }
 
 int MipDisplayBase::conv_4bit_64colors(unsigned char* image) {
+
+  unsigned char *image_index = image;
+  char *buf_image_index = buf_image;
+  char *buf_image_index_high = buf_image;
+  char b0, b1, b2, b3, b4, b5, b6, b7;
+
+  char *buf_image_diff_index = buf_image;
+  char *pre_buf_image_diff_index = pre_buf_image;
+  char *buf_image_update_index = buf_image;
   int update_lines = 0;
-  (void)image;
+
+  int width_24byte = int(WIDTH*3/24);
+
+  //riemersma_dithering(image);
+
+  buf_image_index += 2;      
+  buf_image_index_high += 2 + HALF_BUF_WIDTH_64COLORS + 2;
+  for(int y = 0; y < HEIGHT; y++) {
+    for(int x = 0; x < width_24byte; x++) {
+      b0 = *image_index++;
+      b1 = *image_index++;
+      b2 = *image_index++;
+      b3 = *image_index++;
+      b4 = *image_index++;
+      b5 = *image_index++;
+      b6 = *image_index++;
+      b7 = *image_index++;
+      *buf_image_index++ = 
+        ((b0 & 0b01000000) << 1) |
+        (b1 & 0b01000000) |
+        ((b2 & 0b01000000) >> 1) |
+        ((b3 & 0b01000000) >> 2) |
+        ((b4 & 0b01000000) >> 3) |
+        ((b5 & 0b01000000) >> 4) |
+        ((b6 & 0b01000000) >> 5) |
+        ((b7 & 0b01000000) >> 6);
+      *buf_image_index_high++ =
+        (b0 & 0b10000000) |
+        ((b1 & 0b10000000) >> 1) |
+        ((b2 & 0b10000000) >> 2) |
+        ((b3 & 0b10000000) >> 3) |
+        ((b4 & 0b10000000) >> 4) |
+        ((b5 & 0b10000000) >> 5) |
+        ((b6 & 0b10000000) >> 6) |
+        ((b7 & 0b10000000) >> 7);
+      
+      b0 = *image_index++;
+      b1 = *image_index++;
+      b2 = *image_index++;
+      b3 = *image_index++;
+      b4 = *image_index++;
+      b5 = *image_index++;
+      b6 = *image_index++;
+      b7 = *image_index++;
+      *buf_image_index++ = 
+        ((b0 & 0b01000000) << 1) |
+        (b1 & 0b01000000) |
+        ((b2 & 0b01000000) >> 1) |
+        ((b3 & 0b01000000) >> 2) |
+        ((b4 & 0b01000000) >> 3) |
+        ((b5 & 0b01000000) >> 4) |
+        ((b6 & 0b01000000) >> 5) |
+        ((b7 & 0b01000000) >> 6);
+      *buf_image_index_high++ =
+        (b0 & 0b10000000) |
+        ((b1 & 0b10000000) >> 1) |
+        ((b2 & 0b10000000) >> 2) |
+        ((b3 & 0b10000000) >> 3) |
+        ((b4 & 0b10000000) >> 4) |
+        ((b5 & 0b10000000) >> 5) |
+        ((b6 & 0b10000000) >> 6) |
+        ((b7 & 0b10000000) >> 7);
+
+      b0 = *image_index++;
+      b1 = *image_index++;
+      b2 = *image_index++;
+      b3 = *image_index++;
+      b4 = *image_index++;
+      b5 = *image_index++;
+      b6 = *image_index++;
+      b7 = *image_index++;
+      *buf_image_index++ = 
+        ((b0 & 0b01000000) << 1) |
+        (b1 & 0b01000000) |
+        ((b2 & 0b01000000) >> 1) |
+        ((b3 & 0b01000000) >> 2) |
+        ((b4 & 0b01000000) >> 3) |
+        ((b5 & 0b01000000) >> 4) |
+        ((b6 & 0b01000000) >> 5) |
+        ((b7 & 0b01000000) >> 6);
+      *buf_image_index_high++ =
+        (b0 & 0b10000000) |
+        ((b1 & 0b10000000) >> 1) |
+        ((b2 & 0b10000000) >> 2) |
+        ((b3 & 0b10000000) >> 3) |
+        ((b4 & 0b10000000) >> 4) |
+        ((b5 & 0b10000000) >> 5) |
+        ((b6 & 0b10000000) >> 6) |
+        ((b7 & 0b10000000) >> 7);
+    }
+  
+    // next start
+    buf_image_index += 2 + HALF_BUF_WIDTH_64COLORS + 2;
+    buf_image_index_high += 2 + HALF_BUF_WIDTH_64COLORS + 2;
+    
+    if(memcmp(buf_image_diff_index, pre_buf_image_diff_index, BUF_WIDTH) != 0) {
+      memcpy(pre_buf_image_diff_index, buf_image_diff_index, BUF_WIDTH);
+      memcpy(buf_image_update_index, pre_buf_image_diff_index, BUF_WIDTH);
+      update_lines++;
+      buf_image_update_index += BUF_WIDTH;
+    }
+    buf_image_diff_index += BUF_WIDTH;
+    pre_buf_image_diff_index += BUF_WIDTH;
+  }
   return update_lines;
 }
 
@@ -484,4 +605,3 @@ int MipDisplayBase::conv_4bit_343colors(unsigned char* image) {
 void MipDisplayBase::draw(std::vector<char>& buf_queue) {
   spi_write_bytes(buf_queue.data(), buf_queue.size());
 }
-

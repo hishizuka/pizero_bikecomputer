@@ -107,7 +107,7 @@ class MipDisplayBase(Display):
         self.buff_width = int(self.size[0] * self.bpp / 8) + 2  # for 3bit update mode
         if self.color == 64:
             self.buff_width += 2
-        self.spi_max_rows = int(self.spi_max_buf_size/self.buff_width)
+        self.spi_max_rows = int((self.spi_max_buf_size - 2) / self.buff_width)
 
         self.img_buff_rgb8 = np.zeros((self.size[1], self.buff_width), dtype="uint8")
         self.pre_img = np.zeros((self.size[1], self.buff_width), dtype="uint8")
@@ -339,8 +339,9 @@ class MipDisplayBase(Display):
     def quit(self):
         self.quit_status = True
         asyncio.create_task(self.draw_queue.put(None))
-        self.set_brightness(0)
         self.clear()
+        self.gpio_write(self.DISP, 0)
+        self.set_brightness(0)
         self.spi_close()
 
     def screen_flash_long(self):

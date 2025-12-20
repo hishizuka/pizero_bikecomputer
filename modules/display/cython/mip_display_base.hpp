@@ -7,6 +7,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <atomic>
 #include <queue>
 #include <vector>
 #include <thread>
@@ -46,9 +47,10 @@ class MipDisplayBase {
     char buf_inversion[2] = {0b00010100,0x00};
     float inversion_interval = 0.25f;
 
-    const char thresholds_3bit_27colors[2] = {216, 128};
-    const char thresholds_4bit_343colors[2][3] = {{96, 160, 226}, {64, 128, 192}};
-    const char add_bit[8] = {0b10000000, 0b01000000, 0b00100000, 0b00010000, 0b00001000, 0b00000100, 0b00000010, 0b00000001};
+    // NOTE: These are compared against uint8 image data; keep them unsigned to avoid sign-extension bugs.
+    const unsigned char thresholds_3bit_27colors[2] = {216, 128};
+    const unsigned char thresholds_4bit_343colors[2][3] = {{96, 160, 226}, {64, 128, 192}};
+    const unsigned char add_bit[8] = {0b10000000, 0b01000000, 0b00100000, 0b00010000, 0b00001000, 0b00000100, 0b00000010, 0b00000001};
 
     // for riemersma dithering
     int weights[16];
@@ -69,9 +71,10 @@ class MipDisplayBase {
 
     std::queue<std::vector<char> > queue_;
     std::mutex mutex_;
+    std::mutex update_mutex_;
     std::condition_variable cv_;
     std::vector<std::thread> threads_;
-    bool status_quit = false;
+    std::atomic<bool> status_quit{false};
 
     void clear_buf();
 
@@ -113,4 +116,3 @@ class MipDisplayBase {
 };
 
 #endif
-
