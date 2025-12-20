@@ -217,25 +217,24 @@ class Button_Config:
 
         w_index = self.config.gui.stack_widget.currentIndex()
         if w_index == 1:
-            if (
-                self.config.gui.main_page.widget(
-                    self.config.gui.main_page.currentIndex()
-                )
-                == self.config.gui.map_widget
-            ):
-                if not self.G_BUTTON_MODE_IS_CHANGE:
-                    self.G_PAGE_MODE = "MAP"
-            elif (
-                self.config.gui.main_page.widget(
-                    self.config.gui.main_page.currentIndex()
-                )
-                == self.config.gui.course_profile_graph_widget
-            ):
-                if not self.G_BUTTON_MODE_IS_CHANGE:
-                    self.G_PAGE_MODE = "COURSE_PROFILE"
+            current_widget = self.config.gui.main_page.widget(
+                self.config.gui.main_page.currentIndex()
+            )
+            if current_widget == self.config.gui.map_widget:
+                mode_key = "MAP"
+            elif current_widget == self.config.gui.course_profile_graph_widget:
+                mode_key = "COURSE_PROFILE"
             else:
-                if not self.G_BUTTON_MODE_IS_CHANGE:
-                    self.G_PAGE_MODE = "MAIN"
+                mode_key = "MAIN"
+
+            pages = self.G_BUTTON_MODE_PAGES.get(mode_key)
+            if pages:
+                mode_index = self.G_BUTTON_MODE_INDEX.get(mode_key, 0)
+                if mode_index < 0 or mode_index >= len(pages):
+                    mode_index = 0
+                self.G_PAGE_MODE = pages[mode_index]
+            else:
+                self.G_PAGE_MODE = mode_key
             # for no implementation
             if self.G_PAGE_MODE not in self.G_BUTTON_DEF[button_hard]:
                 self.G_PAGE_MODE = "MAIN"
