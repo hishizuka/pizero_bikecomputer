@@ -29,7 +29,7 @@ cdef extern from "cxd5610_rpi.h":
     timespec timestamp
 
   int cxd5610_create(cxd5610_ctx **out_ctx)
-  int cxd5610_read(cxd5610_ctx *ctx, cxd5610_data *out, int timeout_ms)
+  int cxd5610_peek(cxd5610_ctx *ctx, cxd5610_data *out)
   void cxd5610_close(cxd5610_ctx *ctx)
 
 
@@ -63,10 +63,10 @@ cdef class CXD5610:
       cxd5610_close(self.ctx)
       self.ctx = NULL
 
-  cpdef int poll(self, int timeout_ms=1000):
+  cpdef int peek(self):
     if self.ctx is NULL:
       raise ValueError("CXD5610 not initialized")
-    return cxd5610_read(self.ctx, &self.data, timeout_ms)
+    return cxd5610_peek(self.ctx, &self.data)
 
   @property
   def lat(self):

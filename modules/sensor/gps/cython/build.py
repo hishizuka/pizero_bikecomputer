@@ -1,3 +1,4 @@
+import errno
 import time
 from datetime import datetime, timezone
 
@@ -24,16 +25,19 @@ def main():
         print(f"[INIT] failed (errno={exc.errno}): {exc}")
         return
 
-    print("[INIT] CXD5610 ready, polling every 1s. Ctrl+C to stop.")
+    print("[INIT] CXD5610 ready, reading latest data every 1s. Ctrl+C to stop.")
 
     try:
         while True:
             try:
-                ret = gps.poll(1000)  # wait up to 1s for a packet
+                ret = gps.peek()
                 if ret < 0:
-                    print(f"[WARN] poll returned {ret}")
+                    if ret != -errno.EAGAIN:
+                        print(f"[WARN] peek returned {ret}")
+                    time.sleep(1)
+                    continue
             except OSError as exc:
-                print(f"[ERROR] poll failed (errno={exc.errno}): {exc}")
+                print(f"[ERROR] peek failed (errno={exc.errno}): {exc}")
                 time.sleep(1)
                 continue
 
