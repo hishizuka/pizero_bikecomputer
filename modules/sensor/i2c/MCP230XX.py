@@ -49,7 +49,7 @@ class ButtonIOExpander(i2c.i2c):
     CHANNELS = 8
 
     # Button reads per second.
-    FPS = 30
+    FPS = 15
 
     blt = {} #bit lookup table with intf value
 

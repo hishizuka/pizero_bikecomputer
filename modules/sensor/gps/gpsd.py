@@ -44,11 +44,6 @@ try:
         _SENSOR_GPS_AIOGPS = True
         _SENSOR_GPS_GPSD = True
         _SENSER_GPS_STR = "AIOGPS"
-    else:
-        host, port = _get_gpsd_host_port()
-        app_logger.info(
-            f"[GPSD] aiogps available, but gpsd is not reachable at {host}:{port}; disabling GPSD"
-        )
 except Exception:
     try:
         from gps3 import agps3threaded
@@ -60,11 +55,6 @@ except Exception:
             _SENSOR_GPS_GPS3 = True
             _SENSOR_GPS_GPSD = True
             _SENSER_GPS_STR = "GPS3"
-        else:
-            host, port = _get_gpsd_host_port()
-            app_logger.info(
-                f"[GPSD] gps3 available, but gpsd is not reachable at {host}:{port}; disabling GPSD"
-            )
     except ImportError:
         pass
     except Exception:  # noqa
@@ -159,10 +149,13 @@ class GPSD(AbstractSensorGPS):
 
     async def update_with_aiogps(self):
         rx_timeout = 5.0  # seconds; prevent aiogps from blocking forever without data
+        host, port = _get_gpsd_host_port()
 
         while not self.quit_status:
             try:
-                async with aiogps.aiogps() as gpsd:
+                async with aiogps.aiogps(
+                    connection_args={"host": host, "port": port}
+                ) as gpsd:
                     self.aiogps_client = gpsd
                     gpsd.alive_opts["rx_timeout"] = rx_timeout
                     while not self.quit_status:
