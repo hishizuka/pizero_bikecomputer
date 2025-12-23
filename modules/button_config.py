@@ -15,7 +15,7 @@ class Button_Config:
             "MAIN": {
                 "A": ("scroll_prev", "get_screenshot"),
                 "B": ("count_laps", "reset_count"),
-                "C": ("multiscan", ""),
+                "C": ("multiscan", "toggle_fake_trainer"),
                 "D": ("start_and_stop_manual", ""),
                 "E": ("scroll_next", "enter_menu"),
             },
@@ -105,6 +105,7 @@ class Button_Config:
                 "NAVIGATION_RIGHT": ("scroll_next", ""),
                 "SHIFT_UP_LEFT": ("", ""),
                 "SHIFT_UP_RIGHT": ("", ""),
+                "SHIFT_UP_BOTH": ("", ""),
                 "A": ("start_and_stop_manual", ""),
                 "B": ("count_laps", "reset_count"),
                 "Y": ("enter_menu", ""),
@@ -117,6 +118,7 @@ class Button_Config:
                 "NAVIGATION_RIGHT": ("press_space", ""),
                 "SHIFT_UP_LEFT": ("", ""),
                 "SHIFT_UP_RIGHT": ("", ""),
+                "SHIFT_UP_BOTH": ("", ""),
                 "A": ("press_space", ""),
                 "B": ("back_menu", ""),
                 "Y": ("", ""),
@@ -129,6 +131,7 @@ class Button_Config:
                 "NAVIGATION_RIGHT": ("scroll_next", "map_overlay_next_time"),
                 "SHIFT_UP_LEFT": ("map_zoom_minus", ""),
                 "SHIFT_UP_RIGHT": ("map_zoom_plus", ""),
+                "SHIFT_UP_BOTH": ("", ""),
                 "A": ("start_and_stop_manual", ""),
                 "B": ("count_laps", "reset_count"),
                 "Y": ("change_mode", ""),
@@ -141,6 +144,7 @@ class Button_Config:
                 "NAVIGATION_RIGHT": ("map_move_x_plus", "map_overlay_next_time"),
                 "SHIFT_UP_LEFT": ("map_zoom_minus", ""),
                 "SHIFT_UP_RIGHT": ("map_zoom_plus", ""),
+                "SHIFT_UP_BOTH": ("", ""),
                 "A": ("start_and_stop_manual", ""),
                 "B": ("count_laps", "reset_count"),
                 "Y": ("change_mode", ""),
@@ -153,6 +157,7 @@ class Button_Config:
                 "NAVIGATION_RIGHT": ("scroll_next", ""),
                 "SHIFT_UP_LEFT": ("map_zoom_minus", ""),
                 "SHIFT_UP_RIGHT": ("map_zoom_plus", ""),
+                "SHIFT_UP_BOTH": ("", ""),
                 "A": ("start_and_stop_manual", ""),
                 "B": ("count_laps", "reset_count"),
                 "Y": ("change_mode", ""),
@@ -165,6 +170,7 @@ class Button_Config:
                 "NAVIGATION_RIGHT": ("map_move_x_plus", ""),
                 "SHIFT_UP_LEFT": ("map_zoom_minus", ""),
                 "SHIFT_UP_RIGHT": ("map_zoom_plus", ""),
+                "SHIFT_UP_BOTH": ("", ""),
                 "A": ("start_and_stop_manual", ""),
                 "B": ("count_laps", "reset_count"),
                 "Y": ("change_mode", ""),
@@ -324,8 +330,10 @@ class Button_Config:
         func_str = self.G_BUTTON_DEF[button_hard][self.G_PAGE_MODE][press_button][index]
         if func_str in ("", "dummy"):
             return
-        
+
         getattr(self.config.gui, func_str)()
+        #self.config.loop.call_soon_threadsafe(self.config.gui.scroll, 1)
+        #self.config.loop.call_soon_threadsafe(self.config.gui.scroll_next)
 
     def change_mode(self):
         # check MAP

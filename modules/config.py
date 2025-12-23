@@ -396,6 +396,7 @@ class Config:
     # Keep only the user-facing enable flag here; protocol/tuning defaults live in zwift_click_v2.py.
     G_ZWIFT_CLICK_V2 = {
         "STATUS": False,
+        "ADDRESS": "",
     }
 
     #######################

@@ -121,6 +121,7 @@ class GUI_PyQt(GUI_Qt_Base):
     signal_menu_back_button = Signal()
     signal_get_screenshot = Signal()
     signal_multiscan = Signal()
+    signal_fake_trainer = Signal()
     signal_start_and_stop_manual = Signal()
     signal_count_laps = Signal()
     signal_reset_count = Signal()
@@ -209,6 +210,7 @@ class GUI_PyQt(GUI_Qt_Base):
             # other
             self.signal_get_screenshot.connect(self.screenshot)
             self.signal_multiscan.connect(self.multiscan_internal)
+            self.signal_fake_trainer.connect(self.fake_trainer_internal)
 
             self.signal_start_and_stop_manual.connect(
                 self.start_and_stop_manual_internal
@@ -374,7 +376,7 @@ class GUI_PyQt(GUI_Qt_Base):
                     if (
                         k == "ALTITUDE_GRAPH"
                         and "i2c_baro_temp"
-                        in self.config.logger.sensor.sensor_i2c.sensor
+                        in self.sensor.sensor_i2c.sensor
                     ):
                         self.altitude_graph_widget = (
                             pyqt_value_graph.AltitudeGraphWidget(
@@ -384,7 +386,7 @@ class GUI_PyQt(GUI_Qt_Base):
                         self.main_page.addWidget(self.altitude_graph_widget)
                     elif (
                         k == "ACC_GRAPH"
-                        and self.config.logger.sensor.sensor_i2c.motion_sensor["ACC"]
+                        and self.sensor.sensor_i2c.motion_sensor["ACC"]
                     ):
                         self.acc_graph_widget = (
                             pyqt_value_graph.AccelerationGraphWidget(
@@ -635,15 +637,15 @@ class GUI_PyQt(GUI_Qt_Base):
                 (
                     w == self.course_profile_graph_widget
                     and (
-                        not self.config.logger.course.is_set
-                        or not self.config.logger.course.has_altitude
+                        not self.course.is_set
+                        or not self.course.has_altitude
                         or not self.config.G_COURSE_INDEXING
                     )
                 )
                 or (
                     w == self.cuesheet_widget
                     and (                
-                            not self.config.logger.course.course_points.is_set
+                            not self.course.course_points.is_set
                             or not self.config.G_COURSE_INDEXING
                             or not self.config.G_CUESHEET_DISPLAY_NUM
                     ) 
@@ -673,6 +675,12 @@ class GUI_PyQt(GUI_Qt_Base):
             self.on_change_main_page(self.multiscan_back_index)
             self.main_page.setCurrentIndex(self.multiscan_back_index)
 
+    def toggle_fake_trainer(self):
+        self.signal_fake_trainer.emit()
+
+    def fake_trainer_internal(self):
+        self.sensor.sensor_ble.toggle_fake_trainer()
+
     def get_screenshot(self):
         self.signal_get_screenshot.emit()
 
@@ -701,7 +709,7 @@ class GUI_PyQt(GUI_Qt_Base):
         self.show_message(name, body, limit)
 
     def turn_on_off_light_internal(self):
-        self.config.logger.sensor.sensor_ant.set_light_mode("ON_OFF_FLASH_LOW")
+        self.sensor.sensor_ant.set_light_mode("ON_OFF_FLASH_LOW")
 
     def change_menu_page(self, page, focus_reset=True):
         self.stack_widget.setCurrentIndex(page)

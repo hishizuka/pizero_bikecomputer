@@ -66,6 +66,10 @@ BUTTON_MASKS: Dict[int, str] = {
     0x08000: "onOffRight",
 }
 
+SHIFT_UP_LEFT = "shiftUpLeft"
+SHIFT_UP_RIGHT = "shiftUpRight"
+SHIFT_UP_BOTH = "shiftUpBoth"
+
 DEFAULT_LONG_PRESS_SECONDS = 1.0
 DEFAULT_RELEASE_TIMEOUT_SECONDS = 1.2
 DEFAULT_REPEAT_INTERVAL_SECONDS = 0.5
@@ -146,6 +150,11 @@ class PressDurationClassifier:
 
         # Update currently pressed buttons.
         self.observe_pressed(side, source, pressed, now=now_mono)
+
+    def suppress_buttons(self, side: str, source: str, buttons: Iterable[str]) -> None:
+        """Remove active buttons without emitting a release classification."""
+        for button in _dedupe(buttons):
+            self._active.pop((side, source, button), None)
 
     def flush_long_presses(self, now: Optional[float] = None) -> None:
         now_mono = time.monotonic() if now is None else now
@@ -314,22 +323,39 @@ def parse_click_keypad_status(payload: bytes) -> tuple[List[str], List[str]]:
     return pressed, released
 
 
+def _apply_shift_up_combo(buttons: Iterable[str]) -> List[str]:
+    """Add a synthetic combo button when both shift-up buttons are pressed."""
+    pressed = _dedupe(buttons)
+    if SHIFT_UP_LEFT in pressed and SHIFT_UP_RIGHT in pressed:
+        pressed = [b for b in pressed if b not in (SHIFT_UP_LEFT, SHIFT_UP_RIGHT)]
+        pressed.append(SHIFT_UP_BOTH)
+    return pressed
+
+
 async def connect_and_listen(
-    target: ZwiftClickSide,
+    address: str,
+    side: str,
     classifier: PressDurationClassifier,
     stop_event: asyncio.Event,
+    *,
+    name: Optional[str] = None,
     log: Callable[[str], None] = print,
-) -> None:
+    on_connected: Optional[Callable[[str, str, Optional[str]], None]] = None,
+) -> bool:
     """Connect to a single Click V2 and feed button events to callback."""
+    connected = False
     try:
-        async with BleakClient(target.device) as client:
+        async with BleakClient(address) as client:
+            connected = True
+            if on_connected is not None:
+                on_connected(side, address, name)
             await client.start_notify(
                 ASYNC_CHAR,
-                lambda _, data: handle_notification(target.side, data, classifier, log=log),
+                lambda _, data: handle_notification(side, data, classifier, log=log),
             )
             await client.start_notify(
                 SYNC_TX_CHAR,
-                lambda _, data: handle_notification(target.side, data, classifier, log=log),
+                lambda _, data: handle_notification(side, data, classifier, log=log),
             )
 
             # Handshake sequence mirrors Dart: RIDE_ON then FF 04 00.
@@ -341,9 +367,12 @@ async def connect_and_listen(
             while client.is_connected and not stop_event.is_set():
                 await asyncio.sleep(0.2)
     except asyncio.CancelledError:
-        stop_event.set()
+        if connected:
+            stop_event.set()
+        return connected
     except Exception as exc:  # noqa: BLE errors are runtime
-        log(f"[{target.side}] error: {exc}")
+        log(f"[{side}] error: {exc}")
+    return connected
 
 
 def handle_notification(
@@ -362,7 +391,7 @@ def handle_notification(
         return
 
     if data.startswith(RESPONSE_STOPPED_CLICK_V2_VARIANT_1) or data.startswith(RESPONSE_STOPPED_CLICK_V2_VARIANT_2):
-        log(f"[{side}] Device stopped sending events; open Zwift app once this session to re-enable.")
+        #log(f"[{side}] Device stopped sending events; open Zwift app once this session to re-enable.")
         return
 
     # Ignore the startup public-key packet (RideOn + response header).
@@ -374,6 +403,10 @@ def handle_notification(
 
     if opcode == MESSAGE_TYPE_RIDE_NOTIFICATION:
         buttons = parse_ride_keypad_status(payload)
+        if SHIFT_UP_LEFT in buttons and SHIFT_UP_RIGHT in buttons:
+            # Suppress single-button releases when the combo is active.
+            classifier.suppress_buttons(side, "ride", [SHIFT_UP_LEFT, SHIFT_UP_RIGHT])
+        buttons = _apply_shift_up_combo(buttons)
         classifier.observe_snapshot(side, "ride", buttons)
     elif opcode == MESSAGE_TYPE_CLICK_NOTIFICATION:
         pressed, released = parse_click_keypad_status(payload)
@@ -401,6 +434,8 @@ async def listen(
     scan_interval_seconds: float = DEFAULT_SCAN_INTERVAL_SECONDS,
     reconnect_delay_seconds: float = DEFAULT_RECONNECT_DELAY_SECONDS,
     prefer_left: bool = True,
+    preferred_address: Optional[str] = None,
+    on_connected: Optional[Callable[[str, str, Optional[str]], None]] = None,
     log: Callable[[str], None] = print,
 ) -> None:
     """Scan, connect, and dispatch button presses (short/long) via callback.
@@ -418,26 +453,53 @@ async def listen(
     timeout_task = asyncio.create_task(_press_timeout_poller(classifier, stop_event))
     try:
         while not stop_event.is_set():
-            devices = await scan_for_click_v2(timeout=scan_timeout_seconds)
-            if not devices:
+            if preferred_address:
+                connected = await connect_and_listen(
+                    preferred_address,
+                    "left",
+                    classifier,
+                    stop_event,
+                    name=None,
+                    log=log,
+                    on_connected=on_connected,
+                )
+                if stop_event.is_set():
+                    return
+                if connected:
+                    if not scan_forever:
+                        return
+                    await asyncio.sleep(reconnect_delay_seconds)
+                    continue
+                preferred_address = None
+            devices = await scan_for_click_v2(
+                timeout=scan_timeout_seconds,
+                prefer_left=prefer_left,
+            )
+            selected = [d for d in devices if d.side == "left"]
+            if not selected:
                 if not scan_forever:
                     log("Zwift Click V2 not found. Ensure the device is awake and advertising.")
                     return
                 await asyncio.sleep(scan_interval_seconds)
                 continue
 
-            # Prefer left (it relays both sides). Fall back to all found devices.
-            selected = [d for d in devices if d.side == "left"] or devices
-            if not prefer_left:
-                selected = devices
-
             log("Connecting to:")
             for d in selected:
                 label = d.device.name or d.device.address
-                log(f"  - {d.side}: {label}")
+                log(f"  - {label} ({d.device.address})")
 
             tasks = [
-                asyncio.create_task(connect_and_listen(d, classifier, stop_event, log=log))
+                asyncio.create_task(
+                    connect_and_listen(
+                        d.device.address,
+                        d.side,
+                        classifier,
+                        stop_event,
+                        name=d.device.name,
+                        log=log,
+                        on_connected=on_connected,
+                    )
+                )
                 for d in selected
             ]
             stop_task = asyncio.create_task(stop_event.wait())
@@ -465,9 +527,13 @@ async def listen(
         await asyncio.gather(timeout_task, return_exceptions=True)
 
 
-async def scan_for_click_v2(timeout: float = 10.0) -> List[ZwiftClickSide]:
+async def scan_for_click_v2(
+    timeout: float = 10.0,
+    prefer_left: bool = True,
+) -> List[ZwiftClickSide]:
     """Scan for Click V2 left/right units using manufacturer data."""
     found: dict[str, ZwiftClickSide] = {}
+    found_preferred = asyncio.Event()
 
     def classify(ad: AdvertisementData) -> Optional[str]:
         md = ad.manufacturer_data.get(ZWIFT_MANUFACTURER_ID)
@@ -484,9 +550,18 @@ async def scan_for_click_v2(timeout: float = 10.0) -> List[ZwiftClickSide]:
         side = classify(adv)
         if side:
             found[device.address] = ZwiftClickSide(device=device, side=side)
+            if prefer_left and side == "left":
+                # Stop scanning early when the preferred side is found.
+                found_preferred.set()
 
     async with BleakScanner(detection_callback=detection_callback) as _:
-        await asyncio.sleep(timeout)
+        if prefer_left:
+            try:
+                await asyncio.wait_for(found_preferred.wait(), timeout=timeout)
+            except asyncio.TimeoutError:
+                pass
+        else:
+            await asyncio.sleep(timeout)
 
     return list(found.values())
 
@@ -537,6 +612,11 @@ async def main() -> None:
         default=DEFAULT_REPEAT_INTERVAL_SECONDS,
         help="Fallback repeat interval for duration estimation when release packet is missing.",
     )
+    parser.add_argument(
+        "--address",
+        default="",
+        help="BLE address to connect directly (skip scan).",
+    )
     args = parser.parse_args()
 
     stop_event = asyncio.Event()
@@ -559,6 +639,7 @@ async def main() -> None:
         repeat_interval_seconds=args.repeat_interval_seconds,
         scan_timeout_seconds=DEFAULT_SCAN_TIMEOUT_SECONDS,
         scan_forever=False,
+        preferred_address=args.address or None,
         log=print,
     )
 

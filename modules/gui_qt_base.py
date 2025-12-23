@@ -48,6 +48,14 @@ class GUI_Qt_Base(QtCore.QObject):
     def logger(self):
         return self.config.logger
 
+    @property
+    def sensor(self):
+        return self.logger.sensor
+
+    @property
+    def course(self):
+        return self.logger.course
+
     # need override
     @property
     def grab_func(self):
@@ -90,15 +98,15 @@ class GUI_Qt_Base(QtCore.QObject):
             await self.msg_event.wait()
             self.msg_event.clear()
             await asyncio.sleep(0.1)
-    
+
     async def quit(self):
         self.msg_event.set()
         await self.msg_queue.put(None)
         await self.config.quit()
-    
+
     def exec(self):
         asyncio.run(self.config.start_coroutine(), loop_factory=qasync.QEventLoop)
-        
+
     def _grab_in_target_format(self):
         """Grab current frame and convert only if format differs."""
         image = None
