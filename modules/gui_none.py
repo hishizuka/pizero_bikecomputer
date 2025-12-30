@@ -10,10 +10,20 @@ class GUI_None():
         self.config = config
         self.config.gui = self
 
+        asyncio.run(self._run())
+
+    async def _run(self):
         try:
-            asyncio.run(self.config.start_coroutine())
-        except KeyboardInterrupt:
-            asyncio.run(self.config.quit())
+            await self.config.start_coroutine()
+        except asyncio.CancelledError:
+            # Allow graceful shutdown when Ctrl+C cancels the main task.
+            pass
+        finally:
+            if self.config.app_close_event is not None and not self.config.app_close_event.is_set():
+                try:
+                    await self.config.quit()
+                except asyncio.CancelledError:
+                    pass
 
     async def set_boot_status(self, text):
         print(text)
@@ -26,4 +36,3 @@ class GUI_None():
 
     def scroll_prev(self):
         pass
-

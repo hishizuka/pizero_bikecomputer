@@ -15,7 +15,6 @@ class MipDisplayBase(Display):
     VCOMSEL = 24  # 18pin
     #'''
     BACKLIGHT = 18  # 12pin with hardware PWM in pigpio
-    BACKLIGHT_SWITCH = 24  # 18pin GPIO.BOARD
 
     # update mode
     # https://www.j-display.com/product/pdf/Datasheet/3LPM027M128C_specification_ver02.pdf

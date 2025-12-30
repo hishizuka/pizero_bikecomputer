@@ -186,7 +186,7 @@ class AccelerationGraphWidget(ScreenWidget):
         plot.setXRange(0, self.config.G_GUI_ACC_TIME_RANGE)
         plot.setMouseEnabled(x=False, y=False)
 
-        self.layout.addWidget(plot, 1, 0, 2, 4)
+        self.layout.addWidget(plot, self.plot_y, self.plot_x, -1, -1)
 
     def start(self):
         self.timer.start(self.config.G_REALTIME_GRAPH_INTERVAL)
@@ -280,7 +280,7 @@ class AltitudeGraphWidget(ScreenWidget):
         self.y_range = 15
         self.y_shift = 0  # self.y_ra  nge * 0.25
 
-        self.layout.addWidget(plot, 1, 0, 2, 4)
+        self.layout.addWidget(plot, self.plot_y, self.plot_x, -1, -1)
 
     def set_font_size(self, length):
         self.font_size = int(length / 7)

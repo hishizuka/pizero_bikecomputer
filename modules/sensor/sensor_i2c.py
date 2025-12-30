@@ -1339,7 +1339,7 @@ class SensorI2C(Sensor):
             t -= 1
 
     def detect_bhi360_s_c(self):
-        if not _i2c_addr_present(BHI360_I2C_ADDR, bus=1):
+        if not _i2c_addr_present(BHI360_I2C_ADDR):
             return False
         try:
             # Prefer a prebuilt Cython extension if available.
@@ -1491,7 +1491,7 @@ class SensorI2C(Sensor):
             return False
     
     def detect_pressure_bmp581_c(self):
-        if not _i2c_addr_present(BMP5_I2C_ADDR, bus=1):
+        if not _i2c_addr_present(BMP5_I2C_ADDR):
             return False
         try:
             # Prefer a prebuilt Cython extension if available.
@@ -1672,7 +1672,7 @@ class SensorI2C(Sensor):
             return False
 
     def detect_motion_bmi270_c(self):
-        if not _i2c_addr_present(BMI270_I2C_ADDR, bus=1):
+        if not _i2c_addr_present(BMI270_I2C_ADDR):
             return False
         try:
             # Prefer a prebuilt Cython extension if available.
@@ -1725,7 +1725,7 @@ class SensorI2C(Sensor):
             return False
 
     def detect_motion_bmm150_c(self):
-        if not _i2c_addr_present(BMM150_I2C_ADDR, bus=1):
+        if not _i2c_addr_present(BMM150_I2C_ADDR):
             return False
         try:
             # Prefer a prebuilt Cython extension if available.
@@ -1746,7 +1746,7 @@ class SensorI2C(Sensor):
             return False
 
     def detect_motion_bmm350(self):
-        if not _i2c_addr_present(BMM350_I2C_ADDR, bus=1):
+        if not _i2c_addr_present(BMM350_I2C_ADDR):
             return False
         try:
             # Prefer a prebuilt Cython extension if available.

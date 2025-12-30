@@ -18,7 +18,6 @@
 #define GPIO_DISP 25  // 22pin
 #define GPIO_VCOMSEL 24  // 18pin
 #define GPIO_BACKLIGHT 18  // 12pin (backend may treat as on/off)
-#define GPIO_BACKLIGHT_SWITCH 24  // 18pin
 #define GPIO_BACKLIGHT_FREQ 64
 
 class MipDisplayBase {
