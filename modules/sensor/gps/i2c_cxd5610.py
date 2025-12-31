@@ -13,22 +13,22 @@ _SENSOR_GPS_CXD5610 = False
 CXD5610_I2C_ADDR = 0x24
 
 
-try:
-    # Prefer a prebuilt Cython extension if available.
-    from .cython.cxd5610_helper import CXD5610 as CXD5610_C
-    _SENSOR_GPS_CXD5610 = True
-except Exception:
-    # Fallback to an in-place build so future boots can import the .so directly.
+if _i2c_addr_present(CXD5610_I2C_ADDR):
     try:
-        if _i2c_addr_present(CXD5610_I2C_ADDR, bus=1):
+        # Prefer a prebuilt Cython extension if available.
+        from .cython.cxd5610_helper import CXD5610 as CXD5610_C
+        _SENSOR_GPS_CXD5610 = True
+    except Exception:
+        # Fallback to an in-place build so future boots can import the .so directly.
+        try:
             import pyximport
 
             pyximport.install(inplace=True, language_level=3)
             from .cython.cxd5610_helper import CXD5610 as CXD5610_C
 
             _SENSOR_GPS_CXD5610 = True
-    except Exception as exc:
-        app_logger.warning(f"[CXD5610] Cython import failed: {exc}")
+        except Exception as exc:
+            app_logger.warning(f"[CXD5610] Cython import failed: {exc}")
 
 
 class CXD5610_GPS(AbstractSensorGPS):
