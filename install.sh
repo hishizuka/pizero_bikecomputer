@@ -200,12 +200,12 @@ if [[ "$enable_spi" == "true" ]]; then
     #  sudo adduser "$TARGET_USER" spi
     #fi
     
-    # workaround for trixie
-    sudo apt install -y pigpio python3-pigpio
+    # pigpio for trixie
+    # sudo apt install -y pigpio python3-pigpio
     # or manually install
-
-    sudo systemctl enable pigpiod
-    echo "ℹ️ pigpio enabled  successfully."
+    
+    # sudo systemctl enable pigpiod
+    #echo "ℹ️ pigpio enabled  successfully."
 
     echo "✅ SPI enabled successfully"
 fi
@@ -339,6 +339,7 @@ if [[ "$install_services" == "true" ]]; then
         after="After=display-manager.service\\n"
     else
         envs="Environment=\"QT_QPA_PLATFORM=offscreen\"\\n"
+        #envs="Environment=\"QT_QPA_PLATFORM=linuxfb:fb=/dev/fb1 \"\\n"
         after=""
     fi
 
