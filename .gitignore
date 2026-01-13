@@ -27,6 +27,7 @@ __pycache__/
 *.lprof
 *.o
 *.so
+*.dtbo
 a.out
 setting.conf
 state.pickle

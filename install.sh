@@ -49,6 +49,21 @@ prompt_and_store() {
     esac
 }
 
+install_timezonefinder_and_flatbuffers() {
+    if [[ "${INSTALL_TZ_DEPS_DONE:-false}" == "true" ]]; then
+        return 0
+    fi
+    local pip_tmp_dir
+    pip_tmp_dir="$HOME/tmp/pip"
+    mkdir -p "$pip_tmp_dir"
+    TMPDIR="$pip_tmp_dir" pip install timezonefinder
+    rm -rf "$pip_tmp_dir"
+    # Force PyPI to avoid legacy versions from extra index settings.
+    pip uninstall -y flatbuffers
+    PIP_CONFIG_FILE=/dev/null pip install -U --no-cache-dir -i https://pypi.org/simple flatbuffers
+    INSTALL_TZ_DEPS_DONE=true
+}
+
 #############################################################
 # get user input
 #############################################################
@@ -84,8 +99,6 @@ sudo apt upgrade -y
 
 # install essential packages
 echo "🔧 Installing core packages..."
-# bookworm
-#sudo apt install -y git python3-venv python3-yaml cython3 cmake python3-numpy sqlite3 libsqlite3-dev python3-pil python3-aiohttp python3-aiofiles python3-psutil
 # trixie
 sudo apt install -y git cython3 cmake python3-setuptools python3-numpy sqlite3 libsqlite3-dev python3-pil python3-aiohttp python3-aiofiles python3-psutil
 echo "✅ Core packages installed."
@@ -131,8 +144,6 @@ fi
 # Install ANT+ packages
 if [[ "$install_ant_plus" == "true" ]]; then
     echo "🔧 Installing ANT+ packages..."
-    # bookworm
-    #sudo apt install -y python3-pip libusb-1.0-0 python3-usb
     # trixie
     sudo apt install -y python3-pip python3-usb
     # install as root to ensure there are no udev_rules permission issues from setuptools
@@ -143,18 +154,16 @@ fi
 # Install GPS packages
 if [[ "$install_gps" == "true" ]]; then
     echo "🔧 Installing GPS packages..."
-    # bookworm
-    #sudo apt install -y gpsd
     # trixie
     sudo apt install -y gpsd python3-gps libffi-dev
-    pip install timezonefinder
+    install_timezonefinder_and_flatbuffers
+
     if [[ "$has_raspi_config" == "true" ]]; then
         sudo raspi-config nonint do_serial_cons 1
         sudo raspi-config nonint do_serial_hw 0
     fi
     sudo systemctl enable gpsd
     sudo systemctl enable gpsd.socket
-    #sudo systemctl start gpsd
     echo "✅ GPS packages installed successfully."
 fi
 
@@ -168,7 +177,9 @@ if [[ "$install_bluetooth" == "true" ]]; then
     sudo apt install -y bluez-obexd libffi-dev
     # for raspberry pi zero (building with pip is extremely heavy.)
     sudo apt install -y python3-pydantic python3-orjson
-    pip install garminconnect stravacookies bluez-peripheral==0.2.0a4 tb-mqtt-client mmh3 timezonefinder
+    pip install garminconnect stravacookies bluez-peripheral==0.2.0a5 tb-mqtt-client mmh3
+    install_timezonefinder_and_flatbuffers
+
     echo "✅ Bluetooth packages installed successfully."
 fi
 
@@ -200,7 +211,7 @@ if [[ "$enable_spi" == "true" ]]; then
     #  sudo adduser "$TARGET_USER" spi
     #fi
     
-    # pigpio for trixie
+    # pigpio for trixie (To be deprecated)
     # sudo apt install -y pigpio python3-pigpio
     # or manually install
     
@@ -311,6 +322,7 @@ if [[ "$install_services" == "true" ]]; then
     # GPS service configuration
     if [[ "$install_gps" == "true" ]]; then
         sudo cp scripts/install/etc/default/gpsd /etc/default/gpsd
+        sudo systemctl start gpsd
     fi
 
     # install pizero_bikecomputer.service

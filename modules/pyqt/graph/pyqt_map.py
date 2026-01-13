@@ -134,6 +134,7 @@ class MapWidget(BaseMapWidget):
         64: None,
         #64: "000000 FF0000 00FF00 0000FF 00FFFF FF00FF FFFF00 FFFFFF",
     }
+    scale_lat_round = 2
 
     @property
     def maptile_with_values(self):
@@ -156,6 +157,10 @@ class MapWidget(BaseMapWidget):
 
         self.plot.addItem(self.map_attribution)
         self.plot.addItem(self.scale_text)
+        self.plot.addItem(self.current_point)
+
+        self._last_attribution_text = None
+        self._last_scale_key = None
 
         # current point
         self.point["size"] = 29
@@ -197,6 +202,7 @@ class MapWidget(BaseMapWidget):
             "pen": {"color": (0, 0, 0), "width": 2},
         }
         self.center_point_location = []
+        self.plot.addItem(self.center_point)
 
         # connect signal
         self.signal_search_route.connect(self.search_route)
@@ -318,11 +324,13 @@ class MapWidget(BaseMapWidget):
             if b != "" and v != "":
                 attribution_text += f" ({b}/{v})"
 
-        self.map_attribution.setHtml(
-            '<span style="color: #000000; font-size: small;">'
-            + attribution_text
-            + "</span>"
-        )
+        if attribution_text != self._last_attribution_text:
+            self.map_attribution.setHtml(
+                '<span style="color: #000000; font-size: small;">'
+                + attribution_text
+                + "</span>"
+            )
+            self._last_attribution_text = attribution_text
 
         if attribution_text == "":
             self.map_attribution.setZValue(-100)
@@ -533,12 +541,10 @@ class MapWidget(BaseMapWidget):
 
         # display current position
         if len(self.location):
-            self.plot.removeItem(self.current_point)
-            self.location.pop()
+            self.location.clear()
         # display center point
         if len(self.center_point_location):
-            self.plot.removeItem(self.center_point)
-            self.center_point_location.pop()
+            self.center_point_location.clear()
 
         # current position
         self.point["pos"] = [self.gps_values["lon"], self.gps_values["lat"]]
@@ -636,7 +642,6 @@ class MapWidget(BaseMapWidget):
             )
 
         self.current_point.setData(self.location)
-        self.plot.addItem(self.current_point)
 
         # center point
         if not self.lock_status:
@@ -648,7 +653,8 @@ class MapWidget(BaseMapWidget):
             self.center_point_data["pos"][1] = get_mod_lat(self.map_pos["y"])
             self.center_point_location.append(self.center_point_data)
             self.center_point.setData(self.center_point_location)
-            self.plot.addItem(self.center_point)
+        else:
+            self.center_point.setData([])
 
         # set x and y ranges
         x_start = self.map_pos["x"] - self.map_area["w"] / 2
@@ -1141,7 +1147,19 @@ class MapWidget(BaseMapWidget):
         if scale_label >= 1000:
             scale_label = int(scale_label / 1000)
             scale_unit = "km"
-        self.scale_text.setPlainText(f"{scale_label}{scale_unit}\n(z{self.zoomlevel})")
+        lat_key = self.map_pos["y"]
+        if np.isnan(lat_key):
+            lat_key = y_start
+        if np.isnan(lat_key):
+            lat_key = None
+        else:
+            lat_key = round(lat_key, self.scale_lat_round)
+        scale_key = (self.zoomlevel, lat_key)
+        if self._last_scale_key != scale_key:
+            self.scale_text.setPlainText(
+                f"{scale_label}{scale_unit}\n(z{self.zoomlevel})"
+            )
+            self._last_scale_key = scale_key
         self.scale_text.setPos((scale_x1 + scale_x2) / 2, scale_y2)
 
     def draw_map_attribution(self, x_start, y_start):
