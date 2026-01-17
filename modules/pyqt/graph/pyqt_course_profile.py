@@ -1,6 +1,6 @@
 import numpy as np
 
-from modules._qt_qtwidgets import QtGui, pg, qasync
+from modules._qt_qtwidgets import QtCore, QtGui, QtWidgets, pg, qasync
 from modules.pyqt.graph.pyqtgraph.CourseProfileGraphItem import CourseProfileGraphItem
 from modules.utils.timer import Timer
 from .pyqt_base_map import BaseMapWidget
@@ -29,24 +29,46 @@ class CourseProfileGraphWidget(BaseMapWidget):
         super().setup_ui_extra()
 
         # map
-        self.layout.addWidget(self.plot, 0, 0, 3, 3)
+        self.layout.addWidget(self.plot, 0, 0, -1, -1)
 
+        button_group_offset = None
         if self.config.display.has_touch:
-            # zoom
-            self.layout.addWidget(self.buttons["zoomdown"], 0, 0)
-            self.layout.addWidget(self.buttons["lock"], 1, 0)
-            self.layout.addWidget(self.buttons["zoomup"], 2, 0)
-            # arrow
-            self.layout.addWidget(self.buttons["left"], 0, 2)
-            self.layout.addWidget(self.buttons["right"], 1, 2)
+            align_top_left = (
+                QtCore.Qt.AlignmentFlag.AlignTop | QtCore.Qt.AlignmentFlag.AlignLeft
+            )
+            self.button_group_left = QtWidgets.QWidget(self)
+            self.button_group_left.setAttribute(
+                QtCore.Qt.WidgetAttribute.WA_StyledBackground, True
+            )
+            self.button_group_left.setStyleSheet(
+                "background-color: rgba(255, 255, 255, 128);"
+                "border-radius: 8px;"
+            )
+            left_layout = QtWidgets.QVBoxLayout(self.button_group_left)
+            left_layout.setContentsMargins(8, 8, 8, 8)
+            left_layout.setSpacing(6)
+            left_layout.addWidget(self.buttons["lock"])
+            left_layout.addWidget(self.buttons["zoomup"])
+            left_layout.addWidget(self.buttons["zoomdown"])
+            button_group_offset = int(self.button_group_left.sizeHint().width() * 2 / 3)
+            self.layout.addWidget(
+                self.button_group_left, 0, 1, alignment=align_top_left
+            )
 
         self.climb_detail = pg.TextItem(color=(0, 0, 0), anchor=(1.0, 1.0))
         self.climb_detail.setZValue(100)
 
         # for expanding column
-        self.layout.setColumnMinimumWidth(0, 40)
+        self.layout.setColumnMinimumWidth(
+            0,
+            40
+            if button_group_offset is None
+            else max(40, button_group_offset),
+        )
         self.layout.setColumnStretch(1, 1)
         self.layout.setColumnMinimumWidth(2, 40)
+        self.layout.setColumnMinimumWidth(3, 5)
+        self.layout.setColumnMinimumWidth(4, 40)
 
     # load course profile and display
     def load_course(self):

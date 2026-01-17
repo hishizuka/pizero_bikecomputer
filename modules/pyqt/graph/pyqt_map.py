@@ -8,7 +8,7 @@ import numpy as np
 from PIL import Image, ImageEnhance
 
 from modules.app_logger import app_logger
-from modules._qt_qtwidgets import QT_COMPOSITION_MODE_DARKEN, pg, qasync, Signal
+from modules._qt_qtwidgets import QT_COMPOSITION_MODE_DARKEN, QtCore, QtWidgets, pg, qasync, Signal
 from modules.pyqt.pyqt_cuesheet_widget import CueSheetWidget
 from modules.pyqt.graph.pyqtgraph.CoursePlotItem import CoursePlotItem
 from modules.utils.geo import (
@@ -35,6 +35,7 @@ from .pyqt_map_button import (
 from modules.helper.maptile import (
     conv_image,
     get_wind_color,
+    SCW_WIND_SPEED_ARROW_CONV,
 )
 
 
@@ -135,6 +136,16 @@ class MapWidget(BaseMapWidget):
         #64: "000000 FF0000 00FF00 0000FF 00FFFF FF00FF FFFF00 FFFFFF",
     }
     scale_lat_round = 2
+    # UI padding for map HUD elements (scale/attribution/legend) in px.
+    hud_padding_px = 6
+    hud_scale_height_px = 8
+    hud_scale_width_px = 40
+    hud_gap_px = 4
+    wind_legend_item = None
+    wind_legend_labels = None
+    wind_legend_label_values = None
+    _wind_legend_img = None
+    _wind_legend_layout_cache = None
 
     @property
     def maptile_with_values(self):
@@ -159,8 +170,41 @@ class MapWidget(BaseMapWidget):
         self.plot.addItem(self.scale_text)
         self.plot.addItem(self.current_point)
 
+        self.map_attribution.textItem.document().setDocumentMargin(0)
+        self.scale_text.textItem.document().setDocumentMargin(0)
+
         self._last_attribution_text = None
         self._last_scale_key = None
+
+        # wind speed legend (SCW only)
+        self.wind_legend_item = pg.ImageItem()
+        self.wind_legend_item.setOpts(axisOrder="row-major")
+        self.wind_legend_item.setZValue(95)
+        self.wind_legend_item.setVisible(False)
+        self.plot.addItem(self.wind_legend_item)
+
+        self.wind_legend_label_values = [0, 10]
+        self.wind_legend_labels = []
+        last_value = self.wind_legend_label_values[-1]
+        for value in self.wind_legend_label_values:
+            label = f"{value}~" if value == last_value else str(value)
+            item = pg.TextItem(
+                text="",
+                anchor=(0.5, 0.5),
+                border=(255, 255, 255, 255),
+                fill=(255, 255, 255, 255),
+                color=(0, 0, 0),
+            )
+            item.setHtml(
+                '<span style="font-size: small; color: #000000;">'
+                + label
+                + "</span>"
+            )
+            item.textItem.document().setDocumentMargin(0)
+            item.setZValue(96)
+            item.setVisible(False)
+            self.plot.addItem(item)
+            self.wind_legend_labels.append(item)
 
         # current point
         self.point["size"] = 29
@@ -218,40 +262,82 @@ class MapWidget(BaseMapWidget):
             )
 
         # map
-        max_height = 4
+        max_height = 3
         if self.config.display.has_touch and self.config.G_GOOGLE_DIRECTION_API["HAVE_API_TOKEN"]:
             max_height += 1
-        self.layout.addWidget(self.plot, 0, 0, max_height, 3)
+        self.layout.addWidget(self.plot, 0, 0, -1, -1)
 
         if self.config.display.has_touch:
-            # zoom
-            self.layout.addWidget(self.buttons["zoomdown"], 0, 0)
-            self.layout.addWidget(self.buttons["lock"], 1, 0)
-            self.layout.addWidget(self.buttons["zoomup"], 2, 0)
-            # arrow
-            self.layout.addWidget(self.buttons["left"], 0, 4)
-            self.layout.addWidget(self.buttons["up"], 1, 4)
-            self.layout.addWidget(self.buttons["down"], 2, 4)
-            self.layout.addWidget(self.buttons["right"], 3, 4)
-            
+            align_top_left = (
+                QtCore.Qt.AlignmentFlag.AlignTop | QtCore.Qt.AlignmentFlag.AlignLeft
+            )
+            align_top_right = (
+                QtCore.Qt.AlignmentFlag.AlignTop | QtCore.Qt.AlignmentFlag.AlignRight
+            )
+
+            self.button_group_left = QtWidgets.QWidget(self)
+            self.button_group_left.setAttribute(
+                QtCore.Qt.WidgetAttribute.WA_StyledBackground, True
+            )
+            self.button_group_left.setStyleSheet(
+                "background-color: rgba(255, 255, 255, 128);"
+                "border-radius: 8px;"
+            )
+            left_layout = QtWidgets.QVBoxLayout(self.button_group_left)
+            left_layout.setContentsMargins(8, 8, 8, 8)
+            left_layout.setSpacing(6)
+            left_layout.addWidget(self.buttons["lock"])
+            left_layout.addWidget(self.buttons["zoomup"])
+            left_layout.addWidget(self.buttons["zoomdown"])
+
             if self.config.G_GOOGLE_DIRECTION_API["HAVE_API_TOKEN"]:
                 self.buttons["go"] = DirectionButton()
-                self.layout.addWidget(self.buttons["go"], max_height-2, 0)
                 self.buttons["go"].clicked.connect(self.search_route)
+                left_layout.addSpacing(4)
+                left_layout.addWidget(self.buttons["go"])
+
+            self.layout.addWidget(
+                self.button_group_left, 0, 0, alignment=align_top_left
+            )
+
+            self.button_group_right = QtWidgets.QWidget(self)
+            self.button_group_right.setAttribute(
+                QtCore.Qt.WidgetAttribute.WA_StyledBackground, True
+            )
+            self.button_group_right.setStyleSheet(
+                "background-color: rgba(255, 255, 255, 128);"
+                "border-radius: 8px;"
+            )
+            right_layout = QtWidgets.QVBoxLayout(self.button_group_right)
+            right_layout.setContentsMargins(8, 8, 8, 8)
+            right_layout.setSpacing(6)
 
             self.buttons["layers"] = MapLayersButton()
-            self.layout.addWidget(self.buttons["layers"], max_height-1, 0)
+            right_layout.addWidget(self.buttons["layers"])
             self.buttons["layers"].clicked.connect(self.change_map_overlays)
             self.enable_overlay_button()
 
             # for time series of overlay map tiles
             self.buttons["prev_time"] = MapPrevButton()
             self.buttons["next_time"] = MapNextButton()
-            self.layout.addWidget(self.buttons["prev_time"], max_height-1, 2)
-            self.layout.addWidget(self.buttons["next_time"], max_height-1, 4)
-            self.buttons["prev_time"].clicked.connect(lambda: self.update_overlay_time(False))
-            self.buttons["next_time"].clicked.connect(lambda: self.update_overlay_time(True))
+            self.time_button_group = QtWidgets.QWidget(self.button_group_right)
+            time_layout = QtWidgets.QHBoxLayout(self.time_button_group)
+            time_layout.setContentsMargins(0, 0, 0, 0)
+            time_layout.setSpacing(6)
+            time_layout.addWidget(self.buttons["prev_time"])
+            time_layout.addWidget(self.buttons["next_time"])
+            right_layout.addWidget(self.time_button_group)
+            self.buttons["prev_time"].clicked.connect(
+                lambda: self.update_overlay_time(False)
+            )
+            self.buttons["next_time"].clicked.connect(
+                lambda: self.update_overlay_time(True)
+            )
             self.enable_overlay_time_and_button()
+
+            self.layout.addWidget(
+                self.button_group_right, 0, 4, alignment=align_top_right
+            )
 
         # cue sheet and instruction
         self.init_cuesheet_and_instruction()
@@ -262,6 +348,9 @@ class MapWidget(BaseMapWidget):
         self.layout.setColumnMinimumWidth(2, 40)
         self.layout.setColumnMinimumWidth(3, 5)
         self.layout.setColumnMinimumWidth(4, 40)
+        self.layout.setRowStretch(1, 1)
+        self.layout.setRowStretch(3, 1)
+        self.layout.setRowMinimumHeight(5, 50)
 
         def palette_rgb_multilevel(levels=2):
             if levels < 2:
@@ -318,18 +407,22 @@ class MapWidget(BaseMapWidget):
         elif self.overlay_index == self.overlay_order_index["WIND"]:
             map_settings = self.config.G_WIND_OVERLAY_MAP_CONFIG[self.config.G_WIND_OVERLAY_MAP]
         if map_settings is not None:
-            split_char = " / " if self.config.gui.horizontal else "<br />"
+            split_char = "<br />"
             attribution_text += f"{split_char}{map_settings['attribution']}"
             b, v = self.add_attribution_extra_text(map_settings)
             if b != "" and v != "":
                 attribution_text += f" ({b}/{v})"
 
         if attribution_text != self._last_attribution_text:
+            self.map_attribution.setTextWidth(-1)
             self.map_attribution.setHtml(
-                '<span style="color: #000000; font-size: small;">'
+                '<div style="text-align: right; color: #000000; font-size: small;">'
                 + attribution_text
-                + "</span>"
+                + "</div>"
             )
+            text_width = self.map_attribution.boundingRect().width()
+            if text_width > 0:
+                self.map_attribution.setTextWidth(text_width)
             self._last_attribution_text = attribution_text
 
         if attribution_text == "":
@@ -685,7 +778,9 @@ class MapWidget(BaseMapWidget):
 
         if not np.any(np.isnan([x_start, y_start])):
             # draw scale
-            self.draw_scale(x_start, y_start)
+            scale_geom = self.draw_scale(x_start, y_start)
+            # draw wind speed legend (SCW only)
+            self.draw_wind_speed_legend(x_start, y_start, scale_geom)
             # draw map attribution
             self.draw_map_attribution(x_start, y_start)
 
@@ -861,9 +956,13 @@ class MapWidget(BaseMapWidget):
         # Compute new/prev display_time
         new_display_time = f"{map_settings['basetime']}/{map_settings['validtime']}"
         prev_display_time = self.overlay_time[overlay_type]["display_time"]
+        display_time_changed = prev_display_time != new_display_time
+
+        if display_time_changed or prev_display_time is None:
+            await self.update_prev_next_overlay_time(overlay_type, map_config, map_name)
 
         # If unchanged, just draw overlay and exit
-        if prev_display_time == new_display_time:
+        if not display_time_changed:
             await self.overlay_map(drawn_main_map, p0, p1, map_config, map_name)
             return False
 
@@ -1061,8 +1160,7 @@ class MapWidget(BaseMapWidget):
         draw_flag = False
         add_keys = {}
         expand_keys = {}
-        basetime = map_config[map_name].get("basetime", None)
-        validtime = map_config[map_name].get("validtime", None)
+        map_settings = map_config[map_name]
 
         if z not in self.drawn_tile[map_name] or self.pre_zoomlevel[map_name] != z:
             self.drawn_tile[map_name][z] = {}
@@ -1080,7 +1178,7 @@ class MapWidget(BaseMapWidget):
                 if (
                     drawn_tile_key not in self.drawn_tile[map_name][z] 
                     and self.check_tile(
-                        use_mbtiles, map_name, z_draw, exist_tile_key, basetime, validtime
+                        use_mbtiles, map_name, z_draw, exist_tile_key, map_settings
                     )
                 ):
                     self.drawn_tile[map_name][z][drawn_tile_key] = True
@@ -1091,11 +1189,9 @@ class MapWidget(BaseMapWidget):
 
         return draw_flag, add_keys, expand_keys
 
-    def check_tile(self, use_mbtiles, map_name, z_draw, key, basetime, validtime):
+    def check_tile(self, use_mbtiles, map_name, z_draw, key, map_settings):
         if not use_mbtiles:
-            filename = get_maptile_filename(
-                map_name, z_draw, *key, basetime=basetime, validtime=validtime
-            )
+            filename = get_maptile_filename(map_name, z_draw, *key, map_settings)
             return self.maptile_with_values.check_existing_tiles(filename)
         else:
             sql = (
@@ -1106,11 +1202,8 @@ class MapWidget(BaseMapWidget):
 
     def get_image_file(self, use_mbtiles, map_config, map_name, z_draw, x, y):
         if not use_mbtiles:
-            basetime = map_config[map_name].get("basetime", None)
-            validtime = map_config[map_name].get("validtime", None)
-            img_file = get_maptile_filename(
-                map_name, z_draw, x, y, basetime=basetime, validtime=validtime
-            )
+            map_settings = map_config[map_name]
+            img_file = get_maptile_filename(map_name, z_draw, x, y, map_settings)
         else:
             sql = (
                 f"select tile_data from tiles where "
@@ -1122,7 +1215,26 @@ class MapWidget(BaseMapWidget):
     def draw_scale(self, x_start, y_start):
         # draw scale at left bottom
         scale_factor = 10
-        scale_dist = get_width_distance(y_start, self.map_area["w"]) / scale_factor
+        data_per_px_x, data_per_px_y = self._get_view_data_per_px()
+        use_px = data_per_px_x > 0 and data_per_px_y > 0
+
+        if use_px:
+            padding_x = data_per_px_x * self.hud_padding_px
+            padding_y = data_per_px_y * self.hud_padding_px
+            scale_height = data_per_px_y * self.hud_scale_height_px
+            scale_width = data_per_px_x * self.hud_scale_width_px
+            scale_x1 = x_start + padding_x
+            scale_y1 = get_mod_lat(y_start) + padding_y
+            scale_y2 = scale_y1 + scale_height
+        else:
+            scale_width = self.map_area["w"] / scale_factor
+            scale_x1 = x_start + self.map_area["w"] / 25
+            scale_y1_raw = y_start + self.map_area["h"] / 25
+            scale_y2_raw = scale_y1_raw + self.map_area["h"] / 30
+            scale_y1 = get_mod_lat(scale_y1_raw)
+            scale_y2 = get_mod_lat(scale_y2_raw)
+
+        scale_dist = get_width_distance(y_start, scale_width)
         num = scale_dist / (10 ** int(np.log10(scale_dist)))
         modify = 1
         if 1 < num < 2:
@@ -1131,12 +1243,8 @@ class MapWidget(BaseMapWidget):
             modify = 5 / num
         elif 5 < num < 10:
             modify = 10 / num
-        scale_x1 = x_start + self.map_area["w"] / 25
-        scale_x2 = scale_x1 + self.map_area["w"] / scale_factor * modify
-        scale_y1 = y_start + self.map_area["h"] / 25
-        scale_y2 = scale_y1 + self.map_area["h"] / 30
-        scale_y1 = get_mod_lat(scale_y1)
-        scale_y2 = get_mod_lat(scale_y2)
+
+        scale_x2 = scale_x1 + scale_width * modify
         self.scale_plot.setData(
             [scale_x1, scale_x1, scale_x2, scale_x2],
             [scale_y2, scale_y1, scale_y1, scale_y2],
@@ -1161,10 +1269,175 @@ class MapWidget(BaseMapWidget):
             )
             self._last_scale_key = scale_key
         self.scale_text.setPos((scale_x1 + scale_x2) / 2, scale_y2)
+        return scale_x1, scale_x2, scale_y2
+
+    def draw_wind_speed_legend(self, x_start, y_start, scale_geom):
+        if not self._should_show_wind_legend(scale_geom):
+            self._set_wind_legend_visible(False)
+            self._wind_legend_layout_cache = None
+            return
+
+        legend_blocks = 11
+        self._ensure_wind_legend_image(legend_blocks)
+
+        data_per_px_x, data_per_px_y = self._get_view_data_per_px()
+        if data_per_px_x == 0 or data_per_px_y == 0:
+            return
+        padding_x = data_per_px_x * self.hud_padding_px
+        padding_y = data_per_px_y * self.hud_padding_px
+        gap_mod = data_per_px_y * self.hud_gap_px
+        right_edge = x_start + self.map_area["w"] - padding_x
+        bottom_mod = get_mod_lat(y_start) + padding_y
+
+        legend_rect, label_positions = self._calc_wind_legend_layout(
+            x_start,
+            y_start,
+            data_per_px_x,
+            data_per_px_y,
+            legend_width_px=120,
+            legend_height_px=12,
+            right_edge=right_edge,
+            bottom_mod=bottom_mod,
+            gap_mod=gap_mod,
+        )
+        layout_cache = self._get_wind_legend_layout_cache(label_positions)
+        if self._wind_legend_layout_cache == layout_cache and self.wind_legend_item.isVisible():
+            return
+        self.wind_legend_item.setRect(legend_rect)
+        for item, pos in label_positions:
+            item.setPos(*pos)
+            item.setVisible(True)
+        self.wind_legend_item.setVisible(True)
+        self._wind_legend_layout_cache = layout_cache
+
+    def _should_show_wind_legend(self, scale_geom):
+        return (
+            scale_geom is not None
+            and self.config.G_USE_WIND_OVERLAY_MAP
+            and self.overlay_index == self.overlay_order_index["WIND"]
+            and self.config.G_WIND_OVERLAY_MAP.startswith("jpn_scw")
+        )
+
+    def _set_wind_legend_visible(self, visible):
+        self.wind_legend_item.setVisible(visible)
+        for item in self.wind_legend_labels:
+            item.setVisible(visible)
+
+    def _ensure_wind_legend_image(self, legend_blocks):
+        if self._wind_legend_img is not None:
+            return
+        colors = SCW_WIND_SPEED_ARROW_CONV[:legend_blocks]
+        block_width = 20
+        height = 12
+        img = np.zeros((height, block_width * len(colors), 4), dtype=np.uint8)
+        for i, color in enumerate(colors):
+            x0 = i * block_width
+            img[:, x0 : x0 + block_width, :] = color
+        border = np.array([0, 0, 0, 255], dtype=np.uint8)
+        for i in range(len(colors)):
+            x0 = i * block_width
+            x1 = x0 + block_width - 1
+            img[0, x0 : x0 + block_width, :] = border
+            img[height - 1, x0 : x0 + block_width, :] = border
+            img[:, x0, :] = border
+            img[:, x1, :] = border
+        self._wind_legend_img = img
+        self.wind_legend_item.setImage(
+            self._wind_legend_img,
+            levels=(0, 255),
+            axisOrder="row-major",
+        )
+
+    def _get_view_data_per_px(self):
+        view_box = self.plot.getViewBox()
+        view_range = view_box.viewRange()
+        view_height = view_box.height()
+        view_width = view_box.width()
+        if view_height <= 0:
+            view_height = self.plot.height()
+        if view_width <= 0:
+            view_width = self.plot.width()
+        data_per_px_y = 0
+        data_per_px_x = 0
+        if view_height > 0:
+            data_per_px_y = abs(view_range[1][1] - view_range[1][0]) / view_height
+        if view_width > 0:
+            data_per_px_x = abs(view_range[0][1] - view_range[0][0]) / view_width
+        return data_per_px_x, data_per_px_y
+
+    def _calc_wind_legend_layout(
+        self,
+        x_start,
+        y_start,
+        data_per_px_x,
+        data_per_px_y,
+        legend_width_px,
+        legend_height_px,
+        right_edge=None,
+        bottom_mod=None,
+        gap_mod=None,
+    ):
+        legend_width = legend_width_px * data_per_px_x
+        legend_height_mod = legend_height_px * data_per_px_y
+        if right_edge is None:
+            right_edge = x_start + self.map_area["w"]
+
+        if bottom_mod is None:
+            bottom_mod = get_mod_lat(y_start)
+        attr_height_mod = self.map_attribution.boundingRect().height() * data_per_px_y
+        if gap_mod is None:
+            gap_mod = self.hud_gap_px * data_per_px_y
+
+        legend_y1 = bottom_mod + attr_height_mod + gap_mod
+        legend_y2 = legend_y1 + legend_height_mod
+
+        left_item = self.wind_legend_labels[0]
+        right_item = self.wind_legend_labels[-1]
+        gap_x_mod = self.hud_gap_px * data_per_px_x
+        edge_padding_mod = self.hud_gap_px * data_per_px_x
+        left_width_mod = left_item.boundingRect().width() * data_per_px_x
+        right_width_mod = right_item.boundingRect().width() * data_per_px_x
+
+        legend_x1 = (
+            right_edge
+            - legend_width
+            - gap_x_mod
+            - right_width_mod
+            - edge_padding_mod
+        )
+        legend_rect = pg.QtCore.QRectF(
+            legend_x1,
+            legend_y1,
+            legend_width,
+            legend_y2 - legend_y1,
+        )
+
+        label_y = legend_y1 + (legend_y2 - legend_y1) / 2
+        left_x = legend_x1 - gap_x_mod - left_width_mod / 2
+        right_x = legend_x1 + legend_width + gap_x_mod + right_width_mod / 2
+        return legend_rect, ((left_item, (left_x, label_y)), (right_item, (right_x, label_y)))
+
+    @staticmethod
+    def _get_wind_legend_layout_cache(label_positions):
+        def r(v):
+            return round(v, 6)
+        label_cache = []
+        for item, pos in label_positions:
+            label_cache.append((item.toPlainText(), r(pos[0]), r(pos[1])))
+        return tuple(label_cache)
 
     def draw_map_attribution(self, x_start, y_start):
         # draw map attribution at right bottom
-        self.map_attribution.setPos(x_start + self.map_area["w"], get_mod_lat(y_start))
+        data_per_px_x, data_per_px_y = self._get_view_data_per_px()
+        if data_per_px_x > 0 and data_per_px_y > 0:
+            padding_x = data_per_px_x * self.hud_padding_px
+            padding_y = data_per_px_y * self.hud_padding_px
+            x_pos = x_start + self.map_area["w"] - padding_x
+            y_pos = get_mod_lat(y_start) + padding_y
+        else:
+            x_pos = x_start + self.map_area["w"]
+            y_pos = get_mod_lat(y_start)
+        self.map_attribution.setPos(x_pos, y_pos)
 
     async def update_cuesheet_and_instruction(
         self, x_start, x_end, y_start, y_end, auto_zoom=False
@@ -1305,6 +1578,8 @@ class MapWidget(BaseMapWidget):
         if self.config.display.has_touch:
             self.buttons["prev_time"].setVisible(enabled)
             self.buttons["next_time"].setVisible(enabled)
+            if hasattr(self, "time_button_group"):
+                self.time_button_group.setVisible(enabled)
 
     def enhance_image(self, img_pil):
         # 0: None

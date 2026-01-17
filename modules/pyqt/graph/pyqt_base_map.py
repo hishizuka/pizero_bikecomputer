@@ -6,10 +6,6 @@ from .pyqt_map_button import (
     ZoomInButton,
     ZoomOutButton,
     LockButton,
-    ArrowNorthButton,
-    ArrowSouthButton,
-    ArrowWestButton,
-    ArrowEastButton,
 )
 
 
@@ -120,15 +116,7 @@ class BaseMapWidget(ScreenWidget):
         self.buttons["lock"] = LockButton()
         self.buttons["zoomup"] = ZoomInButton()
         self.buttons["zoomdown"] = ZoomOutButton()
-        self.buttons["left"] = ArrowWestButton()
-        self.buttons["right"] = ArrowEastButton()
-        self.buttons["up"] = ArrowNorthButton()
-        self.buttons["down"] = ArrowSouthButton()
         self.buttons["lock"].clicked.connect(self.switch_lock)
-        self.buttons["right"].clicked.connect(self.move_x_plus)
-        self.buttons["left"].clicked.connect(self.move_x_minus)
-        self.buttons["up"].clicked.connect(self.move_y_plus)
-        self.buttons["down"].clicked.connect(self.move_y_minus)
         self.buttons["zoomdown"].clicked.connect(self.zoom_minus)
         self.buttons["zoomup"].clicked.connect(self.zoom_plus)
 
@@ -222,4 +210,3 @@ class BaseMapWidget(ScreenWidget):
             self.zoom_plus()
         else:
             self.zoom_minus()
-

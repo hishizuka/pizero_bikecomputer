@@ -17,7 +17,7 @@ from modules.pyqt.components.icons import (
 class MapButton(QtWidgets.QPushButton):
     STYLES = """
       QPushButton {
-        border-radius: 15px;
+        border-radius: 12px;
         border-style: outset;
         border-width: 1px;
         font-size: 25px;
