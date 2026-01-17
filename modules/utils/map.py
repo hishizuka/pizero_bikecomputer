@@ -1,13 +1,47 @@
 import math
 import os
 import shutil
+from urllib.parse import urlparse
 
 
-def get_maptile_filename(map_name, z, x, y, basetime=None, validtime=None):
+def normalize_maptile_ext(ext, default="png"):
+    if ext is None:
+        return default
+    ext = str(ext).strip().lower()
+    if ext.startswith("."):
+        ext = ext[1:]
+    if not ext:
+        return default
+    if ext == "pngraw":
+        return "png"
+    return ext
+
+
+def get_maptile_ext_from_url(url, default="png"):
+    if not url:
+        return default
+    try:
+        path = urlparse(str(url)).path
+    except Exception:
+        path = str(url)
+    _, ext = os.path.splitext(path)
+    if not ext:
+        return default
+    return normalize_maptile_ext(ext, default=default)
+
+
+def get_maptile_filename(map_name, z, x, y, map_settings=None):
+    basetime = None
+    validtime = None
+    ext = "png"
+    if map_settings:
+        basetime = map_settings.get("basetime")
+        validtime = map_settings.get("validtime")
+        ext = map_settings.get("ext", ext)
     if basetime and validtime:
-        return f"maptile/{map_name}/{basetime}/{validtime}/{z}/{x}/{y}.png"
+        return f"maptile/{map_name}/{basetime}/{validtime}/{z}/{x}/{y}.{ext}"
     else:
-        return f"maptile/{map_name}/{z}/{x}/{y}.png"
+        return f"maptile/{map_name}/{z}/{x}/{y}.{ext}"
 
 
 def get_lon_lat_from_tile_xy(z, x, y):

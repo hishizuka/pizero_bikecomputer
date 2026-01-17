@@ -466,6 +466,7 @@ class MapTileWithValues():
     scw_wind_validtime = None
     
     # for jpn_kokudo_chiri_in_DEM~
+    pre_alt_map_name = None
     pre_alt_tile_xy = (np.nan, np.nan, np.nan)
     pre_alt_xy_in_tile = (np.nan, np.nan, np.nan)
     pre_altitude = np.nan
@@ -513,12 +514,11 @@ class MapTileWithValues():
 
     async def download_maptiles(self, tiles, map_config, map_name, z, additional_download=False):
         download_tile = []
-        basetime = map_config[map_name].get("basetime", None)
-        validtime = map_config[map_name].get("validtime", None)
+        map_settings = map_config[map_name]
 
         for tile in tiles:
             filename = get_maptile_filename(
-                map_name, z, *tile, basetime=basetime, validtime=validtime
+                map_name, z, *tile, map_settings
             )
             
             # the file has already been downloaded.
@@ -546,7 +546,7 @@ class MapTileWithValues():
                 # failed to put queue, then retry (can't connect internet anymore)
                 for tile in download_tile:
                     filename = get_maptile_filename(
-                        map_name, z, *tile, basetime=basetime, validtime=validtime
+                        map_name, z, *tile, map_settings
                     )
                     if filename in self.existing_tiles:
                         self.existing_tiles.pop(filename)
@@ -783,7 +783,7 @@ class MapTileWithValues():
         tile_files = []
         for t in tiles:
             filename = get_maptile_filename(
-                map_name, z, *t, _map_settings["basetime"], _map_settings["validtime"]
+                map_name, z, *t, _map_settings
             )
             if not self.check_existing_tiles(filename):
                 continue
@@ -844,59 +844,71 @@ class MapTileWithValues():
         map_settings = map_config[map_name]
         z = map_settings["fix_zoomlevel"]
 
-        tile_x, tile_y, x_in_tile, y_in_tile = get_tilexy_and_xy_in_tile(
-            z, *pos, map_settings["tile_size"]
-        )
-        if (
-            self.pre_alt_tile_xy == (tile_x, tile_y, z)
-            and self.pre_alt_xy_in_tile == (x_in_tile, y_in_tile, z)
-        ):
-            return self.pre_altitude
-
-        tiles = [(tile_x, tile_y), ]
-        await self.download_maptiles(tiles, map_config, map_name, z)
-
-        filename = get_maptile_filename(map_name, z, tile_x, tile_y)
-
-        if not self.check_existing_tiles(filename):
-            if self.network.get_file_download_status(filename) != 404:
-                return np.nan
-
-            # 404 not found: change from dem5a(zoom_level=15) to dem10(zoom_level=14)
-            if map_name != "jpn_kokudo_chiri_in_DEM":
-                return np.nan
-            if map_settings["url"] == map_settings["retry_url"]:
-                return np.nan
-            _map_config = map_config.copy()
-            _map_config[map_name]["url"] = _map_config[map_name]["retry_url"]
-            _map_config[map_name]["fix_zoomlevel"] = _map_config[map_name]["retry_zoomlevel"]
+        if self.pre_alt_map_name != map_name:
+            # Reset altitude cache when DEM source changes.
+            self.pre_alt_map_name = map_name
             self.pre_alt_tile_xy = (np.nan, np.nan, np.nan)
             self.pre_alt_xy_in_tile = (np.nan, np.nan, np.nan)
-            altitude = await self.get_altitude_from_tile(pos, _map_config)
+            self.pre_altitude = np.nan
+            self.dem_array = None
+
+        pre_zoom = self.pre_alt_tile_xy[2]
+        if not np.isnan(pre_zoom):
+            tile_x, tile_y, x_in_tile, y_in_tile = get_tilexy_and_xy_in_tile(
+                int(pre_zoom), *pos, map_settings["tile_size"]
+            )
+            if (
+                self.pre_alt_tile_xy == (tile_x, tile_y, int(pre_zoom))
+                and self.pre_alt_xy_in_tile == (x_in_tile, y_in_tile, int(pre_zoom))
+            ):
+                return self.pre_altitude
+
+        zoom_candidates = [z, z - 1, z - 2]
+        zoom_candidates = [zoom for zoom in zoom_candidates if zoom >= 0]
+
+        for zoom in zoom_candidates:
+            map_config_for_zoom = map_config
+            if "retry_url" in map_settings and zoom < map_settings["fix_zoomlevel"]:
+                map_config_for_zoom = map_config.copy()
+                map_config_for_zoom[map_name] = map_settings.copy()
+                map_config_for_zoom[map_name]["url"] = map_settings["retry_url"]
+
+            tile_x, tile_y, x_in_tile, y_in_tile = get_tilexy_and_xy_in_tile(
+                zoom, *pos, map_settings["tile_size"]
+            )
+            tiles = [(tile_x, tile_y), ]
+            await self.download_maptiles(tiles, map_config_for_zoom, map_name, zoom)
+
+            filename = get_maptile_filename(map_name, zoom, tile_x, tile_y, map_config_for_zoom[map_name])
+            if not self.check_existing_tiles(filename):
+                if self.network.get_file_download_status(filename) == 404:
+                    continue
+                return np.nan
+
+            # get altitude
+            self.dem_array = np.asarray(Image.open(filename))
+            rgb_pos = self.dem_array[y_in_tile, x_in_tile]
+
+            r, g, b = int(rgb_pos[0]), int(rgb_pos[1]), int(rgb_pos[2]) 
+            v = (r << 16) | (g << 8) | b
+            if map_name.startswith("jpn_kokudo_chiri_in_DEM"):
+                if v < (1 << 23):
+                    altitude = round(v * 0.01, 1)
+                elif v == (1 << 23):
+                    altitude =  np.nan
+                else:
+                    altitude =  round(((v - (1 << 24)) * 0.01), 1)
+            elif map_name.startswith("mapbox_terrain"):
+                altitude =  round(-10000 + (v * 0.1), 1)
+            elif map_name.startswith("mapterhorn"):
+                altitude = round((v / 256.0) - 32768.0, 1)
+            else:
+                altitude = np.nan
+
+            # app_logger.info(f"{altitude}m, {filename}, {x_in_tile}, {x_in_tile}, {pos}")
+            self.pre_alt_tile_xy = (tile_x, tile_y, zoom)
+            self.pre_alt_xy_in_tile = (x_in_tile, y_in_tile, zoom)
+            self.pre_altitude = altitude
             return altitude
 
-        # get altitude
-        if self.pre_alt_tile_xy != (tile_x, tile_y, z):
-            self.dem_array = np.asarray(Image.open(filename))
-            self.pre_alt_tile_xy = (tile_x, tile_y, z)
-            self.pre_alt_xy_in_tile = (x_in_tile, y_in_tile, z)
-        rgb_pos = self.dem_array[y_in_tile, x_in_tile]
-
-        r, g, b = int(rgb_pos[0]), int(rgb_pos[1]), int(rgb_pos[2]) 
-        v = (r << 16) | (g << 8) | b
-        if map_name.startswith("jpn_kokudo_chiri_in_DEM"):
-            if v < (1 << 23):
-                altitude = round(v * 0.01, 1)
-            elif v == (1 << 23):
-                altitude =  np.nan
-            else:
-                altitude =  round(((v - (1 << 24)) * 0.01), 1)
-        elif map_name.startswith("mapbox_terrain"):
-            altitude =  round(-10000 + (v * 0.1), 1)
-        else:
-            altitude = np.nan
-
-        # app_logger.info(f"{altitude}m, {filename}, {x_in_tile}, {x_in_tile}, {pos}")
-        self.pre_altitude = altitude
-
-        return altitude
+        return np.nan

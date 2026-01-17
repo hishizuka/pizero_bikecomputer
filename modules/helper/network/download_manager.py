@@ -73,7 +73,7 @@ class DownloadManager:
             self.make_maptile_dir(map_name, z, tile[0], basetime, validtime)
             url = map_settings["url"].format(z=z, x=tile[0], y=tile[1], **additional_var)
             save_path = get_maptile_filename(
-                map_name, z, *tile, basetime=basetime, validtime=validtime
+                map_name, z, *tile, map_settings
             )
             urls.append(url)
             save_paths.append(save_path)
@@ -109,7 +109,7 @@ class DownloadManager:
                         y_val = 2 * tile[1] + j
                         url = map_settings["url"].format(z=z_plus_1, x=x_val, y=y_val, **additional_var)
                         save_path = get_maptile_filename(
-                            map_name, z_plus_1, x_val, y_val, basetime=basetime, validtime=validtime
+                            map_name, z_plus_1, x_val, y_val, map_settings
                         )
                         additional_urls.append(url)
                         additional_save_paths.append(save_path)
@@ -124,7 +124,7 @@ class DownloadManager:
                 url = map_settings["url"].format(z=z_minus_1, x=x_val, y=y_val, **additional_var)
                 if url not in additional_urls:
                     save_path = get_maptile_filename(
-                        map_name, z_minus_1, x_val, y_val, basetime=basetime, validtime=validtime
+                        map_name, z_minus_1, x_val, y_val, map_settings
                     )
                     additional_urls.append(url)
                     additional_save_paths.append(save_path)

@@ -163,6 +163,13 @@ def add_map_config(config):
         "referer": "https://supercweather.com/",
     }
 
+    config.G_DEM_MAP_CONFIG["mapterhorn"] = {
+        "url": "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp",
+        "attribution": "© Mapterhorn",
+        "fix_zoomlevel": 15,
+        "tile_size": 512,
+    }
+
     # worldwide DEM(Digital Elevation Model) map
     # Mapbox Terrain-DEM v1
     config.G_DEM_MAP_CONFIG["mapbox_terrain_rgb"] = {
@@ -171,7 +178,7 @@ def add_map_config(config):
         "fix_zoomlevel": 15,
         "tile_size": 256,
     }
-
+ 
     # japanese DEM(Digital Elevation Model) map
     config.G_DEM_MAP_CONFIG["jpn_kokudo_chiri_in_DEM"] = {
         "url": "https://cyberjapandata.gsi.go.jp/xyz/dem5a_png/{z}/{x}/{y}.png",  # DEM5A(zoom: 1-15)
@@ -179,5 +186,4 @@ def add_map_config(config):
         "fix_zoomlevel": 15,
         "tile_size": 256,
         "retry_url": "https://cyberjapandata.gsi.go.jp/xyz/dem_png/{z}/{x}/{y}.png",  # DEM10B(zoom: 1-14)
-        "retry_zoomlevel": 14,
     }
