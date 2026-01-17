@@ -19,7 +19,9 @@ from modules.utils.cmd import (
     is_running_as_service,
 )
 from modules.utils.map import (
-    remove_maptiles
+    get_maptile_ext_from_url,
+    normalize_maptile_ext,
+    remove_maptiles,
 )
 from modules.utils.timer import Timer
 
@@ -111,7 +113,7 @@ class Config:
 
     # DEM tile (Digital Elevation Model)
     G_USE_DEM_TILE = False
-    G_DEM_MAP = "jpn_kokudo_chiri_in" #mapbox_terrain_rgb, jpn_kokudo_chiri_in
+    G_DEM_MAP = "mapterhorn" #mapterhorn, mapbox_terrain_rgb, jpn_kokudo_chiri_in
     G_DEM_MAP_CONFIG = {}
 
     # wind speed, direction and headwind
@@ -227,6 +229,7 @@ class Config:
     G_DISPLAY_PARAM = {
         "SPI_CLOCK": 2000000,
         "USE_BACKLIGHT": False,
+        "USE_DRM": False,
     }
 
     # auto backlight
@@ -500,6 +503,12 @@ class Config:
             for key in map_config:
                 if "tile_size" not in map_config[key]:
                     map_config[key]["tile_size"] = 256
+                if "ext" in map_config[key]:
+                    map_config[key]["ext"] = normalize_maptile_ext(map_config[key]["ext"])
+                else:
+                    map_config[key]["ext"] = get_maptile_ext_from_url(
+                        map_config[key].get("url")
+                    )
 
         if self.G_MAP not in self.G_MAP_CONFIG:
             app_logger.error(f"{self.G_MAP} does not exist in {self.G_MAP_LIST}")
@@ -754,10 +763,34 @@ class Config:
 
     async def power_off(self):
         service_state = is_running_as_service() if self.G_IS_RASPI else False
-        
-        await self.quit()
-        if service_state and self.G_IS_RASPI:
-            exec_cmd(["sudo", "poweroff"])
+
+        if not self.G_IS_RASPI:
+            await self.quit()
+            return
+
+        if service_state:
+            # Run shutdown in a transient unit so it survives this service stopping.
+            shutdown_cmd = (
+                "systemctl stop pizero_bikecomputer; "
+                "while systemctl is-active --quiet pizero_bikecomputer; do sleep 0.2; done; "
+                "systemctl poweroff"
+            )
+            rc = exec_cmd(
+                [
+                    "sudo",
+                    "systemd-run",
+                    "--unit",
+                    "pizero_bikecomputer-poweroff",
+                    "/bin/sh",
+                    "-c",
+                    shutdown_cmd,
+                ]
+            )
+            if rc is None or rc != 0:
+                exec_cmd(["sudo", "systemctl", "poweroff"])
+            return
+        else:
+            await self.quit()
 
     def reboot(self):
         if self.G_IS_RASPI:
