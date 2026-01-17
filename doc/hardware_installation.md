@@ -43,33 +43,30 @@ Pros&Cons
 - <img src="https://user-images.githubusercontent.com/12926652/206317535-71345000-8dfa-4051-a674-15e21afb4203.jpeg" width=480 />
 
 Display alternatives: 
-- [Aliexpress LCD Screen Matrix For Wahoo WFCC5 Elemnt Bolt V1 Bike Computer Assembly Replacement Display](https://www.aliexpress.com/item/3256808580930078.html)
-- [Aliexpress LCD Screen Matrix For Wahoo WFCC5 Elemnt Bolt V1 Bike Computer Assembly Replacement Display](https://www.aliexpress.com/item/3256808586674293.html)
-- [Aliexpress A42Z-LCD Screen Matrix For Wahoo WFCC5 Elemnt Bolt V1 Bike Computer Assembly Replacement Display](https://www.aliexpress.com/item/3256808685919139.html)
+- [Aliexpress T36C LCD Screen Matrix for WFCC5 Elemnt Bolt V1 Bike Computer Assembly Replacement Display](https://www.aliexpress.com/item/1005009516365398.html)
+- [Aliexpress For Wahoo Element Roam V1 (WFCC4) LCD Display Touch Screen Digitizer Glass Panel Full Assembly Replacement Repair Parts](https://www.aliexpress.com/item/1005010104239101.html)
 - [Aliexpress New LPM027M128B LPM027M128C LTPS TFT-LCD, LCM 2.7 inch 400X240 display](https://www.aliexpress.com/item/1005002351792191.html)
 - [Aliexpress New Wahoo Element Roam WFCC4 Screen Lcd Display Replacement/Repair](https://www.aliexpress.com/item/1005008210004927.html): Protector panel is included.
-- [Aliexpress LCD Screen Matrix For Wahoo WFCC5 Elemnt Bolt V1 V2 Bike Computer Assembly Replacement Display](https://www.aliexpress.com/item/1005007797291187.html): choose "V1"
-- [Aliexpress LCD Screen Matrix For Wahoo WFCC5 Elemnt Bolt V1 V2 Bike Computer Assembly Replacement Display](https://www.aliexpress.com/item/1005007782333344.html): different page, choose "V1"
   - <img src="https://user-images.githubusercontent.com/12926652/206317870-dfb424bf-f16f-49bc-a39f-3310ae243257.png" width=320 />
-- [Digikey LPM027M128B](https://www.digikey.com/en/products/detail/azumo/12380-06-T2/9602620): backlight cable is different from original
+- [Digikey LPM027M128B](https://www.digikey.com/en/products/detail/azumo/12380-06-T2/9602620): backlight cable is different from original: Obsolete
 - [MIP Reflective color LCD module 2.7" w/ backlight (LPM027M128C)](https://international.switch-science.com/catalog/5395/) from Switch Science(JP): sold out
 
 Interface board alternatives:
 - [Adafruit SHARP Memory Display Breakout](https://www.adafruit.com/product/4694): Replace monochrome LCD panel. Backlight control is not included.
 
-### JDI [LPM044M141](https://www.digikey.jp/ja/products/detail/azumo/12561-06-A1/19110331)
+### 3.4 inch 64 colors MIP reflective display.
+
+- Azumo [14793-06_A3](https://www.digikey.jp/ja/products/detail/azumo/14793-06-A3/26682148) (not available for individual orders)
+  - <img width="320" alt="3.4inch-01" src="https://github.com/user-attachments/assets/43fa3611-0155-4abf-baa6-040cf3165ba0" /> <img width="320" alt="3.4inch-02" src="https://github.com/user-attachments/assets/f248ded7-ede3-4ccb-b39d-e62e6ea914c3" />
+- AUO U340QBN01.0 [alibaba](https://www.alibaba.com/product-detail/3-4-Inch-TFT-LCD-Display_1601438380650.html) / [youritech](https://youritech-online.com/products/u340qbn01-0-with-front-light-3-4-inch-sunlight-readable-lcd-display-272x451-reflective-spi-sunlight-readable-mip-display?variant=52037710479669)
+  - <img width="320" alt="3.4inch-01" src="https://pbs.twimg.com/media/GwL_jrIXEAAZl7b?format=jpg" /> <img width="320" alt="3.4inch-02" src="https://pbs.twimg.com/media/Gw-bSmlWoAAOXvG?format=jpg" />
+
+### JDI [LPM044M141](https://www.digikey.jp/ja/products/detail/azumo/12561-06-A1/19110331): Obsolete
 
 4.4 inch 8 colors MIP reflective display.
 
 - <img width="320" alt="4.4inch-01" src="https://github.com/user-attachments/assets/d31f1cd3-5472-47b1-8995-1efe8fb5ef97" /> <img width="320" alt="4.4inch-02" src="https://github.com/user-attachments/assets/87afa6c3-ba28-4dbc-970b-e3c7c9a55806" /> <img width="320" alt="4inch-03" src="https://github.com/user-attachments/assets/3b9528d5-9e02-437a-a13f-2607aac2f90d" />
 
-### 3.4 inch 64 colors MIP reflective display.
-
-- Azumo [14793-06_A3](https://www.digikey.jp/ja/products/detail/azumo/14793-06-A3/26682148) (not available for individual orders)
-  - <img width="320" alt="3.4inch-01" src="https://github.com/user-attachments/assets/43fa3611-0155-4abf-baa6-040cf3165ba0" /> <img width="320" alt="3.4inch-02" src="https://github.com/user-attachments/assets/f248ded7-ede3-4ccb-b39d-e62e6ea914c3" />
-
-- AUO [U340QBN01.0](https://www.alibaba.com/product-detail/3-4-Inch-TFT-LCD-Display_1601438380650.html)
-  - <img width="320" alt="3.4inch-01" src="https://pbs.twimg.com/media/GwL_jrIXEAAZl7b?format=jpg" /> <img width="320" alt="3.4inch-02" src="https://pbs.twimg.com/media/Gw-bSmlWoAAOXvG?format=jpg" />
 
 ### [Adafruit SHARP Memory Display Breakout (LS027B7DH01)](https://www.adafruit.com/product/4694)
 
