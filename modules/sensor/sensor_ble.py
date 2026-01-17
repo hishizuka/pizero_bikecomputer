@@ -76,8 +76,6 @@ class SensorBLE(Sensor):
         return True
 
     async def _run_zwift_click_v2_listener(self) -> None:
-        assert self._zwift_click_v2_stop_event is not None
-
         cfg = self.config.G_ZWIFT_CLICK_V2
         preferred_address = ""
         if isinstance(cfg, dict):
