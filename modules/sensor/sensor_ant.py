@@ -274,7 +274,7 @@ class SensorANT(Sensor):
         self.scanner.set_wait_normal_mode()
         app_logger.info("STOP ANT+ multiscan")
 
-    def set_light_mode(self, mode, auto_id=None):
+    def set_light_mode(self, mode, auto=False):
         if "LGT" not in self.config.G_ANT["USE"] or not self.config.G_ANT["USE"]["LGT"]:
             return
-        self.device[self.config.G_ANT["ID_TYPE"]["LGT"]].send_light_mode(mode, auto_id)
+        self.device[self.config.G_ANT["ID_TYPE"]["LGT"]].send_light_mode(mode, auto)

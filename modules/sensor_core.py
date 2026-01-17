@@ -585,9 +585,9 @@ class SensorCore:
 
             if self.config.G_ANT["USE_AUTO_LIGHT"] and self.config.G_MANUAL_STATUS == "START":
                 if auto_light:
-                    self.sensor_ant.set_light_mode("FLASH_LOW", auto_id="sensor_core")
+                    self.sensor_ant.set_light_mode("FLASH_LOW", auto=True)
                 else:
-                    self.sensor_ant.set_light_mode("OFF", auto_id="sensor_core")
+                    self.sensor_ant.set_light_mode("OFF", auto=True)
 
             # cpu and memory
             if _IMPORT_PSUTIL:

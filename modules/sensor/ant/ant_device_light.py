@@ -3,9 +3,16 @@ from datetime import datetime
 import array
 import asyncio
 import threading
+from enum import StrEnum
 
 from modules.app_logger import app_logger
 from . import ant_device
+
+
+class LightState(StrEnum):
+    OFF = "OFF"
+    ON = "ON"
+    AUTO = "AUTO"
 
 
 class ANT_Device_Light(ant_device.ANT_Device):
@@ -15,21 +22,14 @@ class ANT_Device_Light(ant_device.ANT_Device):
         "transmission_type": 0x00,
         "channel_type": 0x00,  # Channel.Type.BIDIRECTIONAL_RECEIVE,
     }
-    elements = (
-        # "light_mode",
-        # "pre_light_mode",
-        # "button_state",
-        # "auto_state",
-        # "changed_timestamp",
-        # "auto_on_timestamp",
-    )
+    elements = ()
     page_34_count = 0
     # Bike Lights profile Rev 2.0 (section 5.4.1) suggests retrying a command
     # (using the same sequence number) if the sequence number in Data Page 1
     # does not match the sequence number that was sent.
     light_retry_timeout = 1.0  # [s]
     light_retry_max = 3
-    auto_light_min_duration = 5  #[s]
+    auto_light_min_duration = 5  # [s]
     ack_retry_max = 3
     ack_retry_backoff = (1.0, 2.0, 6.0)
 
@@ -37,13 +37,14 @@ class ANT_Device_Light(ant_device.ANT_Device):
         "bontrager_flare_rt": {
             "OFF": (0, 0x01),
             "STEADY_HIGH": (1, 0x06),  # mode 1, 4.5 hours
-            "STEADY_MID": (5, 0x16),   # mode 5, 13.5 hours
-            "FLASH_HIGH": (7, 0x1E),   # mode 7, 6 hours
-            "FLASH_MID": (8, 0x22),    # mode 8, 12 hours
-            "FLASH_LOW": (63, 0xFE),   # mode 63, 15 hours
+            "STEADY_MID": (5, 0x16),  # mode 5, 13.5 hours
+            "FLASH_HIGH": (7, 0x1E),  # mode 7, 6 hours
+            "FLASH_MID": (8, 0x22),  # mode 8, 12 hours
+            "FLASH_LOW": (63, 0xFE),  # mode 63, 15 hours
         },
     }
     light_name = "bontrager_flare_rt"
+    default_on_mode = "FLASH_LOW"
 
     battery_levels = {
         0x00: "Not Use",
@@ -55,8 +56,6 @@ class ANT_Device_Light(ant_device.ANT_Device):
         0x06: "Charging",
         0x07: "Invalid",
     }
-
-    auto_off_status = {}
 
     state_lock = None
     _pending_light_setting = None
@@ -133,11 +132,21 @@ class ANT_Device_Light(ant_device.ANT_Device):
         with lock:
             self.values["pre_light_mode"] = None
             self.values["light_mode"] = None
+            self.values["light_state"] = self._default_light_state()
             self.values["button_state"] = False
-            self.values["auto_state"] = False
+            self.values["auto_state"] = self.values["light_state"] == LightState.AUTO
             self.values["changed_timestamp"] = None
-            self.values["auto_on_timestamp"] = datetime.now()
+            self.values["auto_on_timestamp"] = None
             self._pending_light_setting = None
+            self._auto_requested_on = False
+            self._auto_last_on = None
+            self._manual_on_mode = self.default_on_mode
+            self._auto_on_mode = self.default_on_mode
+
+    def _default_light_state(self):
+        if self.config.G_ANT["USE_AUTO_LIGHT"]:
+            return LightState.AUTO
+        return LightState.OFF
 
     def close_extra(self):
         self.send_disconnect_light()
@@ -253,7 +262,6 @@ class ANT_Device_Light(ant_device.ANT_Device):
 
     def send_disconnect_light(self):
         self.channel.send_acknowledged_data_with_retry(
-            #array.array("B", [0x20, 0x01, 0x5A, 0x02, 0x00, 0x00, 0x00, 0x00])
             array.array("B", [0x20, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
         )
 
@@ -288,44 +296,113 @@ class ANT_Device_Light(ant_device.ANT_Device):
         payload = self._build_light_setting_payload(mode, seq_no)
         self._queue_send(payload)
 
-    def send_light_mode(self, mode, auto_id=None):
-        if mode == "OFF":
-            self.change_light_setting_off(auto_id)
-        elif mode == "ON_OFF_FLASH_LOW":
-            if not self.values["button_state"]: # OFF -> ON
-                self.change_light_setting("FLASH_LOW", auto_id)
-            else: # ON -> OFF
-                self.change_light_setting_off(auto_id)
-        elif mode in self.light_modes[self.light_name].keys():
-            self.change_light_setting(mode, auto_id)
+    def send_light_mode(self, mode, auto=False):
+        if auto:
+            self._handle_auto_command(mode)
+        else:
+            self._handle_manual_command(mode)
 
-    def change_light_setting(self, mode, auto_id=None):
+    def _handle_manual_command(self, mode):
+        if mode == "ON_OFF_FLASH_LOW":
+            lock = self._ensure_lock()
+            with lock:
+                current = self.values.get("light_state", LightState.OFF)
+            if current == LightState.OFF:
+                self._manual_on_mode = self.default_on_mode
+                next_state = LightState.ON
+            elif current == LightState.ON:
+                if self.config.G_ANT["USE_AUTO_LIGHT"]:
+                    next_state = LightState.AUTO
+                else:
+                    next_state = LightState.OFF
+            else:
+                next_state = LightState.OFF
+            self.set_light_state(next_state)
+            lock = self._ensure_lock()
+            with lock:
+                state = self.values.get("light_state", LightState.OFF)
+            # app_logger.info(f"ANT+ light manual button state: {state}")
+            return
+
+        if mode == "OFF":
+            self.set_light_state(LightState.OFF)
+            return
+
+        if mode in self.light_modes[self.light_name]:
+            self._manual_on_mode = mode
+        else:
+            self._manual_on_mode = self.default_on_mode
+        self.set_light_state(LightState.ON)
+
+    def _handle_auto_command(self, mode):
+        auto_on = mode != "OFF"
         lock = self._ensure_lock()
         with lock:
-            if auto_id is not None:
-                self.auto_off_status[auto_id] = True
+            self._auto_requested_on = auto_on
+            if auto_on:
+                self._auto_last_on = datetime.now()
+                self.values["auto_on_timestamp"] = self._auto_last_on
+                if mode in self.light_modes[self.light_name]:
+                    self._auto_on_mode = mode
+        self._apply_light_state()
 
-                if self.values["light_mode"] != "OFF":
-                    if not self.values["auto_state"]:
-                        return
-                    else:
-                        self.values["auto_on_timestamp"] = datetime.now()
+    def set_light_state(self, state):
+        normalized = self._normalize_state(state)
+        if normalized is None:
+            return
+        lock = self._ensure_lock()
+        with lock:
+            if self.values.get("light_state") == normalized:
+                return
+            self.values["light_state"] = normalized
+            self.values["auto_state"] = normalized == LightState.AUTO
+            self.values["button_state"] = normalized == LightState.ON
+        self._apply_light_state()
 
-            # auto_state + auto_id request: Turn on
-            # auto_state + manual(auto_id is Null) request: Turn on
-            # manual(not auto_state) + manual(auto_id is Null) request: Turn on
-            # manual(not auto_state) + auto_id request: Turn on if OFF, don't turn on if other
-            if auto_id is not None:
-                self.values["auto_state"] = True
-            else:
-                self.values["button_state"] = True
-                self.values["auto_state"] = False
+    def _normalize_state(self, state):
+        if state is None:
+            return None
+        try:
+            return LightState(state)
+        except (ValueError, TypeError):
+            return None
 
-            if self.values["light_mode"] != mode:
-                self.values["light_mode"] = mode
-                self.change_light_mode()
+    def _auto_should_on(self):
+        lock = self._ensure_lock()
+        with lock:
+            requested_on = self._auto_requested_on
+            last_on = self._auto_last_on
+        if requested_on:
+            return True
+        if last_on is None:
+            return False
+        elapsed = (datetime.now() - last_on).total_seconds()
+        return elapsed < self.auto_light_min_duration
 
-        # app_logger.info(f"change_light_setting: {self.values['light_mode']}, mode:{mode}, auto:{auto}, auto_state:{self.values['auto_state']}, button:{self.values['button_state']}, auto_id:{auto_id}")
+    def _resolve_desired_mode(self):
+        lock = self._ensure_lock()
+        with lock:
+            state = self.values.get("light_state", LightState.OFF)
+            manual_on_mode = self._manual_on_mode
+            auto_on_mode = self._auto_on_mode
+        if state == LightState.OFF:
+            return "OFF"
+        if state == LightState.ON:
+            return manual_on_mode
+        if state == LightState.AUTO:
+            if not self.config.G_ANT["USE_AUTO_LIGHT"]:
+                return "OFF"
+            return auto_on_mode if self._auto_should_on() else "OFF"
+        return "OFF"
+
+    def _apply_light_state(self):
+        desired_mode = self._resolve_desired_mode()
+        if desired_mode not in self.light_modes[self.light_name]:
+            desired_mode = "OFF"
+        lock = self._ensure_lock()
+        with lock:
+            self.values["light_mode"] = desired_mode
+        self.change_light_mode()
 
     def change_light_mode(self):
         lock = self._ensure_lock()
@@ -334,44 +411,9 @@ class ANT_Device_Light(ant_device.ANT_Device):
                 self.values["light_mode"] is not None
                 and self.values["light_mode"] != self.values["pre_light_mode"]
             ):
-                # app_logger.info(
-                #     f"ANT+ Light mode change: {self.values['pre_light_mode']} -> {self.values['light_mode']}"
-                # )
                 self.values["pre_light_mode"] = self.values["light_mode"]
                 mode = self.values["light_mode"]
             else:
                 return
 
         self.send_light_setting(mode)
-
-    def change_light_setting_off(self, auto_id=None):
-        lock = self._ensure_lock()
-        with lock:
-            if auto_id is not None:
-                self.auto_off_status[auto_id] = False
-    
-                t = (datetime.now() - self.values["auto_on_timestamp"]).total_seconds()
-                if (
-                    any(self.auto_off_status.values())
-                    or t < self.auto_light_min_duration
-                ):
-                    return
-    
-                if not self.values["auto_state"]:
-                    return
-
-            # auto_state + auto request: Turn off
-            # auto_state + manual request: Turn off
-            # manual(not auto_state) + manual request: Turn off
-            # manual(not auto_state) + auto request: Don't turn off light
-            if auto_id is not None:
-                self.values["auto_state"] = True
-            else:
-                self.values["button_state"] = False
-                self.values["auto_state"] = False
-
-            if self.values["light_mode"] != "OFF":
-                self.values["light_mode"] = "OFF"
-                self.change_light_mode()
-
-        # app_logger.info(f"change_light_setting_off: {self.values['light_mode']}, auto:{auto}, auto_state:{self.values['auto_state']}, button:{self.values['button_state']}, auto_id:{auto_id}")
