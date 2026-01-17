@@ -163,6 +163,8 @@ class Setting:
                 self.config.G_DISPLAY_PARAM["SPI_CLOCK"] = int(c["SPI_CLOCK"])
             if "USE_BACKLIGHT" in c:
                 self.config.G_DISPLAY_PARAM["USE_BACKLIGHT"] = c.getboolean("USE_BACKLIGHT")
+            if "USE_DRM" in c:
+                self.config.G_DISPLAY_PARAM["USE_DRM"] = c.getboolean("USE_DRM")
             if "AUTO_BACKLIGHT_CUTOFF" in c:
                 # store temporary
                 self.config.G_AUTO_BACKLIGHT_CUTOFF = int(c["AUTO_BACKLIGHT_CUTOFF"])
@@ -285,6 +287,7 @@ class Setting:
         c = self.config_parser["DISPLAY_PARAM"]
         c["SPI_CLOCK"] = str(int(self.config.G_DISPLAY_PARAM["SPI_CLOCK"]))
         c["USE_BACKLIGHT"] = str(self.config.G_DISPLAY_PARAM["USE_BACKLIGHT"])
+        c["USE_DRM"] = str(self.config.G_DISPLAY_PARAM["USE_DRM"])
         c["AUTO_BACKLIGHT_CUTOFF"] = str(int(self.config.G_AUTO_BACKLIGHT_CUTOFF))
 
         self.config_parser["GPSD_PARAM"] = {}
