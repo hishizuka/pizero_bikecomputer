@@ -48,23 +48,26 @@ class NetworkMenuWidget(MenuWidget):
     def setup_menu(self):
         wifi_bt_button_func_wifi = None
         wifi_bt_button_func_bt = None
+        auto_wifi_off_func = None
 
         if self.config.G_IS_RASPI:
             wifi_bt_button_func_wifi = lambda: self.onoff_wifi_bt(True, "Wifi")
             wifi_bt_button_func_bt = lambda: self.onoff_wifi_bt(True, "Bluetooth")
+            auto_wifi_off_func = lambda: self.onoff_auto_wifi_off(True)
 
         button_conf = (
             # Name(page_name), button_attribute, connected functions, layout
             ("Wifi", "toggle", wifi_bt_button_func_wifi),
-            ("Bluetooth", "toggle", wifi_bt_button_func_bt),
-            ("BT Pairing", "submenu", self.bt_pairing),
-            ("BT Paired Devices", "submenu", self.bt_paired_devices),
-            ("BT Tethering", "submenu", self.bt_tething),
             (
                 "connect Wifi via WPS",
                 "dialog",
                 lambda: self.config.gui.show_dialog(self.wifi_connect_with_wps, "Connect to Wifi with WPS?")
             ),
+            ("Auto Wifi Off", "toggle", auto_wifi_off_func),
+            ("Bluetooth", "toggle", wifi_bt_button_func_bt),
+            ("BT Pairing", "submenu", self.bt_pairing),
+            ("BT Paired Devices", "submenu", self.bt_paired_devices),
+            ("BT Tethering", "submenu", self.bt_tething),
             (
                 "Reset Bluetooth",
                 "dialog",
@@ -72,7 +75,6 @@ class NetworkMenuWidget(MenuWidget):
                     self.config.network.reset_bluetooth, "Reset Bluetooth"
                 ),
             ),
-            ("IP Address", "dialog", self.show_ip_address),
         )
         self.add_buttons(button_conf)
 
@@ -88,6 +90,7 @@ class NetworkMenuWidget(MenuWidget):
         # initialize toggle button status
         if self.config.G_IS_RASPI:
             self.onoff_wifi_bt(change=False, key="Wifi")
+            self.onoff_auto_wifi_off(change=False)
             self.onoff_wifi_bt(change=False, key="Bluetooth")
 
     def onoff_wifi_bt(self, change=True, key=None):
@@ -96,6 +99,13 @@ class NetworkMenuWidget(MenuWidget):
         status = {}
         status["Wifi"], status["Bluetooth"] = self.config.network.get_wifi_bt_status()
         self.buttons[key].change_toggle(status[key])
+
+    def onoff_auto_wifi_off(self, change=True):
+        if change:
+            self.config.G_AUTO_WIFI_OFF = not self.config.G_AUTO_WIFI_OFF
+            if self.config.G_MANUAL_STATUS == "START":
+                self.config.network.set_wifi_enabled(not self.config.G_AUTO_WIFI_OFF)
+        self.buttons["Auto Wifi Off"].change_toggle(self.config.G_AUTO_WIFI_OFF)
 
     def bt_pairing(self):
         self.change_page("BT Pairing", preprocess=True)
@@ -121,11 +131,6 @@ class NetworkMenuWidget(MenuWidget):
             self.config.gui.change_dialog(
                 title="Connection failed for some reason!", button_label="OK"
             )
-
-    def show_ip_address(self):
-        address = detect_network() or "No address"
-        # Button is OK only
-        self.config.gui.show_dialog_ok_only(None, address)
 
 
 class BluetoothTetheringListWidget(ListWidget):
@@ -254,6 +259,7 @@ class DebugMenuWidget(MenuWidget):
                     "Enable Wifi/BT\n(need reboot)",
                 ),
             ),
+            ("IP Address", "dialog", self.show_ip_address),
             (
                 "Restart",
                 "dialog",
@@ -287,6 +293,11 @@ class DebugMenuWidget(MenuWidget):
                 app_logger.setLevel(level=logging.DEBUG)
                 self.is_log_level_debug = True
         self.buttons["Debug Level Log"].change_toggle(self.is_log_level_debug)
+
+    def show_ip_address(self):
+        address = detect_network() or "No address"
+        # Button is OK only
+        self.config.gui.show_dialog_ok_only(None, address)
 
 
 class DebugLogViewerWidget(MenuWidget):

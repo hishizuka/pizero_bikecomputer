@@ -50,6 +50,13 @@ class WifiManager:
         status["Wifi"], status["Bluetooth"] = self.get_wifi_bt_status()
         exec_cmd(onoff_cmd[key][status[key]])
 
+    def set_wifi_enabled(self, enabled):
+        if not self.config.G_IS_RASPI:
+            return
+
+        cmd = ["sudo", "rfkill", "unblock" if enabled else "block", "wifi"]
+        exec_cmd(cmd, cmd_print=False)
+
     def hardware_wifi_bt(self, status):
         app_logger.info(f"Hardware Wifi/BT: {status}")
         if self.config.G_IS_RASPI:

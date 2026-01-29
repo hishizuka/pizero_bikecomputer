@@ -41,6 +41,8 @@ class Setting:
                 self.config.G_LANG = c["LANG"].upper()
             if "FONT_FILE" in c:
                 self.config.G_FONT_FILE = c["FONT_FILE"]
+            if "AUTO_WIFI_OFF" in c:
+                self.config.G_AUTO_WIFI_OFF = c.getboolean("AUTO_WIFI_OFF")
 
         if "BT" in self.config_parser:
             c = self.config_parser["BT"]
@@ -163,8 +165,6 @@ class Setting:
                 self.config.G_DISPLAY_PARAM["SPI_CLOCK"] = int(c["SPI_CLOCK"])
             if "USE_BACKLIGHT" in c:
                 self.config.G_DISPLAY_PARAM["USE_BACKLIGHT"] = c.getboolean("USE_BACKLIGHT")
-            if "USE_DRM" in c:
-                self.config.G_DISPLAY_PARAM["USE_DRM"] = c.getboolean("USE_DRM")
             if "AUTO_BACKLIGHT_CUTOFF" in c:
                 # store temporary
                 self.config.G_AUTO_BACKLIGHT_CUTOFF = int(c["AUTO_BACKLIGHT_CUTOFF"])
@@ -233,6 +233,7 @@ class Setting:
         c["GROSS_AVE_SPEED"] = str(int(self.config.G_GROSS_AVE_SPEED))
         c["LANG"] = self.config.G_LANG
         c["FONT_FILE"] = self.config.G_FONT_FILE
+        c["AUTO_WIFI_OFF"] = str(self.config.G_AUTO_WIFI_OFF)
 
         self.config_parser["BT"] = {}
         c = self.config_parser["BT"]
@@ -287,7 +288,6 @@ class Setting:
         c = self.config_parser["DISPLAY_PARAM"]
         c["SPI_CLOCK"] = str(int(self.config.G_DISPLAY_PARAM["SPI_CLOCK"]))
         c["USE_BACKLIGHT"] = str(self.config.G_DISPLAY_PARAM["USE_BACKLIGHT"])
-        c["USE_DRM"] = str(self.config.G_DISPLAY_PARAM["USE_DRM"])
         c["AUTO_BACKLIGHT_CUTOFF"] = str(int(self.config.G_AUTO_BACKLIGHT_CUTOFF))
 
         self.config_parser["GPSD_PARAM"] = {}

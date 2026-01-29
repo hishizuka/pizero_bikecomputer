@@ -344,9 +344,19 @@ class LoggerCore:
             "G_MANUAL_STATUS", self.config.G_MANUAL_STATUS, force_apply=True
         )
 
+        if self.config.G_AUTO_WIFI_OFF and self.config.G_MANUAL_STATUS == "STOP":
+            asyncio.create_task(
+                asyncio.to_thread(self.config.network.set_wifi_enabled, True)
+            )
+
         # send online
         if self.config.G_THINGSBOARD_API["STATUS"]:
             self.config.api.send_livetrack_data(quick_send=True)
+
+        if self.config.G_AUTO_WIFI_OFF and self.config.G_MANUAL_STATUS == "START":
+            asyncio.create_task(
+                asyncio.to_thread(self.config.network.set_wifi_enabled, False)
+            )
 
         # show message
         self.config.gui.show_popup(self.config.G_MANUAL_STATUS + popup_extra, 3)
@@ -393,10 +403,18 @@ class LoggerCore:
  
         u = self.config.gui.gui_config.G_UNIT
         value_message = f"{(pre_lap_avg['speed'] * 3.6):{u['Speed'][0]}} {u['Speed'][1]}"
+        sensor_items = []
         if self.config.G_ANT["USE"]["HR"]:
-            value_message += f", {newline}{pre_lap_avg['heart_rate']:{u['HeartRate'][0]}} {u['HeartRate'][1]}"
+            sensor_items.append(
+                f"{pre_lap_avg['heart_rate']:{u['HeartRate'][0]}} {u['HeartRate'][1]}"
+            )
         if self.config.G_ANT["USE"]["PWR"]:
-            value_message += f", {newline}{pre_lap_avg['power']:{u['Power'][0]}} {u['Power'][1]}"
+            sensor_items.append(
+                f"{pre_lap_avg['power']:{u['Power'][0]}} {u['Power'][1]}"
+            )
+        if sensor_items:
+            line_sep = newline if newline else ", "
+            value_message += f"{line_sep}{', '.join(sensor_items)}"
 
         self.config.gui.show_popup_multiline(
             lap_message,
