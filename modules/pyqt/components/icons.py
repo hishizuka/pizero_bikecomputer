@@ -121,6 +121,18 @@ class MapPrevIcon(_QIconWithPath):
     path = "img/chevron_backward.svg"
 
 
+class BluetoothIcon(_QIconWithPath):
+    path = "img/bluetooth.svg"
+
+
+class LightBeamIcon(_QIconWithPath):
+    path = "img/light_beam.svg"
+
+
+class SatelliteAltIcon(_QIconWithPath):
+    path = "img/satellite_alt.svg"
+
+
 # "Icons label"
 class BaseMenuIcon(QtWidgets.QLabel):
     icon = None  # icon class

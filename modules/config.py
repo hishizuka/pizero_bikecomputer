@@ -18,6 +18,7 @@ from modules.utils.cmd import (
     exec_cmd,
     is_running_as_service,
 )
+from modules.utils.time import init_utc_offset
 from modules.utils.map import (
     get_maptile_ext_from_url,
     normalize_maptile_ext,
@@ -131,6 +132,9 @@ class Config:
 
     # for first run
     G_INIT_ONLY = False
+
+    # dual display mode (map left / values right)
+    G_DUAL_DISPLAY_MODE = False
 
     # Raspberry Pi detection (detect in __init__())
     G_IS_RASPI = False
@@ -394,6 +398,8 @@ class Config:
     # Bluetooth tethering
     G_BT_PAN_DEVICE = ""
     G_AUTO_BT_TETHERING = False
+    # Wi-Fi auto power saving
+    G_AUTO_WIFI_OFF = False
 
     # Zwift Click V2 (BLE remote buttons)
     # Keep only the user-facing enable flag here; protocol/tuning defaults live in zwift_click_v2.py.
@@ -468,6 +474,7 @@ class Config:
         # read setting.conf and state.pickle
         self.setting = Setting(self)
         self.state = AppState()
+        init_utc_offset()
 
         #add map settings
         add_map_config(self)
@@ -646,8 +653,8 @@ class Config:
                     self.gui.scroll_prev()
                 elif key == "q" and self.gui:
                     await self.quit()
-                ##### temporary #####
-                # test hardware key signals
+                if key == "S":
+                    self.gui.get_screenshot()
                 elif key == "m" and self.gui:
                     self.gui.enter_menu()
                 elif key == "v" and self.gui:
@@ -658,7 +665,7 @@ class Config:
                     self.gui.press_shift_tab()
                 elif key == "b" and self.gui:
                     self.gui.back_menu()
-                # test other functions #
+                ##### temporary #####
                 elif key == "i" and self.gui and self.gui.map_widget:
                     self.gui.map_widget.modify_map_tile()
                 elif key == "@" and self.gui and self.gui.map_widget:
@@ -784,7 +791,8 @@ class Config:
                     "/bin/sh",
                     "-c",
                     shutdown_cmd,
-                ]
+                ],
+                cmd_print=False
             )
             if rc is None or rc != 0:
                 exec_cmd(["sudo", "systemctl", "poweroff"])

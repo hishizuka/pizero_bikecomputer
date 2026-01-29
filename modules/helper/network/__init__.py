@@ -84,6 +84,9 @@ class Network:
     def onoff_wifi_bt(self, key=None):
         return self.wifi.onoff_wifi_bt(key)
 
+    def set_wifi_enabled(self, enabled):
+        return self.wifi.set_wifi_enabled(enabled)
+
     def hardware_wifi_bt(self, status):
         return self.wifi.hardware_wifi_bt(status)
 

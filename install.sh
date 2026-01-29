@@ -185,7 +185,7 @@ fi
 
 # Enable I2C
 if [[ "$enable_i2c" == "true" ]]; then
-    #sudo apt install -y python3-smbus2
+    sudo apt install -y python3-smbus2 libgpiod3 libgpiod-dev python3-libgpiod
     pip install magnetic-field-calculator
     # Enable I2C on Raspberry Pi
     echo "🔧 Enabling i2c on Raspberry Pi..."
@@ -201,6 +201,7 @@ fi
 
 # Enable SPI
 if [[ "$enable_spi" == "true" ]]; then
+sudo apt install -y libgpiod3 libgpiod-dev python3-libgpiod
     # Enable SPI on Raspberry Pi
     echo "🔧 Enabling spi on Raspberry Pi..."
     if [[ "$has_raspi_config" == "true" ]]; then

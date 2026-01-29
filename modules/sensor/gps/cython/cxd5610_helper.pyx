@@ -39,6 +39,13 @@ cdef inline object _nan_to_none(double v):
   return v
 
 
+cdef inline object _round_or_none(double v, int ndigits):
+  if isnan(v):
+    return None
+  # Use Python's round for consistent decimal rounding.
+  return round(v, ndigits)
+
+
 cdef inline object _ts_to_epoch(timespec ts):
   if ts.tv_sec == 0:
     return None
@@ -82,7 +89,7 @@ cdef class CXD5610:
 
   @property
   def speed(self):
-    return _nan_to_none(self.data.speed)
+    return _round_or_none(self.data.speed, 2)
 
   @property
   def track(self):
@@ -98,15 +105,15 @@ cdef class CXD5610:
 
   @property
   def pdop(self):
-    return _nan_to_none(self.data.pdop)
+    return _round_or_none(self.data.pdop, 1)
 
   @property
   def hdop(self):
-    return _nan_to_none(self.data.hdop)
+    return _round_or_none(self.data.hdop, 1)
 
   @property
   def vdop(self):
-    return _nan_to_none(self.data.vdop)
+    return _round_or_none(self.data.vdop, 1)
 
   @property
   def used_sats(self):

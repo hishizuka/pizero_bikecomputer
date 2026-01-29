@@ -175,7 +175,7 @@ class api:
         f_name = self.get_openmeteo_current_wind_data_internal.__name__
         bt_open_result = await self.network.open_bt_tethering(f_name)
         if not bt_open_result.is_success():
-            return
+            return [np.nan, np.nan]
 
         # https://open-meteo.com/en/docs
         # hourly=temperature_2m,precipitation,weathercode,windspeed_10m,winddirection_10m
@@ -208,6 +208,8 @@ class api:
             return self.pre_value["OPENMETEO_WIND"]
         elif forcast_time is not None and "hourly" in response:
             return [response["hourly"]["wind_speed_10m"][0], response["hourly"]["wind_direction_10m"][0]]
+
+        return [np.nan, np.nan]
 
     async def get_ridewithgps_route(self, add=False, reset=False):
         if (

@@ -39,7 +39,7 @@
 
 # Software Installation
 
-Requires Python version 3.13 or later.
+Requires Python version 3.13 or later, Qt 6.8 or later (PyQt6 or PySide6).
 Raspberry Pi OS Trixie or later. Bookworm is not supported.
 
 ## macOS or Linux
@@ -97,9 +97,9 @@ $ cd
 $ sudo apt install -y git python3-venv python3-yaml cython3 cmake python3-numpy sqlite3 libsqlite3-dev python3-pil python3-aiohttp python3-aiofiles python3-psutil python3-pyqt6 python3-pyqt6.qtsvg pyqt6-dev-tools
 
 # If there is no python virtual environment.
-$ python -m venv --system-site-packages ~/.env
-$ source ~/.env/bin/activate
-$ echo "source ~/.env/bin/activate" >> ~/.bashrc
+$ python -m venv --system-site-packages ~/.venv
+$ source ~/.venv/bin/activate
+$ echo "source ~/.venv/bin/activate" >> ~/.bashrc
 
 $ pip install oyaml polyline qasync pyqtgraph git+https://github.com/hishizuka/crdp.git
 
@@ -146,8 +146,16 @@ Assume SPI interface is on in raspi-config.
 
 For JDI MIP Reflective color LCD module and Adafruit SHARP Memory Display Breakout.
 
+pigpio is not available in Trixie standard packages. Install manually:
+
 ```
-$ sudo apt install python3-pigpio
+$ cd
+$ wget https://github.com/joan2937/pigpio/archive/master.zip
+$ unzip master.zip
+$ cd pigpio-master
+$ make
+$ sudo make install
+
 $ sudo systemctl enable pigpiod
 $ sudo systemctl start pigpiod
 ```
@@ -177,7 +185,7 @@ Follow [official setup guide](https://wiki.dfrobot.com/Raspberry_Pi_e-ink_Displa
 
 Assume I2C interface is on in raspi-config.
 
-Next, install `smbus2` if not installed. `smbus2` is installed by default on Raspberry Pi OS Bookworm and later.
+Next, install `smbus2` if not installed.
 
 ```
 $ sudo apt install python3-smbus2
