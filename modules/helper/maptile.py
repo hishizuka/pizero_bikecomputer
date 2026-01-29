@@ -125,6 +125,49 @@ JMA_RAIN_COLOR_CONV = np.array([
     [180,   0,   0, 255], # #B40000,   80~[mm/h]
 ], dtype='uint8')
 
+# Downsampled Universal Blue palette for legend use (light -> strong).
+RAINVIEWER_UNIVERSAL_BLUE_LEGEND = np.array([
+    [199, 255, 255, 127], # #C7FFFF7F
+    [191, 255, 255, 255], # #BFFFFF
+    [127, 191, 255, 255], # #7FBFFF
+    [ 79, 143, 255, 255], # #4F8FFF
+    [ 47, 111, 255, 255], # #2F6FFF
+    [ 15,  79, 255, 255], # #0F4FFF
+    [  0,  47, 255, 255], # #002FFF
+    [  0,  15, 255, 255], # #000FFF
+    [  0,   0, 255, 255], # #0000FF
+], dtype='uint8')
+
+# OpenPortGuide wind_stream legend (Bft 0-1 ... >12).
+OPENPORTGUIDE_WIND_STREAM_LEGEND = np.array([
+    [160,   0, 200, 255], # 0-1
+    [130,   0, 220, 255], # 1-2
+    [ 30,  60, 255, 255], # 2-3
+    [  0, 160, 255, 255], # 3-4
+    [  0, 200, 200, 255], # 4-5
+    [  0, 210, 140, 255], # 5-6
+    [  0, 220,   0, 255], # 6-7
+    [160, 230,  50, 255], # 7-8
+    [230, 220,  50, 255], # 8-9
+    [230, 175,  45, 255], # 9-10
+    [240, 130,  40, 255], # 10-11
+    [250,  60,  60, 255], # 11-12
+    [240,   0, 130, 255], # >12
+], dtype='uint8')
+
+# Downsampled NEXRAD Level III palette for legend use (light -> strong).
+RAINVIEWER_NEXRAD_LEGEND = np.array([
+    [  4, 233, 231, 255], # #04E9E7
+    [  0, 172, 243, 255], # #00ACF3
+    [  0, 153,  98, 255], # #009962
+    [  5, 155,   3, 255], # #059B03
+    [251, 245,   0, 255], # #FBF500
+    [250, 158,   0, 255], # #FA9E00
+    [215,   0,   0, 255], # #D70000
+    [214,  32, 231, 255], # #D620E7
+    [255, 255, 255, 255], # #FFFFFF
+], dtype='uint8')
+
 
 async def get_scw_list(url, referer):
     # network check
@@ -160,6 +203,40 @@ def conv_image(image, map_name):
     elif map_name.startswith("jpn_jma_bousai"):
         res = conv_image_internal(image, JMA_RAIN_COLOR, JMA_RAIN_COLOR_CONV)
     return res
+
+
+def build_jma_timeline(past_list, forecast_list, time_format):
+    if not time_format:
+        return []
+
+    def normalize_time_list(raw_list):
+        if not isinstance(raw_list, list):
+            return {}
+        time_map = {}
+        for item in raw_list:
+            if not isinstance(item, dict):
+                continue
+            basetime = item.get("basetime")
+            validtime = item.get("validtime")
+            if not basetime or not validtime:
+                continue
+            try:
+                datetime.strptime(validtime, time_format)
+            except Exception:
+                continue
+            time_map[validtime] = {
+                "basetime": basetime,
+                "validtime": validtime,
+            }
+        return time_map
+
+    forecast_map = normalize_time_list(forecast_list)
+    past_map = normalize_time_list(past_list)
+    # Prefer past entries when validtime overlaps.
+    forecast_map.update(past_map)
+    timeline = list(forecast_map.values())
+    timeline.sort(key=lambda t: t["validtime"])
+    return timeline
 
 
 def get_wind_color(wind_speed):
@@ -220,6 +297,22 @@ def get_scw_prev_next_validtime(map_settings):
             break
 
     return p_vt, p_sd, n_vt, n_sd
+
+
+def get_jma_prev_next_validtime(map_settings):
+    p_vt = n_vt = None
+    timeline = map_settings.get("timeline") or []
+    current_vt = map_settings.get("validtime")
+    if not timeline or not current_vt:
+        return p_vt, n_vt
+    for i, tl in enumerate(timeline):
+        if tl.get("validtime") == current_vt:
+            if i > 0:
+                p_vt = timeline[i - 1].get("validtime")
+            if i < len(timeline) - 1:
+                n_vt = timeline[i + 1].get("validtime")
+            break
+    return p_vt, n_vt
 
 
 def get_wind_with_tile_xy(img_files, x_in_tile, y_in_tile, tilesize, tiles_cond, image, im_array):
@@ -623,6 +716,51 @@ class MapTileWithValues():
                 # app_logger.info(f"get_scw_list Success: {basetime} {tl['it']}]")
                 return
 
+    async def update_jpn_jma_bousai_timeline(self, map_settings):
+        self.update_overlay_rain_basetime(map_settings)
+        current_time = map_settings.get("current_time")
+        if current_time is None:
+            return
+
+        if (
+            map_settings.get("timeline_update_date") == current_time
+            and map_settings.get("timeline")
+        ):
+            return
+
+        if not detect_network():
+            return
+
+        past_url = map_settings.get("past_time_list")
+        forecast_url = map_settings.get("forcast_time_list")
+        if not past_url and not forecast_url:
+            return
+
+        past_list = await get_json(past_url) if past_url else None
+        forecast_list = await get_json(forecast_url) if forecast_url else None
+        if not past_list and not forecast_list:
+            return
+
+        time_format = map_settings.get("time_format")
+        timeline = build_jma_timeline(past_list, forecast_list, time_format)
+        if not timeline:
+            return
+
+        map_settings["timeline"] = timeline
+        map_settings["timeline_update_date"] = current_time
+
+        current_str = current_time.strftime(time_format)
+        selected = None
+        for item in timeline:
+            if item["validtime"] <= current_str:
+                selected = item
+            else:
+                break
+        if selected is None:
+            selected = timeline[0]
+        map_settings["basetime"] = selected["basetime"]
+        map_settings["validtime"] = selected["validtime"]
+
     def update_overlay_wind_basetime(self, map_settings):
 
         # update current_time
@@ -643,7 +781,18 @@ class MapTileWithValues():
         else:
             return False
 
-    async def get_prev_next_validtime(self, overlay_type, map_config, map_name):
+    @staticmethod
+    def get_jma_basetime_for_validtime(map_settings, validtime):
+        if not validtime:
+            return None
+        for item in map_settings.get("timeline") or []:
+            if item.get("validtime") == validtime:
+                return item.get("basetime")
+        return None
+
+    async def get_prev_next_validtime(
+        self, overlay_type, map_config, map_name, skip_update=False
+    ):
         map_settings = map_config[map_name]
         # timeline update
         ufunc_map = {
@@ -651,12 +800,14 @@ class MapTileWithValues():
             "WIND": self.update_overlay_windmap_timeline,
         }
         ufunc = ufunc_map.get(overlay_type)
-        if ufunc:
+        if ufunc and not skip_update:
             await ufunc(map_settings, map_name)
 
         p_vt, p_sd, n_vt, n_sd = None, None, None, None
         if map_name.startswith("jpn_scw"):
             p_vt, p_sd, n_vt, n_sd = get_scw_prev_next_validtime(map_settings)
+        elif map_name.startswith("jpn_jma_bousai"):
+            p_vt, n_vt = get_jma_prev_next_validtime(map_settings)
         elif map_settings['validtime'] is not None:
             time_fmt = map_settings["time_format"]
             def parse(s):
@@ -681,6 +832,10 @@ class MapTileWithValues():
         return p_vt, p_sd, n_vt, n_sd
 
     async def update_overlay_rainmap_timeline(self, map_settings, map_name):
+
+        if map_name.startswith("jpn_jma_bousai"):
+            await self.update_jpn_jma_bousai_timeline(map_settings)
+            return
 
         if not self.update_overlay_rain_basetime(map_settings):
             return
