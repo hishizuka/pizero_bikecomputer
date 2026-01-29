@@ -18,11 +18,10 @@ class MapButton(QtWidgets.QPushButton):
     STYLES = """
       QPushButton {
         border-radius: 12px;
-        border-style: outset;
-        border-width: 1px;
+        border: 1px solid rgba(0, 0, 0, 192);
         font-size: 25px;
         color: rgba(0, 0, 0, 192);
-        background: rgba(255, 255, 255, 128);
+        background-color: rgba(255, 255, 255, 128);
       }
 
       QPushButton:pressed {

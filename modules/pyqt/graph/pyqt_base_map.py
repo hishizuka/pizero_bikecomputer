@@ -46,7 +46,6 @@ class BaseMapWidget(ScreenWidget):
 
     buttons = None
     lock_status = True
-    button_press_count = None
 
     # show range from zoom
     zoom = 2000  # [m]
@@ -77,7 +76,6 @@ class BaseMapWidget(ScreenWidget):
 
     def __init__(self, parent, config):
         self.buttons = {}
-        self.button_press_count = {}
         super().__init__(parent, config)
 
         self.signal_move_x_plus.connect(self.move_x_plus)
@@ -119,13 +117,6 @@ class BaseMapWidget(ScreenWidget):
         self.buttons["lock"].clicked.connect(self.switch_lock)
         self.buttons["zoomdown"].clicked.connect(self.zoom_minus)
         self.buttons["zoomup"].clicked.connect(self.zoom_plus)
-
-        # long press
-        self.buttons["lock"].setAutoRepeat(True)
-        self.buttons["lock"].setAutoRepeatDelay(1000)
-        self.buttons["lock"].setAutoRepeatInterval(1000)
-        self.buttons["lock"]._state = 0
-        self.button_press_count["lock"] = 0
 
     # override disable
     def set_minimum_size(self):
