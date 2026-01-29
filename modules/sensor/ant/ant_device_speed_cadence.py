@@ -202,7 +202,7 @@ class ANT_Device_Cadence(ant_device.ANT_Device):
         self.values["on_data_timestamp"] = t
         self.pre_delta = self.delta[:]
 
-        page = data[0] & 0b111
+        page = data[0] & 0b01111111  # Bit7 is toggle, bits 0-6 are page number
         # Data Page 2: Manufacturer ID
         if page == 2:
             self.values["manu_id"] = data[1]

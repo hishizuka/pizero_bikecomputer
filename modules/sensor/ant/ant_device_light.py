@@ -174,7 +174,7 @@ class ANT_Device_Light(ant_device.ANT_Device):
             seq_no = data[4]
             lock = self._ensure_lock()
             with lock:
-                self.battery_status = self.battery_levels[data[2] >> 5]
+                self.values["battery_status"] = self.battery_levels[(data[2] >> 5) & 0b111]
                 # Data Page 1 (Table 7-3): Light Type is 3 bits (2:4)
                 self.light_type = (data[2] >> 2) & 0b00111
 

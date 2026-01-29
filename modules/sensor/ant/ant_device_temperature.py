@@ -24,3 +24,6 @@ class ANT_Device_Temperature(ant_device.ANT_Device):
                 self.structPattern[self.name].unpack(data[0:8])[0] / 100, 1
             )
             self.values["timestamp"] = datetime.now()
+        # Common Data Page 82 (0x52): Battery Status
+        elif data[0] == 0x52:
+            self.setCommonPage82(data[6:8], self.values)

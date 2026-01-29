@@ -110,7 +110,6 @@ class ANT_Device_Power(ant_device.ANT_Device):
             self.setCommonPage81(data, self.values)
         # Common Data Page 82 (0x52): Battery Status
         elif data[0] == 0x52:
-            # self.setCommonPage82(data, self.values)
             self.setCommonPage82(data[6:8], self.values)
 
         # self.channel.send_acknowledged_data(array.array('B',[0x46,0xFF,0xFF,0xFF,0xFF,0x88,0x02,0x01]))

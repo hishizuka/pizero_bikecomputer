@@ -14,9 +14,10 @@ class ANT_Device_HeartRate(ant_device.ANT_Device):
     pickle_key = "ant+_hr_values"
 
     def on_data(self, data):
+        page = data[0] & 0x7F  # Bit7 is toggle, bits 0-6 are page number
         self.values["heart_rate"] = data[7]
         self.values["timestamp"] = datetime.now()
-        # self.channel.send_acknowledged_data(array.array('B',[0x46,0xFF,0xFF,0xFF,0xFF,0x88,0x06,0x01]))
+
         # if data[0] & 0b1111 == 0b000: # 0x00 or 0x80
         #  print("0x00 : ", format_list(data))
         # elif data[0] & 0b1111 == 0b010: # 0x02 or 0x82
@@ -27,3 +28,19 @@ class ANT_Device_HeartRate(ant_device.ANT_Device):
         #  print("0x06 capabilities: ", format_list(data))
         # elif data[0] & 0b1111 == 0b111: # 0x07 or 0x87
         #  print("0x07 battery status: ", format_list(data))
+
+        # Data Page 7 - Battery Status (0x07)
+        if page == 0x07:
+            frac = data[2]
+            desc = data[3]
+            status_code = (desc >> 4) & 0x07
+            coarse = desc & 0x0F
+
+            self.values["battery_status"] = self.battery_status.get(
+                status_code, "Invalid"
+            )
+            if coarse == 0x0F:
+                self.values["battery_voltage"] = self.config.G_ANT_NULLVALUE
+            else:
+                self.values["battery_voltage"] = round(coarse + (frac / 256.0), 2)
+
