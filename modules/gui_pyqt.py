@@ -29,6 +29,8 @@ from modules._qt_qtwidgets import (
 )
 from modules.gui_qt_base import GUI_Qt_Base
 from modules.utils.timer import Timer, log_timers
+from modules.pyqt.pyqt_status_bar import StatusBarWidget
+from modules.pyqt.pyqt_dialog import CachedDialog
 
 
 class SplashScreen(QtWidgets.QWidget):
@@ -99,10 +101,34 @@ class MainWindow(QtWidgets.QMainWindow):
         self._paint_delegate(event)
 
 
+class DualDisplayWidget(QtWidgets.QWidget):
+    def __init__(self, left_widget, right_widget, parent=None):
+        super().__init__(parent=parent)
+        self.left_widget = left_widget
+        self.right_widget = right_widget
+
+        layout = QtWidgets.QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(self.left_widget)
+        layout.addWidget(self.right_widget)
+
+    def resizeEvent(self, event):
+        total_w = self.width()
+        left_w = total_w // 2
+        right_w = total_w - left_w
+        self.left_widget.setFixedWidth(left_w)
+        self.right_widget.setFixedWidth(right_w)
+        super().resizeEvent(event)
+
+
 class GUI_PyQt(GUI_Qt_Base):
     main_window = None
 
     stack_widget = None
+    root_widget = None
+    root_layout = None
+    status_bar = None
     button_box_widget = None
     main_page = None
     main_page_index = 0
@@ -113,6 +139,7 @@ class GUI_PyQt(GUI_Qt_Base):
     map_widget = None
     cuesheet_widget = None
     multi_scan_widget = None
+    dual_mode = False
 
     # signal
     signal_next_button = Signal(int)
@@ -138,6 +165,8 @@ class GUI_PyQt(GUI_Qt_Base):
     
     @property
     def grab_func(self):
+        if self.root_widget is not None:
+            return self.root_widget.grab().toImage()
         return self.stack_widget.grab().toImage()
 
     def __init__(self, config):
@@ -152,10 +181,22 @@ class GUI_PyQt(GUI_Qt_Base):
         self.main_window.set_gui(self)
         self.main_window.show()
 
-        self.stack_widget = QtWidgets.QStackedWidget(self.main_window)
-        self.main_window.setCentralWidget(self.stack_widget)
+        self.root_widget = QtWidgets.QWidget(self.main_window)
+        self.root_layout = QtWidgets.QVBoxLayout(self.root_widget)
+        self.root_layout.setContentsMargins(0, 0, 0, 0)
+        self.root_layout.setSpacing(0)
+
+        self.status_bar = StatusBarWidget(self.root_widget, self.config)
+        self.status_bar.setVisible(True)
+        self.root_layout.addWidget(self.status_bar)
+
+        self.stack_widget = QtWidgets.QStackedWidget(self.root_widget)
+        self.root_layout.addWidget(self.stack_widget)
+        self.root_layout.setStretch(1, 1)
+
+        self.main_window.setCentralWidget(self.root_widget)
         self.stack_widget.setContentsMargins(0, 0, 0, 0)
-        self.set_render_widget(self.stack_widget)
+        self.set_render_widget(self.root_widget)
 
         # stack_widget elements (splash)
         splash_widget = SplashScreen(self.stack_widget)
@@ -173,6 +214,8 @@ class GUI_PyQt(GUI_Qt_Base):
         self.init_buffer(self.config.display)
         if self.display_active:
             self.main_window.set_paint_delegate(lambda event: self.draw_display())
+
+        self.stack_widget.currentChanged.connect(self.on_change_stack_widget)
 
         self.exec()
 
@@ -229,6 +272,11 @@ class GUI_PyQt(GUI_Qt_Base):
             self.msg_queue = asyncio.Queue()
             self.msg_event = asyncio.Event()
             asyncio.create_task(self.msg_worker())
+
+            # Cached dialog for popup messages
+            self._dialog = CachedDialog(
+                self.stack_widget, self.main_window, QT_PE_WIDGET
+            )
 
         with timers[1]:
             import modules.pyqt.graph.pyqt_map as pyqt_map
@@ -357,9 +405,37 @@ class GUI_PyQt(GUI_Qt_Base):
             main_layout.setContentsMargins(0, 0, 0, 0)
             main_layout.setSpacing(0)
 
-            # main Widget
-            self.main_page = QtWidgets.QStackedWidget(main_widget)
-            self.main_page.setContentsMargins(0, 0, 0, 0)
+            self.dual_mode = bool(self.config.G_DUAL_DISPLAY_MODE)
+            if self.dual_mode:
+                if self.status_bar is not None and self.root_layout is not None:
+                    self.root_layout.removeWidget(self.status_bar)
+                    self.status_bar.setParent(None)
+
+                self.map_widget = pyqt_map.MapWidget(main_widget, self.config)
+                self.main_page = QtWidgets.QStackedWidget(main_widget)
+                self.main_page.setContentsMargins(0, 0, 0, 0)
+
+                right_widget = QtWidgets.QWidget(main_widget)
+                right_layout = QtWidgets.QVBoxLayout(right_widget)
+                right_layout.setContentsMargins(0, 0, 0, 0)
+                right_layout.setSpacing(0)
+                if self.status_bar is not None:
+                    self.status_bar.setParent(right_widget)
+                    right_layout.addWidget(self.status_bar)
+                right_layout.addWidget(self.main_page)
+                right_layout.setStretch(1, 1)
+
+                dual_widget = DualDisplayWidget(
+                    self.map_widget,
+                    right_widget,
+                    parent=main_widget,
+                )
+
+                main_layout.addWidget(dual_widget)
+            else:
+                # main Widget
+                self.main_page = QtWidgets.QStackedWidget(main_widget)
+                self.main_page.setContentsMargins(0, 0, 0, 0)
 
             for k, v in self.gui_config.layout.items():
                 if not v["STATUS"]:
@@ -409,10 +485,11 @@ class GUI_PyQt(GUI_Qt_Base):
                         )
                         self.main_page.addWidget(self.course_profile_graph_widget)
                     elif k == "SIMPLE_MAP":
-                        self.map_widget = pyqt_map.MapWidget(
-                            self.main_page, self.config
-                        )
-                        self.main_page.addWidget(self.map_widget)
+                        if not self.dual_mode:
+                            self.map_widget = pyqt_map.MapWidget(
+                                self.main_page, self.config
+                            )
+                            self.main_page.addWidget(self.map_widget)
                     elif (
                         k == "CUESHEET"
                     ):
@@ -428,7 +505,8 @@ class GUI_PyQt(GUI_Qt_Base):
                 self.multiscan_back_index = self.multiscan_index
 
             # integrate main_layout
-            main_layout.addWidget(self.main_page)
+            if not self.dual_mode:
+                main_layout.addWidget(self.main_page)
             if self.config.display.has_touch:
                 from modules.pyqt.pyqt_button_box_widget import ButtonBoxWidget
 
@@ -440,6 +518,8 @@ class GUI_PyQt(GUI_Qt_Base):
                 self.main_window.showFullScreen()
 
             self.on_change_main_page(self.main_page_index)
+            if self.dual_mode and self.map_widget is not None:
+                self.map_widget.start()
 
         app_logger.info("Drawing components:")
         log_timers(timers, text_total="  total : {0:.3f} sec")
@@ -610,7 +690,10 @@ class GUI_PyQt(GUI_Qt_Base):
         self.map_method("search_route")
 
     def map_method(self, mode):
-        w = self.main_page.widget(self.main_page.currentIndex())
+        if self.dual_mode and self.map_widget is not None:
+            w = self.map_widget
+        else:
+            w = self.main_page.widget(self.main_page.currentIndex())
         signal = getattr(w, f"signal_{mode}", None)
         if signal and hasattr(signal, "emit"):
             signal.emit()
@@ -688,7 +771,7 @@ class GUI_PyQt(GUI_Qt_Base):
         date = datetime.now()
         filename = date.strftime("%Y-%m-%d_%H-%M-%S.png")
         app_logger.info(f"screenshot: {filename}")
-        p = self.stack_widget.grab()
+        p = (self.root_widget or self.stack_widget).grab()
         p.save(os.path.join(self.config.G_SCREENSHOT_DIR, filename), "png")
         self.config.display.screen_flash_short()
 
@@ -724,6 +807,11 @@ class GUI_PyQt(GUI_Qt_Base):
             if focus_widget:
                 focus_widget.clearFocus()
 
+    def on_change_stack_widget(self, index):
+        if self.status_bar is None:
+            return
+        self.status_bar.setVisible(True)
+
     def change_menu_back(self):
         current_widget = self.stack_widget.currentWidget()
         back_method = getattr(current_widget, "back", None)
@@ -751,209 +839,26 @@ class GUI_PyQt(GUI_Qt_Base):
     async def show_dialog_base(self, msg):
         if self.display_dialog:
             return
-
-        title = msg.get("title")
-        title_icon = msg.get("title_icon")  # QtGui.QIcon
-        message = msg.get("message")
-        button_num = msg.get("button_num", 0)  # 0: none, 1: OK, 2: OK+Cancel
-        button_label = msg.get("button_label", None)  # button label for button_num = 1
-        position = msg.get("position", QT_ALIGN_CENTER)
-        text_align = msg.get("text_align", QT_ALIGN_CENTER)
-        fn = msg.get("fn")  # use with OK button(button_num=2)
-
-        default_timeout = 5
-        timeout = msg.get("timeout", default_timeout)
-        if timeout is None:
-            timeout = default_timeout
-            
         self.display_dialog = True
-
-        class DialogButton(QtWidgets.QPushButton):
-            next_button = None
-            prev_button = None
-
-            def focusNextPrevChild(self, is_next):
-                if is_next:
-                    self.next_button.setFocus()
-                else:
-                    self.prev_button.setFocus()
-                return True
-
-        class Container(QtWidgets.QWidget):
-            pe_widget = None
-
-            def showEvent(self, event):
-                if not event.spontaneous():
-                    self.setFocus()
-                    QtCore.QTimer.singleShot(0, self.focusNextChild)
-
-            def paintEvent(self, event):
-                qp = QtWidgets.QStylePainter(self)
-                opt = QtWidgets.QStyleOption()
-                opt.initFrom(self)
-                qp.drawPrimitive(self.pe_widget, opt)
-
-        class DialogBackground(QtWidgets.QWidget):
-            STYLES = """
-              #background {
-                /* transparent black */
-                background-color: rgba(0, 0, 0, 64);
-                /* transparent white */
-                /*
-                  background-color: rgba(255, 255, 255, 128);
-                */
-              }
-              Container {
-                border: 3px solid black;
-                border-radius: 5px;
-                padding: 10px;
-              }
-              Container DialogButton{
-                border: 2px solid #AAAAAA;
-                border-radius: 3px;
-                text-align: center;
-                padding: 3px;
-              }
-              Container DialogButton:pressed{background-color: black; }
-              Container DialogButton:focus{background-color: black; color: white; }
-            """
-
-            def __init__(self, *__args):
-                super().__init__(*__args, objectName="background")
-                self.setStyleSheet(self.STYLES)
-
-        def back():
-            if not self.display_dialog:
-                return
-            self.close_dialog(self.stack_widget_current_index)
-            background.deleteLater()
 
         self.stack_widget_current_index = self.stack_widget.currentIndex()
         self.stack_widget.layout().setStackingMode(QT_STACKINGMODE_STACKALL)
 
-        background = DialogBackground(self.stack_widget)
-        background.back = back
-        back_layout = QtWidgets.QVBoxLayout(background)
-        container = Container(background)
-        container.pe_widget = QT_PE_WIDGET
-
-        # position
-        back_layout.addWidget(container, alignment=position)
-        container.setAutoFillBackground(True)
-        layout = QtWidgets.QVBoxLayout(container)
-        layout.setSpacing(0)
-
-        font = self.main_window.font()
-        font_size = font.pointSize()
-        font.setPointSize(int(font_size * 2))
-        title_label = QtWidgets.QLabel(title, font=font, objectName="title_label")
-        # title_label = MarqueeLabel(config=self.config)
-        title_label.setWordWrap(True)
-        title_label.setText(title)
-        title_label.setAlignment(text_align)
-        title_label.setFont(font)
-        title_label.setContentsMargins(5, 5, 5, 5)
-
-        # title_label_width = title_label.fontMetrics().horizontalAdvance(title_label.text())
-
-        # title_icon
-        if title_icon is not None:
-            outer_widget = QtWidgets.QWidget(container)
-            left_icon = QtWidgets.QLabel()
-            left_icon.setPixmap(title_icon.pixmap(QtCore.QSize(32, 32)))
-            title_label.setAlignment(QT_ALIGN_LEFT)
-
-            label_layout = QtWidgets.QHBoxLayout(outer_widget)
-            label_layout.setContentsMargins(0, 0, 0, 0)
-            label_layout.setSpacing(0)
-            label_layout.addWidget(left_icon)
-            label_layout.addWidget(title_label, stretch=2)
-            layout.addWidget(outer_widget)
-        elif message is not None:
-            outer_widget = QtWidgets.QWidget(container)
-            font.setPointSize(int(font_size * 1.5))
-            title_label.setFont(font)
-            title_label.setStyleSheet("font-weight: bold;")
-            message_label = QtWidgets.QLabel(message, font=font)
-            message_label.setAlignment(text_align)
-            message_label.setWordWrap(True)
-            message_label.setContentsMargins(5, 5, 5, 5)
-
-            label_layout = QtWidgets.QVBoxLayout(outer_widget)
-            label_layout.setContentsMargins(0, 0, 0, 0)
-            label_layout.setSpacing(0)
-            label_layout.addWidget(title_label)
-            label_layout.addWidget(message_label)
-            layout.addWidget(outer_widget)
-        else:
-            layout.addWidget(title_label)
-
-        # timeout
-        if button_num == 0:
-            QtCore.QTimer.singleShot(timeout * 1000, back)
-        # button_num
-        elif button_num > 0:
-            button_widget = QtWidgets.QWidget(container)
-            button_layout = QtWidgets.QHBoxLayout(button_widget)
-            button_layout.setContentsMargins(5, 10, 5, 10)
-            button_layout.setSpacing(10)
-            if not button_label:
-                button_label = ["OK", "Cancel"]
-            buttons = []
-
-            for i in range(button_num):
-                b = DialogButton(text=button_label[i], parent=button_widget)
-                b.setFixedWidth(70)
-                button_layout.addWidget(b)
-                buttons.append(b)
-
-            for i in range(button_num):
-                next_index = i + 1
-                prev_index = i - 1
-                if next_index == button_num:
-                    next_index = 0
-                buttons[i].next_button = buttons[next_index]
-                buttons[i].prev_button = buttons[prev_index]
-                buttons[i].clicked.connect(
-                    lambda: self.close_dialog(self.stack_widget_current_index)
-                )
-                buttons[i].clicked.connect(background.deleteLater)
-
-            # func with OK button
-            if fn is not None:
-                buttons[0].clicked.connect(fn)
-
-            layout.addWidget(button_widget)
-
-        self.main_window.centralWidget().addWidget(background)
-        self.main_window.centralWidget().setCurrentWidget(background)
+        self._dialog.configure(msg, self.close_dialog)
+        self._dialog.show(self.stack_widget_current_index)
 
     def change_dialog(self, title=None, button_label=None):
         if title:
-            title_label = (
-                self.main_window.centralWidget()
-                .currentWidget()
-                .findChild(QtWidgets.QLabel, "title_label")
-            )
-            if title_label:
-                title_label.setText(title)
+            self._dialog.change_title(title)
         if button_label:
-            button = (
-                self.main_window.centralWidget()
-                .currentWidget()
-                .findChild(QtWidgets.QPushButton)
-            )
-            if button:
-                button.setText(button_label)
+            self._dialog.change_button_label(button_label)
 
     def dialog_exists(self):
-        return (
-            self.main_window.centralWidget().currentWidget().objectName()
-            == "background"
-        )
+        return self.stack_widget.currentWidget().objectName() == "background"
 
     def close_dialog(self, index):
         self.stack_widget.layout().setStackingMode(QT_STACKINGMODE_STACKONE)
         self.stack_widget.setCurrentIndex(index)
+        self._dialog.hide()
         self.display_dialog = False
         self.msg_event.set()
