@@ -6,13 +6,15 @@ An open-source bike computer based on  Raspberry Pi Zero (W, WH, 2 W) with GPS a
 https://github.com/hishizuka/pizero_bikecomputer
 
 # News
+
+- 2026/1/30 Support for a groundbreaking dual-screen display is in progress.
+  - <img width="320" alt="dual screen" src="https://pbs.twimg.com/media/G_elAsAbQAATYQm?format=jpg&name=medium" /> <img width="320" alt="back" src="https://pbs.twimg.com/media/G_elAshXUAAqKRi?format=jpg&name=medium" />
+- 2026/1/30 The MIP LCD methods will be fully deprecated, and a switch to a newly released DRM driver is planned.
 - 2025/10/12 Supports Raspberry Pi OS Trixie. For new installations, it is highly recommended to install Trixie due to compatibility with asyncio and asynqt. The following will no longer be supported going forward:
   - Raspberry Pi OS Bookworm and earlier
   - PyQt5
 - 2025/6/24 Now major packages can now be installed with a 1-line command.
   - `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/hishizuka/pizero_bikecomputer/refs/heads/master/install.sh)"`
-- 2025/3/17 PCBs are under development.
-  - <img width="320" alt="4inch-01" src="https://github.com/user-attachments/assets/d31f1cd3-5472-47b1-8995-1efe8fb5ef97" /> <img width="320" alt="4inch-02" src="https://github.com/user-attachments/assets/87afa6c3-ba28-4dbc-970b-e3c7c9a55806" /> <img width="320" alt="4inch-03" src="https://github.com/user-attachments/assets/3b9528d5-9e02-437a-a13f-2607aac2f90d" />
 
 ## Stargazers over time
 [![Stargazers over time](https://starchart.cc/hishizuka/pizero_bikecomputer.svg?variant=dark)](https://starchart.cc/hishizuka/pizero_bikecomputer)
@@ -25,6 +27,7 @@ https://github.com/hishizuka/pizero_bikecomputer
 - [Comparison with other bike computers](#comparison)
 - [Hardware Installation](#hardware-installation)
 - [Software Installation](#software-installation)
+- [PCB Gallery (under development)](#pcb-gallery-under-development)
 - [Q&A](#qa)
 - [License](#License)
 - [Author](#Author)
@@ -223,6 +226,11 @@ See [hardware_installation.md](/doc/hardware_installation.md).
 # Software Installation
 
 See [software_installation.md](/doc/software_installation.md).
+
+# PCB Gallery (under development)
+- <img width="480" alt="4inch-01" src="https://github.com/user-attachments/assets/d31f1cd3-5472-47b1-8995-1efe8fb5ef97" />
+- <img width="480" alt="4inch-02" src="https://github.com/user-attachments/assets/87afa6c3-ba28-4dbc-970b-e3c7c9a55806" />
+- <img width="480" alt="4inch-03" src="https://github.com/user-attachments/assets/3b9528d5-9e02-437a-a13f-2607aac2f90d" />
 
 # Q&A
 
