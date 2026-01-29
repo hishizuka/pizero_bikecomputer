@@ -108,9 +108,11 @@ class MipDisplayDrm(Display):
     send = False
 
     def screen_flash_long(self):
+        super().screen_flash_long()
         self._write_display_invert("0.8,0.25", "screen_flash_long")
 
     def screen_flash_short(self):
+        super().screen_flash_short()
         self._write_display_invert("0.3,0.25", "screen_flash_short")
 
     def clear(self):

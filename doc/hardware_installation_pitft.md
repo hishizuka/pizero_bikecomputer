@@ -17,7 +17,7 @@ Software installation
   - [Run on X Window](#run-on-x-window)
   - [Run on console](#run-on-console)
 - [Usage](#usage)
-  - [Button](#button)       
+  - [Button](#button)
     - [Hardware button](#hardware-button)
 
 # Hardware Assembly
@@ -66,6 +66,12 @@ It is more reliable to solder the PiTFT directly to the header of Raspberry Pi Z
 
 # Software Installation
 
+## Requirements
+
+- Raspberry Pi OS Trixie or later
+- Python 3.13+
+- Qt 6.8+ (PyQt6 or PySide6)
+
 ## Raspberry Pi OS
 
 ### Display
@@ -74,39 +80,10 @@ It is more reliable to solder the PiTFT directly to the header of Raspberry Pi Z
 
 Follow [official setup guide](https://learn.adafruit.com/adafruit-2-4-pitft-hat-with-resistive-touchscreen-mini-kit/overview) of Adafruit, or [my setup guide (Japanese)](https://qiita.com/hishi/items/bdd630666277e4f8162a).
 
-If you run the program in a console, you need to build Qt6 and PyQt6 because the package python3-pyqt6 provided with Raspbian OS does not include a touchscreen library(tslib).
-
-Note:
-
-The touchscreen does not work properly in Raspbian OS(Buster) + Qt 5.14(or higher) + PyQt 5.14(or higher) from some issues. So, if you use PiTFT, I recomand to run on X Window at present.
-In Raspbian OS(Stretch) + Qt 5.12.3 + PyQt 5.12.3, the touchscreen works.
-
-##### Build Qt
-
-Follow ["Building Qt 5.12 LTS for Raspberry Pi on Raspbian"](https://www.tal.org/tutorials/building-qt-512-raspberry-pi) with Raspberry Pi 4 4GB or 8GB. Use the compile option "-platform linux-rpi-g++" for Raspberry Pi 1 or zero, not use options for Raspberry Pi 4 and so on.
-Use the same SD card on Raspberry Pi 4.
-
-You will need libts-dev package before configure of Qt. (from [RaspberryPi2EGLFS](https://wiki.qt.io/RaspberryPi2EGLFS))
+Install libinput for touchscreen support:
 
 ```
-sudo apt-get install libudev-dev libinput-dev libts-dev libxcb-xinerama0-dev libxcb-xinerama0
-```
-
-##### Build PyQt6
-
-Follow [PyQt Reference Guide](https://www.riverbankcomputing.com/static/Docs/PyQt6/installation.html).
-The source is available [here](https://pypi.org/project/PyQt6/#files)
-
-```
-$ cd
-$ mkdir work; cd work
-$ wget NEWEST-PYQT6-PACKAGE-SOURCE-FILE
-$ sudo pip3 install PyQt-builder
-$ sip-build --no-make --qmake PATH-TO-YOUR-QMAKE
-$ cd build
-$ make -j4
-$ sudo make install
-$ sudo pip3 install PyQt6-sip
+$ sudo apt-get install libinput-dev libinput-tools
 ```
 
 
@@ -128,44 +105,46 @@ Then, run the program.
 $ python3 pizero_bikecomputer.py -f
 ```
 
-#### Run from the lancher menu.
-
-Making launcher menu or desktop icon may be useful.
-
-![lancher menu](https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F100741%2Fc466c6f0-ede8-5de2-2061-fbbbcccb93fc.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=864176ddffe3895226a6fd8bf20fb4d0)
-
-Make "New Item" in Main Menu Editor, and set "/home/pi/pizero_bikecomputer/exec.sh" in "Command:" field.
-
-![short cut](https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F100741%2Fe318acf1-3c89-0537-956c-9e64738b8f81.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=fedb51b245af88bffc2e090031cf10a3)
-
-#### Run with autostart
-
-If you are using the autologin option, you can run the program automatically using the following procedure。
-
-```
-$ mkdir -p ~/.config/lxsession/LXDE-pi
-$ cp /etc/xdg/lxsession/LXDE-pi/autostart ~/.config/lxsession/LXDE-pi/
-$ echo "@/home/pi/pizero_bikecomputer/exec.sh" >> ~/.config/lxsession/LXDE-pi/autostart
-```
-
 ## Run on console
 
-### Manual execution
+### PiTFT
 
-#### PiTFT
+First, create a udev rule for touchscreen rotation (270 degrees). You only need to do this once.
 
-Before run the program, add the following environment variables.
+```
+$ sudo nano /etc/udev/rules.d/99-pitft-touch.rules
+```
+
+Add the following line:
+
+```
+SUBSYSTEM=="input", ATTRS{name}=="stmpe-ts", ENV{LIBINPUT_CALIBRATION_MATRIX}="0 1 0 -1 0 1"
+```
+
+Apply the rule:
+
+```
+$ sudo udevadm control --reload-rules
+$ sudo udevadm trigger
+```
+
+Then, run the program with the following environment variables:
 
 ```
 $ export QT_QPA_PLATFORM=linuxfb:fb=/dev/fb1
-$ export QT_QPA_EVDEV_TOUCHSCREEN_PARAMETERS=/dev/input/event0:rotate=270
-$ export QT_QPA_FB_TSLIB=1
-$ export TSLIB_FBDEVICE=/dev/fb1
-$ export TSLIB_TSDEVICE=/dev/input/event0
+$ export QT_QPA_GENERIC_PLUGINS=libinput
 $ python3 pizero_bikecomputer.py
 ```
 
-Note: Works with Raspbian Stretch. No further versions have been confirmed to work. It seems that the touch screen axis is not set.
+Note: The calibration matrix values depend on display rotation:
+
+| Rotation | Matrix |
+|:-|:-|
+| 0° | `1 0 0 0 1 0` |
+| 90° | `0 -1 1 1 0 0` |
+| 180° | `-1 0 1 0 -1 1` |
+| 270° | `0 1 0 -1 0 1` |
+
 
 # Usage
 

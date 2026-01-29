@@ -51,6 +51,12 @@ class MipDisplayBase(Display):
     def __init__(self, config, size=None, color=None):
         super().__init__(config)
 
+        self.has_backlight = config.G_DISPLAY_PARAM["USE_BACKLIGHT"]
+        self.allow_auto_backlight = self.has_backlight and config.G_USE_AUTO_BACKLIGHT
+        self.use_auto_backlight = self.allow_auto_backlight
+        if self.use_auto_backlight:
+            self.brightness_index = len(self.brightness_table)
+
         if size:
             self.size = size
         if color:

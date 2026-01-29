@@ -44,27 +44,21 @@ MIP_DISPLAY_PARAMS = {
 
 # default display (X window)
 class Display:
+    # Device capabilities; override in display subclasses.
     has_backlight = False
+    # Auto backlight mode availability (device + user setting).
+    allow_auto_backlight = False
     has_color = True
     has_touch = True
     send = False
 
-    # current auto brightness status (on/off)
+    # Backlight control state (auto backlight is used by MIP displays).
     use_auto_backlight = False
     brightness_index = 0
     brightness_table = []
 
     def __init__(self, config):
         self.config = config
-
-        self.has_backlight = config.G_DISPLAY_PARAM["USE_BACKLIGHT"]
-        if self.has_backlight:
-            # set initial status
-            self.use_auto_backlight = config.G_USE_AUTO_BACKLIGHT
-
-            # set index properly if on
-            if self.use_auto_backlight:
-                self.brightness_index = len(self.brightness_table)
 
     @property
     def resolution(self):
@@ -84,38 +78,55 @@ class Display:
         pass
 
     def screen_flash_long(self):
-        pass
+        status_bar = self._get_status_bar()
+        if status_bar is None:
+            return
+        status_bar.flash_background(
+            [
+                (status_bar.FLASH_YELLOW, 0.5),
+                (status_bar.BASE_BG_COLOR, 0.5),
+                (status_bar.FLASH_YELLOW, 0.5),
+            ]
+        )
 
     def screen_flash_short(self):
-        pass
+        status_bar = self._get_status_bar()
+        if status_bar is None:
+            return
+        status_bar.flash_background([(status_bar.FLASH_YELLOW, 1.0)])
 
     def clear(self):
         pass
 
-    # We can not have auto brightness and an empty brightness table
-    def change_brightness(self):
-        if self.brightness_table:
-            # brightness is changing as following if the display has use_auto_backlight feature
-            if self.has_backlight:
-                self.brightness_index = (self.brightness_index + 1) % (
-                    len(self.brightness_table) + 1
-                )
+    def _get_status_bar(self):
+        gui = getattr(self.config, "gui", None)
+        if gui is None:
+            return None
+        return getattr(gui, "status_bar", None)
 
-                # switch on use_auto_backlight
-                if self.brightness_index == len(self.brightness_table):
-                    self.use_auto_backlight = True
-                # switch off use_auto_backlight and set requested brightness
-                else:
-                    self.use_auto_backlight = False
-                    self.set_brightness(self.brightness_table[self.brightness_index])
-            else:
-                # else we just loop over the brightness table
-                self.brightness_index = (self.brightness_index + 1) % len(
-                    self.brightness_table
-                )
-                self.set_brightness(self.brightness_table[self.brightness_index])
+    def change_brightness(self):
+        # Cycle manual brightness levels and optionally add an auto-backlight slot.
+        if not self.brightness_table:
+            return
+
+        auto_slot = 1 if self.allow_auto_backlight else 0
+        self.brightness_index = (self.brightness_index + 1) % (
+            len(self.brightness_table) + auto_slot
+        )
+
+        # Auto backlight is selected only when allowed and the extra slot is reached.
+        if self.allow_auto_backlight and self.brightness_index == len(self.brightness_table):
+            self.use_auto_backlight = True
+            return
+
+        # Otherwise apply a fixed brightness from the table.
+        self.use_auto_backlight = False
+        self.set_brightness(self.brightness_table[self.brightness_index])
 
     def set_brightness(self, b):
+        pass
+
+    def set_minimum_brightness(self):
         pass
 
 
@@ -265,6 +276,9 @@ def detect_display(config):
         app_logger.info(f"{vendor_file}: {v}")
         # set display
         if p.find("Adafruit PiTFT HAT - 2.4 inch Resistive Touch") == 0:
+            return "PiTFT"
+        elif p.find("Capacitive Touch HAT - MPR121") == 0 and v.find("Adafruit") == 0:
+            # PiTFT 2.4 Capacitive Touch version
             return "PiTFT"
         elif (p.find("PaPiRus ePaper HAT") == 0) and (v.find("Pi Supply") == 0):
             return "Papirus"
