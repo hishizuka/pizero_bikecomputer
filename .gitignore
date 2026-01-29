@@ -15,6 +15,7 @@
 /.venv/
 /tmp/
 /.tmp/
+/tests/
 __pycache__/
 *.py[cod]
 *.qml
