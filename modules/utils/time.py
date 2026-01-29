@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import asyncio
 import threading
 
@@ -9,6 +9,7 @@ from modules.app_logger import app_logger
 _LAST_KNOWN_DATE_CACHE = None
 _LAST_KNOWN_DATE_INITIALIZED = False
 _LAST_KNOWN_DATE_LOCK = threading.Lock()
+_UTC_OFFSET_MINUTES = None
 
 
 def _get_last_known_date():
@@ -34,6 +35,61 @@ def _get_last_known_date():
             _LAST_KNOWN_DATE_CACHE = None
         _LAST_KNOWN_DATE_INITIALIZED = True
         return _LAST_KNOWN_DATE_CACHE
+
+
+def init_utc_offset():
+    """Initialize UTC offset from system timezone (call at startup)."""
+    global _UTC_OFFSET_MINUTES
+    offset = datetime.now().astimezone().utcoffset()
+    _UTC_OFFSET_MINUTES = int(offset.total_seconds() // 60) if offset else 0
+
+
+def update_utc_offset():
+    """Update UTC offset (call after GPS timezone update)."""
+    init_utc_offset()
+
+
+def _get_utc_offset_minutes():
+    if _UTC_OFFSET_MINUTES is None:
+        init_utc_offset()
+    return _UTC_OFFSET_MINUTES
+
+
+def _shift_hhmm_to_local(utc_hhmm):
+    """Convert HHMM format UTC time to local time by adding offset."""
+    if not utc_hhmm or len(utc_hhmm) < 4:
+        return ""
+    try:
+        total = (int(utc_hhmm[0:2]) * 60 + int(utc_hhmm[2:4]) + _get_utc_offset_minutes()) % 1440  # minutes per day
+        return f"{total // 60:02d}{total % 60:02d}"
+    except ValueError:
+        return ""
+
+
+def format_jma_validtime_local(validtime, time_format):
+    """Convert JMA validtime (extract HHMM from last 6 chars) to local HHMM."""
+    if not validtime or len(validtime) < 4:
+        return ""
+    hhmm = validtime[-6:-2] if len(validtime) >= 6 else validtime[:4]
+    return _shift_hhmm_to_local(hhmm)
+
+
+def format_scw_validtime_local(validtime):
+    """Convert SCW validtime (first HHMMSS) to local HHMM."""
+    if not validtime or len(validtime) < 4:
+        return ""
+    return _shift_hhmm_to_local(validtime[:4])
+
+
+def format_unix_validtime_local(validtime):
+    """Convert Unix timestamp to local HHMM."""
+    if validtime is None:
+        return ""
+    try:
+        utc_dt = datetime.fromtimestamp(int(validtime), tz=timezone.utc)
+        return _shift_hhmm_to_local(f"{utc_dt.hour:02d}{utc_dt.minute:02d}")
+    except (TypeError, ValueError):
+        return ""
 
 
 def set_time(time_info):
@@ -66,6 +122,7 @@ async def set_timezone(lat, lon):
     if ret_code:  # 0 = success
         app_logger.warning(f"Timezone {tz_str} be could not set: {ret_code}")
     else:
+        update_utc_offset()
         app_logger.info(f"success: {tz_str}")
 
 
