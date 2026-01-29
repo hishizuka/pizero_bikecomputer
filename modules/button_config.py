@@ -65,10 +65,10 @@ class Button_Config:
                 "CUSTOM": ("turn_on_off_light", "enter_menu"),
                 "LAP": ("count_laps",),
             },
-            #"MAIN_1": {
-            #    "PAGE": ("turn_on_off_light", "brightness_control"),
-            #    "CUSTOM": ("change_mode", ""),
-            #    "LAP": ("start_and_stop_manual",),
+            #"MAIN": {
+            #    "PAGE": ("scroll_prev", "scroll_next"),
+            #    "CUSTOM": ("start_and_stop_manual", "reset_count"),
+            #    "LAP": ("count_laps",),
             #},
             "MENU": {
                 "PAGE": ("press_tab", ""),
@@ -103,12 +103,12 @@ class Button_Config:
                 "NAVIGATION_DOWN": ("", ""),
                 "NAVIGATION_LEFT": ("", ""),
                 "NAVIGATION_RIGHT": ("", ""),
-                "SHIFT_UP_LEFT": ("scroll_prev", ""),
+                "SHIFT_UP_LEFT": ("scroll_prev", "get_screenshot"),
                 "SHIFT_UP_RIGHT": ("scroll_next", "start_and_stop_manual"),
                 "SHIFT_UP_BOTH": ("count_laps", "reset_count"),
                 "A": ("", ""),
                 "B": ("", ""),
-                "Y": ("enter_menu", ""),
+                "Y": ("change_mode", "enter_menu"),
                 "Z": ("turn_on_off_light", ""),
             },
             "MENU": {
@@ -116,9 +116,9 @@ class Button_Config:
                 "NAVIGATION_DOWN": ("press_tab", ""),
                 "NAVIGATION_LEFT": ("back_menu", ""),
                 "NAVIGATION_RIGHT": ("press_space", ""),
-                "SHIFT_UP_LEFT": ("", ""),
-                "SHIFT_UP_RIGHT": ("", ""),
-                "SHIFT_UP_BOTH": ("", ""),
+                "SHIFT_UP_LEFT": ("press_tab", "get_screenshot"),
+                "SHIFT_UP_RIGHT": ("press_space", ""),
+                "SHIFT_UP_BOTH": ("back_menu", ""),
                 "A": ("press_space", ""),
                 "B": ("back_menu", ""),
                 "Y": ("", ""),
@@ -129,7 +129,7 @@ class Button_Config:
                 "NAVIGATION_DOWN": ("", ""),
                 "NAVIGATION_LEFT": ("", "map_overlay_prev_time"),
                 "NAVIGATION_RIGHT": ("", "map_overlay_next_time"),
-                "SHIFT_UP_LEFT": ("scroll_prev", ""),
+                "SHIFT_UP_LEFT": ("scroll_prev", "get_screenshot"),
                 "SHIFT_UP_RIGHT": ("scroll_next", "start_and_stop_manual"),
                 "SHIFT_UP_BOTH": ("count_laps", "reset_count"),
                 "A": ("map_zoom_plus", ""),
@@ -142,7 +142,7 @@ class Button_Config:
                 "NAVIGATION_DOWN": ("map_move_y_minus", ""),
                 "NAVIGATION_LEFT": ("map_move_x_minus", "map_overlay_prev_time"),
                 "NAVIGATION_RIGHT": ("map_move_x_plus", "map_overlay_next_time"),
-                "SHIFT_UP_LEFT": ("scroll_prev", ""),
+                "SHIFT_UP_LEFT": ("scroll_prev", "get_screenshot"),
                 "SHIFT_UP_RIGHT": ("scroll_next", "start_and_stop_manual"),
                 "SHIFT_UP_BOTH": ("count_laps", "reset_count"),
                 "A": ("map_zoom_plus", ""),
@@ -155,7 +155,7 @@ class Button_Config:
                 "NAVIGATION_DOWN": ("", ""),
                 "NAVIGATION_LEFT": ("", ""),
                 "NAVIGATION_RIGHT": ("", ""),
-                "SHIFT_UP_LEFT": ("scroll_prev", ""),
+                "SHIFT_UP_LEFT": ("scroll_prev", "get_screenshot"),
                 "SHIFT_UP_RIGHT": ("scroll_next", "start_and_stop_manual"),
                 "SHIFT_UP_BOTH": ("count_laps", "reset_count"),
                 "A": ("map_zoom_plus", ""),
@@ -168,7 +168,7 @@ class Button_Config:
                 "NAVIGATION_DOWN": ("", ""),
                 "NAVIGATION_LEFT": ("map_move_x_minus", ""),
                 "NAVIGATION_RIGHT": ("map_move_x_plus", ""),
-                "SHIFT_UP_LEFT": ("scroll_prev", ""),
+                "SHIFT_UP_LEFT": ("scroll_prev", "get_screenshot"),
                 "SHIFT_UP_RIGHT": ("scroll_next", "start_and_stop_manual"),
                 "SHIFT_UP_BOTH": ("count_laps", "reset_count"),
                 "A": ("map_zoom_plus", ""),
@@ -291,6 +291,7 @@ class Button_Config:
 
     def __init__(self, config):
         self.config = config
+        self._dual_map_mode_active = False
 
     def press_button(self, button_hard, press_button, index):
         if self.config.gui is None or self.config.gui.stack_widget is None:
@@ -301,12 +302,22 @@ class Button_Config:
             current_widget = self.config.gui.main_page.widget(
                 self.config.gui.main_page.currentIndex()
             )
-            if current_widget == self.config.gui.map_widget:
-                mode_key = "MAP"
-            elif current_widget == self.config.gui.course_profile_graph_widget:
-                mode_key = "COURSE_PROFILE"
+            if self.config.G_DUAL_DISPLAY_MODE:
+                if current_widget == self.config.gui.course_profile_graph_widget:
+                    mode_key = "COURSE_PROFILE"
+                elif self._dual_map_mode_active:
+                    mode_key = "MAP"
+                elif current_widget == self.config.gui.map_widget:
+                    mode_key = "MAP"
+                else:
+                    mode_key = "MAIN"
             else:
-                mode_key = "MAIN"
+                if current_widget == self.config.gui.map_widget:
+                    mode_key = "MAP"
+                elif current_widget == self.config.gui.course_profile_graph_widget:
+                    mode_key = "COURSE_PROFILE"
+                else:
+                    mode_key = "MAIN"
 
             pages = self.G_BUTTON_MODE_PAGES.get(mode_key)
             if pages:
@@ -319,6 +330,11 @@ class Button_Config:
             # for no implementation
             if self.G_PAGE_MODE not in self.G_BUTTON_DEF[button_hard]:
                 self.G_PAGE_MODE = "MAIN"
+                if self.config.G_DUAL_DISPLAY_MODE and mode_key == "MAP":
+                    self._dual_map_mode_active = False
+                    map_widget = getattr(self.config.gui, "map_widget", None)
+                    if map_widget is not None:
+                        map_widget.lock_on()
         elif w_index >= 2:
             self.G_PAGE_MODE = "MENU"
 
@@ -338,6 +354,38 @@ class Button_Config:
     def change_mode(self):
         # check MAP
         w = self.config.gui.main_page.widget(self.config.gui.main_page.currentIndex())
+        map_widget = getattr(self.config.gui, "map_widget", None)
+
+        if self.config.G_DUAL_DISPLAY_MODE:
+            if w == self.config.gui.course_profile_graph_widget:
+                self.change_mode_index("COURSE_PROFILE")
+                if not self.G_BUTTON_MODE_IS_CHANGE:
+                    w.lock_on()
+                else:
+                    w.lock_off()
+                return
+
+            map_pages = self.G_BUTTON_MODE_PAGES.get("MAP", [])
+            if not map_pages or map_widget is None:
+                self.change_mode_index("MAIN")
+                return
+
+            if not self._dual_map_mode_active:
+                self._dual_map_mode_active = True
+                self.G_BUTTON_MODE_INDEX["MAP"] = 0
+                self.G_BUTTON_MODE_IS_CHANGE = True
+                self.G_PAGE_MODE = map_pages[0]
+                map_widget.lock_off()
+                return
+
+            self.change_mode_index("MAP")
+            if not self.G_BUTTON_MODE_IS_CHANGE:
+                self._dual_map_mode_active = False
+                self.G_PAGE_MODE = "MAIN"
+                map_widget.lock_on()
+            else:
+                map_widget.lock_off()
+            return
 
         if "MAIN" in self.G_PAGE_MODE:
             self.change_mode_index("MAIN")
