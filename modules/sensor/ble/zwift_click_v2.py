@@ -37,6 +37,7 @@ SYNC_TX_CHAR = "00000004-19ca-4651-86e5-fa29dcdd09d1"  # indications
 
 RIDE_ON = bytes([0x52, 0x69, 0x64, 0x65, 0x4F, 0x6E])
 HANDSHAKE_EXTRA = bytes([0xFF, 0x04, 0x00])
+HANDSHAKE_GAP_SECONDS = 0.1
 RESPONSE_START_CLICK_V2 = bytes([0x02, 0x03])
 RESPONSE_STOPPED_CLICK_V2_VARIANT_1 = bytes([0xFF, 0x05, 0x00, 0xEA, 0x05])
 RESPONSE_STOPPED_CLICK_V2_VARIANT_2 = bytes([0xFF, 0x05, 0x00, 0xFA, 0x05])
@@ -118,7 +119,8 @@ class PressDurationClassifier:
             key = (side, source, button)
             state = self._active.get(key)
             if state is None:
-                self._active[key] = _PressState(started_at=now_mono, last_seen_at=now_mono)
+                state = _PressState(started_at=now_mono, last_seen_at=now_mono)
+                self._active[key] = state
                 continue
             interval = now_mono - state.last_seen_at
             if interval > 0:
@@ -189,8 +191,7 @@ class PressDurationClassifier:
         if state.long_fired:
             return
         duration = max(0.0, release_time - state.started_at)
-        kind = "long" if duration >= self._long_press_seconds else "short"
-        self._on_classified(side, button, kind, duration)
+        self._on_classified(side, button, "short", duration)
 
 
 def _read_varint(buf: bytes, idx: int) -> tuple[int, int]:
@@ -347,25 +348,49 @@ async def connect_and_listen(
     try:
         async with BleakClient(address) as client:
             connected = True
+            last_rx_mono: Optional[float] = None
+
+            def mark_rx() -> None:
+                nonlocal last_rx_mono
+                last_rx_mono = time.monotonic()
+
             if on_connected is not None:
                 on_connected(side, address, name)
             await client.start_notify(
                 ASYNC_CHAR,
-                lambda _, data: handle_notification(side, data, classifier, log=log),
+                lambda _, data: handle_notification(
+                    side,
+                    data,
+                    classifier,
+                    log=log,
+                    on_rx=mark_rx,
+                ),
             )
             await client.start_notify(
                 SYNC_TX_CHAR,
-                lambda _, data: handle_notification(side, data, classifier, log=log),
+                lambda _, data: handle_notification(
+                    side,
+                    data,
+                    classifier,
+                    log=log,
+                    on_rx=mark_rx,
+                ),
             )
 
             # Handshake sequence mirrors Dart: RIDE_ON then FF 04 00.
             await client.write_gatt_char(SYNC_RX_CHAR, RIDE_ON, response=False)
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(HANDSHAKE_GAP_SECONDS)
             await client.write_gatt_char(SYNC_RX_CHAR, HANDSHAKE_EXTRA, response=False)
 
-            # Keep alive until disconnected or requested to stop.
+            # Wait until disconnected or requested to stop.
             while client.is_connected and not stop_event.is_set():
                 await asyncio.sleep(0.2)
+            if not stop_event.is_set() and not client.is_connected:
+                if last_rx_mono is None:
+                    log(f"[{side}] disconnected (no notifications received)")
+                else:
+                    since_last = time.monotonic() - last_rx_mono
+                    log(f"[{side}] disconnected (last notification {since_last:.1f}s ago)")
     except asyncio.CancelledError:
         if connected:
             stop_event.set()
@@ -381,10 +406,13 @@ def handle_notification(
     classifier: PressDurationClassifier,
     *,
     log: Callable[[str], None] = print,
+    on_rx: Optional[Callable[[], None]] = None,
 ) -> None:
     """Process incoming data from SYNC_TX/ASYNC characteristics."""
     if not data:
         return
+    if on_rx is not None:
+        on_rx()
 
     # Ignore pure RIDE_ON packets that can appear during some stacks' handshake sequences.
     if data == RIDE_ON:
