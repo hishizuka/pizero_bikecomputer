@@ -8,7 +8,7 @@ import asyncio
 import numpy as np
 from PIL import Image
 
-from modules.utils.network import detect_network
+from modules.utils.network import detect_network_async
 from modules.helper.network import (
     get_json,
 )
@@ -170,10 +170,6 @@ RAINVIEWER_NEXRAD_LEGEND = np.array([
 
 
 async def get_scw_list(url, referer):
-    # network check
-    if not detect_network():
-        return None
-
     try:
         response = await get_json(url, headers={"referer": referer})
     except:
@@ -728,7 +724,7 @@ class MapTileWithValues():
         ):
             return
 
-        if not detect_network():
+        if not await detect_network_async(Cache=False):
             return
 
         past_url = map_settings.get("past_time_list")

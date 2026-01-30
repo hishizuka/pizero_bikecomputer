@@ -9,7 +9,7 @@ import json
 
 import numpy as np
 
-from modules.utils.network import detect_network
+from modules.utils.network import detect_network, detect_network_async
 from modules.helper.network import (
     post,
     get_json,
@@ -95,7 +95,10 @@ class api:
         return self.config.network
 
     async def get_google_routes(self, x1, y1, x2, y2):
-        if not detect_network() or self.config.G_GOOGLE_DIRECTION_API["TOKEN"] == "":
+        if (
+            not await detect_network_async()
+            or self.config.G_GOOGLE_DIRECTION_API["TOKEN"] == ""
+        ):
             return None
         if np.any(np.isnan([x1, y1, x2, y2])):
             return None
@@ -133,7 +136,7 @@ class api:
         return response
 
     async def get_openmeteo_temperature_data(self, x, y):
-        if not detect_network():
+        if not await detect_network_async():
             return None
         if np.any(np.isnan([x, y])):
             return None
@@ -213,7 +216,7 @@ class api:
 
     async def get_ridewithgps_route(self, add=False, reset=False):
         if (
-            not detect_network()
+            not await detect_network_async()
             or self.config.G_RIDEWITHGPS_API["APIKEY"] == ""
             or self.config.G_RIDEWITHGPS_API["TOKEN"] == ""
         ):
@@ -632,6 +635,19 @@ class api:
                 )
                 # Todo: empty message and name / add timestamp
 
+    def _send_livetrack_telemetry_blocking(self, data):
+        try:
+            self.thingsboard_client.connect()
+            res = self.thingsboard_client.send_telemetry(data).get()
+            self.thingsboard_client.request_attributes(
+                shared_keys=["message_name", "message_body"],
+                callback=self.get_tb_message,
+            )
+            time.sleep(1)
+            return res
+        finally:
+            self.thingsboard_client.disconnect()
+
     async def send_livetrack_data_internal(self, quick_send=False):
         self.send_livetrack_data_lock = True
         f_name = self.send_livetrack_data_internal.__name__
@@ -674,17 +690,13 @@ class api:
         }
 
         try:
-            self.thingsboard_client.connect()
-            res = self.thingsboard_client.send_telemetry(data).get()
+            res = await asyncio.to_thread(
+                self._send_livetrack_telemetry_blocking, data
+            )
             if res != TBPublishInfo.TB_ERR_SUCCESS:
                 app_logger.error(f"[BT] thingsboard upload error: {res}")
             else:
                 v["integrated"]["send_time"] = datetime.now().strftime("%H:%M")
-            self.thingsboard_client.request_attributes(
-                shared_keys=["message_name", "message_body"],
-                callback=self.get_tb_message
-            )
-            await asyncio.sleep(1)
         except socket.timeout as e:
             app_logger.error(f"[BT] socket timeout: {e}")
         except socket.error as e:
@@ -695,8 +707,6 @@ class api:
             app_logger.error(f"[BT] ThingsBoard invalid data: {e}\n{data=}")
             for d in data["values"].values():
                 app_logger.error(f"{d} ({type(d)})")
-        finally:
-            self.thingsboard_client.disconnect()
         await asyncio.sleep(5)
 
         if self.course_send_status == "LOAD":

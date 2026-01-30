@@ -61,7 +61,7 @@ class Network:
 
     def check_network_with_bt_tethering(self):
         if not self.config.G_AUTO_BT_TETHERING:
-            return detect_network()
+            return detect_network(cache=False)
 
         has_required_device = (
             self.config.G_BT_PAN_DEVICE
@@ -77,9 +77,6 @@ class Network:
 
     async def close_bt_tethering(self, caller_name):
         return await self.bluetooth.close_bt_tethering(caller_name)
-
-    def get_wifi_bt_status(self):
-        return self.wifi.get_wifi_bt_status()
 
     def onoff_wifi_bt(self, key=None):
         return self.wifi.onoff_wifi_bt(key)

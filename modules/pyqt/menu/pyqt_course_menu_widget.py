@@ -12,7 +12,7 @@ from modules._qt_qtwidgets import (
     qasync,
 )
 from modules.pyqt.components import icons, topbar
-from modules.utils.network import detect_network
+from modules.utils.network import detect_network, detect_network_async
 from .pyqt_menu_widget import (
     MenuWidget,
     ListWidget,
@@ -151,7 +151,7 @@ class CoursesMenuWidget(MenuWidget):
     async def load_file(self, filename):
         # HTML from GoogleMap App
         if filename == self.config.G_RECEIVE_COURSE_FILE:
-            if not detect_network():
+            if not await detect_network_async():
                 self.config.gui.change_dialog(
                     title="Requires network connection.", button_label="Return"
                 )
@@ -524,7 +524,8 @@ class CourseDetailWidget(MenuWidget):
             self.font_size = int(min(self.size().width(), self.size().height()) / 10)
 
     def resizeEvent(self, event):
-        self.check_all_image_and_draw()
+        if self.all_downloaded:
+            self.draw_images()
 
         self.set_font_size(event.oldSize() == QtCore.QSize(-1, -1))
         for i in [self.distance_item, self.ascent_item]:

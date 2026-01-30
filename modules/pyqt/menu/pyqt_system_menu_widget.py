@@ -10,8 +10,9 @@ from modules._qt_qtwidgets import (
     QtCore,
     qasync,
 )
+from modules.helper.network.wifi_manager import get_wifi_bt_status
 from modules.utils.network import detect_network
-from .pyqt_menu_widget import MenuWidget, ListWidget, ListItemWidget
+from .pyqt_menu_widget import MenuWidget, ListWidget
 
 
 class SystemMenuWidget(MenuWidget):
@@ -97,7 +98,7 @@ class NetworkMenuWidget(MenuWidget):
         if change:
             self.config.network.onoff_wifi_bt(key)
         status = {}
-        status["Wifi"], status["Bluetooth"] = self.config.network.get_wifi_bt_status()
+        status["Wifi"], status["Bluetooth"] = get_wifi_bt_status()
         self.buttons[key].change_toggle(status[key])
 
     def onoff_auto_wifi_off(self, change=True):

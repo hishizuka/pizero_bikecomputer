@@ -7,7 +7,7 @@ from enum import Enum
 
 from modules.app_logger import app_logger
 from modules.utils.cmd import exec_cmd, exec_cmd_return_value
-from modules.utils.network import detect_network
+from modules.utils.network import detect_network_async
 
 
 BT_TETHERING_TIMEOUT_SEC = 15
@@ -249,7 +249,7 @@ class BluetoothManager:
             self._bt_tethering_lock.release()
 
     async def _open_bt_tethering_impl(self, caller_name) -> BtOpenResult:
-        if detect_network():
+        if await detect_network_async(cache=False):
             # Todo: disable when using wifi
             #app_logger.info(
             #    f"[BT] skip bt open(detected network), {caller_name=} {self.bt_tethering_status}"
@@ -306,12 +306,12 @@ class BluetoothManager:
 
         elapsed = 0
         while elapsed < BT_TETHERING_TIMEOUT_SEC:
-            if detect_network():
+            if await detect_network_async(cache=False):
                 break
             await asyncio.sleep(wait_time)
             elapsed += wait_time
 
-        if elapsed >= BT_TETHERING_TIMEOUT_SEC and not detect_network():
+        if elapsed >= BT_TETHERING_TIMEOUT_SEC and not await detect_network_async(cache=False):
             await self.bluetooth_tethering(disconnect=True)
             app_logger.error(
                 f"[BT] created bnep0, but detect_network failed({elapsed}s), {caller_name=}"
