@@ -134,9 +134,9 @@ fi
 # Install PyQt6 packages
 if [[ "$install_pyqt6" == "true" ]]; then
     echo "🔧 Installing PyQt6 packages..."
-    sudo apt install -y python3-pyqt6 python3-pyqt6.qtsvg pyqt6-dev-tools
+    sudo apt install -y python3-pyqt6 python3-pyqt6.qtsvg qt6-svg-plugins pyqt6-dev-tools
     echo "✅ PyQt6 packages installed successfully."
-    gui_option=""
+    gui_option=()
 else
     gui_option=(--gui None)
 fi
@@ -300,7 +300,9 @@ while IFS= read -r line; do
     if [ "$ready" -eq 1 ]; then
         case "$line" in
             *"quit done"*)
-                sleep 10
+                echo "✅ 'quit done' detected. Stopping app..."
+                kill "$APP_PID" 2>/dev/null || true
+                wait "$APP_PID" 2>/dev/null || true
                 break
             ;;
         esac
@@ -352,7 +354,8 @@ if [[ "$install_services" == "true" ]]; then
         after="After=display-manager.service\\n"
     else
         envs="Environment=\"QT_QPA_PLATFORM=offscreen\"\\n"
-        #envs="Environment=\"QT_QPA_PLATFORM=linuxfb:fb=/dev/fb1 \"\\n"
+        #envs="Environment=\"QT_QPA_FB_HIDECURSOR=1 QT_QPA_PLATFORM=linuxfb:fb=/dev/fb1\"\\n"
+        # and add vt.global_cursor_default=0 fbcon=map:0 or 1(map console with /dev/fbX)
         after=""
     fi
 

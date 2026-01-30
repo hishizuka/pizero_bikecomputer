@@ -3,7 +3,6 @@ import os
 
 from modules.app_logger import app_logger
 from modules.utils.map import get_maptile_filename
-from modules.utils.network import detect_network
 
 from ..bluetooth.bluetooth_manager import BtOpenResult
 from .http_client import download_files
