@@ -219,7 +219,7 @@ class GUI_Config:
         "Heading": (G_UNIT["String"], "self.sensor.values['I2C']['heading_str']"),
         "Heading_Raw(I2C)": (G_UNIT["Int"], "self.sensor.values['I2C']['raw_heading']"),
         "Heading_Tilt": (G_UNIT["Int"], "self.sensor.values['I2C']['heading']"),
-        "Pitch": (G_UNIT["Int"], "self.sensor.values['I2C']['modified_pitch']"),
+        "Pitch": (G_UNIT["Int"], "self.sensor.values['I2C']['grade_pitch']"),
         "Pitch_Fixed": (
             G_UNIT["Int"],
             "int(180/3.1415*self.sensor.values['I2C']['fixed_pitch'])"

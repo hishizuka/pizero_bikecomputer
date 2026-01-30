@@ -6,7 +6,6 @@ import time
 import numpy as np
 
 from modules.app_logger import app_logger
-from modules.utils.filters import KalmanFilter, KalmanFilter_pitch
 from modules.utils.geo import get_track_str
 from modules.utils.network import detect_network
 from .sensor import Sensor
@@ -71,7 +70,6 @@ class SensorI2C(Sensor):
         "discomfort_index",
         "altitude",
         "pre_altitude",
-        "altitude_kalman",
         "vertical_speed",
         "light",
         "infrared",
@@ -84,7 +82,6 @@ class SensorI2C(Sensor):
         "yaw_for_heading",
         "fixed_pitch",
         "fixed_roll",
-        "modified_pitch",
         "grade_pitch"
         "raw_heading",
         "heading",
@@ -153,11 +150,6 @@ class SensorI2C(Sensor):
     timestamp_array = []
     timestamp_size = vspeed_window_size  # [s]
 
-    # for kalman filter
-    kfp = None
-    kf = None
-    dt = None
-
     quit_status = False
 
     def sensor_init(self):
@@ -205,57 +197,6 @@ class SensorI2C(Sensor):
         else:
             self.values["fixed_pitch"] = 0.0
             self.values["fixed_roll"] = 0.0
-
-    async def init_kalman(self, interval):
-        sampling_num = 100
-
-        # kalman filter for altitude
-        self.dt = self.config.G_I2C_INTERVAL
-
-        self.kf = KalmanFilter(dim_x=3, dim_z=2)
-        self.kf.H = np.array([[1, 0, 0], [0, 0, 1]])
-        self.kf.F = np.array(
-            [[1, self.dt, 0.5 * (self.dt**2)], [0, 1, self.dt], [0, 0, 1]]
-        )
-        var_a = pow(10, -1.5)  # noise when running
-        var_h = 0.04
-        self.kf.P = np.array([[var_h, 0, 0], [0, 1, 0], [0, 0, var_a]])
-        self.kf.R *= np.array([[var_h, 0], [0, var_a]])
-        std = 0.004
-        var = std * std
-        self.kf.Q = (
-            np.array(
-                [
-                    [0.25 * self.dt**4, 0.5 * self.dt**3, 0.5 * self.dt**2],
-                    [0.5 * self.dt**3, self.dt**2, self.dt],
-                    [0.5 * self.dt**2, self.dt, 1],
-                ]
-            )
-            * var
-        )
-
-        # kalman filter for pitch
-        if self.motion_sensor["ACC"] and self.motion_sensor["GYRO"]:
-            count = 0
-            acc_list = []
-            gyro_list = []
-            while count < sampling_num:
-                self.read_acc(return_raw=True)
-                self.read_gyro(return_raw=True)
-                acc_list.append(
-                    math.atan2(self.values["acc_raw"][X], self.values["acc_raw"][Z])
-                )
-                gyro_list.append(self.values["gyro_raw"][Y])
-                count += 1
-                await asyncio.sleep(interval)
-
-            self.kfp = KalmanFilter_pitch(
-                np.mean(acc_list),  # theta_means
-                np.var(acc_list),  # theta_variance
-                np.mean(gyro_list),  # theta_dot_means
-                np.var(gyro_list),  # theta_dot_variance
-                self.config.G_I2C_INTERVAL,
-            )
 
     def detect_sensors(self):
         # pressure sensors
@@ -508,7 +449,6 @@ class SensorI2C(Sensor):
         self.vspeed_array = [np.nan] * self.vspeed_window_size
 
     def start_coroutine(self):
-        asyncio.create_task(self.init_kalman(0.01))
         asyncio.create_task(self.start())
 
     async def start(self):
@@ -1085,43 +1025,12 @@ class SensorI2C(Sensor):
             sum(list(map(lambda x: x**2, self.values["acc_mod"])))
         )
 
-        # modified_pitch
-        if (
-            self.motion_sensor["ACC"]
-            and self.motion_sensor["GYRO"]
-            and self.kfp is not None
-        ):
-            self.kfp.update(
-                math.atan2(-self.values["acc_raw"][X], self.values["acc_raw"][Z]),
-                self.values["gyro_raw"][Y],
-            )
-            self.values["modified_pitch"] = -100 * math.tan(
-                self.kfp.theta_data[0, 0] - self.values["fixed_pitch"]
-            )
-            # print(
-            #  "modified_pitch:{}%, kfp:{}, acc:{}, fixed_pitch:{}".format(
-            #  int(self.values['modified_pitch']),
-            #  int(math.degrees(self.kfp.theta_data[0,0])),
-            #  int(math.degrees(math.atan2(-self.values['acc_raw'][X], self.values['acc_raw'][Z]))),
-            #  int(math.degrees(self.values['fixed_pitch'])),
-            #  ))
-
-            # LP filter
-            self.lp_filter("modified_pitch", 6)
-
         # put into graph
         for g in self.graph_keys:
             if g not in self.graph_values:
                 continue
             self.graph_values[g][:, 0:-1] = self.graph_values[g][:, 1:]
-            # self.graph_values[g][:, -1] = self.values['acc_graph']
-            self.graph_values[g][:, -1] = np.array(
-                [
-                    self.values["acc_graph"][X],
-                    self.values["acc_graph"][Y],
-                    self.values["gyro_mod"][Y],
-                ]
-            )
+            self.graph_values[g][:, -1] = self.values['acc_graph']
 
     def read_baro_temp(self):
         if not self.available_sensors["PRESSURE"]:
@@ -1177,14 +1086,10 @@ class SensorI2C(Sensor):
             * (1 - pow(self.values["pressure"] / self.sealevel_pa, 1.0 / 5.257))
         )
 
-        # filtered altitude
-        # self.update_kf(altitude_raw)
-
         # average filter
         self.average_val["altitude"][0:-1] = self.average_val["altitude"][1:]
         self.average_val["altitude"][-1] = altitude_raw
         self.values["altitude"] = round(np.nanmean(self.average_val["altitude"]), 1)
-        # self.values['altitude_kalman'] = round(np.nanmean(self.average_val['altitude'][-(self.ave_window_size-2)]),1)
 
         if self.config.G_STOPWATCH_STATUS == "START":
             # total ascent/descent
@@ -1313,19 +1218,6 @@ class SensorI2C(Sensor):
                 f"pressure spike:{datetime.now().strftime('%Y%m%d %H:%M:%S')}, {self.values[key]:.3f}hPa, diff:{hampel_value:.3f}, threshold:{sigma * hampel_std:.3f}"
             )
             self.values[key] = self.median_val[key]
-
-    def update_kf(self, alt):
-        if not self.motion_sensor["ACC"]:
-            self.values["altitude_kalman"] = alt
-            return
-        self.kf.predict()
-        self.kf.update(np.array([[alt], [self.values["acc"][Z] * G]]))
-        self.values["altitude_kalman"] = self.kf.x[0][0]
-        # print(
-        #  round(self.values['altitude_kalman'],1),"m, ",
-        #  round(self.values['altitude'],1),"m, ",
-        #  round(self.values['acc'][Z]*G,1),"m/s^2"
-        #)
 
     async def led_blink(self, sec):
         if not self.available_sensors["BUTTON"].get("BUTTON_SHIM"):
