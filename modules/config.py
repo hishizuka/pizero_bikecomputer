@@ -570,12 +570,11 @@ class Config:
         await self.gui.set_boot_status("initialize network modules...")
         from modules.helper.api import api
         from modules.helper.network import Network
-
-        self.api = api(self)
-        self.network = Network(self)
+        from modules.helper.network.wifi_manager import get_wifi_bt_status
 
         # bluetooth
-        if self.G_IS_RASPI:
+        _, bt_available = get_wifi_bt_status()
+        if self.G_IS_RASPI and bt_available:
             await self.gui.set_boot_status("initialize bluetooth modules...")
 
             from modules.helper.bluetooth.bt_pan import (
@@ -592,12 +591,15 @@ class Config:
             if HAS_DBUS_FAST or HAS_DBUS:
                 await self.bt_pan.update_bt_pan_devices()
 
+        self.api = api(self)
+        self.network = Network(self)
+
         # logger, sensor
         await self.gui.set_boot_status("initialize sensor...")
         self.logger.delay_init()
 
         # GadgetBridge (has to be before gui but after sensors for proper init state of buttons)
-        if self.G_IS_RASPI:
+        if self.G_IS_RASPI and bt_available:
             from modules.helper.bluetooth import HAS_GADGETBRIDGE, GadgetbridgeService
 
             if HAS_GADGETBRIDGE and GadgetbridgeService is not None:
@@ -744,7 +746,6 @@ class Config:
 
     async def quit(self):
         app_logger.info("########## QUIT START ##########")
-
         if self.ble_uart is not None:
             await self.ble_uart.quit()
         await self.network.quit()

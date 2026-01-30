@@ -1,6 +1,7 @@
 import asyncio
 import json
 import shutil
+import os
 
 from modules.app_logger import app_logger
 from modules.utils.cmd import exec_cmd, exec_cmd_return_value
@@ -9,31 +10,47 @@ from modules.utils.cmd import exec_cmd, exec_cmd_return_value
 BOOT_FILE = "/boot/firmware/config.txt"
 
 
+def get_wifi_bt_status():
+    if shutil.which("rfkill") is None:
+        return False, False
+
+    status = {"wlan": False, "bluetooth": False}
+    try:
+        raw_status, _ = exec_cmd_return_value([
+            "sudo",
+            "rfkill",
+            "--json",
+        ], cmd_print=False)
+        json_status = json.loads(raw_status)
+        _parse_wifi_bt_json(json_status, status, ["", "rfkilldevices"])
+    except Exception as exc:
+        app_logger.warning(
+            f"Exception occurred trying to get wifi/bt status: {exc}"
+        )
+    return status["wlan"], status["bluetooth"]
+
+
+def _parse_wifi_bt_json(json_status, status, keys):
+    retrieved = False
+    for key in keys:
+        if key not in json_status:
+            continue
+        for device in json_status[key]:
+            if "type" not in device or device["type"] not in ["wlan", "bluetooth"]:
+                continue
+            if device["soft"] == "unblocked" and device["hard"] == "unblocked":
+                status[device["type"]] = True
+                retrieved = True
+        if retrieved:
+            return
+
+
 class WifiManager:
     def __init__(self, config):
         self.config = config
 
-    def get_wifi_bt_status(self):
-        if not self.config.G_IS_RASPI:
-            return False, False
-
-        status = {"wlan": False, "bluetooth": False}
-        try:
-            raw_status, _ = exec_cmd_return_value([
-                "sudo",
-                "rfkill",
-                "--json",
-            ], cmd_print=False)
-            json_status = json.loads(raw_status)
-            self._parse_wifi_bt_json(json_status, status, ["", "rfkilldevices"])
-        except Exception as exc:
-            app_logger.warning(
-                f"Exception occurred trying to get wifi/bt status: {exc}"
-            )
-        return status["wlan"], status["bluetooth"]
-
     def onoff_wifi_bt(self, key=None):
-        if not self.config.G_IS_RASPI:
+        if shutil.which("rfkill") is None:
             return
 
         onoff_cmd = {
@@ -47,11 +64,11 @@ class WifiManager:
             },
         }
         status = {}
-        status["Wifi"], status["Bluetooth"] = self.get_wifi_bt_status()
+        status["Wifi"], status["Bluetooth"] = get_wifi_bt_status()
         exec_cmd(onoff_cmd[key][status[key]])
 
     def set_wifi_enabled(self, enabled):
-        if not self.config.G_IS_RASPI:
+        if shutil.which("rfkill") is None:
             return
 
         cmd = ["sudo", "rfkill", "unblock" if enabled else "block", "wifi"]
@@ -59,7 +76,7 @@ class WifiManager:
 
     def hardware_wifi_bt(self, status):
         app_logger.info(f"Hardware Wifi/BT: {status}")
-        if self.config.G_IS_RASPI:
+        if os.path.exists(BOOT_FILE):
             with open(BOOT_FILE, "r") as file_handle:
                 data = file_handle.read()
             for dev in ["wifi", "bt"]:
@@ -158,20 +175,5 @@ class WifiManager:
             return True
         return False
 
-    @staticmethod
-    def _parse_wifi_bt_json(json_status, status, keys):
-        retrieved = False
-        for key in keys:
-            if key not in json_status:
-                continue
-            for device in json_status[key]:
-                if "type" not in device or device["type"] not in ["wlan", "bluetooth"]:
-                    continue
-                if device["soft"] == "unblocked" and device["hard"] == "unblocked":
-                    status[device["type"]] = True
-                    retrieved = True
-            if retrieved:
-                return
 
-
-__all__ = ["WifiManager", "BOOT_FILE"]
+__all__ = ["WifiManager", "BOOT_FILE", "get_wifi_bt_status"]
