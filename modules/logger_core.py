@@ -340,6 +340,13 @@ class LoggerCore:
             if self.config.gui is not None:
                 self.config.gui.change_start_stop_button(self.config.G_MANUAL_STATUS)
 
+        # show message
+        self.config.gui.show_popup(self.config.G_MANUAL_STATUS + popup_extra, 3)
+        if display_flash_short:
+            self.config.display.screen_flash_short()
+        else:
+            self.config.display.screen_flash_long()
+
         self.config.state.set_value(
             "G_MANUAL_STATUS", self.config.G_MANUAL_STATUS, force_apply=True
         )
@@ -357,13 +364,6 @@ class LoggerCore:
             asyncio.create_task(
                 asyncio.to_thread(self.config.network.set_wifi_enabled, False)
             )
-
-        # show message
-        self.config.gui.show_popup(self.config.G_MANUAL_STATUS + popup_extra, 3)
-        if display_flash_short:
-            self.config.display.screen_flash_short()
-        else:
-            self.config.display.screen_flash_long()
 
     def start_and_stop(self, status=None):
         if status is not None:
