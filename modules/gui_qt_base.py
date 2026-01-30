@@ -70,18 +70,28 @@ class GUI_Qt_Base(QtCore.QObject):
 
         self.config = config
         self.config.gui = self
+        self._quit_requested = False
 
         self.gui_config = GUI_Config(config.G_LAYOUT_FILE)
 
         self.init_window()
 
+    def _enqueue_msg(self, msg):
+        asyncio.create_task(self.msg_queue.put(msg))
+
     async def delay_init(self):
         loop = asyncio.get_running_loop()
         try:
-            loop.add_signal_handler(signal.SIGTERM, self.app.quit)
-            loop.add_signal_handler(signal.SIGINT, self.app.quit)
-            loop.add_signal_handler(signal.SIGQUIT, self.app.quit)
-            loop.add_signal_handler(signal.SIGHUP, self.app.quit)
+            def _request_quit():
+                if self._quit_requested:
+                    return
+                self._quit_requested = True
+                loop.create_task(self.quit())
+
+            loop.add_signal_handler(signal.SIGTERM, _request_quit)
+            loop.add_signal_handler(signal.SIGINT, _request_quit)
+            loop.add_signal_handler(signal.SIGQUIT, _request_quit)
+            loop.add_signal_handler(signal.SIGHUP, _request_quit)
         except:
             pass
 
@@ -106,6 +116,7 @@ class GUI_Qt_Base(QtCore.QObject):
 
     def exec(self):
         asyncio.run(self.config.start_coroutine(), loop_factory=qasync.QEventLoop)
+
 
     def _grab_in_target_format(self):
         """Grab current frame and convert only if format differs."""
@@ -246,28 +257,24 @@ class GUI_Qt_Base(QtCore.QObject):
         # self.config.check_time("draw_display end")
 
     def show_popup(self, title, timeout=None):
-        asyncio.create_task(
-            self.msg_queue.put(
-                {
-                    "title": title,
-                    "button_num": 0,
-                    "position": QT_ALIGN_BOTTOM,
-                    "timeout": timeout,
-                }
-            )
+        self._enqueue_msg(
+            {
+                "title": title,
+                "button_num": 0,
+                "position": QT_ALIGN_BOTTOM,
+                "timeout": timeout,
+            }
         )
 
     def show_popup_multiline(self, title, message, timeout=None):
-        asyncio.create_task(
-            self.msg_queue.put(
-                {
-                    "title": title,
-                    "message": message,
-                    "position": QT_ALIGN_BOTTOM,
-                    "text_align": QT_ALIGN_LEFT,
-                    "timeout": timeout,
-                }
-            )
+        self._enqueue_msg(
+            {
+                "title": title,
+                "message": message,
+                "position": QT_ALIGN_BOTTOM,
+                "text_align": QT_ALIGN_LEFT,
+                "timeout": timeout,
+            }
         )
 
     def show_message(self, title, message, limit_length=False):
@@ -283,38 +290,35 @@ class GUI_Qt_Base(QtCore.QObject):
                 t = t[0:w_t] + "..."
             if len(m) > w_m:
                 m = m[0:w_m] + "..."
-        asyncio.create_task(
-            self.msg_queue.put(
-                {
-                    "title": t,
-                    "message": m,
-                    "button_num": 1,
-                    "position": QT_ALIGN_BOTTOM,
-                    "text_align": QT_ALIGN_LEFT,
-                }
-            )
+        self._enqueue_msg(
+            {
+                "title": t,
+                "message": m,
+                "button_num": 1,
+                "position": QT_ALIGN_BOTTOM,
+                "text_align": QT_ALIGN_LEFT,
+            }
         )
 
     def show_forced_message(self, msg):
         pass
 
     def show_dialog(self, fn, title):
-        asyncio.create_task(
-            self.msg_queue.put({"fn": fn, "title": title, "button_num": 2})
-        )
+        self._enqueue_msg({"fn": fn, "title": title, "button_num": 2})
 
     def show_dialog_ok_only(self, fn, title):
-        asyncio.create_task(
-            self.msg_queue.put(
-                {"fn": fn, "title": title, "button_num": 1, "button_label": ["OK"]}
-            )
+        self._enqueue_msg(
+            {"fn": fn, "title": title, "button_num": 1, "button_label": ["OK"]}
         )
 
     def show_dialog_cancel_only(self, fn, title):
-        asyncio.create_task(
-            self.msg_queue.put(
-                {"fn": fn, "title": title, "button_num": 1, "button_label": ["Cancel"]}
-            )
+        self._enqueue_msg(
+            {
+                "fn": fn,
+                "title": title,
+                "button_num": 1,
+                "button_label": ["Cancel"],
+            }
         )
 
     async def show_dialog_base(self, msg):

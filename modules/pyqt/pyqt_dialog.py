@@ -61,10 +61,36 @@ class DialogBackground(QtWidgets.QWidget):
       DialogContainer DialogButton:focus { background-color: black; color: white; }
     """
 
-    def __init__(self, *args):
+    def __init__(self, *args, dual_mode=False):
         super().__init__(*args, objectName="background")
         self.setStyleSheet(self.STYLES)
         self.back = None  # Callback for back action
+        self._parent_widget = self.parent()
+        self._dual_mode = dual_mode
+        if self._parent_widget is not None:
+            self._update_geometry()
+            self._parent_widget.installEventFilter(self)
+
+    def _update_geometry(self):
+        """Update geometry based on dual mode setting."""
+        if self._parent_widget is None:
+            return
+        pw = self._parent_widget.width()
+        ph = self._parent_widget.height()
+        if self._dual_mode:
+            # Right half only in dual display mode
+            left_w = pw // 2
+            self.setGeometry(left_w, 0, pw - left_w, ph)
+        else:
+            self.setGeometry(0, 0, pw, ph)
+
+    def eventFilter(self, obj, event):
+        resize_event = getattr(QtCore.QEvent, "Resize", None)
+        if resize_event is None and hasattr(QtCore.QEvent, "Type"):
+            resize_event = QtCore.QEvent.Type.Resize
+        if obj == self._parent_widget and event.type() == resize_event:
+            self._update_geometry()
+        return False
 
 
 class CachedDialog:
@@ -79,10 +105,11 @@ class CachedDialog:
 
     MAX_BUTTONS = 2
 
-    def __init__(self, stack_widget, main_window, pe_widget):
+    def __init__(self, stack_widget, main_window, pe_widget, dual_mode=False):
         self._stack_widget = stack_widget
         self._main_window = main_window
         self._pe_widget = pe_widget
+        self._dual_mode = dual_mode
 
         self._background = None
         self._container = None
@@ -114,7 +141,7 @@ class CachedDialog:
     def _build(self):
         """Build all widgets once during initialization."""
         # Background
-        self._background = DialogBackground()
+        self._background = DialogBackground(self._stack_widget, dual_mode=self._dual_mode)
         self._back_layout = QtWidgets.QVBoxLayout(self._background)
 
         # Container
@@ -289,18 +316,21 @@ class CachedDialog:
                 else:
                     btn.hide()
 
+    def add_to_stack(self):
+        """Prepare dialog overlay (call after main pages are added)."""
+        self._background.hide()
+        self._background.raise_()
+
     def show(self, stack_widget_index):
-        """Add dialog to stack and display."""
+        """Display dialog (already pre-added to stack)."""
         self._stored_index = stack_widget_index
-        self._stack_widget.addWidget(self._background)
-        self._stack_widget.setCurrentWidget(self._background)
+        self._background.raise_()
         self._background.show()
 
     def hide(self):
-        """Remove dialog from stack (without destroying)."""
+        """Hide dialog (keep in stack for reuse)."""
         self._stop_timer()
         self._disconnect_buttons()
-        self._stack_widget.removeWidget(self._background)
         self._background.hide()
 
     def change_title(self, title):

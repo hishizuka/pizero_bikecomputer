@@ -5,16 +5,13 @@ from datetime import datetime
 import asyncio
 
 from modules.app_logger import app_logger
-from modules.utils.network import detect_network
 import modules._qt_ver as _qt_ver
 _qt_ver.QtMode = "QtWidgets"
 
 from modules._qt_qtwidgets import (
     QT_ALIGN_LEFT,
     QT_ALIGN_CENTER,
-    QT_STACKINGMODE_STACKALL,
     QT_PE_WIDGET,
-    QT_STACKINGMODE_STACKONE,
     QT_KEY_RELEASE,
     QT_KEY_SPACE,
     QT_KEY_PRESS,
@@ -228,8 +225,7 @@ class GUI_PyQt(GUI_Qt_Base):
     async def set_boot_status(self, text):
         self.signal_boot_status.emit(text)
         self.draw_display(direct_update=True)
-        if not self.config.G_IS_RASPI:
-            await asyncio.sleep(0.01)  # need for changing QLabel in the event loop
+        await asyncio.sleep(0.01)
 
     def delay_init(self):
         asyncio.create_task(super().delay_init())
@@ -275,7 +271,10 @@ class GUI_PyQt(GUI_Qt_Base):
 
             # Cached dialog for popup messages
             self._dialog = CachedDialog(
-                self.stack_widget, self.main_window, QT_PE_WIDGET
+                self.stack_widget,
+                self.main_window,
+                QT_PE_WIDGET,
+                dual_mode=bool(self.config.G_DUAL_DISPLAY_MODE),
             )
 
         with timers[1]:
@@ -520,6 +519,9 @@ class GUI_PyQt(GUI_Qt_Base):
             self.on_change_main_page(self.main_page_index)
             if self.dual_mode and self.map_widget is not None:
                 self.map_widget.start()
+
+            # Pre-add dialog to stack (after all main pages added)
+            self._dialog.add_to_stack()
 
         app_logger.info("Drawing components:")
         log_timers(timers, text_total="  total : {0:.3f} sec")
@@ -842,8 +844,6 @@ class GUI_PyQt(GUI_Qt_Base):
         self.display_dialog = True
 
         self.stack_widget_current_index = self.stack_widget.currentIndex()
-        self.stack_widget.layout().setStackingMode(QT_STACKINGMODE_STACKALL)
-
         self._dialog.configure(msg, self.close_dialog)
         self._dialog.show(self.stack_widget_current_index)
 
@@ -854,10 +854,11 @@ class GUI_PyQt(GUI_Qt_Base):
             self._dialog.change_button_label(button_label)
 
     def dialog_exists(self):
-        return self.stack_widget.currentWidget().objectName() == "background"
+        if self._dialog is None or self._dialog.background is None:
+            return False
+        return self._dialog.background.isVisible()
 
     def close_dialog(self, index):
-        self.stack_widget.layout().setStackingMode(QT_STACKINGMODE_STACKONE)
         self.stack_widget.setCurrentIndex(index)
         self._dialog.hide()
         self.display_dialog = False
