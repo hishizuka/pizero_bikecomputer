@@ -130,7 +130,7 @@ class LightBeamIcon(_QIconWithPath):
 
 
 class SatelliteAltIcon(_QIconWithPath):
-    path = "img/satellite_alt.svg"
+    path = "img/near_me.svg"
 
 
 # "Icons label"

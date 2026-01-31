@@ -18,7 +18,7 @@ from modules.sensor.gps.base import NMEA_MODE_2D, NMEA_MODE_3D
 
 class RecIndicator(QtWidgets.QWidget):
     _state = "hidden"
-    _size = 10
+    _size = 14
 
     def __init__(self, parent=None):
         super().__init__(parent=parent)
@@ -45,13 +45,21 @@ class RecIndicator(QtWidgets.QWidget):
         cy = (self.height() - self._size) / 2
 
         if self._state == "recording":
-            painter.setBrush(QtGui.QColor("#ff4d4d"))
-            painter.drawEllipse(int(cx), int(cy), self._size, self._size)
+            # Green triangle (play icon)
+            painter.setBrush(QtGui.QColor("#2ecc71"))
+            triangle = QtGui.QPolygon([
+                QtCore.QPoint(int(cx), int(cy)),
+                QtCore.QPoint(int(cx), int(cy + self._size)),
+                QtCore.QPoint(int(cx + self._size), int(cy + self._size / 2)),
+            ])
+            painter.drawPolygon(triangle)
         elif self._state == "stop":
+            # Red square
             painter.setBrush(QtGui.QColor("#ff4d4d"))
             painter.drawRect(int(cx), int(cy), self._size, self._size)
         elif self._state == "pause":
-            painter.setBrush(QtGui.QColor("#2ecc71"))
+            # Orange double bars
+            painter.setBrush(QtGui.QColor("#f5a623"))
             bar_w = 3
             gap = 2
             total_w = bar_w * 2 + gap
@@ -79,9 +87,9 @@ class StatusBarWidget(QtWidgets.QWidget):
         self.setSizePolicy(QT_EXPANDING, QT_FIXED)
         self.setFixedHeight(24)
 
-        self._gps_size = 14
-        self._bt_size = 18
-        self._light_size = 13
+        self._gps_size = 20
+        self._bt_size = 20
+        self._light_size = 20
         self._icon_cache = {}
         self._bt_cached = False
         self._last_bt_check = 0.0
@@ -109,9 +117,9 @@ class StatusBarWidget(QtWidgets.QWidget):
         layout.setSpacing(8)
         layout.addWidget(self.rec_indicator)
         layout.addStretch(1)
-        layout.addWidget(self.gps_label)
         layout.addWidget(self.bt_label)
         layout.addWidget(self.light_label)
+        layout.addWidget(self.gps_label)
         layout.addWidget(self.time_label)
 
         self._timer = QtCore.QTimer(parent=self)
