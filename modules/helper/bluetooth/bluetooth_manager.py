@@ -360,6 +360,7 @@ class BluetoothManager:
 
         await asyncio.sleep(3)
         status = check_bnep0()
+        await detect_network_async(cache=False)
         app_logger.info(f"[BT] disconnect, {caller_name=}")
         return not status
 

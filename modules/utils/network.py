@@ -63,7 +63,9 @@ def detect_network(
 ):
     if cache:
         return _detect_network_cached(host, port, timeout, ttl)
-    return _detect_network_raw(host, port, timeout)
+    result = _detect_network_raw(host, port, timeout)
+    _set_cache_value(_cache_key(host, port, timeout), result, time.monotonic())
+    return result
 
 
 async def detect_network_async(
@@ -76,17 +78,21 @@ async def detect_network_async(
     # Non-blocking network check for asyncio contexts.
     if cache:
         return _detect_network_cached(host, port, timeout, ttl)
+    key = _cache_key(host, port, timeout)
     try:
         reader, writer = await asyncio.wait_for(
             asyncio.open_connection(host, port),
             timeout=timeout,
         )
     except Exception:
+        _set_cache_value(key, False, time.monotonic())
         return False
 
     try:
         sockname = writer.get_extra_info("sockname")
-        return sockname[0] if sockname else False
+        result = sockname[0] if sockname else False
+        _set_cache_value(key, result, time.monotonic())
+        return result
     finally:
         writer.close()
         try:

@@ -383,7 +383,7 @@ class api:
 
     def upload_check(self, blank_check, blank_msg, file_check=True):
         # network check
-        if not detect_network():
+        if not detect_network(cache=False):
             app_logger.warning("No Internet connection")
             return False
 
@@ -423,6 +423,9 @@ class api:
         tokens = await post(
             self.config.G_STRAVA_API_URL["OAUTH"], data=data
         )
+        if not tokens:
+            app_logger.error("strava token refresh failed (no response)")
+            return False
 
         if (
             "access_token" in tokens
@@ -446,6 +449,9 @@ class api:
             upload_result = await post(
                 self.config.G_STRAVA_API_URL["UPLOAD"], headers=headers, data=data
             )
+            if not upload_result:
+                app_logger.error("strava upload failed (no response)")
+                return False
             if "status" in upload_result:
                 app_logger.info(upload_result["status"])
 
@@ -550,6 +556,9 @@ class api:
                 params=params,
                 data={"file": file},
             )
+            if not response:
+                app_logger.error("rwgps upload failed (no response)")
+                return False
             if response["success"] != 1:
                 return False
 
