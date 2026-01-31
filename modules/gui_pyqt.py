@@ -765,6 +765,10 @@ class GUI_PyQt(GUI_Qt_Base):
 
     def fake_trainer_internal(self):
         self.sensor.sensor_ble.toggle_fake_trainer()
+        self.show_dialog_ok_only(
+            fn=self.sensor.sensor_ble.toggle_fake_trainer,
+            title="Connect Zwift Click v2 to Zwift."
+        )
 
     def get_screenshot(self):
         self.signal_get_screenshot.emit()

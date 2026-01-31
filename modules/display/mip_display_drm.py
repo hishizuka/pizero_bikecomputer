@@ -107,6 +107,9 @@ class MipDisplayDrm(Display):
     has_touch = False
     send = False
 
+    def quit(self):
+        self.clear()
+
     def screen_flash_long(self):
         super().screen_flash_long()
         self._write_display_invert("0.8,0.25", "screen_flash_long")
