@@ -124,6 +124,19 @@ class Button_Config:
                 "Y": ("", ""),
                 "Z": ("", ""),
             },
+            "DIALOG": {
+                "NAVIGATION_UP": ("press_shift_tab", ""),
+                "NAVIGATION_DOWN": ("press_tab", ""),
+                "NAVIGATION_LEFT": ("press_shift_tab", ""),
+                "NAVIGATION_RIGHT": ("press_tab", ""),
+                "SHIFT_UP_LEFT": ("press_shift_tab", "get_screenshot"),
+                "SHIFT_UP_RIGHT": ("press_tab", ""),
+                "SHIFT_UP_BOTH": ("press_space", ""),
+                "A": ("press_space", ""),
+                "B": ("", ""),
+                "Y": ("", ""),
+                "Z": ("", ""),
+            },
             "MAP": {
                 "NAVIGATION_UP": ("", ""),
                 "NAVIGATION_DOWN": ("", ""),
@@ -273,6 +286,12 @@ class Button_Config:
         # Y key is GPIO 20, not 24
         G_BUTTON_DEF["Pirate_Audio_old"][k][20] = G_BUTTON_DEF["Pirate_Audio_old"][k].pop(24)
 
+    for button_hard in G_BUTTON_DEF:
+        if "MENU" in G_BUTTON_DEF[button_hard] and "DIALOG" not in G_BUTTON_DEF[button_hard]:
+            G_BUTTON_DEF[button_hard]["DIALOG"] = copy.deepcopy(
+                G_BUTTON_DEF[button_hard]["MENU"]
+            )
+
     G_PAGE_MODE = "MAIN"
 
     # mode group setting changed by change_mode
@@ -294,49 +313,63 @@ class Button_Config:
         self._dual_map_mode_active = False
 
     def press_button(self, button_hard, press_button, index):
-        if self.config.gui is None or self.config.gui.stack_widget is None:
+        gui = self.config.gui
+        if gui is None or gui.stack_widget is None:
             return
 
-        w_index = self.config.gui.stack_widget.currentIndex()
-        if w_index == 1:
-            current_widget = self.config.gui.main_page.widget(
-                self.config.gui.main_page.currentIndex()
-            )
-            if self.config.G_DUAL_DISPLAY_MODE:
-                if current_widget == self.config.gui.course_profile_graph_widget:
-                    mode_key = "COURSE_PROFILE"
-                elif self._dual_map_mode_active:
-                    mode_key = "MAP"
-                elif current_widget == self.config.gui.map_widget:
-                    mode_key = "MAP"
-                else:
-                    mode_key = "MAIN"
-            else:
-                if current_widget == self.config.gui.map_widget:
-                    mode_key = "MAP"
-                elif current_widget == self.config.gui.course_profile_graph_widget:
-                    mode_key = "COURSE_PROFILE"
-                else:
-                    mode_key = "MAIN"
+        dialog_exists = getattr(gui, "dialog_exists", None)
+        dialog_active = False
+        if callable(dialog_exists):
+            dialog_active = dialog_exists()
+        else:
+            dialog_active = bool(getattr(gui, "display_dialog", False))
 
-            pages = self.G_BUTTON_MODE_PAGES.get(mode_key)
-            if pages:
-                mode_index = self.G_BUTTON_MODE_INDEX.get(mode_key, 0)
-                if mode_index < 0 or mode_index >= len(pages):
-                    mode_index = 0
-                self.G_PAGE_MODE = pages[mode_index]
+        if dialog_active:
+            if "DIALOG" in self.G_BUTTON_DEF.get(button_hard, {}):
+                self.G_PAGE_MODE = "DIALOG"
+            elif "MENU" in self.G_BUTTON_DEF.get(button_hard, {}):
+                self.G_PAGE_MODE = "MENU"
             else:
-                self.G_PAGE_MODE = mode_key
-            # for no implementation
-            if self.G_PAGE_MODE not in self.G_BUTTON_DEF[button_hard]:
                 self.G_PAGE_MODE = "MAIN"
-                if self.config.G_DUAL_DISPLAY_MODE and mode_key == "MAP":
-                    self._dual_map_mode_active = False
-                    map_widget = getattr(self.config.gui, "map_widget", None)
-                    if map_widget is not None:
-                        map_widget.lock_on()
-        elif w_index >= 2:
-            self.G_PAGE_MODE = "MENU"
+        else:
+            w_index = gui.stack_widget.currentIndex()
+            if w_index == 1:
+                current_widget = gui.main_page.widget(gui.main_page.currentIndex())
+                if self.config.G_DUAL_DISPLAY_MODE:
+                    if current_widget == gui.course_profile_graph_widget:
+                        mode_key = "COURSE_PROFILE"
+                    elif self._dual_map_mode_active:
+                        mode_key = "MAP"
+                    elif current_widget == gui.map_widget:
+                        mode_key = "MAP"
+                    else:
+                        mode_key = "MAIN"
+                else:
+                    if current_widget == gui.map_widget:
+                        mode_key = "MAP"
+                    elif current_widget == gui.course_profile_graph_widget:
+                        mode_key = "COURSE_PROFILE"
+                    else:
+                        mode_key = "MAIN"
+
+                pages = self.G_BUTTON_MODE_PAGES.get(mode_key)
+                if pages:
+                    mode_index = self.G_BUTTON_MODE_INDEX.get(mode_key, 0)
+                    if mode_index < 0 or mode_index >= len(pages):
+                        mode_index = 0
+                    self.G_PAGE_MODE = pages[mode_index]
+                else:
+                    self.G_PAGE_MODE = mode_key
+                # for no implementation
+                if self.G_PAGE_MODE not in self.G_BUTTON_DEF[button_hard]:
+                    self.G_PAGE_MODE = "MAIN"
+                    if self.config.G_DUAL_DISPLAY_MODE and mode_key == "MAP":
+                        self._dual_map_mode_active = False
+                        map_widget = getattr(gui, "map_widget", None)
+                        if map_widget is not None:
+                            map_widget.lock_on()
+            elif w_index >= 2:
+                self.G_PAGE_MODE = "MENU"
 
         if press_button not in self.G_BUTTON_DEF[button_hard][self.G_PAGE_MODE]:
             app_logger.warning(

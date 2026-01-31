@@ -670,9 +670,13 @@ class Config:
                 ##### temporary #####
                 elif key == "i" and self.gui and self.gui.map_widget:
                     self.gui.map_widget.modify_map_tile()
-                elif key == "@" and self.gui and self.gui.map_widget:
+                elif key == "@" and self.gui:
                     self.gui.show_dialog_ok_only(fn=None, title="test")
                     #self.gui.show_popup(f"test", 3)
+                elif key == "t" and self.gui:
+                    def fn():
+                        app_logger.info("OK")
+                    self.gui.show_dialog(fn=self.display.screen_flash_long, title="test")
         except asyncio.CancelledError:
             pass
 

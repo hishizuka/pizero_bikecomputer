@@ -3,10 +3,13 @@ Cached dialog system for popup messages.
 Classes are defined at module level for reuse, avoiding repeated class
 definitions and widget creation on each dialog display.
 """
+import asyncio
+
 from modules._qt_qtwidgets import (
     QT_ALIGN_CENTER,
     QT_ALIGN_LEFT,
     QtCore,
+    QtGui,
     QtWidgets,
 )
 
@@ -64,6 +67,7 @@ class DialogBackground(QtWidgets.QWidget):
     def __init__(self, *args, dual_mode=False):
         super().__init__(*args, objectName="background")
         self.setStyleSheet(self.STYLES)
+        self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
         self.back = None  # Callback for back action
         self._parent_widget = self.parent()
         self._dual_mode = dual_mode
@@ -85,10 +89,7 @@ class DialogBackground(QtWidgets.QWidget):
             self.setGeometry(0, 0, pw, ph)
 
     def eventFilter(self, obj, event):
-        resize_event = getattr(QtCore.QEvent, "Resize", None)
-        if resize_event is None and hasattr(QtCore.QEvent, "Type"):
-            resize_event = QtCore.QEvent.Type.Resize
-        if obj == self._parent_widget and event.type() == resize_event:
+        if obj == self._parent_widget and event.type() == QtCore.QEvent.Type.Resize:
             self._update_geometry()
         return False
 
@@ -135,6 +136,8 @@ class CachedDialog:
         self._timeout_timer = None
         self._current_fn = None
         self._stored_index = None
+        self._ok_fn = None
+        self._back_fn = None
 
         self._build()
 
@@ -147,14 +150,21 @@ class CachedDialog:
         # Container
         self._container = DialogContainer(self._background)
         self._container.pe_widget = self._pe_widget
+        self._container.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
         self._container.setAutoFillBackground(True)
         self._back_layout.addWidget(self._container)
         self._content_layout = QtWidgets.QVBoxLayout(self._container)
         self._content_layout.setSpacing(0)
 
-        # Base font
-        font = self._main_window.font()
-        base_size = font.pointSize()
+        # Create fonts with different sizes
+        base_font = self._main_window.font()
+        base_size = base_font.pointSize()
+
+        large_font = QtGui.QFont(base_font)
+        large_font.setPointSize(int(base_size * 2))
+
+        medium_font = QtGui.QFont(base_font)
+        medium_font.setPointSize(int(base_size * 1.5))
 
         # === Icon layout ===
         self._icon_widget = QtWidgets.QWidget(self._container)
@@ -163,10 +173,9 @@ class CachedDialog:
         icon_layout.setSpacing(0)
 
         self._icon_label = QtWidgets.QLabel()
-        font.setPointSize(int(base_size * 2))
         self._icon_title_label = QtWidgets.QLabel(objectName="title_label")
         self._icon_title_label.setWordWrap(True)
-        self._icon_title_label.setFont(font)
+        self._icon_title_label.setFont(large_font)
         self._icon_title_label.setContentsMargins(5, 5, 5, 5)
         self._icon_title_label.setAlignment(QT_ALIGN_LEFT)
 
@@ -180,16 +189,15 @@ class CachedDialog:
         message_layout.setContentsMargins(0, 0, 0, 0)
         message_layout.setSpacing(0)
 
-        font.setPointSize(int(base_size * 1.5))
         self._message_title_label = QtWidgets.QLabel(objectName="title_label")
         self._message_title_label.setWordWrap(True)
-        self._message_title_label.setFont(font)
+        self._message_title_label.setFont(medium_font)
         self._message_title_label.setStyleSheet("font-weight: bold;")
         self._message_title_label.setContentsMargins(5, 5, 5, 5)
 
         self._message_label = QtWidgets.QLabel()
         self._message_label.setWordWrap(True)
-        self._message_label.setFont(font)
+        self._message_label.setFont(medium_font)
         self._message_label.setContentsMargins(5, 5, 5, 5)
 
         message_layout.addWidget(self._message_title_label)
@@ -197,10 +205,9 @@ class CachedDialog:
         self._content_layout.addWidget(self._message_widget)
 
         # === Simple layout ===
-        font.setPointSize(int(base_size * 2))
         self._simple_title_label = QtWidgets.QLabel(objectName="title_label")
         self._simple_title_label.setWordWrap(True)
-        self._simple_title_label.setFont(font)
+        self._simple_title_label.setFont(large_font)
         self._simple_title_label.setContentsMargins(5, 5, 5, 5)
         self._content_layout.addWidget(self._simple_title_label)
 
@@ -247,6 +254,49 @@ class CachedDialog:
             self._timeout_timer.stop()
             self._timeout_timer = None
 
+    @staticmethod
+    def _set_label(label, text, align=None):
+        """Set label text and optional alignment."""
+        label.setText(text)
+        if align is not None:
+            label.setAlignment(align)
+
+    def _show_layout(self, title, title_icon, message, text_align):
+        """Show the appropriate layout based on dialog content."""
+        if title_icon is not None:
+            self._icon_label.setPixmap(title_icon.pixmap(QtCore.QSize(32, 32)))
+            self._set_label(self._icon_title_label, title, QT_ALIGN_LEFT)
+            self._icon_widget.show()
+            return
+        if message is not None:
+            self._set_label(self._message_title_label, title, text_align)
+            self._set_label(self._message_label, message, text_align)
+            self._message_widget.show()
+            return
+        self._set_label(self._simple_title_label, title, text_align)
+        self._simple_title_label.show()
+
+    def _configure_buttons(self, button_num, button_label, fn, back, timeout_seconds):
+        """Configure dialog buttons."""
+        if button_num == 0:
+            self._timeout_timer = QtCore.QTimer()
+            self._timeout_timer.setSingleShot(True)
+            self._timeout_timer.timeout.connect(back)
+            self._timeout_timer.start(timeout_seconds * 1000)
+            return
+
+        self._button_widget.show()
+        for i, btn in enumerate(self._buttons):
+            if i < button_num:
+                btn.setText(button_label[i] if i < len(button_label) else "")
+                if i == 0 and fn is not None:
+                    btn.clicked.connect(self.trigger_ok)
+                else:
+                    btn.clicked.connect(self.trigger_back)
+                btn.show()
+            else:
+                btn.hide()
+
     def configure(self, msg, close_callback):
         """
         Configure dialog for display.
@@ -268,53 +318,21 @@ class CachedDialog:
         position = msg.get("position", QT_ALIGN_CENTER)
         text_align = msg.get("text_align", QT_ALIGN_CENTER)
         fn = msg.get("fn")
-        timeout = msg.get("timeout", 5) or 5
+        timeout_seconds = msg.get("timeout", 5) or 5
 
         self._current_fn = fn
 
         # Store back callback
-        def back():
-            close_callback(self._stored_index)
-
+        back = lambda: close_callback(self._stored_index)
         self._background.back = back
+        self._ok_fn = fn
+        self._back_fn = back
 
         # Position container
         self._back_layout.setAlignment(self._container, position)
 
-        # Select layout mode
-        if title_icon is not None:
-            self._icon_label.setPixmap(title_icon.pixmap(QtCore.QSize(32, 32)))
-            self._icon_title_label.setText(title)
-            self._icon_widget.show()
-        elif message is not None:
-            self._message_title_label.setText(title)
-            self._message_title_label.setAlignment(text_align)
-            self._message_label.setText(message)
-            self._message_label.setAlignment(text_align)
-            self._message_widget.show()
-        else:
-            self._simple_title_label.setText(title)
-            self._simple_title_label.setAlignment(text_align)
-            self._simple_title_label.show()
-
-        # Buttons
-        if button_num == 0:
-            # Auto-close with timeout
-            self._timeout_timer = QtCore.QTimer()
-            self._timeout_timer.setSingleShot(True)
-            self._timeout_timer.timeout.connect(back)
-            self._timeout_timer.start(timeout * 1000)
-        else:
-            self._button_widget.show()
-            for i, btn in enumerate(self._buttons):
-                if i < button_num:
-                    btn.setText(button_label[i] if i < len(button_label) else "")
-                    btn.clicked.connect(back)
-                    if i == 0 and fn is not None:
-                        btn.clicked.connect(fn)
-                    btn.show()
-                else:
-                    btn.hide()
+        self._show_layout(title, title_icon, message, text_align)
+        self._configure_buttons(button_num, button_label, fn, back, timeout_seconds)
 
     def add_to_stack(self):
         """Prepare dialog overlay (call after main pages are added)."""
@@ -326,12 +344,42 @@ class CachedDialog:
         self._stored_index = stack_widget_index
         self._background.raise_()
         self._background.show()
+        QtCore.QTimer.singleShot(0, self._apply_focus)
+
+    def _apply_focus(self):
+        """Focus the first visible button when dialog is shown."""
+        for btn in self._buttons:
+            if btn.isVisible():
+                btn.setFocus()
+                return
+        self._container.setFocus()
 
     def hide(self):
         """Hide dialog (keep in stack for reuse)."""
         self._stop_timer()
         self._disconnect_buttons()
         self._background.hide()
+
+    def trigger_ok(self):
+        """Run OK callback then close dialog."""
+        if callable(self._ok_fn):
+            result = self._ok_fn()
+            if asyncio.iscoroutine(result):
+                asyncio.create_task(result)
+        self.trigger_back()
+        return True
+
+    def trigger_back(self):
+        """Close dialog without calling OK callback."""
+        if callable(self._back_fn):
+            self._back_fn()
+        return True
+
+    def click_primary(self):
+        """Trigger OK action even if focus is elsewhere."""
+        if not self._button_widget.isVisible():
+            return False
+        return self.trigger_ok()
 
     def change_title(self, title):
         """Update visible title label."""
