@@ -1,19 +1,34 @@
+import argparse
 import sqlite3
 import struct
 from datetime import datetime, timezone
+from pathlib import Path
 
-from modules.app_logger import app_logger
-from modules.utils.date import datetime_myparser
-from .logger import Logger
+if __name__ == "__main__" and __package__ is None:
+    # Allow running as a script by adding repo root to sys.path.
+    import sys
+
+    sys.path.append(str(Path(__file__).resolve().parents[2]))
+
+try:
+    from modules.app_logger import app_logger
+    from modules.utils.date import datetime_myparser
+    from modules.logger.logger import Logger
+except ImportError:  # pragma: no cover
+    from modules.app_logger import app_logger
+    from modules.utils.date import datetime_myparser
+    from .logger import Logger
 
 # cython
 MODE = "Python"
+set_config_func = None
+write_log_cython_func = None
 
 try:
     # Prefer a prebuilt Cython extension if available.
     from .cython.logger_fit import (
-        set_config,
-        write_log_cython,
+        set_config as set_config_func,
+        write_log_cython as write_log_cython_func,
     )
     MODE = "Cython"
 except Exception:
@@ -22,18 +37,12 @@ except Exception:
         import pyximport
         pyximport.install(inplace=True, language_level=3)
         from .cython.logger_fit import (
-            set_config,
-            write_log_cython,
+            set_config as set_config_func,
+            write_log_cython as write_log_cython_func,
         )
         MODE = "Cython"
     except Exception:
         pass
-
-
-class config_local:
-    G_LOG_DB = "log/log.db"
-    G_LOG_DIR = "log"
-    G_UNIT_ID_HEX = 0x12345678
 
 
 class LoggerFit(Logger):
@@ -184,8 +193,8 @@ class LoggerFit(Logger):
         self.config = config
         self.reset()
         self.mode = MODE
-        if MODE == "Cython":
-            set_config(config)
+        if MODE == "Cython" and set_config_func is not None:
+            set_config_func(config)
 
     def reset(self):
         self.fit_data = []
@@ -237,7 +246,10 @@ class LoggerFit(Logger):
         return self.write_log_python(filename, start_date, end_date)
 
     def write_log_cython(self, filename, start_date, end_date):
-        res = write_log_cython(
+        if write_log_cython_func is None:
+            return False
+
+        res = write_log_cython_func(
             self.config.G_LOG_DB,
             filename,
             start_date.strftime("%Y-%m-%d_%H-%M-%S"),
@@ -249,7 +261,10 @@ class LoggerFit(Logger):
 
     def write_log_python(self, filename, start_date, end_date):
         # make sure crc16 is imported is we resolve to using python code
-        from .cython.crc16_p import crc16
+        try:
+            from .cython.crc16_p import crc16
+        except ImportError:  # pragma: no cover
+            from modules.logger.cython.crc16_p import crc16
 
         con = sqlite3.connect(
             self.config.G_LOG_DB,
@@ -585,16 +600,45 @@ class LoggerFit(Logger):
         return self.get_epoch_time(datetime_myparser(strtime))
 
 
-if __name__ == "__main__":
-    # from line_profiler import LineProfiler
-    c = config_local()
-    d = LoggerFit(c)
-    d.write_log()
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Export BIKECOMPUTER_LOG from a sqlite3 DB to FIT."
+    )
+    parser.add_argument(
+        "db_path",
+        help="Path to sqlite3 database file (e.g. log/log.db-YYYY-MM-DD_HH-MM-SS).",
+    )
+    parser.add_argument(
+        "--output",
+        help="Output FIT path. Default: same folder and timestamp based .fit",
+    )
+    args = parser.parse_args()
 
-    # prf = LineProfiler()
-    # prf.add_function(l.convertValue)
-    # prf.add_function(l.getEpochTime)
-    # prf.add_function(l.get_struct_def)
-    # prf.add_function(l.crc)
-    # prf.runcall(l.writeLog)
-    # prf.print_stats()
+    try:
+        db_path = Logger.resolve_db_path(args.db_path)
+    except FileNotFoundError:
+        print(f"ERROR: db file not found: {args.db_path}")
+        return 1
+
+    output_path = (
+        Path(args.output)
+        if args.output
+        else Logger.get_default_output_path(db_path, ".fit")
+    )
+    logger = LoggerFit(Logger.create_command_config(db_path))
+    start_date, end_date = logger.get_db_start_end_dates()
+
+    if start_date is None or end_date is None:
+        print(f"ERROR: no log records found in BIKECOMPUTER_LOG: {db_path}")
+        return 1
+
+    if not logger.write_log(str(output_path), start_date, end_date):
+        print(f"ERROR: failed to export fit: {db_path}")
+        return 1
+
+    print(f"Done. output={output_path}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
