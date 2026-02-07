@@ -724,7 +724,7 @@ class MapTileWithValues():
         ):
             return
 
-        if not await detect_network_async(Cache=False):
+        if not await detect_network_async(cache=False):
             return
 
         past_url = map_settings.get("past_time_list")
