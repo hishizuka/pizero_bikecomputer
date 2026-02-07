@@ -74,16 +74,12 @@ class RecIndicator(QtWidgets.QWidget):
 class StatusBarWidget(QtWidgets.QWidget):
     BASE_BG_COLOR = "#000000"
     FLASH_YELLOW = "#ffd166"
-    STYLES = f"""
-      background-color: {BASE_BG_COLOR};
-    """
 
     def __init__(self, parent, config):
         super().__init__(parent=parent)
         self.config = config
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setAutoFillBackground(True)
-        self.setStyleSheet(self.STYLES)
         self.setSizePolicy(QT_EXPANDING, QT_FIXED)
         self.setFixedHeight(24)
 
@@ -95,6 +91,10 @@ class StatusBarWidget(QtWidgets.QWidget):
         self._last_bt_check = 0.0
         self._last_time = ""
         self._flash_token = 0
+        self._flash_active = False
+        self._normal_bg_color = self.BASE_BG_COLOR
+        self._current_bg_color = None
+        self._set_background_color(self._normal_bg_color)
 
         self.rec_indicator = RecIndicator(self)
         self.gps_label = QtWidgets.QLabel(self)
@@ -132,12 +132,14 @@ class StatusBarWidget(QtWidgets.QWidget):
             return
         self._flash_token += 1
         token = self._flash_token
+        self._flash_active = True
 
         def step(index):
             if token != self._flash_token:
                 return
             if index >= len(sequence):
-                self._set_background_color(self.BASE_BG_COLOR)
+                self._flash_active = False
+                self._set_background_color(self._normal_bg_color)
                 return
             color, duration = sequence[index]
             self._set_background_color(color)
@@ -145,8 +147,21 @@ class StatusBarWidget(QtWidgets.QWidget):
 
         step(0)
 
+    def set_background_color(self, color=None):
+        if not color:
+            self._normal_bg_color = self.BASE_BG_COLOR
+        else:
+            self._normal_bg_color = color
+        if not self._flash_active:
+            self._set_background_color(self._normal_bg_color)
+
     def _set_background_color(self, color):
         # Keep the stylesheet minimal to avoid overriding child styles.
+        if not color:
+            color = self.BASE_BG_COLOR
+        if color == self._current_bg_color:
+            return
+        self._current_bg_color = color
         self.setStyleSheet(f"background-color: {color};")
 
     def resizeEvent(self, event):

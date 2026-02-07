@@ -8,6 +8,8 @@
 /courses/ridewithgps/*
 /courses/*html*
 /fonts/*
+/scripts/*.py
+/scripts/*.yaml
 /.idea/
 /.serena/
 *.iml
