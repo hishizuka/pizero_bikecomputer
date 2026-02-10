@@ -1,4 +1,6 @@
+import os
 import pickle
+import tempfile
 from datetime import datetime, timezone
 
 
@@ -6,20 +8,61 @@ from datetime import datetime, timezone
 class AppState:
     interval = 20  # [s]
 
-    last_write_time = datetime.now(timezone.utc)
     pickle_file = "state.pickle"
-    values = None
 
     def __init__(self):
+        self.last_write_time = datetime.now(timezone.utc)
+        self.values = {}
+
         try:
             with open(self.pickle_file, "rb") as f:
                 self.values = pickle.load(f)
         except FileNotFoundError:
             self.values = {}
+        except (
+            EOFError,
+            OSError,
+            pickle.UnpicklingError,
+            AttributeError,
+            ValueError,
+            TypeError,
+        ) as exc:
+            self.values = {}
+            self._backup_corrupted_state_file(exc)
 
     def write(self):
-        with open(self.pickle_file, "wb") as f:
-            pickle.dump(self.values, f)
+        directory = os.path.dirname(self.pickle_file) or "."
+        fd, tmp_path = tempfile.mkstemp(
+            prefix=".state.",
+            suffix=".tmp",
+            dir=directory,
+        )
+        try:
+            with os.fdopen(fd, "wb") as f:
+                pickle.dump(self.values, f)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, self.pickle_file)
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+
+    def _backup_corrupted_state_file(self, exc):
+        if not os.path.exists(self.pickle_file):
+            return
+
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        backup_path = f"{self.pickle_file}.corrupt-{timestamp}"
+        suffix = 1
+        while os.path.exists(backup_path):
+            backup_path = f"{self.pickle_file}.corrupt-{timestamp}-{suffix}"
+            suffix += 1
+
+        try:
+            os.replace(self.pickle_file, backup_path)
+        except OSError as backup_exc:
+            return
+
 
     def set_value(self, key, value, force_apply=False):
         self.values[key] = value
@@ -81,5 +124,3 @@ if __name__ == "__main__":
         s.write()
 
     print(s.values)
-
-
