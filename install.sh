@@ -100,7 +100,7 @@ sudo apt upgrade -y
 # install essential packages
 echo "🔧 Installing core packages..."
 # trixie
-sudo apt install -y git cython3 cmake python3-setuptools python3-numpy sqlite3 libsqlite3-dev python3-pil python3-aiohttp python3-aiofiles python3-psutil
+sudo apt install -y git cython3 cmake python3-setuptools python3.13-venv python3-numpy sqlite3 libsqlite3-dev python3-pil python3-aiohttp python3-aiofiles python3-psutil
 echo "✅ Core packages installed."
 
 cd
@@ -122,7 +122,7 @@ fi
 # Install additional requirements
 echo "🔧 Installing core pip packages..."
 # essential
-pip install oyaml polyline qasync pyqtgraph git+https://github.com/hishizuka/crdp.git
+pip install oyaml polyline git+https://github.com/hishizuka/crdp.git
 echo "✅ Core pip packages installed successfully."
 
 if command -v raspi-config >/dev/null 2>&1; then
@@ -135,6 +135,8 @@ fi
 if [[ "$install_pyqt6" == "true" ]]; then
     echo "🔧 Installing PyQt6 packages..."
     sudo apt install -y python3-pyqt6 python3-pyqt6.qtsvg qt6-svg-plugins pyqt6-dev-tools
+    pip install qasync pyqtgraph
+    # sudo apt install -y python3-pyside6.qtlocation
     echo "✅ PyQt6 packages installed successfully."
     gui_option=()
 else
@@ -354,6 +356,9 @@ if [[ "$install_services" == "true" ]]; then
         after="After=display-manager.service\\n"
     else
         envs="Environment=\"QT_QPA_PLATFORM=offscreen\"\\n"
+        # DRM
+        #envs="Environment=\"QT_QPA_PLATFORM=linuxfb:fb=/dev/fb1\"\\n"
+        # PiTFT
         #envs="Environment=\"QT_QPA_FB_HIDECURSOR=1 QT_QPA_PLATFORM=linuxfb:fb=/dev/fb1\"\\n"
         # and add vt.global_cursor_default=0 fbcon=map:0 or 1(map console with /dev/fbX)
         after=""
