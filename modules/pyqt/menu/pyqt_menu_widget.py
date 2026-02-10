@@ -27,7 +27,7 @@ class MenuWidget(QtWidgets.QWidget):
     @property
     def sensor_i2c(self):
         return self.config.logger.sensor.sensor_i2c
-    
+
     @property
     def sensor_ant(self):
         return self.config.logger.sensor.sensor_ant
@@ -39,6 +39,7 @@ class MenuWidget(QtWidgets.QWidget):
         self.back_index_key = None
         self.focus_widget = None
         self.menu_layout = None
+        self.use_half_split_grid = False
         self.buttons = {}
 
         self.setup_ui()
@@ -88,6 +89,20 @@ class MenuWidget(QtWidgets.QWidget):
         self.menu_layout.setContentsMargins(0, 0, 0, 0)
         self.menu_layout.setSpacing(0)
 
+    def apply_half_split_grid(self):
+        if not self.use_half_split_grid:
+            return
+        if not isinstance(self.menu_layout, QtWidgets.QGridLayout):
+            return
+
+        left_width = self.menu.width() // 2
+        right_width = self.menu.width() - left_width
+
+        self.menu_layout.setColumnStretch(0, 0)
+        self.menu_layout.setColumnStretch(1, 0)
+        self.menu_layout.setColumnMinimumWidth(0, left_width)
+        self.menu_layout.setColumnMinimumWidth(1, right_width)
+
     def add_buttons(self, buttons):
         n = len(buttons)
         vertical = True
@@ -99,7 +114,9 @@ class MenuWidget(QtWidgets.QWidget):
         else:
             layout_type = QtWidgets.QGridLayout
         self.make_menu_layout(layout_type)
-        
+        self.use_half_split_grid = layout_type == QtWidgets.QGridLayout
+        self.apply_half_split_grid()
+
         i = 0
         for b in buttons:
             icon = None
@@ -151,6 +168,8 @@ class MenuWidget(QtWidgets.QWidget):
         q = self.page_name_label.font()
         q.setPixelSize(int(short_side_length / 12))
         self.page_name_label.setFont(q)
+
+        self.apply_half_split_grid()
 
     def connect_buttons(self):
         pass
@@ -458,7 +477,7 @@ class ConnectivityMenuWidget(MenuWidget):
             or not self.config.G_THINGSBOARD_API["HAVE_API_TOKEN"]
         ):
             self.buttons["Live Track"].disable()
-        
+
         #GadgetBridge
         if self.config.ble_uart is None:
             self.buttons["Gadgetbridge"].disable()
@@ -490,7 +509,7 @@ class ConnectivityMenuWidget(MenuWidget):
 
     def select_bt_device(self):
         self.change_page("BT Tethering", preprocess=True, run_bt_tethering=False)
-    
+
     @qasync.asyncSlot()
     async def onoff_ble_uart_service(self):
         status = await self.config.ble_uart.on_off_uart_service()
