@@ -190,6 +190,35 @@ class Button_Config:
                 "Z": ("", ""),
             },
         },
+        # override from "Zwift Click V2 (BLE)"
+        "Zwift_Click_V2_DUAL": {
+            "MAIN": {
+                "NAVIGATION_UP": ("", ""),
+                "NAVIGATION_DOWN": ("", ""),
+                "NAVIGATION_LEFT": ("", ""),
+                "NAVIGATION_RIGHT": ("", ""),
+                "SHIFT_UP_LEFT": ("scroll_prev", "get_screenshot"),
+                "SHIFT_UP_RIGHT": ("scroll_next", "start_and_stop_manual"),
+                "SHIFT_UP_BOTH": ("count_laps", "reset_count"),
+                "A": ("map_zoom_plus", ""),
+                "B": ("map_zoom_minus", ""),
+                "Y": ("change_mode", "enter_menu"),
+                "Z": ("turn_on_off_light", ""),
+            },
+            "MAP_1": {
+                "NAVIGATION_UP": ("map_move_y_plus", ""),
+                "NAVIGATION_DOWN": ("map_move_y_minus", ""),
+                "NAVIGATION_LEFT": ("map_move_x_minus", ""),
+                "NAVIGATION_RIGHT": ("map_move_x_plus", ""),
+                "SHIFT_UP_LEFT": ("map_overlay_prev_time", "get_screenshot"),
+                "SHIFT_UP_RIGHT": ("map_overlay_next_time", ""),
+                "SHIFT_UP_BOTH": ("", ""),
+                "A": ("map_zoom_plus", ""),
+                "B": ("map_zoom_minus", ""),
+                "Y": ("change_mode", ""),
+                "Z": ("change_map_overlays", ""),
+            },
+        },
         # GPIO button action (short press / long press) from gui_pyqt
         # call from SensorGPIO.my_callback(self, channel)
         # number is from GPIO.setmode(GPIO.BCM)
@@ -270,6 +299,18 @@ class Button_Config:
     }
     # copy button definition
     G_BUTTON_DEF["IOExpander"] = copy.deepcopy(G_BUTTON_DEF["Button_Shim"])
+    # Build dedicated profile for dual display + Zwift Click V2.
+    # 1) copy from base profile
+    # 2) override only entries defined in Zwift_Click_V2_DUAL
+    zwift_click_v2_dual_overrides = copy.deepcopy(
+        G_BUTTON_DEF.get("Zwift_Click_V2_DUAL", {})
+    )
+    G_BUTTON_DEF["Zwift_Click_V2_DUAL"] = copy.deepcopy(G_BUTTON_DEF["Zwift_Click_V2"])
+    for page_name, page_overrides in zwift_click_v2_dual_overrides.items():
+        if page_name not in G_BUTTON_DEF["Zwift_Click_V2_DUAL"]:
+            G_BUTTON_DEF["Zwift_Click_V2_DUAL"][page_name] = {}
+        G_BUTTON_DEF["Zwift_Click_V2_DUAL"][page_name].update(page_overrides)
+
     # change button keys
     ioexpander_change_keys = {
         "A": "GP0", "B": "GP1", "C": "GP2", "D": "GP3", "E": "GP4",
@@ -312,10 +353,25 @@ class Button_Config:
         self.config = config
         self._dual_map_mode_active = False
 
+    def _resolve_button_profile(self, button_hard):
+        if button_hard != "Zwift_Click_V2":
+            return button_hard
+        if not self.config.G_DUAL_DISPLAY_MODE:
+            return button_hard
+        if "Zwift_Click_V2_DUAL" not in self.G_BUTTON_DEF:
+            return button_hard
+
+        cfg = getattr(self.config, "G_ZWIFT_CLICK_V2", None)
+        if not isinstance(cfg, dict) or not cfg.get("STATUS", False):
+            return button_hard
+
+        return "Zwift_Click_V2_DUAL"
+
     def press_button(self, button_hard, press_button, index):
         gui = self.config.gui
         if gui is None or gui.stack_widget is None:
             return
+        profile = self._resolve_button_profile(button_hard)
 
         dialog_exists = getattr(gui, "dialog_exists", None)
         dialog_active = False
@@ -325,9 +381,9 @@ class Button_Config:
             dialog_active = bool(getattr(gui, "display_dialog", False))
 
         if dialog_active:
-            if "DIALOG" in self.G_BUTTON_DEF.get(button_hard, {}):
+            if "DIALOG" in self.G_BUTTON_DEF.get(profile, {}):
                 self.G_PAGE_MODE = "DIALOG"
-            elif "MENU" in self.G_BUTTON_DEF.get(button_hard, {}):
+            elif "MENU" in self.G_BUTTON_DEF.get(profile, {}):
                 self.G_PAGE_MODE = "MENU"
             else:
                 self.G_PAGE_MODE = "MAIN"
@@ -361,7 +417,7 @@ class Button_Config:
                 else:
                     self.G_PAGE_MODE = mode_key
                 # for no implementation
-                if self.G_PAGE_MODE not in self.G_BUTTON_DEF[button_hard]:
+                if self.G_PAGE_MODE not in self.G_BUTTON_DEF[profile]:
                     self.G_PAGE_MODE = "MAIN"
                     if self.config.G_DUAL_DISPLAY_MODE and mode_key == "MAP":
                         self._dual_map_mode_active = False
@@ -371,14 +427,20 @@ class Button_Config:
             elif w_index >= 2:
                 self.G_PAGE_MODE = "MENU"
 
-        if press_button not in self.G_BUTTON_DEF[button_hard][self.G_PAGE_MODE]:
+        if press_button not in self.G_BUTTON_DEF[profile][self.G_PAGE_MODE]:
             app_logger.warning(
-                f"buton key error: '{press_button}' is not defined in self.G_BUTTON_DEF['{button_hard}']['{self.G_PAGE_MODE}']"
+                f"buton key error: '{press_button}' is not defined in self.G_BUTTON_DEF['{profile}']['{self.G_PAGE_MODE}']"
             )
             return
-        func_str = self.G_BUTTON_DEF[button_hard][self.G_PAGE_MODE][press_button][index]
+        func_str = self.G_BUTTON_DEF[profile][self.G_PAGE_MODE][press_button][index]
         if func_str in ("", "dummy"):
             return
+
+        if button_hard == "Zwift_Click_V2":
+            app_logger.debug(
+                "[ZwiftClickV2] dispatch "
+                f"profile={profile}, page={self.G_PAGE_MODE}, key={press_button}, index={index}, action={func_str}"
+            )
 
         getattr(self.config.gui, func_str)()
         #self.config.loop.call_soon_threadsafe(self.config.gui.scroll, 1)
@@ -405,9 +467,11 @@ class Button_Config:
 
             if not self._dual_map_mode_active:
                 self._dual_map_mode_active = True
-                self.G_BUTTON_MODE_INDEX["MAP"] = 0
+                # Start from MAP_1 behavior when switching from MAIN in dual mode.
+                initial_map_mode_index = 1 if len(map_pages) > 1 else 0
+                self.G_BUTTON_MODE_INDEX["MAP"] = initial_map_mode_index
                 self.G_BUTTON_MODE_IS_CHANGE = True
-                self.G_PAGE_MODE = map_pages[0]
+                self.G_PAGE_MODE = map_pages[initial_map_mode_index]
                 map_widget.lock_off()
                 return
 

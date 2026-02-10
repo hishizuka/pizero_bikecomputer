@@ -692,11 +692,27 @@ class GUI_PyQt(GUI_Qt_Base):
         self.map_method("search_route")
 
     def map_method(self, mode):
+        signal_name = f"signal_{mode}"
+        current_widget = None
+        if self.main_page is not None:
+            try:
+                current_widget = self.main_page.widget(self.main_page.currentIndex())
+            except Exception:
+                current_widget = None
+
+        if self.dual_mode and current_widget == self.course_profile_graph_widget:
+            signal = getattr(self.course_profile_graph_widget, signal_name, None)
+            if signal and hasattr(signal, "emit"):
+                signal.emit()
+            return
+
         if self.dual_mode and self.map_widget is not None:
-            w = self.map_widget
-        else:
-            w = self.main_page.widget(self.main_page.currentIndex())
-        signal = getattr(w, f"signal_{mode}", None)
+            signal = getattr(self.map_widget, signal_name, None)
+            if signal and hasattr(signal, "emit"):
+                signal.emit()
+            return
+
+        signal = getattr(current_widget, signal_name, None)
         if signal and hasattr(signal, "emit"):
             signal.emit()
 
