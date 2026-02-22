@@ -82,7 +82,7 @@ class SensorI2C(Sensor):
         "yaw_for_heading",
         "fixed_pitch",
         "fixed_roll",
-        "grade_pitch"
+        "grade_pitch",
         "raw_heading",
         "heading",
         "heading_str",
@@ -319,6 +319,7 @@ class SensorI2C(Sensor):
             self.available_sensors["MOTION"]["BHI3_S"] = True
             self.sensor["i2c_imu"] = self.sensor_bhi3_s
             self.motion_sensor["ACC"] = True
+            self.motion_sensor["GYRO"] = True
             self.available_sensors["PRESSURE"]["BHI3_S"] = True  # includes BMP581 and BME688
             self.sensor["i2c_baro_temp"] = self.sensor_bhi3_s
             self.bhi360_s_heading_corr = 0
@@ -448,6 +449,8 @@ class SensorI2C(Sensor):
         self.timestamp_array = [None] * self.timestamp_size
         self.vspeed_array = [np.nan] * self.vspeed_window_size
 
+        self._bhi3_raw_data_record_status = "INIT"
+
     def start_coroutine(self):
         asyncio.create_task(self.start())
 
@@ -486,6 +489,34 @@ class SensorI2C(Sensor):
 
         self.read_battery()
 
+    def update_bhi3_raw_log_state(self):
+        if not self.available_sensors["MOTION"].get("BHI3_S"):
+            return
+
+        imu = self.sensor.get("i2c_imu")
+        if imu is None:
+            return
+        if not hasattr(imu, "start_and_stop") or not hasattr(imu, "raw_log_enabled"):
+            return
+
+        msg = None
+        if self._bhi3_raw_data_record_status != "START":
+            if not imu.raw_log_enabled:
+                imu.start_and_stop()
+                if imu.raw_log_enabled:
+                    self._bhi3_raw_data_record_status = "START"
+                    msg = "[BHI3] raw log started"
+        elif self._bhi3_raw_data_record_status == "START":
+            if imu.raw_log_enabled:
+                imu.start_and_stop()
+                self._bhi3_raw_data_record_status = "STOP"
+                msg = "[BHI3] raw log stopped"
+        
+        if msg is not None:
+            if self.config.gui is not None:
+                self.config.gui.show_popup(msg, 5)
+            app_logger.debug(msg)
+
     def read_bhi3_s(self):
         if not self.available_sensors["MOTION"].get("BHI3_S"):
             return
@@ -499,12 +530,14 @@ class SensorI2C(Sensor):
             ) % 360
         self.values["heading"] = self.values["raw_heading"]
         self.values["heading_str"] = get_track_str(self.values["heading"])
-        
-        # WIP code
+
+        # Keep the current bike-frame mapping while using filtered BHI360 values.
         # pitch: the x-axis of acceleration and the sign are opposite.
         # roll : same as acc y: to West (up rotation is plus)
-        self.values["pitch"] = math.radians(-1 * ((imu.roll + 360) % 360 - 180))
-        self.values["roll"] = math.radians(imu.pitch)
+        self.values["pitch"] = math.radians(
+            -1 * ((float(imu.roll) + 360) % 360 - 180)
+        )
+        self.values["roll"] = math.radians(float(imu.pitch))
         self.values["grade_pitch"] = 100 * math.tan(self.values["pitch"])
 
     def read_light(self):
@@ -644,7 +677,9 @@ class SensorI2C(Sensor):
         if not self.motion_sensor["GYRO"]:
             return
         try:
-            if self.available_sensors["MOTION"].get("BMI270"): # rad/sec
+            if self.available_sensors["MOTION"].get("BHI3_S"): # rad/sec
+                self.values["gyro_raw"] = np.array(self.sensor["i2c_imu"].gyro)
+            elif self.available_sensors["MOTION"].get("BMI270"): # rad/sec
                 self.values["gyro_raw"] = np.array(self.sensor["i2c_imu"].values["gyro"])
             elif (
                 self.available_sensors["MOTION"].get("LSM6DS") # rad/sec
@@ -670,6 +705,12 @@ class SensorI2C(Sensor):
             self.values["gyro_raw"] = np.radians(self.values["gyro_raw"])
 
         if return_raw:
+            return
+
+        # BHI3_S gyro is already preprocessed in the C layer.
+        # Skip python-side calibration / LP / fusion path.
+        if self.available_sensors["MOTION"].get("BHI3_S"):
+            self.values["gyro_mod"] = self.values["gyro_raw"].copy()
             return
 
         # calibration
@@ -905,6 +946,10 @@ class SensorI2C(Sensor):
         if not self.motion_sensor["ACC"]:
             return
 
+        if self.available_sensors["MOTION"].get("BHI3_S"):
+            self.detect_motion_bhi3_s()
+            return
+
         self.update_moving_threshold()
 
         moving = 1
@@ -915,6 +960,29 @@ class SensorI2C(Sensor):
         # moving status (0:off=stop, 1:on=running)
         self.values["m_stat"] = self.moving[-1]
 
+        self.calibrate_pitch_roll_if_stopped()
+
+    def detect_motion_bhi3_s(self):
+        imu = self.sensor.get("i2c_imu")
+        if imu is None or not hasattr(imu, "moving"):
+            self.values["m_stat"] = np.nan
+            return
+        try:
+            moving = int(imu.moving)
+        except:
+            self.values["m_stat"] = np.nan
+            return
+
+        # Keep shared moving history for calibration and compatibility.
+        self.values["m_stat"] = moving
+        self.moving[0:-1] = self.moving[1:]
+        self.moving[-1] = moving
+        self.acc_raw_hist[:, 0:-1] = self.acc_raw_hist[:, 1:]
+        self.acc_raw_hist[:, -1] = self.values["acc_raw"]
+
+        self.calibrate_pitch_roll_if_stopped()
+
+    def calibrate_pitch_roll_if_stopped(self):
         # calibrate position
         if not self.config.G_IMU_CALIB["PITCH_ROLL"] or sum(self.moving) != 0:
             return
@@ -1038,8 +1106,26 @@ class SensorI2C(Sensor):
 
         sp = self.available_sensors["PRESSURE"]
 
+        def get_temperature():
+            self.values["temperature"] = round(
+                self.sensor["i2c_baro_temp"].temperature, 1
+            )
+
+        def get_discomfort_index():
+            if not any(np.isnan([self.values["humidity"], self.values["temperature"]])):
+                self.values["discomfort_index"] = 0.81*self.values["temperature"] + 0.01*self.values["humidity"]*(0.99*self.values["temperature"]-14.3) + 46.3
+
+
+        if sp.get("BHI3_S"):
+            get_temperature()
+            self.values["pressure"] = self.sensor["i2c_baro_temp"].pressure
+            # Keep compatibility for downstream users that read pressure_mod.
+            self.values["pressure_mod"] = self.values["pressure"]
+            self.values["humidity"] = self.sensor["i2c_baro_temp"].humidity
+            get_discomfort_index()
+            return
+
         try:
-            # t = datetime.now()
             if (
                 sp.get("LPS3XHW_ORIG")
                 or sp.get("BMP280_ORIG")
@@ -1049,16 +1135,11 @@ class SensorI2C(Sensor):
                 or sp.get("BMP581")
             ):
                 self.sensor["i2c_baro_temp"].read()
-            self.values["temperature"] = round(
-                self.sensor["i2c_baro_temp"].temperature, 1
-            )
+            get_temperature()
             self.values["pressure_raw"] = self.sensor["i2c_baro_temp"].pressure
             if sp.get("BME280"):
                 self.values["humidity"] = self.sensor["i2c_baro_temp"].relative_humidity
-            elif sp.get("BHI3_S"):
-                self.values["humidity"] = self.sensor["i2c_baro_temp"].humidity
-            if not any(np.isnan([self.values["humidity"], self.values["temperature"]])):
-                self.values["discomfort_index"] = 0.81*self.values["temperature"] + 0.01*self.values["humidity"]*(0.99*self.values["temperature"]-14.3) + 46.3
+                get_discomfort_index()
         except:
             return
 
@@ -1069,9 +1150,6 @@ class SensorI2C(Sensor):
         # outlier(spike) detection
         # sigma is not 3 but 10 for detecting pressure diff 0.3hPa around 1000hPa
         self.hampel_filter("pressure_mod", sigma=10, diff_min=0.02)
-
-        # LP filter
-        # self.lp_filter('pressure_mod', 8)
 
         # finalize
         self.values["pressure"] = self.values["pressure_mod"]
@@ -1086,10 +1164,13 @@ class SensorI2C(Sensor):
             * (1 - pow(self.values["pressure"] / self.sealevel_pa, 1.0 / 5.257))
         )
 
-        # average filter
-        self.average_val["altitude"][0:-1] = self.average_val["altitude"][1:]
-        self.average_val["altitude"][-1] = altitude_raw
-        self.values["altitude"] = round(np.nanmean(self.average_val["altitude"]), 1)
+        if self.available_sensors["PRESSURE"].get("BHI3_S"):
+            self.values["altitude"] = round(altitude_raw, 1)
+        else:
+            # average filter
+            self.average_val["altitude"][0:-1] = self.average_val["altitude"][1:]
+            self.average_val["altitude"][-1] = altitude_raw
+            self.values["altitude"] = round(np.nanmean(self.average_val["altitude"]), 1)
 
         if self.config.G_STOPWATCH_STATUS == "START":
             # total ascent/descent

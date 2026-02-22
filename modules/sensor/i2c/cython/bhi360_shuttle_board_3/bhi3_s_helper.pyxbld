@@ -51,6 +51,7 @@ def make_ext(modname, pyxfilename):
         return None
 
     extra_link_args.append('-lpthread')
+    extra_link_args.append('-lm')
 
     return Extension(
         name=modname,

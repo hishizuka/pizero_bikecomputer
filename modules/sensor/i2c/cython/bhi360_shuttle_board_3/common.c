@@ -44,7 +44,9 @@
 
 #include "bhi360_parse.h"
 
+#ifndef BHI3_USE_I2C
 static void my_spi_open(const char *device);
+#endif
 static void my_i2c_open(const char *device, uint8_t addr);
 
 static uint8_t spi_mode = SPI_MODE_0;
@@ -525,6 +527,7 @@ void setup_interfaces(bool reset_power, enum bhi360_intf intf)
     bhi3_interrupt_init();
 }
 
+#ifndef BHI3_USE_I2C
 void my_spi_open(const char *device)
 {
 #ifdef BHI3_USE_PIGPIO
@@ -585,6 +588,7 @@ void my_spi_open(const char *device)
     }
 #endif
 }
+#endif
 
 void my_i2c_open(const char *device, uint8_t addr) {
     printf("setup I2C...\n");
