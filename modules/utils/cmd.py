@@ -1,3 +1,4 @@
+import asyncio
 import subprocess
 
 from modules.app_logger import app_logger
@@ -34,6 +35,12 @@ def exec_cmd_return_value(cmd, cmd_print=True, timeout=None):
         if cmd_print:
             app_logger.exception(f"Failed executing {cmd}, {e}")
         return "", repr(e)
+
+
+async def exec_cmd_return_value_async(cmd, cmd_print=True, timeout=None):
+    return await asyncio.to_thread(
+        exec_cmd_return_value, cmd, cmd_print, timeout
+    )
 
 
 # Returns a Popen handle so callers can later poll/send_signal/terminate.

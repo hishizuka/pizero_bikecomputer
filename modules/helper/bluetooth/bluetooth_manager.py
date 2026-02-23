@@ -6,7 +6,11 @@ import time
 from enum import Enum
 
 from modules.app_logger import app_logger
-from modules.utils.cmd import exec_cmd, exec_cmd_return_value
+from modules.utils.cmd import (
+    exec_cmd,
+    exec_cmd_return_value,
+    exec_cmd_return_value_async,
+)
 from modules.utils.network import detect_network_async
 
 
@@ -203,7 +207,7 @@ class BluetoothManager:
             action = "connect"
             if disconnect:
                 action = "disconnect"
-            _, stderr = exec_cmd_return_value(
+            _, stderr = await exec_cmd_return_value_async(
                 ["sudo", "nmcli", "d", action, bt_address],
                 cmd_print=False,
                 timeout=10,
@@ -237,7 +241,7 @@ class BluetoothManager:
 
         # Locked
         if not wait_lock and self._bt_tethering_lock.locked():
-            app_logger.info(
+            app_logger.debug(
                 f"[BT] open_bt_tethering locked, {caller_name=} {self.bt_tethering_status}"
             )
             return BtOpenResult.LOCKED
@@ -251,24 +255,24 @@ class BluetoothManager:
     async def _open_bt_tethering_impl(self, caller_name) -> BtOpenResult:
         if await detect_network_async(cache=False):
             # Todo: disable when using wifi
-            #app_logger.info(
-            #    f"[BT] skip bt open(detected network), {caller_name=} {self.bt_tethering_status}"
-            #)
+            app_logger.debug(
+                f"[BT] skip bt open(detected network), {caller_name=} {self.bt_tethering_status}"
+            )
             self.bt_tethering_status[caller_name] = True
             return BtOpenResult.SUCCESS
 
         # Blocked (DNS error, etc.)
         if self._is_bt_open_block_active():
             remaining = max(0, int(self._bt_open_block_until - time.time()))
-            #app_logger.info(
-            #    f"[BT] skip bt open(block active {remaining}s), {caller_name=} {self.bt_tethering_status}"
-            #)
+            app_logger.debug(
+                f"[BT] skip bt open(block active {remaining}s), {caller_name=} {self.bt_tethering_status}"
+            )
             return BtOpenResult.BLOCKED
 
         if any(self.bt_tethering_status.values()):
-            #app_logger.info(
-            #    f"[BT] skip bt open(other func), {caller_name=} {self.bt_tethering_status}"
-            #)
+            app_logger.debug(
+                f"[BT] skip bt open(other func), {caller_name=} {self.bt_tethering_status}"
+            )
             self.bt_tethering_status[caller_name] = True
             return BtOpenResult.SUCCESS
 
@@ -320,7 +324,7 @@ class BluetoothManager:
             return BtOpenResult.BLOCKED
 
         self.bt_tethering_status[caller_name] = True
-        app_logger.info(f"[BT] connected, {caller_name=}")
+        app_logger.debug(f"[BT] connected, {caller_name=}")
         return BtOpenResult.SUCCESS
 
     async def close_bt_tethering(self, caller_name):
@@ -340,16 +344,16 @@ class BluetoothManager:
         self.bt_tethering_status[caller_name] = False
 
         if any(self.bt_tethering_status.values()):
-            #app_logger.info(
-            #    f"[BT] skip bt close(other func), {caller_name=} {self.bt_tethering_status}"
-            #)
+            app_logger.debug(
+                f"[BT] skip bt close(other func), {caller_name=} {self.bt_tethering_status}"
+            )
             return True
 
         if not check_bnep0():
             # Todo: disable when using wifi
-            #app_logger.info(
-            #    f"[BT] skip bt close(bnep0 don't exists), {caller_name=} {self.bt_tethering_status}"
-            #)
+            app_logger.debug(
+                f"[BT] skip bt close(bnep0 don't exists), {caller_name=} {self.bt_tethering_status}"
+            )
             return True
 
         bt_pan_error = await self.bluetooth_tethering(disconnect=True)
@@ -361,7 +365,7 @@ class BluetoothManager:
         await asyncio.sleep(3)
         status = check_bnep0()
         await detect_network_async(cache=False)
-        app_logger.info(f"[BT] disconnect, {caller_name=}")
+        app_logger.debug(f"[BT] disconnect, {caller_name=}")
         return not status
 
     async def shutdown(self):
