@@ -8,23 +8,34 @@ from .base import AbstractSensorGPS
 
 class Dummy_GPS(AbstractSensorGPS):
     LOG_SPEED = 5
-    COURSE_DIVIDE_FACTOR = 500
+    COURSE_DIVIDE_FACTOR = 2000#500
     COURSE_RAND_FACTOR = 0.5  # np.random.randint(0,10)/10
 
     @property
     def is_real(self):
         return False
 
+    @staticmethod
+    def _to_float_or_nan(value):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return np.nan
+
     def set_position_from_log(self, current_position):
-        self.values["lat"] = current_position[0]
-        self.values["lon"] = current_position[1]
-        self.values["distance"] = current_position[2]
-        self.values["track"] = current_position[3]
-        if self.values["lat"] is None or self.values["lon"] is None:
-            self.values["lat"] = np.nan
-            self.values["lon"] = np.nan
-        if self.values["track"] is None:
-            self.values["track"] = self.values["pre_track"]
+        self.values["lat"] = self._to_float_or_nan(current_position[0])
+        self.values["lon"] = self._to_float_or_nan(current_position[1])
+
+        distance = self._to_float_or_nan(current_position[2])
+        if np.isnan(distance):
+            distance = self.values["distance"]
+        self.values["distance"] = distance
+
+        track = self._to_float_or_nan(current_position[3])
+        if np.isnan(track):
+            track = self._to_float_or_nan(self.values["pre_track"])
+        self.values["track"] = track
+        if not np.isnan(self.values["track"]):
             self.values["track_str"] = get_track_str(self.values["track"])
 
     def set_position_from_course(self, course, idx):
