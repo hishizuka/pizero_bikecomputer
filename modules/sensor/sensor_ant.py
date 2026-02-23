@@ -150,6 +150,20 @@ class SensorANT(Sensor):
         for dv in self.device.values():
             dv.reset_value()
 
+    def reset_normalized_power_state(self):
+        ant_id_type = self.config.G_ANT["ID_TYPE"].get("PWR")
+        if ant_id_type in self.device and hasattr(
+            self.device[ant_id_type], "np_reset_all_pages"
+        ):
+            self.device[ant_id_type].np_reset_all_pages()
+
+    def pause_normalized_power_state(self):
+        ant_id_type = self.config.G_ANT["ID_TYPE"].get("PWR")
+        if ant_id_type in self.device and hasattr(
+            self.device[ant_id_type], "np_pause_all_pages"
+        ):
+            self.device[ant_id_type].np_pause_all_pages()
+
     def _log_battery_status_on_quit(self):
         entries = []
         for dv in self.device.values():

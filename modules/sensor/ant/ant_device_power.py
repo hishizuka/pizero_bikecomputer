@@ -1,6 +1,7 @@
 import struct
 from datetime import datetime
 import math
+from collections import deque
 
 from modules.app_logger import app_logger
 from . import ant_device
@@ -25,9 +26,10 @@ class ANT_Device_Power(ant_device.ANT_Device):
             "power_16_simple",
             "cadence",
             "accumulated_power",
+            "normalized_power",
         ),
-        0x11: ("power", "speed", "distance", "accumulated_power"),
-        0x12: ("power", "cadence", "accumulated_power"),
+        0x11: ("power", "speed", "distance", "accumulated_power", "normalized_power"),
+        0x12: ("power", "cadence", "accumulated_power", "normalized_power"),
         0x13: ("torque_eff", "pedal_sm"),
     }
     stop_cutoff = 3
@@ -69,6 +71,118 @@ class ANT_Device_Power(ant_device.ANT_Device):
             self.power_values[page] = [-1, -1, -1, -1]
             self.values[page]["on_data_timestamp"] = None
             self.values[page]["stop_timestamp"] = None
+        self.np_reset_all_pages()
+
+    def np_ensure_state(self, values):
+        if "normalized_power" not in values:
+            values["normalized_power"] = self.config.G_ANT_NULLVALUE
+        if "np_sec_epoch" not in values:
+            values["np_sec_epoch"] = None
+        if "np_sec_sum" not in values:
+            values["np_sec_sum"] = 0.0
+        if "np_sec_count" not in values:
+            values["np_sec_count"] = 0
+        if "np_window_30s" not in values or not isinstance(values["np_window_30s"], deque):
+            values["np_window_30s"] = deque()
+        if "np_window_sum" not in values:
+            values["np_window_sum"] = 0.0
+        if "np_sum_ma4" not in values:
+            values["np_sum_ma4"] = 0.0
+        if "np_count_ma4" not in values:
+            values["np_count_ma4"] = 0
+
+    def np_reset_state(self, values):
+        self.np_ensure_state(values)
+        values["normalized_power"] = self.config.G_ANT_NULLVALUE
+        values["np_sec_epoch"] = None
+        values["np_sec_sum"] = 0.0
+        values["np_sec_count"] = 0
+        values["np_window_30s"].clear()
+        values["np_window_sum"] = 0.0
+        values["np_sum_ma4"] = 0.0
+        values["np_count_ma4"] = 0
+
+    def np_pause_state(self, values):
+        self.np_ensure_state(values)
+        if values["np_sec_count"] > 0:
+            np_second_power = values["np_sec_sum"] / values["np_sec_count"]
+            self.np_add_second_power(values, np_second_power)
+        # Clear only the short-term 30s window on pause so resume does not mix
+        # old pre-pause samples into the first post-resume moving-average values.
+        values["np_window_30s"].clear()
+        values["np_window_sum"] = 0.0
+        values["np_sec_epoch"] = None
+        values["np_sec_sum"] = 0.0
+        values["np_sec_count"] = 0
+
+    def np_reset_all_pages(self):
+        for page in (0x10, 0x11, 0x12):
+            if page in self.values:
+                self.np_reset_state(self.values[page])
+
+    def np_pause_all_pages(self):
+        for page in (0x10, 0x11, 0x12):
+            if page in self.values:
+                self.np_pause_state(self.values[page])
+
+    def np_add_second_power(self, values, np_second_power):
+        self.np_ensure_state(values)
+        np_window_30s = values["np_window_30s"]
+        np_window_30s.append(np_second_power)
+        values["np_window_sum"] += np_second_power
+        if len(np_window_30s) > 30:
+            values["np_window_sum"] -= np_window_30s.popleft()
+
+        # Only accumulate once the 30s window is full.
+        # Partial-window averages are biased low and contaminate the overall NP.
+        if len(np_window_30s) >= 30:
+            np_ma30 = values["np_window_sum"] / 30
+            values["np_sum_ma4"] += np_ma30**4
+            values["np_count_ma4"] += 1
+            values["normalized_power"] = (values["np_sum_ma4"] / values["np_count_ma4"]) ** 0.25
+
+    def np_update(self, values, power, sample_time):
+        if self.config.G_STOPWATCH_STATUS != "START":
+            return
+        self.np_ensure_state(values)
+
+        np_power = max(float(power), 0.0)
+        if math.isnan(np_power):
+            np_power = 0.0
+        np_second = int(sample_time.timestamp())
+        np_sec_epoch = values["np_sec_epoch"]
+
+        if np_sec_epoch is None:
+            values["np_sec_epoch"] = np_second
+            values["np_sec_sum"] = np_power
+            values["np_sec_count"] = 1
+            return
+        if np_second < np_sec_epoch:
+            self.np_reset_state(values)
+            values["np_sec_epoch"] = np_second
+            values["np_sec_sum"] = np_power
+            values["np_sec_count"] = 1
+            return
+        if np_second == np_sec_epoch:
+            values["np_sec_sum"] += np_power
+            values["np_sec_count"] += 1
+            return
+
+        np_second_power = 0.0
+        if values["np_sec_count"] > 0:
+            np_second_power = values["np_sec_sum"] / values["np_sec_count"]
+        self.np_add_second_power(values, np_second_power)
+
+        # Skip data gaps instead of inserting 0W.
+        # A missed ANT+ message is not zero power output.
+
+        values["np_sec_epoch"] = np_second
+        values["np_sec_sum"] = np_power
+        values["np_sec_count"] = 1
+
+    @staticmethod
+    def _format_raw8(data):
+        return "[" + " ".join(f"{int(v):02x}" for v in data[0:8]) + "]"
 
     def on_data(self, data):
         # standard power-only main data page (0x10)
@@ -124,11 +238,14 @@ class ANT_Device_Power(ant_device.ANT_Device):
             power_16_simple,
         ) = self.structPattern[self.name][0x10].unpack(data[0:8])
         t = datetime.now()
+        np_power = None
 
         if pre_values[0] == -1:
             pre_values[0:2] = power_values[0:2]
             values["on_data_timestamp"] = t
             values["power"] = 0
+            np_power = 0.0
+            self.np_update(values, np_power, t)
             return
 
         delta = [a - b for (a, b) in zip(power_values, pre_values)]
@@ -137,13 +254,13 @@ class ANT_Device_Power(ant_device.ANT_Device):
         if -65535 <= delta[1] < 0:
             delta[1] += 65536
         delta_t = (t - values["on_data_timestamp"]).total_seconds()
-        # print("ANT+ Power(16) delta: ", datetime.now().strftime("%Y%m%d %H:%M:%S"), delta)
 
         if delta[0] > 0 and delta[1] >= 0 and delta_t < self.valid_time:
             pwr = delta[1] / delta[0]
             # max value in .fit file is 65536 [w]
             if pwr <= 65535 and (pwr - values["power"]) < self.spike_threshold["power"]:
                 values["power"] = pwr
+                np_power = pwr
                 values["power_16_simple"] = power_16_simple
                 values["cadence"] = cadence
                 if (
@@ -167,6 +284,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
             else:
                 self.print_spike("Power(16)", pwr, values["power"], delta, delta_t)
         elif delta[0] == 0 and delta[1] == 0:
+            np_power = 0.0
             if pre_delta[0:2] != [0, 0]:
                 values["stop_timestamp"] = t
             elif (t - values["stop_timestamp"]).total_seconds() >= self.stop_cutoff:
@@ -183,6 +301,8 @@ class ANT_Device_Power(ant_device.ANT_Device):
         # on_data timestamp
         values["on_data_timestamp"] = t
         pre_delta = delta[:]
+        if np_power is not None:
+            self.np_update(values, np_power, t)
 
         # store raw power
         self.config.state.set_value("ant+_power_values_16", power_values[1])
@@ -196,11 +316,14 @@ class ANT_Device_Power(ant_device.ANT_Device):
             power_values[1],
         ) = self.structPattern[self.name][0x11].unpack(data[0:8])
         t = datetime.now()
+        np_power = None
 
         if pre_values[0] == -1:
             pre_values = power_values
             values["on_data_timestamp"] = t
             values["power"] = 0
+            np_power = 0.0
+            self.np_update(values, np_power, t)
 
             if not resume:
                 return
@@ -241,6 +364,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
             # max value in .fit file is 65536 [w]
             if pwr <= 65535 and (pwr - values["power"]) < self.spike_threshold["power"]:
                 values["power"] = pwr
+                np_power = pwr
                 if self.config.G_MANUAL_STATUS == "START":
                     # unit: J
                     # values['power'] * delta[0] / 2048 #the unit of delta[0] is 1/2048s
@@ -261,6 +385,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
             else:
                 self.print_spike("Speed(17)", spd, values["speed"], delta, delta_t)
         elif delta[0] == 0 and delta[1] == 0 and delta[2] == 0:
+            np_power = 0.0
             if pre_delta[0:3] != [0, 0, 0]:
                 values["stop_timestamp"] = t
             elif (t - values["stop_timestamp"]).total_seconds() >= self.stop_cutoff:
@@ -273,6 +398,8 @@ class ANT_Device_Power(ant_device.ANT_Device):
         # on_data timestamp
         values["on_data_timestamp"] = t
         pre_delta = delta[:]
+        if np_power is not None:
+            self.np_update(values, np_power, t)
 
         # store raw power
         self.config.state.set_value("ant+_power_values_17", power_values)
@@ -285,11 +412,14 @@ class ANT_Device_Power(ant_device.ANT_Device):
             power_values[1],
         ) = self.structPattern[self.name][0x12].unpack(data[0:8])
         t = datetime.now()
+        np_power = None
 
         if pre_values[0] == -1:
             pre_values[0:2] = power_values[0:2]
             values["on_data_timestamp"] = t
             values["power"] = 0
+            np_power = 0.0
+            self.np_update(values, np_power, t)
 
             if not resume:
                 return
@@ -319,13 +449,13 @@ class ANT_Device_Power(ant_device.ANT_Device):
         if -65535 <= delta[1] < 0:
             delta[1] += 65536
         delta_t = (t - values["on_data_timestamp"]).total_seconds()
-        # print("ANT+ Power(18) delta: ", datetime.now().strftime("%Y%m%d %H:%M:%S"), delta)
 
         if delta[0] > 0 and delta[1] >= 0 and delta_t < self.valid_time:
             pwr = 128 * math.pi * delta[1] / delta[0]
             # max value in .fit file is 65536 [w]
             if pwr <= 65535 and (pwr - values["power"]) < self.spike_threshold["power"]:
                 values["power"] = pwr
+                np_power = pwr
                 values["cadence"] = cadence
                 if self.config.G_MANUAL_STATUS == "START":
                     # unit: J
@@ -335,7 +465,8 @@ class ANT_Device_Power(ant_device.ANT_Device):
                 values["timestamp"] = t
             else:
                 self.print_spike("Power(18)", pwr, values["power"], delta, delta_t)
-        elif delta[0] == 0 and delta[1] == 0:        
+        elif delta[0] == 0 and delta[1] == 0:
+            np_power = 0.0
             if pre_delta[0:2] != [0, 0]:
                 values["stop_timestamp"] = t
             elif (t - values["stop_timestamp"]).total_seconds() >= self.stop_cutoff:
@@ -353,6 +484,8 @@ class ANT_Device_Power(ant_device.ANT_Device):
         # on_data timestamp
         values["on_data_timestamp"] = t
         pre_delta = delta[:]
+        if np_power is not None:
+            self.np_update(values, np_power, t)
 
         # store raw power
         self.config.state.set_value("ant+_power_values_18", power_values[1])
