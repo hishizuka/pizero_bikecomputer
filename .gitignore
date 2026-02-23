@@ -10,6 +10,7 @@
 /fonts/*
 /scripts/*.py
 /scripts/*/*.py
+/scripts/*/*.md
 /scripts/*/*.yaml
 /.idea/
 /.serena/

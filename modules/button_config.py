@@ -339,7 +339,6 @@ class Button_Config:
     G_BUTTON_MODE_IS_CHANGE = False
     G_BUTTON_MODE_PAGES = {
         "MAIN": ["MAIN", "MAIN_1"],
-        # 'MAP': ['MAP','MAP_1','MAP_2'],
         "MAP": ["MAP", "MAP_1"],
         "COURSE_PROFILE": ["COURSE_PROFILE", "COURSE_PROFILE_1"],
     }
@@ -372,6 +371,13 @@ class Button_Config:
         if gui is None or gui.stack_widget is None:
             return
         profile = self._resolve_button_profile(button_hard)
+        stack_index = gui.stack_widget.currentIndex()
+        main_page_index = -1
+        if getattr(gui, "main_page", None) is not None:
+            try:
+                main_page_index = gui.main_page.currentIndex()
+            except Exception:
+                main_page_index = -1
 
         dialog_exists = getattr(gui, "dialog_exists", None)
         dialog_active = False
@@ -388,7 +394,7 @@ class Button_Config:
             else:
                 self.G_PAGE_MODE = "MAIN"
         else:
-            w_index = gui.stack_widget.currentIndex()
+            w_index = stack_index
             if w_index == 1:
                 current_widget = gui.main_page.widget(gui.main_page.currentIndex())
                 if self.config.G_DUAL_DISPLAY_MODE:
@@ -427,6 +433,14 @@ class Button_Config:
             elif w_index >= 2:
                 self.G_PAGE_MODE = "MENU"
 
+        app_logger.debug(
+            "[BUTTON] input "
+            f"device={button_hard}, profile={profile}, "
+            f"stack_index={stack_index}, main_page_index={main_page_index}, "
+            f"dialog_active={dialog_active}, page={self.G_PAGE_MODE}, "
+            f"key={press_button}, index={index}"
+        )
+
         if press_button not in self.G_BUTTON_DEF[profile][self.G_PAGE_MODE]:
             app_logger.warning(
                 f"buton key error: '{press_button}' is not defined in self.G_BUTTON_DEF['{profile}']['{self.G_PAGE_MODE}']"
@@ -434,17 +448,22 @@ class Button_Config:
             return
         func_str = self.G_BUTTON_DEF[profile][self.G_PAGE_MODE][press_button][index]
         if func_str in ("", "dummy"):
+            app_logger.debug(
+                "[BUTTON] noop "
+                f"device={button_hard}, profile={profile}, page={self.G_PAGE_MODE}, "
+                f"key={press_button}, index={index}, action={func_str!r}"
+            )
             return
 
-        if button_hard == "Zwift_Click_V2":
-            app_logger.debug(
-                "[ZwiftClickV2] dispatch "
-                f"profile={profile}, page={self.G_PAGE_MODE}, key={press_button}, index={index}, action={func_str}"
-            )
+        app_logger.debug(
+            "[BUTTON] dispatch "
+            f"device={button_hard}, profile={profile}, "
+            f"stack_index={stack_index}, main_page_index={main_page_index}, "
+            f"dialog_active={dialog_active}, page={self.G_PAGE_MODE}, "
+            f"key={press_button}, index={index}, action={func_str}"
+        )
 
         getattr(self.config.gui, func_str)()
-        #self.config.loop.call_soon_threadsafe(self.config.gui.scroll, 1)
-        #self.config.loop.call_soon_threadsafe(self.config.gui.scroll_next)
 
     def change_mode(self):
         # check MAP

@@ -1,5 +1,6 @@
 import asyncio
 import math
+import time
 from datetime import datetime
 
 import numpy as np
@@ -36,6 +37,7 @@ class SensorCore:
         "speed",
         "cadence",
         "power",
+        "normalized_power",
         "distance",
         "accumulated_power",
         "w_prime_balance",
@@ -44,6 +46,7 @@ class SensorCore:
         "w_prime_power_count",
         "w_prime_t",
         "w_prime_sum",
+        "tss",
         "grade",
         "grade_spd",
         "glide_ratio",
@@ -88,7 +91,12 @@ class SensorCore:
     ]
     lp = 4
 
+    cpu_status_bar_color_low = "#000000"
+    cpu_status_bar_color_mid = "#ffd166"
+    cpu_status_bar_color_high = "#ff4d4d"
+
     status_quit = False
+    _PERF_SENSOR_LOG_INTERVAL_SEC = 30.0
 
     def __init__(self, config):
         self.config = config
@@ -145,6 +153,117 @@ class SensorCore:
         app_logger.info("[sensor] Initialize:")
         log_timers(timers)
 
+        # Emit debug metrics at a fixed cadence to reduce log volume.
+        self._perf_sensor_window = max(
+            1,
+            int(
+                round(
+                    self._PERF_SENSOR_LOG_INTERVAL_SEC
+                    / max(self.config.G_SENSOR_INTERVAL, 0.001)
+                )
+            ),
+        )
+        self._init_perf_sensor_metrics()
+
+    @staticmethod
+    def _safe_stat(values, func, *args):
+        if not values:
+            return float("nan")
+        return float(func(values, *args))
+
+    @staticmethod
+    def _elapsed_since_timestamp(now_time, sensor_values):
+        timestamp = sensor_values.get("timestamp")
+        if timestamp is None:
+            return None
+        return (now_time - timestamp).total_seconds()
+
+    def _update_delta_from_pages(self, now_time, source_values, pages, delta_target):
+        for page in pages:
+            elapsed = self._elapsed_since_timestamp(now_time, source_values[page])
+            if elapsed is None:
+                continue
+            if isinstance(delta_target, dict):
+                delta_target[page] = elapsed
+            else:
+                delta_target = elapsed
+        return delta_target
+
+    def _init_perf_sensor_metrics(self):
+        self._perf_sensor_calls = 0
+        self._perf_sensor_loop_ms = []
+        self._perf_sensor_preprocess_ms_sum = 0.0
+        self._perf_sensor_ant_update_ms_sum = 0.0
+        self._perf_sensor_calc_ms_sum = 0.0
+        self._perf_sensor_post_ms_sum = 0.0
+        self._perf_sensor_adjust_ms_sum = 0.0
+        self._perf_sensor_api_alt_ms_sum = 0.0
+        self._perf_sensor_api_alt_calls = 0
+        self._perf_sensor_api_wind_ms_sum = 0.0
+        self._perf_sensor_api_wind_calls = 0
+
+    def _maybe_log_perf_sensor_window(self):
+        if self._perf_sensor_calls < self._perf_sensor_window:
+            return
+
+        loop_avg_ms = self._safe_stat(self._perf_sensor_loop_ms, np.mean)
+        loop_p95_ms = self._safe_stat(self._perf_sensor_loop_ms, np.percentile, 95)
+        loop_max_ms = self._safe_stat(self._perf_sensor_loop_ms, np.max)
+
+        preprocess_avg_ms = (
+            self._perf_sensor_preprocess_ms_sum / self._perf_sensor_calls
+        )
+        ant_update_avg_ms = (
+            self._perf_sensor_ant_update_ms_sum / self._perf_sensor_calls
+        )
+        calc_avg_ms = self._perf_sensor_calc_ms_sum / self._perf_sensor_calls
+        post_avg_ms = self._perf_sensor_post_ms_sum / self._perf_sensor_calls
+        adjust_avg_ms = self._perf_sensor_adjust_ms_sum / self._perf_sensor_calls
+
+        if self._perf_sensor_api_alt_calls > 0:
+            api_alt_avg_ms = (
+                self._perf_sensor_api_alt_ms_sum / self._perf_sensor_api_alt_calls
+            )
+        else:
+            api_alt_avg_ms = float("nan")
+
+        if self._perf_sensor_api_wind_calls > 0:
+            api_wind_avg_ms = (
+                self._perf_sensor_api_wind_ms_sum / self._perf_sensor_api_wind_calls
+            )
+        else:
+            api_wind_avg_ms = float("nan")
+
+        cpu_percent = self.values["integrated"].get("cpu_percent", np.nan)
+        app_logger.debug(
+            "[PERF_SENSOR] "
+            f"win={self._perf_sensor_window} "
+            f"calls={self._perf_sensor_calls} "
+            f"loop_avg_ms={loop_avg_ms:.3f} "
+            f"loop_p95_ms={loop_p95_ms:.3f} "
+            f"loop_max_ms={loop_max_ms:.3f} "
+            f"preprocess_avg_ms={preprocess_avg_ms:.3f} "
+            f"ant_update_avg_ms={ant_update_avg_ms:.3f} "
+            f"calc_avg_ms={calc_avg_ms:.3f} "
+            f"post_avg_ms={post_avg_ms:.3f} "
+            f"adjust_avg_ms={adjust_avg_ms:.3f} "
+            f"wait_s={self.wait_time:.3f} "
+            f"interval_s={self.actual_loop_interval:.3f} "
+            f"cpu={cpu_percent}"
+        )
+        app_logger.debug(
+            "[PERF_SENSOR_DETAIL] "
+            f"win={self._perf_sensor_window} "
+            f"api_alt_calls={self._perf_sensor_api_alt_calls} "
+            f"api_alt_avg_ms={api_alt_avg_ms:.3f} "
+            f"api_wind_calls={self._perf_sensor_api_wind_calls} "
+            f"api_wind_avg_ms={api_wind_avg_ms:.3f} "
+            f"stopwatch={self.config.G_STOPWATCH_STATUS} "
+            f"manual={self.config.G_MANUAL_STATUS}"
+        )
+
+        self._init_perf_sensor_metrics()
+
     def start_coroutine(self):
         asyncio.create_task(self.integrate())
         self.sensor_ant.start_coroutine()
@@ -170,6 +289,7 @@ class SensorCore:
     def reset_internal(self):
         self.values["integrated"]["distance"] = 0
         self.values["integrated"]["accumulated_power"] = 0
+        self.values["integrated"]["normalized_power"] = np.nan
         self.values["integrated"]["w_prime_balance"] = self.config.G_POWER_W_PRIME
         self.values["integrated"]["w_prime_power_sum"] = 0
         self.values["integrated"]["w_prime_power_count"] = 0
@@ -177,6 +297,8 @@ class SensorCore:
         self.values["integrated"]["w_prime_sum"] = 0
         self.values["integrated"]["pwr_mean_under_cp"] = 0
         self.values["integrated"]["tau"] = 546 * np.exp(-0.01 * (self.config.G_POWER_CP - 0)) + 316
+
+        self.values["integrated"]["tss"] = 0.0
 
     async def integrate(self):
         pre_dst = {"ANT+": 0, "GPS": 0}
@@ -195,11 +317,15 @@ class SensorCore:
 
         while not self.status_quit:
             await asyncio.sleep(self.wait_time)
+            loop_start_perf = time.perf_counter()
+            api_alt_elapsed_ms = 0.0
+            api_wind_elapsed_ms = 0.0
             start_time = datetime.now()
             # print(start_time, self.wait_time)
 
             time_profile = [start_time,]
             hr = spd = cdc = pwr = temperature = self.config.G_ANT_NULLVALUE
+            npwr = self.config.G_ANT_NULLVALUE
             grade = grade_spd = glide = self.config.G_ANT_NULLVALUE
             ttlwork_diff = 0
             dst_diff = {"ANT+": 0, "GPS": 0, "USE": 0}
@@ -210,14 +336,19 @@ class SensorCore:
             time_profile.append(datetime.now())
             # self.sensor_i2c.update()
             # self.sensor_gps.update()
+            ant_update_start = time.perf_counter()
+            preprocess_elapsed_ms = (ant_update_start - loop_start_perf) * 1000.0
             self.sensor_ant.update()  # for dummy
+            ant_update_elapsed_ms = (time.perf_counter() - ant_update_start) * 1000.0
+            calc_start_perf = time.perf_counter()
 
             now_time = datetime.now()
             time_profile.append(now_time)
 
             ant_id_type = self.config.G_ANT["ID_TYPE"]
             delta = {
-                "PWR": {0x10: float("inf"), 0x11: float("inf"), 0x12: float("inf")}
+                "PWR": {0x10: float("inf"), 0x11: float("inf"), 0x12: float("inf")},
+                "CDC-PWR": {0x12: float("inf"), 0x10: float("inf")},
             }
             for key in ["HR", "SPD", "CDC", "TEMP"]:
                 delta[key] = float("inf")
@@ -233,35 +364,47 @@ class SensorCore:
             for key in ["HR", "SPD", "CDC", "TEMP"]:
                 if not self.config.G_ANT["USE"][key]:
                     continue
-                if "timestamp" in v[key]:
-                    delta[key] = (now_time - v[key]["timestamp"]).total_seconds()
-                # override:
-                # cadence from power
-                if self.config.G_ANT["TYPE"][key] == 0x0B and key == "CDC":
-                    for page in [0x12, 0x10]:
-                        if not "timestamp" in v[key][page]:
-                            continue
-                        delta[key] = (
-                            now_time - v[key][page]["timestamp"]
-                        ).total_seconds()
-                        break
-                # speed from power
-                elif self.config.G_ANT["TYPE"][key] == 0x0B and key == "SPD":
-                    if not "timestamp" in v[key][0x11]:
-                        continue
-                    delta[key] = (
-                        now_time - v[key][0x11]["timestamp"]
-                    ).total_seconds()
-            # timestamp(power)
-            if self.config.G_ANT["USE"]["PWR"]:
-                for page in [0x12, 0x11, 0x10]:
-                    if not "timestamp" in v["PWR"][page]:
-                        continue
-                    delta["PWR"][page] = (
-                        now_time - v["PWR"][page]["timestamp"]
-                    ).total_seconds()
-            if "timestamp" in v["GPS"]:
-                delta["GPS"] = (now_time - v["GPS"]["timestamp"]).total_seconds()
+                elapsed = self._elapsed_since_timestamp(now_time, v[key])
+                if elapsed is not None:
+                    delta[key] = elapsed
+
+            # override/page-based deltas from power profile pages
+            page_delta_specs = (
+                (
+                    "CDC",
+                    "CDC-PWR",
+                    [0x12, 0x10],
+                    self.config.G_ANT["USE"]["CDC"]
+                    and self.config.G_ANT["TYPE"]["CDC"] == 0x0B,
+                ),
+                (
+                    "SPD",
+                    "SPD",
+                    [0x11],
+                    self.config.G_ANT["USE"]["SPD"]
+                    and self.config.G_ANT["TYPE"]["SPD"] == 0x0B,
+                ),
+                (
+                    "PWR",
+                    "PWR",
+                    [0x12, 0x11, 0x10],
+                    self.config.G_ANT["USE"]["PWR"],
+                ),
+            )
+            for sensor_key, delta_key, pages, enabled in page_delta_specs:
+                if not enabled:
+                    continue
+                if sensor_key not in v:
+                    continue
+                delta[delta_key] = self._update_delta_from_pages(
+                    now_time,
+                    v[sensor_key],
+                    pages,
+                    delta[delta_key],
+                )
+            elapsed = self._elapsed_since_timestamp(now_time, v["GPS"])
+            if elapsed is not None:
+                delta["GPS"] = elapsed
 
             # HeartRate : ANT+
             if self.config.G_ANT["USE"]["HR"]:
@@ -280,7 +423,7 @@ class SensorCore:
                     for page in [0x12, 0x10]:
                         if not "timestamp" in v["CDC"][page]:
                             continue
-                        if delta["CDC"] < self.time_threshold["CDC"]:
+                        if delta["CDC-PWR"][page] < self.time_threshold["CDC"]:
                             cdc = v["CDC"][page]["cadence"]
                             break
 
@@ -291,6 +434,9 @@ class SensorCore:
                 for page in [0x12, 0x11, 0x10]:
                     if delta["PWR"][page] < self.time_threshold["PWR"]:
                         pwr = v["PWR"][page]["power"]
+                        npwr = v["PWR"][page].get(
+                            "normalized_power", self.config.G_ANT_NULLVALUE
+                        )
                         break
 
             # Speed : ANT+(SPD&CDC, (PWR)) > GPS
@@ -386,14 +532,17 @@ class SensorCore:
 
             # dem_altitude
             if self.config.G_USE_DEM_TILE:
+                api_alt_start = time.perf_counter()
                 self.values["integrated"][
                     "dem_altitude"
                 ] = await self.config.api.get_altitude(
                     [v["GPS"]["lon"], v["GPS"]["lat"]]
                 )
+                api_alt_elapsed_ms = (time.perf_counter() - api_alt_start) * 1000.0
 
             # wind
             if self.config.G_USE_WIND_DATA_SOURCE:
+                api_wind_start = time.perf_counter()
                 (
                     self.values["integrated"]["wind_speed"], 
                     self.values["integrated"]["wind_direction"],
@@ -402,6 +551,9 @@ class SensorCore:
                 ) = await self.config.api.get_wind(
                     [v["GPS"]["lon"], v["GPS"]["lat"]], v["GPS"]["track"]
                 )
+                api_wind_elapsed_ms = (
+                    time.perf_counter() - api_wind_start
+                ) * 1000.0
 
             # grade (distance base)
             if dst_diff["USE"] > 0:
@@ -476,6 +628,7 @@ class SensorCore:
             self.values["integrated"]["speed"] = spd
             self.values["integrated"]["cadence"] = cdc
             self.values["integrated"]["power"] = pwr
+            self.values["integrated"]["normalized_power"] = npwr
             self.values["integrated"]["distance"] += dst_diff["USE"]
             self.values["integrated"]["accumulated_power"] += ttlwork_diff
             self.values["integrated"]["grade"] = grade
@@ -486,6 +639,7 @@ class SensorCore:
             #set self.values["integrated"]["w_prime_balance_normalized"] etc
             if self.config.G_ANT["USE"]["PWR"]:
                 self.calc_w_prime_balance(pwr)
+                self.calc_form_metrics(pwr)
 
             for g in self.graph_keys:
                 self.values["integrated"][g][:-1] = self.values["integrated"][g][1:]
@@ -504,6 +658,8 @@ class SensorCore:
                 self.get_ave_values("heart_rate", hr)
 
             time_profile.append(datetime.now())
+            calc_elapsed_ms = (time.perf_counter() - calc_start_perf) * 1000.0
+            post_start_perf = time.perf_counter()
 
             # toggle auto stop
             # ANT+ or GPS speed is available
@@ -595,9 +751,10 @@ class SensorCore:
                     self.values["integrated"]["cpu_percent"] = int(
                         self.process.cpu_percent(interval=None)
                     )
+                    self._update_status_bar_color_by_cpu_usage()
                     self.values["integrated"][
                         "CPU_MEM"
-                    ] = "{0:^2.0f}% ({1}),  {2:^2.0f}MB".format(
+                    ] = "{0:^2.0f}%({1}), {2:^2.0f}MB".format(
                         self.values["integrated"]["cpu_percent"],
                         self.process.num_threads(),
                         self.process.memory_info().rss/1024**2,
@@ -605,6 +762,8 @@ class SensorCore:
 
             # adjust loop time
             time_profile.append(datetime.now())
+            post_elapsed_ms = (time.perf_counter() - post_start_perf) * 1000.0
+            adjust_start_perf = time.perf_counter()
             sec_diff = []
             time_progile_sec = 0
             for i in range(len(time_profile)):
@@ -634,12 +793,54 @@ class SensorCore:
             self.wait_time = self.config.G_SENSOR_INTERVAL - d2
             self.actual_loop_interval = (d1 + 1) * self.config.G_SENSOR_INTERVAL
 
+            adjust_elapsed_ms = (time.perf_counter() - adjust_start_perf) * 1000.0
+            loop_elapsed_ms = (time.perf_counter() - loop_start_perf) * 1000.0
+
+            self._perf_sensor_calls += 1
+            self._perf_sensor_loop_ms.append(loop_elapsed_ms)
+            self._perf_sensor_preprocess_ms_sum += preprocess_elapsed_ms
+            self._perf_sensor_ant_update_ms_sum += ant_update_elapsed_ms
+            self._perf_sensor_calc_ms_sum += calc_elapsed_ms
+            self._perf_sensor_post_ms_sum += post_elapsed_ms
+            self._perf_sensor_adjust_ms_sum += adjust_elapsed_ms
+
+            if self.config.G_USE_DEM_TILE:
+                self._perf_sensor_api_alt_calls += 1
+                self._perf_sensor_api_alt_ms_sum += api_alt_elapsed_ms
+            if self.config.G_USE_WIND_DATA_SOURCE:
+                self._perf_sensor_api_wind_calls += 1
+                self._perf_sensor_api_wind_ms_sum += api_wind_elapsed_ms
+
+            self._maybe_log_perf_sensor_window()
+
     @staticmethod
     def conv_grade(gr):
         g = gr
         if -1.5 < g < 1.5:
             g = 0
         return int(g)
+
+    def _get_status_bar_color_by_cpu_usage(self, cpu_percent):
+        if cpu_percent < 20:
+            return self.cpu_status_bar_color_low
+        if cpu_percent < 50:
+            return self.cpu_status_bar_color_mid
+        return self.cpu_status_bar_color_high
+
+    def _update_status_bar_color_by_cpu_usage(self):
+        gui = getattr(self.config, "gui", None)
+        if gui is None:
+            return
+
+        status_bar = getattr(gui, "status_bar", None)
+        if status_bar is None:
+            return
+
+        status_bar.set_background_color(
+            self._get_status_bar_color_by_cpu_usage(
+                self.values["integrated"]["cpu_percent"]
+            )
+        )
 
     def get_lp_filtered_value(self, value, pre):
         # value must be initialized with None
@@ -665,40 +866,73 @@ class SensorCore:
         # https://medium.com/critical-powers/comparison-of-wbalance-algorithms-8838173e2c15
 
         v = self.values["integrated"]
+        dt = self.config.G_SENSOR_INTERVAL
         pwr_cp_diff = pwr - self.config.G_POWER_CP
-        # Waterworth algorighm
+
+        # Waterworth algorithm
         if self.config.G_POWER_W_PRIME_ALGORITHM == "WATERWORTH":
             if pwr < self.config.G_POWER_CP:
                 v["w_prime_power_sum"] = v["w_prime_power_sum"] + pwr
                 v["w_prime_power_count"] = v["w_prime_power_count"] + 1
                 v["pwr_mean_under_cp"] = v["w_prime_power_sum"] / v["w_prime_power_count"]
-                v["tau"] = (
+                tau_new = (
                     546
                     * np.exp(-0.01 * (self.config.G_POWER_CP - v["pwr_mean_under_cp"]))
                     + 316
                 )
-            v["w_prime_sum"] += max(0, pwr_cp_diff) * np.exp(v["w_prime_t"] / v["tau"])
-            v["w_prime_t"] += self.config.G_SENSOR_INTERVAL
+                # When tau changes, rescale w_prime_sum so W'balance is continuous.
+                # W'bal = W' - w_prime_sum * exp(-t/tau) must be preserved.
+                if tau_new != v["tau"] and v["w_prime_t"] > 0:
+                    w_bal = (
+                        self.config.G_POWER_W_PRIME
+                        - v["w_prime_sum"] * np.exp(-v["w_prime_t"] / v["tau"])
+                    )
+                    v["w_prime_sum"] = (
+                        self.config.G_POWER_W_PRIME - w_bal
+                    ) * np.exp(v["w_prime_t"] / tau_new)
+                v["tau"] = tau_new
+
+            # Accumulate: (P-CP)+ * exp(t/tau) * dt [J scaled for later exp(-T/tau)]
+            v["w_prime_sum"] += max(0, pwr_cp_diff) * dt * np.exp(v["w_prime_t"] / v["tau"])
+            v["w_prime_t"] += dt
             v["w_prime_balance"] = (
                 self.config.G_POWER_W_PRIME
-                 - v["w_prime_sum"]*np.exp(-v["w_prime_t"] / v["tau"])
+                - v["w_prime_sum"] * np.exp(-v["w_prime_t"] / v["tau"])
             )
 
         # Differential algorithm
         elif self.config.G_POWER_W_PRIME_ALGORITHM == "DIFFERENTIAL":
             cp_pwr_diff = -pwr_cp_diff
             if cp_pwr_diff < 0:
-                # consume
-                v["w_prime_balance"] += cp_pwr_diff
+                # consume (P > CP): deplete proportional to excess power and time
+                v["w_prime_balance"] += cp_pwr_diff * dt
             else:
-                # recovery
+                # recovery (P < CP): recover toward W' with exponential approach
                 v["w_prime_balance"] += (
                     cp_pwr_diff
                     * (self.config.G_POWER_W_PRIME - v["w_prime_balance"])
                     / self.config.G_POWER_W_PRIME
+                    * dt
                 )
 
+        # Clamp to [0, W']: balance cannot exceed full charge or go physically undefined
+        v["w_prime_balance"] = min(
+            max(v["w_prime_balance"], 0), self.config.G_POWER_W_PRIME
+        )
         v["w_prime_balance_normalized"] = round(
             v["w_prime_balance"] / self.config.G_POWER_W_PRIME * 100,
             1
         )
+
+    def calc_form_metrics(self, pwr):
+        """Compute TSS each sensor interval.
+
+        TSS (Training Stress Score):
+            Incremental approximation: (P/CP)^2 * dt/3600 * 100 per second.
+            Uses CP as a proxy for FTP.
+        """
+        v = self.values["integrated"]
+        if not np.isnan(pwr) and pwr > 0:
+            cp = self.config.G_POWER_CP
+            dt = self.config.G_SENSOR_INTERVAL
+            v["tss"] += (pwr / cp) ** 2 * dt / 3600 * 100

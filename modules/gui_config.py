@@ -28,9 +28,15 @@ class GUI_Config:
         "Int": (".0f", ""),
     }
 
+    # Per-item font scale for value text in PyQt item widgets.
+    G_ITEM_VALUE_FONT_SCALE = {
+        "CPU_MEM": 0.8,
+    }
+
     G_ITEM_DEF = {
         # integrated
         "Power": (G_UNIT["Power"], "self.sensor.values['integrated']['power']"),
+        "NP": (G_UNIT["Power"], "self.sensor.values['integrated']['normalized_power']"),
         "Speed": (G_UNIT["Speed"], "self.sensor.values['integrated']['speed']"),
         "Dist.": (G_UNIT["Distance"], "self.sensor.values['integrated']['distance']"),
         "Distance": (G_UNIT["Distance"], "self.sensor.values['integrated']['distance']"),
@@ -45,6 +51,7 @@ class GUI_Config:
             G_UNIT["Percent"],
             "self.sensor.values['integrated']['w_prime_balance_normalized']",
         ),
+        "TSS": ((".0f", ""), "self.sensor.values['integrated']['tss']"),
         "Grade": (G_UNIT["Percent"], "self.sensor.values['integrated']['grade']"),
         "Grade(spd)": (
             G_UNIT["Percent"],
@@ -130,6 +137,10 @@ class GUI_Config:
             G_UNIT["Work"],
             "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x10]['accumulated_power']",
         ),
+        "NP16(ANT+)": (
+            G_UNIT["Power"],
+            "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x10]['normalized_power']",
+        ),
         "Power R(ANT+)": (
             G_UNIT["Power"],
             "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x10]['power_r']",
@@ -158,6 +169,10 @@ class GUI_Config:
             G_UNIT["Work"],
             "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x11]['accumulated_power']",
         ),
+        "NP17(ANT+)": (
+            G_UNIT["Power"],
+            "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x11]['normalized_power']",
+        ),
         "Power18(ANT+)": (
             G_UNIT["Power"],
             "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x12]['power']",
@@ -169,6 +184,10 @@ class GUI_Config:
         "Work18(ANT+)": (
             G_UNIT["Work"],
             "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x12]['accumulated_power']",
+        ),
+        "NP18(ANT+)": (
+            G_UNIT["Power"],
+            "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x12]['normalized_power']",
         ),
         "Torque Ef.(ANT+)": (
             G_UNIT["String"],

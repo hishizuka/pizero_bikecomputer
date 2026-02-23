@@ -63,9 +63,13 @@ class Network:
         if not self.config.G_AUTO_BT_TETHERING:
             return detect_network(cache=False)
 
+        bt_pan = getattr(self.config, "bt_pan", None)
+        if bt_pan is None:
+            return False
+
         has_required_device = (
             self.config.G_BT_PAN_DEVICE
-            and self.config.bt_pan.get_bt_pan_devices()
+            and bt_pan.get_bt_pan_devices()
         )
         return has_required_device
 

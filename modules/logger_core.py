@@ -78,10 +78,116 @@ class LoggerCore:
 
     resume_status = False
     last_timestamp = None
+    _PERF_LOGGER_LOG_INTERVAL_SEC = 30.0
 
     def __init__(self, config):
         super().__init__()
         self.config = config
+        # Emit debug metrics at a fixed cadence to reduce log volume.
+        self._perf_logger_window = max(
+            1,
+            int(
+                round(
+                    self._PERF_LOGGER_LOG_INTERVAL_SEC
+                    / max(self.config.G_LOGGING_INTERVAL, 0.001)
+                )
+            ),
+        )
+        self._init_perf_logger_metrics()
+        self._init_perf_sql_worker_metrics()
+
+    @staticmethod
+    def _to_float_or_nan(value):
+        if value is None:
+            return np.nan
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            app_logger.warning(
+                "Skip invalid resume value for numeric field: %r (%s)",
+                value,
+                type(value).__name__,
+            )
+            return np.nan
+
+    @staticmethod
+    def _safe_stat(values, func, *args):
+        if not values:
+            return float("nan")
+        return float(func(values, *args))
+
+    def _init_perf_logger_metrics(self):
+        self._perf_logger_calls = 0
+        self._perf_logger_total_ms = []
+        self._perf_logger_stats_ms_sum = 0.0
+        self._perf_logger_sql_queue_ms_sum = 0.0
+        self._perf_logger_short_log_ms_sum = 0.0
+        self._perf_logger_send_online_ms_sum = 0.0
+        self._perf_logger_send_online_calls = 0
+
+    def _init_perf_sql_worker_metrics(self):
+        self._perf_sql_worker_calls = 0
+        self._perf_sql_worker_wait_ms = []
+        self._perf_sql_worker_exec_ms = []
+
+    def _maybe_log_perf_logger_window(self):
+        if self._perf_logger_calls < self._perf_logger_window:
+            return
+
+        total_avg_ms = self._safe_stat(self._perf_logger_total_ms, np.mean)
+        total_p95_ms = self._safe_stat(self._perf_logger_total_ms, np.percentile, 95)
+        total_max_ms = self._safe_stat(self._perf_logger_total_ms, np.max)
+        stats_avg_ms = self._perf_logger_stats_ms_sum / self._perf_logger_calls
+        sql_queue_avg_ms = self._perf_logger_sql_queue_ms_sum / self._perf_logger_calls
+        short_log_avg_ms = self._perf_logger_short_log_ms_sum / self._perf_logger_calls
+        send_online_avg_ms = (
+            self._perf_logger_send_online_ms_sum / self._perf_logger_calls
+        )
+        queue_size = self.sql_queue.qsize() if hasattr(self, "sql_queue") else -1
+
+        app_logger.debug(
+            "[PERF_LOGGER] "
+            f"win={self._perf_logger_window} "
+            f"calls={self._perf_logger_calls} "
+            f"total_avg_ms={total_avg_ms:.3f} "
+            f"total_p95_ms={total_p95_ms:.3f} "
+            f"total_max_ms={total_max_ms:.3f} "
+            f"stats_avg_ms={stats_avg_ms:.3f} "
+            f"sql_queue_avg_ms={sql_queue_avg_ms:.3f} "
+            f"short_log_avg_ms={short_log_avg_ms:.3f} "
+            f"send_online_avg_ms={send_online_avg_ms:.3f} "
+            f"send_online_calls={self._perf_logger_send_online_calls} "
+            f"queue_size={queue_size} "
+            f"count={self.values['count']} "
+            f"lap={self.values['lap']}"
+        )
+
+        self._init_perf_logger_metrics()
+
+    def _maybe_log_perf_sql_worker_window(self):
+        if self._perf_sql_worker_calls < self._perf_logger_window:
+            return
+
+        wait_avg_ms = self._safe_stat(self._perf_sql_worker_wait_ms, np.mean)
+        wait_p95_ms = self._safe_stat(self._perf_sql_worker_wait_ms, np.percentile, 95)
+        exec_avg_ms = self._safe_stat(self._perf_sql_worker_exec_ms, np.mean)
+        exec_p95_ms = self._safe_stat(self._perf_sql_worker_exec_ms, np.percentile, 95)
+        exec_max_ms = self._safe_stat(self._perf_sql_worker_exec_ms, np.max)
+        queue_size = self.sql_queue.qsize() if hasattr(self, "sql_queue") else -1
+
+        app_logger.debug(
+            "[PERF_LOGGER_SQL] "
+            f"win={self._perf_logger_window} "
+            f"calls={self._perf_sql_worker_calls} "
+            f"wait_avg_ms={wait_avg_ms:.3f} "
+            f"wait_p95_ms={wait_p95_ms:.3f} "
+            f"exec_avg_ms={exec_avg_ms:.3f} "
+            f"exec_p95_ms={exec_p95_ms:.3f} "
+            f"exec_max_ms={exec_max_ms:.3f} "
+            f"queue_size={queue_size}"
+        )
+
+        self._init_perf_sql_worker_metrics()
 
     def start_coroutine(self):
         self.sql_queue = asyncio.Queue()
@@ -184,12 +290,21 @@ class LoggerCore:
 
     async def sql_worker(self):
         while True:
+            wait_start = time.perf_counter()
             sql = await self.sql_queue.get()
+            wait_elapsed_ms = (time.perf_counter() - wait_start) * 1000.0
             if sql is None:
                 break
+            exec_start = time.perf_counter()
             self.cur.execute(*sql)
             self.con.commit()
+            exec_elapsed_ms = (time.perf_counter() - exec_start) * 1000.0
             self.sql_queue.task_done()
+
+            self._perf_sql_worker_calls += 1
+            self._perf_sql_worker_wait_ms.append(wait_elapsed_ms)
+            self._perf_sql_worker_exec_ms.append(exec_elapsed_ms)
+            self._maybe_log_perf_sql_worker_window()
 
     def init_db(self):
         self.create_table_sql = """CREATE TABLE BIKECOMPUTER_LOG(
@@ -203,6 +318,7 @@ class LoggerCore:
       raw_lat FLOAT,
       raw_long FLOAT,
       gps_altitude FLOAT,
+      raw_gps_altitude FLOAT,
       gps_speed FLOAT,
       gps_distance FLOAT,
       gps_mode INTEGER,
@@ -231,6 +347,8 @@ class LoggerCore:
       wind_direction INT,
       headwind FLOAT,
       heading INTEGER,
+      pitch FLOAT,
+      roll FLOAT,
       motion INTEGER,
       acc_x FLOAT,
       acc_y FLOAT,
@@ -310,11 +428,14 @@ class LoggerCore:
         popup_extra = ""
         pre_status = self.config.G_MANUAL_STATUS
         display_flash_short = True
+        buzzer = getattr(self.config, "buzzer", None)
 
         if self.config.G_MANUAL_STATUS != "START":
             app_logger.info(f"->M START")
             self.start_and_stop("STOP")
             self.config.G_MANUAL_STATUS = "START"
+            if buzzer is not None:
+                buzzer.play("sgx-ca600-start")
             if self.config.gui is not None:
                 self.config.gui.change_start_stop_button(self.config.G_MANUAL_STATUS)
             if self.values["start_time"] is None:
@@ -337,11 +458,17 @@ class LoggerCore:
             app_logger.info(f"->M STOP")
             self.start_and_stop("START")
             self.config.G_MANUAL_STATUS = "STOP"
+            if buzzer is not None:
+                buzzer.play("sgx-ca600-stop")
             if self.config.gui is not None:
                 self.config.gui.change_start_stop_button(self.config.G_MANUAL_STATUS)
 
         # show message
-        self.config.gui.show_popup(self.config.G_MANUAL_STATUS + popup_extra, 3)
+        self.config.gui.show_popup(
+            self.config.G_MANUAL_STATUS + popup_extra,
+            3,
+            buzzer_sound=None,
+        )
         if display_flash_short:
             self.config.display.screen_flash_short()
         else:
@@ -374,6 +501,14 @@ class LoggerCore:
         elif self.config.G_STOPWATCH_STATUS == "START":
             self.config.G_STOPWATCH_STATUS = "STOP"
             app_logger.info(f"->STOP")
+            if (
+                self.sensor is not None
+                and self.sensor.sensor_ant is not None
+            ):
+                if hasattr(self.sensor.sensor_ant, "pause_normalized_power_state"):
+                    self.sensor.sensor_ant.pause_normalized_power_state()
+                elif hasattr(self.sensor.sensor_ant, "reset_normalized_power_state"):
+                    self.sensor.sensor_ant.reset_normalized_power_state()
 
     def count_laps(self):
         if self.values["count"] == 0 or self.values["count_lap"] == 0:
@@ -391,6 +526,10 @@ class LoggerCore:
             self.average["lap"][k2]["sum"] = 0
         asyncio.create_task(self.record_log())
         app_logger.info(f"->LAP:{self.values['lap']}")
+
+        buzzer = getattr(self.config, "buzzer", None)
+        if buzzer is not None:
+            buzzer.play("sgx-ca600-lap")
 
         # show message
         newline = "<br />" if not self.config.gui.horizontal else ""
@@ -419,7 +558,8 @@ class LoggerCore:
         self.config.gui.show_popup_multiline(
             lap_message,
             value_message,
-            timeout=10 #[s]
+            timeout=10,  # [s]
+            buzzer_sound=None,
         )
         self.config.display.screen_flash_short()
 
@@ -454,6 +594,9 @@ class LoggerCore:
             return False
 
         # reset
+        buzzer = getattr(self.config, "buzzer", None)
+        if buzzer is not None:
+            buzzer.play("sgx-ca600-save")
         self.config.display.screen_flash_long()
 
         # close db connect
@@ -549,9 +692,11 @@ class LoggerCore:
     async def record_log(self):
         # need to detect location delta for smart recording
 
+        record_start = time.perf_counter()
         # get present value
         value = self.sensor.values["integrated"]
 
+        stats_start = time.perf_counter()
         # update lap stats if value is not Null
         for k, v in value.items():
             # skip when null value(np.nan)
@@ -631,21 +776,12 @@ class LoggerCore:
             self.record_stats["lap_avg"][k] = x2 - x1
             self.record_stats["lap_max"][k] = x2
 
+        stats_elapsed_ms = (time.perf_counter() - stats_start) * 1000.0
+
         ## SQLite
+        sql_queue_start = time.perf_counter()
         now_time = datetime.now(timezone.utc)
-        # self.cur.execute("""\
-        sql = (
-            """\
-      INSERT INTO BIKECOMPUTER_LOG VALUES(\
-        ?,?,?,?,?,\
-        ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,\
-        ?,?,?,?,?,?,\
-        ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,\
-        ?,?,?,?,?,?,?,?,\
-        ?,?,?,?,\
-        ?,?,?,?,?,?,?,?\
-      )""",
-            (
+        sql_values = (
                 now_time,
                 self.values["lap"],
                 self.values["count_lap"],
@@ -657,6 +793,7 @@ class LoggerCore:
                 self.sensor.values["GPS"]["raw_lat"],
                 self.sensor.values["GPS"]["raw_lon"],
                 self.sensor.values["GPS"]["alt"],
+                self.sensor.values["GPS"]["raw_alt"],
                 self.sensor.values["GPS"]["speed"],
                 self.sensor.values["GPS"]["distance"],
                 self.sensor.values["GPS"]["mode"],
@@ -687,6 +824,8 @@ class LoggerCore:
                 value["wind_direction"],
                 value["headwind"],
                 self.sensor.values["I2C"]["heading"],
+                self.sensor.values["I2C"]["pitch"],
+                self.sensor.values["I2C"]["roll"],
                 self.sensor.values["I2C"]["m_stat"],
                 # self.sensor.values['I2C']['acc'][0],
                 # self.sensor.values['I2C']['acc'][1],
@@ -724,21 +863,41 @@ class LoggerCore:
                 self.average["lap"]["power"]["sum"],
                 self.average["entire"]["power"]["count"],
                 self.average["entire"]["power"]["sum"],
-            ),
         )
+        placeholders = ",".join(["?"] * len(sql_values))
+        sql = (f"INSERT INTO BIKECOMPUTER_LOG VALUES({placeholders})", sql_values)
         # self.con.commit()
         await self.sql_queue.put((sql))
+        sql_queue_elapsed_ms = (time.perf_counter() - sql_queue_start) * 1000.0
 
+        short_log_start = time.perf_counter()
         self.store_short_log_for_update_track(
             value["distance"],
             self.sensor.values["GPS"]["lat"],
             self.sensor.values["GPS"]["lon"],
             now_time,
         )
+        short_log_elapsed_ms = (time.perf_counter() - short_log_start) * 1000.0
 
         # send online
+        send_online_elapsed_ms = 0.0
         if self.config.G_THINGSBOARD_API["STATUS"]:
+            send_online_start = time.perf_counter()
             self.config.api.send_livetrack_data(quick_send=False)
+            send_online_elapsed_ms = (
+                time.perf_counter() - send_online_start
+            ) * 1000.0
+
+        record_elapsed_ms = (time.perf_counter() - record_start) * 1000.0
+        self._perf_logger_calls += 1
+        self._perf_logger_total_ms.append(record_elapsed_ms)
+        self._perf_logger_stats_ms_sum += stats_elapsed_ms
+        self._perf_logger_sql_queue_ms_sum += sql_queue_elapsed_ms
+        self._perf_logger_short_log_ms_sum += short_log_elapsed_ms
+        self._perf_logger_send_online_ms_sum += send_online_elapsed_ms
+        if self.config.G_THINGSBOARD_API["STATUS"]:
+            self._perf_logger_send_online_calls += 1
+        self._maybe_log_perf_logger_window()
 
     def calc_gross(self):
         # elapsed_time
@@ -820,10 +979,9 @@ class LoggerCore:
         sn["accumulated_power"] += value[5]
         i2c["total_ascent"] += value[6]
         i2c["total_descent"] += value[7]
-        # None -> np.nan
-        (i2c["pre_altitude"], gps["pre_lat"], gps["pre_lon"]) = np.array(
-            value[8:11], dtype=np.float32
-        )
+        i2c["pre_altitude"] = self._to_float_or_nan(value[8])
+        gps["pre_lat"] = self._to_float_or_nan(value[9])
+        gps["pre_lon"] = self._to_float_or_nan(value[10])
 
         index = 11
         for k in self.lap_keys:

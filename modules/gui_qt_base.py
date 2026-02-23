@@ -103,6 +103,10 @@ class GUI_Qt_Base(QtCore.QObject):
             self.msg_queue.task_done()
 
             await self.show_dialog_base(msg)
+            buzzer = getattr(self.config, "buzzer", None)
+            buzzer_sound = msg.get("buzzer_sound", "beep")
+            if buzzer is not None and buzzer_sound is not None:
+                buzzer.play(buzzer_sound)
 
             # event set in close_dialog()
             await self.msg_event.wait()
@@ -256,17 +260,18 @@ class GUI_Qt_Base(QtCore.QObject):
         self.config.display.update(buf, direct_update)
         # self.config.check_time("draw_display end")
 
-    def show_popup(self, title, timeout=None):
+    def show_popup(self, title, timeout=None, buzzer_sound="beep"):
         self._enqueue_msg(
             {
                 "title": title,
                 "button_num": 0,
                 "position": QT_ALIGN_BOTTOM,
                 "timeout": timeout,
+                "buzzer_sound": buzzer_sound,
             }
         )
 
-    def show_popup_multiline(self, title, message, timeout=None):
+    def show_popup_multiline(self, title, message, timeout=None, buzzer_sound="beep"):
         self._enqueue_msg(
             {
                 "title": title,
@@ -274,6 +279,7 @@ class GUI_Qt_Base(QtCore.QObject):
                 "position": QT_ALIGN_BOTTOM,
                 "text_align": QT_ALIGN_LEFT,
                 "timeout": timeout,
+                "buzzer_sound": buzzer_sound,
             }
         )
 

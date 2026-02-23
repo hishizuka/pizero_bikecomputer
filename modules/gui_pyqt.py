@@ -146,6 +146,7 @@ class GUI_PyQt(GUI_Qt_Base):
     signal_get_screenshot = Signal()
     signal_multiscan = Signal()
     signal_fake_trainer = Signal()
+    signal_bhi3_raw_log = Signal()
     signal_start_and_stop_manual = Signal()
     signal_count_laps = Signal()
     signal_reset_count = Signal()
@@ -250,6 +251,7 @@ class GUI_PyQt(GUI_Qt_Base):
             self.signal_get_screenshot.connect(self.screenshot)
             self.signal_multiscan.connect(self.multiscan_internal)
             self.signal_fake_trainer.connect(self.fake_trainer_internal)
+            self.signal_bhi3_raw_log.connect(self.signal_bhi3_raw_log_internal)
 
             self.signal_start_and_stop_manual.connect(
                 self.start_and_stop_manual_internal
@@ -786,6 +788,12 @@ class GUI_PyQt(GUI_Qt_Base):
             title="Connect Zwift Click v2 to Zwift."
         )
 
+    def bhi3_raw_log(self):
+        self.signal_bhi3_raw_log.emit()
+
+    def signal_bhi3_raw_log_internal(self):
+        self.sensor.sensor_i2c.update_bhi3_raw_log_state()
+
     def get_screenshot(self):
         self.signal_get_screenshot.emit()
 
@@ -849,8 +857,12 @@ class GUI_PyQt(GUI_Qt_Base):
         self.change_menu_page(self.gui_config.G_GUI_INDEX["Menu"])
 
     def delete_popup(self):
-        if self.display_dialog:
-            self.signal_menu_back_button.emit()
+        if not self.display_dialog:
+            return
+
+        # Close active dialog directly instead of delegating to menu back.
+        # Menu back can be unavailable on plain QWidget and leave popup stuck.
+        self.close_dialog(getattr(self, "stack_widget_current_index", 1))
 
     def show_forced_message(self, msg):
         if self.dialog_exists():
@@ -858,12 +870,67 @@ class GUI_PyQt(GUI_Qt_Base):
         else:
             self.show_dialog_ok_only(None, msg)
 
+    def _resolve_dialog_return_index(self, index):
+        if self.stack_widget is None:
+            return index
+
+        count = self.stack_widget.count()
+        if count <= 0:
+            return 0
+
+        splash_hidden = False
+        if count > 0:
+            splash_widget = self.stack_widget.widget(0)
+            splash_hidden = splash_widget is not None and not splash_widget.isVisible()
+
+        current_index = self.stack_widget.currentIndex()
+        fallback_index = current_index
+        if fallback_index < 0 or fallback_index >= count:
+            fallback_index = 1 if count > 1 else 0
+        if count > 1 and fallback_index == 0 and splash_hidden:
+            fallback_index = 1
+
+        resolved_index = fallback_index
+        if isinstance(index, int):
+            if 0 <= index < count:
+                resolved_index = index
+        else:
+            try:
+                candidate = int(index)
+            except (TypeError, ValueError):
+                candidate = None
+            if candidate is not None and 0 <= candidate < count:
+                resolved_index = candidate
+
+        if count > 1 and resolved_index == 0 and splash_hidden:
+            resolved_index = fallback_index
+
+        if resolved_index != index:
+            app_logger.warning(
+                f"dialog return index adjusted: {index} -> {resolved_index}"
+            )
+        return resolved_index
+
     async def show_dialog_base(self, msg):
         if self.display_dialog:
             return
         self.display_dialog = True
 
-        self.stack_widget_current_index = self.stack_widget.currentIndex()
+        title_raw = msg.get("title", "")
+        title_preview = str(title_raw).replace("\n", " ")
+        if len(title_preview) > 80:
+            title_preview = title_preview[:80] + "..."
+
+        self.stack_widget_current_index = self._resolve_dialog_return_index(
+            self.stack_widget.currentIndex()
+        )
+        app_logger.debug(
+            "[DIALOG] show "
+            f"title={title_preview!r}, button_num={msg.get('button_num', 0)}, "
+            f"stack_index={self.stack_widget.currentIndex()}, "
+            f"return_index={self.stack_widget_current_index}, "
+            f"dual_mode={self.dual_mode}"
+        )
         self._dialog.configure(msg, self.close_dialog)
         self._dialog.show(self.stack_widget_current_index)
 
@@ -879,7 +946,14 @@ class GUI_PyQt(GUI_Qt_Base):
         return self._dialog.background.isVisible()
 
     def close_dialog(self, index):
-        self.stack_widget.setCurrentIndex(index)
+        current_index = self.stack_widget.currentIndex()
+        resolved_index = self._resolve_dialog_return_index(index)
+        app_logger.debug(
+            "[DIALOG] close "
+            f"requested_index={index}, resolved_index={resolved_index}, "
+            f"current_index={current_index}"
+        )
+        self.stack_widget.setCurrentIndex(resolved_index)
         self._dialog.hide()
         self.display_dialog = False
         self.msg_event.set()

@@ -27,6 +27,7 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
         "alt",
         "raw_lat",
         "raw_lon",
+        "raw_alt",
         "pre_lat",
         "pre_lon",
         "pre_alt",
@@ -243,6 +244,7 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
                 self.values["alt"] = alt
         else:  # copy from pre value
             self.values["alt"] = self.values["pre_alt"]
+        self.values["raw_alt"] = alt
 
         # speed
         if valid_pos and speed is not None:
