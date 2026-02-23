@@ -14,6 +14,7 @@ from modules.map_config import add_map_config
 from modules.helper.setting import Setting
 from modules.button_config import Button_Config
 from modules.helper.state import AppState
+from modules.utils.buzzer import BuzzerController
 from modules.utils.cmd import (
     exec_cmd,
     is_running_as_service,
@@ -34,7 +35,7 @@ class Config:
 
     # loop interval
     G_SENSOR_INTERVAL = 1.0  # [s] for sensor_core
-    G_ANT_INTERVAL = 1.0  # [s] for ANT+. 0.25, 0.5, 1.0 only.
+    G_ANT_INTERVAL = 0.25 #1.0  # [s] for ANT+. 0.25, 0.5, 1.0 only.
     G_I2C_INTERVAL = 1.0  # 0.2 #[s] for I2C (altitude, accelerometer, etc)
     G_GPS_INTERVAL = 1.0  # [s] for GPS
     G_DRAW_INTERVAL = 1000  # [ms] for GUI (QtCore.QTimer)
@@ -60,6 +61,7 @@ class Config:
     G_POWER_W_PRIME_ALGORITHM = "WATERWORTH"  # WATERWORTH, DIFFERENTIAL
 
     G_USE_PCB_PIZERO_BIKECOMPUTER = False
+    G_USE_BUZZER = False
 
     ###########################
     # fixed or pointer values #
@@ -421,6 +423,7 @@ class Config:
     state = None
     gui = None
     gui_config = None
+    buzzer = None
     boot_time = 0
 
     def __init__(self):
@@ -474,17 +477,21 @@ class Config:
         # read setting.conf and state.pickle
         self.setting = Setting(self)
         self.state = AppState()
+
         init_utc_offset()
 
         #add map settings
         add_map_config(self)
 
-        # add test settings
+        # add test settings (pre)
         try:
-            from modules.test_code.test_code import add_test_config
-            add_test_config(self)
+            from modules.test_code.test_code import pre_add_test_config, post_add_test_config
+            pre_add_test_config(self)
         except:
             pass
+
+        # buzzer
+        self.buzzer = BuzzerController(self)
 
         # make sure all folders exist
         os.makedirs(self.G_SCREENSHOT_DIR, exist_ok=True)
@@ -545,6 +552,12 @@ class Config:
 
         self.button_config = Button_Config(self)
 
+        # add test settings (post)
+        try:
+            post_add_test_config(self)
+        except:
+            pass
+
     @property
     def loop(self):
         #return asyncio.get_running_loop()
@@ -590,6 +603,18 @@ class Config:
                 self.bt_pan = BTPanDbus()
             if HAS_DBUS_FAST or HAS_DBUS:
                 await self.bt_pan.update_bt_pan_devices()
+
+        if self.G_AUTO_BT_TETHERING and self.bt_pan is None:
+            if not self.G_IS_RASPI:
+                reason = "non-Raspberry Pi environment"
+            elif not bt_available:
+                reason = "Bluetooth hardware unavailable"
+            else:
+                reason = "BT PAN backend unavailable (dbus modules are missing)"
+            app_logger.warning(
+                f"[BT] auto_bt_tethering is enabled but {reason}; disable auto BT tethering"
+            )
+            self.G_AUTO_BT_TETHERING = False
 
         self.api = api(self)
         self.network = Network(self)
@@ -669,7 +694,8 @@ class Config:
                     self.gui.back_menu()
                 ##### temporary #####
                 elif key == "i" and self.gui and self.gui.map_widget:
-                    self.gui.map_widget.modify_map_tile()
+                    #self.gui.map_widget.modify_map_tile()
+                    self.gui.change_map_overlays()
                 elif key == "@" and self.gui:
                     self.gui.show_dialog_ok_only(fn=None, title="test")
                     #self.gui.show_popup(f"test", 3)
@@ -760,6 +786,8 @@ class Config:
             self.logger.start_and_stop_manual()
         self.logger.remove_handler()
         await self.logger.quit()
+        if self.buzzer is not None:
+            await self.buzzer.stop()
         self.setting.write_config()
         self.state.delete()
         app_logger.info(" 2: logger & state")
