@@ -240,8 +240,8 @@ def get_wind_color(wind_speed):
         return [0, 0, 0, 0]
     idx = int(wind_speed)
     if idx > len(SCW_WIND_SPEED_ARROW_CONV):
-        idx = -1
-    return list(SCW_WIND_SPEED_ARROW_CONV[idx])
+        return list(SCW_WIND_SPEED_ARROW_CONV[-1])
+    return list(SCW_WIND_SPEED_ARROW_CONV[max(idx-1, 0)])
 
 
 def conv_image_internal(image, orig_colors, conv_colors):
@@ -312,7 +312,6 @@ def get_jma_prev_next_validtime(map_settings):
 
 
 def get_wind_with_tile_xy(img_files, x_in_tile, y_in_tile, tilesize, tiles_cond, image, im_array):
-
     def get_wind_speed(color):
         dist = np.linalg.norm(SCW_WIND_SPEED_COLOR - color, axis=1)
         min_index = np.argmin(dist)
@@ -535,7 +534,6 @@ def get_wind_with_tile_xy(img_files, x_in_tile, y_in_tile, tilesize, tiles_cond,
             # app_logger.debug(f"  dist: {round(dist,1)}, from {s['start']} to {xy_in_tile}")
 
     # app_logger.debug(stats)
-
     return wind_speed, wind_direction, image, im_array
 
 
@@ -760,7 +758,9 @@ class MapTileWithValues():
     def update_overlay_wind_basetime(self, map_settings):
 
         # update current_time
-        current_time = map_settings["current_time_func"]()
+        current_time = map_settings.pop("_precomputed_current_time", None)
+        if current_time is None:
+            current_time = map_settings["current_time_func"]()
         delta_minutes = current_time.minute % map_settings["time_interval"]
 
         # time_interval < time_interval/2: latest measured time (not forecast)
@@ -848,7 +848,9 @@ class MapTileWithValues():
     def update_overlay_rain_basetime(self, map_settings):
 
         # update current_time
-        current_time = map_settings["current_time_func"]()
+        current_time = map_settings.pop("_precomputed_current_time", None)
+        if current_time is None:
+            current_time = map_settings["current_time_func"]()
         delta_minutes = current_time.minute % map_settings["time_interval"]
 
         # latest measured time (not forecast)
@@ -876,20 +878,18 @@ class MapTileWithValues():
         if not map_name.startswith("jpn_scw") or np.any(np.isnan(pos)):
             return np.nan, np.nan
 
-        # initialize 
+        # initialize
         tile_x, tile_y, x_in_tile, y_in_tile = get_tilexy_and_xy_in_tile(
             z, *pos, tilesize
         )
-        wait = False
-        if forcast_time is not None:
-            wait = True
+        wait = forcast_time is not None
         await self.update_overlay_windmap_timeline(map_settings, map_name, wait)
+
+        time_updated = False
         if self.scw_wind_validtime != map_config[map_name]["validtime"]:
             # app_logger.debug(f"get_wind update: {self.scw_wind_validtime}, {map_config[map_name]['validtime']} / {map_config[map_name]['basetime']}")
             self.scw_wind_validtime = map_config[map_name]["validtime"]
             time_updated = True
-        else:
-            time_updated = False
 
         if (
             forcast_time is None
@@ -899,7 +899,7 @@ class MapTileWithValues():
             and self.wind_image is not None
         ):
             return self.pre_wind_speed, self.pre_wind_direction
-        
+
         # check marginal tile
         tiles_cond = [0, 0] # x:-1/0/+1, y:-1/0/+1
         for i, t in enumerate([x_in_tile, y_in_tile]):
@@ -929,6 +929,7 @@ class MapTileWithValues():
             _map_config[map_name]["validtime"] = closest["it"]
             _map_config[map_name]["subdomain"] = closest["sd"]
             locale.setlocale(locale.LC_TIME, current_locale)
+
         await self.download_maptiles(tiles, _map_config, map_name, z)
 
         tile_files = []
@@ -939,6 +940,7 @@ class MapTileWithValues():
             if not self.check_existing_tiles(filename):
                 continue
             tile_files.append(filename)
+
         # download in progress
         if len(tiles) != len(tile_files):
             # app_logger.debug("dl in progress... reset wind_image, wind_im_array")
@@ -982,7 +984,7 @@ class MapTileWithValues():
             self.pre_wind_tiles_cond = tiles_cond
             self.pre_wind_speed = wind_speed
             self.pre_wind_direction = wind_direction
-        
+
         return wind_speed, wind_direction
     
     async def get_altitude_from_tile(self, pos, map_config=None):

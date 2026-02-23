@@ -52,6 +52,7 @@ class Item(QtWidgets.QVBoxLayout):
     label = None
     value = None
     name = ""
+    value_font_scale = 1.0
     font_size_unit = 0
     font_size_unit_set = False
 
@@ -71,6 +72,10 @@ class Item(QtWidgets.QVBoxLayout):
         self.value = ItemValue(right_flag, bottom_flag)
         self.itemformat = self.config.gui.gui_config.G_ITEM_DEF[name][0][0]
         self.unittext = self.config.gui.gui_config.G_ITEM_DEF[name][0][1]
+        value_font_scale_map = getattr(
+            self.config.gui.gui_config, "G_ITEM_VALUE_FONT_SCALE", {}
+        )
+        self.value_font_scale = value_font_scale_map.get(self.name, 1.0)
         self._unit_suffix = ""
 
         self.addWidget(self.label)
@@ -100,10 +105,13 @@ class Item(QtWidgets.QVBoxLayout):
     def update_font_size(self, font_size):
         if not self.font_size_unit_set and self.font_size_unit != 0:
             self.font_size_unit_set = True
-        self.font_size_unit = int(font_size * 0.7)
-        
-        for text, fsize in zip(
-            [self.label, self.value], [int(font_size * 0.66), font_size]
+        label_font_size = int(font_size * 0.66)
+        value_font_size = int(font_size * self.value_font_scale)
+        self.font_size_unit = int(value_font_size * 0.7)
+
+        for text, fsize in (
+            (self.label, label_font_size),
+            (self.value, value_font_size),
         ):
             q = text.font()
             q.setPixelSize(fsize)

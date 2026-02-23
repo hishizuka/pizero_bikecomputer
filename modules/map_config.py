@@ -95,6 +95,7 @@ def add_map_config(config):
         "time_list": "https://api.rainviewer.com/public/weather-maps.json",
         "current_time": None,
         "current_time_func": datetime.now,  # local?
+        "refresh_time_mode": "cutoff",
         "basetime": None,
         "validtime": None,
         "time_interval": 10,  # [minutes]
@@ -116,6 +117,7 @@ def add_map_config(config):
         "timeline_update_date": None,
         "current_time": None,
         "current_time_func": datetime.utcnow,
+        "refresh_time_mode": "cutoff",
         "basetime": None,
         "validtime": None,
         "time_interval": 5,  # [minutes]
@@ -135,6 +137,7 @@ def add_map_config(config):
         "min_zoomlevel": 0,
         "current_time": None,
         "current_time_func": datetime.utcnow,
+        "refresh_time_mode": "aligned",
         "basetime": None,
         "validtime": None,
         "time_interval": 60,  # [minutes]
@@ -154,6 +157,7 @@ def add_map_config(config):
         "fl": "https://k2.supercweather.com/tl/msm/{basetime}/fl.json?rand={rand}",
         "current_time": None,
         "current_time_func": datetime.utcnow,
+        "refresh_time_mode": "aligned",
         "timeline": None,
         "timeline_update_date": None,
         "basetime": None,

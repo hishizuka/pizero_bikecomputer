@@ -18,8 +18,19 @@ class CustomPlotWidget(pg.PlotWidget):
         super().__init__()
         self._dragging = False
         self._start_pos = None
+        self._mouse_interaction_enabled = True
+
+    def set_mouse_interaction_enabled(self, enabled):
+        self._mouse_interaction_enabled = bool(enabled)
+        if not self._mouse_interaction_enabled:
+            self._dragging = False
+            self._start_pos = None
 
     def mousePressEvent(self, event):
+        if not self._mouse_interaction_enabled:
+            event.ignore()
+            return
+
         if event.button() == QT_MOUSEBUTTON_LEFTBUTTON:
             self._dragging = True
             self._start_pos = event.position().toPoint()
@@ -27,6 +38,11 @@ class CustomPlotWidget(pg.PlotWidget):
         super().mousePressEvent(event)
 
     def mouseReleaseEvent(self, event):
+        if not self._mouse_interaction_enabled:
+            self._dragging = False
+            event.ignore()
+            return
+
         if event.button() == QT_MOUSEBUTTON_LEFTBUTTON and self._dragging:
             self._dragging = False
             end_pos = event.position().toPoint()
@@ -36,6 +52,10 @@ class CustomPlotWidget(pg.PlotWidget):
         super().mouseReleaseEvent(event)
 
     def wheelEvent(self, event):
+        if not self._mouse_interaction_enabled:
+            event.ignore()
+            return
+
         delta = event.angleDelta().y()
         self.signal_wheel_scroll.emit(delta)
         event.accept()
@@ -118,6 +138,19 @@ class BaseMapWidget(ScreenWidget):
         self.buttons["zoomdown"].clicked.connect(self.zoom_minus)
         self.buttons["zoomup"].clicked.connect(self.zoom_plus)
 
+        self.apply_lock_interaction_state()
+
+    def apply_lock_interaction_state(self):
+        mouse_enabled = not self.lock_status
+        self.plot.setMouseEnabled(x=mouse_enabled, y=mouse_enabled)
+
+        view_box = self.plot.getViewBox()
+        if view_box is not None:
+            view_box.setMenuEnabled(mouse_enabled)
+
+        if hasattr(self.plot, "set_mouse_interaction_enabled"):
+            self.plot.set_mouse_interaction_enabled(mouse_enabled)
+
     # override disable
     def set_minimum_size(self):
         pass
@@ -133,10 +166,12 @@ class BaseMapWidget(ScreenWidget):
     def lock_off(self):
         self.lock_status = False
         self.buttons["lock"].change_status(self.lock_status)
+        self.apply_lock_interaction_state()
 
     def lock_on(self):
         self.lock_status = True
         self.buttons["lock"].change_status(self.lock_status)
+        self.apply_lock_interaction_state()
 
     def switch_lock(self):
         if self.lock_status:
@@ -190,6 +225,8 @@ class BaseMapWidget(ScreenWidget):
 
     @qasync.asyncSlot()
     async def on_drag_started(self):
+        if self.lock_status:
+            return
         self.timer.stop()
 
     @qasync.asyncSlot(int, int)
@@ -197,6 +234,8 @@ class BaseMapWidget(ScreenWidget):
         self.timer.start()
 
     def on_wheel_scrolled(self, delta):
+        if self.lock_status:
+            return
         if delta > 0:
             self.zoom_plus()
         else:

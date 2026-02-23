@@ -18,19 +18,39 @@ from .pyqt_map_button import (
 
 
 class MapOverlayMixin:
+    _OVERLAY_ENABLED_ATTRS = {
+        "WIND": "G_USE_WIND_OVERLAY_MAP",
+        "RAIN": "G_USE_RAIN_OVERLAY_MAP",
+        "HEATMAP": "G_USE_HEATMAP_OVERLAY_MAP",
+    }
+
     overlay_time = {}
     overlay_order = ["NONE", "WIND", "RAIN", "HEATMAP"]
-    overlay_order_index = {
-        "WIND": 1,
-        "RAIN": 2,
-        "HEATMAP": 3,
-    }
     overlay_index = 0
 
     zoom_delta_from_tilesize = 0
     auto_zoomlevel = None
     auto_zoomlevel_diff = 2  # auto_zoomlevel = zoomlevel + auto_zoomlevel_diff
     auto_zoomlevel_back = None
+
+    @staticmethod
+    def _is_time_series_overlay(overlay_type):
+        return overlay_type in ("WIND", "RAIN")
+
+    def _is_overlay_enabled(self, overlay_type):
+        enabled_attr = self._OVERLAY_ENABLED_ATTRS.get(overlay_type)
+        return getattr(self.config, enabled_attr) if enabled_attr else True
+
+    def _create_touch_button_group(self):
+        group = QtWidgets.QWidget(self)
+        group.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
+        group.setStyleSheet(
+            "background-color: rgba(255, 255, 255, 128);" "border-radius: 8px;"
+        )
+        layout = QtWidgets.QVBoxLayout(group)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
+        return group, layout
 
     def _setup_touch_overlay_controls(self):
         if not self.config.display.has_touch:
@@ -43,16 +63,7 @@ class MapOverlayMixin:
             QtCore.Qt.AlignmentFlag.AlignTop | QtCore.Qt.AlignmentFlag.AlignRight
         )
 
-        self.button_group_left = QtWidgets.QWidget(self)
-        self.button_group_left.setAttribute(
-            QtCore.Qt.WidgetAttribute.WA_StyledBackground, True
-        )
-        self.button_group_left.setStyleSheet(
-            "background-color: rgba(255, 255, 255, 128);" "border-radius: 8px;"
-        )
-        left_layout = QtWidgets.QVBoxLayout(self.button_group_left)
-        left_layout.setContentsMargins(8, 8, 8, 8)
-        left_layout.setSpacing(6)
+        self.button_group_left, left_layout = self._create_touch_button_group()
         left_layout.addWidget(self.buttons["lock"])
         left_layout.addWidget(self.buttons["zoomup"])
         left_layout.addWidget(self.buttons["zoomdown"])
@@ -65,16 +76,7 @@ class MapOverlayMixin:
 
         self.layout.addWidget(self.button_group_left, 0, 0, alignment=align_top_left)
 
-        self.button_group_right = QtWidgets.QWidget(self)
-        self.button_group_right.setAttribute(
-            QtCore.Qt.WidgetAttribute.WA_StyledBackground, True
-        )
-        self.button_group_right.setStyleSheet(
-            "background-color: rgba(255, 255, 255, 128);" "border-radius: 8px;"
-        )
-        right_layout = QtWidgets.QVBoxLayout(self.button_group_right)
-        right_layout.setContentsMargins(8, 8, 8, 8)
-        right_layout.setSpacing(6)
+        self.button_group_right, right_layout = self._create_touch_button_group()
 
         self.buttons["layers"] = MapLayersButton()
         right_layout.addWidget(self.buttons["layers"])
@@ -101,6 +103,7 @@ class MapOverlayMixin:
         self.layout.addWidget(self.button_group_right, 0, 4, alignment=align_top_right)
 
     def reset_map(self):
+        self._clear_tile_items()
         self._init_overlay_state()
         zoom_delta_from_tilesize = (
             int(self.config.G_MAP_CONFIG[self.config.G_MAP]["tile_size"] / 256) - 1
@@ -141,21 +144,28 @@ class MapOverlayMixin:
             },
         }
 
+    def _apply_precomputed_overlay_time(self, overlay_type, map_name, map_settings):
+        cache = getattr(self, "_overlay_refresh_time_cache", None)
+        if not isinstance(cache, dict):
+            return
+        cached = cache.get(overlay_type)
+        if not isinstance(cached, dict):
+            return
+        if cached.get("map_name") != map_name:
+            return
+        time_key = cached.get("time_key")
+        if time_key is None:
+            return
+        # Reuse per-frame time key to avoid duplicated time alignment calculations.
+        map_settings["_precomputed_current_time"] = time_key
+
     def set_attribution(self):
         attribution_text = self.config.G_MAP_CONFIG[self.config.G_MAP]["attribution"]
+        overlay_type = self.overlay_order[self.overlay_index]
         map_settings = None
-        if self.overlay_index == self.overlay_order_index["HEATMAP"]:
-            map_settings = self.config.G_HEATMAP_OVERLAY_MAP_CONFIG[
-                self.config.G_HEATMAP_OVERLAY_MAP
-            ]
-        elif self.overlay_index == self.overlay_order_index["RAIN"]:
-            map_settings = self.config.G_RAIN_OVERLAY_MAP_CONFIG[
-                self.config.G_RAIN_OVERLAY_MAP
-            ]
-        elif self.overlay_index == self.overlay_order_index["WIND"]:
-            map_settings = self.config.G_WIND_OVERLAY_MAP_CONFIG[
-                self.config.G_WIND_OVERLAY_MAP
-            ]
+        map_config, map_name = self._get_overlay_map_config_and_name(overlay_type)
+        if map_config and map_name in map_config:
+            map_settings = map_config[map_name]
         if map_settings is not None:
             split_char = "<br />"
             attribution_text += f"{split_char}{map_settings['attribution']}"
@@ -163,13 +173,15 @@ class MapOverlayMixin:
             if extra_text:
                 attribution_text += f" ({extra_text})"
 
+        attribution_html = (
+            '<div style="text-align: right; color: #000000; font-size: small;">'
+            + attribution_text
+            + "</div>"
+        )
+
         if attribution_text != self._last_attribution_text:
             self.map_attribution.setTextWidth(-1)
-            self.map_attribution.setHtml(
-                '<div style="text-align: right; color: #000000; font-size: small;">'
-                + attribution_text
-                + "</div>"
-            )
+            self.map_attribution.setHtml(attribution_html)
             text_width = self.map_attribution.boundingRect().width()
             if text_width > 0:
                 self.map_attribution.setTextWidth(text_width)
@@ -179,6 +191,11 @@ class MapOverlayMixin:
             self.map_attribution.setZValue(-100)
         else:
             self.map_attribution.setZValue(100)
+
+        self.update_fixed_attribution_label(
+            attribution_html=attribution_html,
+            visible=(attribution_text != ""),
+        )
 
     def add_attribution_extra_text(self, map_settings):
         overlay_type = self.overlay_order[self.overlay_index]
@@ -223,42 +240,45 @@ class MapOverlayMixin:
     @qasync.asyncSlot()
     async def update_overlay_time(self, goto_next=True):
         overlay_type = self.overlay_order[self.overlay_index]
-        if overlay_type not in ["WIND", "RAIN"]:
+        if not self._is_time_series_overlay(overlay_type):
             return
 
-        map_config = getattr(self.config, f"G_{overlay_type}_OVERLAY_MAP_CONFIG")
-        map_name = getattr(self.config, f"G_{overlay_type}_OVERLAY_MAP")
+        map_config, map_name = self._get_overlay_map_config_and_name(overlay_type)
+        if map_config is None or map_name is None:
+            return
         map_settings = map_config[map_name]
 
         time_key = "next_time" if goto_next else "prev_time"
         subdomain_key = "next_subdomain" if goto_next else "prev_subdomain"
         time_value = self.overlay_time[overlay_type].get(time_key)
+        if time_value is None:
+            return
 
-        if time_value is not None:
-            map_settings["validtime"] = time_value
-            if map_name.startswith("jpn_scw"):
-                map_settings["subdomain"] = self.overlay_time[overlay_type].get(
-                    subdomain_key
-                )
-            elif map_name.startswith("jpn_jma_bousai"):
-                basetime = self.maptile_with_values.get_jma_basetime_for_validtime(
-                    map_settings, time_value
-                )
-                if basetime:
-                    map_settings["basetime"] = basetime
-            await self.update_display()
-            await self.update_prev_next_overlay_time(
-                overlay_type,
-                map_config,
-                map_name,
-                skip_update=True,
+        map_settings["validtime"] = time_value
+        if map_name.startswith("jpn_scw"):
+            map_settings["subdomain"] = self.overlay_time[overlay_type].get(
+                subdomain_key
             )
+        elif map_name.startswith("jpn_jma_bousai"):
+            basetime = self.maptile_with_values.get_jma_basetime_for_validtime(
+                map_settings, time_value
+            )
+            if basetime:
+                map_settings["basetime"] = basetime
+        await self.update_display()
+        await self.update_prev_next_overlay_time(
+            overlay_type,
+            map_config,
+            map_name,
+            skip_update=True,
+        )
 
     async def draw_map_tile(self, x_start, x_end, y_start, y_end):
         p0 = {"x": min(x_start, x_end), "y": min(y_start, y_end)}
         p1 = {"x": max(x_start, x_end), "y": max(y_start, y_end)}
 
-        drawn_main_map = await self.draw_map_tile_by_overlay(
+        prev_main_signature = self._tile_view_signature.get(self.config.G_MAP)
+        await self.draw_map_tile_by_overlay(
             self.config.G_MAP_CONFIG,
             self.config.G_MAP,
             self.zoomlevel,
@@ -267,41 +287,30 @@ class MapOverlayMixin:
             overlay=False,
             use_mbtiles=self.config.G_MAP_CONFIG[self.config.G_MAP].get("use_mbtiles"),
         )
+        current_main_signature = self._tile_view_signature.get(self.config.G_MAP)
+        main_view_changed = prev_main_signature != current_main_signature
 
-        if self.overlay_index == self.overlay_order_index["HEATMAP"]:
-            await self.overlay_heatmap(drawn_main_map, p0, p1)
-        elif self.overlay_index == self.overlay_order_index["RAIN"]:
-            await self.overlay_rainmap(drawn_main_map, p0, p1)
-        elif self.overlay_index == self.overlay_order_index["WIND"]:
-            await self.overlay_windmap(drawn_main_map, p0, p1)
+        overlay_type = self.overlay_order[self.overlay_index]
+        if overlay_type == "HEATMAP":
+            map_config, map_name = self._get_overlay_map_config_and_name("HEATMAP")
+            if map_config and map_name:
+                await self.overlay_map(main_view_changed, p0, p1, map_config, map_name)
+            return
+        if not self._is_time_series_overlay(overlay_type):
+            return
 
-    async def overlay_heatmap(self, drawn_main_map, p0, p1):
-        await self.overlay_map(
-            drawn_main_map,
-            p0,
-            p1,
-            self.config.G_HEATMAP_OVERLAY_MAP_CONFIG,
-            self.config.G_HEATMAP_OVERLAY_MAP,
-        )
-
-    async def overlay_rainmap(self, drawn_main_map, p0, p1):
-        await self.overlay_map_internal(
-            overlay_type="RAIN",
-            drawn_main_map=drawn_main_map,
-            p0=p0,
-            p1=p1,
-            update_func=self.maptile_with_values.update_overlay_rainmap_timeline,
-        )
-
-    async def overlay_windmap(self, drawn_main_map, p0, p1):
+        update_funcs = {
+            "RAIN": self.maptile_with_values.update_overlay_rainmap_timeline,
+            "WIND": self.maptile_with_values.update_overlay_windmap_timeline,
+        }
         updated = await self.overlay_map_internal(
-            overlay_type="WIND",
-            drawn_main_map=drawn_main_map,
+            overlay_type=overlay_type,
+            main_view_changed=main_view_changed,
             p0=p0,
             p1=p1,
-            update_func=self.maptile_with_values.update_overlay_windmap_timeline,
+            update_func=update_funcs[overlay_type],
         )
-        if updated:
+        if overlay_type == "WIND" and updated:
             run_after(
                 a_func=self.course.get_course_wind,
                 b_func=self.add_course_wind,
@@ -310,16 +319,18 @@ class MapOverlayMixin:
     async def overlay_map_internal(
         self,
         overlay_type,
-        drawn_main_map,
+        main_view_changed,
         p0,
         p1,
         update_func,
     ) -> bool:
         """Return True only when display_time changes after the first initialization."""
 
-        map_config = getattr(self.config, f"G_{overlay_type}_OVERLAY_MAP_CONFIG")
-        map_name = getattr(self.config, f"G_{overlay_type}_OVERLAY_MAP")
+        map_config, map_name = self._get_overlay_map_config_and_name(overlay_type)
+        if map_config is None or map_name is None:
+            return False
         map_settings = map_config[map_name]
+        self._apply_precomputed_overlay_time(overlay_type, map_name, map_settings)
 
         await update_func(map_settings, map_name)
         # Compute new/prev display_time
@@ -332,7 +343,7 @@ class MapOverlayMixin:
 
         # If unchanged, just draw overlay and exit
         if not display_time_changed:
-            await self.overlay_map(drawn_main_map, p0, p1, map_config, map_name)
+            await self.overlay_map(main_view_changed, p0, p1, map_config, map_name)
             return False
 
         # Changed: record and reset tiles
@@ -343,13 +354,16 @@ class MapOverlayMixin:
         return prev_display_time is not None
 
     def reset_overlay(self, map_name):
+        self._clear_tile_items(self.config.G_MAP)
+        self._clear_tile_items(map_name)
         self.drawn_tile[self.config.G_MAP] = {}
         self.drawn_tile[map_name] = {}
         self.pre_zoomlevel[map_name] = np.nan
         self.set_attribution()
 
-    async def overlay_map(self, drawn_main_map, p0, p1, map_config, map_name):
-        if drawn_main_map:
+    async def overlay_map(self, main_view_changed, p0, p1, map_config, map_name):
+        if main_view_changed:
+            self._clear_tile_items(map_name)
             self.drawn_tile[map_name] = {}
 
         z = (
@@ -360,8 +374,14 @@ class MapOverlayMixin:
             )
             - 1
         )
-        if map_config[map_name]["min_zoomlevel"] <= z <= map_config[map_name]["max_zoomlevel"]:
-            await self.draw_map_tile_by_overlay(map_config, map_name, z, p0, p1, overlay=True)
+        if (
+            map_config[map_name]["min_zoomlevel"]
+            <= z
+            <= map_config[map_name]["max_zoomlevel"]
+        ):
+            await self.draw_map_tile_by_overlay(
+                map_config, map_name, z, p0, p1, overlay=True
+            )
         elif z > map_config[map_name]["max_zoomlevel"]:
             await self.draw_map_tile_by_overlay(
                 map_config,
@@ -379,12 +399,16 @@ class MapOverlayMixin:
     async def enable_overlay_time_and_button(self):
         overlay_type = self.overlay_order[self.overlay_index]
 
-        if overlay_type in ("WIND", "RAIN"):
-            map_config = getattr(self.config, f"G_{overlay_type}_OVERLAY_MAP_CONFIG")
-            map_name = getattr(self.config, f"G_{overlay_type}_OVERLAY_MAP")
-            await self.update_prev_next_overlay_time(overlay_type, map_config, map_name)
+        if self._is_time_series_overlay(overlay_type):
+            map_config, map_name = self._get_overlay_map_config_and_name(overlay_type)
+            if map_config and map_name:
+                await self.update_prev_next_overlay_time(
+                    overlay_type,
+                    map_config,
+                    map_name,
+                )
 
-        enabled = overlay_type in ("WIND", "RAIN")
+        enabled = self._is_time_series_overlay(overlay_type)
         if self.config.display.has_touch:
             self.buttons["prev_time"].setVisible(enabled)
             self.buttons["next_time"].setVisible(enabled)
@@ -407,11 +431,7 @@ class MapOverlayMixin:
                 break
 
             overlay_name = self.overlay_order[self.overlay_index]
-            if (
-                (overlay_name == "WIND" and self.config.G_USE_WIND_OVERLAY_MAP)
-                or (overlay_name == "RAIN" and self.config.G_USE_RAIN_OVERLAY_MAP)
-                or (overlay_name == "HEATMAP" and self.config.G_USE_HEATMAP_OVERLAY_MAP)
-            ):
+            if self._is_overlay_enabled(overlay_name):
                 break
 
         self.reset_map()
@@ -424,11 +444,8 @@ class MapOverlayMixin:
             self.reset_map()
 
     def enable_overlay_button(self):
-        if (
-            not self.config.G_USE_HEATMAP_OVERLAY_MAP
-            and not self.config.G_USE_RAIN_OVERLAY_MAP
-            and not self.config.G_USE_WIND_OVERLAY_MAP
-        ):
-            self.buttons["layers"].setEnabled(False)
-        else:
-            self.buttons["layers"].setEnabled(True)
+        has_overlay = any(
+            getattr(self.config, attr_name)
+            for attr_name in self._OVERLAY_ENABLED_ATTRS.values()
+        )
+        self.buttons["layers"].setEnabled(has_overlay)

@@ -14,6 +14,7 @@ from modules.pyqt.components.icons import (
     MapPrevIcon,
 )
 
+
 class MapButton(QtWidgets.QPushButton):
     STYLES = """
       QPushButton {
@@ -35,14 +36,21 @@ class MapButton(QtWidgets.QPushButton):
         self.setIconSize(QtCore.QSize(30, 30))
 
 
-class ZoomInButton(MapButton):
+class IconMapButton(MapButton):
+    ICON_CLASS = None
+
     def __init__(self, *args):
-        super().__init__(ZoomInIcon(color="black"), "", *args)
+        if self.ICON_CLASS is None:
+            raise ValueError("ICON_CLASS is not set")
+        super().__init__(self.ICON_CLASS(color="black"), "", *args)
 
 
-class ZoomOutButton(MapButton):
-    def __init__(self, *args):
-        super().__init__(ZoomOutIcon(color="black"), "", *args)
+class ZoomInButton(IconMapButton):
+    ICON_CLASS = ZoomInIcon
+
+
+class ZoomOutButton(IconMapButton):
+    ICON_CLASS = ZoomOutIcon
 
 
 class LockButton(MapButton):
@@ -50,7 +58,7 @@ class LockButton(MapButton):
         self.lock_icon = LockIcon(color="black")
         self.lock_open_icon = LockOpenIcon(color="black")
         super().__init__(self.lock_icon, "", *args)
-    
+
     def change_status(self, status):
         if status:
             self.setIcon(self.lock_icon)
@@ -58,39 +66,33 @@ class LockButton(MapButton):
             self.setIcon(self.lock_open_icon)
 
 
-class ArrowNorthButton(MapButton):
-    def __init__(self, *args):
-        super().__init__(ArrowNorthIcon(color="black"), "", *args)
+class ArrowNorthButton(IconMapButton):
+    ICON_CLASS = ArrowNorthIcon
 
 
-class ArrowSouthButton(MapButton):
-    def __init__(self, *args):
-        super().__init__(ArrowSouthIcon(color="black"), "", *args)
+class ArrowSouthButton(IconMapButton):
+    ICON_CLASS = ArrowSouthIcon
 
 
-class ArrowWestButton(MapButton):
-    def __init__(self, *args):
-        super().__init__(ArrowWestIcon(color="black"), "", *args)
+class ArrowWestButton(IconMapButton):
+    ICON_CLASS = ArrowWestIcon
 
 
-class ArrowEastButton(MapButton):
-    def __init__(self, *args):
-        super().__init__(ArrowEastIcon(color="black"), "", *args)
+class ArrowEastButton(IconMapButton):
+    ICON_CLASS = ArrowEastIcon
 
 
-class DirectionButton(MapButton):
-    def __init__(self, *args):
-        super().__init__(DirectionsIcon(color="black"), "", *args)
+class DirectionButton(IconMapButton):
+    ICON_CLASS = DirectionsIcon
 
 
-class MapLayersButton(MapButton):
-    def __init__(self, *args):
-        super().__init__(MapLayersIcon(color="black"), "", *args)
+class MapLayersButton(IconMapButton):
+    ICON_CLASS = MapLayersIcon
 
-class MapNextButton(MapButton):
-    def __init__(self, *args):
-        super().__init__(MapNextIcon(color="black"), "", *args)
 
-class MapPrevButton(MapButton):
-    def __init__(self, *args):
-        super().__init__(MapPrevIcon(color="black"), "", *args)
+class MapNextButton(IconMapButton):
+    ICON_CLASS = MapNextIcon
+
+
+class MapPrevButton(IconMapButton):
+    ICON_CLASS = MapPrevIcon
