@@ -36,6 +36,36 @@
 #define BHI3_MOTION_ON_COUNT 2U
 #define BHI3_MOTION_OFF_COUNT 6U
 #define BHI3_MOTION_SMOOTH_WINDOW_SAMPLES 50U
+#define BHI3_CALIB_DIR "log/bhi3"
+#define BHI3_CALIB_ACC_FILE BHI3_CALIB_DIR "/calib_acc.bin"
+#define BHI3_CALIB_GYRO_FILE BHI3_CALIB_DIR "/calib_gyro.bin"
+#define BHI3_CALIB_MAG_FILE BHI3_CALIB_DIR "/calib_mag.bin"
+#define BHI3_CALIB_SIC_FILE BHI3_CALIB_DIR "/sic_matrix.bin"
+#define BHI3_CALIB_COMPLETED 3U
+#define BHI3_CALIB_DIRTY 1U
+#define BHI3_BSX_BLOCK_NUMBER_MASK 0x7FU
+#define BHI3_CALIB_SLOT_ACC 0U
+#define BHI3_CALIB_SLOT_GYRO 1U
+#define BHI3_CALIB_SLOT_MAG 2U
+
+#ifndef BHI360_BSX_CALIBRATE_STATE_BASE
+#define BHI360_BSX_CALIBRATE_STATE_BASE UINT16_C(0x200)
+#endif
+#ifndef BHI360_BSX_SIC_MATRIX
+#define BHI360_BSX_SIC_MATRIX UINT16_C(0x27D)
+#endif
+#ifndef BHI360_BSX_STATE_BLOCK_LEN
+#define BHI360_BSX_STATE_BLOCK_LEN UINT8_C(64)
+#endif
+#ifndef BHI360_BSX_STATE_TRANSFER_COMPLETE
+#define BHI360_BSX_STATE_TRANSFER_COMPLETE UINT8_C(0x80)
+#endif
+#ifndef BHI360_BSX_STATE_MAX_BLOCKS
+#define BHI360_BSX_STATE_MAX_BLOCKS UINT8_C(20)
+#endif
+
+#define BHI3_BSX_MAX_PAYLOAD_BYTES \
+    ((uint32_t)BHI360_BSX_STATE_BLOCK_LEN * (uint32_t)BHI360_BSX_STATE_MAX_BLOCKS)
 
 static void parse_euler_data(const struct bhi360_fifo_parse_data_info *callback_info, void *callback_ref);
 static void parse_acc_data(const struct bhi360_fifo_parse_data_info *callback_info, void *callback_ref);
@@ -74,6 +104,21 @@ static uint64_t bhi3_s_sample_time_ns(const struct bhi360_fifo_parse_data_info *
 static int8_t bhi3_s_raw_log_open(const char *requested_path);
 static void bhi3_s_raw_log_write_row(void);
 static void bhi3_s_raw_log_close(void);
+static int8_t bhi3_s_calib_prepare_directory(void);
+static int8_t bhi3_s_calib_read_file(const char *path, uint8_t *buffer, uint32_t max_len, uint32_t *actual_len);
+static int8_t bhi3_s_calib_write_file(const char *path, const uint8_t *buffer, uint32_t actual_len);
+static const char *bhi3_s_calib_profile_path(uint8_t phys_sensor_id);
+static const char *bhi3_s_calib_profile_label(uint8_t phys_sensor_id);
+static uint16_t bhi3_s_calib_param_id(uint8_t phys_sensor_id);
+static int8_t bhi3_s_set_bsx_state_from_blob(uint16_t param_id, const uint8_t *state_data, uint32_t state_len);
+static int8_t bhi3_s_get_bsx_state_to_blob(uint16_t param_id, uint8_t *state_data, uint32_t max_len, uint32_t *actual_len);
+static int8_t bhi3_s_restore_param_from_file(uint16_t param_id,
+                                             const char *path,
+                                             const char *label,
+                                             bool missing_is_ok);
+static int8_t bhi3_s_save_param_to_file(uint16_t param_id, const char *path, const char *label);
+static void bhi3_s_restore_calibration_profiles(void);
+static void bhi3_s_try_save_calibration_profile(uint8_t phys_sensor_id, uint8_t accuracy);
 static int8_t bhi3_s_set_sensor_rate_with_fallback(uint8_t sensor_id,
                                                    struct bhi360_virtual_sensor_conf_param_conf *sensor_conf);
 
@@ -123,6 +168,8 @@ static uint8_t acc_accuracy_state = 0U;
 static uint8_t gravity_accuracy_state = 0U;
 static uint8_t linear_acc_accuracy_state = 0U;
 static uint8_t gyro_accuracy_state = 0U;
+static uint8_t mag_accuracy_state = 0U;
+static uint8_t calib_update_flags[3] = { 0U, 0U, 0U };
 static uint64_t ts_ori_sensor_ns = 0U;
 static uint64_t ts_lacc_sensor_ns = 0U;
 static uint64_t ts_gra_sensor_ns = 0U;
@@ -388,6 +435,7 @@ static int8_t bhi3_s_device_bootstrap(void)
     struct bhi360_virtual_sensor_conf_param_conf sensor_conf_eular = { 0 };
     struct bhi360_virtual_sensor_conf_param_conf sensor_conf_acc = { 0 };
     struct bhi360_virtual_sensor_conf_param_conf sensor_conf_gyro = { 0 };
+    struct bhi360_virtual_sensor_conf_param_conf sensor_conf_mag = { 0 };
     struct bhi360_virtual_sensor_conf_param_conf sensor_conf_gravity = { 0 };
     struct bhi360_virtual_sensor_conf_param_conf sensor_conf_linear_acc = { 0 };
     struct bhi360_virtual_sensor_conf_param_conf sensor_conf_temperature = { 0 };
@@ -606,6 +654,8 @@ static int8_t bhi3_s_device_bootstrap(void)
         return rslt;
     }
 
+    bhi3_s_restore_calibration_profiles();
+
     rslt = bhi3_s_set_sensor_rate_with_fallback(BHI360_SENSOR_ID_ORI, &sensor_conf_eular);
     if (rslt != BHI360_OK)
     {
@@ -654,6 +704,17 @@ static int8_t bhi3_s_device_bootstrap(void)
         close_interfaces(intf);
         return rslt;
     }
+
+    sensor_conf_mag.sample_rate = 1.0f;
+    sensor_conf_mag.latency = 0;
+    rslt = bhi360_virtual_sensor_conf_param_set_cfg(BHI360_SENSOR_ID_MAG, &sensor_conf_mag, &bhy);
+    if (rslt != BHI360_OK)
+    {
+        bhi3_s_report_api_error(rslt, &bhy);
+        close_interfaces(intf);
+        return rslt;
+    }
+    printf("Enable %s at %.2fHz.\r\n", get_sensor_name(BHI360_SENSOR_ID_MAG), sensor_conf_mag.sample_rate);
 
     rslt = bhi3_s_set_sensor_rate_with_fallback(BHI360_SENSOR_ID_BARO, &sensor_conf_pressure);
     if (rslt != BHI360_OK)
@@ -1216,6 +1277,439 @@ static void bhi3_s_raw_log_close(void)
     pthread_mutex_unlock(&raw_log_lock);
 }
 
+static int8_t bhi3_s_calib_prepare_directory(void)
+{
+    int err_no;
+
+    if ((mkdir("log", 0755) != 0) && (errno != EEXIST))
+    {
+        err_no = errno;
+        fprintf(stderr,
+                "[BHI3] Failed to create 'log' directory for calibration files (errno=%d: %s)\n",
+                err_no,
+                strerror(err_no));
+        return BHI360_E_IO;
+    }
+
+    if ((mkdir(BHI3_CALIB_DIR, 0755) != 0) && (errno != EEXIST))
+    {
+        err_no = errno;
+        fprintf(stderr,
+                "[BHI3] Failed to create '%s' directory for calibration files (errno=%d: %s)\n",
+                BHI3_CALIB_DIR,
+                err_no,
+                strerror(err_no));
+        return BHI360_E_IO;
+    }
+
+    return BHI360_OK;
+}
+
+static int8_t bhi3_s_calib_read_file(const char *path, uint8_t *buffer, uint32_t max_len, uint32_t *actual_len)
+{
+    FILE *file;
+    long file_size;
+    size_t read_size;
+
+    if ((path == NULL) || (buffer == NULL) || (actual_len == NULL))
+    {
+        return BHI360_E_NULL_PTR;
+    }
+
+    file = fopen(path, "rb");
+    if (file == NULL)
+    {
+        return BHI360_E_IO;
+    }
+
+    if (fseek(file, 0, SEEK_END) != 0)
+    {
+        fclose(file);
+        return BHI360_E_IO;
+    }
+
+    file_size = ftell(file);
+    if ((file_size < 0) || ((uint32_t)file_size > max_len))
+    {
+        fclose(file);
+        return BHI360_E_BUFFER;
+    }
+
+    if (fseek(file, 0, SEEK_SET) != 0)
+    {
+        fclose(file);
+        return BHI360_E_IO;
+    }
+
+    if (file_size == 0)
+    {
+        fclose(file);
+        *actual_len = 0U;
+        return BHI360_OK;
+    }
+
+    read_size = fread(buffer, sizeof(uint8_t), (size_t)file_size, file);
+    fclose(file);
+    if (read_size != (size_t)file_size)
+    {
+        return BHI360_E_IO;
+    }
+
+    *actual_len = (uint32_t)file_size;
+    return BHI360_OK;
+}
+
+static int8_t bhi3_s_calib_write_file(const char *path, const uint8_t *buffer, uint32_t actual_len)
+{
+    FILE *file;
+    size_t written_size;
+    int8_t rslt;
+
+    if ((path == NULL) || (buffer == NULL))
+    {
+        return BHI360_E_NULL_PTR;
+    }
+
+    if (actual_len == 0U)
+    {
+        return BHI360_E_INVALID_PARAM;
+    }
+
+    rslt = bhi3_s_calib_prepare_directory();
+    if (rslt != BHI360_OK)
+    {
+        return rslt;
+    }
+
+    file = fopen(path, "wb");
+    if (file == NULL)
+    {
+        return BHI360_E_IO;
+    }
+
+    written_size = fwrite(buffer, sizeof(uint8_t), actual_len, file);
+    fclose(file);
+    if (written_size != actual_len)
+    {
+        return BHI360_E_IO;
+    }
+
+    return BHI360_OK;
+}
+
+static const char *bhi3_s_calib_profile_path(uint8_t phys_sensor_id)
+{
+    switch (phys_sensor_id)
+    {
+        case BHI360_PHYS_SENSOR_ID_ACCELEROMETER:
+            return BHI3_CALIB_ACC_FILE;
+        case BHI360_PHYS_SENSOR_ID_GYROSCOPE:
+            return BHI3_CALIB_GYRO_FILE;
+        case BHI360_PHYS_SENSOR_ID_MAGNETOMETER:
+            return BHI3_CALIB_MAG_FILE;
+        default:
+            return NULL;
+    }
+}
+
+static const char *bhi3_s_calib_profile_label(uint8_t phys_sensor_id)
+{
+    switch (phys_sensor_id)
+    {
+        case BHI360_PHYS_SENSOR_ID_ACCELEROMETER:
+            return "accelerometer profile";
+        case BHI360_PHYS_SENSOR_ID_GYROSCOPE:
+            return "gyroscope profile";
+        case BHI360_PHYS_SENSOR_ID_MAGNETOMETER:
+            return "magnetometer profile";
+        default:
+            return NULL;
+    }
+}
+
+static uint16_t bhi3_s_calib_param_id(uint8_t phys_sensor_id)
+{
+    if (phys_sensor_id > BHI3_BSX_BLOCK_NUMBER_MASK)
+    {
+        return 0U;
+    }
+
+    return (uint16_t)(BHI360_BSX_CALIBRATE_STATE_BASE | phys_sensor_id);
+}
+
+static int8_t bhi3_s_set_bsx_state_from_blob(uint16_t param_id, const uint8_t *state_data, uint32_t state_len)
+{
+    bhi360_bsx_algo_param_state_exg bsx_state_exg[BHI360_BSX_STATE_MAX_BLOCKS] = { { 0 } };
+    uint32_t pos = 0U;
+    uint16_t block = 0U;
+    uint32_t remaining;
+
+    if (state_data == NULL)
+    {
+        return BHI360_E_NULL_PTR;
+    }
+
+    if ((state_len == 0U) || (state_len > BHI3_BSX_MAX_PAYLOAD_BYTES) || (state_len > UINT16_MAX))
+    {
+        return BHI360_E_BUFFER;
+    }
+
+    while ((pos < state_len) && (block < BHI360_BSX_STATE_MAX_BLOCKS))
+    {
+        remaining = state_len - pos;
+        bsx_state_exg[block].block_info = (uint8_t)(block & BHI3_BSX_BLOCK_NUMBER_MASK);
+        if (remaining <= BHI360_BSX_STATE_BLOCK_LEN)
+        {
+            bsx_state_exg[block].block_info |= BHI360_BSX_STATE_TRANSFER_COMPLETE;
+            bsx_state_exg[block].block_len = (uint8_t)remaining;
+        }
+        else
+        {
+            bsx_state_exg[block].block_len = BHI360_BSX_STATE_BLOCK_LEN;
+        }
+
+        bsx_state_exg[block].struct_len = (uint16_t)state_len;
+        memcpy(bsx_state_exg[block].state_data, &state_data[pos], bsx_state_exg[block].block_len);
+        pos += bsx_state_exg[block].block_len;
+        block++;
+    }
+
+    if (pos < state_len)
+    {
+        return BHI360_E_BUFFER;
+    }
+
+    return bhi360_bsx_algo_param_set_bsx_states(param_id, bsx_state_exg, &bhy);
+}
+
+static int8_t bhi3_s_get_bsx_state_to_blob(uint16_t param_id, uint8_t *state_data, uint32_t max_len, uint32_t *actual_len)
+{
+    bhi360_bsx_algo_param_state_exg bsx_state_exg[BHI360_BSX_STATE_MAX_BLOCKS] = { { 0 } };
+    uint32_t reported_len = 0U;
+    uint32_t copied_len = 0U;
+    int8_t rslt;
+    uint8_t block_len;
+
+    if ((state_data == NULL) || (actual_len == NULL))
+    {
+        return BHI360_E_NULL_PTR;
+    }
+
+    rslt = bhi360_bsx_algo_param_get_bsx_states(param_id, bsx_state_exg, sizeof(bsx_state_exg), &reported_len, &bhy);
+    if (rslt != BHI360_OK)
+    {
+        return rslt;
+    }
+
+    if (reported_len > max_len)
+    {
+        return BHI360_E_BUFFER;
+    }
+
+    for (uint16_t block = 0U; block < BHI360_BSX_STATE_MAX_BLOCKS; block++)
+    {
+        block_len = bsx_state_exg[block].block_len;
+        if (block_len > BHI360_BSX_STATE_BLOCK_LEN)
+        {
+            return BHI360_E_INVALID_PARAM;
+        }
+        if ((copied_len + block_len) > max_len)
+        {
+            return BHI360_E_BUFFER;
+        }
+
+        memcpy(&state_data[copied_len], bsx_state_exg[block].state_data, block_len);
+        copied_len += block_len;
+
+        if ((block_len == 0U) || ((bsx_state_exg[block].block_info & BHI360_BSX_STATE_TRANSFER_COMPLETE) != 0U))
+        {
+            break;
+        }
+    }
+
+    if ((reported_len != 0U) && (reported_len <= copied_len))
+    {
+        *actual_len = reported_len;
+    }
+    else
+    {
+        *actual_len = copied_len;
+    }
+
+    return BHI360_OK;
+}
+
+static int8_t bhi3_s_restore_param_from_file(uint16_t param_id,
+                                            const char *path,
+                                            const char *label,
+                                            bool missing_is_ok)
+{
+    uint8_t state_data[BHI3_BSX_MAX_PAYLOAD_BYTES] = { 0 };
+    uint32_t actual_len = 0U;
+    int8_t rslt;
+
+    if ((path == NULL) || (label == NULL))
+    {
+        return BHI360_E_NULL_PTR;
+    }
+
+    if ((access(path, F_OK) != 0) && missing_is_ok)
+    {
+        return BHI360_OK;
+    }
+
+    rslt = bhi3_s_calib_read_file(path, state_data, sizeof(state_data), &actual_len);
+    if (rslt != BHI360_OK)
+    {
+        fprintf(stderr, "[BHI3] Failed to read %s from '%s' (err=%d)\n", label, path, rslt);
+        return rslt;
+    }
+
+    if (actual_len == 0U)
+    {
+        fprintf(stderr, "[BHI3] %s file '%s' is empty.\n", label, path);
+        return BHI360_E_INVALID_PARAM;
+    }
+
+    rslt = bhi3_s_set_bsx_state_from_blob(param_id, state_data, actual_len);
+    if (rslt == BHI360_OK)
+    {
+        printf("[BHI3] Restored %s from '%s' (%" PRIu32 " bytes).\n", label, path, actual_len);
+    }
+    else
+    {
+        bhi3_s_report_api_error(rslt, &bhy);
+        fprintf(stderr, "[BHI3] Failed to restore %s from '%s' (err=%d)\n", label, path, rslt);
+    }
+
+    return rslt;
+}
+
+static int8_t bhi3_s_save_param_to_file(uint16_t param_id, const char *path, const char *label)
+{
+    uint8_t state_data[BHI3_BSX_MAX_PAYLOAD_BYTES] = { 0 };
+    uint32_t actual_len = 0U;
+    int8_t rslt;
+
+    if ((path == NULL) || (label == NULL))
+    {
+        return BHI360_E_NULL_PTR;
+    }
+
+    rslt = bhi3_s_get_bsx_state_to_blob(param_id, state_data, sizeof(state_data), &actual_len);
+    if (rslt != BHI360_OK)
+    {
+        bhi3_s_report_api_error(rslt, &bhy);
+        fprintf(stderr, "[BHI3] Failed to read %s from device (err=%d)\n", label, rslt);
+        return rslt;
+    }
+
+    rslt = bhi3_s_calib_write_file(path, state_data, actual_len);
+    if (rslt != BHI360_OK)
+    {
+        fprintf(stderr, "[BHI3] Failed to write %s to '%s' (err=%d)\n", label, path, rslt);
+        return rslt;
+    }
+
+    printf("[BHI3] Saved %s to '%s' (%" PRIu32 " bytes).\n", label, path, actual_len);
+    return BHI360_OK;
+}
+
+static void bhi3_s_restore_calibration_profiles(void)
+{
+    static const uint8_t phys_sensors[] = {
+        BHI360_PHYS_SENSOR_ID_ACCELEROMETER,
+        BHI360_PHYS_SENSOR_ID_GYROSCOPE,
+        BHI360_PHYS_SENSOR_ID_MAGNETOMETER,
+    };
+    int8_t rslt;
+
+    rslt = bhi3_s_calib_prepare_directory();
+    if (rslt != BHI360_OK)
+    {
+        return;
+    }
+
+    for (uint8_t idx = 0U; idx < (uint8_t)(sizeof(phys_sensors) / sizeof(phys_sensors[0])); idx++)
+    {
+        uint8_t phys_sensor_id = phys_sensors[idx];
+        const char *path = bhi3_s_calib_profile_path(phys_sensor_id);
+        const char *label = bhi3_s_calib_profile_label(phys_sensor_id);
+        uint16_t param_id = bhi3_s_calib_param_id(phys_sensor_id);
+        if ((path == NULL) || (label == NULL) || (param_id == 0U))
+        {
+            continue;
+        }
+
+        (void)bhi3_s_restore_param_from_file(param_id, path, label, true);
+    }
+
+    /* SIC matrix restore is intentionally disabled.
+     * Keep calibration profile restore enabled.
+     */
+    // rslt = bhi3_s_restore_param_from_file(BHI360_BSX_SIC_MATRIX, BHI3_CALIB_SIC_FILE, "sic matrix", true);
+    // if (rslt != BHI360_OK)
+    // {
+    //     fprintf(stderr, "[BHI3] SIC matrix restore skipped (err=%d)\n", rslt);
+    // }
+}
+
+static void bhi3_s_try_save_calibration_profile(uint8_t phys_sensor_id, uint8_t accuracy)
+{
+    uint8_t slot;
+    int8_t rslt;
+    const char *path = bhi3_s_calib_profile_path(phys_sensor_id);
+    const char *label = bhi3_s_calib_profile_label(phys_sensor_id);
+    uint16_t param_id = bhi3_s_calib_param_id(phys_sensor_id);
+
+    if ((accuracy != BHI3_CALIB_COMPLETED) || (path == NULL) || (label == NULL) || (param_id == 0U))
+    {
+        return;
+    }
+
+    switch (phys_sensor_id)
+    {
+        case BHI360_PHYS_SENSOR_ID_ACCELEROMETER:
+            slot = BHI3_CALIB_SLOT_ACC;
+            break;
+        case BHI360_PHYS_SENSOR_ID_GYROSCOPE:
+            slot = BHI3_CALIB_SLOT_GYRO;
+            break;
+        case BHI360_PHYS_SENSOR_ID_MAGNETOMETER:
+            slot = BHI3_CALIB_SLOT_MAG;
+            break;
+        default:
+            return;
+    }
+
+    if (calib_update_flags[slot] != BHI3_CALIB_DIRTY)
+    {
+        return;
+    }
+
+    rslt = bhi3_s_save_param_to_file(param_id, path, label);
+    if (rslt == BHI360_OK)
+    {
+        calib_update_flags[slot] = 0U;
+    }
+    else
+    {
+        return;
+    }
+
+    /* SIC matrix save is intentionally disabled.
+     * Keep calibration profile save enabled.
+     */
+    // if (phys_sensor_id == BHI360_PHYS_SENSOR_ID_MAGNETOMETER)
+    // {
+    //     rslt = bhi3_s_save_param_to_file(BHI360_BSX_SIC_MATRIX, BHI3_CALIB_SIC_FILE, "sic matrix");
+    //     if (rslt != BHI360_OK)
+    //     {
+    //         fprintf(stderr, "[BHI3] SIC matrix save skipped (err=%d)\n", rslt);
+    //     }
+    // }
+}
+
 static int8_t bhi3_s_set_sensor_rate_with_fallback(uint8_t sensor_id,
                                                    struct bhi360_virtual_sensor_conf_param_conf *sensor_conf)
 {
@@ -1265,6 +1759,8 @@ static void bhi3_s_reset_local_data(void)
     gravity_accuracy_state = 0U;
     linear_acc_accuracy_state = 0U;
     gyro_accuracy_state = 0U;
+    mag_accuracy_state = 0U;
+    memset(calib_update_flags, 0, sizeof(calib_update_flags));
 
     ts_ori_sensor_ns = 0U;
     ts_lacc_sensor_ns = 0U;
@@ -1663,6 +2159,10 @@ static void parse_meta_event(const struct bhi360_fifo_parse_data_info *callback_
             printf("%s Power mode changed for sensor id %u (%s)\r\n", event_text, byte1, get_sensor_name(byte1));
             break;
         case BHI360_META_EVENT_SENSOR_STATUS:
+        {
+            uint8_t prev_accuracy = 0U;
+            uint8_t save_phys_sensor_id = 0U;
+
             printf("%s Accuracy for sensor id %u (%s) changed to %u (%s)\r\n", event_text, byte1, get_sensor_name(byte1), byte2, get_sensor_name(byte2));
             switch (byte1)
             {
@@ -1675,8 +2175,16 @@ static void parse_meta_event(const struct bhi360_fifo_parse_data_info *callback_
                 case BHI360_SENSOR_ID_ACC_WU:
                 case BHI360_SENSOR_ID_ACC_RAW:
                 case BHI360_SENSOR_ID_ACC_RAW_WU:
+                case BHI360_SENSOR_ID_ACC_BIAS:
+                case BHI360_SENSOR_ID_ACC_BIAS_WU:
+                    prev_accuracy = acc_accuracy_state;
                     acc_accuracy_state = byte2;
                     bhi3_s_datas.acc_accuracy = acc_accuracy_state;
+                    save_phys_sensor_id = BHI360_PHYS_SENSOR_ID_ACCELEROMETER;
+                    if ((byte2 == BHI3_CALIB_COMPLETED) && (prev_accuracy != BHI3_CALIB_COMPLETED))
+                    {
+                        calib_update_flags[BHI3_CALIB_SLOT_ACC] = BHI3_CALIB_DIRTY;
+                    }
                     break;
                 case BHI360_SENSOR_ID_GRA:
                 case BHI360_SENSOR_ID_GRA_WU:
@@ -1692,13 +2200,42 @@ static void parse_meta_event(const struct bhi360_fifo_parse_data_info *callback_
                 case BHI360_SENSOR_ID_GYRO_WU:
                 case BHI360_SENSOR_ID_GYRO_RAW:
                 case BHI360_SENSOR_ID_GYRO_RAW_WU:
+                case BHI360_SENSOR_ID_GYRO_BIAS:
+                case BHI360_SENSOR_ID_GYRO_BIAS_WU:
+                    prev_accuracy = gyro_accuracy_state;
                     gyro_accuracy_state = byte2;
                     bhi3_s_datas.gyro_accuracy = gyro_accuracy_state;
+                    save_phys_sensor_id = BHI360_PHYS_SENSOR_ID_GYROSCOPE;
+                    if ((byte2 == BHI3_CALIB_COMPLETED) && (prev_accuracy != BHI3_CALIB_COMPLETED))
+                    {
+                        calib_update_flags[BHI3_CALIB_SLOT_GYRO] = BHI3_CALIB_DIRTY;
+                    }
+                    break;
+                case BHI360_SENSOR_ID_MAG:
+                case BHI360_SENSOR_ID_MAG_WU:
+                case BHI360_SENSOR_ID_MAG_RAW:
+                case BHI360_SENSOR_ID_MAG_RAW_WU:
+                case BHI360_SENSOR_ID_MAG_BIAS:
+                case BHI360_SENSOR_ID_MAG_BIAS_WU:
+                    prev_accuracy = mag_accuracy_state;
+                    mag_accuracy_state = byte2;
+                    save_phys_sensor_id = BHI360_PHYS_SENSOR_ID_MAGNETOMETER;
+                    if ((byte2 == BHI3_CALIB_COMPLETED) && (prev_accuracy != BHI3_CALIB_COMPLETED))
+                    {
+                        calib_update_flags[BHI3_CALIB_SLOT_MAG] = BHI3_CALIB_DIRTY;
+                    }
                     break;
                 default:
                     break;
             }
+
+            if (save_phys_sensor_id != 0U)
+            {
+                bhi3_s_try_save_calibration_profile(save_phys_sensor_id, byte2);
+            }
+
             break;
+        }
         case BHI360_META_EVENT_SENSOR_ERROR:
             printf("%s Sensor id %u (%s) reported error 0x%02X\r\n", event_text, byte1, get_sensor_name(byte1), byte2);
             break;
