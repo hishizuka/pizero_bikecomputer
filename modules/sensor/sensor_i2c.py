@@ -187,6 +187,7 @@ class SensorI2C(Sensor):
             if self.values_mod["mag_min"] is not None and self.values_mod["mag_max"] is not None:
                 self.calc_mag_scales()
         else:
+            self.mag_calib_ready = False
             self.values_mod["mag_min"] = None
             self.values_mod["mag_max"] = None
             self.raw_mags = []
@@ -406,6 +407,8 @@ class SensorI2C(Sensor):
             self.values[key] = np.nan
         for key in self.elements_vec:
             self.values[key] = np.zeros(3)
+        self.values["mag_scale"] = np.ones(3)
+        self.mag_calib_ready = False
         # for LP filter
         for key in self.elements:
             self.pre_value[key] = np.nan
@@ -448,6 +451,12 @@ class SensorI2C(Sensor):
         self.timestamp_size *= int(1 / self.config.G_I2C_INTERVAL)
         self.timestamp_array = [None] * self.timestamp_size
         self.vspeed_array = [np.nan] * self.vspeed_window_size
+
+        if (
+            self.values_mod.get("mag_min") is not None
+            and self.values_mod.get("mag_max") is not None
+        ):
+            self.calc_mag_scales()
 
         self._bhi3_raw_data_record_status = "INIT"
 
@@ -748,7 +757,6 @@ class SensorI2C(Sensor):
                 or self.available_sensors["MOTION"].get("BMM150")
                 or self.available_sensors["MOTION"].get("BMM350")
                 or self.available_sensors["MOTION"].get("LIS3MDL")
-                or self.available_sensors["MOTION"].get("LSM303_ORIG")
             ):
                 self.values["mag_raw"] = np.array(self.sensor["i2c_mag"].magnetic)
             elif (
@@ -763,7 +771,8 @@ class SensorI2C(Sensor):
             elif self.available_sensors["MOTION"].get("BNO055"):
                 # sometimes BNO055 returns [None, None, None] array occurs
                 self.values["mag_raw"] = np.array(self.sensor["i2c_imu"].magnetic) / 1.0
-        except:
+        except Exception as e:
+            app_logger.debug("read_mag error: %s", e)
             return
         self.values["mag_raw"] = self.change_axis(self.values["mag_raw"], is_mag=True)
 
@@ -771,30 +780,10 @@ class SensorI2C(Sensor):
 
         # calibration(hard/soft iron distortion)
         if self.config.G_IMU_CALIB["MAG"]:
-            if self.values_mod["mag_min"] is None or self.values_mod["mag_max"] is None:
-                pre_min = np.full(3, np.inf)
-                pre_max = np.full(3, -np.inf)
-            else:
-                pre_min = self.values_mod["mag_min"].copy()
-                pre_max = self.values_mod["mag_max"].copy()
-
-            self.values_mod["mag_min"] = np.minimum(pre_min, self.values["mag_mod"])
-            self.values_mod["mag_max"] = np.maximum(pre_max, self.values["mag_mod"])
-
-            # store
-            update_mag_min_max = False
-            for pre, k in zip((pre_min, pre_max), ("mag_min", "mag_max")):
-                if np.any(pre != self.values_mod[k]):
-                    update_mag_min_max = True
-                    self.config.state.set_value(
-                        k + "_" + self.sensor_label["MAG"], self.values_mod[k]
-                    )
-                    app_logger.info(f"update {k}: {self.values_mod[k]}")
-            if update_mag_min_max:
-                self.calc_mag_scales()
+            self.update_mag_calibration(self.values["mag_mod"])
             self.raw_mags.append(list(self.values["mag_raw"]))
 
-        if all((all(self.values_mod["mag_min"]), all(self.values_mod["mag_max"]))):
+        if self.mag_calib_ready:
             # hard iron distortion: - self.values['mag_center']
             # soft iron distortion: * self.values['mag_scale']
             self.values["mag_mod"] = (self.values["mag_mod"] - self.values['mag_center']) * self.values['mag_scale']
@@ -808,8 +797,108 @@ class SensorI2C(Sensor):
     def calc_mag_scales(self):
         self.values['mag_center'] = (self.values_mod["mag_max"] + self.values_mod["mag_min"]) / 2
         axis = (self.values_mod["mag_max"] - self.values_mod["mag_min"]) / 2
-        if not np.any(axis == 0):
-            self.values['mag_scale'] = np.mean(axis) / axis
+        if np.any(np.isnan(axis)):
+            self.mag_calib_ready = False
+            return
+
+        positive_axis = axis > 0
+        if not np.any(positive_axis):
+            self.mag_calib_ready = False
+            return
+
+        mag_scale = np.ones(3)
+        mag_scale[positive_axis] = np.mean(axis[positive_axis]) / axis[positive_axis]
+        self.values['mag_scale'] = mag_scale
+        self.mag_calib_ready = True
+
+    def update_mag_calibration(self, mag_sample):
+        # Keep about 60 seconds of samples at 10 Hz (--calib_mag uses 0.1 s interval).
+        # This is long enough to capture most orientations while allowing outliers to age out.
+        mag_calib_window_size = 600
+        # Reject single-frame jumps that are unlikely to come from real orientation change.
+        # Earth field is typically ~25-65 uT, so a 0.1 s jump above these values is likely a glitch.
+        mag_calib_jump_norm_threshold = 200.0  # [uT]
+        mag_calib_jump_axis_threshold = 150.0  # [uT]
+
+        if (
+            not hasattr(self, "mag_calib_window")
+            or self.mag_calib_window.shape[0] != mag_calib_window_size
+        ):
+            self.mag_calib_window = np.full((mag_calib_window_size, 3), np.nan)
+            self.mag_calib_window_idx = 0
+            self.mag_calib_window_count = 0
+            self.mag_calib_prev_sample = None
+            self.mag_calib_reject_count = 0
+
+        if not self.accept_mag_calibration_sample(
+            mag_sample,
+            mag_calib_jump_norm_threshold,
+            mag_calib_jump_axis_threshold,
+        ):
+            self.mag_calib_reject_count = getattr(self, "mag_calib_reject_count", 0) + 1
+            if self.mag_calib_reject_count % 50 == 0:
+                app_logger.debug(
+                    "mag calib outlier rejects: %d",
+                    self.mag_calib_reject_count,
+                )
+            return
+
+        self.mag_calib_window[self.mag_calib_window_idx] = mag_sample
+        self.mag_calib_window_idx = (
+            self.mag_calib_window_idx + 1
+        ) % mag_calib_window_size
+        self.mag_calib_window_count = min(
+            self.mag_calib_window_count + 1, mag_calib_window_size
+        )
+
+        history = self.mag_calib_window[: self.mag_calib_window_count]
+        pre_min = self.values_mod.get("mag_min")
+        pre_max = self.values_mod.get("mag_max")
+        if pre_min is None:
+            pre_min = np.full(3, np.inf)
+        if pre_max is None:
+            pre_max = np.full(3, -np.inf)
+
+        self.values_mod["mag_min"] = np.min(history, axis=0)
+        self.values_mod["mag_max"] = np.max(history, axis=0)
+
+        # store
+        update_mag_min_max = False
+        for pre, k in zip((pre_min, pre_max), ("mag_min", "mag_max")):
+            if np.any(pre != self.values_mod[k]):
+                update_mag_min_max = True
+                self.config.state.set_value(
+                    k + "_" + self.sensor_label["MAG"], self.values_mod[k]
+                )
+                app_logger.info(f"update {k}: {self.values_mod[k]}")
+        if update_mag_min_max:
+            self.calc_mag_scales()
+
+    def accept_mag_calibration_sample(
+        self,
+        mag_sample,
+        jump_norm_threshold,
+        jump_axis_threshold,
+    ):
+        if np.any(np.isnan(mag_sample)) or not np.all(np.isfinite(mag_sample)):
+            return False
+
+        prev_sample = getattr(self, "mag_calib_prev_sample", None)
+        if prev_sample is None:
+            self.mag_calib_prev_sample = mag_sample.copy()
+            return True
+
+        delta = mag_sample - prev_sample
+        jump_norm = np.linalg.norm(delta)
+        jump_axis = np.max(np.abs(delta))
+        if (
+            jump_norm > jump_norm_threshold
+            or jump_axis > jump_axis_threshold
+        ):
+            return False
+
+        self.mag_calib_prev_sample = mag_sample.copy()
+        return True
 
     def read_quaternion(self):
         if not self.motion_sensor["QUATERNION"]:
