@@ -628,7 +628,9 @@ class SensorCore:
             self.values["integrated"]["speed"] = spd
             self.values["integrated"]["cadence"] = cdc
             self.values["integrated"]["power"] = pwr
-            self.values["integrated"]["normalized_power"] = npwr
+            # NP represents overall ride intensity; keep last value during stops.
+            if not np.isnan(npwr):
+                self.values["integrated"]["normalized_power"] = npwr
             self.values["integrated"]["distance"] += dst_diff["USE"]
             self.values["integrated"]["accumulated_power"] += ttlwork_diff
             self.values["integrated"]["grade"] = grade
