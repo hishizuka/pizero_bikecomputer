@@ -540,13 +540,15 @@ class SensorI2C(Sensor):
         self.values["heading"] = self.values["raw_heading"]
         self.values["heading_str"] = get_track_str(self.values["heading"])
 
-        # Keep the current bike-frame mapping while using filtered BHI360 values.
-        # pitch: the x-axis of acceleration and the sign are opposite.
-        # roll : same as acc y: to West (up rotation is plus)
+        # BHI360 is currently mounted 90 degrees off from the intended frame.
+        # Map BHI roll -> bike pitch (look down is plus),
+        # and BHI pitch -> bike roll with the same sign trend.
         self.values["pitch"] = math.radians(
-            -1 * ((float(imu.roll) + 360) % 360 - 180)
+            ((float(imu.roll) + 360) % 360 - 180)
         )
-        self.values["roll"] = math.radians(float(imu.pitch))
+        self.values["roll"] = math.radians(
+            ((float(imu.pitch) + 180) % 360 - 180)
+        )
         self.values["grade_pitch"] = 100 * math.tan(self.values["pitch"])
 
     def read_light(self):
