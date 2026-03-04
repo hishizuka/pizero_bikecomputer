@@ -49,7 +49,9 @@ static void my_spi_open(const char *device);
 #endif
 static void my_i2c_open(const char *device, uint8_t addr);
 
+#ifndef BHI3_USE_I2C
 static uint8_t spi_mode = SPI_MODE_0;
+#endif
 static uint8_t bits_per_word = 8;
 static uint32_t spi_speed = 1000000; // 1MHz
 //static uint32_t spi_speed = 10000000; // 10MHz
