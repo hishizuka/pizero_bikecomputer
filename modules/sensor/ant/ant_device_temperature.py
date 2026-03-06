@@ -6,7 +6,7 @@ from . import ant_device
 
 class ANT_Device_Temperature(ant_device.ANT_Device):
     ant_config = {
-        "interval": (8192, 65535, 65535),
+        "interval": (65535, 65535, 65535),  # 8192 for 4Hz, 65535 for 0.5Hz
         "type": 0x19,
         "transmission_type": 0x00,
         "channel_type": 0x00,  # Channel.Type.BIDIRECTIONAL_RECEIVE,

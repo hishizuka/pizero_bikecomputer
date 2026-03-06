@@ -17,7 +17,7 @@ class LightState(StrEnum):
 
 class ANT_Device_Light(ant_device.ANT_Device):
     ant_config = {
-        "interval": (4084, 16336, 32672),  # 4084 / 8168 / 16336 / 32672
+        "interval": (4084, 8168, 16336),  # 4084 for 8.02Hz / 8168 / 16336 / 32672
         "type": 0x23,
         "transmission_type": 0x00,
         "channel_type": 0x00,  # Channel.Type.BIDIRECTIONAL_RECEIVE,

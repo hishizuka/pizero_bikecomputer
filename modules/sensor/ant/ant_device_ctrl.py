@@ -7,7 +7,7 @@ from . import ant_device
 
 class ANT_Device_CTRL(ant_device.ANT_Device):
     ant_config = {
-        "interval": (8192, 16384, 16384),  # 8192, 16384, 32768
+        "interval": (8192, 16384, 32768),  # 8192, 16384, 32768
         "type": 0x10,
         "transmission_type": 0x05,
         "channel_type": 0x10,  # Channel.Type.BIDIRECTIONAL_TRANSMIT,
