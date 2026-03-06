@@ -1,0 +1,5 @@
+from setuptools import Extension
+
+
+def make_ext(modname, pyxfilename):
+    return Extension(modname, [pyxfilename], extra_compile_args=["-O3"])

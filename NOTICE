@@ -43,3 +43,20 @@ and licensed under the BSD 3-Clause License:
 - modules/sensor/i2c/cython/bhi360_shuttle_board_3/common.h
 
 The full text of the BSD 3-Clause License is available at the top of the source file.
+
+---
+
+This project also includes code adapted from a MIT licensed project.
+
+Portions of the code in the following files are
+adapted from crdp by Ran Bi
+(https://github.com/biran0079/crdp),
+vendored from the hishizuka/crdp fork
+(https://github.com/hishizuka/crdp, commit 9359b0ba5a89efca4d30f306dfb250d972d301d8),
+and licensed under the MIT License:
+
+- modules/utils/crdp.py
+- modules/utils/_crdp.pyx
+
+The full text of the MIT License is available at:
+third_party/mit/LICENSE.MIT

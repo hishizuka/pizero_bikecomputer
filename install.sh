@@ -100,7 +100,7 @@ sudo apt upgrade -y
 # install essential packages
 echo "🔧 Installing core packages..."
 # trixie
-sudo apt install -y git cython3 cmake python3-setuptools python3.13-venv python3-numpy sqlite3 libsqlite3-dev python3-pil python3-aiohttp python3-aiofiles python3-psutil
+sudo apt install -y git cython3 cmake python3-setuptools python3.13-venv python3-numpy sqlite3 libsqlite3-dev python3-pil python3-aiohttp python3-psutil
 echo "✅ Core packages installed."
 
 cd
@@ -122,7 +122,7 @@ fi
 # Install additional requirements
 echo "🔧 Installing core pip packages..."
 # essential
-pip install oyaml polyline git+https://github.com/hishizuka/crdp.git
+pip install oyaml polyline
 echo "✅ Core pip packages installed successfully."
 
 if command -v raspi-config >/dev/null 2>&1; then

@@ -255,6 +255,11 @@ This project also includes code ported and modified from Bosch Sensortec GmbH's 
   - modules/sensor/i2c/cython/bhi360_shuttle_board_3/common.c
   - modules/sensor/i2c/cython/bhi360_shuttle_board_3/common.h
 
+This project also includes code vendored from `hishizuka/crdp`, which is based on the original `biran0079/crdp` project by Ran Bi, under the MIT License. See the NOTICE file for details.
+- [hishizuka/crdp](https://github.com/hishizuka/crdp)
+  - modules/utils/crdp.py
+  - modules/utils/_crdp.pyx
+
 
 # Author
 

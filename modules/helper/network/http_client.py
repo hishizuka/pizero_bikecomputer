@@ -2,13 +2,17 @@ import asyncio
 from datetime import datetime
 from typing import Iterable
 
-import aiofiles
 import aiohttp
 
 from modules.app_logger import app_logger
 
 
 DEFAULT_COROUTINE_SEM = 100
+
+
+def _write_binary_file(save_path, data):
+    with open(save_path, mode="wb") as file_handle:
+        file_handle.write(data)
 
 
 async def get_json(url, params=None, headers=None, timeout=30):
@@ -56,8 +60,8 @@ async def _get_http_request(session, url, save_path, headers, params, semaphore,
                     )
                     return response_code
 
-                async with aiofiles.open(save_path, mode="wb") as file_handle:
-                    await file_handle.write(await dl_file.read())
+                data = await dl_file.read()
+                await asyncio.to_thread(_write_binary_file, save_path, data)
         except asyncio.CancelledError:
             pass
         except Exception as exc:

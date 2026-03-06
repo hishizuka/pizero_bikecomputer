@@ -49,12 +49,10 @@ Please build a python virtual environment since the pip command is used.
 ```
 # mac
 $ brew install pyqt numpy cython python-setuptools pillow sqlite3
-$ pip install pyqtgraph oyaml polyline aiohttp aiofiles qasync
+$ pip install pyqtgraph oyaml polyline aiohttp qasync
 # or linux (Debian)
-$ pip install PyQt6 numpy cython setuptools pillow pyqtgraph oyaml polyline aiohttp aiofiles qasync
+$ pip install PyQt6 numpy cython setuptools pillow pyqtgraph oyaml polyline aiohttp qasync
 $ sudo apt install sqlite3 libsqlite3-dev
-
-$ pip install git+https://github.com/hishizuka/crdp.git
 
 # (optional) If you want to try the upload to cloud feature.
 $ pip garminconnect stravacookies tb-mqtt-client
@@ -62,6 +60,9 @@ $ pip garminconnect stravacookies tb-mqtt-client
 $ git clone https://github.com/hishizuka/pizero_bikecomputer.git
 $ cd pizero_bikecomputer
 ```
+
+The RDP implementation from `hishizuka/crdp` is vendored in this repository,
+so no separate `crdp` installation is required.
 
 ## Raspberry Pi OS
 
@@ -94,18 +95,21 @@ Install in the home directory of default user "pi". Also, your Raspberry Pi is c
 ```
 $ cd
 
-$ sudo apt install -y git python3-venv python3-yaml cython3 cmake python3-numpy sqlite3 libsqlite3-dev python3-pil python3-aiohttp python3-aiofiles python3-psutil python3-pyqt6 python3-pyqt6.qtsvg pyqt6-dev-tools
+$ sudo apt install -y git python3-venv python3-yaml cython3 cmake python3-numpy sqlite3 libsqlite3-dev python3-pil python3-aiohttp python3-psutil python3-pyqt6 python3-pyqt6.qtsvg pyqt6-dev-tools
 
 # If there is no python virtual environment.
 $ python -m venv --system-site-packages ~/.venv
 $ source ~/.venv/bin/activate
 $ echo "source ~/.venv/bin/activate" >> ~/.bashrc
 
-$ pip install oyaml polyline qasync pyqtgraph git+https://github.com/hishizuka/crdp.git
+$ pip install oyaml polyline qasync pyqtgraph
 
 $ git clone https://github.com/hishizuka/pizero_bikecomputer.git
 $ cd pizero_bikecomputer
 ```
+
+The RDP implementation from `hishizuka/crdp` is vendored in this repository,
+so no separate `crdp` installation is required.
 
 ### Bluetooth and Cloud
 
