@@ -592,6 +592,23 @@ class MapTileWithValues():
                 tiles.append([tile_x + x_delta - 1, tile_y + y_delta - 1])
         return tiles
 
+    @staticmethod
+    def _decode_dem_altitude(rgb_pos, map_name):
+        r, g, b = int(rgb_pos[0]), int(rgb_pos[1]), int(rgb_pos[2])
+        value = (r << 16) | (g << 8) | b
+
+        if map_name.startswith("jpn_kokudo_chiri_in_DEM"):
+            if value < (1 << 23):
+                return round(value * 0.01, 1)
+            if value == (1 << 23):
+                return np.nan
+            return round((value - (1 << 24)) * 0.01, 1)
+        if map_name.startswith("mapbox_terrain"):
+            return round(-10000 + (value * 0.1), 1)
+        if map_name.startswith("mapterhorn"):
+            return round((value / 256.0) - 32768.0, 1)
+        return np.nan
+
     def check_existing_tiles(self, filename):
         return self.existing_tiles.get(filename, False)
 
@@ -1007,14 +1024,30 @@ class MapTileWithValues():
 
         pre_zoom = self.pre_alt_tile_xy[2]
         if not np.isnan(pre_zoom):
+            cached_zoom = int(pre_zoom)
             tile_x, tile_y, x_in_tile, y_in_tile = get_tilexy_and_xy_in_tile(
-                int(pre_zoom), *pos, map_settings["tile_size"]
+                cached_zoom, *pos, map_settings["tile_size"]
             )
             if (
-                self.pre_alt_tile_xy == (tile_x, tile_y, int(pre_zoom))
-                and self.pre_alt_xy_in_tile == (x_in_tile, y_in_tile, int(pre_zoom))
+                self.pre_alt_tile_xy == (tile_x, tile_y, cached_zoom)
+                and self.pre_alt_xy_in_tile == (x_in_tile, y_in_tile, cached_zoom)
             ):
                 return self.pre_altitude
+            if (
+                self.pre_alt_tile_xy == (tile_x, tile_y, cached_zoom)
+                and self.dem_array is not None
+                and y_in_tile >= 0
+                and x_in_tile >= 0
+                and y_in_tile < self.dem_array.shape[0]
+                and x_in_tile < self.dem_array.shape[1]
+            ):
+                altitude = self._decode_dem_altitude(
+                    self.dem_array[y_in_tile, x_in_tile],
+                    map_name,
+                )
+                self.pre_alt_xy_in_tile = (x_in_tile, y_in_tile, cached_zoom)
+                self.pre_altitude = altitude
+                return altitude
 
         zoom_candidates = [z, z - 1, z - 2]
         zoom_candidates = [zoom for zoom in zoom_candidates if zoom >= 0]
@@ -1040,23 +1073,10 @@ class MapTileWithValues():
 
             # get altitude
             self.dem_array = np.asarray(Image.open(filename))
-            rgb_pos = self.dem_array[y_in_tile, x_in_tile]
-
-            r, g, b = int(rgb_pos[0]), int(rgb_pos[1]), int(rgb_pos[2]) 
-            v = (r << 16) | (g << 8) | b
-            if map_name.startswith("jpn_kokudo_chiri_in_DEM"):
-                if v < (1 << 23):
-                    altitude = round(v * 0.01, 1)
-                elif v == (1 << 23):
-                    altitude =  np.nan
-                else:
-                    altitude =  round(((v - (1 << 24)) * 0.01), 1)
-            elif map_name.startswith("mapbox_terrain"):
-                altitude =  round(-10000 + (v * 0.1), 1)
-            elif map_name.startswith("mapterhorn"):
-                altitude = round((v / 256.0) - 32768.0, 1)
-            else:
-                altitude = np.nan
+            altitude = self._decode_dem_altitude(
+                self.dem_array[y_in_tile, x_in_tile],
+                map_name,
+            )
 
             # app_logger.info(f"{altitude}m, {filename}, {x_in_tile}, {x_in_tile}, {pos}")
             self.pre_alt_tile_xy = (tile_x, tile_y, zoom)
