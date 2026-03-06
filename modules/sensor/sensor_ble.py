@@ -31,6 +31,7 @@ class SensorBLE(Sensor):
         self._fake_trainer_proc = None
         self._fake_trainer_check_handle = None
         self._zwift_click_v2_paused_for_fake_trainer = False
+        self._fake_trainer_session_active = False
 
     def sensor_init(self):
         self.reset()
@@ -43,6 +44,8 @@ class SensorBLE(Sensor):
         self.connect_zwift_click_v2()
 
     def quit(self):
+        self._fake_trainer_session_active = False
+        self._zwift_click_v2_paused_for_fake_trainer = False
         self.stop_fake_trainer()
         self.disconnect_zwift_click_v2()
 
@@ -152,21 +155,55 @@ class SensorBLE(Sensor):
             return False
         return not self._zwift_click_v2_task.done()
 
+    def _pause_zwift_click_v2_for_fake_trainer(self) -> None:
+        if self.is_zwift_click_v2_running():
+            self.disconnect_zwift_click_v2()
+            self._zwift_click_v2_paused_for_fake_trainer = True
+        else:
+            self._zwift_click_v2_paused_for_fake_trainer = False
+
+    def _resume_zwift_click_v2_after_fake_trainer(self) -> None:
+        if not self._zwift_click_v2_paused_for_fake_trainer:
+            return
+        self._zwift_click_v2_paused_for_fake_trainer = False
+        self.connect_zwift_click_v2()
+
+    def start_fake_trainer_session(self) -> bool:
+        if self._fake_trainer_session_active and self.is_fake_trainer_running():
+            return True
+        if self.is_fake_trainer_running():
+            app_logger.warning(
+                "Fake trainer session start skipped: fake trainer already running"
+            )
+            return False
+        if not self.start_fake_trainer():
+            return False
+
+        self._fake_trainer_session_active = True
+        self._pause_zwift_click_v2_for_fake_trainer()
+        return True
+
+    def finish_fake_trainer_session(self) -> bool:
+        if not self._fake_trainer_session_active:
+            return False
+
+        self._fake_trainer_session_active = False
+        self.stop_fake_trainer()
+        self._resume_zwift_click_v2_after_fake_trainer()
+        return True
+
     def toggle_fake_trainer(self) -> bool:
+        if self._fake_trainer_session_active:
+            self.finish_fake_trainer_session()
+            return self.is_fake_trainer_running()
         if self.is_fake_trainer_running():
             self.stop_fake_trainer()
-            if self._zwift_click_v2_paused_for_fake_trainer:
-                self._zwift_click_v2_paused_for_fake_trainer = False
-                self.connect_zwift_click_v2()
+            self._resume_zwift_click_v2_after_fake_trainer()
         else:
+            self._fake_trainer_session_active = False
             started = self.start_fake_trainer()
             if started:
-                if self.is_zwift_click_v2_running():
-                    # Pause Click V2 while fake trainer is active.
-                    self.disconnect_zwift_click_v2()
-                    self._zwift_click_v2_paused_for_fake_trainer = True
-                else:
-                    self._zwift_click_v2_paused_for_fake_trainer = False
+                self._pause_zwift_click_v2_for_fake_trainer()
         return self.is_fake_trainer_running()
 
     def start_fake_trainer(self) -> bool:

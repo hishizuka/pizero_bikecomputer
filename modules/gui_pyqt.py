@@ -9,7 +9,6 @@ import modules._qt_ver as _qt_ver
 _qt_ver.QtMode = "QtWidgets"
 
 from modules._qt_qtwidgets import (
-    QT_ALIGN_LEFT,
     QT_ALIGN_CENTER,
     QT_PE_WIDGET,
     QT_KEY_RELEASE,
@@ -781,11 +780,20 @@ class GUI_PyQt(GUI_Qt_Base):
     def toggle_fake_trainer(self):
         self.signal_fake_trainer.emit()
 
+    def finish_fake_trainer_session(self):
+        self.sensor.sensor_ble.finish_fake_trainer_session()
+
     def fake_trainer_internal(self):
-        self.sensor.sensor_ble.toggle_fake_trainer()
+        started = self.sensor.sensor_ble.start_fake_trainer_session()
+        if not started:
+            self.show_dialog_ok_only(
+                None,
+                "Failed to start Fake Trainer session.",
+            )
+            return
         self.show_dialog_ok_only(
-            fn=self.sensor.sensor_ble.toggle_fake_trainer,
-            title="Connect Zwift Click v2 to Zwift."
+            fn=self.finish_fake_trainer_session,
+            title="Operate Zwift, then press OK to restore Zwift Click V2.",
         )
 
     def bhi3_raw_log(self):
