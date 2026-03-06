@@ -116,9 +116,9 @@ class api:
             destination,
             language,
         )
-        # print(url)
+        app_logger.debug(url)
         response = await get_json(url)
-        # print(response)
+        app_logger.debug(response)
         return response
 
     async def get_google_route_from_mapstogpx(self, url):
@@ -318,15 +318,21 @@ class api:
         return True
 
     async def get_ridewithgps_files_with_privacy_code(self, route_id, privacy_code):
+        profile_url = (
+            self.config.G_RIDEWITHGPS_API["URL_ROUTE_BASE_URL"]
+            + "/elevation_profile.jpg"
+        ).format(route_id=route_id)
+        tcx_url = (
+            self.config.G_RIDEWITHGPS_API["URL_ROUTE_BASE_URL"] + ".tcx"
+        ).format(route_id=route_id)
+
+        if privacy_code:
+            profile_url = f"{profile_url}?privacy_code={privacy_code}"
+            tcx_url = f"{tcx_url}?privacy_code={privacy_code}"
+
         urls = [
-            (
-                self.config.G_RIDEWITHGPS_API["URL_ROUTE_BASE_URL"]
-                + "/elevation_profile.jpg?privacy_code={privacy_code}"
-            ).format(route_id=route_id, privacy_code=privacy_code),
-            (
-                self.config.G_RIDEWITHGPS_API["URL_ROUTE_BASE_URL"]
-                + ".tcx?privacy_code={privacy_code}"
-            ).format(route_id=route_id, privacy_code=privacy_code),
+            profile_url,
+            tcx_url,
         ]
         save_paths = [
             (
@@ -432,7 +438,7 @@ class api:
             and "refresh_token" in tokens
             and tokens["access_token"] != self.config.G_STRAVA_API["ACCESS_TOKEN"]
         ):
-            # print("update strava tokens")
+            # app_logger.debug("update strava tokens")
             self.config.G_STRAVA_API["ACCESS_TOKEN"] = tokens["access_token"]
             self.config.G_STRAVA_API["REFRESH_TOKEN"] = tokens["refresh_token"]
         elif "message" in tokens and tokens["message"].find("Error") > 0:
