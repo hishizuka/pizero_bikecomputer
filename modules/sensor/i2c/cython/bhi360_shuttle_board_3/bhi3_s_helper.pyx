@@ -84,6 +84,15 @@ cdef class BHI3_S:
     return self.datas.acc_rms_norm
 
   @property
+  def linear_acc(self):
+    self.read_data()
+    return [
+      self.datas.linear_acc_x,
+      self.datas.linear_acc_y,
+      self.datas.linear_acc_z,
+    ]
+
+  @property
   def gyro(self):
     self.read_data()
     return [self.datas.gyro_x, self.datas.gyro_y, self.datas.gyro_z]
