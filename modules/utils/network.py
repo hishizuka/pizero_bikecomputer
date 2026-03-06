@@ -17,7 +17,7 @@ def _cache_key(host, port, timeout):
 
 def _get_cache_entry_locked(key):
     return _DETECT_CACHE.setdefault(
-        key, {"value": False, "timestamp": 0.0, "in_flight": False}
+        key, {"value": False, "timestamp": None, "in_flight": False}
     )
 
 
@@ -32,12 +32,13 @@ def _set_cache_value(key, value, timestamp, in_flight=False):
 def _get_cached_value(key, ttl, now):
     with _DETECT_LOCK:
         entry = _get_cache_entry_locked(key)
-        if now - entry["timestamp"] <= ttl:
-            return entry["value"], True
-        if entry["in_flight"]:
-            return entry["value"], True
+        has_value = entry["timestamp"] is not None
+        if has_value and now - entry["timestamp"] <= ttl:
+            return entry["value"], True, has_value
+        if has_value and entry["in_flight"]:
+            return entry["value"], True, has_value
         entry["in_flight"] = True
-        return entry["value"], False
+        return entry["value"], False, has_value
 
 
 def _detect_network_raw(
@@ -75,9 +76,8 @@ async def detect_network_async(
     port=_DEFAULT_PORT,
     timeout=_DEFAULT_TIMEOUT,
 ):
-    # Non-blocking network check for asyncio contexts.
     if cache:
-        return _detect_network_cached(host, port, timeout, ttl)
+        return await _detect_network_cached_async(host, port, timeout, ttl)
     key = _cache_key(host, port, timeout)
     try:
         reader, writer = await asyncio.wait_for(
@@ -102,10 +102,15 @@ async def detect_network_async(
 
 
 async def _refresh_detect_network_async(key, host, port, timeout):
-    result = await detect_network_async(
-        cache=False, host=host, port=port, timeout=timeout
-    )
-    _set_cache_value(key, result, time.monotonic(), in_flight=False)
+    try:
+        await detect_network_async(
+            cache=False, host=host, port=port, timeout=timeout
+        )
+    finally:
+        # Ensure stale in_flight flag is always cleared even when task is cancelled.
+        with _DETECT_LOCK:
+            entry = _get_cache_entry_locked(key)
+            entry["in_flight"] = False
 
 
 def _schedule_refresh_async(key, host, port, timeout):
@@ -118,12 +123,18 @@ def _schedule_refresh_async(key, host, port, timeout):
 
 
 def _detect_network_cached(host, port, timeout, ttl):
-    # Non-blocking network check with background refresh.
+    # Fast path with stale-value refresh.
     key = _cache_key(host, port, timeout)
     now = time.monotonic()
-    cached_value, should_return = _get_cached_value(key, ttl, now)
+    cached_value, should_return, has_value = _get_cached_value(key, ttl, now)
     if should_return:
         return cached_value
+
+    if not has_value:
+        # First call should not return the default cached False.
+        result = _detect_network_raw(host, port, timeout)
+        _set_cache_value(key, result, time.monotonic(), in_flight=False)
+        return result
 
     if _schedule_refresh_async(key, host, port, timeout):
         return cached_value
@@ -132,3 +143,25 @@ def _detect_network_cached(host, port, timeout, ttl):
     result = _detect_network_raw(host, port, timeout)
     _set_cache_value(key, result, time.monotonic(), in_flight=False)
     return result
+
+
+async def _detect_network_cached_async(host, port, timeout, ttl):
+    key = _cache_key(host, port, timeout)
+    now = time.monotonic()
+    cached_value, should_return, has_value = _get_cached_value(key, ttl, now)
+    if should_return:
+        return cached_value
+
+    if not has_value:
+        # First async call should also provide real connectivity result.
+        return await detect_network_async(
+            cache=False, host=host, port=port, timeout=timeout
+        )
+
+    if _schedule_refresh_async(key, host, port, timeout):
+        return cached_value
+
+    # Fallback when no loop task can be scheduled.
+    return await detect_network_async(
+        cache=False, host=host, port=port, timeout=timeout
+    )
