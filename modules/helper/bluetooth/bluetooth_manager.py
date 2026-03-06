@@ -1,21 +1,20 @@
 import asyncio
-import ipaddress
-import re
+import socket
 import shutil
 import time
 from enum import Enum
 
+import psutil
+
 from modules.app_logger import app_logger
 from modules.utils.cmd import (
     exec_cmd,
-    exec_cmd_return_value,
     exec_cmd_return_value_async,
 )
 from modules.utils.network import detect_network_async
 
 
 BT_TETHERING_TIMEOUT_SEC = 15
-_IPV4_PATTERN = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 
 class BtOpenResult(Enum):
     SUCCESS = "success"
@@ -29,22 +28,14 @@ class BtOpenResult(Enum):
 
 
 def check_network_interface(iface=None):
-    stdout, _ = exec_cmd_return_value(["ip", "-br", "-4", "a", "show", iface], cmd_print=False)
-    if not stdout:
+    addresses = psutil.net_if_addrs().get(iface, [])
+    if not addresses:
         return False
-
-    # Accept any valid IPv4 address on the interface.
-    for addr in _IPV4_PATTERN.findall(stdout):
-        try:
-            ipaddress.IPv4Address(addr)
-            return True
-        except ipaddress.AddressValueError:
-            continue
-    return False
+    return any(addr.family == socket.AF_INET for addr in addresses)
 
 
 def check_bnep0():
-    return check_network_interface(iface="bnep0")
+    return "bnep0" in psutil.net_if_addrs()
 
 
 def check_wlan0():
