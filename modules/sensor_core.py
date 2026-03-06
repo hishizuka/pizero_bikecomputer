@@ -4,15 +4,16 @@ import time
 from datetime import datetime
 
 import numpy as np
-
-_IMPORT_PSUTIL = False
-try:
-    import psutil
-    _IMPORT_PSUTIL = True
-except ImportError:
-    pass
+import psutil
 
 from modules.app_logger import app_logger
+from modules.sensor.performance_metrics import (
+    NP_WINDOW_SIZE_DEFAULT,
+    calc_form_metrics as perf_calc_form_metrics,
+    calc_w_prime_balance as perf_calc_w_prime_balance,
+    reset_performance_metrics_state,
+    update_normalized_power as perf_update_normalized_power,
+)
 
 app_logger.info("detected sensor modules:")
 
@@ -25,6 +26,8 @@ from .sensor.sensor_i2c import SensorI2C
 
 
 class SensorCore:
+    NP_WINDOW_SIZE = NP_WINDOW_SIZE_DEFAULT
+
     config = None
     sensor_gps = None
     sensor_ant = None
@@ -57,6 +60,7 @@ class SensorCore:
         "headwind",
         "temperature",
         "cpu_percent",
+        "system_cpu_percent",
         "send_time",
     ]
     average_secs = [3, 30, 60]
@@ -74,6 +78,13 @@ class SensorCore:
     brakelight_spd = []
     brakelight_spd_range = 4
     brakelight_spd_cutoff = 4  # 4*3.6 = 14.4 [km/h]
+    brakelight_cad = []
+    brakelight_cad_range = 3  # 2s window at 1Hz loop
+    brakelight_cad_drop_ratio = 0.30
+    brakelight_cad_drop_floor = 70.0
+    brakelight_pitch = []
+    brakelight_pitch_range = 3  # 2s window at 1Hz loop
+    brakelight_pitch_rise_deg_2s = 2.0
     auto_backlight_brightness = []
     auto_backlight_brightness_range = 3
     graph_keys = [
@@ -118,6 +129,8 @@ class SensorCore:
         for d in self.diff_keys:
             self.values["integrated"][d] = [np.nan] * self.grade_range
         self.brakelight_spd = [0] * self.brakelight_spd_range
+        self.brakelight_cad = [np.nan] * self.brakelight_cad_range
+        self.brakelight_pitch = [np.nan] * self.brakelight_pitch_range
         self.auto_backlight_brightness = \
             [self.config.G_AUTO_BACKLIGHT_CUTOFF+1] * self.auto_backlight_brightness_range
         self.values["integrated"]["CPU_MEM"] = ""
@@ -126,8 +139,7 @@ class SensorCore:
             for v in self.average_values:
                 self.average_values[v][s] = []
                 self.values["integrated"][f"ave_{v}_{s}s"] = np.nan
-        if _IMPORT_PSUTIL:
-            self.process = psutil.Process()
+        self.process = psutil.Process()
 
         if SensorGPS:
             self.sensor_gps = SensorGPS(config, self.values["GPS"])
@@ -235,6 +247,9 @@ class SensorCore:
             api_wind_avg_ms = float("nan")
 
         cpu_percent = self.values["integrated"].get("cpu_percent", np.nan)
+        system_cpu_percent = self.values["integrated"].get(
+            "system_cpu_percent", np.nan
+        )
         app_logger.debug(
             "[PERF_SENSOR] "
             f"win={self._perf_sensor_window} "
@@ -249,7 +264,8 @@ class SensorCore:
             f"adjust_avg_ms={adjust_avg_ms:.3f} "
             f"wait_s={self.wait_time:.3f} "
             f"interval_s={self.actual_loop_interval:.3f} "
-            f"cpu={cpu_percent}"
+            f"cpu_proc={cpu_percent} "
+            f"cpu_sys={system_cpu_percent}"
         )
         app_logger.debug(
             "[PERF_SENSOR_DETAIL] "
@@ -289,16 +305,61 @@ class SensorCore:
     def reset_internal(self):
         self.values["integrated"]["distance"] = 0
         self.values["integrated"]["accumulated_power"] = 0
-        self.values["integrated"]["normalized_power"] = np.nan
-        self.values["integrated"]["w_prime_balance"] = self.config.G_POWER_W_PRIME
-        self.values["integrated"]["w_prime_power_sum"] = 0
-        self.values["integrated"]["w_prime_power_count"] = 0
-        self.values["integrated"]["w_prime_t"] = 0
-        self.values["integrated"]["w_prime_sum"] = 0
-        self.values["integrated"]["pwr_mean_under_cp"] = 0
-        self.values["integrated"]["tau"] = 546 * np.exp(-0.01 * (self.config.G_POWER_CP - 0)) + 316
+        reset_performance_metrics_state(self)
+        self.brakelight_spd = [0] * self.brakelight_spd_range
+        self.brakelight_cad = [np.nan] * self.brakelight_cad_range
+        self.brakelight_pitch = [np.nan] * self.brakelight_pitch_range
 
-        self.values["integrated"]["tss"] = 0.0
+    def update_normalized_power(self, pwr):
+        perf_update_normalized_power(self, pwr)
+
+    @staticmethod
+    def _shift_window_and_append(window, value):
+        window[:-1] = window[1:]
+        window[-1] = value
+
+    def _update_speed_brake_hint(self, speed):
+        if np.isnan(speed):
+            return False
+
+        self._shift_window_and_append(self.brakelight_spd, speed)
+
+        # 1: all past speeds are less than brakelight_spd_cutoff
+        cond_1 = all((s < self.brakelight_spd_cutoff for s in self.brakelight_spd))
+        # 2-1: current speed exceeds brakelight_spd_cutoff
+        cond_2_1 = speed > self.brakelight_spd_cutoff
+        # 2-2: current speed reduced by 5% from the speed [brakelight_spd_range] seconds ago
+        #  30km/h: 1.2km/h(4%), 20km/h: 0.8km/h(4%)
+        cond_2_2 = (
+            self.brakelight_spd[0] - self.brakelight_spd[-1]
+            > self.brakelight_spd[0] * 0.04
+        )
+        return cond_1 or (cond_2_1 and cond_2_2)
+
+    def _update_cadence_brake_hint(self, cadence):
+        if np.isnan(cadence):
+            return False
+
+        self._shift_window_and_append(self.brakelight_cad, cadence)
+
+        cad_prev_2s = self.brakelight_cad[0]
+        cad_now = self.brakelight_cad[-1]
+        cad_drop = (
+            cad_prev_2s >= self.brakelight_cad_drop_floor
+            and cad_now <= cad_prev_2s * (1.0 - self.brakelight_cad_drop_ratio)
+        )
+        cad_all_zero = all(c <= 0.0 for c in self.brakelight_cad)
+        return cad_drop or cad_all_zero
+
+    def _update_pitch_brake_hint(self, pitch_deg):
+        if np.isnan(pitch_deg):
+            return False
+
+        self._shift_window_and_append(self.brakelight_pitch, pitch_deg)
+        return (
+            self.brakelight_pitch[-1] - self.brakelight_pitch[0]
+            >= self.brakelight_pitch_rise_deg_2s
+        )
 
     async def integrate(self):
         pre_dst = {"ANT+": 0, "GPS": 0}
@@ -325,7 +386,6 @@ class SensorCore:
 
             time_profile = [start_time,]
             hr = spd = cdc = pwr = temperature = self.config.G_ANT_NULLVALUE
-            npwr = self.config.G_ANT_NULLVALUE
             grade = grade_spd = glide = self.config.G_ANT_NULLVALUE
             ttlwork_diff = 0
             dst_diff = {"ANT+": 0, "GPS": 0, "USE": 0}
@@ -434,9 +494,6 @@ class SensorCore:
                 for page in [0x12, 0x11, 0x10]:
                     if delta["PWR"][page] < self.time_threshold["PWR"]:
                         pwr = v["PWR"][page]["power"]
-                        npwr = v["PWR"][page].get(
-                            "normalized_power", self.config.G_ANT_NULLVALUE
-                        )
                         break
 
             # Speed : ANT+(SPD&CDC, (PWR)) > GPS
@@ -562,10 +619,9 @@ class SensorCore:
                     "dst_diff": dst_diff,
                 }
                 for key in ["alt_diff", "dst_diff"]:
-                    self.values["integrated"][key][0:-1] = self.values[
-                        "integrated"
-                    ][key][1:]
-                    self.values["integrated"][key][-1] = diff_sources[key]["USE"]
+                    self._shift_window_and_append(
+                        self.values["integrated"][key], diff_sources[key]["USE"]
+                    )
                     # diff_sum[key] = np.mean(self.values['integrated'][key][-self.grade_window_size:])
                     diff_sum[key] = np.nansum(
                         self.values["integrated"][key][-self.grade_window_size :]
@@ -601,10 +657,9 @@ class SensorCore:
                     "dst_diff_spd": dst_diff_spd,
                 }
                 for key in ["alt_diff_spd", "dst_diff_spd"]:
-                    self.values["integrated"][key][0:-1] = self.values[
-                        "integrated"
-                    ][key][1:]
-                    self.values["integrated"][key][-1] = diff_sources_spd[key]["ANT+"]
+                    self._shift_window_and_append(
+                        self.values["integrated"][key], diff_sources_spd[key]["ANT+"]
+                    )
                     diff_sum[key] = np.mean(
                         self.values["integrated"][key][-self.grade_window_size :]
                     )
@@ -628,9 +683,8 @@ class SensorCore:
             self.values["integrated"]["speed"] = spd
             self.values["integrated"]["cadence"] = cdc
             self.values["integrated"]["power"] = pwr
-            # NP represents overall ride intensity; keep last value during stops.
-            if not np.isnan(npwr):
-                self.values["integrated"]["normalized_power"] = npwr
+            if self.config.G_ANT["USE"]["PWR"]:
+                self.update_normalized_power(pwr)
             self.values["integrated"]["distance"] += dst_diff["USE"]
             self.values["integrated"]["accumulated_power"] += ttlwork_diff
             self.values["integrated"]["grade"] = grade
@@ -643,15 +697,15 @@ class SensorCore:
                 self.calc_w_prime_balance(pwr)
                 self.calc_form_metrics(pwr)
 
-            for g in self.graph_keys:
-                self.values["integrated"][g][:-1] = self.values["integrated"][g][1:]
-            self.values["integrated"]["hr_graph"][-1] = hr
-            self.values["integrated"]["power_graph"][-1] = pwr
-            self.values["integrated"]["w_bal_graph"][-1] = self.values[
-                "integrated"
-            ]["w_prime_balance_normalized"]
-            self.values["integrated"]["altitude_gps_graph"][-1] = v["GPS"]["alt"]
-            self.values["integrated"]["altitude_graph"][-1] = v["I2C"]["altitude"]
+            graph_values = {
+                "hr_graph": hr,
+                "power_graph": pwr,
+                "w_bal_graph": self.values["integrated"]["w_prime_balance_normalized"],
+                "altitude_gps_graph": v["GPS"]["alt"],
+                "altitude_graph": v["I2C"]["altitude"],
+            }
+            for key, value in graph_values.items():
+                self._shift_window_and_append(self.values["integrated"][key], value)
 
             # average power, heart_rate
             if self.config.G_ANT["USE"]["PWR"] and not np.isnan(pwr):
@@ -716,8 +770,9 @@ class SensorCore:
                 self.config.display.use_auto_backlight
                 and not np.isnan(v["I2C"]["light"])
             ):
-                self.auto_backlight_brightness[:-1] = self.auto_backlight_brightness[1:]
-                self.auto_backlight_brightness[-1] = v["I2C"]["light"]
+                self._shift_window_and_append(
+                    self.auto_backlight_brightness, v["I2C"]["light"]
+                )
                 brightness = int(np.mean(self.auto_backlight_brightness))
 
                 if brightness <= self.config.G_AUTO_BACKLIGHT_CUTOFF:
@@ -726,41 +781,49 @@ class SensorCore:
                 else:
                     self.config.display.set_brightness(0)
 
-            # brake light with speed
-            if not np.isnan(self.values["integrated"]["speed"]):
-                self.brakelight_spd[:-1] = self.brakelight_spd[1:]
-                self.brakelight_spd[-1] = self.values["integrated"]["speed"]
+            # brake light with speed/cadence/pitch conditions
+            speed = self.values["integrated"]["speed"]
+            cadence = self.values["integrated"]["cadence"]
+            # sensor_i2c stores pitch in radians. Convert to degrees for threshold comparison.
+            pitch_deg = np.nan
+            if not np.isnan(v["I2C"]["pitch"]):
+                pitch_deg = math.degrees(v["I2C"]["pitch"])
 
-                # 1: all past speeds are less than brakelight_spd_cutoff
-                cond_1 = all((s < self.brakelight_spd_cutoff for s in self.brakelight_spd))
-                # 2-1: current speed exceeds brakelight_spd_cutoff
-                cond_2_1 = self.values["integrated"]["speed"] > self.brakelight_spd_cutoff
-                # 2-2: current speed reduced by 5% from the speed [brakelight_spd_range] seconds ago
-                #  30km/h: 1.2km/h(4%), 20km/h: 0.8km/h(4%)
-                cond_2_2 = self.brakelight_spd[0] - self.brakelight_spd[-1] > self.brakelight_spd[0]*0.04
-                if (cond_1 or (cond_2_1 and cond_2_2)):
-                    auto_light = True
+            speed_brake_hint = self._update_speed_brake_hint(speed)
+            cadence_brake_hint = self._update_cadence_brake_hint(cadence)
+            pitch_brake_hint = self._update_pitch_brake_hint(pitch_deg)
 
             if self.config.G_ANT["USE_AUTO_LIGHT"] and self.config.G_MANUAL_STATUS == "START":
+                if speed_brake_hint or cadence_brake_hint or pitch_brake_hint:
+                    auto_light = True
+                    app_logger.debug(
+                        "[BRAKELIGHT] fire "
+                        f"speed={int(speed_brake_hint)} "
+                        f"cadence={int(cadence_brake_hint)} "
+                        f"pitch={int(pitch_brake_hint)}"
+                    )
+
                 if auto_light:
                     self.sensor_ant.set_light_mode("FLASH_LOW", auto=True)
                 else:
                     self.sensor_ant.set_light_mode("OFF", auto=True)
 
             # cpu and memory
-            if _IMPORT_PSUTIL:
-                with self.process.oneshot():
-                    self.values["integrated"]["cpu_percent"] = int(
-                        self.process.cpu_percent(interval=None)
-                    )
-                    self._update_status_bar_color_by_cpu_usage()
-                    self.values["integrated"][
-                        "CPU_MEM"
-                    ] = "{0:^2.0f}%({1}), {2:^2.0f}MB".format(
-                        self.values["integrated"]["cpu_percent"],
-                        self.process.num_threads(),
-                        self.process.memory_info().rss/1024**2,
-                    )
+            self.values["integrated"]["system_cpu_percent"] = int(
+                sum(psutil.cpu_percent(interval=None, percpu=True))
+            )
+            with self.process.oneshot():
+                self.values["integrated"]["cpu_percent"] = int(
+                    self.process.cpu_percent(interval=None)
+                )
+                self._update_status_bar_color_by_cpu_usage()
+                self.values["integrated"][
+                    "CPU_MEM"
+                ] = "{0:.0f}%/{1:.0f}%, {2:.0f}MB".format(
+                    self.values["integrated"]["cpu_percent"],
+                    self.values["integrated"]["system_cpu_percent"],
+                    self.process.memory_info().rss / 1024**2,
+                )
 
             # adjust loop time
             time_profile.append(datetime.now())
@@ -858,83 +921,13 @@ class SensorCore:
             if len(self.average_values[k][sec]) < sec:
                 self.average_values[k][sec].append(v)
             else:
-                self.average_values[k][sec][:-1] = self.average_values[k][sec][1:]
-                self.average_values[k][sec][-1] = v
+                self._shift_window_and_append(self.average_values[k][sec], v)
             self.values["integrated"]["ave_{}_{}s".format(k, sec)] = int(
                 np.mean(self.average_values[k][sec])
             )
 
     def calc_w_prime_balance(self, pwr):
-        # https://medium.com/critical-powers/comparison-of-wbalance-algorithms-8838173e2c15
-
-        v = self.values["integrated"]
-        dt = self.config.G_SENSOR_INTERVAL
-        pwr_cp_diff = pwr - self.config.G_POWER_CP
-
-        # Waterworth algorithm
-        if self.config.G_POWER_W_PRIME_ALGORITHM == "WATERWORTH":
-            if pwr < self.config.G_POWER_CP:
-                v["w_prime_power_sum"] = v["w_prime_power_sum"] + pwr
-                v["w_prime_power_count"] = v["w_prime_power_count"] + 1
-                v["pwr_mean_under_cp"] = v["w_prime_power_sum"] / v["w_prime_power_count"]
-                tau_new = (
-                    546
-                    * np.exp(-0.01 * (self.config.G_POWER_CP - v["pwr_mean_under_cp"]))
-                    + 316
-                )
-                # When tau changes, rescale w_prime_sum so W'balance is continuous.
-                # W'bal = W' - w_prime_sum * exp(-t/tau) must be preserved.
-                if tau_new != v["tau"] and v["w_prime_t"] > 0:
-                    w_bal = (
-                        self.config.G_POWER_W_PRIME
-                        - v["w_prime_sum"] * np.exp(-v["w_prime_t"] / v["tau"])
-                    )
-                    v["w_prime_sum"] = (
-                        self.config.G_POWER_W_PRIME - w_bal
-                    ) * np.exp(v["w_prime_t"] / tau_new)
-                v["tau"] = tau_new
-
-            # Accumulate: (P-CP)+ * exp(t/tau) * dt [J scaled for later exp(-T/tau)]
-            v["w_prime_sum"] += max(0, pwr_cp_diff) * dt * np.exp(v["w_prime_t"] / v["tau"])
-            v["w_prime_t"] += dt
-            v["w_prime_balance"] = (
-                self.config.G_POWER_W_PRIME
-                - v["w_prime_sum"] * np.exp(-v["w_prime_t"] / v["tau"])
-            )
-
-        # Differential algorithm
-        elif self.config.G_POWER_W_PRIME_ALGORITHM == "DIFFERENTIAL":
-            cp_pwr_diff = -pwr_cp_diff
-            if cp_pwr_diff < 0:
-                # consume (P > CP): deplete proportional to excess power and time
-                v["w_prime_balance"] += cp_pwr_diff * dt
-            else:
-                # recovery (P < CP): recover toward W' with exponential approach
-                v["w_prime_balance"] += (
-                    cp_pwr_diff
-                    * (self.config.G_POWER_W_PRIME - v["w_prime_balance"])
-                    / self.config.G_POWER_W_PRIME
-                    * dt
-                )
-
-        # Clamp to [0, W']: balance cannot exceed full charge or go physically undefined
-        v["w_prime_balance"] = min(
-            max(v["w_prime_balance"], 0), self.config.G_POWER_W_PRIME
-        )
-        v["w_prime_balance_normalized"] = round(
-            v["w_prime_balance"] / self.config.G_POWER_W_PRIME * 100,
-            1
-        )
+        perf_calc_w_prime_balance(self, pwr)
 
     def calc_form_metrics(self, pwr):
-        """Compute TSS each sensor interval.
-
-        TSS (Training Stress Score):
-            Incremental approximation: (P/CP)^2 * dt/3600 * 100 per second.
-            Uses CP as a proxy for FTP.
-        """
-        v = self.values["integrated"]
-        if not np.isnan(pwr) and pwr > 0:
-            cp = self.config.G_POWER_CP
-            dt = self.config.G_SENSOR_INTERVAL
-            v["tss"] += (pwr / cp) ** 2 * dt / 3600 * 100
+        perf_calc_form_metrics(self, pwr)
