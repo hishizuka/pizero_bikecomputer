@@ -8,9 +8,9 @@ import traceback
 from datetime import datetime, timedelta, timezone
 
 import numpy as np
-from crdp import rdp
 
 from modules.app_logger import app_logger
+from modules.utils.crdp import rdp
 from modules.utils.cmd import exec_cmd
 from modules.utils.date import datetime_myparser
 from modules.utils.timer import Timer
@@ -79,10 +79,13 @@ class LoggerCore:
     resume_status = False
     last_timestamp = None
     _PERF_LOGGER_LOG_INTERVAL_SEC = 30.0
+    _SQL_COMMIT_INTERVAL_SEC = 5.0
 
     def __init__(self, config):
         super().__init__()
         self.config = config
+        self._sql_worker_task = None
+        self._reset_sql_batch_state()
         # Emit debug metrics at a fixed cadence to reduce log volume.
         self._perf_logger_window = max(
             1,
@@ -110,6 +113,38 @@ class LoggerCore:
             )
             return np.nan
 
+    def _restore_np_window_from_log_db(self, window_size=None):
+        sensor = self.sensor
+        if sensor is None:
+            return
+        if window_size is None:
+            window_size = sensor.np_window_size
+
+        restored_window = []
+
+        self.cur.execute(
+            "SELECT power FROM BIKECOMPUTER_LOG "
+            "WHERE power IS NOT NULL "
+            "ORDER BY total_timer_time DESC, timestamp DESC LIMIT ?",
+            (window_size,),
+        )
+        rows = self.cur.fetchall()
+        if rows:
+            window_desc = []
+            for (power,) in rows:
+                try:
+                    power_value = float(power)
+                except (TypeError, ValueError):
+                    continue
+                if np.isnan(power_value):
+                    continue
+                window_desc.append(max(power_value, 0.0))
+
+            restored_window = list(reversed(window_desc))
+
+        sensor.np_window_30s = restored_window
+        sensor.np_window_sum = float(sum(restored_window))
+
     @staticmethod
     def _safe_stat(values, func, *args):
         if not values:
@@ -129,6 +164,38 @@ class LoggerCore:
         self._perf_sql_worker_calls = 0
         self._perf_sql_worker_wait_ms = []
         self._perf_sql_worker_exec_ms = []
+
+    def _reset_sql_batch_state(self):
+        self._sql_transaction_dirty = False
+        self._sql_last_commit_monotonic = time.monotonic()
+
+    def _execute_sql(self, sql):
+        self.cur.execute(*sql)
+        self._sql_transaction_dirty = True
+
+    def _commit_sql_if_dirty(self):
+        if not self._sql_transaction_dirty:
+            return False
+        self.con.commit()
+        self._sql_transaction_dirty = False
+        self._sql_last_commit_monotonic = time.monotonic()
+        return True
+
+    def _drain_sql_queue_nowait(self):
+        while True:
+            try:
+                sql = self.sql_queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+            if sql is not None:
+                self._execute_sql(sql)
+            self.sql_queue.task_done()
+
+    def _flush_sql_queue_sync(self):
+        if not hasattr(self, "sql_queue"):
+            return
+        self._drain_sql_queue_nowait()
+        self._commit_sql_if_dirty()
 
     def _maybe_log_perf_logger_window(self):
         if self._perf_logger_calls < self._perf_logger_window:
@@ -191,7 +258,8 @@ class LoggerCore:
 
     def start_coroutine(self):
         self.sql_queue = asyncio.Queue()
-        asyncio.create_task(self.sql_worker())
+        self._reset_sql_batch_state()
+        self._sql_worker_task = asyncio.create_task(self.sql_worker())
         try:
             self.count_up_lock = False
             self.config.loop.add_signal_handler(signal.SIGALRM, self.count_up)
@@ -279,8 +347,10 @@ class LoggerCore:
     async def quit(self):
         await self.sensor.quit()
 
+        self._flush_sql_queue_sync()
         await self.sql_queue.put(None)
-        await asyncio.sleep(0.1)
+        if self._sql_worker_task is not None:
+            await self._sql_worker_task
         self.cur.close()
         self.con.close()
 
@@ -294,10 +364,22 @@ class LoggerCore:
             sql = await self.sql_queue.get()
             wait_elapsed_ms = (time.perf_counter() - wait_start) * 1000.0
             if sql is None:
+                exec_start = time.perf_counter()
+                self._commit_sql_if_dirty()
+                exec_elapsed_ms = (time.perf_counter() - exec_start) * 1000.0
+                self.sql_queue.task_done()
+                self._perf_sql_worker_calls += 1
+                self._perf_sql_worker_wait_ms.append(wait_elapsed_ms)
+                self._perf_sql_worker_exec_ms.append(exec_elapsed_ms)
+                self._maybe_log_perf_sql_worker_window()
                 break
             exec_start = time.perf_counter()
-            self.cur.execute(*sql)
-            self.con.commit()
+            self._execute_sql(sql)
+            if (
+                time.monotonic() - self._sql_last_commit_monotonic
+                >= self._SQL_COMMIT_INTERVAL_SEC
+            ):
+                self._commit_sql_if_dirty()
             exec_elapsed_ms = (time.perf_counter() - exec_start) * 1000.0
             self.sql_queue.task_done()
 
@@ -358,6 +440,7 @@ class LoggerCore:
       gyro_z FLOAT,
       light INTEGER,
       cpu_percent INTEGER,
+      system_cpu_percent INTEGER,
       total_ascent FLOAT,
       total_descent FLOAT,
       lap_heart_rate INTEGER,
@@ -500,6 +583,7 @@ class LoggerCore:
             app_logger.info(f"->START")
         elif self.config.G_STOPWATCH_STATUS == "START":
             self.config.G_STOPWATCH_STATUS = "STOP"
+            self._flush_sql_queue_sync()
             app_logger.info(f"->STOP")
             if (
                 self.sensor is not None
@@ -509,6 +593,10 @@ class LoggerCore:
                     self.sensor.sensor_ant.pause_normalized_power_state()
                 elif hasattr(self.sensor.sensor_ant, "reset_normalized_power_state"):
                     self.sensor.sensor_ant.reset_normalized_power_state()
+
+    async def _record_log_and_flush(self):
+        await self.record_log()
+        self._flush_sql_queue_sync()
 
     def count_laps(self):
         if self.values["count"] == 0 or self.values["count_lap"] == 0:
@@ -524,7 +612,7 @@ class LoggerCore:
         for k2 in ["cadence", "power"]:
             self.average["lap"][k2]["count"] = 0
             self.average["lap"][k2]["sum"] = 0
-        asyncio.create_task(self.record_log())
+        asyncio.create_task(self._record_log_and_flush())
         app_logger.info(f"->LAP:{self.values['lap']}")
 
         buzzer = getattr(self.config, "buzzer", None)
@@ -599,6 +687,8 @@ class LoggerCore:
             buzzer.play("sgx-ca600-save")
         self.config.display.screen_flash_long()
 
+        self._flush_sql_queue_sync()
+
         # close db connect
         self.cur.close()
         self.con.close()
@@ -647,6 +737,7 @@ class LoggerCore:
             # usage of sqlite3 is "insert" only, so check_same_thread=False
             self.con = sqlite3.connect(self.config.G_LOG_DB, check_same_thread=False)
             self.cur = self.con.cursor()
+            self._reset_sql_batch_state()
             self.init_db()
 
         # reset temporary values
@@ -838,6 +929,7 @@ class LoggerCore:
                 self.sensor.values["I2C"]["gyro_mod"][2],
                 self.sensor.values["I2C"]["light"],
                 value["cpu_percent"],
+                value["system_cpu_percent"],
                 self.sensor.values["I2C"]["total_ascent"],
                 self.sensor.values["I2C"]["total_descent"],
                 ###
@@ -1051,6 +1143,9 @@ class LoggerCore:
                 self.record_stats["pre_lap_max"][k] = max_value[i]
         # print(self.record_stats)
         # print(self.average)
+
+        if self.config.G_ANT["USE"]["PWR"]:
+            self._restore_np_window_from_log_db(window_size=self.sensor.np_window_size)
 
         # start_time
         self.cur.execute("SELECT MIN(timestamp) FROM BIKECOMPUTER_LOG")
