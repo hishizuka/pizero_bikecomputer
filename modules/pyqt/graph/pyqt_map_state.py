@@ -2,6 +2,7 @@ from datetime import timedelta
 
 import numpy as np
 
+from modules.app_logger import app_logger
 from modules._qt_qtwidgets import pg
 from modules.utils.geo import calc_y_mod, get_mod_lat, get_width_distance
 from modules.utils.map import get_maptile_filename
@@ -32,6 +33,10 @@ class MapStateMixin:
     arrow_direction_angle_unit_half = arrow_direction_angle_unit / 2
     y_mod = 1.22  # 31/25 at Tokyo(N35)
     view_range_update_epsilon_px = 20
+    course_focus_offset_ratio = 0.25
+    course_focus_enter_ratio = 0.30
+    course_focus_exit_ratio = 0.20
+    course_focus_release_frames = 3
     _overlay_refresh_time_cache = None
 
     @staticmethod
@@ -86,7 +91,18 @@ class MapStateMixin:
     def _setup_map_state_items(self):
         self.map_pos["x"] = self.config.G_DUMMY_POS_X
         self.map_pos["y"] = self.config.G_DUMMY_POS_Y
+        self._map_track_source = "gps_track"
+        try:
+            motion_sensors = self.sensor.sensor_i2c.available_sensors.get("MOTION", {})
+            if motion_sensors.get("BHI3_S"):
+                self._map_track_source = "heading"
+        except Exception:
+            self._map_track_source = "gps_track"
         self._overlay_refresh_time_cache = {}
+        self._course_focus_active = False
+        self._course_focus_off_frames = 0
+        self._course_focus_x_direction = 0
+        self._course_focus_y_direction = 0
         self._last_applied_x_range = None
         self._last_applied_y_range = None
         self._last_applied_x_bounds = None
@@ -156,6 +172,86 @@ class MapStateMixin:
                 )
             )
 
+    def _update_course_focus_active(self, raw_on_course):
+        if raw_on_course:
+            self._course_focus_active = True
+            self._course_focus_off_frames = 0
+            return True
+
+        if not self._course_focus_active:
+            return False
+
+        self._course_focus_off_frames += 1
+        if self._course_focus_off_frames < self.course_focus_release_frames:
+            return True
+
+        self._course_focus_active = False
+        self._course_focus_off_frames = 0
+        self._course_focus_x_direction = 0
+        self._course_focus_y_direction = 0
+        return False
+
+    def _resolve_course_focus_axis_direction(self, delta, span, previous_direction):
+        if span <= 0:
+            return 0
+
+        enter_threshold = self.course_focus_enter_ratio * span
+        exit_threshold = self.course_focus_exit_ratio * span
+
+        if previous_direction == 0:
+            if delta > enter_threshold:
+                return 1
+            if delta < -enter_threshold:
+                return -1
+            return 0
+
+        if previous_direction > 0:
+            if delta < -enter_threshold:
+                return -1
+            if abs(delta) <= exit_threshold:
+                return 0
+            return 1
+
+        if delta > enter_threshold:
+            return 1
+        if abs(delta) <= exit_threshold:
+            return 0
+        return -1
+
+    def _get_course_focus_target(self, start_index, lookahead_index):
+        if not len(self.course.longitude):
+            return None
+
+        max_index = len(self.course.longitude) - 1
+        start_index = int(max(0, min(start_index, max_index)))
+        lookahead_index = int(max(0, min(lookahead_index, max_index)))
+
+        if lookahead_index <= start_index:
+            return (
+                float(self.course.longitude[lookahead_index]),
+                float(self.course.latitude[lookahead_index]),
+            )
+
+        index_span = lookahead_index - start_index
+        sample_step = max(1, index_span // 8)
+        sample_indices = np.arange(
+            start_index,
+            lookahead_index + 1,
+            sample_step,
+            dtype=np.int32,
+        )
+        if sample_indices[-1] != lookahead_index:
+            sample_indices = np.append(sample_indices, lookahead_index)
+
+        lon_values = self.course.longitude[sample_indices]
+        lat_values = self.course.latitude[sample_indices]
+
+        # Bias the centroid toward farther points to keep the look-ahead behavior.
+        weights = np.linspace(1.0, 2.0, num=len(sample_indices), dtype=np.float64)
+        target_lon = float(np.average(lon_values, weights=weights))
+        target_lat = float(np.average(lat_values, weights=weights))
+        return target_lon, target_lat
+
     def _init_center_point(self):
         self.center_point = pg.ScatterPlotItem(pxMode=True, symbol="+")
         self.center_point.setZValue(50)
@@ -175,6 +271,20 @@ class MapStateMixin:
         except Exception:
             pass
         return value
+
+    @staticmethod
+    def _is_nan_value(value):
+        try:
+            return np.isnan(value)
+        except Exception:
+            return False
+
+    def _get_map_track_value(self):
+        if getattr(self, "_map_track_source", "gps_track") == "heading":
+            heading = self.sensor.values["I2C"].get("heading", np.nan)
+            if heading is not None and not self._is_nan_value(heading):
+                return heading
+        return self.gps_values.get("track", np.nan)
 
     def _get_overlay_display_state(self):
         overlay_type = self.overlay_order[self.overlay_index]
@@ -326,7 +436,7 @@ class MapStateMixin:
         display_key = (
             norm(gps_values.get("lon")),
             norm(gps_values.get("lat")),
-            norm(gps_values.get("track")),
+            norm(self._get_map_track_value()),
             norm(gps_values.get("mode")),
             norm(self.map_pos.get("x")),
             norm(self.map_pos.get("y")),
@@ -424,40 +534,66 @@ class MapStateMixin:
             self.map_pos["y"],
         )
         x_move = y_move = 0
-        if (
+        course_focus_requested = (
             self.lock_status
             and len(self.course.distance)
             and self.course.index.on_course_status
+        )
+        course_focus_active = self._update_course_focus_active(course_focus_requested)
+        if (
+            self.lock_status
+            and len(self.course.distance)
+            and course_focus_active
         ):
+            start_index = self.course.index.value
             index = self.course.get_index_with_distance_cutoff(
-                self.course.index.value,
+                start_index,
                 get_width_distance(self.map_pos["y"], self.map_area["w"]) / 1000,
             )
-            x2 = self.course.longitude[index]
-            y2 = self.course.latitude[index]
+            target = self._get_course_focus_target(start_index, index)
+            if target is None:
+                x2 = self.course.longitude[index]
+                y2 = self.course.latitude[index]
+            else:
+                x2, y2 = target
             x_delta = x2 - self.map_pos["x"]
             y_delta = y2 - self.map_pos["y"]
-            x_move = 0.25 * self.map_area["w"]
-            y_move = 0.25 * self.map_area["h"]
-            if x_delta > x_move:
+            x_move = self.course_focus_offset_ratio * self.map_area["w"]
+            y_move = self.course_focus_offset_ratio * self.map_area["h"]
+            self._course_focus_x_direction = self._resolve_course_focus_axis_direction(
+                x_delta,
+                self.map_area["w"],
+                self._course_focus_x_direction,
+            )
+            self._course_focus_y_direction = self._resolve_course_focus_axis_direction(
+                y_delta,
+                self.map_area["h"],
+                self._course_focus_y_direction,
+            )
+            if self._course_focus_x_direction > 0:
                 self.map_pos["x"] += x_move
-            elif x_delta < -x_move:
+            elif self._course_focus_x_direction < 0:
                 self.map_pos["x"] -= x_move
-            if y_delta > y_move:
+            if self._course_focus_y_direction > 0:
                 self.map_pos["y"] += y_move
-            elif y_delta < -y_move:
+            elif self._course_focus_y_direction < 0:
                 self.map_pos["y"] -= y_move
-        elif not self.lock_status:
-            if self.move_pos["x"] > 0:
-                x_move = self.map_area["w"] / 2
-            elif self.move_pos["x"] < 0:
-                x_move = -self.map_area["w"] / 2
-            if self.move_pos["y"] > 0:
-                y_move = self.map_area["h"] / 2
-            elif self.move_pos["y"] < 0:
-                y_move = -self.map_area["h"] / 2
-            self.map_pos["x"] += x_move / self.move_factor
-            self.map_pos["y"] += y_move / self.move_factor
+        else:
+            self._course_focus_x_direction = 0
+            self._course_focus_y_direction = 0
+            if not self.lock_status:
+                self._course_focus_active = False
+                self._course_focus_off_frames = 0
+                if self.move_pos["x"] > 0:
+                    x_move = self.map_area["w"] / 2
+                elif self.move_pos["x"] < 0:
+                    x_move = -self.map_area["w"] / 2
+                if self.move_pos["y"] > 0:
+                    y_move = self.map_area["h"] / 2
+                elif self.move_pos["y"] < 0:
+                    y_move = -self.map_area["h"] / 2
+                self.map_pos["x"] += x_move / self.move_factor
+                self.map_pos["y"] += y_move / self.move_factor
         self.move_pos["x"] = self.move_pos["y"] = 0
 
         self.map_area["w"], self.map_area["h"] = self.get_geo_area(
@@ -469,10 +605,11 @@ class MapStateMixin:
         self.point["pos"][1] *= self.y_mod
         self.location.append(self.point)
 
-        if not np.isnan(self.gps_values["track"]):
+        track_value = self._get_map_track_value()
+        if not self._is_nan_value(track_value):
             self.current_point.setSymbol(
                 self.direction_arrows[
-                    self.get_arrow_angle_index(self.gps_values["track"])
+                    self.get_arrow_angle_index(track_value)
                 ]
             )
         self.current_point.setData(self.location)
