@@ -505,8 +505,6 @@ class SensorI2C(Sensor):
         imu = self.sensor.get("i2c_imu")
         if imu is None:
             return
-        if not hasattr(imu, "start_and_stop") or not hasattr(imu, "raw_log_enabled"):
-            return
 
         msg = None
         if self._bhi3_raw_data_record_status != "START":
@@ -531,7 +529,7 @@ class SensorI2C(Sensor):
             return
 
         imu = self.sensor["i2c_imu"]
-        if hasattr(imu, "ready") and not imu.ready:
+        if not imu.ready:
             return
 
         self.values["raw_heading"] = (
@@ -1055,14 +1053,10 @@ class SensorI2C(Sensor):
 
     def detect_motion_bhi3_s(self):
         imu = self.sensor.get("i2c_imu")
-        if imu is None or not hasattr(imu, "moving"):
+        if imu is None:
             self.values["m_stat"] = np.nan
             return
-        try:
-            moving = int(imu.moving)
-        except:
-            self.values["m_stat"] = np.nan
-            return
+        moving = int(imu.moving)
 
         # Keep shared moving history for calibration and compatibility.
         self.values["m_stat"] = moving
@@ -1160,7 +1154,9 @@ class SensorI2C(Sensor):
         m_acc = np.array(self.values["acc_mod"]).reshape(3, 1)
         m_acc_mod = m_roll @ m_pitch @ m_acc
         self.values["acc_graph"] = m_acc_mod.reshape(3)
-        self.lp_filter("acc_graph", 10)
+        if self.available_sensors["MOTION"].get("BHI3_S"):
+            self.values["acc_graph"][Z] += 1.0
+        self.lp_filter("acc_graph", 3)
 
         # position quaternion
         # cosRoll = math.cos(roll*0.5)
@@ -1424,7 +1420,7 @@ class SensorI2C(Sensor):
             for _ in range(20):  # ~1s
                 if self.sensor_bhi3_s.last_error != 0:
                     break
-                if getattr(self.sensor_bhi3_s, "ready", False):
+                if self.sensor_bhi3_s.ready:
                     break
                 time.sleep(0.05)
 

@@ -139,7 +139,7 @@ class GUI_Config:
         ),
         "NP16(ANT+)": (
             G_UNIT["Power"],
-            "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x10]['normalized_power']",
+            "self.sensor.values['integrated']['normalized_power']",
         ),
         "Power R(ANT+)": (
             G_UNIT["Power"],
@@ -171,7 +171,7 @@ class GUI_Config:
         ),
         "NP17(ANT+)": (
             G_UNIT["Power"],
-            "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x11]['normalized_power']",
+            "self.sensor.values['integrated']['normalized_power']",
         ),
         "Power18(ANT+)": (
             G_UNIT["Power"],
@@ -187,7 +187,7 @@ class GUI_Config:
         ),
         "NP18(ANT+)": (
             G_UNIT["Power"],
-            "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x12]['normalized_power']",
+            "self.sensor.values['integrated']['normalized_power']",
         ),
         "Torque Ef.(ANT+)": (
             G_UNIT["String"],

@@ -141,9 +141,9 @@ class CourseProfileGraphWidget(BaseMapWidget):
     def wheelEvent(self, event):
         delta = event.angleDelta().y()
         if delta > 0:
-            self.zoom_in()
+            self.zoom_plus()
         else:
-            self.zoom_out()
+            self.zoom_minus()
         event.accept()
 
     @qasync.asyncSlot(int, int)

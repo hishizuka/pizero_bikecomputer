@@ -26,7 +26,7 @@ class LoggerCsv(Logger):
             "dem_altitude,gps_speed,gps_distance,gps_mode,gps_used_sats,gps_total_sats,gps_epx,gps_epy,gps_epv,"
             "gps_pdop,gps_hdop,gps_vdop,total_ascent,total_descent,pressure,temperature,humidity,heading,pitch,roll,"
             "gps_track,wind_speed,wind_direction,headwind,"
-            "motion,acc_x,acc_y,acc_z,gyro_x,gyro_y,gyro_z,cpu_percent,light"
+            "motion,acc_x,acc_y,acc_z,gyro_x,gyro_y,gyro_z,cpu_percent,system_cpu_percent,light"
         )
         columns = r.split(",")
 
