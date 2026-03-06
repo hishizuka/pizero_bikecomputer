@@ -1,24 +1,41 @@
 import asyncio
 
 import numpy as np
-from crdp import rdp
 
 from modules.app_logger import app_logger
-from modules._qt_qtwidgets import QtCore, QtWidgets, pg, qasync
+from modules._qt_qtwidgets import QtCore, QtGui, QtWidgets, pg, qasync
 from modules.helper.maptile import get_wind_color
 from modules.pyqt.graph.pyqtgraph.CoursePlotItem import CoursePlotItem
 from modules.pyqt.graph.pyqtgraph.WindVaneItem import WindVaneItem
+from modules.utils.crdp import rdp
 from modules.utils.geo import get_mod_lat, get_mod_lat_np
 from modules.utils.timer import Timer, log_timers
 
 
 class MapCourseMixin:
-    _COURSE_POINT_SYMBOLS = {"Left": "t3", "Right": "t2"}
-    _INSTRUCTION_ICON_MAP = {
-        "Right": '<img src="img/navi_turn_right_white.svg">',
-        "Left": '<img src="img/navi_turn_left_white.svg">',
-        "Summit": '<img src="img/summit.png">',
+    _INSTRUCTION_ICON_PATH_MAP = {
+        "Right": "img/navi_turn_right_white.svg",
+        "Left": "img/navi_turn_left_white.svg",
+        "Slight Right": "img/navi_turn_slight_right_white.svg",
+        "Slight Left": "img/navi_turn_slight_left_white.svg",
+        "Sharp Right": "img/navi_turn_sharp_right_white.svg",
+        "Sharp Left": "img/navi_turn_sharp_left_white.svg",
+        "Uturn Left": "img/navi_uturn_left_white.svg",
+        "Uturn Right": "img/navi_uturn_right_white.svg",
+        "Uturn": "img/navi_uturn_right_white.svg",
+        "Summit": "img/summit.png",
     }
+    _INSTRUCTION_DEFAULT_ICON_PATH = "img/navi_flag_white.svg"
+    _COURSE_POINT_ICON_PATH_MAP = _INSTRUCTION_ICON_PATH_MAP
+    _COURSE_POINT_DEFAULT_ICON_PATH = _INSTRUCTION_DEFAULT_ICON_PATH
+    course_point_min_zoomlevel = 13
+    course_point_show_only_forward = True
+    course_point_filter_by_view_bounds = False
+    course_point_icon_size = 16
+    course_point_marker_size = 24
+    course_point_marker_bg_color = (0, 128, 0, 240)
+    course_point_marker_border_color = (0, 0, 0, 220)
+    course_point_marker_border_width = 1
 
     # tracks
     track_history_lon = []
@@ -41,6 +58,10 @@ class MapCourseMixin:
     course_plot = None
     plot_verification = None
     course_points_plot = None
+    course_point_markers = None
+    course_point_last_index = None
+    course_points_plot_visible = None
+    course_point_icon_pixmaps = None
     course_winds = []
 
     instruction = None
@@ -51,11 +72,66 @@ class MapCourseMixin:
     instruction_anchor_y_ratio = 0.15
 
     def _setup_course_widgets(self):
+        self.course_point_icon_pixmaps = {}
+        self.course_point_markers = []
+        self.course_point_last_index = None
         self.init_instruction()
 
     def _remove_plot_item(self, item):
         if item is not None:
             self.plot.removeItem(item)
+
+    def _get_instruction_icon_path(self, instruction_name):
+        return self._INSTRUCTION_ICON_PATH_MAP.get(
+            instruction_name, self._INSTRUCTION_DEFAULT_ICON_PATH
+        )
+
+    def _get_course_point_icon_path(self, point_type):
+        return self._COURSE_POINT_ICON_PATH_MAP.get(
+            str(point_type), self._COURSE_POINT_DEFAULT_ICON_PATH
+        )
+
+    @staticmethod
+    def _build_instruction_icon_html(icon_path):
+        return f'<img src="{icon_path}">'
+
+    def _get_course_point_marker_pixmap(self, icon_path):
+        marker_size = int(self.course_point_marker_size)
+        icon_size = int(self.course_point_icon_size)
+        cache_key = (icon_path, marker_size, icon_size)
+        pixmap = self.course_point_icon_pixmaps.get(cache_key)
+        if pixmap is not None:
+            return pixmap
+
+        pixmap = QtGui.QPixmap(marker_size, marker_size)
+        pixmap.fill(QtCore.Qt.GlobalColor.transparent)
+
+        painter = QtGui.QPainter(pixmap)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
+        painter.setPen(
+            QtGui.QPen(
+                QtGui.QColor(*self.course_point_marker_border_color),
+                self.course_point_marker_border_width,
+            )
+        )
+        painter.setBrush(QtGui.QColor(*self.course_point_marker_bg_color))
+        radius = marker_size / 2.0 - 1
+        painter.drawEllipse(
+            QtCore.QPointF(marker_size / 2.0, marker_size / 2.0),
+            radius,
+            radius,
+        )
+
+        icon = QtGui.QIcon(icon_path)
+        if icon.isNull():
+            icon = QtGui.QIcon(self._COURSE_POINT_DEFAULT_ICON_PATH)
+        x_pos = int(round((marker_size - icon_size) / 2))
+        y_pos = int(round((marker_size - icon_size) / 2))
+        icon.paint(painter, QtCore.QRect(x_pos, y_pos, icon_size, icon_size))
+        painter.end()
+
+        self.course_point_icon_pixmaps[cache_key] = pixmap
+        return pixmap
 
     def _update_course_plot(self):
         self._remove_plot_item(self.course_plot)
@@ -99,35 +175,162 @@ class MapCourseMixin:
 
     def _update_course_points_plot(self):
         self._remove_plot_item(self.course_points_plot)
+        self.course_point_markers = []
+        self.course_point_last_index = None
 
         if not len(self.course_points.longitude):
+            self.course_points_plot_visible = False
             return False
 
-        self.course_points_plot = pg.ScatterPlotItem(
-            pxMode=True,
-            symbol="t",
-            size=12,
-        )
+        self.course_points_plot = QtWidgets.QGraphicsItemGroup()
         self.course_points_plot.setZValue(40)
-        color = (255, 0, 0)
-        self.course_points_plot.setData(
-            [
-                {
-                    "pos": [
-                        self.course_points.longitude[i],
-                        get_mod_lat(self.course_points.latitude[i]),
-                    ],
-                    "pen": {"color": color, "width": 1},
-                    "symbol": self._COURSE_POINT_SYMBOLS.get(
-                        self.course_points.type[i], "t"
-                    ),
-                    "brush": pg.mkBrush(color=color),
-                }
-                for i in reversed(range(len(self.course_points.longitude)))
-            ]
+        self.course_point_markers = [None] * len(self.course_points.longitude)
+        ignore_transformations = (
+            QtWidgets.QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations
         )
+
+        for i in reversed(range(len(self.course_points.longitude))):
+            icon_path = self._get_course_point_icon_path(self.course_points.type[i])
+            marker_pixmap = self._get_course_point_marker_pixmap(icon_path)
+            marker = QtWidgets.QGraphicsPixmapItem(marker_pixmap)
+            marker.setParentItem(self.course_points_plot)
+            marker.setTransformationMode(
+                QtCore.Qt.TransformationMode.SmoothTransformation
+            )
+            marker.setFlag(ignore_transformations, True)
+            marker.setOffset(
+                -marker_pixmap.width() / 2.0,
+                -marker_pixmap.height() / 2.0,
+            )
+            marker.setPos(
+                self.course_points.longitude[i],
+                get_mod_lat(self.course_points.latitude[i]),
+            )
+            self.course_point_markers[i] = marker
+
         self.plot.addItem(self.course_points_plot)
+        self.course_points_plot_visible = True
         return True
+
+    def _get_current_course_point_index(self, marker_count):
+        cp_i = int(getattr(self.course.index, "course_points_index", 0))
+        return max(0, min(cp_i, marker_count))
+
+    def _update_course_point_markers_visibility_by_course_index(self):
+        marker_count = len(self.course_point_markers)
+        if marker_count == 0:
+            self.course_point_last_index = None
+            return
+
+        if not self.course_point_show_only_forward:
+            if self.course_point_last_index is not None:
+                for marker in self.course_point_markers:
+                    marker.setVisible(True)
+            self.course_point_last_index = 0
+            return
+
+        cp_i = self._get_current_course_point_index(marker_count)
+        prev_cp_i = self.course_point_last_index
+
+        if prev_cp_i is None:
+            for i in range(cp_i):
+                self.course_point_markers[i].setVisible(False)
+            self.course_point_last_index = cp_i
+            return
+
+        if cp_i == prev_cp_i:
+            return
+
+        if cp_i > prev_cp_i:
+            for i in range(prev_cp_i, cp_i):
+                self.course_point_markers[i].setVisible(False)
+        else:
+            for i in range(cp_i, prev_cp_i):
+                self.course_point_markers[i].setVisible(True)
+
+        self.course_point_last_index = cp_i
+
+    def _update_course_point_markers_visibility_by_view_bounds(
+        self, x_start=np.nan, x_end=np.nan, y_start=np.nan, y_end=np.nan
+    ):
+        marker_count = len(self.course_point_markers)
+        if marker_count == 0:
+            self.course_point_last_index = None
+            return
+
+        if np.any(np.isnan([x_start, x_end, y_start, y_end])):
+            return
+
+        lon_min, lon_max = sorted((x_start, x_end))
+        lat_min, lat_max = sorted((y_start, y_end))
+        cp_i = self._get_current_course_point_index(marker_count)
+        for i, marker in enumerate(self.course_point_markers):
+            visible = (
+                lon_min <= self.course_points.longitude[i] <= lon_max
+                and lat_min <= self.course_points.latitude[i] <= lat_max
+            )
+            if self.course_point_show_only_forward and i < cp_i:
+                visible = False
+            marker.setVisible(visible)
+
+        self.course_point_last_index = cp_i
+
+    def _should_show_course_points(
+        self, x_start=np.nan, x_end=np.nan, y_start=np.nan, y_end=np.nan
+    ):
+        if self.course_points_plot is None:
+            return False
+        if self.zoomlevel < self.course_point_min_zoomlevel:
+            return False
+        if not self.course_point_filter_by_view_bounds:
+            return True
+
+        if np.any(np.isnan([x_start, x_end, y_start, y_end])):
+            # Keep markers visible when bounds are unknown.
+            return True
+
+        lon_min, lon_max = sorted((x_start, x_end))
+        lat_min, lat_max = sorted((y_start, y_end))
+        return bool(
+            np.any(
+                (self.course_points.longitude >= lon_min)
+                & (self.course_points.longitude <= lon_max)
+                & (self.course_points.latitude >= lat_min)
+                & (self.course_points.latitude <= lat_max)
+            )
+        )
+
+    def _update_course_points_visibility(
+        self, x_start=np.nan, x_end=np.nan, y_start=np.nan, y_end=np.nan
+    ):
+        if self.course_points_plot is None:
+            self.course_points_plot_visible = False
+            self.course_point_last_index = None
+            return
+
+        visible = self._should_show_course_points(x_start, x_end, y_start, y_end)
+        if self.course_points_plot_visible == visible:
+            if visible:
+                if self.course_point_filter_by_view_bounds:
+                    self._update_course_point_markers_visibility_by_view_bounds(
+                        x_start, x_end, y_start, y_end
+                    )
+                else:
+                    self._update_course_point_markers_visibility_by_course_index()
+            return
+
+        self.course_points_plot.setVisible(visible)
+        self.course_points_plot_visible = visible
+        if not visible:
+            self.course_point_last_index = None
+            return
+
+        if self.course_point_filter_by_view_bounds:
+            self._update_course_point_markers_visibility_by_view_bounds(
+                x_start, x_end, y_start, y_end
+            )
+        else:
+            self._update_course_point_markers_visibility_by_course_index()
 
     def load_course(self):
         timers = [
@@ -142,6 +345,7 @@ class MapCourseMixin:
         has_course_points = False
         with timers[1]:
             has_course_points = self._update_course_points_plot()
+            self._update_course_points_visibility()
 
         self.add_course_wind()
 
@@ -326,6 +530,9 @@ class MapCourseMixin:
             self.course_points_plot,
         ]:
             self._remove_plot_item(plot_item)
+        self.course_point_markers = []
+        self.course_point_last_index = None
+        self.course_points_plot_visible = False
         for course_wind in self.course_winds:
             self._remove_plot_item(course_wind)
 
@@ -364,9 +571,8 @@ class MapCourseMixin:
         if self.instruction is None:
             self._create_instruction_item()
 
-        image_src = self._INSTRUCTION_ICON_MAP.get(
-            instruction_name,
-            '<img src="img/navi_flag_white.svg">',
+        image_src = self._build_instruction_icon_html(
+            self._get_instruction_icon_path(instruction_name)
         )
 
         if instruction_distance > 1000:

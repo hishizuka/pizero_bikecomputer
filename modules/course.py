@@ -7,12 +7,13 @@ import asyncio
 
 import oyaml
 import numpy as np
-from crdp import rdp
 
 from modules.app_logger import app_logger
-from modules.loaders import TcxLoader
+from modules.loaders import JsonLoader, TcxLoader
+from modules.utils.crdp import rdp
 from modules.utils.filters import savitzky_golay
 from modules.utils.geo import calc_azimuth, get_dist_on_earth, get_dist_on_earth_array
+from modules.utils.navigation import maneuver_to_turn_type
 from modules.utils.timer import Timer, log_timers
 
 POLYLINE_DECODER = False
@@ -23,7 +24,22 @@ try:
 except ImportError:
     pass
 
-LOADERS = {"tcx": TcxLoader}
+LOADERS = {"tcx": TcxLoader, "json": JsonLoader}
+
+
+def _categorize_slope(slope_smoothing, slope_cutoff):
+    slope_smoothing_cat = np.zeros(len(slope_smoothing), dtype="uint8")
+
+    for category in range(1, len(slope_cutoff)):
+        lower = slope_cutoff[category - 1]
+        upper = slope_cutoff[category]
+        slope_smoothing_cat = np.where(
+            (lower < slope_smoothing) & (slope_smoothing <= upper),
+            category,
+            slope_smoothing_cat,
+        )
+
+    return slope_smoothing_cat
 
 
 class CourseIndex:
@@ -85,6 +101,9 @@ class CoursePoints:
 # we have mutable attributes but course is supposed to be a singleton anyway
 class Course:
     config = None
+    on_route_exit_ratio = 1.2
+    on_route_rescue_ratio = 1.35
+    on_route_centroid_window = 2
 
     # for course
     info = {}
@@ -140,6 +159,43 @@ class Course:
     @property
     def has_weather(self):
         return bool(len(self.wind_speed))
+
+    def _resolve_preferred_course_file(self, file_path):
+        _, ext = os.path.splitext(file_path)
+        if ext.lower() != ".tcx":
+            return file_path
+
+        json_path = os.path.splitext(file_path)[0] + ".json"
+        if not os.path.exists(json_path):
+            return file_path
+
+        app_logger.info(f"prefer json course file: {json_path}")
+        return json_path
+
+    @staticmethod
+    def _read_first_non_whitespace_char(file_path):
+        try:
+            with open(file_path, "r", encoding="utf-8_sig") as f:
+                chunk = f.read(4096)
+        except (OSError, UnicodeDecodeError):
+            return ""
+
+        stripped = chunk.lstrip()
+        if not stripped:
+            return ""
+        return stripped[0]
+
+    def _detect_course_file_extension(self, file_path):
+        ext = os.path.splitext(file_path)[1].lower().lstrip(".")
+        if ext in LOADERS:
+            return ext
+
+        first_char = self._read_first_non_whitespace_char(file_path)
+        if first_char == "<":
+            return "tcx"
+        if first_char in ("{", "["):
+            return "json"
+        return ""
     
     def reset(self, delete_course_file=False, replace=False):
         # for course
@@ -175,7 +231,7 @@ class Course:
     def load(self, file=None):
         # if file is given, copy it to self.config.G_COURSE_FILE_PATH firsthand, we are loading a new course
         if file:
-            _, ext = os.path.splitext(file)
+            file = self._resolve_preferred_course_file(file)
             shutil.copy(file, self.config.G_COURSE_FILE_PATH)
             # shutil.copy2(file, self.config.G_COURSE_FILE_PATH)
             # if ext:
@@ -195,14 +251,10 @@ class Course:
         with timers[0]:
             # get loader based on the extension
             if os.path.exists(self.config.G_COURSE_FILE_PATH):
-                # get file extension in order to find the correct loader
-                # extension was set in custom attributes as the current course is always
-                # loaded from '.current'
                 try:
-                    # ext = os.getxattr(
-                    #    self.config.G_COURSE_FILE_PATH, "user.ext"
-                    # ).decode()
-                    ext = "tcx"
+                    ext = self._detect_course_file_extension(
+                        self.config.G_COURSE_FILE_PATH
+                    )
                     if ext in LOADERS:
                         course_data, course_points_data = LOADERS[ext].load_file(
                             self.config.G_COURSE_FILE_PATH
@@ -214,11 +266,12 @@ class Course:
                             for k, v in course_points_data.items():
                                 setattr(self.course_points, k, v)
                     else:
-                        app_logger.warning(f".{ext} files are not handled")
+                        app_logger.warning(
+                            f"course file format is not handled: {self.config.G_COURSE_FILE_PATH}"
+                        )
                 except (AttributeError, OSError) as e:
                     app_logger.error(
-                        f"Incorrect course file: {e}. Please reload the course and make sure your file"
-                        f"has a proper extension set"
+                        f"Incorrect course file: {e}. Please reload the course."
                     )
         with timers[1]:
             self.downsample()
@@ -284,8 +337,10 @@ class Course:
 
         for p in cp:
             cp_i += 1
+            turn_str = maneuver_to_turn_type(p.get("step"))
+
             # skip
-            if ("step" in p and p["step"] in ["straight", "merge", "keep"]) or (
+            if ("step" in p and not turn_str) or (
                 "step" not in p and cp_i not in [0, cp_n]
             ):
                 point_distance[-1] = round(p["dist"]["total"] / 1000, 1)
@@ -297,15 +352,6 @@ class Course:
             if "dist" in p:
                 dist = round(p["dist"]["total"] / 1000, 1)
                 point_distance.append(dist)
-
-            turn_str = ""
-
-            if "step" in p:
-                turn_str = p["step"]
-                if turn_str[-4:] == "left":
-                    turn_str = "Left"
-                elif turn_str[-5:] == "right":
-                    turn_str = "Right"
 
             point_name.append(turn_str)
             point_type.append(turn_str)
@@ -379,25 +425,10 @@ class Course:
             dist += pre_dist
             pre_dist = step["distance"]["value"] / 1000
 
-            if "maneuver" not in step or any(
-                map(step["maneuver"].__contains__, ("straight", "merge", "keep"))
-            ):
+            turn_str = maneuver_to_turn_type(step.get("maneuver"))
+            if not turn_str:
                 continue
-                # https://developers.google.com/maps/documentation/directions/get-directions
-                # turn-slight-left, turn-sharp-left, turn-left,
-                # turn-slight-right, turn-sharp-right, keep-right,
-                # keep-left, uturn-left, uturn-right, turn-right,
-                # straight,
-                # ramp-left, ramp-right,
-                # merge,
-                # fork-left, fork-right,
-                # ferry, ferry-train,
-                # roundabout-left, and roundabout-right
-            turn_str = step["maneuver"]
-            if turn_str[-4:] == "left":
-                turn_str = "Left"
-            elif turn_str[-5:] == "right":
-                turn_str = "Right"
+
             self.course_points.type = np.append(self.course_points.type, turn_str)
             self.course_points.latitude = np.append(
                 self.course_points.latitude, step["start_location"]["lat"]
@@ -504,9 +535,9 @@ class Course:
 
         diff_dist_max = int(np.max(dist_diff)) * 2 / 1000  # [m->km]
         if diff_dist_max > self.config.G_GPS_SEARCH_RANGE:  # [km]
-            app_logger.debug(
-                f"G_GPS_SEARCH_RANGE[km]: {self.config.G_GPS_SEARCH_RANGE} -> {diff_dist_max}"
-            )
+            #app_logger.debug(
+            #    f"G_GPS_SEARCH_RANGE[km]: {self.config.G_GPS_SEARCH_RANGE} -> {diff_dist_max}"
+            #)
             self.config.G_GPS_SEARCH_RANGE = diff_dist_max
 
         app_logger.info(f"downsampling:{len_lat} -> {len(self.latitude)}")
@@ -572,20 +603,9 @@ class Course:
             ] * LP_coefficient + self.slope_smoothing[i + 1] * (1 - LP_coefficient)
 
         # detect climbs
-        slope_smoothing_cat = np.zeros(course_n).astype("uint8")
-
-        for i in range(i, len(self.config.G_SLOPE_CUTOFF) - 1):
-            slope_smoothing_cat = np.where(
-                (self.config.G_SLOPE_CUTOFF[i - 1] < self.slope_smoothing)
-                & (self.slope_smoothing <= self.config.G_SLOPE_CUTOFF[i]),
-                i,
-                slope_smoothing_cat,
-            )
-
-        slope_smoothing_cat = np.where(
-            (self.config.G_SLOPE_CUTOFF[-1] < self.slope_smoothing),
-            len(self.config.G_SLOPE_CUTOFF) - 1,
-            slope_smoothing_cat,
+        slope_smoothing_cat = _categorize_slope(
+            self.slope_smoothing,
+            self.config.G_SLOPE_CUTOFF,
         )
 
         climb_search_state = False
@@ -909,15 +929,92 @@ class Course:
             current_time += timedelta(hours=rest_dist/self.config.G_GROSS_AVE_SPEED)
             self.wind_timeline.append(current_time)
     
+        n = len(self.wind_coordinates)
+        self.wind_speed = [np.nan] * n
+        self.wind_direction = [np.nan] * n
+        check = [False] * n
+
+        retry_delays = (1.0, 3.0, 8.0)
+        max_attempts = len(retry_delays) + 1
+        for attempts in range(max_attempts):
+            for i in range(n):
+                if not any(np.isnan((self.wind_speed[i], self.wind_direction[i]))):
+                    continue
+                w_spd, w_dir, _, _ = await self.config.api.get_wind(
+                    self.wind_coordinates[i],
+                    forecast_time=self.wind_timeline[i]
+                )
+                if not any(np.isnan((w_spd, w_dir))):
+                    self.wind_speed[i] = float(w_spd)
+                    self.wind_direction[i] = float(w_dir)
+                    check[i] = True
+            if all(check):
+                break
+            if attempts >= len(retry_delays):
+                break
+            await asyncio.sleep(retry_delays[attempts])
+
+        self.load_weather_status = 2
+
     def reset_load_weather_status(self):
         self.load_weather_status = 0
+
+    def _project_point_to_segment(self, segment_index, inner_p):
+        max_segment_index = len(self.longitude) - 2
+        if max_segment_index < 0:
+            return None
+
+        segment_index = int(max(0, min(segment_index, max_segment_index)))
+        inner = float(inner_p[segment_index])
+        inner = max(0.0, min(inner, 1.0))
+
+        h_lon = (
+            self.longitude[segment_index]
+            + (self.longitude[segment_index + 1] - self.longitude[segment_index]) * inner
+        )
+        h_lat = (
+            self.latitude[segment_index]
+            + (self.latitude[segment_index + 1] - self.latitude[segment_index]) * inner
+        )
+        return float(h_lon), float(h_lat)
+
+    def _get_projection_centroid(self, center_segment_index, inner_p, window_size):
+        max_segment_index = len(self.longitude) - 2
+        if max_segment_index < 0:
+            return None
+
+        start_index = max(0, int(center_segment_index) - int(window_size))
+        end_index = min(max_segment_index, int(center_segment_index) + int(window_size))
+
+        lon_sum = 0.0
+        lat_sum = 0.0
+        weight_sum = 0.0
+
+        for segment_index in range(start_index, end_index + 1):
+            projected = self._project_point_to_segment(segment_index, inner_p)
+            if projected is None:
+                continue
+
+            h_lon, h_lat = projected
+            distance_from_center = abs(segment_index - int(center_segment_index))
+            # Keep nearby segments dominant while still blending neighbors.
+            weight = 1.0 / (distance_from_center + 1.0)
+
+            lon_sum += h_lon * weight
+            lat_sum += h_lat * weight
+            weight_sum += weight
+
+        if weight_sum <= 0:
+            return None
+
+        return lon_sum / weight_sum, lat_sum / weight_sum
 
     def get_index(self, lat, lon, track, search_range, on_route_cutoff, azimuth_cutoff):
         if not self.config.G_COURSE_INDEXING:
             self.index.on_course_status = False
             return
 
-        if np.isnan(lat) or np.isnan(lat):
+        if np.isnan(lat) or np.isnan(lon):
             return
 
         # not running
@@ -930,6 +1027,7 @@ class Course:
             return
 
         start = self.index.value
+        was_on_course = bool(self.index.on_course_status)
 
         # 1st search index(a little ahead)
         forward_search_index = min(start + 5, course_n - 1)
@@ -951,7 +1049,9 @@ class Course:
         p_a_y = lat_diff[0:-1]
         p_b_x = lon_diff[1:]
         p_b_y = lat_diff[1:]
-        inner_p = (b_a_x * p_a_x + b_a_y * p_a_y) / self.points_diff_sum_of_squares
+        inner_p = (
+            b_a_x * p_a_x + b_a_y * p_a_y
+        ) / self.points_diff_sum_of_squares
 
         azimuth_diff = np.full(len(self.azimuth), np.nan)
 
@@ -1042,7 +1142,8 @@ class Course:
                 and len(self.slope_smoothing) > 0
                 # prevent directional false detection on uphill round-trip courses.
                 # both in climbing condition or not.
-                and (grade > self.config.G_SLOPE_CUTOFF[0]) != (self.slope_smoothing[m] > self.config.G_SLOPE_CUTOFF[0])
+                and (grade > self.config.G_SLOPE_CUTOFF[0])
+                != (self.slope_smoothing[m] > self.config.G_SLOPE_CUTOFF[0])
             ):
                 continue
 
@@ -1060,34 +1161,28 @@ class Course:
                 self.index.value = m
                 return
 
-            h_lon = (
-                self.longitude[m]
-                + (self.longitude[m + 1] - self.longitude[m]) * inner_p[m]
-            )
-            h_lat = (
-                self.latitude[m]
-                + (self.latitude[m + 1] - self.latitude[m]) * inner_p[m]
-            )
+            projected = self._project_point_to_segment(m, inner_p)
+            if projected is None:
+                continue
+            h_lon, h_lat = projected
             dist_diff_h = get_dist_on_earth(h_lon, h_lat, lon, lat)
+            dist_diff_eval = dist_diff_h
 
-            if dist_diff_h > on_route_cutoff:
-                app_logger.debug(
-                    f"dist_diff_h: {dist_diff_h:.0f} > cutoff {on_route_cutoff}[m]"
-                )
-                app_logger.debug(
-                    f"\ti:{i}, s:{s}, m:{m}, azimuth_diff:{azimuth_diff[m]}, "
-                    f"course_point_index:{self.index.course_points_index}, "
-                    f"inner_p[m]:{inner_p[m]}"
-                )
-                app_logger.debug(
-                    f"\th_lat/h_lon: {h_lat}, {h_lon}, lat_lon: {lat}, {lon}"
-                )
-                app_logger.debug(
-                    f"\tcourse[m]: {self.latitude[m]}, {self.longitude[m]}"
-                )
-                app_logger.debug(
-                    f"\tcourse[m+1]: {self.latitude[m+1]}, {self.longitude[m+1]}"
-                )
+            centroid = self._get_projection_centroid(
+                m,
+                inner_p,
+                self.on_route_centroid_window,
+            )
+            if centroid is not None:
+                c_lon, c_lat = centroid
+                dist_diff_centroid = get_dist_on_earth(c_lon, c_lat, lon, lat)
+                dist_diff_eval = min(dist_diff_eval, dist_diff_centroid)
+
+            on_route_cutoff_eval = float(on_route_cutoff)
+            if was_on_course:
+                on_route_cutoff_eval *= self.on_route_exit_ratio
+
+            if dist_diff_eval > on_route_cutoff_eval:
                 continue
 
             # stay forward while self.config.G_GPS_KEEP_ON_COURSE_CUTOFF if search_indexes is except forward
@@ -1098,9 +1193,6 @@ class Course:
             else:
                 self.index.check[-1] = False
             if self.index.check[-1] is False and np.sum(self.index.check) != 0:
-                # app_logger.debug(f"course_index_check failed, self.index.check[-1]:{self.index.check[-1]}, np.sum(self.course_index_check):{np.sum(self.index.check)}")
-                # app_logger.debug(f"\t i:{i}, s:{s}, m:{m}, azimuth_diff:{azimuth_diff[m+1]}, course_point_index:{self.index.course_points_index}")
-                # app_logger.debug(f"\t {lat}, {lon}, {round(self.index.distance/1000,2)}m")
                 continue
 
             self.index.on_course_status = True
@@ -1144,6 +1236,17 @@ class Course:
                 app_logger.info(f"\t azimuth_diff: {azimuth_diff[m]}")
 
             return
+
+        if was_on_course and len(dist_diff):
+            rescue_segment = int(np.argmin(dist_diff))
+            projected = self._project_point_to_segment(rescue_segment, inner_p)
+            if projected is not None:
+                h_lon, h_lat = projected
+                rescue_distance = get_dist_on_earth(h_lon, h_lat, lon, lat)
+                rescue_cutoff = float(on_route_cutoff) * self.on_route_rescue_ratio
+                if rescue_distance <= rescue_cutoff:
+                    self.index.on_course_status = True
+                    return
 
         self.index.on_course_status = False
 
