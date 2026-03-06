@@ -8,7 +8,7 @@ from .base import AbstractSensorGPS
 
 class Dummy_GPS(AbstractSensorGPS):
     LOG_SPEED = 5
-    COURSE_DIVIDE_FACTOR = 2000#500
+    COURSE_DIVIDE_FACTOR = 2000 #500
     COURSE_RAND_FACTOR = 0.5  # np.random.randint(0,10)/10
 
     @property
@@ -88,19 +88,26 @@ class Dummy_GPS(AbstractSensorGPS):
 
             # generate dummy position from log
             if self.config.logger.position_log.shape[0] > 0:
+                log_len = len(self.config.logger.position_log)
+                if log_len <= 0:
+                    continue
+
+                course_i = int(course_i) % log_len
                 self.set_position_from_log(
                     self.config.logger.position_log[course_i]
                 )
 
-                if course_i == pre_course_i:
-                    course_i += 1 * self.LOG_SPEED
+                # Keep the existing first-loop warm-up behavior, but make index
+                # progression safe for any log length (including short logs).
+                if log_len > 1 and course_i == pre_course_i:
+                    course_i = (course_i + self.LOG_SPEED) % log_len
+                    if course_i == pre_course_i:
+                        course_i = (course_i + 1) % log_len
                     continue
-                else:
-                    pre_course_i = course_i
-                    course_i += 1 * self.LOG_SPEED
-                    if course_i >= len(self.config.logger.position_log):
-                        course_i = pre_course_i = 0
-                        continue
+
+                pre_course_i = course_i
+                if log_len > 1:
+                    course_i = (course_i + self.LOG_SPEED) % log_len
 
             # from course
             else:
