@@ -1,10 +1,10 @@
 import os
 import re
-from collections import defaultdict
 
 import numpy as np
 
 from modules.app_logger import app_logger
+from .base import LoaderBase
 
 patterns = {
     "name": re.compile(r"<Name>(?P<text>[\s\S]*?)</Name>"),
@@ -25,7 +25,7 @@ patterns = {
 }
 
 
-class TcxLoader:
+class TcxLoader(LoaderBase):
     config = None
 
     @classmethod
@@ -34,16 +34,8 @@ class TcxLoader:
             return None, None
         app_logger.info(f"[{cls.__name__}]: loading {file}")
 
-        # should just return a Course object
-        course = {
-            "info": {},
-            "latitude": None,
-            "longitude": None,
-            "altitude": None,
-            "distance": None,
-            "time": None,
-        }
-        course_points = defaultdict(lambda: np.array([]))
+        course = cls.create_course(with_time=True)
+        course_points = cls.create_course_points()
 
         with open(file, "r", encoding="utf-8_sig") as f:
             tcx = f.read()
@@ -130,43 +122,16 @@ class TcxLoader:
                     ]
                 )
 
-        valid_course = True
-        if len(course["latitude"]) != len(course["longitude"]):
-            app_logger.error("Could not parse course")
-            valid_course = False
-        if not (
-            len(course["latitude"])
-            == len(course["altitude"])
-            == len(course["distance"])
-        ):
-            app_logger.warning(
-                f"Course has missing data: points {len(course['latitude'])} altitude {len(course['altitude'])} "
-                f"distance {len(course['distance'])}"
-            )
-        if not (
-            len(course_points["name"])
-            == len(course_points["latitude"])
-            == len(course_points["longitude"])
-            == len(course_points["type"])
-        ):
-            app_logger.error("Could not parse course points")
-            valid_course = False
+        cls.normalize_course_point_types(course_points)
+        valid_course = cls.validate_course_data(course, course_points)
 
         if not valid_course:
-            course["distance"] = np.array([])
-            course["altitude"] = np.array([])
-            course["latitude"] = np.array([])
-            course["longitude"] = np.array([])
-            course_points = defaultdict(lambda: np.array([]))
+            course, course_points = cls.reset_invalid_course_data()
         else:
-            # delete 'Straight' from course points
-            if len(course_points["type"]):
-                not_straight_cond = np.where(
-                    course_points["type"] != "Straight", True, False
-                )
-
-                for key in ["name", "latitude", "longitude", "notes", "type", "time"]:
-                    course_points[key] = course_points[key][not_straight_cond]
+            cls.filter_straight_course_points(
+                course_points,
+                ["name", "latitude", "longitude", "notes", "type", "time"],
+            )
 
         # if time is given in the field, try to set the course point distance/altitude directly from there
         # if a point can not be found, let's fail and modify_course_point will try to compute it instead
