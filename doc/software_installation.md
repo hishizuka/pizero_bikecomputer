@@ -16,8 +16,7 @@
   - [Run in console](#run-in-console)
     - [Manual execution](#manual-execution)
     - [Run as a service](#run-as-a-service)
-  - [Run with VNC](#run-with-vnc)
-- [Usage](#usage)
+  - [Usage](#usage)
   - [Button](#button)
     - [Software button](#software-button)
     - [Hardware button](#hardware-button)
@@ -26,7 +25,7 @@
     - [Courses](#courses)
     - [Connectivity](#connectivity)
     - [Upload Activity](#upload-activity)
-    - [Map](#map)
+    - [Map and Data](#map-and-data)
     - [Profile](#profile)
     - [System](#System)
   - [Settings](#settings)
@@ -47,15 +46,22 @@ Raspberry Pi OS Trixie or later. Bookworm is not supported.
 Please build a python virtual environment since the pip command is used.
 
 ```
-# mac
-$ brew install pyqt numpy cython python-setuptools pillow sqlite3
-$ pip install pyqtgraph oyaml polyline aiohttp qasync
-# or linux (Debian)
-$ pip install PyQt6 numpy cython setuptools pillow pyqtgraph oyaml polyline aiohttp qasync
+# macOS (Homebrew)
+$ brew install python pyqt
+$ python3 -m venv .venv
+$ source .venv/bin/activate
+$ pip install -U pip setuptools
+$ pip install PyQt6 numpy cython pillow pyqtgraph oyaml polyline aiohttp qasync
+
+# or Linux (Debian/Ubuntu)
+$ python3 -m venv .venv
+$ source .venv/bin/activate
+$ pip install -U pip setuptools
+$ pip install PyQt6 numpy cython pillow pyqtgraph oyaml polyline aiohttp qasync
 $ sudo apt install sqlite3 libsqlite3-dev
 
-# (optional) If you want to try the upload to cloud feature.
-$ pip garminconnect stravacookies tb-mqtt-client
+# optional: cloud upload / live track
+$ pip install garminconnect stravacookies tb-mqtt-client mmh3 timezonefinder
 
 $ git clone https://github.com/hishizuka/pizero_bikecomputer.git
 $ cd pizero_bikecomputer
@@ -78,9 +84,9 @@ This command will install following ranges and you can at a minimum run the prog
 
 - [Common](#common)
 - [Bluetooth and Cloud](#bluetooth-and-cloud)
-- [GPS module / UART GPS](#uart-gps)
+- [GPS module](#gps-module)
 - [ANT+ USB dongle](#ant-usb-dongle)
-- [Display / JDI & SHARP display](#jdi--sharp-display)
+- [Display / JDI & SHARP MIP display](#jdi--sharp-mip-display)
 
 After executing the command, reboot and resume from [Quick Start](#quick-start).
 Or, if you want to use a specific display/sensor, please read the following sections carefully.
@@ -95,7 +101,7 @@ Install in the home directory of default user "pi". Also, your Raspberry Pi is c
 ```
 $ cd
 
-$ sudo apt install -y git python3-venv python3-yaml cython3 cmake python3-numpy sqlite3 libsqlite3-dev python3-pil python3-aiohttp python3-psutil python3-pyqt6 python3-pyqt6.qtsvg pyqt6-dev-tools
+$ sudo apt install -y git cython3 cmake python3.13-venv python3-setuptools python3-numpy sqlite3 libsqlite3-dev python3-pil python3-aiohttp python3-psutil python3-pyqt6 python3-pyqt6.qtsvg qt6-svg-plugins pyqt6-dev-tools
 
 # If there is no python virtual environment.
 $ python -m venv --system-site-packages ~/.venv
@@ -117,7 +123,7 @@ Strava, Garmin and ThingsBoard
 
 ```
 $ sudo apt install -y bluez-obexd
-$ pip install garminconnect stravacookies bluez-peripheral==0.2.0a3 tb-mqtt-client mmh3 timezonefinder
+$ pip install garminconnect stravacookies bluez-peripheral==0.2.0a5 tb-mqtt-client mmh3 timezonefinder
 ```
 
 ### GPS module
@@ -127,8 +133,9 @@ Assume Serial interface is on and login shell is off in raspi-config and GPS dev
 ```
 $ sudo apt install gpsd python3-gps
 $ pip install timezonefinder
-$ sudo cp install/etc/default/gpsd /etc/default/gpsd
+$ sudo cp scripts/install/etc/default/gpsd /etc/default/gpsd
 $ sudo systemctl enable gpsd
+$ sudo systemctl enable gpsd.socket
 ```
 
 Check with `cgps` or `gpsmon` command.
@@ -148,9 +155,14 @@ Assume SPI interface is on in raspi-config.
 
 #### JDI & SHARP MIP display
 
-For JDI MIP Reflective color LCD module and Adafruit SHARP Memory Display Breakout.
+For `MIP_*` displays there are currently three practical paths:
 
-pigpio is not available in Trixie standard packages. Install manually:
+- legacy pigpio backend
+- legacy spidev + libgpiod backend
+- the newer `sharp-drm` framebuffer driver (`QT_QPA_PLATFORM=linuxfb:fb=/dev/fb1`)
+
+`install.sh` enables SPI and installs libgpiod packages, but it does not install pigpio automatically.
+If you want to keep using the legacy pigpio backend on Raspberry Pi OS Trixie, install pigpio manually:
 
 ```
 $ cd
@@ -164,7 +176,16 @@ $ sudo systemctl enable pigpiod
 $ sudo systemctl start pigpiod
 ```
 
+If you use the newer `sharp-drm` driver, pigpio is not needed.
+In that case run the application with `QT_QPA_PLATFORM=linuxfb:fb=/dev/fb1`.
+
 #### Display HAT Mini, Pirate Audio
+
+```
+$ pip install st7789
+```
+
+#### ST7789 Breakout
 
 ```
 $ pip install st7789
@@ -212,8 +233,7 @@ $ pip install adafruit-circuitpython-bmp280
 | [Bosch BMI270](https://www.bosch-sensortec.com/products/motion-sensors/imus/bmi270/) | | o | None(*1) |
 | [Bosch BMM150 (Obsolete)](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm150/) | | | None(*1) |
 | [Bosch BMM350](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm350/) | | o | None(*1) |
-| [Bosch BHI360](https://www.bosch-sensortec.com/products/smart-sensor-systems/bhi360/) | | | None(*1) |
-| [Bosch BHI385](https://www.bosch-sensortec.com/products/smart-sensor-systems/bhi385/) | | | None(*1) |
+| Bosch BHI360 Shuttle Board 3.0 | | | bundled Cython helper |
 | [Bosch BNO055](https://www.bosch-sensortec.com/products/smart-sensor-systems/bno055/) | [Adafruit](https://www.adafruit.com/product/4646) | | adafruit-circuitpython-bno055(*2) | 
 | [MEMSIC MMC5983MA](https://www.memsic.com/magnetometer-5) | [SparkFun](https://www.sparkfun.com/products/19895) | | None |
 | [STMicroelectronics LIS3MDL](https://www.st.com/en/mems-and-sensors/lis3mdl.html) | [Adafruit](https://www.adafruit.com/product/4485) | | adafruit-circuitpython-lis3mdl |
@@ -264,28 +284,6 @@ Also, place the header files in LD_INCLUDE_PATH (/usr/local/include, etc.).
   $ sudo ldconfig
   ```
 
-- [BHI360_SensorAPI](https://github.com/boschsensortec/BHI360_SensorAPI)
-  - 
-  ```
-  $ gcc -shared -fPIC -O2 -o libbhi360.so bhi*.c examples/common/verbose.c -I./examples/common/
-  $ sudo mv libbhi360.so /usr/local/lib/
-  $ sudo cp bhi*.h /usr/local/include/
-  $ sudo cp examples/common/verbose.h /usr/local/include/
-  $ sudo cp -a firmware/bhi360 /usr/local/include/
-  $ sudo ldconfig
-  ```
-
-- [BHI385_SensorAPI](https://github.com/boschsensortec/BHI385_SensorAPI)
-  - 
-  ```
-  $ gcc -shared -fPIC -O2 -o libbhi385.so bhi*.c examples/common/verbose.c -I./examples/common/
-  $ sudo mv libbhi385.so /usr/local/lib/
-  $ sudo cp bhi*.h /usr/local/include/
-  $ sudo cp examples/common/verbose.h /usr/local/include/
-  $ sudo cp -a firmware/bhi385 /usr/local/include/
-  $ sudo ldconfig
-  ```
-
 *2 You must enable i2c slowdown. Follow [the adafruit guide](https://learn.adafruit.com/circuitpython-on-raspberrypi-linux/i2c-clock-stretching).
 
 *3 Install manually https://github.com/spacecraft-design-lab-2019/CircuitPython_BMX160
@@ -306,12 +304,16 @@ $ sudo apt install python3-buttonshim
 #### IO Expander (with MCP23008/MCP23009 and some buttons)
 
 ```
-$ sudo apt install adafruit-circuitpython-mcp230xx
+$ pip install adafruit-circuitpython-mcp230xx
 ```
 
 #### PiJuice HAT
 
 Follow [official setup guide](https://github.com/PiSupply/PiJuice/tree/master/Software) of PiSupply/PiJuice
+
+#### PiSugar3
+
+No additional Python package is required by this repository.
 
 
 # Quick Start
@@ -320,13 +322,16 @@ If cython is available, it will take a few minutes to run for the first time to 
 
 ## Run on Wayland / X Window
 
-If you use Raspberry Pi OS with desktop, starting on X Window (or using VNC) at first would be better.
+If you use Raspberry Pi OS with desktop, starting on X Window at first would be better.
 
 ```
 $ python3 pizero_bikecomputer.py
 ```
 
-If you use MIP Reflective color LCD module, SHARP Memory Display or E-Ink displays, run with [`QT_QPA_PLATFORM=offscreen`](#mip-reflective-color-lcd-module-sharp-memory-display-or-e-ink-displays)
+For legacy MIP / SHARP / E-ink displays in console mode, use `QT_QPA_PLATFORM=offscreen`.
+If you use the newer `sharp-drm` driver, use `QT_QPA_PLATFORM=linuxfb:fb=/dev/fb1`.
+
+If your Qt build includes the VNC platform plugin, `QT_QPA_PLATFORM=vnc` can still be used for temporary remote debugging, but it is not a primary workflow for this project.
 
 ### PiTFT
 
@@ -340,10 +345,14 @@ see [hardware_installation_pitft.md](./hardware_installation_pitft.md#run-on-x-w
 
 For JDI MIP Reflective color LCD module and Adafruit SHARP Memory Display Breakout.
 
-Before run the program, add the following environment variable.
+Before running the program, choose one of the following platform plugins:
 
 ```
+# legacy pigpio / spidev backend
 $ QT_QPA_PLATFORM=offscreen python3 pizero_bikecomputer.py
+
+# sharp-drm framebuffer driver
+$ QT_QPA_PLATFORM=linuxfb:fb=/dev/fb1 python3 pizero_bikecomputer.py
 ```
 
 `ctrl + c` to exit the application.
@@ -355,49 +364,33 @@ see [hardware_installation_pitft.md](./hardware_installation_pitft.md#run-on-con
 
 ### Run as a service
 
-If you use displays in console environment not X Window, install auto-run service and shutdown service.
+The old `install/` paths, `exec-mip.sh`, and shutdown helper service are no longer used in this repository.
+The current service template lives at `scripts/install/etc/systemd/system/pizero_bikecomputer.service`,
+and the recommended way is to run `install.sh` and answer `Install services? -> y`.
 
-#### auto-run setting
+`install.sh` fills the placeholders in the template, installs `rotate_debug_log.sh`,
+and enables `pizero_bikecomputer.service` automatically.
 
-If you use MIP Reflective color LCD module, SHARP Memory Display or E-Ink displays, modify install/etc/systemd/system/pizero_bikecomputer.service.
+The application log is written to `log/debug.log`.
+
+If you want to manage the service manually, use `scripts/install/etc/systemd/system/pizero_bikecomputer.service`
+as a template and fill at least:
+
+- `WorkingDirectory`
+- `ExecStartPre`
+- `ExecStart`
+- `ExecStopPost`
+- `User`
+- `Group`
+- `StandardOutput`
+
+Then reload and start it as usual:
 
 ```
-ExecStart=/home/pi/pizero_bikecomputer/exec-mip.sh
-```
-
-Install service scripts.
-
-```
-$ sudo cp install/etc/systemd/system/pizero_bikecomputer.service /etc/systemd/system/
-$ sudo cp install/usr/local/bin/pizero_bikecomputer_shutdown /usr/local/bin/
-$ sudo cp install/etc/systemd/system/pizero_bikecomputer_shutdown.service /etc/systemd/system/
 $ sudo systemctl daemon-reload
 $ sudo systemctl enable pizero_bikecomputer.service
-$ sudo systemctl enable pizero_bikecomputer_shutdown.service
-```
-
-#### start the service
-
-The output of the log file will be in "/home/pi/pizero_bikecomputer/log/debug.txt".
-
-```
 $ sudo systemctl start pizero_bikecomputer.service
 ```
-
-## Run with VNC
-
-Do not enable VNC in raspi-config if you want to access pizero_bikecomputer.
-The software has an inbuilt VNC server that allows you to access the program without needing to enable VNC in raspi-config.
-
-```
-$ QT_QPA_PLATFORM=vnc python3 pizero_bikecomputer.py
-```
-
-Access from the vnc viewer in your environment.
-
-- Windows: RealVNC
-- Linux: RealVNC, TigerVNC, Tight VNC
-- macOS: Finder (`Cmd + K`)
 
 # Usage
 
@@ -420,7 +413,7 @@ The buttons at the bottom of the screen are assigned the following functions fro
 ### Hardware button
 
 The hardware buttons are designed to roughly match the software screen.
-You can change both short and long presses in "modules/config.py".
+You can change both short and long presses in `modules/button_config.py`.
 
 #### PiTFT 2.4
 
@@ -436,9 +429,9 @@ From left to right, the button assignments are as follows.
 
 | Button | Short press | Long press |
 |:-|:-|:-|
-| A | Left (<) | None |
+| A | Left (<) | Screenshot |
 | B | Lap | Reset |
-| C | Screenshot | None |
+| C | ANT+ MultiScan | Fake Trainer for Zwift |
 | D | Start/Stop | None |
 | E | Right (>) | Menu |
 
@@ -446,11 +439,11 @@ From left to right, the button assignments are as follows.
 
 | Button | Short press | Long press |
 |:-|:-|:-|
-| A | Left (<) | None |
-| B | Zoom out | Reset |
-| C | Change button mode(*1) | None |
-| D | Zoom in | None |
-| E | Right (>) | Menu |
+| A | Left (<) | Screenshot |
+| B | Zoom out | Previous rain/wind time |
+| C | Change overlay | Change button mode |
+| D | Zoom in | Next rain/wind time |
+| E | Right (>) | Change tile mode |
 
 Another button mode
 
@@ -458,7 +451,7 @@ Another button mode
 |:-|:-|:-|
 | A | Move left | None |
 | B | Move down | Zoom out |
-| C | Restore button mode | Change move amount |
+| C | Change overlay | Restore button mode |
 | D | Move up | Zoom in |
 | E | Move right | Search route(*) |
 
@@ -470,9 +463,9 @@ Another button mode
 |:-|:-|:-|
 | A | Left (<) | None |
 | B | Zoom out | None |
-| C | Restore button mode | None |
+| C | Change button mode | None |
 | D | Zoom in | None |
-| E | Right (>) | None |
+| E | Right (>) | Menu |
 
 Another button mode
 
@@ -507,16 +500,8 @@ The button assignments are as follows.
 | Button | Short press | Long press |
 |:-|:-|:-|
 | PAGE | Left (<) | Right (>) |
-| CUSTOM | Change button mode | Menu |
+| CUSTOM | ANT+ Light ON/OFF | Menu |
 | LAP | Lap | None |
-
-Another button mode
-
-| Button | Short press | Long press |
-|:-|:-|:-|
-| PAGE | ANT+ Light ON/OFF | Brightness control |
-| CUSTOM | Restore button mode | None |
-| LAP | Start/Stop | None |
 
 #### Map
 
@@ -557,43 +542,37 @@ In the menu, the button assignments are changed.
 | Button | Short press | Long press |
 |:-|:-|:-|
 | PAGE | Select items (Forward) | None |
-| CUSTOM | Select items (Back) | None |
+| CUSTOM | Select items (Back) | Back |
 | LAP | Enter | None |
 
 ## Map
 
 <img width="400" alt="map-01" src="https://user-images.githubusercontent.com/12926652/206341071-5f9bee00-d959-489b-832a-9b4bf7fe2279.png">
 
-Left side
+Touch UI:
 
-- "-": zoom in
-- "L": lock / unlock
-  - The map can be moved when unlocked.
-- "+": zoom out
-- "G": route search by Google Directions API
-  - set token in [GOOGLE_DIRECTION_API section](#google_direction_api-section) of setting.conf
+- left side
+  - lock / unlock
+  - zoom in
+  - zoom out
+  - route search by Google Directions API (shown only when token is configured)
+- right side
+  - overlay selector
+  - previous / next time buttons for rain and wind overlays
 
-Right side
-
-- "left"
-- "up"
-- "down"
-- "right"
+When unlocked, you can drag the map directly.
 
 ## Course profile
 <img width="400" alt="map-02" src="https://user-images.githubusercontent.com/12926652/206341086-7935cfbd-8ed3-4068-9f2b-93f676a8932a.png">
 
-Left side
+Touch UI:
 
-- "-": zoom in
-- "L": lock / unlock
-  - The course profile can be moved to left or right when unlocked.
-- "+": zoom out
+- left side
+  - lock / unlock
+  - zoom in
+  - zoom out
 
-Right side
-
-- "left"
-- "right"
+When unlocked, you can drag the profile horizontally.
 
 ## Menu screen
 
@@ -628,10 +607,14 @@ Right side
   - <img width="400" alt="RidewithGPS-02" src="https://user-images.githubusercontent.com/12926652/206076212-8696ac34-c9e6-485f-b1ba-687c0d2a0061.png">
 - Android Google Maps
   - Receive routes from Google Maps on Android via Bluetooth. The result is parsed using [https://mapstogpx.com](https://mapstogpx.com).
-  - To use this feature, pair the device with an Android smartphone with obexd activated. `bluez-obexd` and `dbus-x11` packages are required to be installed in advance.
-    - `eval 'dbus-launch --auto-syntax' /usr/libexec/bluetooth/obexd -d -n -r /home/pi -l -a`
-  - If properly paired, Android Google Maps Directions route search results can be sent with 'Share Directions' > 'Bluetooth' > (your Raspberry Pi).
+  - `bluez-obexd` must be installed in advance.
+  - This entry is available only on Raspberry Pi and only when `/usr/libexec/bluetooth/obexd` exists.
+  - If properly paired, Android Google Maps directions can be sent with `Share Directions` > `Bluetooth` > your Raspberry Pi.
     - <img width="320" alt="mapstogpx-01" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/928a8ed5-82e7-4ba2-afc7-6b68150d9043"> <img width="320" alt="mapstogpx-02" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/d6fbfb22-5c93-47e5-920f-8ef4fc9c02de">
+- Cancel Course
+  - Remove the currently loaded course.
+- Course Calc
+  - Toggle course indexing and on-course calculation.
 
 
 ### Connectivity
@@ -649,6 +632,10 @@ Right side
   - `tb-mqtt-client` package, which can be installed with the `pip` command, is required.
   - Also, thingsboard device access token is required in [THINGSBOARD_API](#thingsboard_api-section) of setting.conf.
   - You will also need to upload and set up a dashboard.　For more details of Thingboard setup, see [thingsboard_setup.md](./thingsboard_setup.md).
+- Gadgetbridge
+  - Enable BLE UART service for the Android [Gadgetbridge](https://gadgetbridge.org) app.
+- Get Location
+  - Use Gadgetbridge as a GPS source.
 
 
 ### Upload Activity
@@ -664,7 +651,7 @@ Uploads the most recent activity record file(.fit) created by the reset operatio
 - Ride with GPS
   - You need to set the Ride with GPS Token in [RIDEWITHGPS_API section](#ridewithgps_api-section) of setting.conf.
 
-### Map
+### Map and Data
 
 <img width="400" alt="menu-05-map" src="https://user-images.githubusercontent.com/12926652/206076200-383c1d24-ec26-4b79-95e9-a6fd88e161dd.png"> <img width="400" alt="menu-06-map_overlay" src="https://user-images.githubusercontent.com/12926652/206076202-29989a71-34c0-4892-8433-48305868326d.png">
 
@@ -673,6 +660,8 @@ Uploads the most recent activity record file(.fit) created by the reset operatio
 - Map Overlay
   - Toggle map overlay(heatmap, rain map and wind map) and select an overlay map.
   - Heatmaps are cached, but rain map and wind map require internet connection to fetch the latest images.
+- External Data Sources
+  - Toggle and configure wind data source and DEM tile source used for calculations.
 
 #### Heatmap
 
@@ -696,6 +685,17 @@ openportguide
 
 ![map_overlay_weather openportguide de](https://user-images.githubusercontent.com/12926652/205876684-253b672f-615d-410c-8496-5eb9a13b2558.png)
 
+#### External Data Sources
+
+- Wind
+  - Toggle the external wind data source used for headwind / wind direction calculations.
+- Wind Source
+  - Select `openmeteo` or a supported SCW source.
+- DEM Tile
+  - Toggle DEM tile usage.
+- DEM Tile source
+  - Select the DEM tile source.
+
 ### Profile
 
 If ANT+ powermeter is available, set both parameters are used in W'balance (%). They are determined by histrical activity data with bicycle power with [GoldenCheetah](http://www.goldencheetah.org) or [intervals.icu](https://intervals.icu).
@@ -706,13 +706,16 @@ If ANT+ powermeter is available, set both parameters are used in W'balance (%). 
 
 <img width="400" alt="menu-08-system" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/402692a5-1612-4bf3-a645-a84ba91b766b">
 
-
 - Network
   - See below.
-- Debug (experimental)
-  - Debug log: view "log/debug.log".
-  - Disable Wifi/BT, Enable Wifi/BT: modify /boot/firmware/config.txt to turn Wifi and BT On/Off at the hardware level. Reboot required for settings to take effect.
-  - Update: execite `git pull origin master`.
+- Brightness
+  - Reserved menu item. Currently not configurable from this menu.
+- Language
+  - Reserved menu item. Currently not configurable from this menu.
+- Update
+  - Execute the application update flow.
+- Debug
+  - Open the debug submenu described below.
 - Power Off
   - Power off the raspberry pi zero when the program is started with the service.
 
@@ -722,25 +725,50 @@ If ANT+ powermeter is available, set both parameters are used in W'balance (%). 
 
 - Wifi, Bluetooth
   - Turn Wifi and BT On/Off at the software level using `rfkill`.
+- connect Wifi via WPS
+  - Try WPS association from the menu.
+- Auto Wifi Off
+  - Turn Wifi off automatically while recording.
+- BT Pairing
+  - Scan and pair a Bluetooth device from the menu.
+- BT Paired Devices
+  - Show and remove paired Bluetooth devices.
 - BT Tethering
-  - If dbus and bluez is available, start bluetooth tethering with a smartphone which are already paired using `bluetoothctl`.
-- IP Address
-  - Show IP address. This can be used for ssh access while tethering a smartphone.
-- GadgetBridge
-  - Recieve notifications and GPS location from a smartphone. Install [GadgetBridge](https://gadgetbridge.org) Android app and toggle on.
-  - `bluez-peripheral`(`bluez-peripheral==0.2.0a3` above) packages, which can be installed with the `pip` command, is required.
-  - GadgetBridge app settings
-    - Enable all permissions.
-    - `Settings` > `Discovery and Pairing options` > `Ignore bonded devices`: Off, `CompanionDevice Pairing`: On, `Discover unsupported devices`: On, `Scanning intensity`: 2 or 3
-    - From `Connect new device` in the menu or `+` button, you can enter '`Device discovery`. Select the device(shown as host name), long press, and do pairing as `Bangle.js`.
-- Get Location
-  - Enable GPS location acquisition by Gadgetbridge.
-  - GadgetBridge app settings
-    - Click the Settings button in the list of devices on the top screen. `Use phone gps data`: On, `GPS data update interval in ms`: 5000-10000.
+  - Show available BT PAN devices and optionally start Bluetooth tethering.
+- Reset Bluetooth
+  - Reset the Bluetooth stack from the menu.
+
+#### Debug
+
+- `Debug Log`
+  - View `log/debug.log`.
+- `Debug Level Log`
+  - Toggle debug log level.
+- `Disable Wifi/BT`, `Enable Wifi/BT`
+  - Modify `/boot/firmware/config.txt` and require reboot.
+- `IP Address`
+  - Show current IP address.
+- `Restart`
+  - Restart the application.
+- `Reboot`
+  - Reboot Raspberry Pi.
+
+#### Gadgetbridge
+
+- Install [GadgetBridge](https://gadgetbridge.org) on Android and enable the `Connectivity` menu items.
+- `bluez-peripheral` (`bluez-peripheral==0.2.0a5` above) package is required.
+- GadgetBridge app settings
+  - Enable all permissions.
+  - `Settings` > `Discovery and Pairing options` > `Ignore bonded devices`: Off, `CompanionDevice Pairing`: On, `Discover unsupported devices`: On, `Scanning intensity`: 2 or 3
+  - From `Connect new device` in the menu or `+` button, enter `Device discovery`. Select the device (shown as host name), long press, and pair it as `Bangle.js`.
+- For `Get Location`
+  - Open the device settings in GadgetBridge and enable `Use phone gps data`.
+  - Set `GPS data update interval in ms` to around `5000-10000`.
 
 ## Settings
 
-There are five different configuration files. You need to edit at the first "setting.conf" and don't need to care about the other files.
+There are four runtime configuration files (`setting.conf`, `state.pickle`, `layout.yaml`, `map.yaml`).
+`config.py` is code, not a user-edited config file in normal use.
 
 ### setting.conf
 
@@ -752,7 +780,7 @@ Set the value before starting the program. If the value is set during running, i
 
 - `display`
   - Set the type of display.
-  - There are definitions in `modules/config.py` for the resolution and availability of the touchscreen.
+  - There are definitions in `modules/display/display_core.py`.
   - `None`: default (no hardware control)
   - `MIP_JDI_color_400x240`: JDI 2.7 inch MIP reflective color LCD module. (LPM027M128C/LPM027M128B)
   - `MIP_JDI_color_640x480`: JDI 4.4 inch MIP reflective color LCD module. (LPM044M141A)
@@ -763,6 +791,7 @@ Set the value before starting the program. If the value is set during running, i
   - `DFRobot_RPi_Display`: e-ink Display Module
   - `Pirate_Audio`, `Pirate_Audio_old`: Pirate Audio ("old" assigns the Y button to GPIO 20.)
   - `Display_HAT_Mini`: Display HAT Mini
+  - `ST7789_Breakout`: generic ST7789 breakout
   - `PiTFT`: PiTFT2.4 (or a PiTFT2.8 with the same resolution)
 - `autostop_cutoff`
   - Set the threshold for the speed at which the stopwatch will automatically stop/start after it is activated.
@@ -782,14 +811,31 @@ Set the value before starting the program. If the value is set during running, i
 - `font_file`
   - Set the full path of the font which you want to use.
   - Place the fonts in `fonts/` folder.
+- `auto_wifi_off`
+  - Turn Wifi off automatically while recording.
+
+#### BT section
+
+- `bt_pan_device`
+  - Default Bluetooth PAN device used by tethering.
+- `auto_bt_tethering`
+  - Enable automatic Bluetooth tethering.
+- `gadgetbridge_status`
+  - Enable Gadgetbridge BLE UART service at startup.
+- `gadgetbridge_use_gps`
+  - Enable GPS acquisition from Gadgetbridge.
+- `use_zwift_click_v2`
+  - Enable Zwift Click V2 support.
+- `zwift_click_v2_address`
+  - Store the paired Zwift Click V2 BLE address.
+
+#### MAP_AND_DATA section
+
 - `map`
-  - Set the map.
-  - The `G_MAP_CONFIG` in modules/config.py provides some preset definitions.
-  - `wikimedia`: An example map of a full-color map. [https://maps.wikimedia.org/](https://maps.wikimedia.org/)
-  - `jpn_kokudo_chiri_in`: A map from Japan GSI. [https://cyberjapandata.gsi.go.jp](https://cyberjapandata.gsi.go.jp)
-  - (obsolete)`toner`: A map for monochrome colors. [http://maps.stamen.com/toner/](http://maps.stamen.com/toner/)
-  - You can add a map URL to map.yaml. Specify the URL in tile format (tile coordinates by [x, y] and zoom level by [z]). And The map name is set to this setting `map`.
-  - Also, you can set raster mbtiles mapsets generated from [mb-util](https://github.com/mapbox/mbutil). It is sqlite3 db packed with raster maptile images. The definition in map.yaml is following with sample mbtile map named `sample_mbtile` placed at `maptile/sample_mbtile.mbtiles`.
+  - Select the base map.
+  - Presets are defined in `modules/map_config.py` and can be extended from `map.yaml`.
+  - `openstreetmap`, `wikimedia`, and `jpn_kokudo_chiri_in` are built in.
+  - You can also add raster mbtiles mapsets generated from [mb-util](https://github.com/mapbox/mbutil). The definition in `map.yaml` is as follows for `maptile/sample_mbtile.mbtiles`.
 
 ```
 map.yaml entry
@@ -799,6 +845,17 @@ map.yaml entry
     attribution: some attribution.
     use_mbtiles: true
 ```
+
+- `use_heatmap_overlay_map`, `heatmap_overlay_map`
+  - Enable heatmap overlay and select the source.
+- `use_rain_overlay_map`, `rain_overlay_map`
+  - Enable rain overlay and select the source.
+- `use_wind_overlay_map`, `wind_overlay_map`
+  - Enable wind overlay and select the source.
+- `use_wind_data_source`, `wind_data_source`
+  - Enable external wind data and select the source.
+- `use_dem_tile`, `dem_map`
+  - Enable DEM tile usage and select the source.
 
 #### ANT+ section
 
@@ -836,8 +893,11 @@ Axis conversion is performed with the following variables.
 
 (experimental)
 - `spi_clock`: specify SPI clock of the following displays.
-  - `MIP`: MIP color reflective LCD module 2.7 inch.
-  - `MIP_Sharp`: SHARP Memory Display Breakout
+  - applies to legacy `MIP_*` backends
+- `use_backlight`
+  - Enable backlight control for supported MIP color displays.
+- `auto_backlight_cutoff`
+  - Threshold for automatic backlight control.
 
 #### STRAVA_API section
 
@@ -873,6 +933,7 @@ If you want to search for a route on a map, set your `token` of the Google Direc
 #### THINGSBOARD_API section
 
 If you want to use ThingsBoard dashboard, set your `token` of the Thingboard device access token.
+You can also override `server`, and `status` stores the current on/off state.
 
 
 ### state.pickle
@@ -906,7 +967,7 @@ MAIN:
 - `STATUS`: Show this screen or not.
   - Set the boolean value of `true` or `false` of yaml format.
 - `LAYOUT`: Specify the position of each element.
-  - Each element is defined in modules/gui_congig.py under `G_ITEM_DEF`. You can also add your own variables to the modules/gui_congig.py file.
+  - Each element is defined in `modules/gui_config.py` under `G_ITEM_DEF`. You can also add your own variables there.
   - The position is set up in the form of [Y, X], with the top left as the origin [0, 0], the right as the positive direction of the X axis, and the bottom as the positive direction of the Y axis. The implementation is the coordinate system of QGridLayout.
   - If you want to merge multiple cells, the third argument should be the bottom Y coordinate + 1, and the fourth argument should be the right X coordinate + 1. For example, `Power: [0, 0, 1, 2]` merges the [0, 0] cell with the right next [0, 1] cell.
 
@@ -922,7 +983,7 @@ strava_heatmap_hot:
 ```
 
 - Line 1: Map name
-  - This is the string to be set to [GENERAL](#general-section) -> map in setting.conf.
+  - This is the string to be set to [MAP_AND_DATA](#map_and_data-section) -> `map` in `setting.conf`.
 - Second line: tile URL
   - Set the tile URL. Tile coordinates X, Y, and zoom Z should be listed with `{x}`, `{y}`, and `{z}`.
 - Line 3: Copyright.
@@ -934,7 +995,7 @@ There are some settings which the user doesn't need to care about and some varia
 
 ## Prepare course files and maps
 
-Put course.tcx file in course folder. The file name is fixed for now. If the file exists, it will be loaded when it starts up.
+Put `.tcx` files in the `courses/` folder. They are listed in the `Courses > Local Storage` menu.
 
 To download the map in advance, run the program manually with the --demo option. It will start in demo mode.
 

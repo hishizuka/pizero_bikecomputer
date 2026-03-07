@@ -85,6 +85,12 @@ Pros&Cons
 
 ### [Pirate Audio](https://shop.pimoroni.com/collections/pirate-audio)
 
+Both are supported through the ST7789 driver.
+
+### ST7789 Breakout
+
+Generic ST7789 breakout boards are also supported.
+
 ### [PiTFT 2.4](https://www.adafruit.com/product/2455)  (OBSOLETE)
 
 Pros&Cons
@@ -160,7 +166,8 @@ UART modules with GPSd are recommended. I2C(Sparkfun qwiic or Adafruit STEMMA QT
 
 ## I2C sensors
 
-Adafuit circuitpython library is required or original drivers are available. Refer to learing page of each sensors.
+Adafruit CircuitPython libraries or original drivers are used depending on the sensor.
+Refer to the learning page of each sensor.
 
 If you use Sparkfun Qwiic or Adafruit STEMMA QT sensors, [SparkFun Qwiic SHIM for Raspberry Pi](https://www.sparkfun.com/products/15794) is very useful for connecting sensors.
 
@@ -171,8 +178,10 @@ If you use Sparkfun Qwiic or Adafruit STEMMA QT sensors, [SparkFun Qwiic SHIM fo
 for altitude, grade, and total ascent/descent
 
 - [BMP280](https://shop.pimoroni.com/products/enviro-phat)
+- [BME280](https://www.waveshare.com/environment-sensor-hat.htm)
 - [BMP388](https://www.dfrobot.com/product-1928.html)
 - [BMP390](https://www.adafruit.com/product/4816)
+- [MS5637](https://gps-pie.com)
 - [LPS33HW](https://www.adafruit.com/product/4414)
 - [BMP581](https://www.sparkfun.com/products/20170)
 
@@ -186,12 +195,13 @@ The accelerometer is used for stop detection when using GPS. The magnetometer is
 - [LIS3MDL](https://www.adafruit.com/product/4485): Mag 
 - [BMX160](https://www.dfrobot.com/product-1928.html): Accel / Gyro / Mag
 - [BNO055](https://www.adafruit.com/product/4646): Accel / Gyro / Mag / Euler / Quatenrion
+- [ICM20948](https://www.waveshare.com/environment-sensor-hat.htm): Accel / Gyro / Mag
 - [ISM330DHCX](https://www.sparkfun.com/products/19895): Accel / Gyro
 - [MMC5983MA](https://www.sparkfun.com/products/19895): Mag
 - [BMI270](https://www.bosch-sensortec.com/products/motion-sensors/imus/bmi270/): Accel / Gyro
 - [BMM150](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm150/): Mag
 - [BMM350](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm350/): Mag
-- [BHI360](https://www.bosch-sensortec.com/products/smart-sensor-systems/bhi360/): Accel / Gyro
+- Bosch BHI360 Shuttle Board 3.0: custom board with BHI360 + BMM350 + pressure sensor support
 
 ### Light
 
@@ -199,6 +209,12 @@ for auto backlight when using MIP Reflective color LCD
 
 - [TCS3472](https://shop.pimoroni.com/products/enviro-phat)
 - [VCNL4040](https://www.adafruit.com/product/4161)
+- [TSL2591](https://www.waveshare.com/environment-sensor-hat.htm)
+
+### UV / Gas
+
+- [LTR390](https://www.waveshare.com/environment-sensor-hat.htm): UV
+- [SGP40](https://www.waveshare.com/environment-sensor-hat.htm): VOC / gas
 
 ### Multi sensors
 
@@ -233,7 +249,7 @@ get battery percent, etc.
 - ![ANT+ USB dongle + USB OTG Adapter](https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F100741%2F2a2639eb-7515-4dff-33d1-864a274a4919.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=348720e6c0bc82111195ac699fdc04b6)
 
 ## SD card
-- youw own (over 8GB)
+- your own (over 8GB)
 - [SanDisk MAX ENDURANCE microSD™ Card](https://www.westerndigital.com/products/memory-cards/sandisk-max-endurance-uhs-i-microsd#SDSQQVR-032G-GN6IA) is recommended if you use several years.
 - [SanDisk® High Endurance microSD™ Card](https://shop.westerndigital.com/products/memory-cards/sandisk-high-endurance-uhs-i-microsd#SDSQQNR-032G-AN6IA) is not compatible with Raspberry Pi OS Bullseye. See [post1](https://forums.raspberrypi.com/viewtopic.php?p=2021511) and [post2](https://forums.raspberrypi.com/viewtopic.php?p=2006250)
 
@@ -267,7 +283,7 @@ It's quite difficult, but the hardware configuration is better than PiTFT.
 - top right: PiJuice Zero
 - central left: Adafruit SHARP Memory Display
 - center: GPS module
-- central right: DFRobot BMP160(IMU) and BMP388(pressure and temperature)
+- central right: DFRobot BMX160(IMU) and BMP388(pressure and temperature)
 - bottom left: Button SHIM
 - bottom right: SparkFun Qwiic SHIM for Raspberry Pi
 
@@ -345,4 +361,4 @@ Attach the case to the handlebar and connect it to a battery in a top tube bag. 
 
 
 
-[Back to README.md](/README.md)
+[Back to README.md](../README.md)
