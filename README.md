@@ -36,18 +36,18 @@ https://github.com/hishizuka/pizero_bikecomputer
 
 # Abstract
 
-Pi Zero Bikecomputer is a GPS and ANT+ bike computer based on Raspberry Pi Zero(W, WH, 2 W). This is the first DIY project in the world integrated with necessary hardwares and software for modern bike computer. It measures and records position(GPS), ANT+ sensor(speed/cadence/power) and I2C sensor(pressure/temperature/accelerometer, etc). It also displays these values, even maps and courses in real-time. In addition, it write out log into .fit format file.
+Pi Zero Bikecomputer is a GPS and ANT+ bike computer based on Raspberry Pi Zero (W, WH, 2 W). This is the first DIY project in the world integrating the necessary hardware and software for a modern bike computer. It measures and records position (GPS), ANT+ sensors (speed / cadence / power), and I2C sensors (pressure / temperature / accelerometer, etc.). It also displays these values, maps, and courses in real time. In addition, it writes logs to `.fit` format files.
 
-In this project, Pi Zero Bikecomputer got basic functions needed for bike computers. Next target is to add new functions which existing products do not have!
+In this project, Pi Zero Bikecomputer has already got the basic functions needed for a bike computer. The next target is to add new functions that existing products do not have!
 
 You will enjoy both cycling and the maker movement with Pi Zero Bikecomputer!
 
-Here is detail articles in Japanese.
+Here are detailed articles in Japanese. The original Japanese titles are kept below, with English translations for reference.
 
-- [I tried to make a bikecomputer, the result was pretty good](https://qiita.com/hishi/items/46619b271daaa9ad41b3)
-- [Let's make a bikecomputer with Raspberry Pi Zero (W, WH)](https://qiita.com/hishi/items/46619b271daaa9ad41b3)
+- [サイクルコンピューターをガチで作ってみたら、割とできてしまったという話](https://qiita.com/hishi/items/8f77fd4655027fac7c7d) (English: I tried to seriously build a bike computer, and it turned out surprisingly well)
+- [Raspberry Pi Zero (W, WH, 2 W)でサイクルコンピューターを作ってみよう](https://qiita.com/hishi/items/46619b271daaa9ad41b3) (English: Let's build a bike computer with Raspberry Pi Zero (W, WH, 2 W))
 
-Daily update [at twitter (@pi0bikecomputer)](https://twitter.com/pi0bikecomputer), and [my cycling activity at STRAVA](https://www.strava.com/athletes/40248693).
+Daily updates are posted on [X (@pi0bikecomputer)](https://x.com/pi0bikecomputer), and my riding activities are on [STRAVA](https://www.strava.com/athletes/40248693).
 
 
 <img width="836" alt="system-01-202106" src="https://user-images.githubusercontent.com/12926652/120964687-a6ac4500-c79e-11eb-8598-98ab2e612cd6.png">
@@ -72,10 +72,10 @@ Daily update [at twitter (@pi0bikecomputer)](https://twitter.com/pi0bikecomputer
   - Pi Zero Bikecomputer uses same libraries as for standard Linux.
     - [Python](https://www.python.org)
     - [numpy](https://numpy.org)
-    - [PyQt6](https://pypi.org/project/PyQt6/) and [PyQtGraph](http://www.pyqtgraph.org)
+    - [PyQt6](https://pypi.org/project/PyQt6/), [PySide6](https://pypi.org/project/PySide6/) and [PyQtGraph](http://www.pyqtgraph.org)
     - [GPSd](https://gpsd.gitlab.io/gpsd/index.html) for GPS modules.
     - [CircuitPython](https://learn.adafruit.com/welcome-to-circuitpython/what-is-circuitpython) libraries for some I2C sensors. 
-  - So, you can run in cross platform environments such as Raspberry Pi OS, some Linux, macOS and Windows.
+  - So, you can run in cross-platform environments such as Raspberry Pi OS, Linux, macOS and Windows.
 
 - Good balance between battery life and performance
 
@@ -91,9 +91,10 @@ Some functions depend on your parts.
 | Logging | Yes | See below. |
 | Sensors | Yes | ANT+ sensors and I2C sensors. See below. |
 | Maps and navigations | Yes | A GPS module or the Android app [GadgetBridge](https://gadgetbridge.org) is required. See below. |
-| GUI | Yes | Implemented using PyQt. See below. |
+| Displays, controls and power | Yes | Multiple displays, hardware buttons, remote controls, and battery modules are supported. See below. |
+| GUI | Yes | PyQt is the primary GUI. QML, Kivy, and headless modes are also available. |
 | Wifi & Bluetooth | Yes | Using built-in modules.|
-| Smartphone connections | Yes | Android only. Mirroring notifications and getting locations via [GadgetBridge](https://gadgetbridge.org).|
+| Smartphone connections | Yes | Android only. GadgetBridge integration and route sharing from Google Maps via Bluetooth. |
 | Battery life(Reference) | 18h | with 3100mAh mobile battery([Garmin Charge Power Pack](https://buy.garmin.com/en-US/US/p/571552)) and MIP Reflective color LCD. |
 
 ## Logging
@@ -130,9 +131,10 @@ USB dongle is required if using ANT+ sensors.
 | ANT+ Light |  Yes | Bontrager Flare RT only. |
 | ANT+ Control |  Yes | Garmin Edge Remote only. |
 | ANT+ Environment |  Yes | Garmin tempe (temperature sensor) |
-| Bluetooth sensors |  No | developping now... |
+| BLE peripherals |  Partial | Zwift Click V2 remote and Fake Trainer for Zwift are supported. |
 | Barometric altimeter | Yes | I2C sensor(pressure, temperature) |
 | Accelerometer | Yes | I2C sensor |
+| Gyroscope | Yes | I2C sensor |
 | Magnetometer | Yes | I2C sensor |
 | Light sensor | Yes | I2C sensor. Use for auto backlight and lighting. |
 
@@ -143,12 +145,26 @@ USB dongle is required if using ANT+ sensors.
 | GPS module | Yes | UART GPS module(via GPSd) and I2C GPS are supported. |
 | Positioning from smartphones | Yes | Using the Android app [GadgetBridge](https://gadgetbridge.org). |
 | Map | Yes | Support raster map tile format like OSM (z/x/y.png or jpg). So, offline map is available with local caches. Also, raster .mbtile format is supported. |
-| Course on the map| Yes | Local file(.tcx), or cloud course from Ride with GPS with internet connection. |
+| Course on the map| Yes | Local `.tcx` files, cloud courses from Ride with GPS, and routes shared from Google Maps on Android via Bluetooth. |
 | Search route | Yes | Google Directions API |
 | Course profile | Yes |  |
 | Detect climbs | Yes | Like Garmin ClimbPro. Only climbs on the course, not detect nearby climbs. |
 | Cuesheet | Yes | Use course points included in course files(.tcx). |
-| Map overlay | Yes | Heatmap (Strava / Ride with GPS) and weather(rain / wind). |
+| Map overlay | Yes | Heatmap (Strava / Ride with GPS), weather (rain / wind), and configurable wind / DEM data sources. |
+| DEM / wind data sources | Yes | External DEM tiles and wind data sources can be selected from the menu and settings. |
+
+## Displays, controls and power
+
+| Specs | Support | Detail |
+|:-|:-|:-|
+| MIP reflective color LCD | Yes | JDI 2.7 / 4.4 inch and Azumo 3.4 inch modules are supported. |
+| SHARP memory display | Yes | 2.7 / 4.4 inch monochrome MIP modules are supported. |
+| TFT LCD | Yes | Pirate Audio, Display HAT Mini, generic ST7789 breakout, and PiTFT are supported. |
+| E-paper | Yes | Papirus and DFRobot RPi Display are supported. |
+| Touchscreen | Partial | Available on supported TFT displays. |
+| Hardware buttons | Yes | Button SHIM, MCP23008 / MCP23009-based IO expanders, and display-attached buttons are supported. |
+| Remote control | Yes | Garmin Edge Remote (ANT+) and Zwift Click V2 (BLE) are supported. |
+| Battery modules | Partial | PiJuice HAT / Zero and PiSugar3 are supported. |
 
 ### Map example
 
@@ -181,11 +197,11 @@ In Japan, [気象庁降水ナウキャスト](https://www.jma.go.jp/bosai/nowc/)
 | Graph | Yes | Altitude and performance(HR, PWR, W prime balance) |
 | Customize data pages | Yes | With layout.yaml |
 | ANT+ pairing | Yes |  |
-| Select course | Yes | local .tcx file and Ride with GPS. |
+| Select course | Yes | local `.tcx`, Ride with GPS, and Android Google Maps via Bluetooth. |
 | Upload activity | Yes | Strava, Garmin and Ride with GPS. |
-| Select map | Yes | maps and overlays(heatmap and weather) |
+| Select map | Yes | base maps, overlays, and external data sources |
 | Adjust parameter | Yes | wheel size, altitude, CP and W prime balance |
-| Network setting | Yes | Toggle wifi and BT, BT tethering. |
+| Network setting | Yes | Toggle Wi-Fi / Bluetooth, BT pairing / tethering, and GadgetBridge-related options. |
 | Language localization | Yes | Font and translation file of items are required. |
 | No GUI option | Yes | headless mode |
 
@@ -221,11 +237,19 @@ it displays three of the people around you in the order in which you caught sens
 
 # Hardware Installation
 
-See [hardware_installation.md](/doc/hardware_installation.md).
+See [hardware_installation.md](/doc/hardware_installation.md) for supported displays, GPS modules, I2C sensors, buttons, batteries, and assembly examples.
 
 # Software Installation
 
 See [software_installation.md](/doc/software_installation.md).
+
+For a new Raspberry Pi OS Trixie setup, the recommended entry point is:
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/hishizuka/pizero_bikecomputer/refs/heads/master/install.sh)"
+```
+
+For macOS or Linux development, see the manual setup steps in [software_installation.md](/doc/software_installation.md).
 
 # PCB Gallery (under development)
 - <img width="480" alt="4inch-01" src="https://github.com/user-attachments/assets/d31f1cd3-5472-47b1-8995-1efe8fb5ef97" />
@@ -263,7 +287,7 @@ This project also includes code vendored from `hishizuka/crdp`, which is based o
 
 # Author
 
-[hishizuka](https://github.com/hishizuka/) ([@pi0bikecomputer](https://twitter.com/pi0bikecomputer) at twitter, [pizero bikecomputer](https://www.strava.com/athletes/40248693) at STRAVA)
+[hishizuka](https://github.com/hishizuka/) ([@pi0bikecomputer](https://x.com/pi0bikecomputer) on X, [pizero bikecomputer](https://www.strava.com/athletes/40248693) on STRAVA)
 
 # Link
 
