@@ -7,6 +7,8 @@ https://github.com/hishizuka/pizero_bikecomputer
 
 # News
 
+- 2026/4/29 Support for Raspberry Pi Compute Module Zero (CM0) is currently in development.
+  - <img width="400" alt="Raspberry Pi CM0 example" src="https://github.com/user-attachments/assets/a7d9a2b8-5380-4f70-9cb2-84002e546b45" />
 - 2026/1/30 Support for a groundbreaking dual-screen display is in progress.
   - <img width="320" alt="dual screen" src="https://pbs.twimg.com/media/G_elAsAbQAATYQm?format=jpg&name=medium" /> <img width="320" alt="back" src="https://pbs.twimg.com/media/G_elAshXUAAqKRi?format=jpg&name=medium" />
 - 2026/1/30 The MIP LCD methods will be fully deprecated, and a switch to a newly released DRM driver is planned.

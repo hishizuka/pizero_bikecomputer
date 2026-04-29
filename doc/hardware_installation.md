@@ -118,12 +118,12 @@ Pros&Cons
 
 UART modules with GPSd are recommended. I2C(Sparkfun qwiic or Adafruit STEMMA QT) modules are supported experimentally.
 
-### MAX-M10S
+### MAX-M10S and MAX-M10N
 
-- UART
+- UART (MAX-M10S and MAX-M10N) and I2C (MAX-M10S only)
 - an antenna is also needed
 - stable and low power consumption
-- recommended as of 2025/4.
+- recommended as of 2026/4.
   - [MAX-M10S Ultra Low Power GNSS receiver with UF.L connector](https://gnss.store/max-m10s-gnss-modules/169-elt0150.html)
   - [MAX-M10S Ultra Low Power GNSS receiver with SMA connector](https://gnss.store/max-m10s-gnss-modules/378-elt0151.html)
   - [SparkFun GNSS Receiver Breakout - MAX-M10S (Qwiic)](https://www.sparkfun.com/sparkfun-gnss-receiver-breakout-max-m10s-qwiic.html)
