@@ -1,7 +1,7 @@
 ![title](https://user-images.githubusercontent.com/12926652/89370669-47178000-d71c-11ea-896f-0d98f4cbd5da.jpg)
 
 # Pi Zero Bikecomputer
-An open-source bike computer based on  Raspberry Pi Zero (W, WH, 2 W) with GPS and ANT+.
+An open-source bike computer with GPS and ANT+ capabilities, based on the Raspberry Pi Zero (W, WH, 2 W) or the Compute Module Zero.
 
 https://github.com/hishizuka/pizero_bikecomputer
 
