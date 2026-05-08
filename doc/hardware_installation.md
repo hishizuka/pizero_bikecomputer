@@ -1,5 +1,13 @@
 [Back to README.md](../README.md)
 
+# Official hardware
+
+Official Pi Zero Bikecomputer hardware is being designed and prototyped for Raspberry Pi Zero-family configurations.
+
+The official hardware design files will be published by this project under the [CERN Open Hardware Licence Version 2 - Strongly Reciprocal (CERN-OHL-S-2.0)](../LICENSES/CERN-OHL-S-2.0.txt), unless otherwise stated.
+
+Third-party boards are independent projects and are not official, endorsed, or supported by Pi Zero Bikecomputer unless they are explicitly listed in this repository.
+
 # Table of Contents
 
 - [Parts List](#parts-list)

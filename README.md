@@ -7,8 +7,8 @@ https://github.com/hishizuka/pizero_bikecomputer
 
 # News
 
-- 2026/4/29 Support for Raspberry Pi Compute Module Zero (CM0) is currently in development.
-  - <img width="400" alt="Raspberry Pi CM0 example" src="https://github.com/user-attachments/assets/a7d9a2b8-5380-4f70-9cb2-84002e546b45" />
+- 2026/5/9 Official hardware is being designed and prototyped for Pi Zero Bikecomputer. The official hardware design files will be released under CERN-OHL-S-2.0.
+  - <img width="400" alt="Official hardware prototype" src="https://github.com/user-attachments/assets/a7d9a2b8-5380-4f70-9cb2-84002e546b45" />
 - 2026/1/30 Support for a groundbreaking dual-screen display is in progress.
   - <img width="320" alt="dual screen" src="https://pbs.twimg.com/media/G_elAsAbQAATYQm?format=jpg&name=medium" /> <img width="320" alt="back" src="https://pbs.twimg.com/media/G_elAshXUAAqKRi?format=jpg&name=medium" />
 - 2026/1/30 The MIP LCD methods will be fully deprecated, and a switch to a newly released DRM driver is planned.
@@ -29,7 +29,7 @@ https://github.com/hishizuka/pizero_bikecomputer
 - [Comparison with other bike computers](#comparison)
 - [Hardware Installation](#hardware-installation)
 - [Software Installation](#software-installation)
-- [PCB Gallery (under development)](#pcb-gallery-under-development)
+- [Official Hardware (under development)](#official-hardware-under-development)
 - [Q&A](#qa)
 - [License](#License)
 - [Author](#Author)
@@ -253,7 +253,14 @@ For a new Raspberry Pi OS Trixie setup, the recommended entry point is:
 
 For macOS or Linux development, see the manual setup steps in [software_installation.md](/doc/software_installation.md).
 
-# PCB Gallery (under development)
+# Official Hardware (under development)
+
+Official Pi Zero Bikecomputer hardware is being designed and prototyped for Raspberry Pi Zero-family configurations.
+
+The official hardware design files will be published by this project under the [CERN Open Hardware Licence Version 2 - Strongly Reciprocal (CERN-OHL-S-2.0)](/LICENSES/CERN-OHL-S-2.0.txt), unless otherwise stated.
+
+Third-party boards are independent projects and are not official, endorsed, or supported by Pi Zero Bikecomputer unless they are explicitly listed in this repository.
+
 - <img width="480" alt="4inch-01" src="https://github.com/user-attachments/assets/d31f1cd3-5472-47b1-8995-1efe8fb5ef97" />
 - <img width="480" alt="4inch-02" src="https://github.com/user-attachments/assets/87afa6c3-ba28-4dbc-970b-e3c7c9a55806" />
 - <img width="480" alt="4inch-03" src="https://github.com/user-attachments/assets/3b9528d5-9e02-437a-a13f-2607aac2f90d" />
@@ -263,7 +270,9 @@ For macOS or Linux development, see the manual setup steps in [software_installa
 
 # License
 
-This repository is available under the [GNU General Public License v3.0](https://github.com/hishizuka/pizero_bikecomputer/blob/master/LICENSE)
+The software in this repository is available under the [GNU General Public License v3.0](https://github.com/hishizuka/pizero_bikecomputer/blob/master/LICENSE).
+
+Official hardware design files, when published by this project, are available under the [CERN Open Hardware Licence Version 2 - Strongly Reciprocal (CERN-OHL-S-2.0)](/LICENSES/CERN-OHL-S-2.0.txt), unless otherwise stated.
 
 The code shown below is ported and modified from Azumo's code under the Apache License 2.0 (third_party/apache/LICENSE.Apache2). See the NOTICE file for details.
 - modules/display/mip_display_base.py
