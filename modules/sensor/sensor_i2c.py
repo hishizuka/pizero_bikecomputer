@@ -145,9 +145,11 @@ class SensorI2C(Sensor):
 
     # for vertical speed
     vspeed_array = []
-    vspeed_window_size = 2  # [s]
+    vspeed_window_duration = 2  # [s]
+    vspeed_window_size = vspeed_window_duration
     timestamp_array = []
-    timestamp_size = vspeed_window_size  # [s]
+    timestamp_duration = vspeed_window_duration  # [s]
+    timestamp_size = timestamp_duration
 
     quit_status = False
 
@@ -462,8 +464,9 @@ class SensorI2C(Sensor):
         self.acc_variance = np.zeros(3)
         self.moving = np.ones(self.mov_window_size)
 
-        self.vspeed_window_size *= int(1 / self.config.G_I2C_INTERVAL)
-        self.timestamp_size *= int(1 / self.config.G_I2C_INTERVAL)
+        samples_per_second = max(1, int(1 / self.config.G_I2C_INTERVAL))
+        self.vspeed_window_size = self.vspeed_window_duration * samples_per_second
+        self.timestamp_size = self.timestamp_duration * samples_per_second
         self.timestamp_array = [None] * self.timestamp_size
         self.vspeed_array = [np.nan] * self.vspeed_window_size
 
@@ -812,12 +815,8 @@ class SensorI2C(Sensor):
         # BHI360 is currently mounted 90 degrees off from the intended frame.
         # Map BHI roll -> bike pitch (look down is plus),
         # and BHI pitch -> bike roll with the same sign trend.
-        self.values["pitch"] = math.radians(
-            ((float(imu.roll) + 360) % 360 - 180)
-        )
-        self.values["roll"] = math.radians(
-            ((float(imu.pitch) + 180) % 360 - 180)
-        )
+        #self.values["pitch"] = math.radians(((float(imu.roll) + 360) % 360 - 180))
+        #self.values["roll"] = math.radians(((float(imu.pitch) + 180) % 360 - 180))
         self.values["grade_pitch"] = 100 * math.tan(self.values["pitch"])
 
     def read_light(self):

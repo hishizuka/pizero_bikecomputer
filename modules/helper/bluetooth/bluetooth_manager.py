@@ -9,6 +9,7 @@ import psutil
 from modules.app_logger import app_logger
 from modules.utils.cmd import (
     exec_cmd,
+    exec_cmd_return_value,
     exec_cmd_return_value_async,
 )
 from modules.utils.network import detect_network_async

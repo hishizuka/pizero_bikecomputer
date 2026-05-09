@@ -81,7 +81,7 @@ class SensorANT(Sensor):
             # need to set dummy ANT+ device id 0
             self.config.G_ANT["USE"]["HR"] = True
             self.config.G_ANT["USE"]["SPD"] = True
-            self.config.G_ANT["USE"]["CDC"] - True  # same as SPD
+            self.config.G_ANT["USE"]["CDC"] = True  # same as SPD
             self.config.G_ANT["USE"]["PWR"] = True
             self.config.G_ANT["USE"]["TEMP"] = False
 

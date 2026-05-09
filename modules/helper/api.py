@@ -257,22 +257,44 @@ class api:
             vars_str,
             forecast_time_str,
         )
-        response = await get_json(url)
+        response = None
+        try:
+            response = await get_json(url)
+        finally:
+            # close connection
+            try:
+                await self.network.close_bt_tethering(f_name)
+            except Exception as exc:
+                app_logger.error(f"close_bt_tethering error: {exc}")
         # response["elevation"], response["current"][{vars}]
 
-        # close connection
-        await self.network.close_bt_tethering(f_name)
+        if not isinstance(response, dict):
+            if forcast_time is None:
+                return self.pre_value["OPENMETEO_WIND"]
+            return [np.nan, np.nan]
 
-        if forcast_time is None and "current" in response:
+        if forcast_time is None:
+            current = response.get("current")
+            if not isinstance(current, dict):
+                return self.pre_value["OPENMETEO_WIND"]
+            wind_speed = current.get("wind_speed_10m")
+            wind_direction = current.get("wind_direction_10m")
+            if wind_speed is None or wind_direction is None:
+                return self.pre_value["OPENMETEO_WIND"]
             self.pre_value["OPENMETEO_WIND"] = [
-                response["current"]["wind_speed_10m"],
-                response["current"]["wind_direction_10m"]
+                wind_speed,
+                wind_direction,
             ]
             return self.pre_value["OPENMETEO_WIND"]
-        elif forcast_time is not None and "hourly" in response:
-            return [response["hourly"]["wind_speed_10m"][0], response["hourly"]["wind_direction_10m"][0]]
 
-        return [np.nan, np.nan]
+        hourly = response.get("hourly")
+        if not isinstance(hourly, dict):
+            return [np.nan, np.nan]
+        wind_speeds = hourly.get("wind_speed_10m")
+        wind_directions = hourly.get("wind_direction_10m")
+        if not wind_speeds or not wind_directions:
+            return [np.nan, np.nan]
+        return [wind_speeds[0], wind_directions[0]]
 
     async def get_ridewithgps_route(self, add=False, reset=False):
         if (
