@@ -511,14 +511,11 @@ class LoggerCore:
         popup_extra = ""
         pre_status = self.config.G_MANUAL_STATUS
         display_flash_short = True
-        buzzer = getattr(self.config, "buzzer", None)
 
         if self.config.G_MANUAL_STATUS != "START":
             app_logger.info(f"->M START")
-            self.start_and_stop("STOP")
+            self.start_and_stop("STOP", play_buzzer=False)
             self.config.G_MANUAL_STATUS = "START"
-            if buzzer is not None:
-                buzzer.play("sgx-ca600-start")
             if self.config.gui is not None:
                 self.config.gui.change_start_stop_button(self.config.G_MANUAL_STATUS)
             if self.values["start_time"] is None:
@@ -539,10 +536,8 @@ class LoggerCore:
         elif self.config.G_MANUAL_STATUS == "START":
             display_flash_short = False
             app_logger.info(f"->M STOP")
-            self.start_and_stop("START")
+            self.start_and_stop("START", play_buzzer=False)
             self.config.G_MANUAL_STATUS = "STOP"
-            if buzzer is not None:
-                buzzer.play("sgx-ca600-stop")
             if self.config.gui is not None:
                 self.config.gui.change_start_stop_button(self.config.G_MANUAL_STATUS)
 
@@ -575,16 +570,24 @@ class LoggerCore:
                 asyncio.to_thread(self.config.network.set_wifi_enabled, False)
             )
 
-    def start_and_stop(self, status=None):
+    def start_and_stop(self, status=None, play_buzzer=True):
         if status is not None:
             self.config.G_STOPWATCH_STATUS = status
         if self.config.G_STOPWATCH_STATUS != "START":
             self.config.G_STOPWATCH_STATUS = "START"
             app_logger.info(f"->START")
+            if play_buzzer:
+                buzzer = getattr(self.config, "buzzer", None)
+                if buzzer is not None:
+                    buzzer.play("sgx-ca600-start")
         elif self.config.G_STOPWATCH_STATUS == "START":
             self.config.G_STOPWATCH_STATUS = "STOP"
             self._flush_sql_queue_sync()
             app_logger.info(f"->STOP")
+            if play_buzzer:
+                buzzer = getattr(self.config, "buzzer", None)
+                if buzzer is not None:
+                    buzzer.play("sgx-ca600-stop")
             if (
                 self.sensor is not None
                 and self.sensor.sensor_ant is not None
