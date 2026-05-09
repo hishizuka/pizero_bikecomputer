@@ -249,7 +249,11 @@ This is essential for displays without buttons, like MIP displays.
 
 You can also connect momentary buttons directly to Raspberry Pi GPIO pins on a custom board.
 
-The software side handles GPIO buttons via a per-product profile (`PiTFT`, `Papirus`, `DFRobot_RPi_Display`, `Pirate_Audio`, `Pirate_Audio_old`, `Display_HAT_Mini`). You can also add or modify a profile in `modules/button_config.py` (`G_BUTTON_DEF`) to customize button assignments.
+The software side handles GPIO buttons in `modules/button_config.py`. Common action templates are defined in `button_templates` (`5_BUTTON`, `4_BUTTON`, `3_BUTTON`, `2_BUTTON`), and hardware/profile mappings are expanded into `button_def`.
+
+Display-attached GPIO pins are defined in `gpio_buttons` (`PiTFT`, `Papirus`, `DFRobot_RPi_Display`, `Pirate_Audio`, `Pirate_Audio_old`, `Display_HAT_Mini`). For custom direct GPIO buttons, set `use_custom_gpio_buttons = True`, choose `custom_gpio_button_template`, and edit `custom_gpio_buttons`. `custom_gpio_buttons` maps logical template buttons such as `"A"`/`"B"`/`"C"` to BCM GPIO numbers.
+
+Use `OVERRIDES` in `button_profile_defs` only for button actions that differ from the selected template. Override entries are merged into the generated profile, so keys omitted from `OVERRIDES` keep the template defaults.
 
 Wiring is active-LOW (`GPIO ── button ── GND`). All built-in profiles except Papirus use the internal pull-up, so external pull-up resistors are not required. Avoid GPIO pins already used by SPI / I2C / UART unless that sharing is intentional.
 

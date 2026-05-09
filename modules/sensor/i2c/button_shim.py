@@ -35,7 +35,7 @@ class ButtonShim:
         buttonshim.set_pixel(0x00, 0x00, 0x00)
         # update hold_time of buttons
         for b in buttonshim._handlers:
-            b.hold_time = self.button_config.G_BUTTON_LONG_PRESS
+            b.hold_time = self.button_config.button_long_press
         _FUNC["A"] = self.press_A
         _FUNC["A_LONG"] = self.press_A_LONG
         _FUNC["B"] = self.press_B

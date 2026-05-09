@@ -160,7 +160,7 @@ From left to right, the button assignments are as follows.
 
 | GPIO NUM | Short press | Long press |
 |:-|:-|:-|
-| 5 | Left (<-) | None |
+| 5 | Left (<-) | Screenshot |
 | 6 | Lap | Reset |
 | 12 | Screen brightness On/Off | None |
 | 13 | Start/Stop | None |
@@ -171,12 +171,12 @@ In the menu, the button has different assignments. From left to right, the butto
 | GPIO NUM | Short press | Long press |
 |:-|:-|:-|
 | 5 | Back | None |
-| 6 | None | None |
+| 6 | Screen brightness On/Off | None |
 | 12 | Enter | None |
 | 13 | Select items (Back) | None |
 | 16 | Select items (Forward) | None |
 
-Both short press and long press can be changed. And only the GPIO number of PiTFT 2.4 is supported. For other models, you need to change it in modules/config.py.
+Both short press and long press can be changed in `modules/button_config.py`. For other button layouts or GPIO pin assignments, edit `button_templates`, `gpio_buttons`, or `button_profile_defs`.
 
 
 [Back to hardware_installation.md](./hardware_installation.md)

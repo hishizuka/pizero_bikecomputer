@@ -438,6 +438,12 @@ The buttons at the bottom of the screen are assigned the following functions fro
 The hardware buttons are designed to roughly match the software screen.
 You can change both short and long presses in `modules/button_config.py`.
 
+Button actions are generated from common templates in `button_templates` (`5_BUTTON`, `4_BUTTON`, `3_BUTTON`, `2_BUTTON`) and hardware/profile definitions in `button_profile_defs`. The generated result is stored in `button_def`.
+
+For display-attached GPIO buttons, edit `gpio_buttons` only when the BCM GPIO pin assignment differs from the built-in profile. For direct custom GPIO buttons, set `use_custom_gpio_buttons = True`, select `custom_gpio_button_template`, and edit `custom_gpio_buttons`.
+
+`OVERRIDES` in `button_profile_defs` only needs to contain actions that differ from the selected template. Omitted keys keep the template defaults.
+
 #### PiTFT 2.4
 
 see [hardware_installation_pitft.md](./hardware_installation_pitft.md#hardware-button)
@@ -454,7 +460,7 @@ From left to right, the button assignments are as follows.
 |:-|:-|:-|
 | A | Left (<) | Screenshot |
 | B | Lap | Reset |
-| C | ANT+ MultiScan | Fake Trainer for Zwift |
+| C | ANT+ MultiScan | None |
 | D | Start/Stop | None |
 | E | Right (>) | Menu |
 

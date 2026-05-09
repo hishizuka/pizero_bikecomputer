@@ -3,19 +3,52 @@ import copy
 from modules.app_logger import app_logger
 
 
+def _button_key_map(*button_names):
+    return {button_name: button_name for button_name in button_names}
+
+
+def _expand_button_template(button_template, button_map, pages=None):
+    button_def = {}
+    page_names = pages if pages is not None else button_template.keys()
+    for page_name in page_names:
+        if page_name not in button_template:
+            continue
+        button_def[page_name] = {
+            button_map[button_name]: copy.deepcopy(actions)
+            for button_name, actions in button_template[page_name].items()
+            if button_name in button_map
+        }
+    return button_def
+
+
+def _build_button_profiles(button_templates, profile_defs):
+    button_profiles = {}
+    for profile_name, profile_def in profile_defs.items():
+        button_profile = _expand_button_template(
+            button_templates[profile_def["TEMPLATE"]],
+            profile_def["BUTTONS"],
+            profile_def.get("PAGES"),
+        )
+        for page_name, page_buttons in profile_def.get("OVERRIDES", {}).items():
+            if page_name not in button_profile:
+                button_profile[page_name] = {}
+            button_profile[page_name].update(copy.deepcopy(page_buttons))
+        button_profiles[profile_name] = button_profile
+    return button_profiles
+
+
 class Button_Config:
     config = None
 
     # long press threshold of buttons [sec]
-    G_BUTTON_LONG_PRESS = 1
+    button_long_press = 1
 
-    G_BUTTON_DEF = {
-        # call from ButtonShim
-        "Button_Shim": {
+    button_templates = {
+        "5_BUTTON": {
             "MAIN": {
                 "A": ("scroll_prev", "get_screenshot"),
                 "B": ("count_laps", "reset_count"),
-                "C": ("multiscan", "toggle_fake_trainer"),
+                "C": ("multiscan", ""),
                 "D": ("start_and_stop_manual", ""),
                 "E": ("scroll_next", "enter_menu"),
             },
@@ -56,8 +89,175 @@ class Button_Config:
                 "E": ("map_move_x_plus", ""),
             },
         },
-        # copy from Button_Shim: see ioexpander_change_keys
-        "IOExpander": {},
+        "4_BUTTON": {
+            "MAIN": {
+                "A": ("scroll_prev", "change_mode"),
+                "B": ("count_laps", "reset_count"),
+                "C": ("scroll_next", "enter_menu"),
+                "D": ("start_and_stop_manual", ""),
+            },
+            "MAIN_1": {
+                "A": ("scroll_prev", "change_mode"),
+                "B": ("count_laps", ""),
+                "C": ("scroll_next", "enter_menu"),
+                "D": ("brightness_control", ""),
+            },
+            "MENU": {
+                "A": ("press_shift_tab", ""),
+                "B": ("back_menu", ""),
+                "C": ("press_tab", ""),
+                "D": ("press_space", ""),
+            },
+            "MAP": {
+                "A": ("scroll_prev", ""),
+                "B": ("map_zoom_minus", ""),
+                "C": ("scroll_next", "enter_menu"),
+                "D": ("map_zoom_plus", "change_map_overlays"),
+            },
+            "COURSE_PROFILE": {
+                "A": ("scroll_prev", ""),
+                "B": ("map_zoom_minus", ""),
+                "C": ("scroll_next", "enter_menu"),
+                "D": ("map_zoom_plus", ""),
+            },
+        },
+        "3_BUTTON": {
+            "MAIN": {
+                "A": ("scroll_prev", "get_screenshot"),
+                "B": ("start_and_stop_manual", "count_laps"),
+                "C": ("scroll_next", "enter_menu"),
+            },
+            "MENU": {
+                "A": ("back_menu", ""),
+                "B": ("press_space", ""),
+                "C": ("press_tab", ""),
+            },
+            "MAP": {
+                "A": ("map_zoom_minus", "map_overlay_prev_time"),
+                "B": ("change_map_overlays", "change_mode"),
+                "C": ("map_zoom_plus", "map_overlay_next_time"),
+            },
+            "MAP_1": {
+                "A": ("map_move_x_minus", "map_zoom_minus"),
+                "B": ("change_map_overlays", "change_mode"),
+                "C": ("map_move_x_plus", "map_zoom_plus"),
+            },
+            "COURSE_PROFILE": {
+                "A": ("map_zoom_minus", ""),
+                "B": ("change_mode", ""),
+                "C": ("map_zoom_plus", ""),
+            },
+            "COURSE_PROFILE_1": {
+                "A": ("map_move_x_minus", ""),
+                "B": ("change_mode", ""),
+                "C": ("map_move_x_plus", ""),
+            },
+        },
+        "2_BUTTON": {
+            "MAIN": {
+                "A": ("start_and_stop_manual", "reset_count"),
+                "B": ("scroll_next", "enter_menu"),
+            },
+            "MENU": {
+                "A": ("press_space", ""),
+                "B": ("press_tab", "back_menu"),
+            },
+        },
+    }
+
+    # BCM GPIO pin assignment by display profile.
+    gpio_buttons = {
+        "PiTFT": {"A": 5, "B": 6, "C": 12, "D": 13, "E": 16},
+        "Papirus": {"A": 16, "B": 26, "C": 21, "D": 20},
+        "DFRobot_RPi_Display": {"A": 21, "B": 20},
+        # Pirate Audio C/D are X/Y buttons.
+        "Pirate_Audio": {"A": 5, "B": 6, "C": 16, "D": 24},
+        "Pirate_Audio_old": {"A": 5, "B": 6, "C": 16, "D": 20},
+        "Display_HAT_Mini": {"A": 5, "B": 6, "C": 16, "D": 24},
+    }
+
+    # Select one of 5_BUTTON, 4_BUTTON, 3_BUTTON, or 2_BUTTON.
+    custom_gpio_button_template = "5_BUTTON"
+
+    # Enable custom direct GPIO buttons defined below.
+    use_custom_gpio_buttons = False
+
+    # BCM GPIO pin assignment for Custom_GPIO.
+    # Remove entries to use fewer physical buttons.
+    custom_gpio_buttons = {
+        "A": 4,
+        "B": 27,
+        "C": 5,
+        "D": 6,
+        "E": 26,
+    }
+
+    button_profile_defs = {
+        "Button_Shim": {
+            "TEMPLATE": "5_BUTTON",
+            "BUTTONS": _button_key_map("A", "B", "C", "D", "E"),
+        },
+        "IOExpander": {
+            "TEMPLATE": "5_BUTTON",
+            "BUTTONS": {
+                "A": "GP0",
+                "B": "GP1",
+                "C": "GP2",
+                "D": "GP3",
+                "E": "GP4",
+            },
+        },
+        "Custom_GPIO": {
+            "TEMPLATE": custom_gpio_button_template,
+            "BUTTONS": _button_key_map(*custom_gpio_buttons.keys()),
+        },
+        "PiTFT": {
+            "TEMPLATE": "5_BUTTON",
+            "BUTTONS": gpio_buttons["PiTFT"],
+            "PAGES": ("MAIN", "MENU"),
+            "OVERRIDES": {
+                "MAIN": {
+                    #5: ("", ""),
+                    #6: ("", ""),
+                    12: ("brightness_control", ""),
+                    #13: ("", ""),
+                    #16: ("", ""),
+                },
+            },
+        },
+        "Papirus": {
+            "TEMPLATE": "4_BUTTON",
+            "BUTTONS": gpio_buttons["Papirus"],
+            "PAGES": ("MAIN", "MENU"),
+            "OVERRIDES": {
+                "MAIN": {
+                    #16: ("", ""),  # SW1(left)
+                    #26: ("", ""),  # SW2
+                    #20: ("", ""),  # SW3
+                    #21: ("", ""),  # SW4
+                },
+            },
+        },
+        "DFRobot_RPi_Display": {
+            "TEMPLATE": "2_BUTTON",
+            "BUTTONS": gpio_buttons["DFRobot_RPi_Display"],
+        },
+        "Pirate_Audio": {
+            "TEMPLATE": "4_BUTTON",
+            "BUTTONS": gpio_buttons["Pirate_Audio"],
+        },
+        "Pirate_Audio_old": {
+            "TEMPLATE": "4_BUTTON",
+            "BUTTONS": gpio_buttons["Pirate_Audio_old"],
+        },
+        "Display_HAT_Mini": {
+            "TEMPLATE": "4_BUTTON",
+            "BUTTONS": gpio_buttons["Display_HAT_Mini"],
+        },
+    }
+
+    button_def = _build_button_profiles(button_templates, button_profile_defs)
+    button_def.update({
         # call from sensor_ant
         "Edge_Remote": {
             "MAIN": {
@@ -221,130 +421,34 @@ class Button_Config:
                 "Z": ("change_map_overlays", ""),
             },
         },
-        # GPIO button action (short press / long press) from gui_pyqt
-        # call from SensorGPIO.my_callback(self, channel)
-        # number is from GPIO.setmode(GPIO.BCM)
-        "PiTFT": {
-            "MAIN": {
-                5: ("scroll_prev", ""),
-                6: ("count_laps", "reset_count"),
-                12: ("brightness_control", ""),
-                13: ("start_and_stop_manual", ""),
-                16: ("scroll_next", "enter_menu"),
-            },
-            "MENU": {
-                5: ("back_menu", ""),
-                6: ("", ""),
-                12: ("press_space", ""),
-                13: ("press_shift_tab", ""),
-                16: ("press_tab", ""),
-            },
-        },
-        "Papirus": {
-            "MAIN": {
-                16: ("scroll_prev", ""),            # SW1(left)
-                26: ("count_laps", "reset_count"),  # SW2
-                20: ("start_and_stop_manual", ""),  # SW3
-                21: ("scroll_next", "enter_menu"),  # SW4
-            },
-            "MENU": {
-                16: ("back_menu", ""),
-                26: ("press_space", ""),
-                20: ("press_shift_tab", ""),
-                21: ("press_tab", ""),
-            },
-        },
-        "DFRobot_RPi_Display": {
-            "MAIN": {
-                21: ("start_and_stop_manual", "reset_count"),
-                20: ("scroll_next", "enter_menu"),
-            },
-            "MENU": {
-                21: ("press_space", ""),
-                20: ("press_tab", "back_menu"),
-            },
-        },
-        "Pirate_Audio": {
-            "MAIN": {
-                5: ("scroll_prev", "change_mode"),  # A
-                6: ("count_laps", "reset_count"),   # B
-                16: ("scroll_next", "enter_menu"),  # X
-                24: ("start_and_stop_manual", ""),  # Y
-            },
-            "MAIN_1": {
-                5: ("scroll_prev", "change_mode"),
-                6: ("count_laps", ""),
-                16: ("scroll_next", "enter_menu"),
-                24: ("brightness_control", ""),
-            },
-            "MENU": {
-                5: ("press_shift_tab", ""),
-                6: ("back_menu", ""),
-                16: ("press_tab", ""),
-                24: ("press_space", ""),
-            },
-            "MAP": {
-                5: ("scroll_prev", ""),
-                6: ("map_zoom_minus", ""),
-                16: ("scroll_next", "enter_menu"),
-                24: ("map_zoom_plus", "change_map_overlays"),
-            },
-            "COURSE_PROFILE": {
-                5: ("scroll_prev", ""),
-                6: ("map_zoom_minus", ""),
-                16: ("scroll_next", "enter_menu"),
-                24: ("map_zoom_plus", ""),
-            },
-        },
-        "Pirate_Audio_old": {},
-        "Display_HAT_Mini": {},
-    }
-    # copy button definition
-    G_BUTTON_DEF["IOExpander"] = copy.deepcopy(G_BUTTON_DEF["Button_Shim"])
+    })
+
     # Build dedicated profile for dual display + Zwift Click V2.
     # 1) copy from base profile
     # 2) override only entries defined in Zwift_Click_V2_DUAL
     zwift_click_v2_dual_overrides = copy.deepcopy(
-        G_BUTTON_DEF.get("Zwift_Click_V2_DUAL", {})
+        button_def.get("Zwift_Click_V2_DUAL", {})
     )
-    G_BUTTON_DEF["Zwift_Click_V2_DUAL"] = copy.deepcopy(G_BUTTON_DEF["Zwift_Click_V2"])
+    button_def["Zwift_Click_V2_DUAL"] = copy.deepcopy(button_def["Zwift_Click_V2"])
     for page_name, page_overrides in zwift_click_v2_dual_overrides.items():
-        if page_name not in G_BUTTON_DEF["Zwift_Click_V2_DUAL"]:
-            G_BUTTON_DEF["Zwift_Click_V2_DUAL"][page_name] = {}
-        G_BUTTON_DEF["Zwift_Click_V2_DUAL"][page_name].update(page_overrides)
+        if page_name not in button_def["Zwift_Click_V2_DUAL"]:
+            button_def["Zwift_Click_V2_DUAL"][page_name] = {}
+        button_def["Zwift_Click_V2_DUAL"][page_name].update(page_overrides)
 
-    # change button keys
-    ioexpander_change_keys = {
-        "A": "GP0", "B": "GP1", "C": "GP2", "D": "GP3", "E": "GP4",
-        #"A": "GP1", "B": "GP2", "C": "GP3", "D": "GP4", "E": "GP6",
-    }
-    for k1 in G_BUTTON_DEF["IOExpander"]:
-        b = G_BUTTON_DEF["IOExpander"][k1]
-        for k2 in ioexpander_change_keys:
-            b[ioexpander_change_keys[k2]] = b.pop(k2)
-            
-    G_BUTTON_DEF["Display_HAT_Mini"] = copy.deepcopy(G_BUTTON_DEF["Pirate_Audio"])
-    G_BUTTON_DEF["Pirate_Audio_old"] = copy.deepcopy(G_BUTTON_DEF["Pirate_Audio"])
-    for k in G_BUTTON_DEF["Pirate_Audio_old"]:
-        # Y key is GPIO 20, not 24
-        G_BUTTON_DEF["Pirate_Audio_old"][k][20] = G_BUTTON_DEF["Pirate_Audio_old"][k].pop(24)
+    for profile_button_def in button_def.values():
+        if "MENU" in profile_button_def and "DIALOG" not in profile_button_def:
+            profile_button_def["DIALOG"] = copy.deepcopy(profile_button_def["MENU"])
 
-    for button_hard in G_BUTTON_DEF:
-        if "MENU" in G_BUTTON_DEF[button_hard] and "DIALOG" not in G_BUTTON_DEF[button_hard]:
-            G_BUTTON_DEF[button_hard]["DIALOG"] = copy.deepcopy(
-                G_BUTTON_DEF[button_hard]["MENU"]
-            )
-
-    G_PAGE_MODE = "MAIN"
+    page_mode = "MAIN"
 
     # mode group setting changed by change_mode
-    G_BUTTON_MODE_IS_CHANGE = False
-    G_BUTTON_MODE_PAGES = {
+    button_mode_is_change = False
+    button_mode_pages = {
         "MAIN": ["MAIN", "MAIN_1"],
         "MAP": ["MAP", "MAP_1"],
         "COURSE_PROFILE": ["COURSE_PROFILE", "COURSE_PROFILE_1"],
     }
-    G_BUTTON_MODE_INDEX = {
+    button_mode_index = {
         "MAIN": 0,
         "MAP": 0,
         "COURSE_PROFILE": 0,
@@ -353,13 +457,15 @@ class Button_Config:
     def __init__(self, config):
         self.config = config
         self._dual_map_mode_active = False
+        if hasattr(config, "use_custom_gpio_buttons"):
+            self.use_custom_gpio_buttons = config.use_custom_gpio_buttons
 
     def _resolve_button_profile(self, button_hard):
         if button_hard != "Zwift_Click_V2":
             return button_hard
         if not self.config.G_DUAL_DISPLAY_MODE:
             return button_hard
-        if "Zwift_Click_V2_DUAL" not in self.G_BUTTON_DEF:
+        if "Zwift_Click_V2_DUAL" not in self.button_def:
             return button_hard
 
         cfg = getattr(self.config, "G_ZWIFT_CLICK_V2", None)
@@ -389,12 +495,12 @@ class Button_Config:
             dialog_active = bool(getattr(gui, "display_dialog", False))
 
         if dialog_active:
-            if "DIALOG" in self.G_BUTTON_DEF.get(profile, {}):
-                self.G_PAGE_MODE = "DIALOG"
-            elif "MENU" in self.G_BUTTON_DEF.get(profile, {}):
-                self.G_PAGE_MODE = "MENU"
+            if "DIALOG" in self.button_def.get(profile, {}):
+                self.page_mode = "DIALOG"
+            elif "MENU" in self.button_def.get(profile, {}):
+                self.page_mode = "MENU"
             else:
-                self.G_PAGE_MODE = "MAIN"
+                self.page_mode = "MAIN"
         else:
             w_index = stack_index
             if w_index == 1:
@@ -416,35 +522,37 @@ class Button_Config:
                     else:
                         mode_key = "MAIN"
 
-                pages = self.G_BUTTON_MODE_PAGES.get(mode_key)
+                pages = self.button_mode_pages.get(mode_key)
                 if pages:
-                    mode_index = self.G_BUTTON_MODE_INDEX.get(mode_key, 0)
+                    mode_index = self.button_mode_index.get(mode_key, 0)
                     if mode_index < 0 or mode_index >= len(pages):
                         mode_index = 0
-                    self.G_PAGE_MODE = pages[mode_index]
+                    self.page_mode = pages[mode_index]
                 else:
-                    self.G_PAGE_MODE = mode_key
+                    self.page_mode = mode_key
                 # for no implementation
-                if self.G_PAGE_MODE not in self.G_BUTTON_DEF[profile]:
-                    self.G_PAGE_MODE = "MAIN"
+                if self.page_mode not in self.button_def[profile]:
+                    self.page_mode = "MAIN"
                     if self.config.G_DUAL_DISPLAY_MODE and mode_key == "MAP":
                         self._dual_map_mode_active = False
                         map_widget = getattr(gui, "map_widget", None)
                         if map_widget is not None:
                             map_widget.lock_on()
             elif w_index >= 2:
-                self.G_PAGE_MODE = "MENU"
+                self.page_mode = "MENU"
 
-        if press_button not in self.G_BUTTON_DEF[profile][self.G_PAGE_MODE]:
+        if press_button not in self.button_def[profile][self.page_mode]:
             app_logger.warning(
-                f"buton key error: '{press_button}' is not defined in self.G_BUTTON_DEF['{profile}']['{self.G_PAGE_MODE}']"
+                "button key error: "
+                f"'{press_button}' is not defined in "
+                f"self.button_def['{profile}']['{self.page_mode}']"
             )
             return
-        func_str = self.G_BUTTON_DEF[profile][self.G_PAGE_MODE][press_button][index]
+        func_str = self.button_def[profile][self.page_mode][press_button][index]
         if func_str in ("", "dummy"):
             app_logger.debug(
                 "[BUTTON] noop "
-                f"device={button_hard}, profile={profile}, page={self.G_PAGE_MODE}, "
+                f"device={button_hard}, profile={profile}, page={self.page_mode}, "
                 f"key={press_button}, index={index}, action={func_str!r}"
             )
             return
@@ -453,7 +561,7 @@ class Button_Config:
             "[BUTTON] dispatch "
             f"device={button_hard}, profile={profile}, "
             f"stack_index={stack_index}, main_page_index={main_page_index}, "
-            f"dialog_active={dialog_active}, page={self.G_PAGE_MODE}, "
+            f"dialog_active={dialog_active}, page={self.page_mode}, "
             f"key={press_button}, index={index}, action={func_str}"
         )
 
@@ -467,13 +575,13 @@ class Button_Config:
         if self.config.G_DUAL_DISPLAY_MODE:
             if w == self.config.gui.course_profile_graph_widget:
                 self.change_mode_index("COURSE_PROFILE")
-                if not self.G_BUTTON_MODE_IS_CHANGE:
+                if not self.button_mode_is_change:
                     w.lock_on()
                 else:
                     w.lock_off()
                 return
 
-            map_pages = self.G_BUTTON_MODE_PAGES.get("MAP", [])
+            map_pages = self.button_mode_pages.get("MAP", [])
             if not map_pages or map_widget is None:
                 self.change_mode_index("MAIN")
                 return
@@ -482,45 +590,45 @@ class Button_Config:
                 self._dual_map_mode_active = True
                 # Start from MAP_1 behavior when switching from MAIN in dual mode.
                 initial_map_mode_index = 1 if len(map_pages) > 1 else 0
-                self.G_BUTTON_MODE_INDEX["MAP"] = initial_map_mode_index
-                self.G_BUTTON_MODE_IS_CHANGE = True
-                self.G_PAGE_MODE = map_pages[initial_map_mode_index]
+                self.button_mode_index["MAP"] = initial_map_mode_index
+                self.button_mode_is_change = True
+                self.page_mode = map_pages[initial_map_mode_index]
                 map_widget.lock_off()
                 return
 
             self.change_mode_index("MAP")
-            if not self.G_BUTTON_MODE_IS_CHANGE:
+            if not self.button_mode_is_change:
                 self._dual_map_mode_active = False
-                self.G_PAGE_MODE = "MAIN"
+                self.page_mode = "MAIN"
                 map_widget.lock_on()
             else:
                 map_widget.lock_off()
             return
 
-        if "MAIN" in self.G_PAGE_MODE:
+        if "MAIN" in self.page_mode:
             self.change_mode_index("MAIN")
         # if display is MAP: change MAP_1 -> MAP_2 -> MAP -> ...
         elif w == self.config.gui.map_widget:
             self.change_mode_index("MAP")
             # additional: lock current position when normal page
-            if not self.G_BUTTON_MODE_IS_CHANGE:
+            if not self.button_mode_is_change:
                 w.lock_on()
             else:
                 w.lock_off()
         elif w == self.config.gui.course_profile_graph_widget:
             self.change_mode_index("COURSE_PROFILE")
             # additional: lock current position when normal page
-            if not self.G_BUTTON_MODE_IS_CHANGE:
+            if not self.button_mode_is_change:
                 w.lock_on()
             else:
                 w.lock_off()
 
     def change_mode_index(self, mode):
-        self.G_BUTTON_MODE_INDEX[mode] = self.G_BUTTON_MODE_INDEX[mode] + 1
-        self.G_BUTTON_MODE_IS_CHANGE = True
-        if self.G_BUTTON_MODE_INDEX[mode] >= len(self.G_BUTTON_MODE_PAGES[mode]):
-            self.G_BUTTON_MODE_INDEX[mode] = 0
-            self.G_BUTTON_MODE_IS_CHANGE = False
-        self.G_PAGE_MODE = self.G_BUTTON_MODE_PAGES[mode][
-            self.G_BUTTON_MODE_INDEX[mode]
+        self.button_mode_index[mode] = self.button_mode_index[mode] + 1
+        self.button_mode_is_change = True
+        if self.button_mode_index[mode] >= len(self.button_mode_pages[mode]):
+            self.button_mode_index[mode] = 0
+            self.button_mode_is_change = False
+        self.page_mode = self.button_mode_pages[mode][
+            self.button_mode_index[mode]
         ]

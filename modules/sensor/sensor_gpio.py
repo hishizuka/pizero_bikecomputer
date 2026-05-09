@@ -33,31 +33,41 @@ class SensorGPIO(Sensor):
     _line_request = None
     _event_task = None
     _loop = None
+    _button_profile = None
+    _pin_to_button = {}
 
-    # Displays that require internal pull-up resistors
-    _PULLUP_DISPLAYS = [
+    # Button profiles that require internal pull-up resistors.
+    _PULLUP_BUTTON_PROFILES = [
         "PiTFT",
         "DFRobot_RPi_Display",
         "Pirate_Audio_old",
         "Pirate_Audio",
         "Display_HAT_Mini",
+        "Custom_GPIO",
     ]
-    # Displays that use external pull-up (no internal pull-up needed)
-    _NO_PULLUP_DISPLAYS = [
+    # Button profiles that use external pull-up (no internal pull-up needed).
+    _NO_PULLUP_BUTTON_PROFILES = [
         "Papirus",
     ]
 
     def sensor_init(self):
+        self.button_state = {}
+        self.quit_status = False
+        self._button_profile = None
+        self._pin_to_button = {}
+
         if not _SENSOR_GPIOD:
             return
 
-        all_displays = self._PULLUP_DISPLAYS + self._NO_PULLUP_DISPLAYS
-        if self.config.G_DISPLAY not in all_displays:
+        if getattr(self.config.button_config, "use_custom_gpio_buttons", False):
+            self._set_custom_gpio_buttons()
+        else:
+            self._set_display_gpio_buttons()
+
+        if self._button_profile is None:
             return
 
-        button_keys = list(
-            self.config.button_config.G_BUTTON_DEF[self.config.G_DISPLAY]["MAIN"].keys()
-        )
+        button_keys = list(self._pin_to_button.keys())
         if not button_keys:
             return
 
@@ -70,13 +80,63 @@ class SensorGPIO(Sensor):
                 "last_action_time": 0,  # For software debouncing
             }
 
-        use_pullup = self.config.G_DISPLAY in self._PULLUP_DISPLAYS
+        use_pullup = self._button_profile in self._PULLUP_BUTTON_PROFILES
 
         try:
             self._init_gpiod(button_keys, use_pullup)
         except Exception as e:
             app_logger.error(f"Failed to initialize GPIO: {e}")
             self._line_request = None
+
+    def _set_custom_gpio_buttons(self):
+        profile = "Custom_GPIO"
+        button_def = self.config.button_config.button_def.get(profile, {})
+        valid_buttons = button_def.get("MAIN", {})
+        button_map = getattr(self.config.button_config, "custom_gpio_buttons", {})
+
+        for button_name, pin in button_map.items():
+            if button_name not in valid_buttons:
+                app_logger.warning(
+                    f"Custom GPIO button '{button_name}' is not defined in {profile}"
+                )
+                continue
+            try:
+                gpio_pin = int(pin)
+            except (TypeError, ValueError):
+                app_logger.warning(
+                    f"Custom GPIO button '{button_name}' has invalid pin: {pin!r}"
+                )
+                continue
+            if gpio_pin in self._pin_to_button:
+                app_logger.warning(
+                    f"Custom GPIO pin {gpio_pin} is already assigned to "
+                    f"'{self._pin_to_button[gpio_pin]}'"
+                )
+                continue
+            self._pin_to_button[gpio_pin] = button_name
+
+        if self._pin_to_button:
+            self._button_profile = profile
+
+    def _set_display_gpio_buttons(self):
+        button_profiles = self._PULLUP_BUTTON_PROFILES + self._NO_PULLUP_BUTTON_PROFILES
+        profile = self.config.G_DISPLAY
+        if profile not in button_profiles:
+            return
+
+        button_def = self.config.button_config.button_def.get(profile, {})
+        for button in button_def.get("MAIN", {}):
+            try:
+                gpio_pin = int(button)
+            except (TypeError, ValueError):
+                app_logger.warning(
+                    f"GPIO button '{button}' in {profile} is not a valid pin"
+                )
+                continue
+            self._pin_to_button[gpio_pin] = button
+
+        if self._pin_to_button:
+            self._button_profile = profile
 
     def _init_gpiod(self, pins, use_pullup):
         bias = Bias.PULL_UP if use_pullup else Bias.AS_IS
@@ -167,6 +227,12 @@ class SensorGPIO(Sensor):
             except TypeError:
                 return self._line_request.wait_edge_events()
 
+    def _press_button(self, pin, index):
+        button = self._pin_to_button.get(pin)
+        if self._button_profile is None or button is None:
+            return
+        self.config.button_config.press_button(self._button_profile, button, index)
+
     async def _handle_edge_event(self, event):
         """Handle a single edge event (FALLING only - button press)."""
         pin = event.line_offset
@@ -191,7 +257,7 @@ class SensorGPIO(Sensor):
     async def _monitor_button_release(self, pin):
         """Monitor button state for release or long press detection."""
         state = self.button_state[pin]
-        long_press_threshold = self.config.button_config.G_BUTTON_LONG_PRESS
+        long_press_threshold = self.config.button_config.button_long_press
         poll_interval = 0.01  # 10ms polling
 
         while not self.quit_status and state["pressed"]:
@@ -207,9 +273,7 @@ class SensorGPIO(Sensor):
                 # Button released
                 if not state["long_press_fired"]:
                     # Short press
-                    self.config.button_config.press_button(
-                        self.config.G_DISPLAY, pin, 0
-                    )
+                    self._press_button(pin, 0)
                 state["pressed"] = False
                 state["press_time"] = None
                 state["long_press_fired"] = False
@@ -225,9 +289,7 @@ class SensorGPIO(Sensor):
                 if elapsed >= long_press_threshold:
                     # Long press detected
                     state["long_press_fired"] = True
-                    self.config.button_config.press_button(
-                        self.config.G_DISPLAY, pin, 1
-                    )
+                    self._press_button(pin, 1)
                     state["last_action_time"] = time.time()
 
             await asyncio.sleep(poll_interval)
@@ -235,7 +297,7 @@ class SensorGPIO(Sensor):
     async def _check_long_press(self):
         """Check for buttons held long enough for long press."""
         current_time = time.time()
-        long_press_threshold = self.config.button_config.G_BUTTON_LONG_PRESS
+        long_press_threshold = self.config.button_config.button_long_press
 
         for pin, state in self.button_state.items():
             if (
@@ -247,9 +309,7 @@ class SensorGPIO(Sensor):
                 if elapsed >= long_press_threshold:
                     # Long press detected
                     state["long_press_fired"] = True
-                    self.config.button_config.press_button(
-                        self.config.G_DISPLAY, pin, 1
-                    )
+                    self._press_button(pin, 1)
                     state["last_action_time"] = current_time
 
     def quit(self):

@@ -56,7 +56,7 @@ class ButtonBoxWidget(QtWidgets.QWidget):
                 app_logger.info(f"lap button pressing: {self.lap_button_count}")
                 if (
                     self.lap_button_count
-                    == self.config.button_config.G_BUTTON_LONG_PRESS
+                    == self.config.button_config.button_long_press
                 ):
                     app_logger.info("reset")
                     self.config.gui.reset_count()
@@ -76,7 +76,7 @@ class ButtonBoxWidget(QtWidgets.QWidget):
                 app_logger.info(f"start button pressing: {self.start_button_count}")
                 if (
                     self.start_button_count
-                    == self.config.button_config.G_BUTTON_LONG_PRESS
+                    == self.config.button_config.button_long_press
                 ):
                     app_logger.info("quit or poweroff")
                     self.config.gui.quit()

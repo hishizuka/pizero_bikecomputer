@@ -188,7 +188,8 @@ class ButtonIOExpander(i2c.i2c):
                 if curr == 0:
                     if (
                         not h["hold_fired"]
-                        and (time.time() - h["t_pressed"]) > self.button_config.G_BUTTON_LONG_PRESS
+                        and (time.time() - h["t_pressed"])
+                        > self.button_config.button_long_press
                     ):
                         self.press_button(f"GP{i}", 1) # hold
                         h["hold_fired"] = True
@@ -283,12 +284,13 @@ class ButtonIOExpander(i2c.i2c):
         
         self.states[b] = state
 
-        await asyncio.sleep(self.button_config.G_BUTTON_LONG_PRESS)
+        await asyncio.sleep(self.button_config.button_long_press)
         
         if (
             not self.states[b] and
             not state and
-            time.time() - self.watch_time[b] >= self.button_config.G_BUTTON_LONG_PRESS
+            time.time() - self.watch_time[b]
+            >= self.button_config.button_long_press
         ):
             self.watch_time[b] = None
             self.press_button(f"GP{b}", 1)
@@ -308,7 +310,8 @@ if __name__ == "__main__":
     import signal
 
     class button_config:
-        G_BUTTON_LONG_PRESS = 1
+        button_long_press = 1
+
         def press_button(self, key, button, index):
             print(f"{key}, {button}, {index}")
 
