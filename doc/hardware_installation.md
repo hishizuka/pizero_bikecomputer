@@ -217,6 +217,7 @@ for auto backlight when using MIP Reflective color LCD
 
 - [TCS3472](https://shop.pimoroni.com/products/enviro-phat)
 - [VCNL4040](https://www.adafruit.com/product/4161)
+- [LTR-308ALS-01](https://optoelectronics.liteon.com/upload/download/DS86-2016-0027/LTR-308ALS-01_Final_%20DS_V2.1.PDF)
 - [TSL2591](https://www.waveshare.com/environment-sensor-hat.htm)
 
 ### UV / Gas

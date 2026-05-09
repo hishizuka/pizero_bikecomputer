@@ -239,7 +239,8 @@ $ pip install adafruit-circuitpython-bmp280
 | [MEMSIC MMC5983MA](https://www.memsic.com/magnetometer-5) | [SparkFun](https://www.sparkfun.com/products/19895) | | None |
 | [STMicroelectronics LIS3MDL](https://www.st.com/en/mems-and-sensors/lis3mdl.html) | [Adafruit](https://www.adafruit.com/product/4485) | | adafruit-circuitpython-lis3mdl |
 | [STMicroelectronics ISM330DHCX](https://www.st.com/en/mems-and-sensors/ism330dhcx.html) | [SparkFun](https://www.sparkfun.com/products/19895) | | adafruit-circuitpython-lsm6ds |
-| [Vishay VCNL4040](https://www.vishay.com/en/product/84274/) | [Adafruit](https://www.adafruit.com/product/4161) | o | adafruit-circuitpython-vcnl4040 |
+| [Vishay VCNL4040](https://www.vishay.com/en/product/84274/) | [Adafruit](https://www.adafruit.com/product/4161) | o | None (bundled smbus2 driver) |
+| [Lite-On LTR-308ALS-01](https://optoelectronics.liteon.com/upload/download/DS86-2016-0027/LTR-308ALS-01_Final_%20DS_V2.1.PDF) | | | None (bundled smbus2 driver) |
 | | [ozzmaker Berry GPS IMU v4](https://ozzmaker.com/product/berrygps-imu/) | | adafruit-circuitpython-lsm6ds adafruit-circuitpython-lis3mdl |
 | | [GPS PIE](https://gps-pie.com/) | | adafruit-circuitpython-bno055(*2) |
 | | [waveshare Environment Sensor HAT](https://www.waveshare.com/environment-sensor-hat.htm) | | adafruit-circuitpython-bme280 adafruit-circuitpython-icm20x adafruit-circuitpython-tsl2591 adafruit-circuitpython-ltr390 adafruit-circuitpython-sgp40 |

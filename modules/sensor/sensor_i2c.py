@@ -167,6 +167,9 @@ class SensorI2C(Sensor):
             if self.detect_light_vncl4040():
                 self.available_sensors["LIGHT"]["VCNL4040"] = True
                 self.sensor["lux"] = self.sensor_vcnl4040
+            elif self.detect_light_ltr308als():
+                self.available_sensors["LIGHT"]["LTR308ALS"] = True
+                self.sensor["lux"] = self.sensor_ltr308als
             if self.detect_button_mcp230xx():
                 self.available_sensors["BUTTON"]["MCP23008"] = True
 
@@ -293,6 +296,7 @@ class SensorI2C(Sensor):
         # light sensors
         self.available_sensors["LIGHT"]["TCS3472"] = self.detect_light_tcs3472()
         self.available_sensors["LIGHT"]["VCNL4040"] = self.detect_light_vncl4040()
+        self.available_sensors["LIGHT"]["LTR308ALS"] = self.detect_light_ltr308als()
         self.available_sensors["LIGHT"]["TSL2591"] = self.detect_light_tsl2591()
 
         # uv sensor
@@ -393,6 +397,8 @@ class SensorI2C(Sensor):
         # light sensor
         if self.available_sensors["LIGHT"].get("VCNL4040"):
             self.sensor["lux"] = self.sensor_vcnl4040
+        elif self.available_sensors["LIGHT"].get("LTR308ALS"):
+            self.sensor["lux"] = self.sensor_ltr308als
         elif self.available_sensors["LIGHT"].get("TCS3472"):
             self.sensor["lux"] = self.sensor_tcs3472
         elif self.available_sensors["LIGHT"].get("TSL2591"):
@@ -820,6 +826,7 @@ class SensorI2C(Sensor):
         try:
             if (
                 self.available_sensors["LIGHT"].get("VCNL4040")
+                or self.available_sensors["LIGHT"].get("LTR308ALS")
                 or self.available_sensors["LIGHT"].get("TSL2591")
             ):
                 self.values["light"] = int(self.sensor["lux"].lux)
@@ -2085,14 +2092,23 @@ class SensorI2C(Sensor):
 
     def detect_light_vncl4040(self):
         try:
-            import board
-            import busio
-            import adafruit_vcnl4040
+            from .i2c.VCNL4040 import VCNL4040
 
-            self.sensor_vcnl4040 = adafruit_vcnl4040.VCNL4040(
-                busio.I2C(board.SCL, board.SDA)
-            )
+            if not VCNL4040.test():
+                return False
+            self.sensor_vcnl4040 = VCNL4040()
             self.sensor_vcnl4040.proximity_shutdown = True
+            return True
+        except:
+            return False
+
+    def detect_light_ltr308als(self):
+        try:
+            from .i2c.LTR308ALS import LTR308ALS
+
+            if not LTR308ALS.test():
+                return False
+            self.sensor_ltr308als = LTR308ALS()
             return True
         except:
             return False
