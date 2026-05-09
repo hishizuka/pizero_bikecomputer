@@ -130,6 +130,9 @@ class SensorBLE(Sensor):
             if setting is not None:
                 setting.write_config()
 
+        def on_stopped(_side: str, _packet: bytes) -> None:
+            self._notify_zwift_click_v2_stopped()
+
         try:
             await zwift_click_v2.listen(
                 on_classified=on_classified,
@@ -137,12 +140,26 @@ class SensorBLE(Sensor):
                 scan_forever=True,
                 preferred_address=preferred_address or None,
                 on_connected=on_connected,
+                on_stopped=on_stopped,
                 log=log,
             )
         except asyncio.CancelledError:
             return
         except Exception as exc:  # noqa: BLE errors are runtime
             log(f"listener crashed: {exc}")
+
+    def _notify_zwift_click_v2_stopped(self) -> None:
+        gui = getattr(self.config, "gui", None)
+        if gui is None:
+            return
+
+        def show() -> None:
+            gui.show_dialog(
+                gui.toggle_fake_trainer,
+                "Click V2 is locked. Start Fake Trainer to reconnect?",
+            )
+
+        self.config.loop.call_soon_threadsafe(show)
 
     def is_fake_trainer_running(self) -> bool:
         proc = self._fake_trainer_proc

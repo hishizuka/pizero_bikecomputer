@@ -77,6 +77,10 @@ DEFAULT_REPEAT_INTERVAL_SECONDS = 0.5
 DEFAULT_SCAN_TIMEOUT_SECONDS = 10.0
 DEFAULT_SCAN_INTERVAL_SECONDS = 30.0
 DEFAULT_RECONNECT_DELAY_SECONDS = 3.0
+STOPPED_PACKET_WARNING = (
+    "Zwift Click V2 may be locked. Connect it once in the Zwift app, "
+    "then reconnect."
+)
 
 
 @dataclass
@@ -342,6 +346,7 @@ async def connect_and_listen(
     name: Optional[str] = None,
     log: Callable[[str], None] = print,
     on_connected: Optional[Callable[[str, str, Optional[str]], None]] = None,
+    on_stopped: Optional[Callable[[str, bytes], None]] = None,
 ) -> bool:
     """Connect to a single Click V2 and feed button events to callback."""
     connected = False
@@ -349,33 +354,34 @@ async def connect_and_listen(
         async with BleakClient(address) as client:
             connected = True
             last_rx_mono: Optional[float] = None
+            stopped_notice_sent = False
 
             def mark_rx() -> None:
                 nonlocal last_rx_mono
                 last_rx_mono = time.monotonic()
 
+            def handle_data(_sender, data: bytes) -> None:
+                nonlocal stopped_notice_sent
+                stopped = handle_notification(
+                    side,
+                    data,
+                    classifier,
+                    log=log,
+                    on_rx=mark_rx,
+                )
+                if not stopped or stopped_notice_sent:
+                    return
+                stopped_notice_sent = True
+                packet = bytes(data)
+                packet_hex = " ".join(f"{b:02X}" for b in packet)
+                log(f"[{side}] {STOPPED_PACKET_WARNING} packet={packet_hex}")
+                if on_stopped is not None:
+                    on_stopped(side, packet)
+
             if on_connected is not None:
                 on_connected(side, address, name)
-            await client.start_notify(
-                ASYNC_CHAR,
-                lambda _, data: handle_notification(
-                    side,
-                    data,
-                    classifier,
-                    log=log,
-                    on_rx=mark_rx,
-                ),
-            )
-            await client.start_notify(
-                SYNC_TX_CHAR,
-                lambda _, data: handle_notification(
-                    side,
-                    data,
-                    classifier,
-                    log=log,
-                    on_rx=mark_rx,
-                ),
-            )
+            await client.start_notify(ASYNC_CHAR, handle_data)
+            await client.start_notify(SYNC_TX_CHAR, handle_data)
 
             # Handshake sequence mirrors Dart: RIDE_ON then FF 04 00.
             await client.write_gatt_char(SYNC_RX_CHAR, RIDE_ON, response=False)
@@ -407,24 +413,28 @@ def handle_notification(
     *,
     log: Callable[[str], None] = print,
     on_rx: Optional[Callable[[], None]] = None,
-) -> None:
-    """Process incoming data from SYNC_TX/ASYNC characteristics."""
+) -> bool:
+    """Process incoming data from SYNC_TX/ASYNC characteristics.
+
+    Returns True when the packet is a known Click V2 stopped-event packet.
+    """
     if not data:
-        return
+        return False
     if on_rx is not None:
         on_rx()
 
     # Ignore pure RIDE_ON packets that can appear during some stacks' handshake sequences.
     if data == RIDE_ON:
-        return
+        return False
 
-    if data.startswith(RESPONSE_STOPPED_CLICK_V2_VARIANT_1) or data.startswith(RESPONSE_STOPPED_CLICK_V2_VARIANT_2):
-        #log(f"[{side}] Device stopped sending events; open Zwift app once this session to re-enable.")
-        return
+    if data.startswith(RESPONSE_STOPPED_CLICK_V2_VARIANT_1) or data.startswith(
+        RESPONSE_STOPPED_CLICK_V2_VARIANT_2
+    ):
+        return True
 
     # Ignore the startup public-key packet (RideOn + response header).
     if data.startswith(START_COMMAND):
-        return
+        return False
 
     opcode = data[0]
     payload = data[1:]
@@ -444,10 +454,11 @@ def handle_notification(
             classifier.observe_released(side, "click", released)
     elif opcode in (0x19, 0x42, 0x2A, 0xFF, 0x15, 0x3C):
         # Battery/log/empty/vendor noise; ignore for CLI output.
-        return
+        return False
     else:
         # Unknown/unhandled packet; ignore to avoid noisy logs in app mode.
-        return
+        return False
+    return False
 
 
 async def listen(
@@ -464,6 +475,7 @@ async def listen(
     prefer_left: bool = True,
     preferred_address: Optional[str] = None,
     on_connected: Optional[Callable[[str, str, Optional[str]], None]] = None,
+    on_stopped: Optional[Callable[[str, bytes], None]] = None,
     log: Callable[[str], None] = print,
 ) -> None:
     """Scan, connect, and dispatch button presses (short/long) via callback.
@@ -490,6 +502,7 @@ async def listen(
                     name=None,
                     log=log,
                     on_connected=on_connected,
+                    on_stopped=on_stopped,
                 )
                 if stop_event.is_set():
                     return
@@ -526,6 +539,7 @@ async def listen(
                         name=d.device.name,
                         log=log,
                         on_connected=on_connected,
+                        on_stopped=on_stopped,
                     )
                 )
                 for d in selected
