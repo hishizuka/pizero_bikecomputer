@@ -427,8 +427,11 @@ def handle_notification(
     if data == RIDE_ON:
         return False
 
-    if data.startswith(RESPONSE_STOPPED_CLICK_V2_VARIANT_1) or data.startswith(
-        RESPONSE_STOPPED_CLICK_V2_VARIANT_2
+    # Treat only the exact 5-byte stopped packets as locked/stopped. Some
+    # normal response packets use the same prefix and append payload data.
+    if data in (
+        RESPONSE_STOPPED_CLICK_V2_VARIANT_1,
+        RESPONSE_STOPPED_CLICK_V2_VARIANT_2,
     ):
         return True
 
