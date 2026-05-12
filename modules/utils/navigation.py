@@ -2,6 +2,7 @@ import re
 
 
 _GADGETBRIDGE_ACTION_TURN_TYPE = {
+    "continue": "Straight",
     "left": "Left",
     "left_slight": "Slight Left",
     "left_sharp": "Sharp Left",
@@ -19,7 +20,6 @@ _GADGETBRIDGE_ACTION_TURN_TYPE = {
 }
 _GADGETBRIDGE_HIDDEN_ACTIONS = {
     "",
-    "continue",
     "offroute",
     "roundabout_straight",
 }

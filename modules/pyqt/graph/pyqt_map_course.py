@@ -14,6 +14,7 @@ from modules.utils.timer import Timer, log_timers
 
 class MapCourseMixin:
     _INSTRUCTION_ICON_PATH_MAP = {
+        "Straight": "img/navi_straight_white.svg",
         "Right": "img/navi_turn_right_white.svg",
         "Left": "img/navi_turn_left_white.svg",
         "Slight Right": "img/navi_turn_slight_right_white.svg",
