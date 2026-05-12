@@ -286,7 +286,10 @@ This project also includes code adapted from swiftcontrol under the GNU General 
 - modules/sensor/ble/zwift_click_v2.py
 
 This project also includes code ported and modified from Bosch Sensortec GmbH's code under the BSD 3-Clause License. See the NOTICE file for details.
-- [BHI360_SensorAPI](https://github.com/boschsensortec/BHI360_SensorAPI)
+- Source APIs:
+  - [BHI360_SensorAPI](https://github.com/boschsensortec/BHI360_SensorAPI)
+  - [BHI385_SensorAPI](https://github.com/boschsensortec/BHI385_SensorAPI)
+- Adapted files:
   - modules/sensor/i2c/cython/bhi360_shuttle_board_3/common.c
   - modules/sensor/i2c/cython/bhi360_shuttle_board_3/common.h
 

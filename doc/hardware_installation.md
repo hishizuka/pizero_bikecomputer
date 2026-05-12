@@ -210,6 +210,7 @@ The accelerometer is used for stop detection when using GPS. The magnetometer is
 - [BMM150](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm150/): Mag
 - [BMM350](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm350/): Mag
 - Bosch BHI360 Shuttle Board 3.0: custom board with BHI360 + BMM350 + pressure sensor support
+- Bosch BHI385 Shuttle Board 3.0: custom board with BHI385 + BMM350 + BMP58X + BME688 support
 
 ### Light
 

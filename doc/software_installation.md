@@ -234,7 +234,7 @@ $ pip install adafruit-circuitpython-bmp280
 | [Bosch BMM150 (Obsolete)](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm150/) | | | bundled Cython helper(*1) |
 | [Bosch BMM350](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm350/) | | | bundled Cython helper(*1) |
 | [Bosch BHI360 Shuttle Board 3.0](https://www.bosch-sensortec.com/en/products/smart-sensor-systems/bhi360) | | o | bundled Cython helper(*1) |
-| [Bosch BHI385 Shuttle Board 3.0](https://www.bosch-sensortec.com/en/products/smart-sensor-systems/bhi385) | | | bundled Cython helper(*1) |
+| [Bosch BHI385 Shuttle Board 3.0](https://www.bosch-sensortec.com/en/products/smart-sensor-systems/bhi385) | | o | bundled Cython helper(*1) |
 | [Bosch BNO055](https://www.bosch-sensortec.com/products/smart-sensor-systems/bno055/) | [Adafruit](https://www.adafruit.com/product/4646) | | adafruit-circuitpython-bno055(*2) | 
 | [MEMSIC MMC5983MA](https://www.memsic.com/magnetometer-5) | [SparkFun](https://www.sparkfun.com/products/19895) | | None |
 | [STMicroelectronics LIS3MDL](https://www.st.com/en/mems-and-sensors/lis3mdl.html) | [Adafruit](https://www.adafruit.com/product/4485) | | adafruit-circuitpython-lis3mdl |
@@ -249,6 +249,8 @@ $ pip install adafruit-circuitpython-bmp280
 | (Obsolete) STMicroelectronics LSM6DS33 | [Adafruit](https://www.adafruit.com/product/4485) | | adafruit-circuitpython-lsm6ds |
 | (Obsolete) [STMicroelectronics LSM9DS1](https://www.st.com/ja/mems-and-sensors/lsm9ds1.html) | [Adafruit](https://www.adafruit.com/product/4634) | | adafruit-circuitpython-lsm9ds1 | 
 | | (Obsolete) [Pimoroni Enviro pHAT](https://learn.pimoroni.com/article/getting-started-with-enviro-phat) | | None |
+
+BHI360 Shuttle Board 3.0 and BHI385 Shuttle Board 3.0 are handled by the same BHI3 Cython helper. The helper reads the chip ID register before loading firmware and selects the BHI360 or BHI385 build target automatically.
 
 *1 It is also possible to use the official BOSCH C library with cython. Create a shared library with the following command and name and place it under LD_LIBRARY_PATH (e.g. /usr/local/lib).
 Also, place the header files in LD_INCLUDE_PATH (/usr/local/include, etc.).
@@ -969,6 +971,7 @@ You can also override `server`, and `status` stores the current on/off state.
 ### state.pickle
 
 It stores temporary variables such as values for quick recovery in the event of a power failure and sensor calibration results.
+BHI3 calibration profiles are stored separately under `log/bhi3/` as `bhi360_calib_*.bin` or `bhi385_calib_*.bin`.
 
 Most of them are deleted on reset.
 

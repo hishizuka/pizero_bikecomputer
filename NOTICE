@@ -39,6 +39,8 @@ Portions of the code in the following file are
 adapted from code originally developed by Bosch Sensortec GmbH (Copyright 2025)
 and licensed under the BSD 3-Clause License:
 
+- BHI360_SensorAPI
+- BHI385_SensorAPI
 - modules/sensor/i2c/cython/bhi360_shuttle_board_3/common.c
 - modules/sensor/i2c/cython/bhi360_shuttle_board_3/common.h
 
