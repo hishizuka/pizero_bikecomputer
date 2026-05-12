@@ -46,6 +46,7 @@ cdef extern from "bhi3_s.h":
   void bhi3_s_read_data(bhi3_s_data *data)
   bint bhi3_s_ready()
   int8_t bhi3_s_last_error()
+  bint bhi3_s_is_bhi385()
   void bhi3_s_close()
   int8_t bhi3_s_raw_log_start(const char *path)
   void bhi3_s_raw_log_stop()
@@ -139,6 +140,10 @@ cdef class BHI3_S:
   @property
   def last_error(self):
     return bhi3_s_last_error()
+
+  @property
+  def is_bhi385(self):
+    return bhi3_s_is_bhi385()
 
   @property
   def raw_log_enabled(self):

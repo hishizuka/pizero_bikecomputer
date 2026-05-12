@@ -1,5 +1,5 @@
 def make_ext(modname, pyxfilename):
-    """Build Extension for the BHI360 shuttle board (I2C)."""
+    """Build Extension for BHI3 shuttle boards (I2C)."""
 
     from distutils.extension import Extension
     import os
@@ -7,14 +7,13 @@ def make_ext(modname, pyxfilename):
     base_dir = os.path.dirname(os.path.abspath(pyxfilename))
 
     i2c_sensors = {
-        # BHI385 is checked first; falls back to BHI360 if libbhi385.so is absent.
-        'bhi3_s_385': {
+        'bhi385': {
             'src': os.path.join(base_dir, 'bhi3_s.c'),
             'lib': 'libbhi385.so',
             #'macro': [('USE_BHI3_S', '1'), ('USE_BHI385', '1')],  # for SPI
             'macro': [('USE_BHI3_S', '1'), ('USE_BHI385', '1'), ('BHI3_USE_I2C', '1')],  # for I2C
         },
-        'bhi3_s_360': {
+        'bhi360': {
             'src': os.path.join(base_dir, 'bhi3_s.c'),
             'lib': 'libbhi360.so',
             #'macro': [('USE_BHI3_S', '1')],  # for SPI
@@ -45,8 +44,16 @@ def make_ext(modname, pyxfilename):
     env_paths = [p for p in os.environ.get("LD_LIBRARY_PATH", "").split(":") if p]
     lib_paths = env_paths + ["/usr/lib", "/usr/local/lib", base_dir]
 
+    target = os.environ.get("BHI3_TARGET", "").strip().lower()
+    if target in ("385", "bhi385"):
+        sensor_order = [i2c_sensors['bhi385']]
+    elif target in ("360", "bhi360"):
+        sensor_order = [i2c_sensors['bhi360']]
+    else:
+        sensor_order = [i2c_sensors['bhi360'], i2c_sensors['bhi385']]
+
     sources = []
-    for sensor in i2c_sensors.values():
+    for sensor in sensor_order:
         if _check_lib_exists(sensor['lib'], lib_paths):
             sources = [pyxfilename, os.path.join(base_dir, 'common.c'), sensor['src']]
             extra_link_args.append('-l' + os.path.splitext(sensor['lib'])[0][3:])

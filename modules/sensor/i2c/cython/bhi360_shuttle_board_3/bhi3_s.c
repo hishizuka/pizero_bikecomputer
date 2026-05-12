@@ -41,16 +41,35 @@
 #define BHI3_MOTION_OFF_COUNT 6U
 #define BHI3_MOTION_SMOOTH_WINDOW_SAMPLES 50U
 #define BHI3_CALIB_DIR "log/bhi3"
-#define BHI3_CALIB_ACC_FILE BHI3_CALIB_DIR "/calib_acc.bin"
-#define BHI3_CALIB_GYRO_FILE BHI3_CALIB_DIR "/calib_gyro.bin"
-#define BHI3_CALIB_MAG_FILE BHI3_CALIB_DIR "/calib_mag.bin"
-#define BHI3_CALIB_SIC_FILE BHI3_CALIB_DIR "/sic_matrix.bin"
+#ifdef USE_BHI385
+#define BHI3_CALIB_ACC_FILE BHI3_CALIB_DIR "/bhi385_calib_acc.bin"
+#define BHI3_CALIB_GYRO_FILE BHI3_CALIB_DIR "/bhi385_calib_gyro.bin"
+#define BHI3_CALIB_MAG_FILE BHI3_CALIB_DIR "/bhi385_calib_mag.bin"
+#define BHI3_CALIB_SIC_FILE BHI3_CALIB_DIR "/bhi385_sic_matrix.bin"
+#else
+#define BHI3_CALIB_ACC_FILE BHI3_CALIB_DIR "/bhi360_calib_acc.bin"
+#define BHI3_CALIB_GYRO_FILE BHI3_CALIB_DIR "/bhi360_calib_gyro.bin"
+#define BHI3_CALIB_MAG_FILE BHI3_CALIB_DIR "/bhi360_calib_mag.bin"
+#define BHI3_CALIB_SIC_FILE BHI3_CALIB_DIR "/bhi360_sic_matrix.bin"
+#endif
 #define BHI3_CALIB_COMPLETED 3U
 #define BHI3_CALIB_DIRTY 1U
 #define BHI3_BSX_BLOCK_NUMBER_MASK 0x7FU
 #define BHI3_CALIB_SLOT_ACC 0U
 #define BHI3_CALIB_SLOT_GYRO 1U
 #define BHI3_CALIB_SLOT_MAG 2U
+
+#ifdef USE_BHI385
+#define BHI3_TARGET_IS_BHI385 1
+#define BHI3_SENSOR_ID_PRESSURE BHI360_SENSOR_ID_PRESSURE
+#define BHI3_ACC_RANGE_G BHI360_ACCEL_8G
+#define BHI3_POLL_FIFO_WITHOUT_INTERRUPT 1
+#else
+#define BHI3_TARGET_IS_BHI385 0
+#define BHI3_SENSOR_ID_PRESSURE BHI360_SENSOR_ID_BARO
+#define BHI3_ACC_RANGE_G BHI360_ACCEL_16G
+#define BHI3_POLL_FIFO_WITHOUT_INTERRUPT 0
+#endif
 
 #ifndef BHI360_BSX_CALIBRATE_STATE_BASE
 #define BHI360_BSX_CALIBRATE_STATE_BASE UINT16_C(0x200)
@@ -316,6 +335,11 @@ int8_t bhi3_s_last_error(void)
     return err;
 }
 
+bool bhi3_s_is_bhi385(void)
+{
+    return BHI3_TARGET_IS_BHI385 != 0;
+}
+
 int8_t bhi3_s_raw_log_start(const char *path)
 {
     return bhi3_s_raw_log_open(path);
@@ -395,7 +419,10 @@ static void *bhi3_s_worker(void *arg)
     {
         if (!bhi3_wait_for_interrupt(INTERRUPT_WAIT_TIMEOUT_MS))
         {
-            continue;
+            if (!BHI3_POLL_FIFO_WITHOUT_INTERRUPT)
+            {
+                continue;
+            }
         }
 
         do
@@ -618,7 +645,7 @@ static int8_t bhi3_s_device_bootstrap(void)
         return rslt;
     }
 
-    rslt = bhi360_register_fifo_parse_callback(BHI360_SENSOR_ID_BARO, parse_pressure, NULL, &bhy);
+    rslt = bhi360_register_fifo_parse_callback(BHI3_SENSOR_ID_PRESSURE, parse_pressure, NULL, &bhy);
     if (rslt != BHI360_OK)
     {
         bhi3_s_report_api_error(rslt, &bhy);
@@ -673,7 +700,7 @@ static int8_t bhi3_s_device_bootstrap(void)
         close_interfaces(intf);
         return rslt;
     }
-    rslt = bhi360_set_virt_sensor_range(BHI360_SENSOR_ID_ACC, BHI360_ACCEL_16G, &bhy);
+    rslt = bhi360_set_virt_sensor_range(BHI360_SENSOR_ID_ACC, BHI3_ACC_RANGE_G, &bhy);
     if (rslt != BHI360_OK)
     {
         bhi3_s_report_api_error(rslt, &bhy);
@@ -720,7 +747,7 @@ static int8_t bhi3_s_device_bootstrap(void)
     }
     printf("Enable %s at %.2fHz.\r\n", get_sensor_name(BHI360_SENSOR_ID_MAG), sensor_conf_mag.sample_rate);
 
-    rslt = bhi3_s_set_sensor_rate_with_fallback(BHI360_SENSOR_ID_BARO, &sensor_conf_pressure);
+    rslt = bhi3_s_set_sensor_rate_with_fallback(BHI3_SENSOR_ID_PRESSURE, &sensor_conf_pressure);
     if (rslt != BHI360_OK)
     {
         close_interfaces(intf);
@@ -1881,7 +1908,7 @@ static void parse_acc_data(const struct bhi360_fifo_parse_data_info *callback_in
     }
 
     bhi360_event_data_parse_xyz(callback_info->data_ptr, &data);
-    scaling_factor = get_sensor_dynamic_range_scaling(callback_info->sensor_id, (float)BHI360_ACCEL_16G);
+    scaling_factor = get_sensor_dynamic_range_scaling(callback_info->sensor_id, (float)BHI3_ACC_RANGE_G);
     raw_x = data.x * scaling_factor;
     raw_y = data.y * scaling_factor;
     raw_z = data.z * scaling_factor;

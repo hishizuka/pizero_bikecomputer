@@ -491,6 +491,14 @@ char *get_api_error(int8_t error_code)
         case BHI360_E_PARAM_NOT_SET:
             ret = "[API Error] Parameter not set";
             break;
+#ifdef USE_BHI385
+        case BHI360_E_INSUFFICIENT_MAX_SIMUL_SENSORS:
+            ret = "[API Error] Insufficient maximum simultaneous sensors";
+            break;
+        case BHI360_E_INVALID_DATA:
+            ret = "[API Error] Invalid data";
+            break;
+#endif
         default:
             ret = "[API Error] Unknown API error code";
     }
@@ -1320,6 +1328,14 @@ char *get_sensor_name(uint8_t sensor_id)
         case BHI360_SENSOR_BMP_TEMPERATURE_WU:
             ret = "BMP Temperature wake up";
             break;
+#ifdef USE_BHI385
+        case BHI360_SENSOR_ID_PRESSURE:
+            ret = "BMP Pressure";
+            break;
+        case BHI360_SENSOR_ID_PRESSURE_WU:
+            ret = "BMP Pressure wake up";
+            break;
+#endif
         case BHI360_SENSOR_ID_ANY_MOTION_LP_WU:
             ret = "Low Power Any motion wake up";
             break;
@@ -1515,6 +1531,10 @@ char *get_sensor_parse_format(uint8_t sensor_id)
             break;
         case BHI360_SENSOR_ID_BARO:
         case BHI360_SENSOR_ID_BARO_WU:
+#ifdef USE_BHI385
+        case BHI360_SENSOR_ID_PRESSURE:
+        case BHI360_SENSOR_ID_PRESSURE_WU:
+#endif
             ret = "u24";
             break;
         case BHI360_SENSOR_ID_GAS:

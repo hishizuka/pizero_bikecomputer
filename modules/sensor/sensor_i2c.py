@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 import math
 import asyncio
+import os
+from pathlib import Path
 import time
 
 import numpy as np
@@ -35,11 +37,84 @@ Z = 2
 G = 9.80665
 
 # I2C addresses for Cython-based helpers (keep in sync with corresponding C headers).
-BHI360_I2C_ADDR = 0x28
+BHI3_I2C_ADDR = 0x28
+BHI3_CHIP_ID_REG = 0x2B
+BHI360_CHIP_ID = 0x7A
+BHI385_CHIP_ID = 0x7C
+BHI3_HELPER_DIR = Path(__file__).resolve().parent / "i2c/cython/bhi360_shuttle_board_3"
+BHI3_HELPER_GLOB = "bhi3_s_helper*.so"
+BHI3_TARGET_MARKER = BHI3_HELPER_DIR / "__pycache__" / "bhi3_s_helper.target"
 BMP5_I2C_ADDR = 0x47
 BMI270_I2C_ADDR = 0x68
 BMM150_I2C_ADDR = 0x13
 BMM350_I2C_ADDR = 0x14
+
+
+def _normalize_bhi3_target(target):
+    target = (target or "").strip().lower()
+    if target in ("360", "bhi360", "385", "bhi385"):
+        return f"bhi{target[-3:]}"
+    return ""
+
+
+def _remove_bhi3_helper_extensions():
+    for path in BHI3_HELPER_DIR.glob(BHI3_HELPER_GLOB):
+        path.unlink(missing_ok=True)
+
+
+def _write_bhi3_target_marker(target):
+    try:
+        BHI3_TARGET_MARKER.parent.mkdir(exist_ok=True)
+        BHI3_TARGET_MARKER.write_text(f"{target}\n")
+    except OSError:
+        pass
+
+
+def _prepare_bhi3_build_target():
+    chip_id = None
+    if _SENSOR_I2C:
+        bus = None
+        try:
+            bus = smbus2.SMBus(1)
+            chip_id = bus.read_byte_data(BHI3_I2C_ADDR, BHI3_CHIP_ID_REG)
+        except Exception:
+            chip_id = None
+        finally:
+            if bus is not None:
+                try:
+                    bus.close()
+                except Exception:
+                    pass
+
+    detected_target = ""
+    if chip_id == BHI360_CHIP_ID:
+        detected_target = "bhi360"
+    elif chip_id == BHI385_CHIP_ID:
+        detected_target = "bhi385"
+
+    env_target = _normalize_bhi3_target(os.environ.get("BHI3_TARGET", ""))
+    target = detected_target or env_target
+    if not target:
+        return ""
+
+    if env_target and detected_target and env_target != detected_target:
+        app_logger.warning(
+            f"BHI3_TARGET={env_target} does not match chip id 0x{chip_id:02X}; using {detected_target}"
+        )
+
+    os.environ["BHI3_TARGET"] = target
+    try:
+        marker_target = _normalize_bhi3_target(BHI3_TARGET_MARKER.read_text().strip())
+    except OSError:
+        marker_target = ""
+
+    if marker_target != target and any(BHI3_HELPER_DIR.glob(BHI3_HELPER_GLOB)):
+        _remove_bhi3_helper_extensions()
+
+    if chip_id is not None:
+        app_logger.info(f"BHI3 chip id 0x{chip_id:02X}; target {target}")
+    return target
+
 
 class SensorI2C(Sensor):
     sensor = {}
@@ -164,8 +239,8 @@ class SensorI2C(Sensor):
             return
 
         if self.config.G_USE_PCB_PIZERO_BIKECOMPUTER:
-            # BHI360 Shuttle Board 3.0
-            self.set_bhi360_s()
+            # BHI3 Shuttle Board 3.0
+            self.set_bhi3_s()
             if self.detect_light_vncl4040():
                 self.available_sensors["LIGHT"]["VCNL4040"] = True
                 self.sensor["lux"] = self.sensor_vcnl4040
@@ -317,8 +392,8 @@ class SensorI2C(Sensor):
         self.available_sensors["BATTERY"]["PIJUICE"] = self.detect_battery_pijuice()
         self.available_sensors["BATTERY"]["PISUGAR3"] = self.detect_battery_pisugar3()
 
-        # BHI360 Shuttle Board 3.0
-        self.set_bhi360_s()
+        # BHI3 Shuttle Board 3.0
+        self.set_bhi3_s()
 
         # print
         self.print_sensors()
@@ -330,21 +405,21 @@ class SensorI2C(Sensor):
                 if self.available_sensors[k][kk]:
                     app_logger.info(f"  {k}: {kk}")
 
-    def set_bhi360_s(self):
-        if self.detect_bhi360_s_c():
+    def set_bhi3_s(self):
+        if self.detect_bhi3_s_c():
             self.available_sensors["MOTION"]["BHI3_S"] = True
             self.sensor["i2c_imu"] = self.sensor_bhi3_s
             self.motion_sensor["ACC"] = True
             self.motion_sensor["GYRO"] = True
             self.available_sensors["PRESSURE"]["BHI3_S"] = True  # includes BMP581 and BME688
             self.sensor["i2c_baro_temp"] = self.sensor_bhi3_s
-            self.bhi360_s_heading_corr = 0
+            self.bhi3_s_heading_corr = 0
             if (
                 not self.config.G_IMU_AXIS_SWAP_XY["STATUS"]
                 and self.config.G_IMU_AXIS_CONVERSION["STATUS"]
                 and list(self.config.G_IMU_AXIS_CONVERSION["COEF"]) == [1.0, -1.0, -1.0]
             ):
-                self.bhi360_s_heading_corr = 90
+                self.bhi3_s_heading_corr = 90
 
     def set_sensors(self):
         # barometic pressure & temperature sensor
@@ -807,12 +882,12 @@ class SensorI2C(Sensor):
             return
 
         self.values["raw_heading"] = (
-            int(imu.heading) - self.bhi360_s_heading_corr + self.config.G_IMU_MAG_DECLINATION
-            ) % 360
+            int(imu.heading) - self.bhi3_s_heading_corr + self.config.G_IMU_MAG_DECLINATION
+        ) % 360
         self.values["heading"] = self.values["raw_heading"]
         self.values["heading_str"] = get_track_str(self.values["heading"])
 
-        # BHI360 is currently mounted 90 degrees off from the intended frame.
+        # BHI3 Shuttle mounting can be corrected by the common heading offset.
         # Map BHI roll -> bike pitch (look down is plus),
         # and BHI pitch -> bike roll with the same sign trend.
         #self.values["pitch"] = math.radians(((float(imu.roll) + 360) % 360 - 180))
@@ -1651,10 +1726,11 @@ class SensorI2C(Sensor):
             await asyncio.sleep(0.5)
             t -= 1
 
-    def detect_bhi360_s_c(self):
-        if not _i2c_addr_present(BHI360_I2C_ADDR):
+    def detect_bhi3_s_c(self):
+        if not _i2c_addr_present(BHI3_I2C_ADDR):
             return False
         try:
+            bhi3_target = _prepare_bhi3_build_target()
             # Prefer a prebuilt Cython extension if available.
             try:
                 from .i2c.cython.bhi360_shuttle_board_3.bhi3_s_helper import BHI3_S
@@ -1681,6 +1757,15 @@ class SensorI2C(Sensor):
                 self.sensor_bhi3_s.close()
                 del self.sensor_bhi3_s
                 return False
+
+            if bhi3_target:
+                is_target_bhi385 = bhi3_target == "bhi385"
+                if bool(getattr(self.sensor_bhi3_s, "is_bhi385", False)) != is_target_bhi385:
+                    self.sensor_bhi3_s.close()
+                    del self.sensor_bhi3_s
+                    _remove_bhi3_helper_extensions()
+                    return False
+                _write_bhi3_target_marker(bhi3_target)
 
             return True
         except:

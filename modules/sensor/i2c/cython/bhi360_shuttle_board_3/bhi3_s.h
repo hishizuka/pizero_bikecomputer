@@ -67,6 +67,7 @@ int8_t bhi3_s_init();
 void bhi3_s_read_data(bhi3_s_data *data);
 bool bhi3_s_ready();
 int8_t bhi3_s_last_error();
+bool bhi3_s_is_bhi385(void);
 void bhi3_s_close();
 int8_t bhi3_s_raw_log_start(const char *path);
 void bhi3_s_raw_log_stop(void);
@@ -81,6 +82,7 @@ int8_t bhi3_s_init() {
 void bhi3_s_read_data(bhi3_s_data *data) {};
 bool bhi3_s_ready() { return false; }
 int8_t bhi3_s_last_error() { return -1; }
+bool bhi3_s_is_bhi385(void) { return false; }
 void bhi3_s_close() {};
 int8_t bhi3_s_raw_log_start(const char *path) { (void)path; return -1; };
 void bhi3_s_raw_log_stop(void) {};

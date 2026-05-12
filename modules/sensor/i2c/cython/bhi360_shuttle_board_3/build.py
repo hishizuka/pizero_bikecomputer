@@ -1,10 +1,56 @@
 import time
+import os
+from pathlib import Path
+
+
+BASE_DIR = Path(__file__).resolve().parent
+MODULE_NAME = "bhi3_s_helper"
+TARGET_MARKER = BASE_DIR / "__pycache__" / f"{MODULE_NAME}.target"
+
+
+def prepare_bhi3_target():
+    target = os.environ.get("BHI3_TARGET", "").strip().lower()
+    try:
+        import smbus2
+        bus = smbus2.SMBus(1)
+        try:
+            chip_id = bus.read_byte_data(0x28, 0x2B)
+            target = {0x7A: "bhi360", 0x7C: "bhi385"}.get(chip_id, target)
+        finally:
+            bus.close()
+    except Exception:
+        pass
+
+    if target in ("360", "385"):
+        target = f"bhi{target}"
+    if target not in ("bhi360", "bhi385"):
+        return
+
+    os.environ["BHI3_TARGET"] = target
+    try:
+        previous_target = TARGET_MARKER.read_text().strip()
+    except OSError:
+        previous_target = ""
+
+    if previous_target != target:
+        remove_helper_extensions()
+    TARGET_MARKER.parent.mkdir(exist_ok=True)
+    TARGET_MARKER.write_text(f"{target}\n")
+
+
+def remove_helper_extensions():
+    for path in BASE_DIR.glob(f"{MODULE_NAME}*.so"):
+        path.unlink(missing_ok=True)
+
 
 # Prefer a prebuilt extension if present, otherwise build in-place.
+prepare_bhi3_target()
 try:
     from bhi3_s_helper import BHI3_S
-except Exception:
+except ImportError:
     import pyximport
+
+    remove_helper_extensions()
     pyximport.install(inplace=True, language_level=3)
     from bhi3_s_helper import BHI3_S
 
