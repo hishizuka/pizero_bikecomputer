@@ -132,13 +132,26 @@ Assume Serial interface is on and login shell is off in raspi-config and GPS dev
 
 ```
 $ sudo apt install gpsd python3-gps
-$ pip install timezonefinder
+$ pip install timezonefinder pyubx2 pyserial azarashi
 $ sudo cp scripts/install/etc/default/gpsd /etc/default/gpsd
 $ sudo systemctl enable gpsd
 $ sudo systemctl enable gpsd.socket
 ```
 
 Check with `cgps` or `gpsmon` command.
+
+For u-blox AssistNow Live/Predictive Orbits, add the ZTP token to
+`setting.conf`. If `assistnow_token` is empty, AssistNow is skipped.
+
+```
+[GPSD_UBLOX_PARAM]
+assistnow_token =
+use_power_save = False
+use_qzss_dcr = False
+```
+
+`use_qzss_dcr=True` is ignored when `use_power_save=True`; disable power save
+when collecting QZSS DC Report messages.
 
 
 ### ANT+ USB dongle

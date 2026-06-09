@@ -15,19 +15,49 @@ def _write_binary_file(save_path, data):
         file_handle.write(data)
 
 
-async def get_json(url, params=None, headers=None, timeout=30):
+async def get_response(url, params=None, headers=None, timeout=30, response_type="json"):
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
                 url, params=params, headers=headers, timeout=timeout
             ) as res:
-                data = await res.json()
-                return data
+                if res.status != 200:
+                    data = await res.read()
+                    text = data.decode("utf-8", errors="replace")
+                    app_logger.error(
+                        f"get_response status {res.status}: {text[:200]}\n{url}"
+                    )
+                    return None
+                if response_type == "json":
+                    return await res.json()
+                if response_type == "bytes":
+                    return await res.read()
+                raise ValueError(f"unknown response_type: {response_type}")
     except asyncio.CancelledError:
         return None
     except Exception as exc:
-        app_logger.error(f"get_json error: {exc}\n{url}")
+        app_logger.error(f"get_response error: {exc}\n{url}")
         return None
+
+
+async def get_json(url, params=None, headers=None, timeout=30):
+    return await get_response(
+        url,
+        params=params,
+        headers=headers,
+        timeout=timeout,
+        response_type="json",
+    )
+
+
+async def get_bytes(url, params=None, headers=None, timeout=30):
+    return await get_response(
+        url,
+        params=params,
+        headers=headers,
+        timeout=timeout,
+        response_type="bytes",
+    )
 
 
 async def post(url, headers=None, params=None, data=None):
@@ -93,4 +123,11 @@ async def download_files(
         return await asyncio.gather(*tasks)
 
 
-__all__ = ["download_files", "get_json", "post", "DEFAULT_COROUTINE_SEM"]
+__all__ = [
+    "download_files",
+    "get_bytes",
+    "get_json",
+    "get_response",
+    "post",
+    "DEFAULT_COROUTINE_SEM",
+]

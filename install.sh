@@ -64,6 +64,35 @@ install_timezonefinder_and_flatbuffers() {
     INSTALL_TZ_DEPS_DONE=true
 }
 
+install_i2c_support_packages() {
+    if [[ "${INSTALL_I2C_SUPPORT_DONE:-false}" == "true" ]]; then
+        return 0
+    fi
+    sudo apt install -y python3-smbus2 libgpiod3 libgpiod-dev python3-libgpiod
+    INSTALL_I2C_SUPPORT_DONE=true
+}
+
+enable_i2c_interface() {
+    if [[ "${ENABLE_I2C_DONE:-false}" == "true" ]]; then
+        return 0
+    fi
+    if [[ "${has_raspi_config:-false}" == "true" ]]; then
+        sudo raspi-config nonint do_i2c 0
+    fi
+    ENABLE_I2C_DONE=true
+}
+
+enable_uart_interface() {
+    if [[ "${ENABLE_UART_DONE:-false}" == "true" ]]; then
+        return 0
+    fi
+    if [[ "${has_raspi_config:-false}" == "true" ]]; then
+        sudo raspi-config nonint do_serial_cons 1
+        sudo raspi-config nonint do_serial_hw 0
+    fi
+    ENABLE_UART_DONE=true
+}
+
 #############################################################
 # get user input
 #############################################################
@@ -78,7 +107,19 @@ if [[ "$setup_python_venv" == "true" ]]; then
 fi
 prompt_and_store "Install GUI(PyQt6) packages?" install_pyqt6
 prompt_and_store "Install ANT+ packages?" install_ant_plus
-prompt_and_store "Install GPS packages?" install_gps
+prompt_and_store "Use GPS?" install_gps
+use_ublox_gps=false
+use_gpsd_uart_gps=false
+use_cxd5610_gps=false
+if [[ "$install_gps" == "true" ]]; then
+    prompt_and_store "Use u-blox GPS directly with UBX protocol? (MAX-M10S/N etc.)" use_ublox_gps
+    if [[ "$use_ublox_gps" != "true" ]]; then
+        prompt_and_store "Use UART GPS through GPSD?" use_gpsd_uart_gps
+        if [[ "$use_gpsd_uart_gps" != "true" ]]; then
+            prompt_and_store "Use Sony CXD5610 GPS over I2C?" use_cxd5610_gps
+        fi
+    fi
+fi
 prompt_and_store "Install Bluetooth packages?" install_bluetooth
 prompt_and_store "Enable I2C?" enable_i2c
 prompt_and_store "Enable SPI?" enable_spi
@@ -156,16 +197,41 @@ fi
 # Install GPS packages
 if [[ "$install_gps" == "true" ]]; then
     echo "🔧 Installing GPS packages..."
-    # trixie
-    sudo apt install -y gpsd python3-gps libffi-dev
-    install_timezonefinder_and_flatbuffers
 
-    if [[ "$has_raspi_config" == "true" ]]; then
-        sudo raspi-config nonint do_serial_cons 1
-        sudo raspi-config nonint do_serial_hw 0
+    if [[ "$use_ublox_gps" == "true" || "$use_gpsd_uart_gps" == "true" || "$use_cxd5610_gps" == "true" ]]; then
+        install_timezonefinder_and_flatbuffers
     fi
-    sudo systemctl enable gpsd
-    sudo systemctl enable gpsd.socket
+
+    if [[ "$use_ublox_gps" == "true" ]]; then
+        echo "🔧 Installing u-blox direct UBX GPS packages..."
+        # pyserial is required for UART; smbus2 keeps MAX-M10S I2C usable.
+        sudo apt install -y python3-smbus2
+        pip install pyubx2 pyserial azarashi
+        enable_uart_interface
+        enable_i2c_interface
+        echo "✅ u-blox direct UBX GPS packages installed successfully."
+    fi
+
+    if [[ "$use_gpsd_uart_gps" == "true" ]]; then
+        echo "🔧 Installing GPSD UART GPS packages..."
+        sudo apt install -y gpsd python3-gps libffi-dev
+        enable_uart_interface
+        sudo systemctl enable gpsd
+        sudo systemctl enable gpsd.socket
+        echo "✅ GPSD UART GPS packages installed successfully."
+    fi
+
+    if [[ "$use_cxd5610_gps" == "true" ]]; then
+        echo "🔧 Installing Sony CXD5610 GPS packages..."
+        install_i2c_support_packages
+        enable_i2c_interface
+        echo "✅ Sony CXD5610 GPS packages installed successfully."
+    fi
+
+    if [[ "$use_ublox_gps" != "true" && "$use_gpsd_uart_gps" != "true" && "$use_cxd5610_gps" != "true" ]]; then
+        echo "ℹ️ GPS selected, but no supported GPS hardware path selected. Skipping GPS-specific packages."
+    fi
+
     echo "✅ GPS packages installed successfully."
 fi
 
@@ -187,13 +253,11 @@ fi
 
 # Enable I2C
 if [[ "$enable_i2c" == "true" ]]; then
-    sudo apt install -y python3-smbus2 libgpiod3 libgpiod-dev python3-libgpiod
+    install_i2c_support_packages
     pip install magnetic-field-calculator
     # Enable I2C on Raspberry Pi
     echo "🔧 Enabling i2c on Raspberry Pi..."
-    if [[ "$has_raspi_config" == "true" ]]; then
-        sudo raspi-config nonint do_i2c 0
-    fi
+    enable_i2c_interface
     # add pi to i2c if not already a member
     #if ! groups "$TARGET_USER" | grep -qw i2c; then
     #  sudo adduser "$TARGET_USER" i2c
@@ -325,7 +389,7 @@ fi
 if [[ "$install_services" == "true" ]]; then
 
     # GPS service configuration
-    if [[ "$install_gps" == "true" ]]; then
+    if [[ "$use_gpsd_uart_gps" == "true" ]]; then
         sudo cp scripts/install/etc/default/gpsd /etc/default/gpsd
         sudo systemctl start gpsd
     fi

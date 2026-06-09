@@ -8,13 +8,13 @@ import urllib.parse
 import asyncio
 import json
 
-import aiohttp
 import numpy as np
 
 from modules.utils.network import detect_network, detect_network_async
 from modules.helper.network import (
-    post,
+    get_bytes,
     get_json,
+    post,
 )
 from modules.helper.maptile import (
     MapTileWithValues,
@@ -285,7 +285,7 @@ class api:
         if not params["gnss"] or not params["data"]:
             raise RuntimeError("AssistNow GNSS or DATA is not configured")
 
-        data = await self._get_ublox_assistnow_bytes(
+        data = await get_bytes(
             service_url,
             params=params,
             timeout=float(assistnow_config["TIMEOUT"]),
@@ -296,17 +296,6 @@ class api:
             text = data.decode("utf-8", errors="replace")
             raise RuntimeError(f"AssistNow data is not UBX: {text[:200]}")
         return data
-
-    async def _get_ublox_assistnow_bytes(self, url, params, timeout):
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, params=params, timeout=timeout) as res:
-                data = await res.read()
-                if res.status == 200:
-                    return data
-                text = data.decode("utf-8", errors="replace")
-                raise RuntimeError(
-                    f"AssistNow service failed: HTTP {res.status}: {text[:200]}"
-                )
 
     async def get_openmeteo_temperature_data(self, x, y):
         if not await detect_network_async():

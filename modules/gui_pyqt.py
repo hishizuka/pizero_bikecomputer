@@ -293,6 +293,8 @@ class GUI_PyQt(GUI_Qt_Base):
 
             from modules.pyqt.menu.pyqt_menu_widget import (
                 TopMenuWidget,
+                RideInfoMenuWidget,
+                QzssDcrViewerWidget,
                 ConnectivityMenuWidget,
                 UploadActivityMenuWidget,
             )
@@ -386,6 +388,8 @@ class GUI_PyQt(GUI_Qt_Base):
                 ("CP", AdjustCPWidget),
                 ("W Prime Balance", AdjustWPrimeBalanceWidget),
                 ("Profile", ProfileWidget),
+                ("QZSS DC Report", QzssDcrViewerWidget),
+                ("Ride Info", RideInfoMenuWidget),
                 ("Connectivity", ConnectivityMenuWidget),
                 ("Upload Activity", UploadActivityMenuWidget),
                 ("DEM Tile source", DEMTileListWidget),
@@ -540,6 +544,7 @@ class GUI_PyQt(GUI_Qt_Base):
 
             # Pre-add dialog to stack (after all main pages added)
             self._dialog.add_to_stack()
+            self._start_qzss_dcr_popup_monitor()
 
         app_logger.info("Drawing components:")
         log_timers(timers, text_total="  total : {0:.3f} sec")
@@ -549,6 +554,40 @@ class GUI_PyQt(GUI_Qt_Base):
         self.main_page.widget(self.main_page_index).stop()
         self.main_page.widget(index).start()
         self.main_page_index = index
+
+    def _start_qzss_dcr_popup_monitor(self):
+        self._last_qzss_dcr_popup_key = None
+        self._qzss_dcr_popup_timer = QtCore.QTimer(parent=self)
+        self._qzss_dcr_popup_timer.timeout.connect(self._check_qzss_dcr_popup)
+        self._qzss_dcr_popup_timer.start(1000)
+
+    def _check_qzss_dcr_popup(self):
+        sensor_gps = getattr(self.sensor, "sensor_gps", None)
+        event = getattr(sensor_gps, "latest_qzss_dcr_event", None)
+        if not event:
+            return
+
+        event_key = event.get("id") or event.get("dedupe_key")
+        if event_key is None or event_key == self._last_qzss_dcr_popup_key:
+            return
+        self._last_qzss_dcr_popup_key = event_key
+
+        priority = event.get("priority")
+        if priority not in ("urgent", "warning"):
+            return
+
+        title = event.get("title") or "QZSS DC Report"
+        summary = event.get("summary") or "New disaster report received."
+        timeout = 10 if priority == "urgent" else 7
+        buzzer_sound = "alert" if priority == "urgent" else "beep"
+        if priority == "urgent" and self.dialog_exists():
+            self.delete_popup()
+        self.show_popup_multiline(
+            title,
+            summary,
+            timeout=timeout,
+            buzzer_sound=buzzer_sound,
+        )
 
     def start_and_stop_manual(self):
         self.signal_start_and_stop_manual.emit()

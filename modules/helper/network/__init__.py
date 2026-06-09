@@ -1,6 +1,6 @@
 from ..bluetooth.bluetooth_manager import BluetoothManager, BtOpenResult
 from .download_manager import DownloadManager
-from .http_client import get_json, post
+from .http_client import get_bytes, get_json, post
 from .wifi_manager import WifiManager
 from modules.utils.network import detect_network
 
@@ -95,4 +95,4 @@ class Network:
         return await self.wifi.wifi_connect_with_wps()
 
 
-__all__ = ["Network", "BtOpenResult", "get_json", "post"]
+__all__ = ["Network", "BtOpenResult", "get_bytes", "get_json", "post"]
