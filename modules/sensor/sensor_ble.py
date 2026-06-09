@@ -69,10 +69,8 @@ class SensorBLE(Sensor):
             self._zwift_click_v2_task.cancel()
 
     def _is_zwift_click_v2_enabled(self) -> bool:
-        cfg = getattr(self.config, "G_ZWIFT_CLICK_V2", None)
-        if not isinstance(cfg, dict):
-            return False
-        if not cfg.get("STATUS", False):
+        cfg = self.config.G_ZWIFT_CLICK_V2
+        if not cfg["STATUS"]:
             return False
         if not _HAS_ZWIFT_CLICK_V2:
             return False
@@ -80,9 +78,7 @@ class SensorBLE(Sensor):
 
     async def _run_zwift_click_v2_listener(self) -> None:
         cfg = self.config.G_ZWIFT_CLICK_V2
-        preferred_address = ""
-        if isinstance(cfg, dict):
-            preferred_address = str(cfg.get("ADDRESS", "")).strip()
+        preferred_address = str(cfg["ADDRESS"]).strip()
         button_hard = "Zwift_Click_V2"
 
         def normalize_button_key(button: str) -> str:
@@ -95,6 +91,9 @@ class SensorBLE(Sensor):
 
         def log(msg: str) -> None:
             app_logger.info(f"[ZwiftClickV2] {msg}")
+
+        def debug_log(msg: str) -> None:
+            app_logger.debug(f"[ZwiftClickV2] {msg}")
 
         def on_classified(side: str, button: str, kind: str, duration: float) -> None:
             button_key = normalize_button_key(button)
@@ -121,12 +120,10 @@ class SensorBLE(Sensor):
         def on_connected(side: str, address: str, _name: Optional[str]) -> None:
             if not address:
                 return
-            if not isinstance(cfg, dict):
-                return
-            if cfg.get("ADDRESS") == address:
+            if cfg["ADDRESS"] == address:
                 return
             cfg["ADDRESS"] = address
-            setting = getattr(self.config, "setting", None)
+            setting = self.config.setting
             if setting is not None:
                 setting.write_config()
 
@@ -142,6 +139,7 @@ class SensorBLE(Sensor):
                 on_connected=on_connected,
                 on_stopped=on_stopped,
                 log=log,
+                debug_log=debug_log,
             )
         except asyncio.CancelledError:
             return
@@ -149,7 +147,7 @@ class SensorBLE(Sensor):
             log(f"listener crashed: {exc}")
 
     def _notify_zwift_click_v2_stopped(self) -> None:
-        gui = getattr(self.config, "gui", None)
+        gui = self.config.gui
         if gui is None:
             return
 
@@ -226,7 +224,7 @@ class SensorBLE(Sensor):
     def start_fake_trainer(self) -> bool:
         if self.is_fake_trainer_running():
             return True
-        if getattr(self.config, "ble_uart", None) is None:
+        if self.config.ble_uart is None:
             app_logger.warning("Fake trainer start skipped: BLE UART not available")
             return False
 

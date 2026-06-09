@@ -337,6 +337,82 @@ def _apply_shift_up_combo(buttons: Iterable[str]) -> List[str]:
     return pressed
 
 
+def _format_packet_hex(packet: bytes) -> str:
+    return " ".join(f"{b:02X}" for b in packet)
+
+
+def _read_varint(data: bytes, index: int) -> tuple[Optional[int], int]:
+    value = 0
+    shift = 0
+    while index < len(data):
+        byte = data[index]
+        index += 1
+        value |= (byte & 0x7F) << shift
+        if byte < 0x80:
+            return value, index
+        shift += 7
+        if shift >= 64:
+            break
+    return None, index
+
+
+def _extract_click_v2_vendor_status(data: bytes) -> Optional[int]:
+    if not data.startswith(RESPONSE_STOPPED_CLICK_V2_VARIANT_1):
+        return None
+
+    payload = data[len(RESPONSE_STOPPED_CLICK_V2_VARIANT_1) :]
+    if not payload:
+        return None
+
+    # The first byte is a protobuf payload length in observed packets.
+    if payload[0] == len(payload) - 1:
+        payload = payload[1:]
+
+    index = 0
+    while index < len(payload):
+        tag, index = _read_varint(payload, index)
+        if tag is None:
+            return None
+        field_number = tag >> 3
+        wire_type = tag & 0x07
+
+        if wire_type == 0:
+            value, index = _read_varint(payload, index)
+            if value is None:
+                return None
+            if field_number == 2:
+                return value
+        elif wire_type == 2:
+            length, index = _read_varint(payload, index)
+            if length is None:
+                return None
+            index += length
+            if index > len(payload):
+                return None
+        else:
+            return None
+
+    return None
+
+
+def _is_stopped_event_packet(data: bytes, *, button_notifications_seen: bool) -> bool:
+    if not button_notifications_seen:
+        return False
+    if data in (
+        RESPONSE_STOPPED_CLICK_V2_VARIANT_1,
+        RESPONSE_STOPPED_CLICK_V2_VARIANT_2,
+    ):
+        return True
+    return _extract_click_v2_vendor_status(data) == 1
+
+
+def _is_button_notification_packet(data: bytes) -> bool:
+    return bool(data) and data[0] in (
+        MESSAGE_TYPE_RIDE_NOTIFICATION,
+        MESSAGE_TYPE_CLICK_NOTIFICATION,
+    )
+
+
 async def connect_and_listen(
     address: str,
     side: str,
@@ -345,6 +421,7 @@ async def connect_and_listen(
     *,
     name: Optional[str] = None,
     log: Callable[[str], None] = print,
+    debug_log: Optional[Callable[[str], None]] = None,
     on_connected: Optional[Callable[[str, str, Optional[str]], None]] = None,
     on_stopped: Optional[Callable[[str, bytes], None]] = None,
 ) -> bool:
@@ -355,26 +432,38 @@ async def connect_and_listen(
             connected = True
             last_rx_mono: Optional[float] = None
             stopped_notice_sent = False
+            button_notifications_seen = False
 
             def mark_rx() -> None:
                 nonlocal last_rx_mono
                 last_rx_mono = time.monotonic()
 
             def handle_data(_sender, data: bytes) -> None:
-                nonlocal stopped_notice_sent
+                nonlocal button_notifications_seen, stopped_notice_sent
+                packet = bytes(data)
+                if debug_log is not None:
+                    sender_uuid = getattr(_sender, "uuid", _sender)
+                    debug_log(
+                        f"[{side}] rx char={sender_uuid} len={len(packet)} "
+                        f"packet={_format_packet_hex(packet)}"
+                    )
                 stopped = handle_notification(
                     side,
-                    data,
+                    packet,
                     classifier,
                     log=log,
                     on_rx=mark_rx,
+                    button_notifications_seen=button_notifications_seen,
                 )
+                if _is_button_notification_packet(packet):
+                    button_notifications_seen = True
                 if not stopped or stopped_notice_sent:
                     return
                 stopped_notice_sent = True
-                packet = bytes(data)
-                packet_hex = " ".join(f"{b:02X}" for b in packet)
-                log(f"[{side}] {STOPPED_PACKET_WARNING} packet={packet_hex}")
+                log(
+                    f"[{side}] {STOPPED_PACKET_WARNING} "
+                    f"packet={_format_packet_hex(packet)}"
+                )
                 if on_stopped is not None:
                     on_stopped(side, packet)
 
@@ -413,10 +502,11 @@ def handle_notification(
     *,
     log: Callable[[str], None] = print,
     on_rx: Optional[Callable[[], None]] = None,
+    button_notifications_seen: bool = False,
 ) -> bool:
     """Process incoming data from SYNC_TX/ASYNC characteristics.
 
-    Returns True when the packet is a known Click V2 stopped-event packet.
+    Returns True when the packet indicates a Click V2 stopped/locked state.
     """
     if not data:
         return False
@@ -427,11 +517,9 @@ def handle_notification(
     if data == RIDE_ON:
         return False
 
-    # Treat only the exact 5-byte stopped packets as locked/stopped. Some
-    # normal response packets use the same prefix and append payload data.
-    if data in (
-        RESPONSE_STOPPED_CLICK_V2_VARIANT_1,
-        RESPONSE_STOPPED_CLICK_V2_VARIANT_2,
+    if _is_stopped_event_packet(
+        data,
+        button_notifications_seen=button_notifications_seen,
     ):
         return True
 
@@ -480,6 +568,7 @@ async def listen(
     on_connected: Optional[Callable[[str, str, Optional[str]], None]] = None,
     on_stopped: Optional[Callable[[str, bytes], None]] = None,
     log: Callable[[str], None] = print,
+    debug_log: Optional[Callable[[str], None]] = None,
 ) -> None:
     """Scan, connect, and dispatch button presses (short/long) via callback.
 
@@ -504,6 +593,7 @@ async def listen(
                     stop_event,
                     name=None,
                     log=log,
+                    debug_log=debug_log,
                     on_connected=on_connected,
                     on_stopped=on_stopped,
                 )
@@ -541,6 +631,7 @@ async def listen(
                         stop_event,
                         name=d.device.name,
                         log=log,
+                        debug_log=debug_log,
                         on_connected=on_connected,
                         on_stopped=on_stopped,
                     )
