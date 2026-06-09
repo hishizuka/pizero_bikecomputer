@@ -84,6 +84,7 @@ class LoggerCore:
     def __init__(self, config):
         super().__init__()
         self.config = config
+        self.sql_queue = None
         self._sql_worker_task = None
         self._reset_sql_batch_state()
         # Emit debug metrics at a fixed cadence to reduce log volume.
@@ -113,37 +114,46 @@ class LoggerCore:
             )
             return np.nan
 
-    def _restore_np_window_from_log_db(self, window_size=None):
+    def _restore_np_state_from_log_db(self, window_size=None):
+        """Rebuild Normalized Power state from recorded power samples."""
         sensor = self.sensor
         if sensor is None:
             return
         if window_size is None:
             window_size = sensor.np_window_size
 
-        restored_window = []
-
         self.cur.execute(
             "SELECT power FROM BIKECOMPUTER_LOG "
             "WHERE power IS NOT NULL "
-            "ORDER BY total_timer_time DESC, timestamp DESC LIMIT ?",
-            (window_size,),
+            "ORDER BY total_timer_time ASC, timestamp ASC"
         )
         rows = self.cur.fetchall()
-        if rows:
-            window_desc = []
-            for (power,) in rows:
-                try:
-                    power_value = float(power)
-                except (TypeError, ValueError):
-                    continue
-                if np.isnan(power_value):
-                    continue
-                window_desc.append(max(power_value, 0.0))
 
-            restored_window = list(reversed(window_desc))
+        powers = np.fromiter((power for (power,) in rows), dtype=np.float64)
+        powers = powers[~np.isnan(powers)]
+        powers = np.maximum(powers, 0.0)
+
+        restored_window = powers[-window_size:].tolist()
+        np_window_sum = float(np.sum(restored_window))
+        np_sum_ma4 = 0.0
+        np_count_ma4 = 0
+
+        if powers.size >= window_size:
+            cumsum = np.concatenate(([0.0], np.cumsum(powers)))
+            ma30 = (cumsum[window_size:] - cumsum[:-window_size]) / window_size
+            np_sum_ma4 = float(np.sum(ma30**4))
+            np_count_ma4 = int(ma30.size)
 
         sensor.np_window_30s = restored_window
-        sensor.np_window_sum = float(sum(restored_window))
+        sensor.np_window_sum = float(np_window_sum)
+        sensor.np_sum_ma4 = float(np_sum_ma4)
+        sensor.np_count_ma4 = np_count_ma4
+
+        integrated = sensor.values["integrated"]
+        if np_count_ma4 > 0:
+            integrated["normalized_power"] = (np_sum_ma4 / np_count_ma4) ** 0.25
+        else:
+            integrated["normalized_power"] = np.nan
 
     @staticmethod
     def _safe_stat(values, func, *args):
@@ -192,7 +202,7 @@ class LoggerCore:
             self.sql_queue.task_done()
 
     def _flush_sql_queue_sync(self):
-        if not hasattr(self, "sql_queue"):
+        if self.sql_queue is None:
             return
         self._drain_sql_queue_nowait()
         self._commit_sql_if_dirty()
@@ -210,7 +220,7 @@ class LoggerCore:
         send_online_avg_ms = (
             self._perf_logger_send_online_ms_sum / self._perf_logger_calls
         )
-        queue_size = self.sql_queue.qsize() if hasattr(self, "sql_queue") else -1
+        queue_size = self.sql_queue.qsize() if self.sql_queue is not None else -1
 
         app_logger.debug(
             "[PERF_LOGGER] "
@@ -240,7 +250,7 @@ class LoggerCore:
         exec_avg_ms = self._safe_stat(self._perf_sql_worker_exec_ms, np.mean)
         exec_p95_ms = self._safe_stat(self._perf_sql_worker_exec_ms, np.percentile, 95)
         exec_max_ms = self._safe_stat(self._perf_sql_worker_exec_ms, np.max)
-        queue_size = self.sql_queue.qsize() if hasattr(self, "sql_queue") else -1
+        queue_size = self.sql_queue.qsize() if self.sql_queue is not None else -1
 
         app_logger.debug(
             "[PERF_LOGGER_SQL] "
@@ -588,14 +598,6 @@ class LoggerCore:
                 buzzer = getattr(self.config, "buzzer", None)
                 if buzzer is not None:
                     buzzer.play("sgx-ca600-stop")
-            if (
-                self.sensor is not None
-                and self.sensor.sensor_ant is not None
-            ):
-                if hasattr(self.sensor.sensor_ant, "pause_normalized_power_state"):
-                    self.sensor.sensor_ant.pause_normalized_power_state()
-                elif hasattr(self.sensor.sensor_ant, "reset_normalized_power_state"):
-                    self.sensor.sensor_ant.reset_normalized_power_state()
 
     def sync_stopwatch_status_to_manual(self):
         stopwatch_status = self.config.G_STOPWATCH_STATUS
@@ -1163,7 +1165,7 @@ class LoggerCore:
         # print(self.average)
 
         if self.config.G_ANT["USE"]["PWR"]:
-            self._restore_np_window_from_log_db(window_size=self.sensor.np_window_size)
+            self._restore_np_state_from_log_db(window_size=self.sensor.np_window_size)
 
         # start_time
         self.cur.execute("SELECT MIN(timestamp) FROM BIKECOMPUTER_LOG")
