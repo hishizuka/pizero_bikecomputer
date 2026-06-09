@@ -70,6 +70,8 @@ _INFO_POLL_ATTEMPTS = 3
 _INFO_POLL_INTERVAL = 0.15
 _WRITE_QUEUE_WAIT_TIMEOUT = 10.0
 _ASSISTNOW_CACHE_FALLBACK_DELAY = 30.0
+_I2C_CONFIG_MESSAGE_MAX_LENGTH = 32
+_I2C_CONFIG_CHUNK_DELAY = 0.02
 
 
 if _UBLOX_IMPORT_ERROR is None:
@@ -319,12 +321,40 @@ class UBlox(AbstractSensorGPS):
             finally:
                 self._write_queue.task_done()
 
+    def _config_set_message(self, cfg_data):
+        return UBXMessage.config_set(SET_LAYER_RAM, TXN_NONE, cfg_data).serialize()
+
+    def _config_chunks_for_transport(self, cfg_data):
+        if self.transport_type != "i2c":
+            return [cfg_data]
+
+        chunks = []
+        current = []
+        for item in cfg_data:
+            candidate = current + [item]
+            if (
+                current
+                and len(self._config_set_message(candidate))
+                > _I2C_CONFIG_MESSAGE_MAX_LENGTH
+            ):
+                chunks.append(current)
+                current = [item]
+            else:
+                current = candidate
+        if current:
+            chunks.append(current)
+        return chunks
+
     def _write_config(self, cfg_data, wait=False, direct=False):
-        self._write_transport(
-            UBXMessage.config_set(SET_LAYER_RAM, TXN_NONE, cfg_data).serialize(),
-            wait=wait,
-            direct=direct,
-        )
+        chunks = self._config_chunks_for_transport(cfg_data)
+        for i, chunk in enumerate(chunks):
+            delay = _I2C_CONFIG_CHUNK_DELAY if i + 1 < len(chunks) else 0.0
+            self._write_transport(
+                self._config_set_message(chunk),
+                delay=delay,
+                wait=wait,
+                direct=direct,
+            )
 
     def _clear_pending_input(self):
         if self.transport_type != "uart":
@@ -679,11 +709,11 @@ class UBlox(AbstractSensorGPS):
             while not self.quit_status:
                 if (
                     self._receiver_model is None
-                    and self.transport_type == "uart"
                     and time.monotonic() - self._last_mon_ver_poll >= 2.0
                 ):
-                    self._quiet_uart_output(direct=True)
-                    self._clear_pending_input()
+                    if self.transport_type == "uart":
+                        self._quiet_uart_output(direct=True)
+                        self._clear_pending_input()
                     self._poll_mon_ver(force=True, direct=True)
                 self._maybe_start_assistnow()
                 await self._drain_write_queue()

@@ -10,6 +10,10 @@ UART_DETECT_TIMEOUT = 2.0
 I2C_BUS = 1
 I2C_ADDRESS = 0x42
 READ_TIMEOUT = 0.2
+I2C_READLINE_LIMIT = 512
+I2C_REMOTE_IO_ERRNO = getattr(errno, "EREMOTEIO", 121)
+I2C_TRANSFER_ATTEMPTS = 4
+I2C_TRANSFER_RETRY_DELAY = 0.02
 
 
 def is_interrupted_system_call(exc):
@@ -28,6 +32,22 @@ def retry_interrupted_system_call(func, *args):
             if is_interrupted_system_call(exc):
                 continue
             raise
+
+
+def is_i2c_remote_io_error(exc):
+    return getattr(exc, "errno", None) == I2C_REMOTE_IO_ERRNO or (
+        exc.args and exc.args[0] == I2C_REMOTE_IO_ERRNO
+    )
+
+
+def retry_i2c_remote_io(func, *args):
+    for attempt in range(I2C_TRANSFER_ATTEMPTS):
+        try:
+            return func(*args)
+        except OSError as exc:
+            if not is_i2c_remote_io_error(exc) or attempt + 1 >= I2C_TRANSFER_ATTEMPTS:
+                raise
+            time.sleep(I2C_TRANSFER_RETRY_DELAY * (attempt + 1))
 
 
 def has_valid_ubx_frame(buffer):
@@ -116,8 +136,24 @@ class I2CStream:
     def name(self):
         return f"i2c:{self.bus_number}:0x{self.address:02x}"
 
+    def _read_block(self, register, length):
+        return retry_i2c_remote_io(
+            self.bus.read_i2c_block_data,
+            self.address,
+            register,
+            length,
+        )
+
+    def _write_block(self, register, data):
+        retry_i2c_remote_io(
+            self.bus.write_i2c_block_data,
+            self.address,
+            register,
+            data,
+        )
+
     def available(self):
-        data = self.bus.read_i2c_block_data(self.address, 0xFD, 2)
+        data = self._read_block(0xFD, 2)
         return (data[0] << 8) | data[1]
 
     def read(self, size):
@@ -132,19 +168,46 @@ class I2CStream:
 
             while available > 0 and len(self.buffer) < size:
                 length = min(available, size - len(self.buffer), 32)
-                self.buffer.extend(
-                    self.bus.read_i2c_block_data(self.address, 0xFF, length)
-                )
+                self.buffer.extend(self._read_block(0xFF, length))
                 available -= length
 
         out = bytes(self.buffer[:size])
         del self.buffer[:size]
         return out
 
+    def readline(self, size=-1):
+        limit = I2C_READLINE_LIMIT if size is None or size < 0 else size
+        if limit <= 0:
+            return b""
+
+        end_time = time.monotonic() + self.timeout
+        while b"\n" not in self.buffer and len(self.buffer) < limit:
+            available = self.available()
+            if not available:
+                if time.monotonic() >= end_time:
+                    break
+                time.sleep(0.01)
+                continue
+
+            length = min(available, limit - len(self.buffer), 32)
+            if length <= 0:
+                break
+            self.buffer.extend(self._read_block(0xFF, length))
+
+        newline_index = self.buffer.find(b"\n")
+        if newline_index >= 0:
+            out_size = min(newline_index + 1, limit)
+        else:
+            out_size = min(len(self.buffer), limit)
+
+        out = bytes(self.buffer[:out_size])
+        del self.buffer[:out_size]
+        return out
+
     def write(self, data):
         data = bytes(data)
         for i in range(0, len(data), 32):
-            self.bus.write_i2c_block_data(self.address, 0xFF, list(data[i : i + 32]))
+            self._write_block(0xFF, list(data[i : i + 32]))
 
     def close(self):
         if self.bus is not None:
