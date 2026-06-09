@@ -704,51 +704,52 @@ class SensorCore:
             post_start_perf = time.perf_counter()
 
             # toggle auto stop
-            # ANT+ or GPS speed is available
-            if not np.isnan(spd) and self.config.G_MANUAL_STATUS == "START":
-                # speed from ANT+ or GPS
-                flag_spd = False
-                if spd >= self.config.G_AUTOSTOP_CUTOFF:
-                    flag_spd = True
+            if self.config.G_AUTOSTOP_STATUS:
+                # ANT+ or GPS speed is available
+                if not np.isnan(spd) and self.config.G_MANUAL_STATUS == "START":
+                    # speed from ANT+ or GPS
+                    flag_spd = False
+                    if spd >= self.config.G_AUTOSTOP_CUTOFF:
+                        flag_spd = True
 
-                # use moving status of accelerometer because of excluding erroneous speed values when stopping
-                flag_moving = False
-                if v["I2C"]["m_stat"] == 1:
-                    flag_moving = True
+                    # use moving status of accelerometer because of excluding erroneous speed values when stopping
+                    flag_moving = False
+                    if v["I2C"]["m_stat"] == 1:
+                        flag_moving = True
 
-                # flag_moving is not considered (set True) as follows,
-                # accelerometer is not available (nan)
-                # ANT+ speed sensor is available
-                if (
-                    np.isnan(v["I2C"]["m_stat"])
-                    or self.config.G_ANT["USE"]["SPD"]
-                    or self.config.G_DUMMY_OUTPUT
-                ):
-                    flag_moving = True
+                    # flag_moving is not considered (set True) as follows,
+                    # accelerometer is not available (nan)
+                    # ANT+ speed sensor is available
+                    if (
+                        np.isnan(v["I2C"]["m_stat"])
+                        or self.config.G_ANT["USE"]["SPD"]
+                        or self.config.G_DUMMY_OUTPUT
+                    ):
+                        flag_moving = True
 
-                if (
-                    self.config.G_STOPWATCH_STATUS == "STOP"
-                    and flag_spd
-                    and flag_moving
-                    and self.config.logger is not None
-                ):
-                    self.config.logger.start_and_stop()
-                elif (
-                    self.config.G_STOPWATCH_STATUS == "START"
-                    and (not flag_spd or not flag_moving)
-                    and self.config.logger is not None
-                ):
-                    self.config.logger.start_and_stop()
+                    if (
+                        self.config.G_STOPWATCH_STATUS == "STOP"
+                        and flag_spd
+                        and flag_moving
+                        and self.config.logger is not None
+                    ):
+                        self.config.logger.start_and_stop()
+                    elif (
+                        self.config.G_STOPWATCH_STATUS == "START"
+                        and (not flag_spd or not flag_moving)
+                        and self.config.logger is not None
+                    ):
+                        self.config.logger.start_and_stop()
 
-            # ANT+ or GPS speed is not available
-            elif np.isnan(spd) and self.config.G_MANUAL_STATUS == "START":
-                # stop recording if speed is broken
-                if (
-                    (self.config.G_ANT["USE"]["SPD"] or "timestamp" in v["GPS"])
-                    and self.config.G_STOPWATCH_STATUS == "START"
-                    and self.config.logger is not None
-                ):
-                    self.config.logger.start_and_stop()
+                # ANT+ or GPS speed is not available
+                elif np.isnan(spd) and self.config.G_MANUAL_STATUS == "START":
+                    # stop recording if speed is broken
+                    if (
+                        (self.config.G_ANT["USE"]["SPD"] or "timestamp" in v["GPS"])
+                        and self.config.G_STOPWATCH_STATUS == "START"
+                        and self.config.logger is not None
+                    ):
+                        self.config.logger.start_and_stop()
 
             # auto backlight & brake light with brightness
             auto_light = False

@@ -167,9 +167,48 @@ class AdjustWheelCircumferenceWidget(AdjustWidget):
         app_logger.info(
             f"set G_WHEEL_CIRCUMFERENCE from {pre_v} to {self.config.G_WHEEL_CIRCUMFERENCE}"
         )
+        self.config.setting.write_config()
 
     def preprocess(self):
         self.display.setText(str(int(self.config.G_WHEEL_CIRCUMFERENCE * 1000)))
+
+
+class AdjustAutoStopCutoffWidget(AdjustWidget):
+    unit = "km/h"
+
+    def init_extra(self):
+        self.display.setMaxLength(2)
+
+    async def set_value_extra(self, value):
+        pre_v = self.config.G_AUTOSTOP_CUTOFF
+        v = value / 3.6
+        self.config.G_AUTOSTOP_CUTOFF = v
+        self.config.G_GPS_SPEED_CUTOFF = v
+        app_logger.info(
+            f"set G_AUTOSTOP_CUTOFF from {pre_v} to {self.config.G_AUTOSTOP_CUTOFF}"
+        )
+        self.config.setting.write_config()
+
+    def preprocess(self):
+        self.display.setText(str(int(self.config.G_AUTOSTOP_CUTOFF * 3.6)))
+
+
+class AdjustGrossAverageSpeedWidget(AdjustWidget):
+    unit = "km/h"
+
+    def init_extra(self):
+        self.display.setMaxLength(2)
+
+    async def set_value_extra(self, value):
+        pre_v = self.config.G_GROSS_AVE_SPEED
+        self.config.G_GROSS_AVE_SPEED = value
+        app_logger.info(
+            f"set G_GROSS_AVE_SPEED from {pre_v} to {self.config.G_GROSS_AVE_SPEED}"
+        )
+        self.config.setting.write_config()
+
+    def preprocess(self):
+        self.display.setText(str(int(self.config.G_GROSS_AVE_SPEED)))
 
 
 class AdjustCPWidget(AdjustWidget):

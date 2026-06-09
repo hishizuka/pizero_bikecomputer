@@ -25,6 +25,8 @@ class Setting:
 
         if "GENERAL" in self.config_parser:
             c = self.config_parser["GENERAL"]
+            if "AUTOSTOP_STATUS" in c:
+                self.config.G_AUTOSTOP_STATUS = c.getboolean("AUTOSTOP_STATUS")
             if "AUTOSTOP_CUTOFF" in c:
                 self.config.G_AUTOSTOP_CUTOFF = (int(c["AUTOSTOP_CUTOFF"]) / 3.6)
                 self.config.G_GPS_SPEED_CUTOFF = self.config.G_AUTOSTOP_CUTOFF
@@ -247,6 +249,7 @@ class Setting:
         self.config_parser["GENERAL"] = {}
         c = self.config_parser["GENERAL"]
         c["DISPLAY"] = self.config.G_DISPLAY
+        c["AUTOSTOP_STATUS"] = str(self.config.G_AUTOSTOP_STATUS)
         c["AUTOSTOP_CUTOFF"] = str(int(self.config.G_AUTOSTOP_CUTOFF * 3.6))
         c["WHEEL_CIRCUMFERENCE"] = str(int(self.config.G_WHEEL_CIRCUMFERENCE * 1000))
         c["GROSS_AVE_SPEED"] = str(int(self.config.G_GROSS_AVE_SPEED))

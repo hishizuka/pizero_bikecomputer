@@ -309,6 +309,7 @@ class GUI_PyQt(GUI_Qt_Base):
             from modules.pyqt.menu.pyqt_sensor_menu_widget import (
                 SensorMenuWidget,
                 I2CMenuWidget,
+                SpeedMenuWidget,
                 ANTMenuWidget,
                 ANTListWidget,
                 BLEMenuWidget,
@@ -334,6 +335,8 @@ class GUI_PyQt(GUI_Qt_Base):
             from modules.pyqt.menu.pyqt_adjust_widget import (
                 AdjustAltitudeWidget,
                 AdjustWheelCircumferenceWidget,
+                AdjustAutoStopCutoffWidget,
+                AdjustGrossAverageSpeedWidget,
                 AdjustCPWidget,
                 AdjustWPrimeBalanceWidget,
             )
@@ -366,6 +369,9 @@ class GUI_PyQt(GUI_Qt_Base):
                 ("ANT+ Detail", ANTListWidget),
                 ("ANT+ Sensors", ANTMenuWidget),
                 ("Wheel Size", AdjustWheelCircumferenceWidget),
+                ("Auto Stop Cutoff", AdjustAutoStopCutoffWidget),
+                ("Gross Ave Speed", AdjustGrossAverageSpeedWidget),
+                ("Speed", SpeedMenuWidget),
                 ("Adjust Altitude", AdjustAltitudeWidget),
                 ("I2C Sensors", I2CMenuWidget),
                 ("GPS", GPSMenuWidget),

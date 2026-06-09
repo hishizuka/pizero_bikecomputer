@@ -11,9 +11,7 @@ class SensorMenuWidget(MenuWidget):
             ("ANT+ Sensors", "submenu", self.ant_sensors_menu),
             ("BLE Sensors", "submenu", self.ble_sensors_menu),
             ("GPS", "submenu", self.gps_menu),
-            ("Wheel Size", "submenu", self.adjust_wheel_circumference),
-            ("Auto Stop", None, None),
-            ("Gross Ave Speed", None, None),
+            ("Speed", "submenu", self.speed_menu),
             ("I2C Sensors", "submenu", self.i2c_sensors_menu),
         )
         self.add_buttons(button_conf)
@@ -34,8 +32,8 @@ class SensorMenuWidget(MenuWidget):
     def gps_menu(self):
         self.change_page("GPS", preprocess=True)
 
-    def adjust_wheel_circumference(self):
-        self.change_page("Wheel Size", preprocess=True)
+    def speed_menu(self):
+        self.change_page("Speed")
 
     def i2c_sensors_menu(self):
         self.change_page("I2C Sensors", preprocess=True)
@@ -84,6 +82,49 @@ class I2CMenuWidget(MenuWidget):
         self.buttons[self.PITCH_ROLL_CALIBRATION_BUTTON].change_toggle(
             self.sensor_i2c.do_pitch_roll_calibration
         )
+
+
+class SpeedMenuWidget(MenuWidget):
+    def setup_menu(self):
+        button_conf = (
+            # Name(page_name), button_attribute, connected functions, layout
+            ("Wheel Size", "submenu", self.adjust_wheel_circumference),
+            ("Auto Stop", "toggle", lambda: self.onoff_auto_stop(True)),
+            ("Auto Stop Cutoff", "submenu", self.adjust_autostop_cutoff),
+            ("Gross Ave Speed", "submenu", self.adjust_gross_average_speed),
+        )
+        self.add_buttons(button_conf)
+        self.onoff_auto_stop(False)
+
+    def preprocess(self):
+        self.onoff_auto_stop(False)
+
+    def adjust_wheel_circumference(self):
+        self.change_page("Wheel Size", preprocess=True)
+
+    def adjust_autostop_cutoff(self):
+        self.change_page("Auto Stop Cutoff", preprocess=True)
+
+    def adjust_gross_average_speed(self):
+        self.change_page("Gross Ave Speed", preprocess=True)
+
+    def onoff_auto_stop(self, change=True):
+        if change:
+            pre_status = self.config.G_AUTOSTOP_STATUS
+            self.config.G_AUTOSTOP_STATUS = not pre_status
+            app_logger.info(
+                "Auto Stop changed from "
+                f"{self.onoff_status_text(pre_status)} to "
+                f"{self.onoff_status_text(self.config.G_AUTOSTOP_STATUS)}"
+            )
+            self.config.logger.sync_stopwatch_status_to_manual()
+            self.config.setting.write_config()
+        self.buttons["Auto Stop"].change_toggle(self.config.G_AUTOSTOP_STATUS)
+        self.buttons["Auto Stop Cutoff"].onoff_button(self.config.G_AUTOSTOP_STATUS)
+
+    @staticmethod
+    def onoff_status_text(status):
+        return "ON" if status else "OFF"
 
 
 class GPSMenuWidget(MenuWidget):

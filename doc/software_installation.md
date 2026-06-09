@@ -619,11 +619,19 @@ When unlocked, you can drag the profile horizontally.
   - You need to install the ANT+ library and to set [ANT section](#ant-section) of setting.conf with `status = True`.
   - The pairing setting is saved in setting.conf when a sensor is connected, so it will be automatically connected next time you start the program.
 - ANT+ MultiScan
-- Wheel Size
-  - Enter the wheel circumference in mm when the ANT+ speed sensor is available.
-  - It is used to calculate the distance.
-  - The default value is 2,105mm, which is the circumference of 700x25c tire.
-  - The value is saved in setting.conf
+- Speed
+  - Wheel Size
+    - Enter the wheel circumference in mm when the ANT+ speed sensor is available.
+    - It is used to calculate the distance.
+    - The default value is 2,105mm, which is the circumference of 700x25c tire.
+    - The value is saved in setting.conf
+  - Auto Stop
+    - Enable or disable automatic stopwatch start/stop.
+  - Auto Stop Cutoff
+    - Enter the speed threshold in km/h for automatic stopwatch start/stop.
+    - This item is available when Auto Stop is enabled.
+  - Gross Ave Speed
+    - Enter the target gross average speed in km/h.
 - Adjust Altitude
   - Enter the current altitude to correct the sea level and increase the accuracy when an I2C pressure sensor is connected.
 
@@ -830,8 +838,13 @@ Set the value before starting the program. If the value is set during running, i
   - `Display_HAT_Mini`: Display HAT Mini
   - `ST7789_Breakout`: generic ST7789 breakout
   - `PiTFT`: PiTFT2.4 (or a PiTFT2.8 with the same resolution)
+- `autostop_status`
+  - Enable or disable automatic stopwatch start/stop.
+  - If disabled, the stopwatch starts/stops only by button operation.
+  - The default value is `True`.
 - `autostop_cutoff`
   - Set the threshold for the speed at which the stopwatch will automatically stop/start after it is activated.
+  - This value is used only when `autostop_status` is enabled.
   - The default value is `4` [km/h].
 - `wheel_circumference`
   - Set the wheel circumference required for ANT+ speed sensor use.

@@ -597,6 +597,17 @@ class LoggerCore:
                 elif hasattr(self.sensor.sensor_ant, "reset_normalized_power_state"):
                     self.sensor.sensor_ant.reset_normalized_power_state()
 
+    def sync_stopwatch_status_to_manual(self):
+        stopwatch_status = self.config.G_STOPWATCH_STATUS
+        manual_status = self.config.G_MANUAL_STATUS
+        if stopwatch_status == manual_status:
+            return
+        app_logger.info(
+            "G_STOPWATCH_STATUS differs from G_MANUAL_STATUS: "
+            f"{stopwatch_status} -> {manual_status}"
+        )
+        self.config.G_STOPWATCH_STATUS = manual_status
+
     async def _record_log_and_flush(self):
         await self.record_log()
         self._flush_sql_queue_sync()

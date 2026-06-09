@@ -145,7 +145,8 @@ class Config:
     G_MANUAL_STATUS = "INIT"
     G_STOPWATCH_STATUS = "INIT"  # with Auto Pause
 
-    # auto pause cutoff [m/s] (overwritten with setting.conf)
+    # auto pause status and cutoff [m/s] (overwritten with setting.conf)
+    G_AUTOSTOP_STATUS = True
     # G_AUTOSTOP_CUTOFF = 0
     G_AUTOSTOP_CUTOFF = 4.0 * 1000 / 3600
 
