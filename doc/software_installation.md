@@ -128,17 +128,28 @@ $ pip install garminconnect stravacookies bluez-peripheral==0.2.0a5 tb-mqtt-clie
 
 ### GPS module
 
-Assume Serial interface is on and login shell is off in raspi-config and GPS device is connected as /dev/ttyS0. If GPS device is /dev/ttyAMA0, modify gpsd config file(/etc/default/gpsd).
+`install.sh` asks which GPS path to use. Install only the packages for the
+selected hardware path.
+
+For all GPS paths:
 
 ```
-$ sudo apt install gpsd python3-gps
-$ pip install timezonefinder pyubx2 pyserial azarashi
-$ sudo cp scripts/install/etc/default/gpsd /etc/default/gpsd
-$ sudo systemctl enable gpsd
-$ sudo systemctl enable gpsd.socket
+$ pip install timezonefinder
+$ pip uninstall -y flatbuffers
+$ PIP_CONFIG_FILE=/dev/null pip install -U --no-cache-dir -i https://pypi.org/simple flatbuffers
 ```
 
-Check with `cgps` or `gpsmon` command.
+#### u-blox direct UBX GPS
+
+Use this for u-blox receivers such as MAX-M10S/N when the application talks to
+the receiver directly with the UBX protocol. This path does not use `gpsd`.
+Enable UART if the receiver is connected by UART, and enable I2C if the
+receiver is connected by I2C.
+
+```
+$ sudo apt install -y python3-smbus2
+$ pip install pyubx2 pyserial azarashi
+```
 
 For u-blox AssistNow Live/Predictive Orbits, add the ZTP token to
 `setting.conf`. If `assistnow_token` is empty, AssistNow is skipped.
@@ -152,6 +163,30 @@ use_qzss_dcr = False
 
 `use_qzss_dcr=True` is ignored when `use_power_save=True`; disable power save
 when collecting QZSS DC Report messages.
+
+#### UART GPS through GPSD
+
+Use this for NMEA GPS receivers managed by `gpsd`. Assume Serial interface is
+on and login shell is off in raspi-config and the GPS device is connected as
+`/dev/ttyS0`. If the GPS device is `/dev/ttyAMA0`, modify gpsd config
+file(`/etc/default/gpsd`).
+
+```
+$ sudo apt install -y gpsd python3-gps libffi-dev
+$ sudo cp scripts/install/etc/default/gpsd /etc/default/gpsd
+$ sudo systemctl enable gpsd
+$ sudo systemctl enable gpsd.socket
+```
+
+Check with `cgps` or `gpsmon` command.
+
+#### Sony CXD5610 GPS over I2C
+
+Use this for the Sony CXD5610 I2C GPS path.
+
+```
+$ sudo apt install -y python3-smbus2 libgpiod3 libgpiod-dev python3-libgpiod
+```
 
 
 ### ANT+ USB dongle
