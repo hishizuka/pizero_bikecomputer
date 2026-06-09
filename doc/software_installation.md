@@ -791,11 +791,16 @@ If ANT+ powermeter is available, set both parameters are used in W'balance (%). 
 - `bluez-peripheral` (`bluez-peripheral==0.2.0a5` above) package is required.
 - GadgetBridge app settings
   - Enable all permissions.
-  - `Settings` > `Discovery and Pairing options` > `Ignore bonded devices`: Off, `CompanionDevice Pairing`: On, `Discover unsupported devices`: On, `Scanning intensity`: 2 or 3
+  - `Settings` > `Discovery and Pairing options` > `Discover unsupported devices`: On.
   - From `Connect new device` in the menu or `+` button, enter `Device discovery`. Select the device (shown as host name), long press, and pair it as `Bangle.js`.
 - For `Get Location`
   - Open the device settings in GadgetBridge and enable `Use phone gps data`.
-  - Set `GPS data update interval in ms` to around `5000-10000`.
+  - Set `GPS data update interval` to around `1000-5000` (1s - 5s).
+- For Google Maps navigation notifications
+  - Gadgetbridge reads Google Maps turn-by-turn instructions from Android notifications.
+  - On recent Android versions, Google Maps `Live Updates` notifications can prevent Gadgetbridge from reading the navigation instruction details.
+  - If navigation messages are received only as `{"t":"nav"}` or do not include `action` and `distance`, open Android `Settings` > `Apps` > `Maps` > `Notifications` and disable the `Live Updates` notification category for Google Maps.
+  - The exact label may vary by Android version and vendor, but it is usually shown as `Live Updates`, `Live info`, or a similar live navigation notification category.
 
 ## Settings
 
