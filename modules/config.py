@@ -129,6 +129,9 @@ class Config:
     # dummy sampling value output (change with --demo option)
     G_DUMMY_OUTPUT = False
 
+    # debug mode (change with --debug option)
+    G_DEBUG = False
+
     # enable headless mode (keyboard operation)
     G_HEADLESS = False
 
@@ -468,6 +471,7 @@ class Config:
         args = parser.parse_args()
 
         if args.debug:
+            self.G_DEBUG = True
             app_logger.setLevel(logging.DEBUG)
             app_logger.debug(args)
         if args.fullscreen:

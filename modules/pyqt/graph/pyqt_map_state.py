@@ -91,13 +91,7 @@ class MapStateMixin:
     def _setup_map_state_items(self):
         self.map_pos["x"] = self.config.G_DUMMY_POS_X
         self.map_pos["y"] = self.config.G_DUMMY_POS_Y
-        self._map_track_source = "gps_track"
-        try:
-            motion_sensors = self.sensor.sensor_i2c.available_sensors.get("MOTION", {})
-            if motion_sensors.get("BHI3_S"):
-                self._map_track_source = "heading"
-        except Exception:
-            self._map_track_source = "gps_track"
+        self.set_map_track_source(self.config.G_DEBUG)
         self._overlay_refresh_time_cache = {}
         self._course_focus_active = False
         self._course_focus_off_frames = 0
@@ -111,6 +105,26 @@ class MapStateMixin:
         self.point["size"] = 29
         self._init_direction_arrows()
         self._init_center_point()
+
+    def set_map_track_source(self, use_i2c_heading):
+        self.use_i2c_heading_for_map_track = bool(use_i2c_heading)
+        if self.use_i2c_heading_for_map_track:
+            self._map_track_value_getter = self._get_i2c_heading_track_value
+        else:
+            self._map_track_value_getter = self._get_gps_track_value
+
+    def _get_gps_track_value(self):
+        return self.gps_values["track"]
+
+    def _get_i2c_heading_track_value(self):
+        heading = self.sensor.values["I2C"]["heading"]
+        if heading is not None and not self._is_nan_value(heading):
+            return heading
+        return self._get_gps_track_value()
+
+    def _get_map_track_value(self):
+        return self._map_track_value_getter()
+
 
     def _get_viewport_px_size(self):
         view_box = self.plot.getViewBox()
@@ -278,13 +292,6 @@ class MapStateMixin:
             return np.isnan(value)
         except Exception:
             return False
-
-    def _get_map_track_value(self):
-        if getattr(self, "_map_track_source", "gps_track") == "heading":
-            heading = self.sensor.values["I2C"].get("heading", np.nan)
-            if heading is not None and not self._is_nan_value(heading):
-                return heading
-        return self.gps_values.get("track", np.nan)
 
     def _get_overlay_display_state(self):
         overlay_type = self.overlay_order[self.overlay_index]

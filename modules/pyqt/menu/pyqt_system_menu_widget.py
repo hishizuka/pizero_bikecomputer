@@ -42,7 +42,7 @@ class SystemMenuWidget(MenuWidget):
         self.change_page("Network", preprocess=True)
 
     def debug(self):
-        self.change_page("Debug")
+        self.change_page("Debug", preprocess=True)
 
 
 class NetworkMenuWidget(MenuWidget):
@@ -237,13 +237,11 @@ class BluetoothPairedDeviceListWidget(ListWidget):
 
 
 class DebugMenuWidget(MenuWidget):
-    is_log_level_debug = False
-
     def setup_menu(self):
         button_conf = (
             # Name(page_name), button_attribute, connected functions, layout
             ("Debug Log", "submenu", self.debug_log),
-            ("Debug Level Log", "toggle", lambda: self.set_log_level_to_debug(True)),
+            ("Debug", "toggle", lambda: self.set_debug(True)),
             (
                 "Disable Wifi/BT",
                 "dialog",
@@ -278,22 +276,18 @@ class DebugMenuWidget(MenuWidget):
 
     def preprocess(self):
         # initialize toggle button status
-        self.set_log_level_to_debug(change=False)
+        self.set_debug(change=False)
 
     def debug_log(self):
         self.change_page("Debug Log", preprocess=True)
 
-    def set_log_level_to_debug(self, change=True):
-        # assume the initial log level is INFO.
-        # Future support for multiple log levels.
+    def set_debug(self, change=True):
         if change:
-            if app_logger.level == logging.DEBUG:
-                app_logger.setLevel(level=logging.INFO)
-                self.is_log_level_debug = False
-            else:
-                app_logger.setLevel(level=logging.DEBUG)
-                self.is_log_level_debug = True
-        self.buttons["Debug Level Log"].change_toggle(self.is_log_level_debug)
+            self.config.G_DEBUG = not self.config.G_DEBUG
+        app_logger.setLevel(
+            level=logging.DEBUG if self.config.G_DEBUG else logging.INFO
+        )
+        self.buttons["Debug"].change_toggle(self.config.G_DEBUG)
 
     def show_ip_address(self):
         address = detect_network() or "No address"

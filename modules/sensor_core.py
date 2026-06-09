@@ -1,5 +1,4 @@
 import asyncio
-import logging
 import math
 import time
 from datetime import datetime
@@ -793,7 +792,7 @@ class SensorCore:
                 self.values["integrated"]["cpu_percent"] = int(
                     self.process.cpu_percent(interval=None)
                 )
-                if app_logger.isEnabledFor(logging.DEBUG):
+                if self.config.G_DEBUG:
                     self._update_status_bar_color_by_cpu_usage()
                 self.values["integrated"][
                     "CPU_MEM"

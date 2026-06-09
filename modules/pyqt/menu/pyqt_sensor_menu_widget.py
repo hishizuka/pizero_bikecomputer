@@ -40,6 +40,7 @@ class SensorMenuWidget(MenuWidget):
 
 
 class I2CMenuWidget(MenuWidget):
+    MAP_HEADING_BUTTON = "Map Magnetic Heading"
     MAG_CALIBRATION_BUTTON = "Mag Calibration"
     PITCH_ROLL_CALIBRATION_BUTTON = "Pitch/Roll Calibration"
 
@@ -47,6 +48,11 @@ class I2CMenuWidget(MenuWidget):
         button_conf = (
             # Name(page_name), button_attribute, connected functions, layout
             ("Auto Light", "toggle", lambda: self.onoff_auto_light(True)),
+            (
+                self.MAP_HEADING_BUTTON,
+                "toggle",
+                lambda: self.onoff_map_heading(True),
+            ),
             ("Adjust Altitude", "submenu", self.adjust_altitude),
             (self.MAG_CALIBRATION_BUTTON, "toggle", self.calib_mag),
             (self.PITCH_ROLL_CALIBRATION_BUTTON, "toggle", self.calib_pitch_roll),
@@ -65,6 +71,20 @@ class I2CMenuWidget(MenuWidget):
             self.config.G_ANT["USE_AUTO_LIGHT"] = not self.config.G_ANT["USE_AUTO_LIGHT"]
         self.buttons["Auto Light"].change_toggle(self.config.G_ANT["USE_AUTO_LIGHT"])
 
+    def onoff_map_heading(self, change=True):
+        map_widget = self.config.gui.map_widget
+        if map_widget is None:
+            self.buttons[self.MAP_HEADING_BUTTON].change_toggle(False)
+            return
+
+        if change:
+            map_widget.set_map_track_source(
+                not map_widget.use_i2c_heading_for_map_track
+            )
+        self.buttons[self.MAP_HEADING_BUTTON].change_toggle(
+            map_widget.use_i2c_heading_for_map_track
+        )
+
     def calib_mag(self):
         self.config.gui.calib_mag()
         self.update_button_status()
@@ -76,6 +96,7 @@ class I2CMenuWidget(MenuWidget):
     def update_button_status(self):
         self.buttons["Auto Light"].onoff_button(self.config.G_ANT["USE"]["LGT"])
         self.buttons["Auto Light"].change_toggle(self.config.G_ANT["USE_AUTO_LIGHT"])
+        self.onoff_map_heading(change=False)
         self.buttons[self.MAG_CALIBRATION_BUTTON].change_toggle(
             self.sensor_i2c.do_mag_calibration
         )
