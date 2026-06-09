@@ -30,19 +30,20 @@ class ANT_Device_Power(ant_device.ANT_Device):
         0x12: ("power", "cadence", "accumulated_power"),
         0x13: ("torque_eff", "pedal_sm"),
     }
-    stop_cutoff = 3
+    torque_time_base = 2048
+    page_value_lengths = {0x10: 2, 0x11: 5, 0x12: 5, 0x13: 4}
 
     pickle_key = "ant+_pwr_values"
 
     def add_struct_pattern(self):
         self.structPattern[self.name] = {
-            # (page), evt_count, lr_balance, cadence, accumulated power(2byte), instantaneous power(2byte)
+            # page, event count, balance, cadence, accumulated and instant power.
             0x10: struct.Struct("<xBBBHH"),
-            # (page), evt_count, wheel_ticks, x, wheel period(2byte), accumulatd power(2byte)
-            0x11: struct.Struct("<xBBxHH"),
-            # (page), x, x, cadence, period(2byte), accumulatd power(2byte)
-            0x12: struct.Struct("<xxxBHH"),
-            # (page), x, torque effectiveness(left, right), pedal smoothness(left, right), x, x
+            # page, event count, wheel ticks, cadence, period and torque.
+            0x11: struct.Struct("<xBBBHH"),
+            # page, event count, crank ticks, cadence, period and torque.
+            0x12: struct.Struct("<xBBBHH"),
+            # page, x, torque effectiveness, pedal smoothness, x, x.
             0x13: struct.Struct("<xxBBBBxx"),
         }
 
@@ -55,36 +56,72 @@ class ANT_Device_Power(ant_device.ANT_Device):
         self.init_common_page_status()
 
     def reset_value(self):
-        self.interval = (
-            self.ant_config["interval"][self.config.G_ANT["INTERVAL"]]
-            / self.ant_config["interval"][-1]
-        )
+        self.set_message_interval()
         self.values[0x10]["accumulated_power"] = 0.0
         self.values[0x11]["distance"] = 0.0
         self.values[0x11]["accumulated_power"] = 0.0
         self.values[0x12]["accumulated_power"] = 0.0
         for page in self.pre_values:
-            self.pre_values[page] = [-1, -1, -1, -1]
-            self.pre_delta[page] = [-1, -1, -1, -1]
-            self.power_values[page] = [-1, -1, -1, -1]
+            value_length = self.page_value_lengths[page]
+            self.pre_values[page] = [-1] * value_length
+            self.pre_delta[page] = [-1] * value_length
+            self.power_values[page] = [-1] * value_length
             self.values[page]["on_data_timestamp"] = None
-            self.values[page]["stop_timestamp"] = None
+            self.values[page]["last_event_timestamp"] = None
+            self.values[page]["last_event_interval"] = None
+
+    def prepare_page_state(self, page, power_values, pre_values, pre_delta, values):
+        value_length = self.page_value_lengths[page]
+        self.extend_list(power_values, value_length)
+        self.extend_list(pre_values, value_length)
+        self.extend_list(pre_delta, value_length)
+
+    @staticmethod
+    def set_page16_zero(values, t):
+        values["power"] = 0
+        values["power_16_simple"] = 0
+        values["cadence"] = 0
+        values["power_r"] = 0
+        values["power_l"] = 0
+        values["lr_balance"] = ":"
+        values["timestamp"] = t
+
+    @staticmethod
+    def set_torque_page_zero(values, t, cadence=False, speed=False):
+        values["power"] = 0
+        if cadence:
+            values["cadence"] = 0
+        if speed:
+            values["speed"] = 0
+        values["timestamp"] = t
 
     def on_data(self, data):
         # standard power-only main data page (0x10)
         if data[0] == 0x10:
             self.on_data_power_0x10(
-                data, self.power_values[0x10], self.pre_values[0x10], self.pre_delta[0x10], self.values[0x10]
+                data,
+                self.power_values[0x10],
+                self.pre_values[0x10],
+                self.pre_delta[0x10],
+                self.values[0x10],
             )
         # Standard Wheel Torque Main Data Page (0x11) #not verified (not own)
         elif data[0] == 0x11:
             self.on_data_power_0x11(
-                data, self.power_values[0x11], self.pre_values[0x11], self.pre_delta[0x11], self.values[0x11]
+                data,
+                self.power_values[0x11],
+                self.pre_values[0x11],
+                self.pre_delta[0x11],
+                self.values[0x11],
             )
         # standard crank power torque main data page (0x12)
         elif data[0] == 0x12:
             self.on_data_power_0x12(
-                data, self.power_values[0x12], self.pre_values[0x12], self.pre_delta[0x12], self.values[0x12]
+                data,
+                self.power_values[0x12],
+                self.pre_values[0x12],
+                self.pre_delta[0x12],
+                self.values[0x12],
             )
         # Torque Effectiveness and Pedal Smoothness Main Data Page (0x13)
         elif data[0] == 0x13:
@@ -112,10 +149,9 @@ class ANT_Device_Power(ant_device.ANT_Device):
         elif data[0] == 0x52:
             self.setCommonPage82(data[6:8], self.values)
 
-        # self.channel.send_acknowledged_data(array.array('B',[0x46,0xFF,0xFF,0xFF,0xFF,0x88,0x02,0x01]))
-
     def on_data_power_0x10(self, data, power_values, pre_values, pre_delta, values):
-        # (page), evt_count, balance, cadence, accumulated power(2byte), instantaneous power(2byte)
+        self.prepare_page_state(0x10, power_values, pre_values, pre_delta, values)
+        # page, event count, balance, cadence, accumulated and instant power.
         (
             power_values[0],
             lr_balance,
@@ -128,31 +164,32 @@ class ANT_Device_Power(ant_device.ANT_Device):
         if pre_values[0] == -1:
             pre_values[0:2] = power_values[0:2]
             values["on_data_timestamp"] = t
+            values["last_event_timestamp"] = t
             values["power"] = 0
             return
 
-        delta = [a - b for (a, b) in zip(power_values, pre_values)]
-        if -255 <= delta[0] < 0:
-            delta[0] += 256
-        if -65535 <= delta[1] < 0:
-            delta[1] += 65536
+        delta = [
+            self.delta_with_rollover(power_values[0], pre_values[0], 256),
+            self.delta_with_rollover(power_values[1], pre_values[1], 65536),
+        ]
         delta_t = (t - values["on_data_timestamp"]).total_seconds()
 
         if delta[0] > 0 and delta[1] >= 0 and delta_t < self.valid_time:
             pwr = delta[1] / delta[0]
+            values["last_event_timestamp"] = t
+            values["last_event_interval"] = delta_t / delta[0]
             # max value in .fit file is 65536 [w]
             if pwr <= 65535 and (pwr - values["power"]) < self.spike_threshold["power"]:
                 values["power"] = pwr
                 values["power_16_simple"] = power_16_simple
-                values["cadence"] = cadence
+                if cadence != 0xFF:
+                    values["cadence"] = cadence
                 if (
                     self.config.G_MANUAL_STATUS == "START"
                     and values["on_data_timestamp"] is not None
                 ):
                     # unit: J
-                    values["accumulated_power"] += pwr * round(
-                        (t - values["on_data_timestamp"]).total_seconds()
-                    )
+                    values["accumulated_power"] += pwr * delta_t
                 # lr_balance
                 if lr_balance < 0xFF and lr_balance >> 7 == 1:
                     right_balance = lr_balance & 0b01111111
@@ -166,40 +203,48 @@ class ANT_Device_Power(ant_device.ANT_Device):
             else:
                 self.print_spike("Power(16)", pwr, values["power"], delta, delta_t)
         elif delta[0] == 0 and delta[1] == 0:
-            if pre_delta[0:2] != [0, 0]:
-                values["stop_timestamp"] = t
-            elif (t - values["stop_timestamp"]).total_seconds() >= self.stop_cutoff:
-                values["power"] = 0
-                values["power_16_simple"] = 0
-                values["cadence"] = 0
-                values["power_r"] = 0
-                values["power_l"] = 0
-                values["lr_balance"] = ":"
+            if self.is_stopped_by_event_age(
+                t, values["last_event_timestamp"], values["last_event_interval"]
+            ):
+                self.set_page16_zero(values, t)
         else:
             app_logger.error(f"ANT+ Power(16) err: {delta}")
 
         pre_values[0:2] = power_values[0:2]
         # on_data timestamp
         values["on_data_timestamp"] = t
-        pre_delta = delta[:]
+        pre_delta[0:2] = delta[0:2]
 
         # store raw power
         self.config.state.set_value("ant+_power_values_16", power_values[1])
 
-    def on_data_power_0x11(self, data, power_values, pre_values, pre_delta, values, resume=True):
-        # (page), evt_count, wheel_ticks, x, wheel period(2byte), accumulated power(2byte)
+    def on_data_power_0x11(
+        self, data, power_values, pre_values, pre_delta, values, resume=True
+    ):
+        self.prepare_page_state(0x11, power_values, pre_values, pre_delta, values)
+        # page, event count, wheel ticks, cadence, period and torque.
         (
-            power_values[2],
-            power_values[3],
-            power_values[0],
-            power_values[1],
+            update_event_count,
+            wheel_ticks,
+            cadence,
+            wheel_period,
+            accumulated_torque,
         ) = self.structPattern[self.name][0x11].unpack(data[0:8])
+        power_values[0:5] = [
+            wheel_period,
+            accumulated_torque,
+            update_event_count,
+            wheel_ticks,
+            cadence,
+        ]
         t = datetime.now()
 
         if pre_values[0] == -1:
-            pre_values = power_values
+            pre_values[0:5] = power_values[0:5]
             values["on_data_timestamp"] = t
+            values["last_event_timestamp"] = t
             values["power"] = 0
+            values["speed"] = 0
 
             if not resume:
                 return
@@ -207,49 +252,56 @@ class ANT_Device_Power(ant_device.ANT_Device):
             pre_pwr_value = self.config.state.get_value(
                 "ant+_power_values_17", pre_values
             )
-            pwr_diff = pre_values[1] - pre_pwr_value[1]
-            spd_diff = pre_values[3] - pre_pwr_value[3]
-            if -65535 <= pwr_diff < 0:
-                pwr_diff += 65536
-            if -255 <= spd_diff < 0:
-                spd_diff += 256
+            self.extend_list(pre_pwr_value, self.page_value_lengths[0x11])
+            pwr_diff = self.delta_with_rollover(pre_values[1], pre_pwr_value[1], 65536)
+            spd_diff = self.delta_with_rollover(pre_values[3], pre_pwr_value[3], 256)
             if pwr_diff > 0:
-                values["accumulated_power"] += 128 * math.pi * pwr_diff / 2048
+                values["accumulated_power"] += (
+                    128 * math.pi * pwr_diff / self.torque_time_base
+                )
             if spd_diff > 0:
                 values["distance"] += self.config.G_WHEEL_CIRCUMFERENCE * spd_diff
             return
 
-        delta = [a - b for (a, b) in zip(power_values, pre_values)]
-        if -65535 <= delta[0] < 0:
-            delta[0] += 65536
-        if -65535 <= delta[1] < 0:
-            delta[1] += 65536
-        if -255 <= delta[2] < 0:
-            delta[2] += 256
-        if -255 <= delta[3] < 0:
-            delta[3] += 256
+        delta = [
+            self.delta_with_rollover(power_values[0], pre_values[0], 65536),
+            self.delta_with_rollover(power_values[1], pre_values[1], 65536),
+            self.delta_with_rollover(power_values[2], pre_values[2], 256),
+            self.delta_with_rollover(power_values[3], pre_values[3], 256),
+            0,
+        ]
         delta_t = (t - values["on_data_timestamp"]).total_seconds()
 
         if (
-            delta[0] > 0
+            delta[2] > 0
+            and delta[0] > 0
             and delta[1] >= 0
-            and delta[2] >= 0
             and delta_t < self.valid_time
         ):
             pwr = 128 * math.pi * delta[1] / delta[0]
+            values["last_event_timestamp"] = t
+            values["last_event_interval"] = (
+                delta[0] / (self.torque_time_base * delta[2])
+            )
             # max value in .fit file is 65536 [w]
             if pwr <= 65535 and (pwr - values["power"]) < self.spike_threshold["power"]:
                 values["power"] = pwr
                 if self.config.G_MANUAL_STATUS == "START":
                     # unit: J
-                    # values['power'] * delta[0] / 2048 #the unit of delta[0] is 1/2048s
-                    values["accumulated_power"] += 128 * math.pi * delta[1] / 2048
+                    # delta[0] uses 1/2048s period ticks.
+                    values["accumulated_power"] += (
+                        128 * math.pi * delta[1] / self.torque_time_base
+                    )
                 # refresh timestamp called from sensor_core
                 values["timestamp"] = t
             else:
                 self.print_spike("Power(17)", pwr, values["power"], delta, delta_t)
 
-            spd = 3.6 * self.config.G_WHEEL_CIRCUMFERENCE * delta[2] / (delta[0] / 2048)
+            spd = (
+                self.config.G_WHEEL_CIRCUMFERENCE
+                * delta[2]
+                / (delta[0] / self.torque_time_base)
+            )
             # max value in .fit file is 65.536 [m/s]
             if spd <= 65 and (spd - values["speed"]) < self.spike_threshold["speed"]:
                 values["speed"] = spd
@@ -259,35 +311,49 @@ class ANT_Device_Power(ant_device.ANT_Device):
                 values["timestamp"] = t
             else:
                 self.print_spike("Speed(17)", spd, values["speed"], delta, delta_t)
-        elif delta[0] == 0 and delta[1] == 0 and delta[2] == 0:
-            if pre_delta[0:3] != [0, 0, 0]:
-                values["stop_timestamp"] = t
-            elif (t - values["stop_timestamp"]).total_seconds() >= self.stop_cutoff:
-                values["power"] = 0
-                values["speed"] = 0
+        elif delta[2] > 0 and delta[0] == 0 and delta[3] == 0:
+            self.set_torque_page_zero(values, t, speed=True)
+        elif delta[0] == 0 and delta[1] == 0 and delta[2] == 0 and delta[3] == 0:
+            if self.is_stopped_by_event_age(
+                t, values["last_event_timestamp"], values["last_event_interval"]
+            ):
+                self.set_torque_page_zero(values, t, speed=True)
         else:
             app_logger.error(f"ANT+ Power(17) err: {delta}")
 
-        pre_values = power_values
+        pre_values[0:5] = power_values[0:5]
         # on_data timestamp
         values["on_data_timestamp"] = t
-        pre_delta = delta[:]
+        pre_delta[0:5] = delta[0:5]
 
         # store raw power
-        self.config.state.set_value("ant+_power_values_17", power_values)
+        self.config.state.set_value("ant+_power_values_17", power_values[:])
 
-    def on_data_power_0x12(self, data, power_values, pre_values, pre_delta, values, resume=True):
-        # (page), x, x, cadence, period(2byte), accumulatd power(2byte)
+    def on_data_power_0x12(
+        self, data, power_values, pre_values, pre_delta, values, resume=True
+    ):
+        self.prepare_page_state(0x12, power_values, pre_values, pre_delta, values)
+        # page, event count, crank ticks, cadence, period and torque.
         (
+            update_event_count,
+            crank_ticks,
             cadence,
-            power_values[0],
-            power_values[1],
+            crank_period,
+            accumulated_torque,
         ) = self.structPattern[self.name][0x12].unpack(data[0:8])
+        power_values[0:5] = [
+            crank_period,
+            accumulated_torque,
+            update_event_count,
+            crank_ticks,
+            cadence,
+        ]
         t = datetime.now()
 
         if pre_values[0] == -1:
-            pre_values[0:2] = power_values[0:2]
+            pre_values[0:5] = power_values[0:5]
             values["on_data_timestamp"] = t
+            values["last_event_timestamp"] = t
             values["power"] = 0
 
             if not resume:
@@ -297,60 +363,82 @@ class ANT_Device_Power(ant_device.ANT_Device):
                 return
 
             pre_pwr_value = self.config.state.get_value(
-                "ant+_power_values_18", pre_values[1]
+                "ant+_power_values_18", pre_values
             )
-            diff = pre_values[1] - pre_pwr_value
-            if -65535 <= diff < 0:
-                diff += 65536
+            if not isinstance(pre_pwr_value, list):
+                pre_pwr_value = [-1, pre_pwr_value, -1, -1, -1]
+            self.extend_list(pre_pwr_value, self.page_value_lengths[0x12])
+            diff = self.delta_with_rollover(pre_values[1], pre_pwr_value[1], 65536)
             if diff > 0:
-                values["accumulated_power"] += 128 * math.pi * diff / 2048
+                recovered_work = 128 * math.pi * diff / self.torque_time_base
+                values["accumulated_power"] += recovered_work
                 app_logger.info(
-                    f"### resume pwr: diff:{diff} = {pre_values[1]} - {pre_pwr_value} ###"
+                    f"### resume pwr: diff:{diff} = "
+                    f"{pre_values[1]} - {pre_pwr_value} ###"
                 )
                 app_logger.info(
-                    f"### resume pwr: {int(values['accumulated_power'])} [J], +{int(128 * math.pi * diff / 2048)} [J] ###"
+                    f"### resume pwr: {int(values['accumulated_power'])} [J], "
+                    f"+{int(recovered_work)} [J] ###"
                 )
             return
 
-        delta = [a - b for (a, b) in zip(power_values, pre_values)]
-        if -65535 <= delta[0] < 0:
-            delta[0] += 65536
-        if -65535 <= delta[1] < 0:
-            delta[1] += 65536
+        delta = [
+            self.delta_with_rollover(power_values[0], pre_values[0], 65536),
+            self.delta_with_rollover(power_values[1], pre_values[1], 65536),
+            self.delta_with_rollover(power_values[2], pre_values[2], 256),
+            self.delta_with_rollover(power_values[3], pre_values[3], 256),
+            0,
+        ]
         delta_t = (t - values["on_data_timestamp"]).total_seconds()
 
-        if delta[0] > 0 and delta[1] >= 0 and delta_t < self.valid_time:
+        if (
+            delta[2] > 0
+            and delta[0] > 0
+            and delta[1] >= 0
+            and delta_t < self.valid_time
+        ):
             pwr = 128 * math.pi * delta[1] / delta[0]
+            cad = 60 * delta[2] * self.torque_time_base / delta[0]
+            values["last_event_timestamp"] = t
+            values["last_event_interval"] = (
+                delta[0] / (self.torque_time_base * delta[2])
+            )
             # max value in .fit file is 65536 [w]
             if pwr <= 65535 and (pwr - values["power"]) < self.spike_threshold["power"]:
                 values["power"] = pwr
-                values["cadence"] = cadence
+                if cad <= 255:
+                    values["cadence"] = cad
+                elif cadence != 0xFF:
+                    values["cadence"] = cadence
                 if self.config.G_MANUAL_STATUS == "START":
                     # unit: J
-                    # values['power'] * delta[0] / 2048 #the unit of delta[0] is 1/2048s
-                    values["accumulated_power"] += 128 * math.pi * delta[1] / 2048
+                    # delta[0] uses 1/2048s period ticks.
+                    values["accumulated_power"] += (
+                        128 * math.pi * delta[1] / self.torque_time_base
+                    )
                 # refresh timestamp called from sensor_core
                 values["timestamp"] = t
             else:
                 self.print_spike("Power(18)", pwr, values["power"], delta, delta_t)
-        elif delta[0] == 0 and delta[1] == 0:
-            if pre_delta[0:2] != [0, 0]:
-                values["stop_timestamp"] = t
-            elif (t - values["stop_timestamp"]).total_seconds() >= self.stop_cutoff:
-                values["power"] = 0
-                values["cadence"] = 0
+        elif delta[2] > 0 and delta[0] == 0 and delta[3] == 0:
+            self.set_torque_page_zero(values, t, cadence=True)
+        elif delta[0] == 0 and delta[1] == 0 and delta[2] == 0 and delta[3] == 0:
+            if self.is_stopped_by_event_age(
+                t, values["last_event_timestamp"], values["last_event_interval"]
+            ):
+                self.set_torque_page_zero(values, t, cadence=True)
         else:
             if self.values["manu_id"] == 48 and self.values["model_num"] == 910:
                 # Pioneer SGY-PM910Z powermeter mode fix (not pedaling monitor mode)
-                # keep increasing accumulated_power at stopping, so it causes a spike at restart
+                # It can keep increasing accumulated torque while stopped.
                 pass
             else:
                 app_logger.error(f"ANT+ Power(18) err: {delta}")
 
-        pre_values[0:2] = power_values[0:2]
+        pre_values[0:5] = power_values[0:5]
         # on_data timestamp
         values["on_data_timestamp"] = t
-        pre_delta = delta[:]
+        pre_delta[0:5] = delta[0:5]
 
         # store raw power
-        self.config.state.set_value("ant+_power_values_18", power_values[1])
+        self.config.state.set_value("ant+_power_values_18", power_values[:])

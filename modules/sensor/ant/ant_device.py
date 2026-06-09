@@ -49,6 +49,9 @@ class ANT_Device:
         "cadence": 255,  # rpm
     }
     ant_idle_interval = {"NORMAL": 0.20, "QUICK": 0.01, "SCAN": 0.20}
+    ant_time_base = 32768
+    stop_margin_periods = 2
+    stop_missing_events = 1
 
     def __init__(self, node=None, config=None, values=None, name=""):
         self.node = node
@@ -97,6 +100,47 @@ class ANT_Device:
     # reset total value with reset button
     def reset_value(self):
         pass
+
+    def set_message_interval(self):
+        self.interval = (
+            self.ant_config["interval"][self.config.G_ANT["INTERVAL"]]
+            / self.ant_time_base
+        )
+
+    def get_stop_cutoff(
+        self, last_event_interval, margin_periods=None, missing_events=None
+    ):
+        if last_event_interval is None or last_event_interval <= 0:
+            return None
+        if margin_periods is None:
+            margin_periods = self.stop_margin_periods
+        if missing_events is None:
+            missing_events = self.stop_missing_events
+        return last_event_interval * missing_events + margin_periods * self.interval
+
+    def is_stopped_by_event_age(
+        self,
+        t,
+        last_event_timestamp,
+        last_event_interval,
+        margin_periods=None,
+        missing_events=None,
+    ):
+        cutoff = self.get_stop_cutoff(
+            last_event_interval, margin_periods, missing_events
+        )
+        if last_event_timestamp is None or cutoff is None:
+            return False
+        return (t - last_event_timestamp).total_seconds() >= cutoff
+
+    @staticmethod
+    def extend_list(values, value_length):
+        if len(values) < value_length:
+            values.extend([-1] * (value_length - len(values)))
+
+    @staticmethod
+    def delta_with_rollover(current_value, pre_value, rollover):
+        return (current_value + rollover - pre_value) % rollover
 
     def make_channel(self, c_type, ext_assign=None):
         if self.config.G_ANT["STATUS"] and self.channel is None:

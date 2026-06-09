@@ -129,16 +129,25 @@ class ANT_Device_MultiScan(ant_device.ANT_Device):
             self.pre_power_meter_value[antIDType] = {}
             self.pre_power_meter_delta[antIDType] = {}
             for t in [0x10, 0x11, 0x12]:
+                value_length = self.dummyPowerDevice.page_value_lengths[t]
                 self.power_values[antIDType][t] = {
                     "power": 0,
                     "accumulated_power": 0,
                     "on_data_timestamp": None,
-                    "stop_timestamp": None,
+                    "last_event_timestamp": None,
+                    "last_event_interval": None,
                 }
-                self.pre_power_meter_value[antIDType][t] = [-1, -1, -1, -1]
-                self.pre_power_meter_delta[antIDType][t] = [-1, -1, -1, -1]
-                self.power_meter_value[antIDType][t] = [-1, -1, -1, -1]
+                self.pre_power_meter_value[antIDType][t] = [-1] * value_length
+                self.pre_power_meter_delta[antIDType][t] = [-1] * value_length
+                self.power_meter_value[antIDType][t] = [-1] * value_length
+            self.power_values[antIDType][0x10]["power_l"] = 0
+            self.power_values[antIDType][0x10]["power_r"] = 0
+            self.power_values[antIDType][0x10]["lr_balance"] = ":"
+            self.power_values[antIDType][0x10]["power_16_simple"] = 0
+            self.power_values[antIDType][0x10]["cadence"] = 0
+            self.power_values[antIDType][0x11]["speed"] = 0
             self.power_values[antIDType][0x11]["distance"] = 0
+            self.power_values[antIDType][0x12]["cadence"] = 0
             self.power_values[antIDType][0x12]["manu_id"] = ""
             self.power_values[antIDType][0x12]["model_num"] = ""
 

@@ -181,8 +181,8 @@ class SensorCore:
         return float(func(values, *args))
 
     @staticmethod
-    def _elapsed_since_timestamp(now_time, sensor_values):
-        timestamp = sensor_values.get("timestamp")
+    def _elapsed_since_timestamp(now_time, sensor_values, timestamp_key="timestamp"):
+        timestamp = sensor_values.get(timestamp_key)
         if timestamp is None:
             return None
         return (now_time - timestamp).total_seconds()
@@ -243,10 +243,8 @@ class SensorCore:
         else:
             api_wind_avg_ms = float("nan")
 
-        cpu_percent = self.values["integrated"].get("cpu_percent", np.nan)
-        system_cpu_percent = self.values["integrated"].get(
-            "system_cpu_percent", np.nan
-        )
+        cpu_percent = self.values["integrated"]["cpu_percent"]
+        system_cpu_percent = self.values["integrated"]["system_cpu_percent"]
         app_logger.debug(
             "[PERF_SENSOR] "
             f"win={self._perf_sensor_window} "
@@ -482,17 +480,26 @@ class SensorCore:
                         break
 
             # Speed : ANT+(SPD&CDC, (PWR)) > GPS
+            ant_spd_packet_received_recently = False
             if self.config.G_ANT["USE"]["SPD"]:
+                spd_data = v["SPD"]
+                if self.config.G_ANT["TYPE"]["SPD"] == 0x0B:
+                    spd_data = v["SPD"][0x11]
+                ant_spd_packet_received_recently = (
+                    spd_data["on_data_timestamp"] is not None
+                    and (now_time - spd_data["on_data_timestamp"]).total_seconds()
+                    < self.time_threshold["SPD"]
+                )
+
                 spd = 0
                 if delta["SPD"] < self.time_threshold["SPD"]:
-                    if self.config.G_ANT["TYPE"]["SPD"] in [0x79, 0x7B]:
-                        spd = v["SPD"]["speed"]
-                    elif self.config.G_ANT["TYPE"]["SPD"] == 0x0B:
-                        spd = v["SPD"][0x11]["speed"]
-                # complement from GPS speed when I2C acc sensor is available (using moving status)
-                else:
-                    if v["I2C"]["m_stat"] == 1 and v["GPS"]["speed"] > 0:
-                        spd = v["GPS"]["speed"]
+                    spd = spd_data["speed"]
+                # Keep zero speed while ANT+ speed packets continue during a wheel stop.
+                elif ant_spd_packet_received_recently:
+                    pass
+                # Complement from GPS speed when I2C acc sensor is available (using moving status).
+                elif v["I2C"]["m_stat"] == 1 and v["GPS"]["speed"] > 0:
+                    spd = v["GPS"]["speed"]
             elif not np.isnan(v["GPS"]["speed"]):
                 spd = v["GPS"]["speed"]
 
@@ -518,10 +525,10 @@ class SensorCore:
                 if not self.config.G_ANT["USE"]["SPD"] and dst_diff["GPS"] > 0:
                     dst_diff["USE"] = dst_diff["GPS"]
                     grade_use["GPS"] = True
-                # ANT+ sensor is not connected from the beginning of the ride
+                # Fall back to GPS distance when ANT+ speed packets are unavailable.
                 elif self.config.G_ANT["USE"]["SPD"]:
                     if (
-                        delta["SPD"] == np.inf
+                        not ant_spd_packet_received_recently
                         and dst_diff["ANT+"] == 0
                         and dst_diff["GPS"] > 0
                     ):
@@ -870,7 +877,7 @@ class SensorCore:
         return self.cpu_status_bar_color_high
 
     def _update_status_bar_color_by_cpu_usage(self):
-        gui = getattr(self.config, "gui", None)
+        gui = self.config.gui
         if gui is None:
             return
 

@@ -18,8 +18,7 @@ class ANT_Device_Speed_Cadence(ant_device.ANT_Device):
     delta = []  # cad_time, cad, speed_time, speed
     pre_delta = []
     elements = ("speed", "cadence", "distance")
-    stop_cutoff_spd = 5
-    stop_cutoff_cdc = 3
+    stop_missing_events = 2
 
     pickle_key = "ant+_sc_values"
 
@@ -27,13 +26,16 @@ class ANT_Device_Speed_Cadence(ant_device.ANT_Device):
         self.structPattern[self.name] = struct.Struct("<HHHH")
 
     def reset_value(self):
+        self.set_message_interval()
         self.values["distance"] = 0.0
         self.sc_values = [-1, -1, -1, -1]
         self.pre_values = [-1, -1, -1, -1]
         self.delta = [-1, -1, -1, -1]
         self.values["on_data_timestamp"] = None
-        self.values["stop_timestamp_spd"] = None
-        self.values["stop_timestamp_cdc"] = None
+        self.values["last_event_timestamp_spd"] = None
+        self.values["last_event_timestamp_cdc"] = None
+        self.values["last_event_interval_spd"] = None
+        self.values["last_event_interval_cdc"] = None
 
     def on_data(self, data):
         self.sc_values = self.structPattern[self.name].unpack(data[0:8])
@@ -44,8 +46,8 @@ class ANT_Device_Speed_Cadence(ant_device.ANT_Device):
             self.values["speed"] = 0
             self.values["cadence"] = 0
             self.values["on_data_timestamp"] = t
-            self.values["stop_timestamp_spd"] = t
-            self.values["stop_timestamp_cdc"] = t
+            self.values["last_event_timestamp_spd"] = t
+            self.values["last_event_timestamp_cdc"] = t
 
             pre_speed_value = self.config.state.get_value(
                 self.pickle_key, self.pre_values[3]
@@ -65,13 +67,13 @@ class ANT_Device_Speed_Cadence(ant_device.ANT_Device):
             return
 
         # cad_time, cad, speed_time, speed
-        self.delta = [a - b for (a, b) in zip(self.sc_values, self.pre_values)]
-        for i in range(len(self.delta)):
-            if -65535 <= self.delta[i] < 0:
-                self.delta[i] += 65536
+        self.delta = [
+            self.delta_with_rollover(value, pre_value, 65536)
+            for value, pre_value in zip(self.sc_values, self.pre_values)
+        ]
 
         # speed
-        if self.delta[2] > 0 and 0 <= self.delta[3] < 6553:  # for spike
+        if self.delta[2] > 0 and 0 < self.delta[3] < 6553:  # for spike
             # unit: m/s
             spd = (
                 self.config.G_WHEEL_CIRCUMFERENCE * self.delta[3] * 1024 / self.delta[2]
@@ -82,6 +84,10 @@ class ANT_Device_Speed_Cadence(ant_device.ANT_Device):
                 and (spd - self.values["speed"]) < self.spike_threshold["speed"]
             ):
                 self.values["speed"] = spd
+                self.values["last_event_timestamp_spd"] = t
+                self.values["last_event_interval_spd"] = (
+                    self.delta[2] / (1024 * self.delta[3])
+                )
                 if self.config.G_MANUAL_STATUS == "START":
                     # unit: m
                     self.values["distance"] += (
@@ -93,27 +99,35 @@ class ANT_Device_Speed_Cadence(ant_device.ANT_Device):
                 self.print_spike(
                     "Speed(S&C)", spd, self.values["speed"], self.delta, []
                 )
-        elif self.delta[2] == 0 and self.delta[3] == 0:
-            if self.pre_delta[2:4] != [0, 0]:
-                self.values["stop_timestamp_spd"] = t
-            elif (t - self.values["stop_timestamp_spd"]).total_seconds() >= self.stop_cutoff_spd:
-                self.values["speed"] = 0      
+        elif self.delta[3] == 0:
+            if self.is_stopped_by_event_age(
+                t,
+                self.values["last_event_timestamp_spd"],
+                self.values["last_event_interval_spd"],
+            ):
+                self.values["speed"] = 0
         else:
             app_logger.error(f"ANT+ S&C(speed) err: {self.delta}")
         # store raw speed
         self.config.state.set_value(self.pickle_key, self.sc_values[3])
 
         # cadence
-        if self.delta[0] > 0 and 0 <= self.delta[1] < 6553:  # for spike
+        if self.delta[0] > 0 and 0 < self.delta[1] < 6553:  # for spike
             cad = 60 * self.delta[1] * 1024 / self.delta[0]
             if cad <= 255:  # max value in .fit file is 255 [rpm]
                 self.values["cadence"] = cad
+                self.values["last_event_timestamp_cdc"] = t
+                self.values["last_event_interval_cdc"] = (
+                    self.delta[0] / (1024 * self.delta[1])
+                )
                 # refresh timestamp called from sensor_core
                 self.values["timestamp"] = t
-        elif self.delta[0] == 0 and self.delta[1] == 0:
-            if self.pre_delta[0:2] != [0, 0]:
-                self.values["stop_timestamp_cdc"] = t
-            elif (t - self.values["stop_timestamp_cdc"]).total_seconds() >= self.stop_cutoff_cdc:
+        elif self.delta[1] == 0:
+            if self.is_stopped_by_event_age(
+                t,
+                self.values["last_event_timestamp_cdc"],
+                self.values["last_event_interval_cdc"],
+            ):
                 self.values["cadence"] = 0
         else:
             app_logger.error(f"ANT+ S&C(cadence) err: {self.delta}")
@@ -137,7 +151,7 @@ class ANT_Device_Cadence(ant_device.ANT_Device):
     elements = ("cadence",)
     const = 60
     fit_max = 255
-    stop_cutoff = 5
+    stop_missing_events = 2
 
     pickle_key = "ant+_cdc_values"
 
@@ -145,12 +159,14 @@ class ANT_Device_Cadence(ant_device.ANT_Device):
         self.structPattern[self.name] = struct.Struct("<xxxxHH")
 
     def reset_value(self):
+        self.set_message_interval()
         self.sc_values = [-1, -1]
         self.pre_values = [-1, -1]
         self.delta = [-1, -1]
         self.pre_delta = [-1, -1]
         self.values["on_data_timestamp"] = None
-        self.values["stop_timestamp"] = None
+        self.values["last_event_timestamp"] = None
+        self.values["last_event_interval"] = None
         self.resetExtra()
 
     def resetExtra(self):
@@ -159,22 +175,23 @@ class ANT_Device_Cadence(ant_device.ANT_Device):
     def on_data(self, data):
         self.sc_values = self.structPattern[self.name].unpack(data[0:8])
         t = datetime.now()
+        page = data[0] & 0b01111111  # Bit7 is toggle, bits 0-6 are page number
 
         if self.pre_values[0] == -1:
             self.pre_values = list(self.sc_values)
             self.values[self.elements[0]] = 0
             self.values["on_data_timestamp"] = t
-            self.values["stop_timestamp"] = t
+            self.values["last_event_timestamp"] = t
             self.resumeAccumulatedValue()
             return
 
         # time, value
-        self.delta = [a - b for (a, b) in zip(self.sc_values, self.pre_values)]
-        for i in range(len(self.delta)):
-            if -65535 <= self.delta[i] < 0:
-                self.delta[i] += 65536
+        self.delta = [
+            self.delta_with_rollover(value, pre_value, 65536)
+            for value, pre_value in zip(self.sc_values, self.pre_values)
+        ]
 
-        if self.delta[0] > 0 and 0 <= self.delta[1] < 6553:  # for spike
+        if self.delta[0] > 0 and 0 < self.delta[1] < 6553:  # for spike
             val = self.const * self.delta[1] * 1024 / self.delta[0]
             # max value in .fit file is fit_max
             if (
@@ -183,6 +200,10 @@ class ANT_Device_Cadence(ant_device.ANT_Device):
                 < self.spike_threshold[self.elements[0]]
             ):
                 self.values[self.elements[0]] = val
+                self.values["last_event_timestamp"] = t
+                self.values["last_event_interval"] = (
+                    self.delta[0] / (1024 * self.delta[1])
+                )
                 self.accumulateValue()
                 # refresh timestamp called from sensor_core
                 self.values["timestamp"] = t
@@ -190,19 +211,21 @@ class ANT_Device_Cadence(ant_device.ANT_Device):
                 self.print_spike(
                     self.elements[0], val, self.values[self.elements[0]], self.delta, []
                 )
-        elif self.delta[0] == 0 and self.delta[1] == 0:
-            if self.pre_delta != [0, 0]:
-                self.values["stop_timestamp"] = t
-            elif (t - self.values["stop_timestamp"]).total_seconds() >= self.stop_cutoff:
+        elif self.delta[1] == 0:
+            if self.is_stopped_by_event_age(
+                t,
+                self.values["last_event_timestamp"],
+                self.values["last_event_interval"],
+            ):
                 self.values[self.elements[0]] = 0
         else:
             app_logger.error(f"ANT+ {self.elements[0]} err: {self.delta}")
+
         self.pre_values = list(self.sc_values)
         # on_data timestamp
         self.values["on_data_timestamp"] = t
         self.pre_delta = self.delta[:]
 
-        page = data[0] & 0b01111111  # Bit7 is toggle, bits 0-6 are page number
         # Data Page 2: Manufacturer ID
         if page == 2:
             self.values["manu_id"] = data[1]
@@ -237,7 +260,6 @@ class ANT_Device_Speed(ANT_Device_Cadence):
     elements = ("speed", "distance")
     const = None
     fit_max = 65
-    stop_cutoff = 3
 
     pickle_key = "ant+_spd_values"
 
