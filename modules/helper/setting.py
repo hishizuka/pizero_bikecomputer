@@ -187,6 +187,25 @@ class Setting:
                     self.config_parser["GPSD_PARAM"]["SP1_USED_SATS_CUTOFF"]
                 )
 
+        if "GPSD_UBLOX_PARAM" in self.config_parser:
+            c = self.config_parser["GPSD_UBLOX_PARAM"]
+            assistnow = self.config.G_GPS_UBLOX["ASSISTNOW"]
+            ztp_token_configured = False
+            if "ASSISTNOW_ZTP_TOKEN" in c:
+                assistnow["ZTP_TOKEN"] = c["ASSISTNOW_ZTP_TOKEN"]
+                ztp_token_configured = bool(assistnow["ZTP_TOKEN"].strip())
+            elif "ASSISTNOW_TOKEN" in c:
+                assistnow["ZTP_TOKEN"] = c["ASSISTNOW_TOKEN"]
+                ztp_token_configured = bool(assistnow["ZTP_TOKEN"].strip())
+            if "ASSISTNOW_STATUS" in c:
+                assistnow["STATUS"] = c.getboolean("ASSISTNOW_STATUS")
+            elif ztp_token_configured:
+                assistnow["STATUS"] = True
+            if "USE_POWER_SAVE" in c:
+                self.config.G_GPS_UBLOX["POWER_SAVE"] = c.getboolean("USE_POWER_SAVE")
+            if "USE_QZSS_DCR" in c:
+                self.config.G_GPS_UBLOX["QZSS_DCR"] = c.getboolean("USE_QZSS_DCR")
+
         if "STRAVA_API" in self.config_parser:
             for k in self.config.G_STRAVA_API.keys():
                 if k in self.config_parser["STRAVA_API"]:
@@ -296,6 +315,13 @@ class Setting:
         c["EPV_CUTOFF"] = str(self.config.G_GPSD_PARAM["EPV_CUTOFF"])
         c["SP1_EPV_CUTOFF"] = str(self.config.G_GPSD_PARAM["SP1_EPV_CUTOFF"])
         c["SP1_USED_SATS_CUTOFF"] = str(self.config.G_GPSD_PARAM["SP1_USED_SATS_CUTOFF"])
+
+        self.config_parser["GPSD_UBLOX_PARAM"] = {}
+        c = self.config_parser["GPSD_UBLOX_PARAM"]
+        c["assistnow_status"] = str(self.config.G_GPS_UBLOX["ASSISTNOW"]["STATUS"])
+        c["assistnow_ztp_token"] = self.config.G_GPS_UBLOX["ASSISTNOW"]["ZTP_TOKEN"]
+        c["use_power_save"] = str(self.config.G_GPS_UBLOX["POWER_SAVE"])
+        c["use_qzss_dcr"] = str(self.config.G_GPS_UBLOX["QZSS_DCR"])
 
         self.config_parser["STRAVA_API"] = {}
         for k in self.config.G_STRAVA_API.keys():

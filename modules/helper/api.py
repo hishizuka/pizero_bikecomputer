@@ -1,12 +1,14 @@
 import os
 import traceback
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime
 import socket
 import urllib.parse
 import asyncio
 import json
 
+import aiohttp
 import numpy as np
 
 from modules.utils.network import detect_network, detect_network_async
@@ -57,6 +59,7 @@ except ImportError:
 
 class api:
     config = None
+    UBLOX_ASSISTNOW_RETRY_DELAYS = (15.0, 30.0, 60.0)
 
     thingsboard_client = None
     tb_message = {
@@ -194,6 +197,108 @@ class api:
         )
 
         return response
+
+    async def get_ublox_assistnow_chipcode(
+        self,
+        ztp_token,
+        sec_uniqid_raw,
+        mon_ver_raw,
+    ):
+        assistnow_config = self.config.G_GPS_UBLOX["ASSISTNOW"]
+        endpoint = assistnow_config["ZTP_ENDPOINT"].strip()
+        if not endpoint:
+            raise RuntimeError("AssistNow ZTP_ENDPOINT is not configured")
+
+        payload = {
+            "token": ztp_token,
+            "messages": {
+                "UBX-SEC-UNIQID": sec_uniqid_raw.hex().upper(),
+                "UBX-MON-VER": mon_ver_raw.hex().upper(),
+            },
+        }
+        data = await post(
+            endpoint,
+            headers={"Content-Type": "application/json"},
+            data=json.dumps(payload),
+        )
+        if not data:
+            raise RuntimeError("AssistNow ZTP failed")
+        if "chipcode" not in data:
+            message = data.get("Message") or data.get("message") or str(data)
+            raise RuntimeError(f"AssistNow ZTP failed: {message[:200]}")
+        return data["chipcode"]
+
+    @asynccontextmanager
+    async def ublox_assistnow_session(self):
+        if not self.network.check_network_with_bt_tethering():
+            raise RuntimeError("AssistNow network is not available")
+
+        caller_name = self.ublox_assistnow_session.__name__
+        bt_open_result = await self.network.open_bt_tethering(caller_name)
+        if not bt_open_result.is_success():
+            raise RuntimeError(f"AssistNow BT tethering failed: {bt_open_result.value}")
+
+        try:
+            yield
+        finally:
+            try:
+                await self.network.close_bt_tethering(caller_name)
+            except Exception as exc:
+                app_logger.error(f"close_bt_tethering error: {exc}")
+
+    async def run_ublox_assistnow_session(self, request):
+        for retry_count in range(len(self.UBLOX_ASSISTNOW_RETRY_DELAYS) + 1):
+            try:
+                async with self.ublox_assistnow_session():
+                    return await request()
+            except Exception as exc:
+                if retry_count >= len(self.UBLOX_ASSISTNOW_RETRY_DELAYS):
+                    raise
+                delay = self.UBLOX_ASSISTNOW_RETRY_DELAYS[retry_count]
+                app_logger.warning(
+                    "AssistNow communication failed: "
+                    f"{exc}; retrying in {delay:g}s "
+                    f"(attempt {retry_count + 1}/"
+                    f"{len(self.UBLOX_ASSISTNOW_RETRY_DELAYS)})"
+                )
+                await asyncio.sleep(delay)
+
+    async def get_ublox_assistnow_data(self, chipcode):
+        assistnow_config = self.config.G_GPS_UBLOX["ASSISTNOW"]
+        service_url = assistnow_config["SERVICE_URL"].strip()
+        if not service_url:
+            raise RuntimeError("AssistNow SERVICE_URL is not configured")
+
+        params = {
+            "chipcode": chipcode,
+            "gnss": assistnow_config["GNSS"].strip(),
+            "data": assistnow_config["DATA"].strip(),
+        }
+        if not params["gnss"] or not params["data"]:
+            raise RuntimeError("AssistNow GNSS or DATA is not configured")
+
+        data = await self._get_ublox_assistnow_bytes(
+            service_url,
+            params=params,
+            timeout=float(assistnow_config["TIMEOUT"]),
+        )
+        if not data:
+            raise RuntimeError("AssistNow data failed")
+        if not data.startswith(b"\xb5\x62"):
+            text = data.decode("utf-8", errors="replace")
+            raise RuntimeError(f"AssistNow data is not UBX: {text[:200]}")
+        return data
+
+    async def _get_ublox_assistnow_bytes(self, url, params, timeout):
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, params=params, timeout=timeout) as res:
+                data = await res.read()
+                if res.status == 200:
+                    return data
+                text = data.decode("utf-8", errors="replace")
+                raise RuntimeError(
+                    f"AssistNow service failed: HTTP {res.status}: {text[:200]}"
+                )
 
     async def get_openmeteo_temperature_data(self, x, y):
         if not await detect_network_async():

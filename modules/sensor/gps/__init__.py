@@ -2,9 +2,12 @@ from modules.app_logger import app_logger
 
 from .gpsd import _SENSOR_GPS_GPSD, _SENSER_GPS_STR, GPSD
 from .i2c_cxd5610 import _SENSOR_GPS_CXD5610, CXD5610_GPS
+from .ublox import _SENSOR_GPS_UBLOX, UBlox
 
 if _SENSOR_GPS_CXD5610:
     SensorGPS = CXD5610_GPS
+elif _SENSOR_GPS_UBLOX:
+    SensorGPS = UBlox
 elif _SENSOR_GPS_GPSD:
     SensorGPS = GPSD
 else:

@@ -223,6 +223,19 @@ class Config:
         "SP1_EPV_CUTOFF": 100.0,
         "SP1_USED_SATS_CUTOFF": 3,
     }
+    G_GPS_UBLOX = {
+        "ASSISTNOW": {
+            "STATUS": False,
+            "ZTP_TOKEN": "",
+            "ZTP_ENDPOINT": "https://api.thingstream.io/ztp/assistnow/credentials",
+            "SERVICE_URL": "https://assistnow.services.u-blox.com/GetAssistNowData.ashx",
+            "GNSS": "gps,gal,bds,qzss",
+            "DATA": "uporb_1,ualm",
+            "TIMEOUT": 30,
+        },
+        "POWER_SAVE": False,
+        "QZSS_DCR": False,
+    }
 
     # fullscreen switch (overwritten with setting.conf)
     G_FULLSCREEN = False
@@ -671,7 +684,8 @@ class Config:
         try:
             while True:
                 app_logger.info(
-                    "s:start/stop, l: lap, r:reset, p: previous screen, n: next screen, q: quit"
+                    "s:start/stop, l: lap, r:reset, p: previous screen, "
+                    "n: next screen, z: QZSS DCR test, q: quit"
                 )
                 key = await self.loop.run_in_executor(None, input, "> ")
 
@@ -706,6 +720,12 @@ class Config:
                 elif key == "@" and self.gui:
                     self.gui.show_dialog_ok_only(fn=None, title="test")
                     #self.gui.show_popup(f"test", 3)
+                elif key == "z" and self.gui:
+                    sensor_gps = self.logger.sensor.sensor_gps
+                    if sensor_gps.__class__.__name__ != "UBlox":
+                        app_logger.warning("[QZSS DCR][TEST] UBlox is not active")
+                        continue
+                    sensor_gps.inject_qzss_dcr_test_event()
                 elif key == "t" and self.gui:
                     def fn():
                         app_logger.info("OK")

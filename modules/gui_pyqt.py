@@ -307,6 +307,7 @@ class GUI_PyQt(GUI_Qt_Base):
                 ANTMenuWidget,
                 ANTListWidget,
                 BLEMenuWidget,
+                GPSMenuWidget,
             )
             from modules.pyqt.menu.pyqt_course_menu_widget import (
                 CoursesMenuWidget,
@@ -361,6 +362,7 @@ class GUI_PyQt(GUI_Qt_Base):
                 ("ANT+ Sensors", ANTMenuWidget),
                 ("Wheel Size", AdjustWheelCircumferenceWidget),
                 ("Adjust Altitude", AdjustAltitudeWidget),
+                ("GPS", GPSMenuWidget),
                 ("Sensors", SensorMenuWidget),
                 ("BT Pairing", BluetoothPairingListWidget),
                 ("BT Paired Devices", BluetoothPairedDeviceListWidget),

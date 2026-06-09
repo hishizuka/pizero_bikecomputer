@@ -1,5 +1,5 @@
 from modules.app_logger import app_logger
-from modules._qt_qtwidgets import QtCore, QtWidgets, QtGui
+from modules._qt_qtwidgets import QtCore, QtWidgets, QtGui, qasync
 from .pyqt_menu_widget import MenuWidget, ListWidget, ListItemWidget
 
 
@@ -10,6 +10,7 @@ class SensorMenuWidget(MenuWidget):
             # Name(page_name), button_attribute, connected functions, layout
             ("ANT+ Sensors", "submenu", self.ant_sensors_menu),
             ("BLE Sensors", "submenu", self.ble_sensors_menu),
+            ("GPS", "submenu", self.gps_menu),
             ("Wheel Size", "submenu", self.adjust_wheel_circumference),
             ("Auto Light", "toggle", lambda: self.onoff_auto_light(True)),
             ("Auto Stop", None, None),
@@ -18,6 +19,7 @@ class SensorMenuWidget(MenuWidget):
         )
         self.add_buttons(button_conf)
         self.onoff_auto_light(False)
+        self.buttons["GPS"].onoff_button(self.sensor_gps.__class__.__name__ == "UBlox")
     
     def preprocess(self):
         self.buttons["Auto Light"].onoff_button(self.config.G_ANT["USE"]["LGT"])
@@ -31,6 +33,9 @@ class SensorMenuWidget(MenuWidget):
     def ble_sensors_menu(self):
         self.change_page("BLE Sensors", preprocess=True)
 
+    def gps_menu(self):
+        self.change_page("GPS", preprocess=True)
+
     def adjust_wheel_circumference(self):
         self.change_page("Wheel Size", preprocess=True)
 
@@ -41,6 +46,94 @@ class SensorMenuWidget(MenuWidget):
         if change:
             self.config.G_ANT["USE_AUTO_LIGHT"] = not self.config.G_ANT["USE_AUTO_LIGHT"] 
         self.buttons["Auto Light"].change_toggle(self.config.G_ANT["USE_AUTO_LIGHT"])
+
+
+class GPSMenuWidget(MenuWidget):
+    ASSISTNOW_BUTTON = "AssistNow (u-blox)"
+    POWER_SAVE_BUTTON = "Power Save Mode (u-blox)"
+    QZSS_DCR_BUTTON = "QZSS DCR (u-blox)"
+
+    def setup_menu(self):
+        self.gps_ublox = self.config.G_GPS_UBLOX
+        button_conf = (
+            # Name(page_name), button_attribute, connected functions, layout
+            (self.ASSISTNOW_BUTTON, "toggle", self.onoff_assistnow),
+            (self.POWER_SAVE_BUTTON, "toggle", self.onoff_power_save),
+            (self.QZSS_DCR_BUTTON, "toggle", self.onoff_qzss_dcr),
+        )
+        self.add_buttons(button_conf)
+        self.update_toggles()
+
+    def preprocess(self):
+        self.update_toggles()
+
+    async def _set_qzss_dcr(self, enabled):
+        previous = bool(self.gps_ublox["QZSS_DCR"])
+        self.gps_ublox["QZSS_DCR"] = enabled
+        self.update_toggles()
+        if await self.sensor_gps.set_qzss_dcr_enabled(enabled):
+            return True
+        self.gps_ublox["QZSS_DCR"] = previous
+        self.update_toggles()
+        return False
+
+    @qasync.asyncSlot()
+    async def onoff_power_save(self):
+        enabled = not bool(self.gps_ublox["POWER_SAVE"])
+        previous_qzss_dcr = bool(self.gps_ublox["QZSS_DCR"])
+
+        if enabled and self.gps_ublox["QZSS_DCR"]:
+            if not await self._set_qzss_dcr(False):
+                app_logger.warning(
+                    "Power Save Mode toggle skipped: QZSS DCR disable failed"
+                )
+                return
+
+        self.gps_ublox["POWER_SAVE"] = enabled
+        self.update_toggles()
+        if not await self.sensor_gps.set_power_save_enabled(enabled):
+            self.gps_ublox["POWER_SAVE"] = not enabled
+            self.gps_ublox["QZSS_DCR"] = previous_qzss_dcr
+            if enabled and previous_qzss_dcr:
+                await self.sensor_gps.set_qzss_dcr_enabled(True)
+            self.update_toggles()
+            power_save_status = self.sensor_gps.power_save_status
+            app_logger.warning(
+                "Power Save Mode toggle skipped: "
+                f"{power_save_status['status']} {power_save_status['error']}"
+            )
+            return
+        self.config.setting.write_config()
+        self.update_toggles()
+
+    @qasync.asyncSlot()
+    async def onoff_qzss_dcr(self):
+        if self.gps_ublox["POWER_SAVE"]:
+            self.update_toggles()
+            return
+
+        if await self._set_qzss_dcr(not bool(self.gps_ublox["QZSS_DCR"])):
+            self.config.setting.write_config()
+        self.update_toggles()
+
+    def onoff_assistnow(self):
+        assistnow = self.gps_ublox["ASSISTNOW"]
+        enabled = not bool(assistnow["STATUS"])
+        self.sensor_gps.set_assistnow_enabled(enabled)
+        self.config.setting.write_config()
+        self.update_toggles()
+
+    def update_toggles(self):
+        assistnow_enabled = bool(self.gps_ublox["ASSISTNOW"]["STATUS"])
+        self.buttons[self.ASSISTNOW_BUTTON].change_toggle(assistnow_enabled)
+
+        power_save_enabled = bool(self.gps_ublox["POWER_SAVE"])
+        self.buttons[self.POWER_SAVE_BUTTON].change_toggle(power_save_enabled)
+
+        self.buttons[self.QZSS_DCR_BUTTON].onoff_button(not power_save_enabled)
+        self.buttons[self.QZSS_DCR_BUTTON].change_toggle(
+            False if power_save_enabled else bool(self.gps_ublox["QZSS_DCR"])
+        )
 
 
 class ANTMenuWidget(MenuWidget):
