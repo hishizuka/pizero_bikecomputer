@@ -57,6 +57,15 @@ def _normalize_bhi3_target(target):
     return ""
 
 
+def _bhi3_target_sensor_name(target):
+    target = _normalize_bhi3_target(target)
+    if target == "bhi360":
+        return "BHI360"
+    if target == "bhi385":
+        return "BHI385"
+    return "BHI3_S"
+
+
 def _remove_bhi3_helper_extensions():
     for path in BHI3_HELPER_DIR.glob(BHI3_HELPER_GLOB):
         path.unlink(missing_ok=True)
@@ -232,6 +241,7 @@ class SensorI2C(Sensor):
     quit_status = False
 
     def sensor_init(self):
+        self.bhi3_s_target = ""
         self.reset()
         self.is_mag_declination_modified = False
         self._mag_declination_task = None
@@ -399,14 +409,25 @@ class SensorI2C(Sensor):
         for k in self.available_sensors.keys():
             for kk in self.available_sensors[k]:
                 if self.available_sensors[k][kk]:
-                    app_logger.info(f"  {k}: {kk}")
+                    app_logger.info(f"  {k}: {self._sensor_log_name(kk)}")
+
+    def _sensor_log_name(self, sensor_name):
+        if sensor_name == "BHI3_S":
+            return self._bhi3_s_log_name()
+        return sensor_name
+
+    def _bhi3_s_log_name(self):
+        return _bhi3_target_sensor_name(self.bhi3_s_target)
 
     def set_bhi3_s(self):
+        self.bhi3_s_target = ""
         if self.detect_bhi3_s_c():
             self.available_sensors["MOTION"]["BHI3_S"] = True
             self.sensor["i2c_imu"] = self.sensor_bhi3_s
             self.motion_sensor["ACC"] = True
             self.motion_sensor["GYRO"] = True
+            self.motion_sensor["MAG"] = True
+            self.sensor_label["MAG"] = self._bhi3_s_log_name()
             self.available_sensors["PRESSURE"]["BHI3_S"] = True  # includes BMP581 and BME688
             self.sensor["i2c_baro_temp"] = self.sensor_bhi3_s
             self.bhi3_s_heading_corr = 0
@@ -924,17 +945,17 @@ class SensorI2C(Sensor):
         if not imu.ready:
             return
 
-        self.values["raw_heading"] = (
-            int(imu.heading) - self.bhi3_s_heading_corr + self.config.G_IMU_MAG_DECLINATION
-        ) % 360
-        self.values["heading"] = self.values["raw_heading"]
-        self.values["heading_str"] = get_track_str(self.values["heading"])
+        # self.values["raw_heading"] = (
+        #     int(imu.heading) - self.bhi3_s_heading_corr + self.config.G_IMU_MAG_DECLINATION
+        # ) % 360
+        # self.values["heading"] = self.values["raw_heading"]
+        # self.values["heading_str"] = get_track_str(self.values["heading"])
 
         # BHI3 Shuttle mounting can be corrected by the common heading offset.
         # Map BHI roll -> bike pitch (look down is plus),
         # and BHI pitch -> bike roll with the same sign trend.
-        #self.values["pitch"] = math.radians(((float(imu.roll) + 360) % 360 - 180))
-        #self.values["roll"] = math.radians(((float(imu.pitch) + 180) % 360 - 180))
+        self.values["pitch"] = math.radians(((float(imu.roll) + 360) % 360 - 180))
+        self.values["roll"] = math.radians(((float(imu.pitch) + 180) % 360 - 180))
         self.values["grade_pitch"] = 100 * math.tan(self.values["pitch"])
 
     def read_light(self):
@@ -1141,7 +1162,9 @@ class SensorI2C(Sensor):
         if not self.motion_sensor["MAG"]:
             return
         try:
-            if (
+            if self.available_sensors["MOTION"].get("BHI3_S"):
+                self.values["mag_raw"] = np.array(self.sensor["i2c_imu"].mag)
+            elif (
                 self.available_sensors["MOTION"].get("MMC5983MA")
                 or self.available_sensors["MOTION"].get("BMM150")
                 or self.available_sensors["MOTION"].get("BMM350")
@@ -1201,60 +1224,22 @@ class SensorI2C(Sensor):
         self.mag_calib_ready = True
 
     def update_mag_calibration(self, mag_sample):
-        # Keep about 60 seconds of samples at 10 Hz (--calib_mag uses 0.1 s interval).
-        # This is long enough to capture most orientations while allowing outliers to age out.
-        mag_calib_window_size = 600
-        # Reject single-frame jumps that are unlikely to come from real orientation change.
-        # Earth field is typically ~25-65 uT, so a 0.1 s jump above these values is likely a glitch.
-        mag_calib_jump_norm_threshold = 200.0  # [uT]
-        mag_calib_jump_axis_threshold = 150.0  # [uT]
-
-        if (
-            not hasattr(self, "mag_calib_window")
-            or self.mag_calib_window.shape[0] != mag_calib_window_size
-        ):
-            self.mag_calib_window = np.full((mag_calib_window_size, 3), np.nan)
-            self.mag_calib_window_idx = 0
-            self.mag_calib_window_count = 0
-            self.mag_calib_prev_sample = None
-            self.mag_calib_reject_count = 0
-
-        if not self.accept_mag_calibration_sample(
-            mag_sample,
-            mag_calib_jump_norm_threshold,
-            mag_calib_jump_axis_threshold,
-        ):
-            self.mag_calib_reject_count = getattr(self, "mag_calib_reject_count", 0) + 1
-            if self.mag_calib_reject_count % 50 == 0:
-                app_logger.debug(
-                    "mag calib outlier rejects: %d",
-                    self.mag_calib_reject_count,
-                )
+        if np.any(np.isnan(mag_sample)) or not np.all(np.isfinite(mag_sample)):
             return
 
-        self.mag_calib_window[self.mag_calib_window_idx] = mag_sample
-        self.mag_calib_window_idx = (
-            self.mag_calib_window_idx + 1
-        ) % mag_calib_window_size
-        self.mag_calib_window_count = min(
-            self.mag_calib_window_count + 1, mag_calib_window_size
-        )
-
-        history = self.mag_calib_window[: self.mag_calib_window_count]
-        pre_min = self.values_mod.get("mag_min")
-        pre_max = self.values_mod.get("mag_max")
-        if pre_min is None:
-            pre_min = np.full(3, np.inf)
-        if pre_max is None:
-            pre_max = np.full(3, -np.inf)
-
-        self.values_mod["mag_min"] = np.min(history, axis=0)
-        self.values_mod["mag_max"] = np.max(history, axis=0)
+        pre_min = self.values_mod["mag_min"]
+        pre_max = self.values_mod["mag_max"]
+        if pre_min is None or pre_max is None:
+            self.values_mod["mag_min"] = mag_sample.copy()
+            self.values_mod["mag_max"] = mag_sample.copy()
+        else:
+            self.values_mod["mag_min"] = np.minimum(pre_min, mag_sample)
+            self.values_mod["mag_max"] = np.maximum(pre_max, mag_sample)
 
         # store
         update_mag_min_max = False
         for pre, k in zip((pre_min, pre_max), ("mag_min", "mag_max")):
-            if np.any(pre != self.values_mod[k]):
+            if pre is None or np.any(pre != self.values_mod[k]):
                 update_mag_min_max = True
                 self.config.state.set_value(
                     k + "_" + self.sensor_label["MAG"], self.values_mod[k]
@@ -1262,32 +1247,6 @@ class SensorI2C(Sensor):
                 app_logger.info(f"update {k}: {self.values_mod[k]}")
         if update_mag_min_max:
             self.calc_mag_scales()
-
-    def accept_mag_calibration_sample(
-        self,
-        mag_sample,
-        jump_norm_threshold,
-        jump_axis_threshold,
-    ):
-        if np.any(np.isnan(mag_sample)) or not np.all(np.isfinite(mag_sample)):
-            return False
-
-        prev_sample = getattr(self, "mag_calib_prev_sample", None)
-        if prev_sample is None:
-            self.mag_calib_prev_sample = mag_sample.copy()
-            return True
-
-        delta = mag_sample - prev_sample
-        jump_norm = np.linalg.norm(delta)
-        jump_axis = np.max(np.abs(delta))
-        if (
-            jump_norm > jump_norm_threshold
-            or jump_axis > jump_axis_threshold
-        ):
-            return False
-
-        self.mag_calib_prev_sample = mag_sample.copy()
-        return True
 
     def read_quaternion(self):
         if not self.motion_sensor["QUATERNION"]:
@@ -1403,10 +1362,6 @@ class SensorI2C(Sensor):
         if not self.motion_sensor["ACC"]:
             return
 
-        if self.available_sensors["MOTION"].get("BHI3_S"):
-            self.detect_motion_bhi3_s()
-            return
-
         self.update_moving_threshold()
 
         moving = 1
@@ -1416,22 +1371,6 @@ class SensorI2C(Sensor):
         self.moving[-1] = moving
         # moving status (0:off=stop, 1:on=running)
         self.values["m_stat"] = self.moving[-1]
-
-        self.calibrate_pitch_roll_if_stopped()
-
-    def detect_motion_bhi3_s(self):
-        imu = self.sensor.get("i2c_imu")
-        if imu is None:
-            self.values["m_stat"] = np.nan
-            return
-        moving = int(imu.moving)
-
-        # Keep shared moving history for calibration and compatibility.
-        self.values["m_stat"] = moving
-        self.moving[0:-1] = self.moving[1:]
-        self.moving[-1] = moving
-        self.acc_raw_hist[:, 0:-1] = self.acc_raw_hist[:, 1:]
-        self.acc_raw_hist[:, -1] = self.values["acc_raw"]
 
         self.calibrate_pitch_roll_if_stopped()
 
@@ -1811,6 +1750,10 @@ class SensorI2C(Sensor):
                     _remove_bhi3_helper_extensions()
                     return False
                 _write_bhi3_target_marker(bhi3_target)
+
+            self.bhi3_s_target = bhi3_target or (
+                "bhi385" if sensor_is_bhi385 else "bhi360"
+            )
 
             return True
         except:

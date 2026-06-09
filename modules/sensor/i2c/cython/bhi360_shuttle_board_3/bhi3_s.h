@@ -47,6 +47,12 @@ typedef struct bhi3_s_data
     float gyro_y;
     float gyro_z;
 
+    /* Magnetometer corrected */
+    float mag_x;
+    float mag_y;
+    float mag_z;
+    uint8_t mag_accuracy;
+
     /* Orientation: raw -> accuracy -> filtered */
     float heading_raw;
     float pitch_raw;

@@ -37,10 +37,13 @@
 
  #include "common.h"
 
+#include <errno.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <time.h>
 
 #ifndef USE_BHI385
 #include "bhi360_parse.h"
@@ -89,6 +92,54 @@ static unsigned int gpiod_offsets[1] = { INT_PIN };
 #endif
 
 static int bhi3_spi_transfer(uint8_t reg_addr, const uint8_t *tx_data, uint8_t *rx_data, uint32_t length, bool is_read);
+
+static void bhi3_common_log(FILE *stream, const char *level, const char *fmt, va_list args)
+{
+    time_t now = time(NULL);
+    struct tm tm_info;
+    char timestamp[20] = "0000-00-00 00:00:00";
+
+    if (localtime_r(&now, &tm_info) != NULL)
+    {
+        strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", &tm_info);
+    }
+
+    fprintf(stream, "%s %s: ", timestamp, level);
+    vfprintf(stream, fmt, args);
+    fflush(stream);
+}
+
+static void bhi3_common_log_info(const char *fmt, ...)
+{
+    va_list args;
+
+    va_start(args, fmt);
+    bhi3_common_log(stdout, "INFO", fmt, args);
+    va_end(args);
+}
+
+static void bhi3_common_log_warning(const char *fmt, ...)
+{
+    va_list args;
+
+    va_start(args, fmt);
+    bhi3_common_log(stderr, "WARNING", fmt, args);
+    va_end(args);
+}
+
+static void bhi3_common_log_error(const char *fmt, ...)
+{
+    va_list args;
+
+    va_start(args, fmt);
+    bhi3_common_log(stderr, "ERROR", fmt, args);
+    va_end(args);
+}
+
+static void bhi3_common_log_errno(const char *message)
+{
+    bhi3_common_log_error("%s: %s\n", message, strerror(errno));
+}
 
 
 bool get_interrupt_status(void)
@@ -226,7 +277,7 @@ void bhi3_interrupt_init(void)
 #if defined(BHI3_INT_MODE_PIGPIO_CB)
     if (pigpio < 0)
     {
-        fprintf(stderr, "[BHI3] pigpio not initialized; cannot register callback.\n");
+        bhi3_common_log_error("[BHI3] pigpio not initialized; cannot register callback.\n");
         return;
     }
 
@@ -238,7 +289,7 @@ void bhi3_interrupt_init(void)
     callback_id = callback(pigpio, INT_PIN, RISING_EDGE, cb);
     if (callback_id < 0)
     {
-        fprintf(stderr, "[BHI3] Failed to register pigpio callback (err=%d).\n", callback_id);
+        bhi3_common_log_error("[BHI3] Failed to register pigpio callback (err=%d).\n", callback_id);
     }
 #elif defined(BHI3_USE_PIGPIO)
     if (pigpio >= 0)
@@ -256,46 +307,46 @@ void bhi3_interrupt_init(void)
     gchip = gpiod_chip_open(BHI3_GPIOD_DEVICE);
     if (!gchip)
     {
-        perror("gpiod_chip_open");
+        bhi3_common_log_errno("gpiod_chip_open");
         return;
     }
 
     settings = gpiod_line_settings_new();
     if (!settings)
     {
-        fprintf(stderr, "[BHI3] Failed to allocate gpiod line settings.\n");
+        bhi3_common_log_error("[BHI3] Failed to allocate gpiod line settings.\n");
         goto cleanup_gpiod_init;
     }
 
     if (gpiod_line_settings_set_direction(settings, GPIOD_LINE_DIRECTION_INPUT) < 0)
     {
-        perror("gpiod_line_settings_set_direction");
+        bhi3_common_log_errno("gpiod_line_settings_set_direction");
         goto cleanup_gpiod_init;
     }
 
     if (gpiod_line_settings_set_edge_detection(settings, GPIOD_LINE_EDGE_RISING) < 0)
     {
-        perror("gpiod_line_settings_set_edge_detection");
+        bhi3_common_log_errno("gpiod_line_settings_set_edge_detection");
         goto cleanup_gpiod_init;
     }
 
     line_cfg = gpiod_line_config_new();
     if (!line_cfg)
     {
-        fprintf(stderr, "[BHI3] Failed to allocate gpiod line config.\n");
+        bhi3_common_log_error("[BHI3] Failed to allocate gpiod line config.\n");
         goto cleanup_gpiod_init;
     }
 
     if (gpiod_line_config_add_line_settings(line_cfg, gpiod_offsets, 1, settings) < 0)
     {
-        perror("gpiod_line_config_add_line_settings");
+        bhi3_common_log_errno("gpiod_line_config_add_line_settings");
         goto cleanup_gpiod_init;
     }
 
     request_cfg = gpiod_request_config_new();
     if (!request_cfg)
     {
-        fprintf(stderr, "[BHI3] Failed to allocate gpiod request config.\n");
+        bhi3_common_log_error("[BHI3] Failed to allocate gpiod request config.\n");
         goto cleanup_gpiod_init;
     }
 
@@ -304,14 +355,14 @@ void bhi3_interrupt_init(void)
     gpiod_request = gpiod_chip_request_lines(gchip, request_cfg, line_cfg);
     if (!gpiod_request)
     {
-        perror("gpiod_chip_request_lines");
+        bhi3_common_log_errno("gpiod_chip_request_lines");
         goto cleanup_gpiod_init;
     }
 
     gpiod_event_buffer = gpiod_edge_event_buffer_new(1);
     if (!gpiod_event_buffer)
     {
-        fprintf(stderr, "[BHI3] Warning: gpiod edge event buffer allocation failed; proceeding without buffer.\n");
+        bhi3_common_log_warning("[BHI3] gpiod edge event buffer allocation failed; proceeding without buffer.\n");
     }
 
     success = true;
@@ -531,7 +582,7 @@ void setup_interfaces(bool reset_power, enum bhi360_intf intf)
     pigpio = pigpio_start(NULL, NULL);
     if (pigpio < 0)
     {
-        fprintf(stderr, "[BHI3] Failed to start pigpiod interface (err=%d).\n", pigpio);
+        bhi3_common_log_error("[BHI3] Failed to start pigpiod interface (err=%d).\n", pigpio);
         return;
     }
 #endif
@@ -549,57 +600,57 @@ void setup_interfaces(bool reset_power, enum bhi360_intf intf)
 void my_spi_open(const char *device)
 {
 #ifdef BHI3_USE_PIGPIO
-    printf("setup SPI...\n");
+    bhi3_common_log_info("setup SPI...\n");
 
     spi = spi_open(pigpio, SPI_CHANNEL, spi_speed, 0);
 #else
-    printf("setup SPI via spidev...\n");
+    bhi3_common_log_info("setup SPI via spidev...\n");
 
     spi_fd = open(device, O_RDWR);
     if (spi_fd < 0)
     {
-        perror("Failed to open SPI device");
+        bhi3_common_log_errno("Failed to open SPI device");
         return;
     }
 
     if (ioctl(spi_fd, SPI_IOC_WR_MODE, &spi_mode) < 0)
     {
-        perror("Failed SPI_IOC_WR_MODE");
+        bhi3_common_log_errno("Failed SPI_IOC_WR_MODE");
         close(spi_fd);
         spi_fd = -1;
         return;
     }
     if (ioctl(spi_fd, SPI_IOC_RD_MODE, &spi_mode) < 0)
     {
-        perror("Failed SPI_IOC_RD_MODE");
+        bhi3_common_log_errno("Failed SPI_IOC_RD_MODE");
         close(spi_fd);
         spi_fd = -1;
         return;
     }
     if (ioctl(spi_fd, SPI_IOC_WR_BITS_PER_WORD, &bits_per_word) < 0)
     {
-        perror("Failed SPI_IOC_WR_BITS_PER_WORD");
+        bhi3_common_log_errno("Failed SPI_IOC_WR_BITS_PER_WORD");
         close(spi_fd);
         spi_fd = -1;
         return;
     }
     if (ioctl(spi_fd, SPI_IOC_RD_BITS_PER_WORD, &bits_per_word) < 0)
     {
-        perror("Failed SPI_IOC_RD_BITS_PER_WORD");
+        bhi3_common_log_errno("Failed SPI_IOC_RD_BITS_PER_WORD");
         close(spi_fd);
         spi_fd = -1;
         return;
     }
     if (ioctl(spi_fd, SPI_IOC_WR_MAX_SPEED_HZ, &spi_speed) < 0)
     {
-        perror("Failed SPI_IOC_WR_MAX_SPEED_HZ");
+        bhi3_common_log_errno("Failed SPI_IOC_WR_MAX_SPEED_HZ");
         close(spi_fd);
         spi_fd = -1;
         return;
     }
     if (ioctl(spi_fd, SPI_IOC_RD_MAX_SPEED_HZ, &spi_speed) < 0)
     {
-        perror("Failed SPI_IOC_RD_MAX_SPEED_HZ");
+        bhi3_common_log_errno("Failed SPI_IOC_RD_MAX_SPEED_HZ");
         close(spi_fd);
         spi_fd = -1;
         return;
@@ -609,15 +660,15 @@ void my_spi_open(const char *device)
 #endif
 
 void my_i2c_open(const char *device, uint8_t addr) {
-    printf("setup I2C...\n");
+    bhi3_common_log_info("setup I2C...\n");
     fd = open(device, O_RDWR);
     if (fd < 0) {
-        perror("Failed to open the i2c bus");
+        bhi3_common_log_errno("Failed to open the i2c bus");
         return;
     }
     
     if (ioctl(fd, I2C_SLAVE, addr) < 0) {
-        perror("Failed to acquire bus access and/or talk to slave");
+        bhi3_common_log_errno("Failed to acquire bus access and/or talk to slave");
         close(fd);
         fd = -1;
         return;
@@ -679,7 +730,7 @@ static int bhi3_spi_transfer(uint8_t reg_addr, const uint8_t *tx_data, uint8_t *
 
     if (spi_xfer(pigpio, spi, (char *)tx_buf, (char *)rx_buf, length + 1) < 0)
     {
-        perror("SPI transfer failed");
+        bhi3_common_log_errno("SPI transfer failed");
         return -1;
     }
 #else
@@ -699,7 +750,7 @@ static int bhi3_spi_transfer(uint8_t reg_addr, const uint8_t *tx_data, uint8_t *
 
     if (ioctl(spi_fd, SPI_IOC_MESSAGE(1), &tr) < 0)
     {
-        perror("SPI transfer failed");
+        bhi3_common_log_errno("SPI transfer failed");
         return -1;
     }
 #endif
@@ -1422,7 +1473,7 @@ float get_sensor_dynamic_range_scaling(uint8_t sensor_id, float dynamic_range)
             scaling = dynamic_range / 32768.0f;
             break;
         default:
-            printf("Sensor ID not supported for dynamic range scaling\r\n");
+            bhi3_common_log_warning("Sensor ID not supported for dynamic range scaling\r\n");
             scaling = -1.0f; /* Do not apply the scaling factor */
     }
 

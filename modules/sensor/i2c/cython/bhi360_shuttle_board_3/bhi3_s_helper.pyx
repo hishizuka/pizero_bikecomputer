@@ -31,6 +31,10 @@ cdef extern from "bhi3_s.h":
     float gyro_x
     float gyro_y
     float gyro_z
+    float mag_x
+    float mag_y
+    float mag_z
+    unsigned char mag_accuracy
     float heading_raw
     float pitch_raw
     float roll_raw
@@ -97,6 +101,11 @@ cdef class BHI3_S:
   def gyro(self):
     self.read_data()
     return [self.datas.gyro_x, self.datas.gyro_y, self.datas.gyro_z]
+
+  @property
+  def mag(self):
+    self.read_data()
+    return [self.datas.mag_x, self.datas.mag_y, self.datas.mag_z]
 
   @property
   def moving(self):

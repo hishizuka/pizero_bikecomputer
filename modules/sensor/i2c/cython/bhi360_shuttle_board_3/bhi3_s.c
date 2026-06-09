@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <math.h>
 #include <pthread.h>
+#include <stdarg.h>
 #include <strings.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -28,6 +29,7 @@
 #define PRESSURE_EMA_ALPHA_50HZ 0.02f /* tau=0.88s at 50Hz */
 #define HEADING_EMA_ALPHA_50HZ 0.0487705755f /* tau=0.4s at 50Hz */
 #define TILT_EMA_ALPHA_50HZ 0.0487705755f /* tau=0.4s at 50Hz */
+#define BHI3_MAG_RANGE_UT 2000.0f
 #define BHI3_RAW_PATH_MAX 512
 #define NS_PER_SEC UINT64_C(1000000000)
 #define DEG_TO_RAD 0.01745329251994329577f
@@ -95,11 +97,16 @@ static void parse_acc_data(const struct bhi360_fifo_parse_data_info *callback_in
 static void parse_gravity_data(const struct bhi360_fifo_parse_data_info *callback_info, void *callback_ref);
 static void parse_linear_acc_data(const struct bhi360_fifo_parse_data_info *callback_info, void *callback_ref);
 static void parse_gyro_data(const struct bhi360_fifo_parse_data_info *callback_info, void *callback_ref);
+static void parse_mag_data(const struct bhi360_fifo_parse_data_info *callback_info, void *callback_ref);
 static void parse_temperature(const struct bhi360_fifo_parse_data_info *callback_info, void *callback_ref);
 static void parse_pressure(const struct bhi360_fifo_parse_data_info *callback_info, void *callback_ref);
 static void parse_humidity(const struct bhi360_fifo_parse_data_info *callback_info, void *callback_ref);
 static void parse_meta_event(const struct bhi360_fifo_parse_data_info *callback_info, void *callback_ref);
 
+static void bhi3_s_log(FILE *stream, const char *level, const char *fmt, va_list args);
+static void bhi3_s_log_info(const char *fmt, ...);
+static void bhi3_s_log_warning(const char *fmt, ...);
+static void bhi3_s_log_error(const char *fmt, ...);
 static int8_t upload_firmware(uint8_t boot_stat, struct bhi360_dev *dev);
 static int8_t bhi3_s_device_bootstrap(void);
 static void bhi3_s_report_api_error(int8_t rslt, struct bhi360_dev *dev);
@@ -245,6 +252,49 @@ static bhi3_s_context ctx = {
     .last_error = BHI360_OK,
 };
 
+static void bhi3_s_log(FILE *stream, const char *level, const char *fmt, va_list args)
+{
+    time_t now = time(NULL);
+    struct tm tm_info;
+    char timestamp[20] = "0000-00-00 00:00:00";
+
+    if (localtime_r(&now, &tm_info) != NULL)
+    {
+        strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", &tm_info);
+    }
+
+    fprintf(stream, "%s %s: ", timestamp, level);
+    vfprintf(stream, fmt, args);
+    fflush(stream);
+}
+
+static void bhi3_s_log_info(const char *fmt, ...)
+{
+    va_list args;
+
+    va_start(args, fmt);
+    bhi3_s_log(stdout, "INFO", fmt, args);
+    va_end(args);
+}
+
+static void bhi3_s_log_warning(const char *fmt, ...)
+{
+    va_list args;
+
+    va_start(args, fmt);
+    bhi3_s_log(stderr, "WARNING", fmt, args);
+    va_end(args);
+}
+
+static void bhi3_s_log_error(const char *fmt, ...)
+{
+    va_list args;
+
+    va_start(args, fmt);
+    bhi3_s_log(stderr, "ERROR", fmt, args);
+    va_end(args);
+}
+
 int8_t bhi3_s_init(void)
 {
     int rc;
@@ -254,7 +304,7 @@ int8_t bhi3_s_init(void)
         rc = pthread_mutex_init(&ctx.lock, NULL);
         if (rc != 0)
         {
-            fprintf(stderr, "[BHI3] Failed to init mutex (%d)\n", rc);
+            bhi3_s_log_error("[BHI3] Failed to init mutex (%d)\n", rc);
             return -1;
         }
         ctx.lock_initialized = true;
@@ -279,7 +329,7 @@ int8_t bhi3_s_init(void)
     rc = pthread_create(&ctx.thread, NULL, bhi3_s_worker, NULL);
     if (rc != 0)
     {
-        fprintf(stderr, "[BHI3] Failed to start worker thread (%d)\n", rc);
+        bhi3_s_log_error("[BHI3] Failed to start worker thread (%d)\n", rc);
         pthread_mutex_lock(&ctx.lock);
         ctx.thread_started = false;
         ctx.running = false;
@@ -511,11 +561,11 @@ static int8_t bhi3_s_device_bootstrap(void)
 
     if (chip_id == BHI360_CHIP_ID)
     {
-        printf("Chip ID read 0x%X\r\n", chip_id);
+        bhi3_s_log_info("Chip ID read 0x%X\r\n", chip_id);
     }
     else
     {
-        printf("Device not found. Chip ID read 0x%X\r\n", chip_id);
+        bhi3_s_log_error("Device not found. Chip ID read 0x%X\r\n", chip_id);
         close_interfaces(intf);
         return BHI360_E_IO;
     }
@@ -567,7 +617,7 @@ static int8_t bhi3_s_device_bootstrap(void)
 
     if (!(boot_status & BHI360_BST_HOST_INTERFACE_READY))
     {
-        printf("Host interface not ready. Exiting\r\n");
+        bhi3_s_log_error("Host interface not ready. Exiting\r\n");
         close_interfaces(intf);
         return BHI360_E_TIMEOUT;
     }
@@ -582,7 +632,7 @@ static int8_t bhi3_s_device_bootstrap(void)
     rslt = bhi360_get_kernel_version(&version, &bhy);
     if (rslt == BHI360_OK && version != 0)
     {
-        printf("Boot successful. Kernel version %u.\r\n", version);
+        bhi3_s_log_info("Boot successful. Kernel version %u.\r\n", version);
     }
     else
     {
@@ -638,6 +688,14 @@ static int8_t bhi3_s_device_bootstrap(void)
     }
 
     rslt = bhi360_register_fifo_parse_callback(BHI360_SENSOR_ID_GYRO, parse_gyro_data, NULL, &bhy);
+    if (rslt != BHI360_OK)
+    {
+        bhi3_s_report_api_error(rslt, &bhy);
+        close_interfaces(intf);
+        return rslt;
+    }
+
+    rslt = bhi360_register_fifo_parse_callback(BHI360_SENSOR_ID_MAG, parse_mag_data, NULL, &bhy);
     if (rslt != BHI360_OK)
     {
         bhi3_s_report_api_error(rslt, &bhy);
@@ -745,7 +803,7 @@ static int8_t bhi3_s_device_bootstrap(void)
         close_interfaces(intf);
         return rslt;
     }
-    printf("Enable %s at %.2fHz.\r\n", get_sensor_name(BHI360_SENSOR_ID_MAG), sensor_conf_mag.sample_rate);
+    bhi3_s_log_info("Enable %s at %.2fHz.\r\n", get_sensor_name(BHI360_SENSOR_ID_MAG), sensor_conf_mag.sample_rate);
 
     rslt = bhi3_s_set_sensor_rate_with_fallback(BHI3_SENSOR_ID_PRESSURE, &sensor_conf_pressure);
     if (rslt != BHI360_OK)
@@ -764,7 +822,7 @@ static int8_t bhi3_s_device_bootstrap(void)
         return rslt;
     }
     bhi3_s_report_api_error(rslt, &bhy);
-    printf("Enable %s at %.2fHz.\r\n", get_sensor_name(BHI360_SENSOR_ID_TEMP), sensor_conf_temperature.sample_rate);
+    bhi3_s_log_info("Enable %s at %.2fHz.\r\n", get_sensor_name(BHI360_SENSOR_ID_TEMP), sensor_conf_temperature.sample_rate);
 
     sensor_conf_humidity.sample_rate = 1.0f;
     sensor_conf_humidity.latency = 0;
@@ -776,7 +834,7 @@ static int8_t bhi3_s_device_bootstrap(void)
         return rslt;
     }
     bhi3_s_report_api_error(rslt, &bhy);
-    printf("Enable %s at %.2fHz.\r\n", get_sensor_name(BHI360_SENSOR_ID_HUM), sensor_conf_humidity.sample_rate);
+    bhi3_s_log_info("Enable %s at %.2fHz.\r\n", get_sensor_name(BHI360_SENSOR_ID_HUM), sensor_conf_humidity.sample_rate);
 
     return rslt;
 }
@@ -794,10 +852,10 @@ static void bhi3_s_report_api_error(int8_t rslt, struct bhi360_dev *dev)
 {
     if (rslt != BHI360_OK)
     {
-        printf("%s\r\n", get_api_error(rslt));
+        bhi3_s_log_error("%s\r\n", get_api_error(rslt));
         if ((rslt == BHI360_E_IO) && (dev != NULL))
         {
-            printf("%s\r\n", get_intf_error(dev->hif.intf_rslt));
+            bhi3_s_log_error("%s\r\n", get_intf_error(dev->hif.intf_rslt));
             dev->hif.intf_rslt = BHI360_INTF_RET_SUCCESS;
         }
     }
@@ -805,15 +863,15 @@ static void bhi3_s_report_api_error(int8_t rslt, struct bhi360_dev *dev)
 
 static void bhi3_s_log_interrupt_ctrl(uint8_t hintr_ctrl)
 {
-    printf("Host interrupt control\r\n");
-    printf("    Wake up FIFO %s.\r\n", (hintr_ctrl & BHI360_ICTL_DISABLE_FIFO_W) ? "disabled" : "enabled");
-    printf("    Non wake up FIFO %s.\r\n", (hintr_ctrl & BHI360_ICTL_DISABLE_FIFO_NW) ? "disabled" : "enabled");
-    printf("    Status FIFO %s.\r\n", (hintr_ctrl & BHI360_ICTL_DISABLE_STATUS_FIFO) ? "disabled" : "enabled");
-    printf("    Debugging %s.\r\n", (hintr_ctrl & BHI360_ICTL_DISABLE_DEBUG) ? "disabled" : "enabled");
-    printf("    Fault %s.\r\n", (hintr_ctrl & BHI360_ICTL_DISABLE_FAULT) ? "disabled" : "enabled");
-    printf("    Interrupt is %s.\r\n", (hintr_ctrl & BHI360_ICTL_ACTIVE_LOW) ? "active low" : "active high");
-    printf("    Interrupt is %s triggered.\r\n", (hintr_ctrl & BHI360_ICTL_EDGE) ? "pulse" : "level");
-    printf("    Interrupt pin drive is %s.\r\n", (hintr_ctrl & BHI360_ICTL_OPEN_DRAIN) ? "open drain" : "push-pull");
+    bhi3_s_log_info("Host interrupt control\r\n");
+    bhi3_s_log_info("    Wake up FIFO %s.\r\n", (hintr_ctrl & BHI360_ICTL_DISABLE_FIFO_W) ? "disabled" : "enabled");
+    bhi3_s_log_info("    Non wake up FIFO %s.\r\n", (hintr_ctrl & BHI360_ICTL_DISABLE_FIFO_NW) ? "disabled" : "enabled");
+    bhi3_s_log_info("    Status FIFO %s.\r\n", (hintr_ctrl & BHI360_ICTL_DISABLE_STATUS_FIFO) ? "disabled" : "enabled");
+    bhi3_s_log_info("    Debugging %s.\r\n", (hintr_ctrl & BHI360_ICTL_DISABLE_DEBUG) ? "disabled" : "enabled");
+    bhi3_s_log_info("    Fault %s.\r\n", (hintr_ctrl & BHI360_ICTL_DISABLE_FAULT) ? "disabled" : "enabled");
+    bhi3_s_log_info("    Interrupt is %s.\r\n", (hintr_ctrl & BHI360_ICTL_ACTIVE_LOW) ? "active low" : "active high");
+    bhi3_s_log_info("    Interrupt is %s triggered.\r\n", (hintr_ctrl & BHI360_ICTL_EDGE) ? "pulse" : "level");
+    bhi3_s_log_info("    Interrupt pin drive is %s.\r\n", (hintr_ctrl & BHI360_ICTL_OPEN_DRAIN) ? "open drain" : "push-pull");
 }
 
 static void bhi3_s_mark_error(int8_t rslt)
@@ -1094,10 +1152,10 @@ static int8_t bhi3_s_raw_log_open(const char *requested_path)
         written = snprintf(raw_log_ctx.path, sizeof(raw_log_ctx.path), "%s", requested_path);
         if ((written <= 0) || ((size_t)written >= sizeof(raw_log_ctx.path)))
         {
-            fprintf(stderr,
-                    "[BHI3] Invalid raw log path length: %d (max %zu)\n",
-                    written,
-                    sizeof(raw_log_ctx.path) - 1U);
+            bhi3_s_log_error(
+                "[BHI3] Invalid raw log path length: %d (max %zu)\n",
+                written,
+                sizeof(raw_log_ctx.path) - 1U);
             rslt = BHI360_E_NULL_PTR;
             goto raw_log_open_exit;
         }
@@ -1107,18 +1165,18 @@ static int8_t bhi3_s_raw_log_open(const char *requested_path)
         if ((mkdir("log", 0755) != 0) && (errno != EEXIST))
         {
             err_no = errno;
-            fprintf(stderr,
-                    "[BHI3] Failed to create log directory 'log' (errno=%d: %s)\n",
-                    err_no,
-                    strerror(err_no));
+            bhi3_s_log_error(
+                "[BHI3] Failed to create log directory 'log' (errno=%d: %s)\n",
+                err_no,
+                strerror(err_no));
         }
         if ((mkdir("log/bhi3", 0755) != 0) && (errno != EEXIST))
         {
             err_no = errno;
-            fprintf(stderr,
-                    "[BHI3] Failed to create log directory 'log/bhi3' (errno=%d: %s)\n",
-                    err_no,
-                    strerror(err_no));
+            bhi3_s_log_error(
+                "[BHI3] Failed to create log directory 'log/bhi3' (errno=%d: %s)\n",
+                err_no,
+                strerror(err_no));
         }
 
         now_sec = (time_t)(bhi3_s_time_ns(CLOCK_REALTIME) / NS_PER_SEC);
@@ -1141,7 +1199,7 @@ static int8_t bhi3_s_raw_log_open(const char *requested_path)
 
         if ((written <= 0) || ((size_t)written >= sizeof(raw_log_ctx.path)))
         {
-            fprintf(stderr, "[BHI3] Failed to generate default raw log path.\n");
+            bhi3_s_log_error("[BHI3] Failed to generate default raw log path.\n");
             rslt = BHI360_E_NULL_PTR;
             goto raw_log_open_exit;
         }
@@ -1151,11 +1209,11 @@ static int8_t bhi3_s_raw_log_open(const char *requested_path)
     if (raw_log_ctx.fp == NULL)
     {
         err_no = errno;
-        fprintf(stderr,
-                "[BHI3] Cannot open raw log '%s' (errno=%d: %s)\n",
-                raw_log_ctx.path,
-                err_no,
-                strerror(err_no));
+        bhi3_s_log_error(
+            "[BHI3] Cannot open raw log '%s' (errno=%d: %s)\n",
+            raw_log_ctx.path,
+            err_no,
+            strerror(err_no));
         rslt = BHI360_E_IO;
         goto raw_log_open_exit;
     }
@@ -1173,7 +1231,7 @@ static int8_t bhi3_s_raw_log_open(const char *requested_path)
                        "gyro_accuracy,baro_raw_hpa\n");
     if (path_len < 0)
     {
-        fprintf(stderr, "[BHI3] Failed to write raw log CSV header.\n");
+        bhi3_s_log_error("[BHI3] Failed to write raw log CSV header.\n");
         fclose(raw_log_ctx.fp);
         raw_log_ctx.fp = NULL;
         rslt = BHI360_E_IO;
@@ -1265,7 +1323,7 @@ static void bhi3_s_raw_log_write_row(void)
                   bhi3_s_datas.pressure_raw);
     if (ret < 0)
     {
-        fprintf(stderr, "[BHI3] Failed to write raw log row. Disabling raw log.\n");
+        bhi3_s_log_error("[BHI3] Failed to write raw log row. Disabling raw log.\n");
         if (raw_log_ctx.fp != NULL)
         {
             fflush(raw_log_ctx.fp);
@@ -1315,21 +1373,21 @@ static int8_t bhi3_s_calib_prepare_directory(void)
     if ((mkdir("log", 0755) != 0) && (errno != EEXIST))
     {
         err_no = errno;
-        fprintf(stderr,
-                "[BHI3] Failed to create 'log' directory for calibration files (errno=%d: %s)\n",
-                err_no,
-                strerror(err_no));
+        bhi3_s_log_error(
+            "[BHI3] Failed to create 'log' directory for calibration files (errno=%d: %s)\n",
+            err_no,
+            strerror(err_no));
         return BHI360_E_IO;
     }
 
     if ((mkdir(BHI3_CALIB_DIR, 0755) != 0) && (errno != EEXIST))
     {
         err_no = errno;
-        fprintf(stderr,
-                "[BHI3] Failed to create '%s' directory for calibration files (errno=%d: %s)\n",
-                BHI3_CALIB_DIR,
-                err_no,
-                strerror(err_no));
+        bhi3_s_log_error(
+            "[BHI3] Failed to create '%s' directory for calibration files (errno=%d: %s)\n",
+            BHI3_CALIB_DIR,
+            err_no,
+            strerror(err_no));
         return BHI360_E_IO;
     }
 
@@ -1592,25 +1650,25 @@ static int8_t bhi3_s_restore_param_from_file(uint16_t param_id,
     rslt = bhi3_s_calib_read_file(path, state_data, sizeof(state_data), &actual_len);
     if (rslt != BHI360_OK)
     {
-        fprintf(stderr, "[BHI3] Failed to read %s from '%s' (err=%d)\n", label, path, rslt);
+        bhi3_s_log_error("[BHI3] Failed to read %s from '%s' (err=%d)\n", label, path, rslt);
         return rslt;
     }
 
     if (actual_len == 0U)
     {
-        fprintf(stderr, "[BHI3] %s file '%s' is empty.\n", label, path);
+        bhi3_s_log_error("[BHI3] %s file '%s' is empty.\n", label, path);
         return BHI360_E_INVALID_PARAM;
     }
 
     rslt = bhi3_s_set_bsx_state_from_blob(param_id, state_data, actual_len);
     if (rslt == BHI360_OK)
     {
-        printf("[BHI3] Restored %s from '%s' (%" PRIu32 " bytes).\n", label, path, actual_len);
+        bhi3_s_log_info("[BHI3] Restored %s from '%s' (%" PRIu32 " bytes).\n", label, path, actual_len);
     }
     else
     {
         bhi3_s_report_api_error(rslt, &bhy);
-        fprintf(stderr, "[BHI3] Failed to restore %s from '%s' (err=%d)\n", label, path, rslt);
+        bhi3_s_log_error("[BHI3] Failed to restore %s from '%s' (err=%d)\n", label, path, rslt);
     }
 
     return rslt;
@@ -1631,18 +1689,18 @@ static int8_t bhi3_s_save_param_to_file(uint16_t param_id, const char *path, con
     if (rslt != BHI360_OK)
     {
         bhi3_s_report_api_error(rslt, &bhy);
-        fprintf(stderr, "[BHI3] Failed to read %s from device (err=%d)\n", label, rslt);
+        bhi3_s_log_error("[BHI3] Failed to read %s from device (err=%d)\n", label, rslt);
         return rslt;
     }
 
     rslt = bhi3_s_calib_write_file(path, state_data, actual_len);
     if (rslt != BHI360_OK)
     {
-        fprintf(stderr, "[BHI3] Failed to write %s to '%s' (err=%d)\n", label, path, rslt);
+        bhi3_s_log_error("[BHI3] Failed to write %s to '%s' (err=%d)\n", label, path, rslt);
         return rslt;
     }
 
-    printf("[BHI3] Saved %s to '%s' (%" PRIu32 " bytes).\n", label, path, actual_len);
+    bhi3_s_log_info("[BHI3] Saved %s to '%s' (%" PRIu32 " bytes).\n", label, path, actual_len);
     return BHI360_OK;
 }
 
@@ -1756,22 +1814,22 @@ static int8_t bhi3_s_set_sensor_rate_with_fallback(uint8_t sensor_id,
     rslt = bhi360_virtual_sensor_conf_param_set_cfg(sensor_id, sensor_conf, &bhy);
     if (rslt == BHI360_OK)
     {
-        printf("Enable %s at %.2fHz.\r\n", get_sensor_name(sensor_id), sensor_conf->sample_rate);
+        bhi3_s_log_info("Enable %s at %.2fHz.\r\n", get_sensor_name(sensor_id), sensor_conf->sample_rate);
         return rslt;
     }
 
     bhi3_s_report_api_error(rslt, &bhy);
-    fprintf(stderr,
-            "[BHI3] Failed to set %s at %.2fHz. Retrying %.2fHz.\n",
-            get_sensor_name(sensor_id),
-            (double)BHI3_SENSOR_PRIMARY_RATE_HZ,
-            (double)BHI3_SENSOR_FALLBACK_RATE_HZ);
+    bhi3_s_log_warning(
+        "[BHI3] Failed to set %s at %.2fHz. Retrying %.2fHz.\n",
+        get_sensor_name(sensor_id),
+        (double)BHI3_SENSOR_PRIMARY_RATE_HZ,
+        (double)BHI3_SENSOR_FALLBACK_RATE_HZ);
 
     sensor_conf->sample_rate = BHI3_SENSOR_FALLBACK_RATE_HZ;
     rslt = bhi360_virtual_sensor_conf_param_set_cfg(sensor_id, sensor_conf, &bhy);
     if (rslt == BHI360_OK)
     {
-        printf("Enable %s at %.2fHz (fallback).\r\n", get_sensor_name(sensor_id), sensor_conf->sample_rate);
+        bhi3_s_log_info("Enable %s at %.2fHz (fallback).\r\n", get_sensor_name(sensor_id), sensor_conf->sample_rate);
     }
     else
     {
@@ -1815,14 +1873,14 @@ static int8_t upload_firmware(uint8_t boot_stat, struct bhi360_dev *dev)
     int8_t temp_rslt;
     int8_t rslt = BHI360_OK;
 
-    printf("Loading firmware into RAM.\r\n");
+    bhi3_s_log_info("Loading firmware into RAM.\r\n");
     rslt = bhi360_upload_firmware_to_ram(bhi360_firmware_image, sizeof(bhi360_firmware_image), dev);
     bhi3_s_report_api_error(rslt, dev);
 
     temp_rslt = bhi360_get_error_value(&sensor_error, dev);
     if (sensor_error != 0)
     {
-        printf("%s\r\n", get_sensor_error_text(sensor_error));
+        bhi3_s_log_error("%s\r\n", get_sensor_error_text(sensor_error));
     }
     bhi3_s_report_api_error(temp_rslt, dev);
 
@@ -1831,14 +1889,14 @@ static int8_t upload_firmware(uint8_t boot_stat, struct bhi360_dev *dev)
         return rslt;
     }
 
-    printf("Booting from RAM.\r\n");
+    bhi3_s_log_info("Booting from RAM.\r\n");
     rslt = bhi360_boot_from_ram(dev);
     bhi3_s_report_api_error(rslt, dev);
 
     temp_rslt = bhi360_get_error_value(&sensor_error, dev);
     if (sensor_error != 0)
     {
-        printf("%s\r\n", get_sensor_error_text(sensor_error));
+        bhi3_s_log_error("%s\r\n", get_sensor_error_text(sensor_error));
     }
     bhi3_s_report_api_error(temp_rslt, dev);
 
@@ -1899,7 +1957,7 @@ static void parse_acc_data(const struct bhi360_fifo_parse_data_info *callback_in
 
     if (!callback_info)
     {
-        printf("Null reference\r\n");
+        bhi3_s_log_error("Null reference\r\n");
         return;
     }
     if (callback_info->data_size != 7U)
@@ -1956,7 +2014,7 @@ static void parse_gravity_data(const struct bhi360_fifo_parse_data_info *callbac
 
     if (!callback_info)
     {
-        printf("Null reference\r\n");
+        bhi3_s_log_error("Null reference\r\n");
         return;
     }
     if (callback_info->data_size != 7U)
@@ -1981,7 +2039,7 @@ static void parse_linear_acc_data(const struct bhi360_fifo_parse_data_info *call
 
     if (!callback_info)
     {
-        printf("Null reference\r\n");
+        bhi3_s_log_error("Null reference\r\n");
         return;
     }
     if (callback_info->data_size != 7U)
@@ -2013,7 +2071,7 @@ static void parse_gyro_data(const struct bhi360_fifo_parse_data_info *callback_i
 
     if (!callback_info)
     {
-        printf("Null reference\r\n");
+        bhi3_s_log_error("Null reference\r\n");
         return;
     }
     if (callback_info->data_size != 7U)
@@ -2075,6 +2133,30 @@ static void parse_gyro_data(const struct bhi360_fifo_parse_data_info *callback_i
     }
 }
 
+static void parse_mag_data(const struct bhi360_fifo_parse_data_info *callback_info, void *callback_ref)
+{
+    (void)callback_ref;
+    struct bhi360_event_data_xyz data;
+    float scaling_factor = SCALING_FACTOR_INVALID_LIMIT;
+
+    if (!callback_info)
+    {
+        bhi3_s_log_error("Null reference\r\n");
+        return;
+    }
+    if (callback_info->data_size != 7U)
+    {
+        return;
+    }
+
+    bhi360_event_data_parse_xyz(callback_info->data_ptr, &data);
+    scaling_factor = get_sensor_dynamic_range_scaling(callback_info->sensor_id, BHI3_MAG_RANGE_UT);
+    bhi3_s_datas.mag_x = data.x * scaling_factor;
+    bhi3_s_datas.mag_y = data.y * scaling_factor;
+    bhi3_s_datas.mag_z = data.z * scaling_factor;
+    bhi3_s_datas.mag_accuracy = mag_accuracy_state;
+}
+
 static void parse_pressure(const struct bhi360_fifo_parse_data_info *callback_info, void *callback_ref)
 {
     (void)callback_ref;
@@ -2083,7 +2165,7 @@ static void parse_pressure(const struct bhi360_fifo_parse_data_info *callback_in
 
     if (!callback_info)
     {
-        printf("Null reference\r\n");
+        bhi3_s_log_error("Null reference\r\n");
         return;
     }
     if (callback_info->data_size != 4U)
@@ -2117,7 +2199,7 @@ static void parse_temperature(const struct bhi360_fifo_parse_data_info *callback
 
     if (!callback_info)
     {
-        printf("Null reference\r\n");
+        bhi3_s_log_error("Null reference\r\n");
         return;
     }
     if (callback_info->data_size != 3U)
@@ -2136,7 +2218,7 @@ static void parse_humidity(const struct bhi360_fifo_parse_data_info *callback_in
 
     if (!callback_info)
     {
-        printf("Null reference\r\n");
+        bhi3_s_log_error("Null reference\r\n");
         return;
     }
     if (callback_info->data_size != 2U)
@@ -2146,6 +2228,23 @@ static void parse_humidity(const struct bhi360_fifo_parse_data_info *callback_in
 
     bhi360_parse_humidity(callback_info->data_ptr, &humidity);
     bhi3_s_datas.humidity = humidity;
+}
+
+static const char *bhi3_s_accuracy_name(uint8_t accuracy)
+{
+    switch (accuracy)
+    {
+        case 0:
+            return "Unreliable";
+        case 1:
+            return "Accuracy Low";
+        case 2:
+            return "Accuracy Medium";
+        case 3:
+            return "Accuracy High";
+        default:
+            return "Unknown";
+    }
 }
 
 static void parse_meta_event(const struct bhi360_fifo_parse_data_info *callback_info, void *callback_ref)
@@ -2181,20 +2280,25 @@ static void parse_meta_event(const struct bhi360_fifo_parse_data_info *callback_
     switch (meta_event_type)
     {
         case BHI360_META_EVENT_FLUSH_COMPLETE:
-            printf("%s Flush complete for sensor id %u (%s)\r\n", event_text, byte1, get_sensor_name(byte1));
+            bhi3_s_log_info("%s Flush complete for sensor id %u (%s)\r\n", event_text, byte1, get_sensor_name(byte1));
             break;
         case BHI360_META_EVENT_SAMPLE_RATE_CHANGED:
-            printf("%s Sample rate changed for sensor id %u (%s)\r\n", event_text, byte1, get_sensor_name(byte1));
+            bhi3_s_log_info("%s Sample rate changed for sensor id %u (%s)\r\n", event_text, byte1, get_sensor_name(byte1));
             break;
         case BHI360_META_EVENT_POWER_MODE_CHANGED:
-            printf("%s Power mode changed for sensor id %u (%s)\r\n", event_text, byte1, get_sensor_name(byte1));
+            bhi3_s_log_info("%s Power mode changed for sensor id %u (%s)\r\n", event_text, byte1, get_sensor_name(byte1));
             break;
         case BHI360_META_EVENT_SENSOR_STATUS:
         {
             uint8_t prev_accuracy = 0U;
             uint8_t save_phys_sensor_id = 0U;
 
-            printf("%s Accuracy for sensor id %u (%s) changed to %u (%s)\r\n", event_text, byte1, get_sensor_name(byte1), byte2, get_sensor_name(byte2));
+            bhi3_s_log_info("%s Accuracy for sensor id %u (%s) changed to %u (%s)\r\n",
+                            event_text,
+                            byte1,
+                            get_sensor_name(byte1),
+                            byte2,
+                            bhi3_s_accuracy_name(byte2));
             switch (byte1)
             {
                 case BHI360_SENSOR_ID_ORI:
@@ -2268,28 +2372,28 @@ static void parse_meta_event(const struct bhi360_fifo_parse_data_info *callback_
             break;
         }
         case BHI360_META_EVENT_SENSOR_ERROR:
-            printf("%s Sensor id %u (%s) reported error 0x%02X\r\n", event_text, byte1, get_sensor_name(byte1), byte2);
+            bhi3_s_log_error("%s Sensor id %u (%s) reported error 0x%02X\r\n", event_text, byte1, get_sensor_name(byte1), byte2);
             break;
         case BHI360_META_EVENT_FIFO_OVERFLOW:
-            printf("%s FIFO overflow\r\n", event_text);
+            bhi3_s_log_warning("%s FIFO overflow\r\n", event_text);
             break;
         case BHI360_META_EVENT_DYNAMIC_RANGE_CHANGED:
-            printf("%s Dynamic range changed for sensor id %u (%s)\r\n", event_text, byte1, get_sensor_name(byte1));
+            bhi3_s_log_info("%s Dynamic range changed for sensor id %u (%s)\r\n", event_text, byte1, get_sensor_name(byte1));
             break;
         case BHI360_META_EVENT_FIFO_WATERMARK:
-            printf("%s FIFO watermark reached\r\n", event_text);
+            bhi3_s_log_info("%s FIFO watermark reached\r\n", event_text);
             break;
         case BHI360_META_EVENT_INITIALIZED:
-            printf("%s Firmware initialized. Firmware version %u\r\n", event_text, ((uint16_t)byte2 << 8) | byte1);
+            bhi3_s_log_info("%s Firmware initialized. Firmware version %u\r\n", event_text, ((uint16_t)byte2 << 8) | byte1);
             break;
         case BHI360_META_EVENT_RESET:
-            printf("%s Reset event\r\n", event_text);
+            bhi3_s_log_warning("%s Reset event\r\n", event_text);
             break;
         case BHI360_META_EVENT_INTERNAL_STATUS:
             /* Ignore repetitive internal status event to avoid noisy logging. */
             break;
         default:
-            printf("%s Unknown meta event with id: %u\r\n", event_text, meta_event_type);
+            bhi3_s_log_warning("%s Unknown meta event with id: %u\r\n", event_text, meta_event_type);
             break;
     }
 }
