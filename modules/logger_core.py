@@ -717,14 +717,18 @@ class LoggerCore:
 
         if self.config.G_LOG_WRITE_CSV:
             with timers[0]:
-                if not self.logger_csv.write_log(f"{filename}.csv"):
+                csv_filename = f"{filename}.csv"
+                if not self.logger_csv.write_log(csv_filename):
+                    app_logger.warning(f"Failed to write csv: {csv_filename}")
                     return False
 
         if self.config.G_LOG_WRITE_FIT:
             with timers[1]:
+                fit_filename = f"{filename}.fit"
                 if not self.logger_fit.write_log(
-                    f"{filename}.fit", start_date, end_date
+                    fit_filename, start_date, end_date
                 ):
+                    app_logger.warning(f"Failed to write fit: {fit_filename}")
                     return False
 
         # backup and reset database

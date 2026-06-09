@@ -47,7 +47,6 @@ class LoggerCsv(Logger):
         if not available:
             cur.close()
             con.close()
-            print("ERROR: no matching columns found in BIKECOMPUTER_LOG")
             return False
 
         select_cols = ",".join(available)
