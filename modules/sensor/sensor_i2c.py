@@ -553,8 +553,8 @@ class SensorI2C(Sensor):
         self.vspeed_array = [np.nan] * self.vspeed_window_size
 
         if (
-            self.values_mod.get("mag_min") is not None
-            and self.values_mod.get("mag_max") is not None
+            self.values_mod["mag_min"] is not None
+            and self.values_mod["mag_max"] is not None
         ):
             self.calc_mag_scales()
 
@@ -611,7 +611,7 @@ class SensorI2C(Sensor):
             return False
 
     def _load_mag_declination_cache(self):
-        state = getattr(self.config, "state", None)
+        state = self.config.state
         if state is None:
             return None
 
@@ -638,7 +638,7 @@ class SensorI2C(Sensor):
         }
 
     def _store_mag_declination_cache(self, declination, lat, lon, gps_time):
-        state = getattr(self.config, "state", None)
+        state = self.config.state
         if state is None:
             return
 
@@ -693,39 +693,37 @@ class SensorI2C(Sensor):
         return True
 
     def _get_mag_declination_context(self):
-        logger = getattr(self.config, "logger", None)
-        sensor_core = getattr(logger, "sensor", None)
+        logger = self.config.logger
+        sensor_core = logger.sensor if logger is not None else None
         if sensor_core is None:
             return None
 
-        gps_sensor = getattr(sensor_core, "sensor_gps", None)
-        gps_values = getattr(sensor_core, "values", {}).get("GPS")
-        if not isinstance(gps_values, dict):
-            return None
+        gps_sensor = sensor_core.sensor_gps
+        gps_values = sensor_core.values["GPS"]
 
-        lat = gps_values.get("lat")
-        lon = gps_values.get("lon")
+        lat = gps_values["lat"]
+        lon = gps_values["lon"]
         dop = (
-            gps_values.get("pdop"),
-            gps_values.get("hdop"),
-            gps_values.get("vdop"),
+            gps_values["pdop"],
+            gps_values["hdop"],
+            gps_values["vdop"],
         )
         satellites = (
-            gps_values.get("used_sats"),
-            gps_values.get("total_sats"),
+            gps_values["used_sats"],
+            gps_values["total_sats"],
         )
         if not self._is_mag_declination_position_valid(
             gps_sensor,
             lat,
             lon,
-            gps_values.get("mode"),
-            gps_values.get("status"),
+            gps_values["mode"],
+            gps_values["status"],
             dop,
             satellites,
         ):
             return None
 
-        gps_time = self._parse_datetime_value(gps_values.get("time"))
+        gps_time = self._parse_datetime_value(gps_values["time"])
         if gps_time is None or gps_time.year < 2000:
             return None
 
@@ -757,7 +755,7 @@ class SensorI2C(Sensor):
         if context is None:
             return
 
-        cache = getattr(self, "_mag_declination_cache", None)
+        cache = self._mag_declination_cache
         if self._is_mag_declination_cache_hit(
             cache, context["lat"], context["lon"], context["gps_time"]
         ):
@@ -767,7 +765,7 @@ class SensorI2C(Sensor):
             )
             return
 
-        if getattr(self, "_mag_declination_fetch_started", False):
+        if self._mag_declination_fetch_started:
             return
 
         self._mag_declination_fetch_started = True
@@ -803,7 +801,7 @@ class SensorI2C(Sensor):
             raise RuntimeError("invalid magnetic declination response") from exc
 
     async def _update_mag_declination_async(self, lat, lon, gps_time):
-        cache = getattr(self, "_mag_declination_cache", None)
+        cache = self._mag_declination_cache
         app_logger.info("mag declination fetch started")
 
         try:
@@ -1811,9 +1809,11 @@ class SensorI2C(Sensor):
                 del self.sensor_bhi3_s
                 return False
 
+            sensor_is_bhi385 = self.sensor_bhi3_s.is_bhi385
+
             if bhi3_target:
                 is_target_bhi385 = bhi3_target == "bhi385"
-                if bool(getattr(self.sensor_bhi3_s, "is_bhi385", False)) != is_target_bhi385:
+                if sensor_is_bhi385 != is_target_bhi385:
                     self.sensor_bhi3_s.close()
                     del self.sensor_bhi3_s
                     _remove_bhi3_helper_extensions()

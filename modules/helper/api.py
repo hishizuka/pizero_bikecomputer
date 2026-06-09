@@ -16,10 +16,7 @@ from modules.helper.network import (
     get_json,
     post,
 )
-from modules.helper.maptile import (
-    MapTileWithValues,
-    get_headwind
-)
+from modules.helper.maptile import MapTileWithValues, get_headwind
 from modules.utils.geo import get_track_str
 from modules.app_logger import app_logger
 
@@ -50,6 +47,7 @@ _IMPORT_THINGSBOARD = False
 try:
     from tb_device_mqtt import TBDeviceMqttClient, TBPublishInfo
     import logging
+
     logging.getLogger("tb_connection").setLevel(logging.ERROR)
 
     _IMPORT_THINGSBOARD = True
@@ -67,15 +65,13 @@ class api:
         "message": None,
     }
     course_send_status = "RESET"
-    
+
     maptile_with_values = None
 
     send_livetrack_data_lock = False
 
     send_time = {}
-    pre_value = {
-        "OPENMETEO_WIND": [np.nan, np.nan]
-    }
+    pre_value = {"OPENMETEO_WIND": [np.nan, np.nan]}
     THINGSBOARD_SHARED_KEYS = ("message_name", "message_body")
     thingsboard_telemetry_url = None
     thingsboard_attributes_url = None
@@ -108,9 +104,7 @@ class api:
             )
         elif token and server:
             access_token = urllib.parse.quote(token, safe="")
-            self.thingsboard_telemetry_url = (
-                f"{server}/api/v1/{access_token}/telemetry"
-            )
+            self.thingsboard_telemetry_url = f"{server}/api/v1/{access_token}/telemetry"
             self.thingsboard_attributes_url = (
                 f"{server}/api/v1/{access_token}/attributes?"
                 f"sharedKeys={','.join(self.THINGSBOARD_SHARED_KEYS)}"
@@ -305,10 +299,7 @@ class api:
 
         vars_str = "temperature_2m,pressure_msl,surface_pressure"
         url = "{}?latitude={}&longitude={}&current={}".format(
-            self.config.G_OPENMETEO_API["URL"],
-            y,
-            x,
-            vars_str
+            self.config.G_OPENMETEO_API["URL"], y, x, vars_str
         )
         response = await get_json(url)
         # response["elevation"], response["current"][{vars}]
@@ -322,18 +313,16 @@ class api:
 
         # check interval
         if forcast_time is None and not self.check_time_interval(
-            "OPENMETEO_WIND",
-            self.config.G_OPENMETEO_API["INTERVAL_SEC"],
-            False
+            "OPENMETEO_WIND", self.config.G_OPENMETEO_API["INTERVAL_SEC"], False
         ):
             return self.pre_value["OPENMETEO_WIND"]
-        
+
         # Skip if there is no connectivity path available.
         if not self.network.check_network_with_bt_tethering():
             return self.pre_value["OPENMETEO_WIND"]
 
         return await self.get_openmeteo_current_wind_data_internal(pos, forcast_time)
-    
+
     async def get_openmeteo_current_wind_data_internal(self, pos, forcast_time=None):
 
         # open connection
@@ -450,9 +439,9 @@ class api:
         if offset < 0:
             limit = offset + limit
             offset = 0
-            self.config.G_RIDEWITHGPS_API[
-                "USER_ROUTES_START"
-            ] = self.config.G_RIDEWITHGPS_API["USER_ROUTES_NUM"]
+            self.config.G_RIDEWITHGPS_API["USER_ROUTES_START"] = (
+                self.config.G_RIDEWITHGPS_API["USER_ROUTES_NUM"]
+            )
 
         # get user route
         response = await get_json(
@@ -506,9 +495,9 @@ class api:
             self.config.G_RIDEWITHGPS_API["URL_ROUTE_BASE_URL"]
             + "/elevation_profile.jpg"
         ).format(route_id=route_id)
-        tcx_url = (
-            self.config.G_RIDEWITHGPS_API["URL_ROUTE_BASE_URL"] + ".tcx"
-        ).format(route_id=route_id)
+        tcx_url = (self.config.G_RIDEWITHGPS_API["URL_ROUTE_BASE_URL"] + ".tcx").format(
+            route_id=route_id
+        )
 
         if privacy_code:
             profile_url = f"{profile_url}?privacy_code={privacy_code}"
@@ -610,9 +599,7 @@ class api:
             "grant_type": "refresh_token",
             "refresh_token": self.config.G_STRAVA_API["REFRESH_TOKEN"],
         }
-        tokens = await post(
-            self.config.G_STRAVA_API_URL["OAUTH"], data=data
-        )
+        tokens = await post(self.config.G_STRAVA_API_URL["OAUTH"], data=data)
         if not tokens:
             app_logger.error("strava token refresh failed (no response)")
             return False
@@ -673,15 +660,11 @@ class api:
             else:
                 garmin_api = Garmin()
                 garmin_api.login(tokenstore)
-        except (
-            ValueError,
-            GarthHTTPError,
-            GarminConnectAuthenticationError
-        ):
+        except (ValueError, GarthHTTPError, GarminConnectAuthenticationError):
             try:
                 garmin_api = Garmin(
                     email=self.config.G_GARMINCONNECT_API["EMAIL"],
-                    password=self.config.G_GARMINCONNECT_API["PASSWORD"]
+                    password=self.config.G_GARMINCONNECT_API["PASSWORD"],
                 )
                 garmin_api.login()
                 self.config.state.set_value(
@@ -690,7 +673,7 @@ class api:
             except (
                 GarthHTTPError,
                 GarminConnectAuthenticationError,
-                requests.exceptions.HTTPError
+                requests.exceptions.HTTPError,
             ) as err:
                 app_logger.error(err)
                 return False
@@ -784,7 +767,7 @@ class api:
             traceback.print_exc()
 
     def thingsboard_check(self):
-        return (self.thingsboard_client is not None)
+        return self.thingsboard_client is not None
 
     def check_livetrack_http_check(self):
         return self.gadgetbridge_service is not None
@@ -808,27 +791,22 @@ class api:
 
         # check interval
         if not self.check_time_interval(
-            "THINGSBOARD",
-            self.config.G_THINGSBOARD_API["INTERVAL_SEC"],
-            quick_send
+            "THINGSBOARD", self.config.G_THINGSBOARD_API["INTERVAL_SEC"], quick_send
         ):
             return
 
         # Allow Gadgetbridge HTTP upload even when MQTT is not available.
-        if not (
-            self.check_livetrack_http_check()
-            or self.check_livetrack_mqtt_check()
-        ):
+        if not (self.check_livetrack_http_check() or self.check_livetrack_mqtt_check()):
             return
         asyncio.create_task(self.send_livetrack_data_internal())
 
-    #def get_tb_message(self, result, exception):
+    # def get_tb_message(self, result, exception):
     #    if exception is not None:
     #        app_logger.error(f"[BT] thingsboard attributes error: {exception}")
     #        return
     #    self._apply_thingsboard_attribute_result(result)
 
-    #def _apply_thingsboard_attribute_result(self, result):
+    # def _apply_thingsboard_attribute_result(self, result):
     #    if not isinstance(result, dict):
     #        return
 
@@ -874,8 +852,7 @@ class api:
             )
         except Exception as exc:
             app_logger.error(
-                "[GB] ThingsBoard telemetry error: "
-                f"{type(exc).__name__}: {exc!r}"
+                "[GB] ThingsBoard telemetry error: " f"{type(exc).__name__}: {exc!r}"
             )
             return False
 
@@ -885,8 +862,8 @@ class api:
         if not await self._send_thingsboard_telemetry_via_gadgetbridge_http(data):
             return False
 
-        #attributes_url = self.thingsboard_attributes_url
-        #if attributes_url is None:
+        # attributes_url = self.thingsboard_attributes_url
+        # if attributes_url is None:
         #    server = self.config.G_THINGSBOARD_API["SERVER"].strip()
         #    if server and not server.startswith(("http://", "https://")):
         #        server = f"https://{server}"
@@ -901,18 +878,18 @@ class api:
         #    )
         #    self.thingsboard_attributes_url = attributes_url
 
-        #app_logger.debug("[TB][GB] requesting livetrack attributes")
-        #try:
+        # app_logger.debug("[TB][GB] requesting livetrack attributes")
+        # try:
         #    attributes = await ble_uart.request_http_json(
         #        attributes_url,
         #        headers={"Accept": "application/json"},
         #        timeout=10,
         #    )
-        #except json.JSONDecodeError as exc:
+        # except json.JSONDecodeError as exc:
         #    app_logger.error(f"[GB] ThingsBoard attributes JSON error: {exc}")
-        #except Exception as exc:
+        # except Exception as exc:
         #    app_logger.error(f"[GB] ThingsBoard attributes error: {exc}")
-        #else:
+        # else:
         #    self._apply_thingsboard_attribute_result(attributes)
         #    app_logger.debug("[TB][GB] livetrack attributes updated")
 
@@ -953,7 +930,9 @@ class api:
         finally:
             if not await self.network.close_bt_tethering(caller_name):
                 close_failed = True
-                app_logger.warning("[TB][MQTT] failed to close BT tethering for livetrack")
+                app_logger.warning(
+                    "[TB][MQTT] failed to close BT tethering for livetrack"
+                )
 
         if close_failed:
             return "close_error"
@@ -1008,10 +987,10 @@ class api:
         try:
             self.thingsboard_client.connect()
             res = self.thingsboard_client.send_telemetry(data).get()
-            #self.thingsboard_client.request_attributes(
+            # self.thingsboard_client.request_attributes(
             #    shared_keys=["message_name", "message_body"],
             #    callback=self.get_tb_message,
-            #)
+            # )
             time.sleep(1)
             return res
         finally:
@@ -1060,9 +1039,7 @@ class api:
                 "close_error": "CE",
             }.get(send_time_status)
             if suffix is not None:
-                v["integrated"]["send_time"] = (
-                    datetime.now().strftime("%H:%M") + suffix
-                )
+                v["integrated"]["send_time"] = datetime.now().strftime("%H:%M") + suffix
             await asyncio.sleep(5)
 
             if telemetry_success:
@@ -1114,10 +1091,7 @@ class api:
         self.course_send_status = "LOAD"
         if not self._check_livetrack_startup_config():
             return
-        if not (
-            self.check_livetrack_http_check()
-            or self.check_livetrack_mqtt_check()
-        ):
+        if not (self.check_livetrack_http_check() or self.check_livetrack_mqtt_check()):
             return
         asyncio.create_task(self.send_livetrack_course(False))
 
@@ -1125,13 +1099,10 @@ class api:
         self.course_send_status = "RESET"
         if not self._check_livetrack_startup_config():
             return
-        if not (
-            self.check_livetrack_http_check()
-            or self.check_livetrack_mqtt_check()
-        ):
+        if not (self.check_livetrack_http_check() or self.check_livetrack_mqtt_check()):
             return
         asyncio.create_task(self.send_livetrack_course(True))
-    
+
     def check_time_interval(self, time_key, interval_sec, quick_send):
         t = int(time.time())
 
@@ -1144,7 +1115,9 @@ class api:
         if self.config.G_WIND_DATA_SOURCE.startswith("jpn_scw"):
             w_spd, w_dir = await self.maptile_with_values.get_wind(pos, forecast_time)
         else:
-            [w_spd, w_dir] = await self.get_openmeteo_current_wind_data(pos, forecast_time)
+            [w_spd, w_dir] = await self.get_openmeteo_current_wind_data(
+                pos, forecast_time
+            )
 
         w_dir_str = get_track_str(w_dir)
 
@@ -1155,6 +1128,6 @@ class api:
 
         # app_logger.info(f"pos:[{pos[0]:.5f},{pos[1]:.5f}], w_spd:{w_spd}, w_dir:{w_dir}, w_dir_str:{w_dir_str}, headwind:{headwind}")
         return w_spd, w_dir, w_dir_str, headwind
-    
+
     async def get_altitude(self, pos):
         return await self.maptile_with_values.get_altitude_from_tile(pos)

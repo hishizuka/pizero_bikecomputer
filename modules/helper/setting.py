@@ -28,12 +28,10 @@ class Setting:
             if "AUTOSTOP_STATUS" in c:
                 self.config.G_AUTOSTOP_STATUS = c.getboolean("AUTOSTOP_STATUS")
             if "AUTOSTOP_CUTOFF" in c:
-                self.config.G_AUTOSTOP_CUTOFF = (int(c["AUTOSTOP_CUTOFF"]) / 3.6)
+                self.config.G_AUTOSTOP_CUTOFF = int(c["AUTOSTOP_CUTOFF"]) / 3.6
                 self.config.G_GPS_SPEED_CUTOFF = self.config.G_AUTOSTOP_CUTOFF
             if "WHEEL_CIRCUMFERENCE" in c:
-                self.config.G_WHEEL_CIRCUMFERENCE = (
-                    int(c["WHEEL_CIRCUMFERENCE"]) / 1000
-                )
+                self.config.G_WHEEL_CIRCUMFERENCE = int(c["WHEEL_CIRCUMFERENCE"]) / 1000
             if "GROSS_AVE_SPEED" in c:
                 self.config.G_GROSS_AVE_SPEED = int(c["GROSS_AVE_SPEED"])
             if "DISPLAY" in c:
@@ -53,34 +51,48 @@ class Setting:
             if "AUTO_BT_TETHERING" in c:
                 self.config.G_AUTO_BT_TETHERING = c.getboolean("AUTO_BT_TETHERING")
             if "USE_ZWIFT_CLICK_V2" in c:
-                self.config.G_ZWIFT_CLICK_V2["STATUS"] = c.getboolean("USE_ZWIFT_CLICK_V2")
+                self.config.G_ZWIFT_CLICK_V2["STATUS"] = c.getboolean(
+                    "USE_ZWIFT_CLICK_V2"
+                )
             if "ZWIFT_CLICK_V2_ADDRESS" in c:
                 address = c["ZWIFT_CLICK_V2_ADDRESS"].strip()
                 if address:
                     self.config.G_ZWIFT_CLICK_V2["ADDRESS"] = address
             if "GADGETBRIDGE_STATUS" in c:
-                self.config.G_GADGETBRIDGE["STATUS"] = c.getboolean("GADGETBRIDGE_STATUS")
+                self.config.G_GADGETBRIDGE["STATUS"] = c.getboolean(
+                    "GADGETBRIDGE_STATUS"
+                )
             if "GADGETBRIDGE_USE_GPS" in c:
-                self.config.G_GADGETBRIDGE["USE_GPS"] = c.getboolean("GADGETBRIDGE_USE_GPS")
+                self.config.G_GADGETBRIDGE["USE_GPS"] = c.getboolean(
+                    "GADGETBRIDGE_USE_GPS"
+                )
 
         if "MAP_AND_DATA" in self.config_parser:
             c = self.config_parser["MAP_AND_DATA"]
             if "MAP" in c:
                 self.config.G_MAP = c["MAP"]
             if "USE_HEATMAP_OVERLAY_MAP" in c:
-                self.config.G_USE_HEATMAP_OVERLAY_MAP = c.getboolean("USE_HEATMAP_OVERLAY_MAP")
+                self.config.G_USE_HEATMAP_OVERLAY_MAP = c.getboolean(
+                    "USE_HEATMAP_OVERLAY_MAP"
+                )
             if "HEATMAP_OVERLAY_MAP" in c:
                 self.config.G_HEATMAP_OVERLAY_MAP = c["HEATMAP_OVERLAY_MAP"]
             if "USE_RAIN_OVERLAY_MAP" in c:
-                self.config.G_USE_RAIN_OVERLAY_MAP = c.getboolean("USE_RAIN_OVERLAY_MAP")
+                self.config.G_USE_RAIN_OVERLAY_MAP = c.getboolean(
+                    "USE_RAIN_OVERLAY_MAP"
+                )
             if "RAIN_OVERLAY_MAP" in c:
                 self.config.G_RAIN_OVERLAY_MAP = c["RAIN_OVERLAY_MAP"]
             if "USE_WIND_OVERLAY_MAP" in c:
-                self.config.G_USE_WIND_OVERLAY_MAP = c.getboolean("USE_WIND_OVERLAY_MAP")
+                self.config.G_USE_WIND_OVERLAY_MAP = c.getboolean(
+                    "USE_WIND_OVERLAY_MAP"
+                )
             if "WIND_OVERLAY_MAP" in c:
                 self.config.G_WIND_OVERLAY_MAP = c["WIND_OVERLAY_MAP"]
             if "USE_WIND_DATA_SOURCE" in c:
-                self.config.G_USE_WIND_DATA_SOURCE = c.getboolean("USE_WIND_DATA_SOURCE")
+                self.config.G_USE_WIND_DATA_SOURCE = c.getboolean(
+                    "USE_WIND_DATA_SOURCE"
+                )
             if "WIND_DATA_SOURCE" in c:
                 self.config.G_WIND_DATA_SOURCE = c["WIND_DATA_SOURCE"]
             if "USE_DEM_TILE" in c:
@@ -108,7 +120,7 @@ class Setting:
                     continue
 
                 k1 = key[0:i].upper()
-                k2 = key[i + 1:].upper()
+                k2 = key[i + 1 :].upper()
                 if k2 in self.config.G_ANT["ID"].keys():
                     if k1 == "USE":
                         self.config.G_ANT[k1][k2] = c.getboolean(key)
@@ -166,7 +178,9 @@ class Setting:
             if "SPI_CLOCK" in c:
                 self.config.G_DISPLAY_PARAM["SPI_CLOCK"] = int(c["SPI_CLOCK"])
             if "USE_BACKLIGHT" in c:
-                self.config.G_DISPLAY_PARAM["USE_BACKLIGHT"] = c.getboolean("USE_BACKLIGHT")
+                self.config.G_DISPLAY_PARAM["USE_BACKLIGHT"] = c.getboolean(
+                    "USE_BACKLIGHT"
+                )
             if "AUTO_BACKLIGHT_CUTOFF" in c:
                 # store temporary
                 self.config.G_AUTO_BACKLIGHT_CUTOFF = int(c["AUTO_BACKLIGHT_CUTOFF"])
@@ -300,10 +314,16 @@ class Setting:
         c = self.config_parser["SENSOR_IMU"]
         c["AXIS_SWAP_XY_STATUS"] = str(self.config.G_IMU_AXIS_SWAP_XY["STATUS"])
         c["AXIS_CONVERSION_STATUS"] = str(self.config.G_IMU_AXIS_CONVERSION["STATUS"])
-        c["AXIS_CONVERSION_COEF"] = str(self.config.G_IMU_AXIS_CONVERSION["COEF"].tolist())
+        c["AXIS_CONVERSION_COEF"] = str(
+            self.config.G_IMU_AXIS_CONVERSION["COEF"].tolist()
+        )
         c["MAG_AXIS_SWAP_XY_STATUS"] = str(self.config.G_IMU_MAG_AXIS_SWAP_XY["STATUS"])
-        c["MAG_AXIS_CONVERSION_STATUS"] = str(self.config.G_IMU_MAG_AXIS_CONVERSION["STATUS"])
-        c["MAG_AXIS_CONVERSION_COEF"] = str(self.config.G_IMU_MAG_AXIS_CONVERSION["COEF"].tolist())
+        c["MAG_AXIS_CONVERSION_STATUS"] = str(
+            self.config.G_IMU_MAG_AXIS_CONVERSION["STATUS"]
+        )
+        c["MAG_AXIS_CONVERSION_COEF"] = str(
+            self.config.G_IMU_MAG_AXIS_CONVERSION["COEF"].tolist()
+        )
         c["MAG_DECLINATION"] = str(int(self.config.G_IMU_MAG_DECLINATION))
 
         self.config_parser["DISPLAY_PARAM"] = {}
@@ -317,7 +337,9 @@ class Setting:
         c["EPX_EPY_CUTOFF"] = str(self.config.G_GPSD_PARAM["EPX_EPY_CUTOFF"])
         c["EPV_CUTOFF"] = str(self.config.G_GPSD_PARAM["EPV_CUTOFF"])
         c["SP1_EPV_CUTOFF"] = str(self.config.G_GPSD_PARAM["SP1_EPV_CUTOFF"])
-        c["SP1_USED_SATS_CUTOFF"] = str(self.config.G_GPSD_PARAM["SP1_USED_SATS_CUTOFF"])
+        c["SP1_USED_SATS_CUTOFF"] = str(
+            self.config.G_GPSD_PARAM["SP1_USED_SATS_CUTOFF"]
+        )
 
         self.config_parser["GPSD_UBLOX_PARAM"] = {}
         c = self.config_parser["GPSD_UBLOX_PARAM"]
@@ -350,9 +372,9 @@ class Setting:
 
         self.config_parser["GARMINCONNECT_API"] = {}
         for k in ["EMAIL", "PASSWORD"]:
-            self.config_parser["GARMINCONNECT_API"][
-                k
-            ] = self.config.G_GARMINCONNECT_API[k]
+            self.config_parser["GARMINCONNECT_API"][k] = (
+                self.config.G_GARMINCONNECT_API[k]
+            )
 
         with open(self.config_file, "w") as file:
             self.config_parser.write(file)

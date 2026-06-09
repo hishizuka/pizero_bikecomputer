@@ -116,12 +116,12 @@ class Config:
 
     # DEM tile (Digital Elevation Model)
     G_USE_DEM_TILE = False
-    G_DEM_MAP = "mapterhorn" #mapterhorn, mapbox_terrain_rgb, jpn_kokudo_chiri_in
+    G_DEM_MAP = "mapterhorn"  # mapterhorn, mapbox_terrain_rgb, jpn_kokudo_chiri_in
     G_DEM_MAP_CONFIG = {}
 
     # wind speed, direction and headwind
     G_USE_WIND_DATA_SOURCE = True
-    G_WIND_DATA_SOURCE = "openmeteo" #openmeteo(worldwide), jpn_scw(japan)
+    G_WIND_DATA_SOURCE = "openmeteo"  # openmeteo(worldwide), jpn_scw(japan)
 
     # screenshot dir
     G_SCREENSHOT_DIR = "screenshots"
@@ -185,13 +185,31 @@ class Config:
             "TEMP": "Temperature",
         },
         "ID": {
-            "HR": 0, "SPD": 0, "CDC": 0, "PWR": 0, "LGT": 0, "CTRL": 0, "TEMP": 0,
+            "HR": 0,
+            "SPD": 0,
+            "CDC": 0,
+            "PWR": 0,
+            "LGT": 0,
+            "CTRL": 0,
+            "TEMP": 0,
         },
         "TYPE": {
-            "HR": 0, "SPD": 0, "CDC": 0, "PWR": 0, "LGT": 0, "CTRL": 0, "TEMP": 0,
+            "HR": 0,
+            "SPD": 0,
+            "CDC": 0,
+            "PWR": 0,
+            "LGT": 0,
+            "CTRL": 0,
+            "TEMP": 0,
         },
         "ID_TYPE": {
-            "HR": 0, "SPD": 0, "CDC": 0, "PWR": 0, "LGT": 0, "CTRL": 0, "TEMP": 0,
+            "HR": 0,
+            "SPD": 0,
+            "CDC": 0,
+            "PWR": 0,
+            "LGT": 0,
+            "CTRL": 0,
+            "TEMP": 0,
         },
         "TYPES": {
             "HR": (0x78,),
@@ -214,7 +232,6 @@ class Config:
         },
         # for display order in ANT+ menu (antMenuWidget)
         "ORDER": ["HR", "SPD", "CDC", "PWR", "LGT", "CTRL", "TEMP"],
-
         "USE_AUTO_LIGHT": False,
     }
 
@@ -245,7 +262,7 @@ class Config:
     G_FULLSCREEN = False
 
     # display type (overwritten with setting.conf)
-    # PiTFT, MIP, MIP_640, MIP_Mraa, MIP_Mraa_640, MIP_Sharp, MIP_Sharp_320, 
+    # PiTFT, MIP, MIP_640, MIP_Mraa, MIP_Mraa_640, MIP_Sharp, MIP_Sharp_320,
     # Papirus, DFRobot_RPi_Display, Pirate_Audio, Pirate_Audio_old(Y button is GPIO 20), Display_HAT_Mini
     G_DISPLAY = "None"
 
@@ -253,6 +270,7 @@ class Config:
         "SPI_CLOCK": 2000000,
         "USE_BACKLIGHT": False,
         "USE_DRM": False,
+        "USE_DRM_FORCED": False,
     }
 
     # auto backlight
@@ -261,8 +279,8 @@ class Config:
 
     # GUI mode
     G_GUI_MODE = "PyQt"
-    #G_GUI_MODE = "QML"
-    #G_GUI_MODE = "Kivy"
+    # G_GUI_MODE = "QML"
+    # G_GUI_MODE = "Kivy"
 
     # PerformanceGraph:
     # 1st: POWER
@@ -317,7 +335,11 @@ class Config:
 
     G_UPLOAD_FILE = ""
     G_AUTO_UPLOAD = False
-    G_AUTO_UPLOAD_SERVICE = {"STRAVA": True, "RWGPS": False, "GARMIN": False,}
+    G_AUTO_UPLOAD_SERVICE = {
+        "STRAVA": True,
+        "RWGPS": False,
+        "GARMIN": False,
+    }
     # STRAVA token (need to write setting.conf manually)
     G_STRAVA_API_URL = {
         "OAUTH": "https://www.strava.com/oauth/token",
@@ -379,7 +401,7 @@ class Config:
     }
 
     G_OPENMETEO_API = {
-        "URL" : "https://api.open-meteo.com/v1/forecast",
+        "URL": "https://api.open-meteo.com/v1/forecast",
         "INTERVAL_SEC": 300,
     }
 
@@ -498,12 +520,16 @@ class Config:
 
         init_utc_offset()
 
-        #add map settings
+        # add map settings
         add_map_config(self)
 
         # add test settings (pre)
         try:
-            from modules.test_code.test_code import pre_add_test_config, post_add_test_config
+            from modules.test_code.test_code import (
+                pre_add_test_config,
+                post_add_test_config,
+            )
+
             pre_add_test_config(self)
         except:
             pass
@@ -535,8 +561,12 @@ class Config:
             for key in map_config:
                 if "tile_size" not in map_config[key]:
                     map_config[key]["tile_size"] = 256
+                if "use_mbtiles" not in map_config[key]:
+                    map_config[key]["use_mbtiles"] = False
                 if "ext" in map_config[key]:
-                    map_config[key]["ext"] = normalize_maptile_ext(map_config[key]["ext"])
+                    map_config[key]["ext"] = normalize_maptile_ext(
+                        map_config[key]["ext"]
+                    )
                 else:
                     map_config[key]["ext"] = get_maptile_ext_from_url(
                         map_config[key].get("url")
@@ -545,7 +575,7 @@ class Config:
         if self.G_MAP not in self.G_MAP_CONFIG:
             app_logger.error(f"{self.G_MAP} does not exist in {self.G_MAP_LIST}")
             self.G_MAP = "openstreetmap"
-        if self.G_MAP_CONFIG[self.G_MAP].get("use_mbtiles") and not os.path.exists(
+        if self.G_MAP_CONFIG[self.G_MAP]["use_mbtiles"] and not os.path.exists(
             os.path.join("maptile", f"{self.G_MAP}.mbtiles")
         ):
             self.G_MAP_CONFIG[self.G_MAP]["use_mbtiles"] = False
@@ -578,7 +608,7 @@ class Config:
 
     @property
     def loop(self):
-        #return asyncio.get_running_loop()
+        # return asyncio.get_running_loop()
         if self._loop is None:
             raise RuntimeError("Event loop has not been initialized yet.")
         return self._loop
@@ -587,9 +617,8 @@ class Config:
     def uses_keyboard_navigation(self):
         if self.G_HEADLESS:
             return True
-        display = getattr(self, "display", None)
-        return not getattr(display, "has_touch", True)
-    
+        return self.display is not None and not self.display.has_touch
+
     async def start_coroutine(self):
         self._loop = asyncio.get_running_loop()
         self.app_close_event = asyncio.Event()
@@ -720,11 +749,11 @@ class Config:
                     self.gui.back_menu()
                 ##### temporary #####
                 elif key == "i" and self.gui and self.gui.map_widget:
-                    #self.gui.map_widget.modify_map_tile()
+                    # self.gui.map_widget.modify_map_tile()
                     self.gui.change_map_overlays()
                 elif key == "@" and self.gui:
                     self.gui.show_dialog_ok_only(fn=None, title="test")
-                    #self.gui.show_popup(f"test", 3)
+                    # self.gui.show_popup(f"test", 3)
                 elif key == "z" and self.gui:
                     sensor_gps = self.logger.sensor.sensor_gps
                     if sensor_gps.__class__.__name__ != "UBlox":
@@ -745,7 +774,7 @@ class Config:
         self.display = display
 
     def check_map_dir(self):
-        if not self.G_MAP_CONFIG[self.G_MAP].get("use_mbtiles"):
+        if not self.G_MAP_CONFIG[self.G_MAP]["use_mbtiles"]:
             os.makedirs(os.path.join("maptile", self.G_MAP), exist_ok=True)
         os.makedirs(os.path.join("maptile", self.G_HEATMAP_OVERLAY_MAP), exist_ok=True)
         os.makedirs(os.path.join("maptile", self.G_RAIN_OVERLAY_MAP), exist_ok=True)
@@ -753,15 +782,15 @@ class Config:
 
         if self.G_USE_DEM_TILE:
             os.makedirs(os.path.join("maptile", self.G_DEM_MAP), exist_ok=True)
-    
+
     def delete_weather_overlay_tiles(self):
         remove_maptiles(
             self.G_RAIN_OVERLAY_MAP,
-            self.G_RAIN_OVERLAY_MAP_CONFIG[self.G_RAIN_OVERLAY_MAP]["basetime"]
+            self.G_RAIN_OVERLAY_MAP_CONFIG[self.G_RAIN_OVERLAY_MAP]["basetime"],
         )
         remove_maptiles(
             self.G_WIND_OVERLAY_MAP,
-            self.G_WIND_OVERLAY_MAP_CONFIG[self.G_WIND_OVERLAY_MAP]["basetime"]
+            self.G_WIND_OVERLAY_MAP_CONFIG[self.G_WIND_OVERLAY_MAP]["basetime"],
         )
 
     def get_serial(self):
@@ -857,7 +886,7 @@ class Config:
                     "-c",
                     shutdown_cmd,
                 ],
-                cmd_print=False
+                cmd_print=False,
             )
             if rc is None or rc != 0:
                 exec_cmd(["sudo", "systemctl", "poweroff"])

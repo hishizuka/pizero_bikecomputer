@@ -65,7 +65,7 @@ class MenuButton(QtWidgets.QPushButton):
             self.setIcon(qt_icon)
             self.setIconSize(QtCore.QSize(*size))
 
-        if MENU_BUTTON_ICON_MAP.get(button_type):
+        if button_type in MENU_BUTTON_ICON_MAP:
             self.set_icon_with_size()
             if button_type in ["cloud_upload", "background_task"]:
                 self.init_loading_icon()

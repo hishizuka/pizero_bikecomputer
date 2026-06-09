@@ -334,7 +334,7 @@ class GUI_Qt_Base(QtCore.QObject):
         )
 
     def _run_gadgetbridge_action(self, action_name):
-        ble_uart = getattr(self.config, "ble_uart", None)
+        ble_uart = self.config.ble_uart
         if ble_uart is None or not ble_uart.status:
             return False
         action = getattr(ble_uart, action_name)

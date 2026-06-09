@@ -151,7 +151,7 @@ class MapWidget(
     def _get_perf_map_cpu_percent(self):
         try:
             sensor = self.config.logger.sensor
-            return sensor.values["integrated"].get("cpu_percent", float("nan"))
+            return sensor.values["integrated"]["cpu_percent"]
         except Exception:
             return float("nan")
 

@@ -57,6 +57,10 @@ class GadgetbridgeService(Service):
     message = None
 
     termux_command = None
+    _tx_lock = None
+    _http_request_id = 0
+    _http_pending_requests = None
+    _nav_message_cache = None
 
     timediff_from_utc = timedelta(hours=0)
 
@@ -65,8 +69,10 @@ class GadgetbridgeService(Service):
         self.product = product
         self.sensor = sensor
         self.gui = gui
+        self._tx_lock = None
         self._http_request_id = 0
         self._http_pending_requests = {}
+        self._nav_message_cache = None
         super().__init__(self.service_uuid, True)
         if init_statuses and init_statuses[0]:
             asyncio.create_task(self.on_off_uart_service())
@@ -81,10 +87,6 @@ class GadgetbridgeService(Service):
     def tx_characteristic(self, options):
         return bytes(self.product, "utf-8")
 
-    def _ensure_tx_state(self):
-        if not hasattr(self, "_tx_lock"):
-            self._tx_lock = None
-
     def _build_tx_payload(self, value):
         return bytes(value + "\\n\n", "utf-8")
 
@@ -94,7 +96,6 @@ class GadgetbridgeService(Service):
             self.tx_characteristic.changed(payload[i : i + self._TX_CHUNK_SIZE])
 
     async def _send_message_async(self, value):
-        self._ensure_tx_state()
         if self._tx_lock is None:
             self._tx_lock = asyncio.Lock()
 
@@ -149,14 +150,8 @@ class GadgetbridgeService(Service):
             self.run_termux_command(self.termux_command)
 
     def _ensure_http_state(self):
-        if not hasattr(self, "_http_request_id"):
-            self._http_request_id = 0
-        if not hasattr(self, "_http_pending_requests"):
+        if self._http_pending_requests is None:
             self._http_pending_requests = {}
-
-    def _ensure_nav_state(self):
-        if not hasattr(self, "_nav_message_cache"):
-            self._nav_message_cache = None
 
     @staticmethod
     def _get_nav_message_cache_key(message):
@@ -179,7 +174,6 @@ class GadgetbridgeService(Service):
         if self._has_active_course():
             return
 
-        self._ensure_nav_state()
         cache_key = self._get_nav_message_cache_key(message)
         if cache_key == self._nav_message_cache:
             return

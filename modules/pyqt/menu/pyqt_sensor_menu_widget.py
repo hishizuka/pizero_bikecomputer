@@ -68,7 +68,9 @@ class I2CMenuWidget(MenuWidget):
 
     def onoff_auto_light(self, change=True):
         if change:
-            self.config.G_ANT["USE_AUTO_LIGHT"] = not self.config.G_ANT["USE_AUTO_LIGHT"]
+            self.config.G_ANT["USE_AUTO_LIGHT"] = not self.config.G_ANT[
+                "USE_AUTO_LIGHT"
+            ]
         self.buttons["Auto Light"].change_toggle(self.config.G_ANT["USE_AUTO_LIGHT"])
 
     def onoff_map_heading(self, change=True):
@@ -330,7 +332,7 @@ class ANTListWidget(ListWidget):
     def on_back_menu(self):
         self.timer.stop()
         self.sensor_ant.searcher.stop_search()
-      	# button update
+        # button update
         back_index_key = self.back_index_key
         gui_index = self.config.gui.gui_config.G_GUI_INDEX
         if back_index_key in gui_index:
@@ -396,7 +398,7 @@ class BLEMenuWidget(MenuWidget):
         self.add_buttons(button_conf)
         self.onoff_zwift_click_v2(False)
 
-        #if self.config.logger.sensor.sensor_ble.enabled():
+        # if self.config.logger.sensor.sensor_ble.enabled():
         #    self.buttons["Zwift Click V2"].disable()
 
         if self.config.ble_uart is None:
@@ -408,15 +410,19 @@ class BLEMenuWidget(MenuWidget):
 
     def onoff_zwift_click_v2(self, change=True):
         if change:
-            self.config.G_ZWIFT_CLICK_V2["STATUS"] = not self.config.G_ZWIFT_CLICK_V2["STATUS"]
+            self.config.G_ZWIFT_CLICK_V2["STATUS"] = not self.config.G_ZWIFT_CLICK_V2[
+                "STATUS"
+            ]
             sensor_ble = self.config.logger.sensor.sensor_ble
             if self.config.G_ZWIFT_CLICK_V2["STATUS"]:
                 if not sensor_ble.connect_zwift_click_v2():
                     app_logger.warning("Zwift Click V2 toggle skipped: BLE not enabled")
             else:
                 sensor_ble.disconnect_zwift_click_v2()
-        self.buttons["Zwift Click V2"].change_toggle(self.config.G_ZWIFT_CLICK_V2["STATUS"])
-    
+        self.buttons["Zwift Click V2"].change_toggle(
+            self.config.G_ZWIFT_CLICK_V2["STATUS"]
+        )
+
     def onoff_fake_trainer(self, change=True):
         sensor_ble = self.config.logger.sensor.sensor_ble
         if change:

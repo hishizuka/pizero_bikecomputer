@@ -167,12 +167,12 @@ class SensorANT(Sensor):
     def _log_battery_status_on_quit(self):
         entries = []
         for dv in self.device.values():
-            status = dv.values.get("battery_status") if hasattr(dv, "values") else None
+            status = dv.values["battery_status"]
             if status is None:
                 continue
             if isinstance(status, (float, np.floating)) and np.isnan(status):
                 continue
-            name = dv.name if getattr(dv, "name", "") else "UNKNOWN"
+            name = dv.name or "UNKNOWN"
             entries.append(f"{name}={status}")
 
         if entries:

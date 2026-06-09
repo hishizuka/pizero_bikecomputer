@@ -285,7 +285,7 @@ class MapOverlayMixin:
             p0,
             p1,
             overlay=False,
-            use_mbtiles=self.config.G_MAP_CONFIG[self.config.G_MAP].get("use_mbtiles"),
+            use_mbtiles=self.config.G_MAP_CONFIG[self.config.G_MAP]["use_mbtiles"],
         )
         current_main_signature = self._tile_view_signature.get(self.config.G_MAP)
         main_view_changed = prev_main_signature != current_main_signature
@@ -412,8 +412,7 @@ class MapOverlayMixin:
         if self.config.display.has_touch:
             self.buttons["prev_time"].setVisible(enabled)
             self.buttons["next_time"].setVisible(enabled)
-            if hasattr(self, "time_button_group"):
-                self.time_button_group.setVisible(enabled)
+            self.time_button_group.setVisible(enabled)
 
     def change_map_overlays(self):
         try:

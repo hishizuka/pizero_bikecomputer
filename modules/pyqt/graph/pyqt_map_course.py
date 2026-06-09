@@ -218,7 +218,7 @@ class MapCourseMixin:
         return True
 
     def _get_current_course_point_index(self, marker_count):
-        cp_i = int(getattr(self.course.index, "course_points_index", 0))
+        cp_i = int(self.course.index.course_points_index)
         return max(0, min(cp_i, marker_count))
 
     def _update_course_point_markers_visibility_by_course_index(self):
@@ -621,7 +621,7 @@ class MapCourseMixin:
                 self.auto_zoomlevel_back = None
 
     def _get_course_instruction_data(self):
-        cp_i = int(getattr(self.course.index, "course_points_index", 0))
+        cp_i = int(self.course.index.course_points_index)
         cp_i = max(0, cp_i)
 
         point_distances = self.course_points.distance
@@ -630,7 +630,7 @@ class MapCourseMixin:
         if cp_i >= len(point_distances):
             return "", None
 
-        current_distance = float(getattr(self.course.index, "distance", 0.0))
+        current_distance = float(self.course.index.distance)
         for i in range(cp_i, len(point_distances)):
             dist_m = float(point_distances[i]) * 1000 - current_distance
             if dist_m < 0:

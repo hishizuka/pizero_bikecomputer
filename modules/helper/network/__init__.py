@@ -63,7 +63,7 @@ class Network:
         if not self.config.G_AUTO_BT_TETHERING:
             return detect_network(cache=False)
 
-        bt_pan = getattr(self.config, "bt_pan", None)
+        bt_pan = self.config.bt_pan
         if bt_pan is None:
             return False
 

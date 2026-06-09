@@ -306,7 +306,7 @@ class ANT_Device_Light(ant_device.ANT_Device):
         if mode == "ON_OFF_FLASH_LOW":
             lock = self._ensure_lock()
             with lock:
-                current = self.values.get("light_state", LightState.OFF)
+                current = self.values["light_state"]
             if current == LightState.OFF:
                 self._manual_on_mode = self.default_on_mode
                 next_state = LightState.ON
@@ -320,7 +320,7 @@ class ANT_Device_Light(ant_device.ANT_Device):
             self.set_light_state(next_state)
             lock = self._ensure_lock()
             with lock:
-                state = self.values.get("light_state", LightState.OFF)
+                state = self.values["light_state"]
             # app_logger.info(f"ANT+ light manual button state: {state}")
             return
 
@@ -352,7 +352,7 @@ class ANT_Device_Light(ant_device.ANT_Device):
             return
         lock = self._ensure_lock()
         with lock:
-            if self.values.get("light_state") == normalized:
+            if self.values["light_state"] == normalized:
                 return
             self.values["light_state"] = normalized
             self.values["auto_state"] = normalized == LightState.AUTO
@@ -382,7 +382,7 @@ class ANT_Device_Light(ant_device.ANT_Device):
     def _resolve_desired_mode(self):
         lock = self._ensure_lock()
         with lock:
-            state = self.values.get("light_state", LightState.OFF)
+            state = self.values["light_state"]
             manual_on_mode = self._manual_on_mode
             auto_on_mode = self._auto_on_mode
         if state == LightState.OFF:

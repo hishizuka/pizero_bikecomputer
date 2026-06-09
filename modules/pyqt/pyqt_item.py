@@ -72,9 +72,7 @@ class Item(QtWidgets.QVBoxLayout):
         self.value = ItemValue(right_flag, bottom_flag)
         self.itemformat = self.config.gui.gui_config.G_ITEM_DEF[name][0][0]
         self.unittext = self.config.gui.gui_config.G_ITEM_DEF[name][0][1]
-        value_font_scale_map = getattr(
-            self.config.gui.gui_config, "G_ITEM_VALUE_FONT_SCALE", {}
-        )
+        value_font_scale_map = self.config.gui.gui_config.G_ITEM_VALUE_FONT_SCALE
         self.value_font_scale = value_font_scale_map.get(self.name, 1.0)
         self._unit_suffix = ""
 

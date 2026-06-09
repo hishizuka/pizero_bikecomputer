@@ -16,7 +16,7 @@ def reset_performance_metrics_state(sensor):
     integrated["tau"] = 546 * np.exp(-0.01 * (sensor.config.G_POWER_CP - 0)) + 316
     integrated["tss"] = 0.0
 
-    sensor.np_window_size = getattr(sensor, "NP_WINDOW_SIZE", NP_WINDOW_SIZE_DEFAULT)
+    sensor.np_window_size = sensor.NP_WINDOW_SIZE
     sensor.np_window_30s = []
     sensor.np_window_sum = 0.0
     sensor.np_sum_ma4 = 0.0

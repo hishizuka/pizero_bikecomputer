@@ -36,11 +36,8 @@ class ANT_Device_HeartRate(ant_device.ANT_Device):
             status_code = (desc >> 4) & 0x07
             coarse = desc & 0x0F
 
-            self.values["battery_status"] = self.battery_status.get(
-                status_code, "Invalid"
-            )
+            self.values["battery_status"] = self.battery_status[status_code]
             if coarse == 0x0F:
                 self.values["battery_voltage"] = self.config.G_ANT_NULLVALUE
             else:
                 self.values["battery_voltage"] = round(coarse + (frac / 256.0), 2)
-

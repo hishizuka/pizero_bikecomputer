@@ -759,18 +759,18 @@ class GUI_PyQt(GUI_Qt_Base):
 
         if self.dual_mode and current_widget == self.course_profile_graph_widget:
             signal = getattr(self.course_profile_graph_widget, signal_name, None)
-            if signal and hasattr(signal, "emit"):
+            if signal:
                 signal.emit()
             return
 
         if self.dual_mode and self.map_widget is not None:
             signal = getattr(self.map_widget, signal_name, None)
-            if signal and hasattr(signal, "emit"):
+            if signal:
                 signal.emit()
             return
 
         signal = getattr(current_widget, signal_name, None)
-        if signal and hasattr(signal, "emit"):
+        if signal:
             signal.emit()
 
     def reset_course(self):

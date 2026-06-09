@@ -427,7 +427,7 @@ class Button_Config:
     # 1) copy from base profile
     # 2) override only entries defined in Zwift_Click_V2_DUAL
     zwift_click_v2_dual_overrides = copy.deepcopy(
-        button_def.get("Zwift_Click_V2_DUAL", {})
+        button_def["Zwift_Click_V2_DUAL"]
     )
     button_def["Zwift_Click_V2_DUAL"] = copy.deepcopy(button_def["Zwift_Click_V2"])
     for page_name, page_overrides in zwift_click_v2_dual_overrides.items():
@@ -468,8 +468,8 @@ class Button_Config:
         if "Zwift_Click_V2_DUAL" not in self.button_def:
             return button_hard
 
-        cfg = getattr(self.config, "G_ZWIFT_CLICK_V2", None)
-        if not isinstance(cfg, dict) or not cfg.get("STATUS", False):
+        cfg = self.config.G_ZWIFT_CLICK_V2
+        if not cfg["STATUS"]:
             return button_hard
 
         return "Zwift_Click_V2_DUAL"
@@ -481,23 +481,19 @@ class Button_Config:
         profile = self._resolve_button_profile(button_hard)
         stack_index = gui.stack_widget.currentIndex()
         main_page_index = -1
-        if getattr(gui, "main_page", None) is not None:
+        if gui.main_page is not None:
             try:
                 main_page_index = gui.main_page.currentIndex()
             except Exception:
                 main_page_index = -1
 
-        dialog_exists = getattr(gui, "dialog_exists", None)
-        dialog_active = False
-        if callable(dialog_exists):
-            dialog_active = dialog_exists()
-        else:
-            dialog_active = bool(getattr(gui, "display_dialog", False))
+        dialog_active = gui.dialog_exists()
 
         if dialog_active:
-            if "DIALOG" in self.button_def.get(profile, {}):
+            profile_buttons = self.button_def[profile]
+            if "DIALOG" in profile_buttons:
                 self.page_mode = "DIALOG"
-            elif "MENU" in self.button_def.get(profile, {}):
+            elif "MENU" in profile_buttons:
                 self.page_mode = "MENU"
             else:
                 self.page_mode = "MAIN"
@@ -522,9 +518,9 @@ class Button_Config:
                     else:
                         mode_key = "MAIN"
 
-                pages = self.button_mode_pages.get(mode_key)
+                pages = self.button_mode_pages[mode_key]
                 if pages:
-                    mode_index = self.button_mode_index.get(mode_key, 0)
+                    mode_index = self.button_mode_index[mode_key]
                     if mode_index < 0 or mode_index >= len(pages):
                         mode_index = 0
                     self.page_mode = pages[mode_index]
@@ -535,7 +531,7 @@ class Button_Config:
                     self.page_mode = "MAIN"
                     if self.config.G_DUAL_DISPLAY_MODE and mode_key == "MAP":
                         self._dual_map_mode_active = False
-                        map_widget = getattr(gui, "map_widget", None)
+                        map_widget = gui.map_widget
                         if map_widget is not None:
                             map_widget.lock_on()
             elif w_index >= 2:
@@ -570,7 +566,7 @@ class Button_Config:
     def change_mode(self):
         # check MAP
         w = self.config.gui.main_page.widget(self.config.gui.main_page.currentIndex())
-        map_widget = getattr(self.config.gui, "map_widget", None)
+        map_widget = self.config.gui.map_widget
 
         if self.config.G_DUAL_DISPLAY_MODE:
             if w == self.config.gui.course_profile_graph_widget:
@@ -581,7 +577,7 @@ class Button_Config:
                     w.lock_off()
                 return
 
-            map_pages = self.button_mode_pages.get("MAP", [])
+            map_pages = self.button_mode_pages["MAP"]
             if not map_pages or map_widget is None:
                 self.change_mode_index("MAIN")
                 return

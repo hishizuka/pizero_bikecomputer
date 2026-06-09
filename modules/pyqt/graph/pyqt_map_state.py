@@ -354,8 +354,7 @@ class MapStateMixin:
         for key in list(self._cached_tiles.keys()):
             if key not in active:
                 del self._cached_tiles[key]
-        if hasattr(self, "_cleanup_tile_runtime_cache"):
-            self._cleanup_tile_runtime_cache(active)
+        self._cleanup_tile_runtime_cache(active)
 
     def _get_map_config_for_name(self, map_name):
         """Return the map config dict for a given map_name."""
@@ -399,7 +398,7 @@ class MapStateMixin:
 
         map_settings = map_config[map_name]
         z = self._get_zoom_for_map(map_name, map_config)
-        tile_size = map_settings.get("tile_size", 256)
+        tile_size = map_settings["tile_size"]
         max_zoomlevel = map_settings.get("max_zoomlevel")
         expand = max_zoomlevel is not None and z > max_zoomlevel
 
@@ -441,12 +440,12 @@ class MapStateMixin:
         course_index_value, course_on_status = self._get_course_display_state()
 
         display_key = (
-            norm(gps_values.get("lon")),
-            norm(gps_values.get("lat")),
+            norm(gps_values["lon"]),
+            norm(gps_values["lat"]),
             norm(self._get_map_track_value()),
-            norm(gps_values.get("mode")),
-            norm(self.map_pos.get("x")),
-            norm(self.map_pos.get("y")),
+            norm(gps_values["mode"]),
+            norm(self.map_pos["x"]),
+            norm(self.map_pos["y"]),
             self.lock_status,
             self.move_adjust_mode,
             self.zoomlevel,
@@ -478,15 +477,15 @@ class MapStateMixin:
             reasons.append("move_y")
         if self.track_timestamp is None:
             reasons.append("track_init")
-        if not getattr(self.logger, "short_log_available", True):
+        if not self.logger.short_log_available:
             reasons.append("short_log_unavailable")
-        if len(getattr(self.logger, "short_log_lat", [])):
+        if len(self.logger.short_log_lat):
             reasons.append("short_log_pending")
         if self.pre_zoomlevel.get(self.config.G_MAP) != self.zoomlevel:
             reasons.append("zoom_changed")
         if not main_drawn:
             reasons.append("main_tile_missing")
-        if hasattr(self, "_has_tile_batch_pending") and self._has_tile_batch_pending():
+        if self._has_tile_batch_pending():
             reasons.append("tile_batch_pending")
         if self._has_pending_downloads():
             reasons.append("pending_downloads")

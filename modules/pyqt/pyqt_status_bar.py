@@ -178,8 +178,8 @@ class StatusBarWidget(QtWidgets.QWidget):
         self._update_time()
 
     def _update_rec(self):
-        manual = getattr(self.config, "G_MANUAL_STATUS", "INIT")
-        stopwatch = getattr(self.config, "G_STOPWATCH_STATUS", "INIT")
+        manual = self.config.G_MANUAL_STATUS
+        stopwatch = self.config.G_STOPWATCH_STATUS
 
         if manual == "INIT":
             state = "hidden"
@@ -195,9 +195,7 @@ class StatusBarWidget(QtWidgets.QWidget):
     def _update_gps(self):
         mode = 0
         try:
-            gps_values = self.config.logger.sensor.values.get("GPS")
-            if isinstance(gps_values, dict):
-                mode = int(gps_values.get("mode", 0))
+            mode = int(self.config.logger.sensor.values["GPS"]["mode"])
         except Exception:
             mode = 0
         
@@ -227,12 +225,9 @@ class StatusBarWidget(QtWidgets.QWidget):
     def _update_light(self):
         light_state = None
         try:
-            ant_values = self.config.logger.sensor.values.get("ANT+")
-            ant_id = self.config.G_ANT.get("ID_TYPE", {}).get("LGT")
-            if isinstance(ant_values, dict) and ant_id in ant_values:
-                light_values = ant_values.get(ant_id)
-                if isinstance(light_values, dict):
-                    light_state = light_values.get("light_state")
+            ant_values = self.config.logger.sensor.values["ANT+"]
+            ant_id = self.config.G_ANT["ID_TYPE"]["LGT"]
+            light_state = ant_values[ant_id]["light_state"]
         except Exception:
             light_state = None
 

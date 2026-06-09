@@ -45,6 +45,8 @@ MIP_DISPLAY_PARAMS = {
 # default display (X window)
 class Display:
     # Device capabilities; override in display subclasses.
+    size = DEFAULT_RESOLUTION
+    color = DEFAULT_COLOR
     has_backlight = False
     # Auto backlight mode availability (device + user setting).
     allow_auto_backlight = False
@@ -62,11 +64,11 @@ class Display:
 
     @property
     def resolution(self):
-        return getattr(self, "size", DEFAULT_RESOLUTION)
+        return self.size
 
     @property
     def colors(self):
-        return getattr(self, "color", DEFAULT_COLOR)
+        return self.color
 
     @property
     def has_status_bar(self):
@@ -103,7 +105,7 @@ class Display:
         pass
 
     def _get_status_bar(self):
-        gui = getattr(self.config, "gui", None)
+        gui = self.config.gui
         if gui is None:
             return None
         return getattr(gui, "status_bar", None)
@@ -288,7 +290,7 @@ def detect_display(config):
             return "Papirus"
 
     if config.G_DISPLAY.startswith("MIP_"):
-        if not config.G_DISPLAY_PARAM.get("USE_DRM_FORCED", False):
+        if not config.G_DISPLAY_PARAM["USE_DRM_FORCED"]:
             from .mip_display_drm import detect_sharp_drm
 
             use_drm = detect_sharp_drm()
@@ -317,7 +319,7 @@ def init_display(config):
         if _SENSOR_DISPLAY:
             display = PiTFT28r(config)
     elif config.G_DISPLAY.startswith("MIP_"):
-        if bool(config.G_DISPLAY_PARAM.get("USE_DRM", False)):
+        if bool(config.G_DISPLAY_PARAM["USE_DRM"]):
             display = _init_mip_drm_display(config)
         else:
             # stop importing when a valid import is found
@@ -351,7 +353,7 @@ def init_display(config):
         
         if _SENSOR_DISPLAY:
             display = ST7789BreakoutDisplay(config, SUPPORTED_DISPLAYS[config.G_DISPLAY])
-    elif config.G_DISPLAY == "None" and bool(config.G_DISPLAY_PARAM.get("USE_DRM", False)):
+    elif config.G_DISPLAY == "None" and bool(config.G_DISPLAY_PARAM["USE_DRM"]):
         from .mip_display_drm import detect_sharp_drm
 
         if detect_sharp_drm():
