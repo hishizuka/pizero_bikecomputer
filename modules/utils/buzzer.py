@@ -15,6 +15,7 @@ class BuzzerController:
         "sgx-ca600-lap",
         "sgx-ca600-cancel",
         "sgx-ca600-save",
+        "sgx-ca600-ready",
         "beep",
         "beep-double",
         "beep-triple",

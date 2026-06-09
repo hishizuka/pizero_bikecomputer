@@ -47,6 +47,7 @@ Sounds (SGX-CA600 - Pioneer):
   sgx-ca600-lap         Low short + high long
   sgx-ca600-cancel      Two short beeps
   sgx-ca600-save        4-tone confirmation
+  sgx-ca600-ready       Two low short + mid long
 
 Utility sounds:
   beep              Simple single beep at 4kHz
@@ -76,6 +77,7 @@ list_sounds() {
     echo "sgx-ca600-lap"
     echo "sgx-ca600-cancel"
     echo "sgx-ca600-save"
+    echo "sgx-ca600-ready"
     echo "beep"
     echo "beep-double"
     echo "beep-triple"
@@ -258,6 +260,14 @@ sgx_ca600_save() {
     tone_on "$(freq 2522)"; sleep 0.059; tone_off
 }
 
+sgx_ca600_ready() {
+    # Two low short + mid long (second half of ca600-ready.wav;
+    # first half is identical to sgx-ca600-poweron)
+    tone_on "$(freq 1725)"; sleep 0.088; tone_off; sleep 0.094
+    tone_on "$(freq 1725)"; sleep 0.055; tone_off; sleep 0.035
+    tone_on "$(freq 2185)"; sleep 0.181; tone_off
+}
+
 # ============================================================
 # Utility sounds (optimized for 4kHz resonance)
 # ============================================================
@@ -308,6 +318,7 @@ play_sound() {
         sgx-ca600-lap)       sgx_ca600_lap ;;
         sgx-ca600-cancel)    sgx_ca600_cancel ;;
         sgx-ca600-save)      sgx_ca600_save ;;
+        sgx-ca600-ready)     sgx_ca600_ready ;;
         beep)            beep_single ;;
         beep-double)     beep_double ;;
         beep-triple)     beep_triple ;;
