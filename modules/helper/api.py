@@ -91,20 +91,22 @@ class api:
         self.livetrack_unavailable_reason = None
         self.livetrack_unavailable_notified = False
 
+        livetrack_enabled = self.config.G_THINGSBOARD_API["STATUS"]
+
         server = self.config.G_THINGSBOARD_API["SERVER"].strip()
         if server and not server.startswith(("http://", "https://")):
             server = f"https://{server}"
         server = server.rstrip("/")
         token = self.config.G_THINGSBOARD_API["TOKEN"].strip()
-        if not token:
+        if livetrack_enabled and not token:
             self.livetrack_unavailable_reason = (
                 "LiveTrack is disabled because ThingsBoard TOKEN is not configured."
             )
-        elif not server:
+        elif livetrack_enabled and not server:
             self.livetrack_unavailable_reason = (
                 "LiveTrack is disabled because ThingsBoard server is not configured."
             )
-        else:
+        elif token and server:
             access_token = urllib.parse.quote(token, safe="")
             self.thingsboard_telemetry_url = (
                 f"{server}/api/v1/{access_token}/telemetry"
@@ -114,7 +116,7 @@ class api:
                 f"sharedKeys={','.join(self.THINGSBOARD_SHARED_KEYS)}"
             )
 
-        if _IMPORT_THINGSBOARD:
+        if _IMPORT_THINGSBOARD and token and server:
             self.thingsboard_client = TBDeviceMqttClient(
                 self.config.G_THINGSBOARD_API["SERVER"],
                 1883,
@@ -136,14 +138,20 @@ class api:
         return ble_uart
 
     def _check_livetrack_startup_config(self):
+        if not self.config.G_THINGSBOARD_API["STATUS"]:
+            return False
+
         if self.livetrack_unavailable_reason is None:
             return True
 
         if not self.livetrack_unavailable_notified:
+            gui = self.config.gui
+            popup_multiline = getattr(gui, "show_popup_multiline", None)
+            if callable(popup_multiline) and getattr(gui, "msg_queue", None) is None:
+                return False
+
             self.livetrack_unavailable_notified = True
             app_logger.warning(self.livetrack_unavailable_reason)
-            gui = getattr(self.config, "gui", None)
-            popup_multiline = getattr(gui, "show_popup_multiline", None)
             if callable(popup_multiline):
                 popup_multiline(
                     "LiveTrack disabled",
