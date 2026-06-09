@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import json
+import os
 import re
 from datetime import datetime, timedelta, timezone
 
@@ -149,10 +150,6 @@ class GadgetbridgeService(Service):
         if self.termux_command is not None:
             self.run_termux_command(self.termux_command)
 
-    def _ensure_http_state(self):
-        if self._http_pending_requests is None:
-            self._http_pending_requests = {}
-
     @staticmethod
     def _get_nav_message_cache_key(message):
         return (
@@ -160,6 +157,10 @@ class GadgetbridgeService(Service):
             str(message.get("distance", "")).replace("\u00A0", " ").strip(),
             str(message.get("instr", "")).strip(),
         )
+
+    def _ensure_http_state(self):
+        if self._http_pending_requests is None:
+            self._http_pending_requests = {}
 
     def _has_active_course(self):
         try:
@@ -219,7 +220,6 @@ class GadgetbridgeService(Service):
             raise RuntimeError("Gadgetbridge UART service is disabled")
 
         self._ensure_http_state()
-
         loop = asyncio.get_running_loop()
         request_id = self._next_http_request_id()
         future = loop.create_future()
@@ -388,6 +388,65 @@ class GadgetbridgeService(Service):
             )
         ]
         return await asyncio.gather(*tasks)
+
+    async def show_gadgetbridge_download(
+        self,
+        url="https://tile.openstreetmap.org/13/7236/3225.png",
+        output_dir="tmp",
+    ):
+        headers = {"User-Agent": self.product}
+
+        if url.lower().endswith(".png"):
+            os.makedirs(output_dir, exist_ok=True)
+            save_path = os.path.join(
+                output_dir,
+                f"gadgetbridge_http_test_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png",
+            )
+            try:
+                status = await self.download_http_file(
+                    url,
+                    save_path,
+                    headers=headers,
+                    timeout=120,
+                )
+            except Exception as exc:
+                app_logger.error(f"Gadgetbridge HTTP test error: {exc!r}")
+                return
+
+            app_logger.debug(
+                f"[GB][HTTP][TEST] PNG download completed: status={status}, "
+                f"save_path={save_path}"
+            )
+            return
+
+        try:
+            response = await self.request_http(
+                url,
+                headers=headers,
+                timeout=30,
+            )
+        except Exception as exc:
+            app_logger.error(f"Gadgetbridge HTTP test error: {exc!r}")
+            return
+
+        body = response.get("resp", "")
+        if body is None:
+            app_logger.debug("[GB][HTTP][TEST] empty response")
+            return
+
+        if isinstance(body, (bytes, bytearray)):
+            body = bytes(body)
+            app_logger.debug(
+                "[GB][HTTP][TEST] response: "
+                f"type=bytes, len={len(body)}, head_hex={body[:16].hex()}"
+            )
+            return
+
+        text = str(body)
+        app_logger.debug(
+            "[GB][HTTP][TEST] response: "
+            f"type={type(body).__name__}, len={len(text)}, preview={text[:80]!r}"
+        )
 
     def _complete_http_request(self, message):
         self._ensure_http_state()

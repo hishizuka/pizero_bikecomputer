@@ -707,8 +707,7 @@ class Config:
         try:
             while True:
                 app_logger.info(
-                    "s:start/stop, l: lap, r:reset, p: previous screen, "
-                    "n: next screen, z: QZSS DCR test, q: quit"
+                    "s:start/stop, l: lap, r:reset, p: previous screen, n: next screen, q: quit"
                 )
                 key = await self.loop.run_in_executor(None, input, "> ")
 
@@ -753,6 +752,8 @@ class Config:
                     def fn():
                         app_logger.info("OK")
                     self.gui.show_dialog(fn=self.display.screen_flash_long, title="test")
+                elif key == "d" and self.ble_uart is not None:
+                    await self.ble_uart.show_gadgetbridge_download()
         except asyncio.CancelledError:
             pass
 
