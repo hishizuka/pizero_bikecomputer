@@ -8,10 +8,9 @@
 /courses/ridewithgps/*
 /courses/*html*
 /fonts/*
-/scripts/*.py
-/scripts/*/*.py
-/scripts/*/*.md
-/scripts/*/*.yaml
+/scripts/*
+!/scripts/install/
+!/scripts/install/**
 /.idea/
 /.serena/
 /.claude/
