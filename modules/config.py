@@ -431,10 +431,6 @@ class Config:
     }
     G_IMU_MAG_AXIS_CONVERSION = {"STATUS": False, "COEF": np.ones(3)}  # X, Y, Z
     G_IMU_MAG_DECLINATION = 0.0
-    G_IMU_CALIB = {
-        "MAG": False,
-        "PITCH_ROLL": False,
-    }
 
     # Bluetooth tethering
     G_BT_PAN_DEVICE = ""
@@ -487,8 +483,6 @@ class Config:
         parser.add_argument("--gui")
         parser.add_argument("--headless", action="store_true", default=False)
         parser.add_argument("--init", action="store_true", default=False)
-        parser.add_argument("--calib_mag", action="store_true", default=False)
-        parser.add_argument("--calib_pitch_roll", action="store_true", default=False)
 
         args = parser.parse_args()
 
@@ -508,11 +502,6 @@ class Config:
             self.G_HEADLESS = True
         if args.init:
             self.G_INIT_ONLY = True
-        if args.calib_mag:
-            self.G_IMU_CALIB["MAG"] = True
-            self.G_I2C_INTERVAL = 0.1
-        if args.calib_pitch_roll:
-            self.G_IMU_CALIB["PITCH_ROLL"] = True
 
         # read setting.conf and state.pickle
         self.setting = Setting(self)

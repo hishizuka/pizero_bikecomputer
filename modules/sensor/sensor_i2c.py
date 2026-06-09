@@ -271,25 +271,18 @@ class SensorI2C(Sensor):
         if restored_sealevel_pa is not None or restored_sealevel_temp is not None:
             self.sealevel_altitude_calibrated = True
 
-        if not self.config.G_IMU_CALIB["MAG"]:
-            for k in ("mag_min", "mag_max"):
-                self.values_mod[k] = self.config.state.get_value(
-                    f"{k}_{self.sensor_label['MAG']}", None
-                )
-            if self.values_mod["mag_min"] is not None and self.values_mod["mag_max"] is not None:
-                self.calc_mag_scales()
-        else:
-            self.mag_calib_ready = False
-            self.values_mod["mag_min"] = None
-            self.values_mod["mag_max"] = None
-            self.raw_mags = []
+        for k in ("mag_min", "mag_max"):
+            self.values_mod[k] = self.config.state.get_value(
+                f"{k}_{self.sensor_label['MAG']}", None
+            )
+        if (
+            self.values_mod["mag_min"] is not None
+            and self.values_mod["mag_max"] is not None
+        ):
+            self.calc_mag_scales()
 
-        if not self.config.G_IMU_CALIB["PITCH_ROLL"]:
-            for k in ("fixed_pitch", "fixed_roll"):
-                self.values[k] = self.config.state.get_value(k, 0.0)
-        else:
-            self.values["fixed_pitch"] = 0.0
-            self.values["fixed_roll"] = 0.0
+        for k in ("fixed_pitch", "fixed_roll"):
+            self.values[k] = self.config.state.get_value(k, 0.0)
 
     def detect_sensors(self):
         # pressure sensors
@@ -576,8 +569,6 @@ class SensorI2C(Sensor):
             self._mag_declination_task.cancel()
         if self.available_sensors["BUTTON"].get("MCP23008", False):
             self.sensor_mcp23008.quit()
-        if self.config.G_IMU_CALIB["MAG"]:
-            np.savetxt('log/raw_mags.csv', self.raw_mags, delimiter=',', fmt='%.6f')
 
     @staticmethod
     def _parse_datetime_value(value):
@@ -888,8 +879,9 @@ class SensorI2C(Sensor):
                 self.config.G_I2C_INTERVAL = self._mag_calibration_prev_i2c_interval
                 self._mag_calibration_prev_i2c_interval = None
 
-            if self.raw_mags:
-                np.savetxt("log/raw_mags.csv", self.raw_mags, delimiter=",", fmt="%.6f")
+            raw_mags = getattr(self, "raw_mags", None)
+            if raw_mags:
+                np.savetxt("log/raw_mags.csv", raw_mags, delimiter=",", fmt="%.6f")
             if (
                 self.values_mod["mag_min"] is not None
                 and self.values_mod["mag_max"] is not None
