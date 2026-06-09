@@ -189,6 +189,9 @@ class SensorI2C(Sensor):
     sensor_label = {
         "MAG": "",
     }
+    do_mag_calibration = False
+    do_pitch_roll_calibration = False
+    mag_calib_ready = False
 
     # for graph
     graph_values = {}
@@ -500,6 +503,8 @@ class SensorI2C(Sensor):
         for key in self.elements_vec:
             self.values[key] = np.zeros(3)
         self.values["mag_scale"] = np.ones(3)
+        self.do_mag_calibration = False
+        self.do_pitch_roll_calibration = False
         self.mag_calib_ready = False
         # for LP filter
         for key in self.elements:
@@ -519,6 +524,8 @@ class SensorI2C(Sensor):
         # for temporary values
         for key in self.elements_vec_mod:
             self.values_mod[key] = np.zeros(3)
+        for key in ("mag_min", "mag_max"):
+            self.values_mod.setdefault(key, None)
         self.gyro_average_array = np.zeros((3, int(2 / self.config.G_I2C_INTERVAL) + 1))
 
         self.values["total_ascent"] = 0
@@ -552,6 +559,7 @@ class SensorI2C(Sensor):
             self.calc_mag_scales()
 
         self._bhi3_raw_data_record_status = "INIT"
+        self._mag_calibration_prev_i2c_interval = None
 
     def start_coroutine(self):
         asyncio.create_task(self.start())
@@ -873,6 +881,51 @@ class SensorI2C(Sensor):
                 self.config.gui.show_popup(msg, 5)
             app_logger.debug(msg)
 
+    def update_mag_calibration_state(self):
+        if not self.motion_sensor["MAG"]:
+            msg = "[MAG] calibration unavailable"
+        elif self.do_mag_calibration:
+            self.do_mag_calibration = False
+            if self._mag_calibration_prev_i2c_interval is not None:
+                self.config.G_I2C_INTERVAL = self._mag_calibration_prev_i2c_interval
+                self._mag_calibration_prev_i2c_interval = None
+
+            if self.raw_mags:
+                np.savetxt("log/raw_mags.csv", self.raw_mags, delimiter=",", fmt="%.6f")
+            if (
+                self.values_mod["mag_min"] is not None
+                and self.values_mod["mag_max"] is not None
+            ):
+                self.config.state.write()
+            msg = "[MAG] calibration stopped"
+        else:
+            self.mag_calib_ready = False
+            self.values_mod["mag_min"] = None
+            self.values_mod["mag_max"] = None
+            self.raw_mags = []
+            self._mag_calibration_prev_i2c_interval = self.config.G_I2C_INTERVAL
+            self.config.G_I2C_INTERVAL = 0.1
+            self.do_mag_calibration = True
+            msg = "[MAG] calibration started"
+
+        if self.config.gui is not None:
+            self.config.gui.show_popup(msg, 5)
+        app_logger.info(msg)
+
+    def update_pitch_roll_calibration_state(self):
+        if not self.motion_sensor["ACC"] and not self.motion_sensor["QUATERNION"]:
+            msg = "[PITCH_ROLL] calibration unavailable"
+        elif self.do_pitch_roll_calibration:
+            self.do_pitch_roll_calibration = False
+            msg = "[PITCH_ROLL] calibration canceled"
+        else:
+            self.do_pitch_roll_calibration = True
+            msg = "[PITCH_ROLL] calibration started"
+
+        if self.config.gui is not None:
+            self.config.gui.show_popup(msg, 5)
+        app_logger.info(msg)
+
     def read_bhi3_s(self):
         if not self.available_sensors["MOTION"].get("BHI3_S"):
             return
@@ -1125,7 +1178,7 @@ class SensorI2C(Sensor):
         self.values["mag_mod"] = self.values["mag_raw"].copy()
 
         # calibration(hard/soft iron distortion)
-        if self.config.G_IMU_CALIB["MAG"]:
+        if self.do_mag_calibration:
             self.update_mag_calibration(self.values["mag_mod"])
             self.raw_mags.append(list(self.values["mag_raw"]))
 
@@ -1394,7 +1447,7 @@ class SensorI2C(Sensor):
 
     def calibrate_pitch_roll_if_stopped(self):
         # calibrate position
-        if not self.config.G_IMU_CALIB["PITCH_ROLL"] or sum(self.moving) != 0:
+        if not self.do_pitch_roll_calibration or sum(self.moving) != 0:
             return
 
         pitch = roll = np.nan
@@ -1419,7 +1472,7 @@ class SensorI2C(Sensor):
             app_logger.info(
                 f"calibrated position: pitch:{int(math.degrees(pitch))}, roll:{int(math.degrees(roll))}"
             )
-            self.config.G_IMU_CALIB["PITCH_ROLL"] = False
+            self.do_pitch_roll_calibration = False
 
     def update_moving_threshold(self):
         if self.motion_sensor["ACC"]:

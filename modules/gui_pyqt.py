@@ -146,6 +146,8 @@ class GUI_PyQt(GUI_Qt_Base):
     signal_multiscan = Signal()
     signal_fake_trainer = Signal()
     signal_bhi3_raw_log = Signal()
+    signal_calib_mag = Signal()
+    signal_calib_pitch_roll = Signal()
     signal_start_and_stop_manual = Signal()
     signal_count_laps = Signal()
     signal_reset_count = Signal()
@@ -254,6 +256,8 @@ class GUI_PyQt(GUI_Qt_Base):
             self.signal_multiscan.connect(self.multiscan_internal)
             self.signal_fake_trainer.connect(self.fake_trainer_internal)
             self.signal_bhi3_raw_log.connect(self.signal_bhi3_raw_log_internal)
+            self.signal_calib_mag.connect(self.signal_calib_mag_internal)
+            self.signal_calib_pitch_roll.connect(self.signal_calib_pitch_roll_internal)
 
             self.signal_start_and_stop_manual.connect(
                 self.start_and_stop_manual_internal
@@ -304,6 +308,7 @@ class GUI_PyQt(GUI_Qt_Base):
             from modules.pyqt.menu.pyqt_profile_widget import ProfileWidget
             from modules.pyqt.menu.pyqt_sensor_menu_widget import (
                 SensorMenuWidget,
+                I2CMenuWidget,
                 ANTMenuWidget,
                 ANTListWidget,
                 BLEMenuWidget,
@@ -362,6 +367,7 @@ class GUI_PyQt(GUI_Qt_Base):
                 ("ANT+ Sensors", ANTMenuWidget),
                 ("Wheel Size", AdjustWheelCircumferenceWidget),
                 ("Adjust Altitude", AdjustAltitudeWidget),
+                ("I2C Sensors", I2CMenuWidget),
                 ("GPS", GPSMenuWidget),
                 ("Sensors", SensorMenuWidget),
                 ("BT Pairing", BluetoothPairingListWidget),
@@ -816,6 +822,18 @@ class GUI_PyQt(GUI_Qt_Base):
 
     def signal_bhi3_raw_log_internal(self):
         self.sensor.sensor_i2c.update_bhi3_raw_log_state()
+
+    def calib_mag(self):
+        self.signal_calib_mag.emit()
+
+    def signal_calib_mag_internal(self):
+        self.sensor.sensor_i2c.update_mag_calibration_state()
+
+    def calib_pitch_roll(self):
+        self.signal_calib_pitch_roll.emit()
+
+    def signal_calib_pitch_roll_internal(self):
+        self.sensor.sensor_i2c.update_pitch_roll_calibration_state()
 
     def get_screenshot(self):
         self.signal_get_screenshot.emit()

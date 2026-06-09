@@ -12,17 +12,15 @@ class SensorMenuWidget(MenuWidget):
             ("BLE Sensors", "submenu", self.ble_sensors_menu),
             ("GPS", "submenu", self.gps_menu),
             ("Wheel Size", "submenu", self.adjust_wheel_circumference),
-            ("Auto Light", "toggle", lambda: self.onoff_auto_light(True)),
             ("Auto Stop", None, None),
             ("Gross Ave Speed", None, None),
-            ("Adjust Altitude", "submenu", self.adjust_altitude),
+            ("I2C Sensors", "submenu", self.i2c_sensors_menu),
         )
         self.add_buttons(button_conf)
-        self.onoff_auto_light(False)
         self.buttons["GPS"].onoff_button(self.sensor_gps.__class__.__name__ == "UBlox")
-    
+
     def preprocess(self):
-        self.buttons["Auto Light"].onoff_button(self.config.G_ANT["USE"]["LGT"])
+        pass
 
     def ant_sensors_menu(self):
         if self.sensor_ant.scanner.isUse:
@@ -39,13 +37,53 @@ class SensorMenuWidget(MenuWidget):
     def adjust_wheel_circumference(self):
         self.change_page("Wheel Size", preprocess=True)
 
+    def i2c_sensors_menu(self):
+        self.change_page("I2C Sensors", preprocess=True)
+
+
+class I2CMenuWidget(MenuWidget):
+    MAG_CALIBRATION_BUTTON = "Mag Calibration"
+    PITCH_ROLL_CALIBRATION_BUTTON = "Pitch/Roll Calibration"
+
+    def setup_menu(self):
+        button_conf = (
+            # Name(page_name), button_attribute, connected functions, layout
+            ("Auto Light", "toggle", lambda: self.onoff_auto_light(True)),
+            ("Adjust Altitude", "submenu", self.adjust_altitude),
+            (self.MAG_CALIBRATION_BUTTON, "toggle", self.calib_mag),
+            (self.PITCH_ROLL_CALIBRATION_BUTTON, "toggle", self.calib_pitch_roll),
+        )
+        self.add_buttons(button_conf)
+        self.update_button_status()
+
+    def preprocess(self):
+        self.update_button_status()
+
     def adjust_altitude(self):
         self.change_page("Adjust Altitude")
 
     def onoff_auto_light(self, change=True):
         if change:
-            self.config.G_ANT["USE_AUTO_LIGHT"] = not self.config.G_ANT["USE_AUTO_LIGHT"] 
+            self.config.G_ANT["USE_AUTO_LIGHT"] = not self.config.G_ANT["USE_AUTO_LIGHT"]
         self.buttons["Auto Light"].change_toggle(self.config.G_ANT["USE_AUTO_LIGHT"])
+
+    def calib_mag(self):
+        self.config.gui.calib_mag()
+        self.update_button_status()
+
+    def calib_pitch_roll(self):
+        self.config.gui.calib_pitch_roll()
+        self.update_button_status()
+
+    def update_button_status(self):
+        self.buttons["Auto Light"].onoff_button(self.config.G_ANT["USE"]["LGT"])
+        self.buttons["Auto Light"].change_toggle(self.config.G_ANT["USE_AUTO_LIGHT"])
+        self.buttons[self.MAG_CALIBRATION_BUTTON].change_toggle(
+            self.sensor_i2c.do_mag_calibration
+        )
+        self.buttons[self.PITCH_ROLL_CALIBRATION_BUTTON].change_toggle(
+            self.sensor_i2c.do_pitch_roll_calibration
+        )
 
 
 class GPSMenuWidget(MenuWidget):
