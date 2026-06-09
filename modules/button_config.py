@@ -393,10 +393,8 @@ class Button_Config:
         # override from "Zwift Click V2 (BLE)"
         "Zwift_Click_V2_DUAL": {
             "MAIN": {
-                #"NAVIGATION_UP": ("gadgetbridge_termux_voice_command", ""),
                 "NAVIGATION_UP": ("", ""),
-                "NAVIGATION_DOWN": ("gadgetbridge_google_assistant", ""),
-                #"NAVIGATION_DOWN": ("", ""),
+                "NAVIGATION_DOWN": ("", ""),
                 "NAVIGATION_LEFT": ("", ""),
                 "NAVIGATION_RIGHT": ("", ""),
                 "SHIFT_UP_LEFT": ("scroll_prev", "get_screenshot"),

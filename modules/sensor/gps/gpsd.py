@@ -135,10 +135,6 @@ class GPSD(AbstractSensorGPS):
                 return value is None
 
     async def update(self):
-        if self.config.G_DUMMY_OUTPUT:
-            await self.output_dummy()
-            return
-
         # https://gpsd.gitlab.io/gpsd/gpsd-client-example-code.html
         # https://gitlab.com/gpsd/gpsd/-/blob/master/gps/gps.py.in
         if _SENSOR_GPS_AIOGPS:

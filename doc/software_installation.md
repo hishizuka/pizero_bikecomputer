@@ -51,13 +51,13 @@ $ brew install python pyqt
 $ python3 -m venv .venv
 $ source .venv/bin/activate
 $ pip install -U pip setuptools
-$ pip install PyQt6 numpy cython pillow pyqtgraph oyaml polyline aiohttp qasync
+$ pip install PyQt6 numpy cython pillow pyqtgraph oyaml polyline aiohttp qasync psutil
 
 # or Linux (Debian/Ubuntu)
 $ python3 -m venv .venv
 $ source .venv/bin/activate
 $ pip install -U pip setuptools
-$ pip install PyQt6 numpy cython pillow pyqtgraph oyaml polyline aiohttp qasync
+$ pip install PyQt6 numpy cython pillow pyqtgraph oyaml polyline aiohttp qasync psutil
 $ sudo apt install sqlite3 libsqlite3-dev
 
 # optional: cloud upload / live track
@@ -846,9 +846,10 @@ If ANT+ powermeter is available, set both parameters are used in W'balance (%). 
 - Install [GadgetBridge](https://gadgetbridge.org) on Android and enable the `Connectivity` menu items.
 - `bluez-peripheral` (`bluez-peripheral==0.2.0a5` above) package is required.
 - GadgetBridge app settings
-  - Enable all permissions.
+  - Enable all permissions. Most Android app permissions are enabled by default when the app is installed.
   - `Settings` > `Discovery and Pairing options` > `Discover unsupported devices`: On.
   - From `Connect new device` in the menu or `+` button, enter `Device discovery`. Select the device (shown as host name), long press, and pair it as `Bangle.js`.
+  - Open the device settings in GadgetBridge and enable `Allow Intents`.
 - For `Get Location`
   - Open the device settings in GadgetBridge and enable `Use phone gps data`.
   - Set `GPS data update interval` to around `1000-5000` (1s - 5s).
