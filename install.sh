@@ -188,9 +188,15 @@ fi
 if [[ "$install_ant_plus" == "true" ]]; then
     echo "🔧 Installing ANT+ packages..."
     # trixie
-    sudo apt install -y python3-pip python3-usb
-    # install as root to ensure there are no udev_rules permission issues from setuptools
-    sudo pip3 install git+https://github.com/hishizuka/openant.git --break-system-packages
+    sudo apt install -y python3-pip python3-usb python3-serial
+    pip3 install --ignore-installed git+https://github.com/hishizuka/openant.git
+    openant_udev_installer="$(command -v openant-install-udev || true)"
+    if [[ -z "$openant_udev_installer" ]]; then
+        echo "❌ openant-install-udev was not found in PATH after openant install."
+        exit 1
+    fi
+    sudo "$openant_udev_installer"
+    sudo usermod -aG dialout "$TARGET_USER"
     echo "✅ ANT+ packages installed successfully."
 fi
 
