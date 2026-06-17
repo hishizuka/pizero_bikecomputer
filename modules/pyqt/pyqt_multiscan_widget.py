@@ -43,6 +43,14 @@ class MultiScanWidget(ScreenWidget):
             self.item_layout[e] = (i // cols, i % cols)
         super().__init__(parent, config, self.item_layout)
 
+    @property
+    def sensor_ant(self):
+        return self.sensor.sensor_ant
+
+    @property
+    def scanner(self):
+        return self.sensor_ant.scanner
+
     def reset_values(self):
         self.values = {
             "HR": [0, 0, 0],
@@ -54,14 +62,14 @@ class MultiScanWidget(ScreenWidget):
 
     # call from on_change_main_page in gui_pyqt.py
     def start(self):
-        if not self.sensor.sensor_ant.scanner.isUse:
-            self.sensor.sensor_ant.continuous_scan()
+        if self.sensor_ant.is_transport_available() and not self.scanner.isUse:
+            self.sensor_ant.continuous_scan()
         self.timer.start(self.config.G_DRAW_INTERVAL)
 
     # call from on_change_main_page in gui_pyqt.py
     def stop(self):
-        if self.sensor.sensor_ant.scanner.isUse:
-            self.sensor.sensor_ant.stop_continuous_scan()
+        if self.sensor_ant.is_transport_available() and self.scanner.isUse:
+            self.sensor_ant.stop_continuous_scan()
         self.timer.stop()
 
     def update_display(self):
@@ -69,7 +77,7 @@ class MultiScanWidget(ScreenWidget):
         now_time = datetime.now()
         self.reset_values()
         count = {"HR": 0, "PWR": 0}
-        for ant_id_type, values in self.sensor.sensor_ant.scanner.values.items():
+        for ant_id_type, values in self.scanner.values.items():
             (ant_id, ant_type) = self.struct_pattern["ID"].unpack(ant_id_type)
             # only HR and PWR
             if (
@@ -117,8 +125,6 @@ class MultiScanWidget(ScreenWidget):
 
             if (
                 key == "PWR"
-                and "manu_name" in self.sensor.sensor_ant.scanner.values[ant_id_type]
+                and "manu_name" in self.scanner.values[ant_id_type]
             ):
-                item.label.setText(
-                    self.sensor.sensor_ant.scanner.values[ant_id_type]["manu_name"]
-                )
+                item.label.setText(self.scanner.values[ant_id_type]["manu_name"])

@@ -96,7 +96,9 @@ class I2CMenuWidget(MenuWidget):
         self.update_button_status()
 
     def update_button_status(self):
-        self.buttons["Auto Light"].onoff_button(self.config.G_ANT["USE"]["LGT"])
+        self.buttons["Auto Light"].onoff_button(
+            self.sensor_ant.is_sensor_available("LGT")
+        )
         self.buttons["Auto Light"].change_toggle(self.config.G_ANT["USE_AUTO_LIGHT"])
         self.onoff_map_heading(change=False)
         self.buttons[self.MAG_CALIBRATION_BUTTON].change_toggle(
@@ -239,8 +241,12 @@ class GPSMenuWidget(MenuWidget):
 
 
 class ANTMenuWidget(MenuWidget):
+    ANT_STATUS_BUTTON = "ANT+"
+
     def setup_menu(self):
-        button_conf = []
+        button_conf = [
+            (self.ANT_STATUS_BUTTON, "toggle", lambda: self.onoff_ant(True))
+        ]
 
         for antName in self.config.G_ANT["ORDER"]:
             # Name(page_name), button_attribute, connected functions, layout
@@ -249,18 +255,34 @@ class ANTMenuWidget(MenuWidget):
             )
         self.add_buttons(button_conf)
 
-        # modify label from antName to self.get_button_state()
-        for antName in self.config.G_ANT["ORDER"]:
-            self.buttons[antName].setText(self.get_button_state(antName))
+        self.update_button_label()
 
         if self.config.uses_keyboard_navigation:
-            self.focus_widget = self.buttons[self.config.G_ANT["ORDER"][0]]
+            self.focus_widget = self.buttons[self.ANT_STATUS_BUTTON]
+
+    def preprocess(self):
+        self.update_button_label()
 
     def get_button_state(self, antName):
         status = "OFF"
-        if antName in self.config.G_ANT["USE"] and self.config.G_ANT["USE"][antName]:
+        if self.config.G_ANT["USE"][antName]:
             status = "{0:05d}".format(self.config.G_ANT["ID"][antName])
         return self.config.G_ANT["NAME"][antName] + ": " + status
+
+    def onoff_ant(self, change=True):
+        if change:
+            action = "OFF" if self.config.G_ANT["STATUS"] else "ON"
+            self.config.gui.show_dialog(self._toggle_ant, f"ANT+ {action}?")
+            return
+        self.update_button_label()
+
+    def _toggle_ant(self):
+        if self.config.G_ANT["STATUS"]:
+            self.sensor_ant.disable_ant("user")
+        else:
+            self.sensor_ant.enable_ant()
+        self.config.setting.write_config()
+        self.update_button_label()
 
     def setting_ant_HR(self):
         self.setting_ant("HR")
@@ -284,6 +306,8 @@ class ANTMenuWidget(MenuWidget):
         self.setting_ant("TEMP")
 
     def setting_ant(self, ant_name):
+        if not self.sensor_ant.is_transport_available():
+            return
         if self.config.G_ANT["USE"][ant_name]:
             # disable ANT+ sensor
             self.sensor_ant.disconnect_ant_sensor(ant_name)
@@ -297,8 +321,13 @@ class ANTMenuWidget(MenuWidget):
         self.update_button_label()
 
     def update_button_label(self):
-        for ant_name in self.buttons.keys():
+        ant_available = self.sensor_ant.is_transport_available()
+        self.buttons[self.ANT_STATUS_BUTTON].change_toggle(
+            self.config.G_ANT["STATUS"]
+        )
+        for ant_name in self.config.G_ANT["ORDER"]:
             self.buttons[ant_name].setText(self.get_button_state(ant_name))
+            self.buttons[ant_name].onoff_button(ant_available)
 
 
 class ANTListWidget(ListWidget):
@@ -317,6 +346,8 @@ class ANTListWidget(ListWidget):
     async def button_func_extra(self):
         if self.selected_item is None:
             return
+        if not self.sensor_ant.is_transport_available():
+            return
 
         app_logger.info(f"connect {self.list_type}: {self.selected_item.id}")
 
@@ -331,7 +362,8 @@ class ANTListWidget(ListWidget):
 
     def on_back_menu(self):
         self.timer.stop()
-        self.sensor_ant.searcher.stop_search()
+        if self.sensor_ant.is_transport_available():
+            self.sensor_ant.searcher.stop_search()
         # button update
         back_index_key = self.back_index_key
         gui_index = self.config.gui.gui_config.G_GUI_INDEX
@@ -345,11 +377,15 @@ class ANTListWidget(ListWidget):
             app_logger.warning(f"{gui_index}")
 
     def preprocess_extra(self):
+        if not self.sensor_ant.is_transport_available():
+            return
         self.ant_sensor_types.clear()
         self.sensor_ant.searcher.search(self.list_type)
         self.timer.start(self.config.G_DRAW_INTERVAL)
 
     def update_display(self):
+        if not self.sensor_ant.is_transport_available():
+            return
         detected_sensors = self.sensor_ant.searcher.getSearchList()
 
         for ant_id, ant_type_array in detected_sensors.items():

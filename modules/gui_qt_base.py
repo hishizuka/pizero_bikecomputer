@@ -71,6 +71,7 @@ class GUI_Qt_Base(QtCore.QObject):
         self.config = config
         self.config.gui = self
         self._quit_requested = False
+        self.msg_queue = None
 
         self.gui_config = GUI_Config(config.G_LAYOUT_FILE)
 
@@ -103,7 +104,7 @@ class GUI_Qt_Base(QtCore.QObject):
             self.msg_queue.task_done()
 
             await self.show_dialog_base(msg)
-            buzzer = getattr(self.config, "buzzer", None)
+            buzzer = self.config.buzzer
             buzzer_sound = msg.get("buzzer_sound", "beep")
             if buzzer is not None and buzzer_sound is not None:
                 buzzer.play(buzzer_sound)
@@ -318,9 +319,15 @@ class GUI_Qt_Base(QtCore.QObject):
     def show_dialog(self, fn, title):
         self._enqueue_msg({"fn": fn, "title": title, "button_num": 2})
 
-    def show_dialog_ok_only(self, fn, title):
+    def show_dialog_ok_only(self, fn, title, buzzer_sound="beep"):
         self._enqueue_msg(
-            {"fn": fn, "title": title, "button_num": 1, "button_label": ["OK"]}
+            {
+                "fn": fn,
+                "title": title,
+                "button_num": 1,
+                "button_label": ["OK"],
+                "buzzer_sound": buzzer_sound,
+            }
         )
 
     def show_dialog_cancel_only(self, fn, title):

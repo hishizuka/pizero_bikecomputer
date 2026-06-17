@@ -10,6 +10,7 @@ class GUI_None():
 
         self.config = config
         self.config.gui = self
+        self.msg_queue = None
 
         asyncio.run(self._run())
 
@@ -46,3 +47,16 @@ class GUI_None():
 
     def clear_external_instruction(self):
         pass
+
+    def show_dialog(self, fn, title):
+        print(title)
+        if fn is not None:
+            fn()
+
+    def show_dialog_ok_only(self, fn, title):
+        print(title)
+        if fn is not None:
+            fn()
+
+    def show_dialog_cancel_only(self, fn, title):
+        print(title)

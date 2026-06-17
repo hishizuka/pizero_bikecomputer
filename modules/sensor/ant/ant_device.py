@@ -218,7 +218,10 @@ class ANT_Device:
             pass
 
     def delete(self):
-        self.node.delete_channel()
+        if self.channel is None:
+            return
+        self.node.delete_channel(self.channel)
+        self.channel = None
 
     def state_check(self, mode):
         result = self.channel.get_channel_status()

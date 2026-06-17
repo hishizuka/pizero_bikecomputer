@@ -30,6 +30,8 @@ except ImportError:
     pass
 except DriverNotFound:
     pass
+except Exception:
+    pass
 
 if _SENSOR_ANT:
     app_logger.info("  ANT")
@@ -43,23 +45,30 @@ class SensorANT(Sensor):
     scanner = None
     device = {}
 
+    def _init_runtime_state(self):
+        self._start_task = None
+
+    def _init_transport_disconnect_state(self):
+        self.transport_disconnected = False
+        self.transport_error = None
+        self._transport_disconnect_popup_pending = False
+        self._transport_disconnect_popup_shown = False
+        self._transport_disconnect_logged = False
+
     def sensor_init(self):
+        self._init_runtime_state()
+        self._init_transport_disconnect_state()
+
         if self.config.G_ANT["STATUS"] and not _SENSOR_ANT:
             self.config.G_ANT["STATUS"] = False
 
         if self.config.G_ANT["STATUS"]:
-            self.node = Node()
-            self.node.set_network_key(self.NETWORK_NUM, self.NETWORK_KEY)
+            self._create_node()
 
         # initialize scan channel (reserve ch0)
         if _SENSOR_ANT:
             app_logger.info("detected ANT+ sensors:")
-        self.scanner = ant_device_multiscan.ANT_Device_MultiScan(self.node, self.config)
-        self.searcher = ant_device_search.ANT_Device_Search(
-            self.node, self.config, self.values
-        )
-        self.scanner.set_main_ant_device(self.device)
-        self.searcher.set_main_ant_device(self.device)
+        self._create_scan_search_devices()
 
         # auto connect ANT+ sensor from setting.conf
         if self.config.G_ANT["STATUS"] and not self.config.G_DUMMY_OUTPUT:
@@ -70,7 +79,7 @@ class SensorANT(Sensor):
                     self.connect_ant_sensor(key, antID, antType, False)
             return
         # otherwise, initialize
-        else:
+        elif self.config.G_DUMMY_OUTPUT:
             for key in self.config.G_ANT["ID"].keys():
                 self.config.G_ANT["USE"][key] = False
                 self.config.G_ANT["ID"][key] = 0
@@ -106,13 +115,21 @@ class SensorANT(Sensor):
         self.reset()
 
     def start_coroutine(self):
-        asyncio.create_task(self.start())
+        self._start_task = asyncio.create_task(self.start())
 
     async def start(self):
         if self.config.G_ANT["STATUS"]:
-            await asyncio.get_running_loop().run_in_executor(None, self.node.start)
+            try:
+                await asyncio.get_running_loop().run_in_executor(
+                    None, self.node.start
+                )
+            finally:
+                self._sync_transport_disconnect_from_node()
+                self.notify_transport_disconnected()
 
     def update(self):
+        self.notify_transport_disconnected()
+
         if self.config.G_ANT["STATUS"] or not self.config.G_DUMMY_OUTPUT:
             return
 
@@ -150,6 +167,137 @@ class SensorANT(Sensor):
         for dv in self.device.values():
             dv.reset_value()
 
+    def _create_node(self):
+        try:
+            self.node = Node()
+            self._register_transport_disconnect_callback()
+            self.node.set_network_key(self.NETWORK_NUM, self.NETWORK_KEY)
+            return True
+        except Exception as e:
+            app_logger.warning(f"ANT+ init failed: {e}")
+            if self.node is not None:
+                try:
+                    self.node.stop()
+                except Exception:
+                    pass
+            self.node = None
+            self.config.G_ANT["STATUS"] = False
+            return False
+
+    def _create_scan_search_devices(self):
+        self.scanner = ant_device_multiscan.ANT_Device_MultiScan(self.node, self.config)
+        self.searcher = ant_device_search.ANT_Device_Search(
+            self.node, self.config, self.values
+        )
+        self.scanner.set_main_ant_device(self.device)
+        self.searcher.set_main_ant_device(self.device)
+
+    def _drop_runtime_devices(self):
+        devices = list({id(dv): dv for dv in self.device.values()}.values())
+        for dv in devices:
+            send_queue = getattr(dv, "send_queue", None)
+            if send_queue is None:
+                continue
+            try:
+                send_queue.put_nowait(None)
+            except Exception:
+                pass
+        self.device.clear()
+
+    def _ensure_node_started(self):
+        if not self.config.G_ANT["STATUS"] or self.node is None:
+            return
+        if self._start_task is not None and not self._start_task.done():
+            return
+        try:
+            loop = self.config.loop
+        except (RuntimeError, AttributeError):
+            return
+        if loop.is_running():
+            self._start_task = loop.create_task(self.start())
+
+    def is_transport_available(self):
+        return (
+            self.config.G_ANT["STATUS"]
+            and self.node is not None
+            and not self.transport_disconnected
+        )
+
+    def is_sensor_available(self, ant_name):
+        if self.config.G_DUMMY_OUTPUT and not self.config.G_ANT["STATUS"]:
+            return self.config.G_ANT["USE"][ant_name]
+        return self.is_transport_available() and self.config.G_ANT["USE"][ant_name]
+
+    def invalidate_sensor_values(self, ant_name=None):
+        devices = []
+        if ant_name is None:
+            devices = list({id(dv): dv for dv in self.device.values()}.values())
+        else:
+            ant_id_type = self.config.G_ANT["ID_TYPE"][ant_name]
+            devices.append(self.device[ant_id_type])
+
+        for dv in devices:
+            try:
+                dv.reset_value()
+            except Exception:
+                pass
+            try:
+                dv.set_null_value()
+            except Exception:
+                pass
+
+    def enable_ant(self):
+        if self.is_transport_available():
+            return True
+
+        self.config.G_ANT["STATUS"] = True
+        if self.node is None or self.transport_disconnected:
+            if self.node is not None:
+                try:
+                    self.node.stop()
+                except Exception:
+                    pass
+            self.node = None
+            self._drop_runtime_devices()
+            self._init_transport_disconnect_state()
+            if not self._create_node():
+                return False
+            self._create_scan_search_devices()
+            self._ensure_node_started()
+
+        for key in self.config.G_ANT["ID"].keys():
+            if not self.config.G_ANT["USE"][key]:
+                continue
+            ant_id = self.config.G_ANT["ID"][key]
+            ant_type = self.config.G_ANT["TYPE"][key]
+            if ant_id == 0 or ant_type == 0:
+                continue
+            self.connect_ant_sensor(key, ant_id, ant_type, False)
+
+        return True
+
+    def disable_ant(self, reason="user"):
+        if self.node is not None and not self.transport_disconnected:
+            try:
+                if self.scanner is not None:
+                    self.scanner.stop()
+            except Exception:
+                pass
+            try:
+                if self.searcher is not None:
+                    self.searcher.stop_search(resetWait=False)
+            except Exception:
+                pass
+            for dv in list({id(dv): dv for dv in self.device.values()}.values()):
+                try:
+                    dv.ant_state = f"disable_ant:{reason}"
+                    dv.disconnect(isCheck=False, isChange=False)
+                except Exception:
+                    pass
+
+        self.invalidate_sensor_values()
+        self.config.G_ANT["STATUS"] = False
+
     def _log_battery_status_on_quit(self):
         entries = []
         for dv in self.device.values():
@@ -165,7 +313,21 @@ class SensorANT(Sensor):
             app_logger.info("ANT+ battery_status: " + ", ".join(entries))
 
     def quit(self):
+        if self.node is None:
+            return
+        self._sync_transport_disconnect_from_node()
+        if self.transport_disconnected:
+            app_logger.info("Skip ANT+ quit after transport disconnect")
+            try:
+                self.node.stop()
+            except Exception:
+                pass
+            return
         if not self.config.G_ANT["STATUS"]:
+            try:
+                self.node.stop()
+            except Exception:
+                pass
             return
         self.searcher.set_wait_quick_mode()
         self._log_battery_status_on_quit()
@@ -178,7 +340,7 @@ class SensorANT(Sensor):
         self.node.stop()
 
     def connect_ant_sensor(self, antName, antID, antType, connectStatus):
-        if not self.config.G_ANT["STATUS"]:
+        if not self.is_transport_available():
             return
         self.config.G_ANT["ID"][antName] = antID
         self.config.G_ANT["TYPE"][antName] = antType
@@ -247,21 +409,26 @@ class SensorANT(Sensor):
             if v and k in self.config.G_ANT["ID_TYPE"]:
                 if self.config.G_ANT["ID_TYPE"][k] == antIDType:
                     antNames.append(k)
+        dv = self.device[antIDType]
+        if self.is_transport_available():
+            try:
+                dv.ant_state = "disconnect_ant_sensor"
+                dv.disconnect(isCheck=False, isChange=False)
+                dv.delete()
+            except Exception:
+                pass
+        self.invalidate_sensor_values(antName)
+        self.device.pop(antIDType)
+
         for k in antNames:
             # USE: True -> False
-            self.device[
-                self.config.G_ANT["ID_TYPE"][k]
-            ].ant_state = "disconnect_ant_sensor"
-            self.device[self.config.G_ANT["ID_TYPE"][k]].disconnect(
-                isCheck=True, isChange=True
-            )
             self.config.G_ANT["ID_TYPE"][k] = 0
             self.config.G_ANT["ID"][k] = 0
             self.config.G_ANT["TYPE"][k] = 0
             self.config.G_ANT["USE"][k] = False
 
     def continuous_scan(self):
-        if not self.config.G_ANT["STATUS"]:
+        if not self.is_transport_available():
             return
         self.scanner.set_wait_quick_mode()
         for dv in self.device.values():
@@ -272,6 +439,8 @@ class SensorANT(Sensor):
         app_logger.info("START ANT+ multiscan")
 
     def stop_continuous_scan(self):
+        if not self.is_transport_available():
+            return
         self.scanner.set_wait_quick_mode()
         self.scanner.stop_scan()
         antIDTypes = set()
@@ -286,6 +455,62 @@ class SensorANT(Sensor):
         app_logger.info("STOP ANT+ multiscan")
 
     def set_light_mode(self, mode, auto=False):
-        if "LGT" not in self.config.G_ANT["USE"] or not self.config.G_ANT["USE"]["LGT"]:
+        if not self.is_sensor_available("LGT"):
             return
         self.device[self.config.G_ANT["ID_TYPE"]["LGT"]].send_light_mode(mode, auto)
+
+    def _register_transport_disconnect_callback(self):
+        if self.node is None:
+            return
+        try:
+            self.node.on_transport_disconnect = self._on_transport_disconnect
+        except AttributeError:
+            pass
+
+    def _on_transport_disconnect(self, error):
+        notify_user = self.config.G_ANT["STATUS"]
+        self.transport_disconnected = True
+        self.transport_error = error
+        self.invalidate_sensor_values()
+        if not self._transport_disconnect_logged:
+            app_logger.warning(f"ANT+ transport disconnected: {error!r}")
+            self._transport_disconnect_logged = True
+        if notify_user and not self._transport_disconnect_popup_shown:
+            self._transport_disconnect_popup_pending = True
+
+        try:
+            loop = self.config.loop
+        except RuntimeError:
+            return
+        except AttributeError:
+            return
+        if loop.is_running():
+            loop.call_soon_threadsafe(self.notify_transport_disconnected)
+
+    def _sync_transport_disconnect_from_node(self):
+        if self.node is None:
+            return
+        if not getattr(self.node, "transport_disconnected", False):
+            return
+        self._on_transport_disconnect(getattr(self.node, "transport_error", None))
+
+    def notify_transport_disconnected(self):
+        if (
+            not self._transport_disconnect_popup_pending
+            or self._transport_disconnect_popup_shown
+        ):
+            return False
+
+        gui = self.config.gui
+        if gui is None:
+            return False
+
+        if gui.msg_queue is None:
+            return False
+        show_dialog = gui.show_dialog_ok_only
+
+        self._transport_disconnect_popup_pending = False
+        self._transport_disconnect_popup_shown = True
+
+        show_dialog(None, "ANT+ USB dongle disconnected.", buzzer_sound="alert")
+        return True

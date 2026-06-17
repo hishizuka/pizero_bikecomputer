@@ -1611,27 +1611,29 @@ class SensorI2C(Sensor):
         # get temperature
         temperature = None
 
-        ant_value = np.nan
-        if (
-            self.config.G_ANT["ID_TYPE"]["TEMP"]
-            in self.config.logger.sensor.values["ANT+"]
-        ):
-            ant_value = self.config.logger.sensor.values["ANT+"][
-                self.config.G_ANT["ID_TYPE"]["TEMP"]
-            ]["temperature"]
+        ant_temperature = np.nan
+        sensor = self.config.logger.sensor
+        ant_values = sensor.values["ANT+"]
+        sensor_ant = sensor.sensor_ant
+        ant_temp_available = sensor_ant.is_sensor_available("TEMP")
+
+        if self.config.G_ANT["ID_TYPE"]["TEMP"] in ant_values:
+            ant_temperature = ant_values[self.config.G_ANT["ID_TYPE"]["TEMP"]][
+                "temperature"
+            ]
 
         # from ANT+ sensor (tempe), not use I2C sensor because of inaccuracy
         if (
-            self.config.G_ANT["USE"]["TEMP"]
+            ant_temp_available
             and self.config.G_ANT["ID_TYPE"]["TEMP"] != 0
-            and not np.isnan(ant_value)
+            and not np.isnan(ant_temperature)
         ):
-            temperature = ant_value
-            self.sealevel_temp = 273.15 + ant_value + 0.0065 * alt
+            temperature = ant_temperature
+            self.sealevel_temp = 273.15 + ant_temperature + 0.0065 * alt
 
         # from Open-Meteo API with current point
         else:
-            v = self.config.logger.sensor.values["GPS"]
+            v = sensor.values["GPS"]
             try:
                 api_data = await self.config.api.get_openmeteo_temperature_data(
                     v["lon"], v["lat"]

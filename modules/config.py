@@ -757,6 +757,8 @@ class Config:
                         app_logger.warning("[QZSS DCR][TEST] UBlox is not active")
                         continue
                     sensor_gps.inject_qzss_dcr_test_event()
+                elif key == "L" and self.gui:
+                    self.gui.turn_on_off_light()
                 elif key == "t" and self.gui:
                     def fn():
                         app_logger.info("OK")

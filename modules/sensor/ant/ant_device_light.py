@@ -71,9 +71,6 @@ class ANT_Device_Light(ant_device.ANT_Device):
         self.channel.set_search_timeout(self.timeout)
 
     def setup_channel_extra(self):
-        # 0:-18 dBm, 1:-12 dBm, 2:-6 dBm, 3:0 dBm, 4:N/A
-        self.channel.set_channel_tx_power(0)
-
         # Protect shared state across ANT callback thread and UI/auto threads.
         self.state_lock = self._ensure_lock()
 
