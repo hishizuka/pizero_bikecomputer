@@ -101,7 +101,7 @@ Install in the home directory of default user "pi". Also, your Raspberry Pi is c
 ```
 $ cd
 
-$ sudo apt install -y git cython3 cmake python3.13-venv python3-setuptools python3-numpy sqlite3 libsqlite3-dev python3-pil python3-aiohttp python3-psutil python3-pyqt6 python3-pyqt6.qtsvg qt6-svg-plugins pyqt6-dev-tools
+$ sudo apt install git cython3 cmake python3.13-venv python3-setuptools python3-numpy sqlite3 libsqlite3-dev python3-pil python3-aiohttp python3-psutil python3-pyqt6 python3-pyqt6.qtsvg qt6-svg-plugins pyqt6-dev-tools
 
 # If there is no python virtual environment.
 $ python -m venv --system-site-packages ~/.venv
@@ -122,7 +122,7 @@ so no separate `crdp` installation is required.
 Strava, Garmin and ThingsBoard
 
 ```
-$ sudo apt install -y bluez-obexd
+$ sudo apt install bluez-obexd
 $ pip install garminconnect stravacookies bluez-peripheral==0.2.0a5 tb-mqtt-client mmh3 timezonefinder
 ```
 
@@ -147,7 +147,7 @@ Enable UART if the receiver is connected by UART, and enable I2C if the
 receiver is connected by I2C.
 
 ```
-$ sudo apt install -y python3-smbus2
+$ sudo apt install python3-smbus2
 $ pip install pyubx2 pyserial azarashi
 ```
 
@@ -172,7 +172,7 @@ on and login shell is off in raspi-config and the GPS device is connected as
 file(`/etc/default/gpsd`).
 
 ```
-$ sudo apt install -y gpsd python3-gps libffi-dev
+$ sudo apt install gpsd python3-gps libffi-dev
 $ sudo cp scripts/install/etc/default/gpsd /etc/default/gpsd
 $ sudo systemctl enable gpsd
 $ sudo systemctl enable gpsd.socket
@@ -185,16 +185,25 @@ Check with `cgps` or `gpsmon` command.
 Use this for the Sony CXD5610 I2C GPS path.
 
 ```
-$ sudo apt install -y python3-smbus2 libgpiod3 libgpiod-dev python3-libgpiod
+$ sudo apt install python3-smbus2 libgpiod3 libgpiod-dev python3-libgpiod
 ```
 
 
 ### ANT+ USB dongle
 
+Run the `pip3` command with the virtual environment from [Common](#common)
+activated.
+
 ```
-$ sudo apt install libusb-1.0-0 python3-usb python3-pip
-$ sudo pip3 install git+https://github.com/hishizuka/openant.git --break-system-packages
+$ sudo apt install python3-pip python3-usb python3-serial
+$ pip3 install --ignore-installed git+https://github.com/hishizuka/openant.git
+$ openant_udev_installer="$(command -v openant-install-udev)"
+$ sudo "$openant_udev_installer"
+$ sudo usermod -aG dialout "$USER"
 ```
+
+`openant-install-udev` installs openant's udev rules. Log out and back in, or
+reboot, before using ANT+ so the udev and group changes are applied.
  
 
 ### Display
