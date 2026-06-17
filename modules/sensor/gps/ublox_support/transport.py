@@ -14,6 +14,9 @@ I2C_READLINE_LIMIT = 512
 I2C_REMOTE_IO_ERRNO = getattr(errno, "EREMOTEIO", 121)
 I2C_TRANSFER_ATTEMPTS = 4
 I2C_TRANSFER_RETRY_DELAY = 0.02
+I2C_BLOCK_READ_LENGTH = 32
+I2C_POLL_INTERVAL = 0.01
+I2C_INVALID_AVAILABLE_THRESHOLD = 0xFF00
 
 
 def is_interrupted_system_call(exc):
@@ -119,7 +122,7 @@ def detect_sensor_ublox():
 
 
 class I2CStream:
-    def __init__(self, bus, address, timeout):
+    def __init__(self, bus, address, timeout, tx_ready=None):
         try:
             import smbus2
         except ImportError as exc:
@@ -129,6 +132,7 @@ class I2CStream:
         self.address = address
         self.timeout = timeout
         self.buffer = bytearray()
+        self.tx_ready = tx_ready
         self.bus = smbus2.SMBus(bus)
         self.available()
 
@@ -152,24 +156,49 @@ class I2CStream:
             data,
         )
 
+    def set_tx_ready(self, tx_ready):
+        self.tx_ready = tx_ready
+
     def available(self):
         data = self._read_block(0xFD, 2)
-        return (data[0] << 8) | data[1]
+        available = (data[0] << 8) | data[1]
+        if available >= I2C_INVALID_AVAILABLE_THRESHOLD:
+            return 0
+        return available
+
+    def _wait_for_data(self, end_time):
+        if self.tx_ready is None:
+            return
+        timeout = end_time - time.monotonic()
+        if timeout <= 0:
+            return
+        self.tx_ready.wait_active(timeout)
+
+    def _poll_sleep(self):
+        if self.tx_ready is None:
+            time.sleep(I2C_POLL_INTERVAL)
+
+    def _read_available(self, available, limit):
+        if available <= 0 or limit <= 0:
+            return 0
+        length = min(available, limit, I2C_BLOCK_READ_LENGTH)
+        self.buffer.extend(self._read_block(0xFF, length))
+        return length
 
     def read(self, size):
         end_time = time.monotonic() + self.timeout
         while len(self.buffer) < size:
+            self._wait_for_data(end_time)
             available = self.available()
             if not available:
                 if time.monotonic() >= end_time:
                     break
-                time.sleep(0.01)
+                self._poll_sleep()
                 continue
 
-            while available > 0 and len(self.buffer) < size:
-                length = min(available, size - len(self.buffer), 32)
-                self.buffer.extend(self._read_block(0xFF, length))
-                available -= length
+            # Read ahead by one I2C block even when UBXReader asks for a byte.
+            # The extra bytes stay in self.buffer and avoid repeated transfers.
+            self._read_available(available, I2C_BLOCK_READ_LENGTH)
 
         out = bytes(self.buffer[:size])
         del self.buffer[:size]
@@ -182,17 +211,16 @@ class I2CStream:
 
         end_time = time.monotonic() + self.timeout
         while b"\n" not in self.buffer and len(self.buffer) < limit:
+            self._wait_for_data(end_time)
             available = self.available()
             if not available:
                 if time.monotonic() >= end_time:
                     break
-                time.sleep(0.01)
+                self._poll_sleep()
                 continue
 
-            length = min(available, limit - len(self.buffer), 32)
-            if length <= 0:
+            if self._read_available(available, limit - len(self.buffer)) <= 0:
                 break
-            self.buffer.extend(self._read_block(0xFF, length))
 
         newline_index = self.buffer.find(b"\n")
         if newline_index >= 0:

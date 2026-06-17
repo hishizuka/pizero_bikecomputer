@@ -221,6 +221,20 @@ class Setting:
                 self.config.G_GPS_UBLOX["POWER_SAVE"] = c.getboolean("USE_POWER_SAVE")
             if "USE_QZSS_DCR" in c:
                 self.config.G_GPS_UBLOX["QZSS_DCR"] = c.getboolean("USE_QZSS_DCR")
+            tx_ready = self.config.G_GPS_UBLOX["TX_READY"]
+            if "USE_TX_READY" in c:
+                tx_ready["STATUS"] = c.getboolean("USE_TX_READY")
+            if "TX_READY_GPIO" in c:
+                value = c["TX_READY_GPIO"].strip()
+                tx_ready["GPIO"] = None if value == "" else int(value)
+            if "TX_READY_INTERFACE" in c:
+                tx_ready["INTERFACE"] = c.getint("TX_READY_INTERFACE")
+            if "TX_READY_PIN" in c:
+                tx_ready["PIN"] = c.getint("TX_READY_PIN")
+            if "TX_READY_POLARITY" in c:
+                tx_ready["POLARITY"] = c.getint("TX_READY_POLARITY")
+            if "TX_READY_THRESHOLD" in c:
+                tx_ready["THRESHOLD"] = c.getint("TX_READY_THRESHOLD")
 
         if "STRAVA_API" in self.config_parser:
             for k in self.config.G_STRAVA_API.keys():
@@ -347,6 +361,13 @@ class Setting:
         c["assistnow_ztp_token"] = self.config.G_GPS_UBLOX["ASSISTNOW"]["ZTP_TOKEN"]
         c["use_power_save"] = str(self.config.G_GPS_UBLOX["POWER_SAVE"])
         c["use_qzss_dcr"] = str(self.config.G_GPS_UBLOX["QZSS_DCR"])
+        tx_ready = self.config.G_GPS_UBLOX["TX_READY"]
+        c["use_tx_ready"] = str(tx_ready["STATUS"])
+        c["tx_ready_gpio"] = "" if tx_ready["GPIO"] is None else str(tx_ready["GPIO"])
+        c["tx_ready_interface"] = str(tx_ready["INTERFACE"])
+        c["tx_ready_pin"] = str(tx_ready["PIN"])
+        c["tx_ready_polarity"] = str(tx_ready["POLARITY"])
+        c["tx_ready_threshold"] = str(tx_ready["THRESHOLD"])
 
         self.config_parser["STRAVA_API"] = {}
         for k in self.config.G_STRAVA_API.keys():

@@ -256,6 +256,15 @@ class Config:
         },
         "POWER_SAVE": False,
         "QZSS_DCR": False,
+        "TX_READY": {
+            "STATUS": True,
+            "GPIOCHIP": "/dev/gpiochip4",
+            "GPIO": 22,
+            "INTERFACE": 0,
+            "PIN": 1,
+            "POLARITY": 0,
+            "THRESHOLD": 1,
+        },
     }
 
     # fullscreen switch (overwritten with setting.conf)

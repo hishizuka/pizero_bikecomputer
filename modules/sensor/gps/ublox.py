@@ -59,6 +59,7 @@ try:
         is_interrupted_system_call as _is_interrupted_system_call,
         retry_interrupted_system_call as _retry_interrupted_system_call,
     )
+    from .ublox_support.tx_ready import TxReadyLine
 except ModuleNotFoundError as exc:
     missing_dependency = (exc.name or "").split(".", maxsplit=1)[0]
     if missing_dependency not in _OPTIONAL_DEPENDENCIES:
@@ -110,6 +111,8 @@ class UBlox(AbstractSensorGPS):
         self._periodic_output_configured = False
         self._sec_uniqid_poll_sent = False
         self._last_mon_ver_poll = 0.0
+        self._tx_ready_line = None
+        self._tx_ready_configured = False
         assistnow_config = self.config.G_GPS_UBLOX["ASSISTNOW"]
         self._assistnow_client = AssistNowClient(
             assistnow_config,
@@ -136,6 +139,11 @@ class UBlox(AbstractSensorGPS):
         }
         self.qzss_dcr_status = {
             "status": self._qzss_dcr_configure_status(),
+        }
+        self.tx_ready_status = {
+            "status": "pending" if self._tx_ready_requested() else "disabled",
+            "gpio": self.config.G_GPS_UBLOX["TX_READY"]["GPIO"],
+            "error": None,
         }
         self.latest_qzss_dcr = None
         self.latest_qzss_dcr_sentence = None
@@ -195,10 +203,12 @@ class UBlox(AbstractSensorGPS):
         if self.transport is None:
             return
         try:
+            self._restore_i2c_tx_ready()
             self.transport.close()
         except Exception:
             app_logger.exception("[UBlox] failed to close transport")
         finally:
+            self._close_tx_ready_line()
             self._reader = None
             self.transport = None
             self.transport_type = None
@@ -218,6 +228,7 @@ class UBlox(AbstractSensorGPS):
         self._periodic_output_configured = False
         self._sec_uniqid_poll_sent = False
         self._last_mon_ver_poll = 0.0
+        self._tx_ready_configured = False
 
     def _read_transport(self):
         try:
@@ -356,6 +367,12 @@ class UBlox(AbstractSensorGPS):
                 direct=direct,
             )
 
+    def _write_config_sequence(self, cfg_data, direct=False):
+        for cfg_item in cfg_data:
+            self._write_config([cfg_item], direct=direct)
+            if self.transport_type == "i2c":
+                time.sleep(_I2C_CONFIG_CHUNK_DELAY)
+
     def _clear_pending_input(self):
         if self.transport_type != "uart":
             return
@@ -420,6 +437,7 @@ class UBlox(AbstractSensorGPS):
             time.sleep(_INFO_POLL_INTERVAL)
             self._clear_pending_input()
 
+        self._configure_i2c_tx_ready()
         self._poll_mon_ver(force=True)
 
         self.qzss_dcr_status["status"] = self._qzss_dcr_configure_status()
@@ -434,6 +452,113 @@ class UBlox(AbstractSensorGPS):
         ):
             app_logger.info("[UBlox] AssistNow skipped: no ZTP token")
             self._assistnow_skip_logged = True
+
+    def _tx_ready_requested(self):
+        return bool(self.config.G_GPS_UBLOX["TX_READY"]["STATUS"])
+
+    def _tx_ready_config(self):
+        return self.config.G_GPS_UBLOX["TX_READY"]
+
+    def _close_tx_ready_line(self):
+        if self._tx_ready_line is not None:
+            self._tx_ready_line.close()
+            self._tx_ready_line = None
+
+    def _tx_ready_active_high(self):
+        return int(self._tx_ready_config()["POLARITY"]) == 0
+
+    def _i2c_tx_ready_enable_cfg_data(self):
+        tx_ready_config = self._tx_ready_config()
+        return [
+            ("CFG_UART1OUTPROT_NMEA", 0),
+            ("CFG_UART1OUTPROT_UBX", 0),
+            ("CFG_UART1_ENABLED", 0),
+            ("CFG_TXREADY_INTERFACE", int(tx_ready_config["INTERFACE"])),
+            ("CFG_TXREADY_PIN", int(tx_ready_config["PIN"])),
+            ("CFG_TXREADY_POLARITY", int(tx_ready_config["POLARITY"])),
+            ("CFG_TXREADY_THRESHOLD", int(tx_ready_config["THRESHOLD"])),
+            ("CFG_TXREADY_ENABLED", 1),
+        ]
+
+    def _i2c_tx_ready_restore_cfg_data(self):
+        return [
+            ("CFG_TXREADY_ENABLED", 0),
+            ("CFG_TXREADY_INTERFACE", 0),
+            ("CFG_TXREADY_PIN", 0),
+            ("CFG_TXREADY_POLARITY", 0),
+            ("CFG_TXREADY_THRESHOLD", 0),
+            ("CFG_UART1_ENABLED", 1),
+            ("CFG_UART1OUTPROT_NMEA", 1),
+            ("CFG_UART1OUTPROT_UBX", 1),
+        ]
+
+    def _configure_i2c_tx_ready(self):
+        if self.transport_type != "i2c":
+            self.tx_ready_status["status"] = "disabled_transport"
+            self.tx_ready_status["error"] = None
+            return
+        if not self._tx_ready_requested():
+            self.tx_ready_status["status"] = "disabled"
+            self.tx_ready_status["error"] = None
+            return
+        if self._tx_ready_configured:
+            return
+
+        tx_ready_config = self._tx_ready_config()
+        if tx_ready_config["GPIO"] is None:
+            self.tx_ready_status["status"] = "disabled_no_gpio"
+            self.tx_ready_status["error"] = None
+            app_logger.info("[UBlox] TX_READY disabled: GPIO is not configured")
+            return
+
+        try:
+            self._tx_ready_line = TxReadyLine(
+                tx_ready_config["GPIOCHIP"],
+                int(tx_ready_config["GPIO"]),
+                active_high=self._tx_ready_active_high(),
+            )
+            self._write_config_sequence(
+                self._i2c_tx_ready_enable_cfg_data(),
+                direct=True,
+            )
+            self.transport.set_tx_ready(self._tx_ready_line)
+        except Exception as exc:
+            self.tx_ready_status["status"] = "fallback_polling"
+            self.tx_ready_status["error"] = str(exc)
+            self._close_tx_ready_line()
+            app_logger.warning(f"[UBlox] TX_READY unavailable: {exc}")
+            return
+
+        self._tx_ready_configured = True
+        self.tx_ready_status["status"] = "enabled"
+        self.tx_ready_status["error"] = None
+        threshold_bytes = int(tx_ready_config["THRESHOLD"]) * 8
+        app_logger.info(
+            "[UBlox] TX_READY enabled "
+            f"(gpio={self._tx_ready_line.name}, "
+            f"interface={int(tx_ready_config['INTERFACE'])}, "
+            f"pin={int(tx_ready_config['PIN'])}, "
+            f"polarity={int(tx_ready_config['POLARITY'])}, "
+            f"threshold={threshold_bytes} bytes)"
+        )
+
+    def _restore_i2c_tx_ready(self):
+        if self.transport_type != "i2c":
+            return
+        if not self._tx_ready_configured:
+            return
+        try:
+            if self.transport is not None:
+                self.transport.set_tx_ready(None)
+            self._write_config_sequence(
+                self._i2c_tx_ready_restore_cfg_data(),
+                direct=True,
+            )
+        except Exception as exc:
+            app_logger.warning(f"[UBlox] TX_READY restore failed: {exc}")
+        finally:
+            self._tx_ready_configured = False
+            self.tx_ready_status["status"] = "restored"
 
     def _initial_assistnow_status(self):
         if self._assistnow_client.has_credentials:
