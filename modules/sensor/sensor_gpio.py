@@ -5,12 +5,12 @@ from datetime import timedelta
 from modules.app_logger import app_logger
 from .sensor import Sensor
 
-
 # GPIO Button (gpiod v2)
 _SENSOR_GPIOD = False
 try:
     import gpiod
     from gpiod.line import Direction, Edge, Bias
+
     _SENSOR_GPIOD = True
 except ImportError:
     pass
@@ -186,18 +186,24 @@ class SensorGPIO(Sensor):
     async def _event_loop(self):
         """Main event loop for GPIO edge detection."""
         while not self.quit_status:
-            if self._line_request is None:
+            line_request = self._line_request
+            if line_request is None:
                 await asyncio.sleep(0.1)
                 continue
 
             # Wait for edge events in a separate thread to avoid blocking
             try:
                 has_event = await asyncio.to_thread(
-                    self._wait_for_events, timedelta(seconds=0.5)
+                    self._wait_for_events, line_request, timedelta(seconds=0.5)
                 )
             except Exception:
+                if self.quit_status:
+                    break
                 await asyncio.sleep(0.1)
                 continue
+
+            if self.quit_status:
+                break
 
             if not has_event:
                 # Check for pending long press timeouts
@@ -205,27 +211,35 @@ class SensorGPIO(Sensor):
                 continue
 
             # Read and process events
+            line_request = self._line_request
+            if line_request is None:
+                continue
+
             try:
-                events = self._line_request.read_edge_events()
+                events = line_request.read_edge_events()
                 for event in events:
                     await self._handle_edge_event(event)
             except Exception as e:
+                if self.quit_status:
+                    break
                 app_logger.debug(f"Error reading edge events: {e}")
                 continue
 
             # Also check long press after processing events
             await self._check_long_press()
 
-    def _wait_for_events(self, timeout):
+    def _wait_for_events(self, line_request, timeout):
         """Wait for edge events (called in thread)."""
+        if line_request is None or self.quit_status:
+            return False
         try:
-            return self._line_request.wait_edge_events(timeout)
+            return line_request.wait_edge_events(timeout)
         except TypeError:
             # Some bindings accept float seconds
             try:
-                return self._line_request.wait_edge_events(timeout.total_seconds())
+                return line_request.wait_edge_events(timeout.total_seconds())
             except TypeError:
-                return self._line_request.wait_edge_events()
+                return line_request.wait_edge_events()
 
     def _press_button(self, pin, index):
         button = self._pin_to_button.get(pin)
@@ -262,10 +276,15 @@ class SensorGPIO(Sensor):
 
         while not self.quit_status and state["pressed"]:
             # Read current pin value
+            line_request = self._line_request
+            if line_request is None:
+                break
             try:
-                value = self._line_request.get_value(pin)
+                value = line_request.get_value(pin)
                 # Value.ACTIVE (1) = released (pulled high), Value.INACTIVE (0) = pressed
-                is_released = value.value == 1 if hasattr(value, 'value') else bool(value)
+                is_released = (
+                    value.value == 1 if hasattr(value, "value") else bool(value)
+                )
             except Exception:
                 break
 
@@ -281,10 +300,7 @@ class SensorGPIO(Sensor):
                 return
 
             # Check for long press
-            if (
-                state["press_time"] is not None
-                and not state["long_press_fired"]
-            ):
+            if state["press_time"] is not None and not state["long_press_fired"]:
                 elapsed = time.time() - state["press_time"]
                 if elapsed >= long_press_threshold:
                     # Long press detected
@@ -312,11 +328,28 @@ class SensorGPIO(Sensor):
                     self._press_button(pin, 1)
                     state["last_action_time"] = current_time
 
-    def quit(self):
+    async def quit(self):
         self.quit_status = True
-        if self._line_request is not None:
+
+        if self._event_task is not None:
             try:
-                self._line_request.release()
+                await asyncio.wait_for(self._event_task, timeout=1.0)
+            except asyncio.TimeoutError:
+                self._event_task.cancel()
+                try:
+                    await self._event_task
+                except asyncio.CancelledError:
+                    pass
+                except Exception:
+                    pass
             except Exception:
                 pass
-            self._line_request = None
+            self._event_task = None
+
+        line_request = self._line_request
+        self._line_request = None
+        if line_request is not None:
+            try:
+                line_request.release()
+            except Exception:
+                pass

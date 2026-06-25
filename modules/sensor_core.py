@@ -288,7 +288,7 @@ class SensorCore:
         self.sensor_ant.quit()
         self.sensor_ble.quit()
         await self.sensor_gps.quit()
-        self.sensor_gpio.quit()
+        await self.sensor_gpio.quit()
 
     # reset accumulated values
     def reset(self):

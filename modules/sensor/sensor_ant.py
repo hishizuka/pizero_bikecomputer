@@ -55,6 +55,58 @@ class SensorANT(Sensor):
         self._transport_disconnect_popup_shown = False
         self._transport_disconnect_logged = False
 
+    @staticmethod
+    def _dummy_timestamp_fields():
+        return {
+            "timestamp": None,
+            "on_data_timestamp": None,
+        }
+
+    @classmethod
+    def _dummy_speed_values(cls):
+        return {
+            "speed": 0,
+            "cadence": 0,
+            "distance": 0,
+            **cls._dummy_timestamp_fields(),
+        }
+
+    @classmethod
+    def _dummy_power_page_values(cls, page):
+        values = {
+            "power": 0,
+            "accumulated_power": 0,
+            "last_event_timestamp": None,
+            "last_event_interval": None,
+            **cls._dummy_timestamp_fields(),
+        }
+        if page == 0x10:
+            values.update(
+                {
+                    "power_16_simple": 0,
+                    "cadence": 0,
+                    "power_r": 0,
+                    "power_l": 0,
+                    "lr_balance": ":",
+                }
+            )
+        elif page == 0x11:
+            values.update(
+                {
+                    "speed": 0,
+                    "distance": 0,
+                    "cadence": 0,
+                }
+            )
+        elif page == 0x12:
+            values["cadence"] = 0
+        return values
+
+    @staticmethod
+    def _touch_dummy_timestamp(values, timestamp):
+        values["timestamp"] = timestamp
+        values["on_data_timestamp"] = timestamp
+
     def sensor_init(self):
         self._init_runtime_state()
         self._init_transport_disconnect_state()
@@ -96,7 +148,9 @@ class SensorANT(Sensor):
 
             self.config.G_ANT["ID_TYPE"]["HR"] = struct.pack("<HB", 0, 0x78)
             self.config.G_ANT["ID_TYPE"]["SPD"] = struct.pack("<HB", 0, 0x79)
-            self.config.G_ANT["ID_TYPE"]["CDC"] = struct.pack("<HB", 0, 0x79)  # same as SPD
+            self.config.G_ANT["ID_TYPE"]["CDC"] = struct.pack(
+                "<HB", 0, 0x79
+            )  # same as SPD
             self.config.G_ANT["ID_TYPE"]["PWR"] = struct.pack("<HB", 0, 0x0B)
 
             self.config.G_ANT["TYPE"]["HR"] = 0x78
@@ -105,11 +159,14 @@ class SensorANT(Sensor):
             self.config.G_ANT["TYPE"]["PWR"] = 0x0B
 
             ac = self.config.G_ANT["ID_TYPE"]
-            self.values[ac["HR"]] = {}
-            self.values[ac["SPD"]] = {"distance": 0}
+            self.values[ac["HR"]] = {
+                "heart_rate": 0,
+                **self._dummy_timestamp_fields(),
+            }
+            self.values[ac["SPD"]] = self._dummy_speed_values()
             self.values[ac["PWR"]] = {}
             for key in [0x10, 0x11, 0x12]:
-                self.values[ac["PWR"]][key] = {"accumulated_power": 0}
+                self.values[ac["PWR"]][key] = self._dummy_power_page_values(key)
 
         # for dummy device
         self.reset()
@@ -120,9 +177,7 @@ class SensorANT(Sensor):
     async def start(self):
         if self.config.G_ANT["STATUS"]:
             try:
-                await asyncio.get_running_loop().run_in_executor(
-                    None, self.node.start
-                )
+                await asyncio.get_running_loop().run_in_executor(None, self.node.start)
             finally:
                 self._sync_transport_disconnect_from_node()
                 self.notify_transport_disconnected()
@@ -146,9 +201,9 @@ class SensorANT(Sensor):
         self.values[ac["PWR"]][0x10]["power"] = power_value
 
         # TIMESTAMP
-        self.values[ac["HR"]]["timestamp"] = timestamp
-        self.values[ac["SPD"]]["timestamp"] = timestamp
-        self.values[ac["PWR"]][0x10]["timestamp"] = timestamp
+        self._touch_dummy_timestamp(self.values[ac["HR"]], timestamp)
+        self._touch_dummy_timestamp(self.values[ac["SPD"]], timestamp)
+        self._touch_dummy_timestamp(self.values[ac["PWR"]][0x10], timestamp)
         # DISTANCE, TOTAL_WORK
         if self.config.G_MANUAL_STATUS == "START":
             # DISTANCE: unit: m
@@ -448,7 +503,9 @@ class SensorANT(Sensor):
             antIDType = self.config.G_ANT["ID_TYPE"][k]
             if v and antIDType not in antIDTypes:
                 antIDTypes.add(antIDType)
-                self.device[antIDType].connect(isCheck=True, isChange=False)  # USE: True -> True
+                self.device[antIDType].connect(
+                    isCheck=True, isChange=False
+                )  # USE: True -> True
                 self.device[antIDType].ant_state = "connect_ant_sensor"
                 self.device[antIDType].init_after_connect()
         self.scanner.set_wait_normal_mode()

@@ -69,7 +69,7 @@ Interface board alternatives:
 - AUO U340QBN01.0 [alibaba](https://www.alibaba.com/product-detail/3-4-Inch-TFT-LCD-Display_1601438380650.html) / [youritech](https://youritech-online.com/products/u340qbn01-0-with-front-light-3-4-inch-sunlight-readable-lcd-display-272x451-reflective-spi-sunlight-readable-mip-display?variant=52037710479669)
   - <img width="320" alt="3.4inch-01" src="https://pbs.twimg.com/media/GwL_jrIXEAAZl7b?format=jpg" /> <img width="320" alt="3.4inch-02" src="https://pbs.twimg.com/media/Gw-bSmlWoAAOXvG?format=jpg" />
 
-### JDI [LPM044M141](https://www.digikey.jp/ja/products/detail/azumo/12561-06-A1/19110331): Obsolete
+### JDI [LPM044M141](https://www.digikey.jp/ja/products/detail/azumo/12567-06-T3/10492348): Obsolete
 
 4.4 inch 8 colors MIP reflective display.
 
