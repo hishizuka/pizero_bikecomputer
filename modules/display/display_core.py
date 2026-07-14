@@ -159,10 +159,13 @@ def _init_mip_drm_display(config):
                 params = _build_mip_params_from_fb_info(fb_info)
 
     if params:
+        if detected_name:
+            display.display_name = detected_name
         display.size = params["size"]
         display.color = params["color"]
         display.has_color = params["has_color"]
         display.has_touch = params["has_touch"]
+        display.init_minimum_brightness()
         if detected_name:
             app_logger.info(
                 f"MIP DRM auto-detected: {detected_name} ({_format_fb_info(fb_info)})"
