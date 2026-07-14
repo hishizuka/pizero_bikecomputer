@@ -69,6 +69,21 @@ _QZQSM_SKIP_SUMMARY_PREFIXES = (
     "### DCX Message",
 )
 
+_QZSS_DCR_REPORT_FIELD_NAMES = (
+    "information_type",
+    "weather_warning_state",
+    "weather_related_disaster_sub_categories",
+    "weather_forecast_regions",
+    "typhoon_number",
+    "reference_time_type",
+    "marine_warning_codes",
+    "marine_forecast_regions",
+    "dcx_message_type",
+    "a4_hazard_type",
+    "a5_severity",
+    "ex1_target_area_ja",
+)
+
 
 def sfrbx_to_qzqsm(parsed):
     if parsed.gnssId != 5 or parsed.sigId != 1 or parsed.numWords < 9:
@@ -144,8 +159,12 @@ def parse_qzqsm_sentence(sentence):
     if parsed is None:
         return None
 
+    decoded_report = decode_qzqsm_report(sentence)
+    if decoded_report.get("is_null_message"):
+        return None
+
     parsed.update({"sentence": sentence, "satellite_id": fields[1], "message": message})
-    parsed.update(decode_qzqsm_report(sentence))
+    parsed.update(decoded_report)
     return parsed
 
 
@@ -160,9 +179,19 @@ def decode_qzqsm_report(sentence):
     except Exception as exc:
         return {"report_text": None, "report_decoder_error": str(exc)}
 
+    report_text = str(report)
+    report_fields = {
+        name: value
+        for name in _QZSS_DCR_REPORT_FIELD_NAMES
+        if (value := getattr(report, name, None)) is not None
+    }
+    dcx_message_type = report_fields.get("dcx_message_type")
     return {
-        "report_text": str(report),
+        "report_text": report_text,
         "report_decoder": "azarashi",
+        "report_fields": report_fields,
+        "dcx_message_type": dcx_message_type,
+        "is_null_message": dcx_message_type == "Null Message",
     }
 
 
@@ -174,7 +203,7 @@ def build_qzss_dcr_event(dcr, event_id=None, received_at=None):
     is_training = dcr.get("report_classification") == 7
     is_cancel = "取り消し" in report_text or "CANCELLATION" in report_text
 
-    title = category or dcr.get("message_type_str", "QZSS DC Report")
+    title = _build_qzss_dcr_title(dcr)
 
     summary = _build_qzss_dcr_summary(dcr, report_text)
     priority = _qzss_dcr_priority(
@@ -253,6 +282,33 @@ def _build_qzss_dcr_summary(dcr, report_text):
             return f"Decode error: {error}"
         return dcr.get("message_type_str", "No decoded message")
 
+    report_fields = dcr.get("report_fields") or {}
+    summary_lines = []
+
+    areas = (
+        report_fields.get("weather_forecast_regions")
+        or report_fields.get("marine_forecast_regions")
+        or report_fields.get("ex1_target_area_ja")
+    )
+    if areas:
+        summary_lines.append(f"対象：{_format_qzss_dcr_values(areas, limit=2)}")
+
+    report_time = _qzss_dcr_text_value(report_text, "発表時刻")
+    if report_time:
+        summary_lines.append(f"発表：{report_time}")
+
+    severity = report_fields.get("a5_severity")
+    if severity:
+        summary_lines.append(f"重要度：{severity}")
+
+    if dcr.get("message_type") == 43:
+        summary_lines.append("発信：気象庁")
+    elif dcr.get("message_type") == 44:
+        summary_lines.append("発信：他機関")
+
+    if summary_lines:
+        return "\n".join(summary_lines[:3])
+
     lines = [line.strip() for line in report_text.splitlines() if line.strip()]
     keyed_lines = [
         line
@@ -268,6 +324,60 @@ def _build_qzss_dcr_summary(dcr, report_text):
     if content_lines:
         return "\n".join(content_lines[:2])
     return lines[0] if lines else dcr.get("message_type_str", "QZSS DC Report")
+
+
+def _build_qzss_dcr_title(dcr):
+    report_fields = dcr.get("report_fields") or {}
+    information_type = report_fields.get("information_type")
+
+    weather_types = report_fields.get("weather_related_disaster_sub_categories")
+    if weather_types:
+        state = report_fields.get("weather_warning_state") or information_type
+        title = _format_qzss_dcr_values(weather_types, limit=2)
+        return f"{title}（{state}）" if state else title
+
+    typhoon_number = report_fields.get("typhoon_number")
+    if typhoon_number:
+        state = report_fields.get("reference_time_type") or information_type
+        title = f"台風{typhoon_number}"
+        return f"{title}（{state}）" if state else title
+
+    marine_warnings = report_fields.get("marine_warning_codes")
+    if marine_warnings:
+        state = information_type
+        title = _format_qzss_dcr_values(marine_warnings, limit=2)
+        return f"{title}（{state}）" if state else title
+
+    dcx_message_type = report_fields.get("dcx_message_type")
+    hazard_type = report_fields.get("a4_hazard_type")
+    if dcx_message_type and hazard_type:
+        return f"{dcx_message_type}: {hazard_type}"
+
+    return dcr.get("disaster_category_str") or dcr.get(
+        "message_type_str", "QZSS DC Report"
+    )
+
+
+def _format_qzss_dcr_values(values, limit):
+    if isinstance(values, str):
+        return values
+
+    unique_values = list(dict.fromkeys(str(value) for value in values if value))
+    visible_values = unique_values[:limit]
+    text = "、".join(visible_values)
+    remaining = len(unique_values) - len(visible_values)
+    if remaining > 0:
+        text += f"、ほか{remaining}件"
+    return text
+
+
+def _qzss_dcr_text_value(report_text, key):
+    prefix = f"{key}:"
+    for line in report_text.splitlines():
+        line = line.strip()
+        if line.startswith(prefix):
+            return line[len(prefix) :].strip()
+    return None
 
 
 def _qzss_dcr_priority(

@@ -1,19 +1,35 @@
+import argparse
 import asyncio
 import queue
+import sys
 import threading
 import time
 from collections import deque
 from datetime import datetime, timezone
+from pathlib import Path
+
+if __name__ == "__main__" and __package__ is None:
+    # Allow running this module directly from the repository root.
+    sys.path.append(str(Path(__file__).resolve().parents[3]))
 
 from modules.app_logger import app_logger
 
-from .base import (
-    NMEA_MODE_2D,
-    NMEA_MODE_3D,
-    NMEA_MODE_NO_FIX,
-    NMEA_MODE_UNKNOWN,
-    AbstractSensorGPS,
-)
+if __name__ == "__main__" and __package__ is None:
+    from base import (
+        NMEA_MODE_2D,
+        NMEA_MODE_3D,
+        NMEA_MODE_NO_FIX,
+        NMEA_MODE_UNKNOWN,
+        AbstractSensorGPS,
+    )
+else:
+    from .base import (
+        NMEA_MODE_2D,
+        NMEA_MODE_3D,
+        NMEA_MODE_NO_FIX,
+        NMEA_MODE_UNKNOWN,
+        AbstractSensorGPS,
+    )
 
 _OPTIONAL_DEPENDENCIES = {"serial", "pyubx2", "pynmeagps"}
 _UBLOX_IMPORT_ERROR = None
@@ -31,40 +47,77 @@ try:
     )
     from pyubx2.ubxhelpers import process_monver
 
-    from .ublox_support.assistnow import AssistNowClient
-    from .ublox_support.power_save import (
-        STATE_RECEIVER_MODEL as _STATE_RECEIVER_MODEL,
-        full_power_config,
-        low_power_config_for_receiver,
-        normalized_receiver_model,
-    )
-    from .ublox_support.qzss_dcr import (
-        build_qzss_dcr_event,
-        build_qzss_dcr_test_event,
-        parse_qzqsm_sentence,
-        qzss_dcr_blocked_by_power_save,
-        qzss_dcr_cfg_data,
-        qzss_dcr_configure_status,
-        qzss_dcr_enabled,
-        qzss_dcr_output_status,
-        sfrbx_to_qzqsm,
-    )
-    from .ublox_support.transport import (
-        I2CStream,
-        I2C_ADDRESS as _I2C_ADDRESS,
-        I2C_BUS as _I2C_BUS,
-        READ_TIMEOUT as _READ_TIMEOUT,
-        UART_BAUDRATE as _UART_BAUDRATE,
-        detect_sensor_ublox as _detect_sensor_ublox,
-        is_interrupted_system_call as _is_interrupted_system_call,
-        retry_interrupted_system_call as _retry_interrupted_system_call,
-    )
-    from .ublox_support.tx_ready import TxReadyLine
+    if __name__ == "__main__" and __package__ is None:
+        from ublox_support.assistnow import AssistNowClient
+        from ublox_support.power_save import (
+            STATE_RECEIVER_MODEL as _STATE_RECEIVER_MODEL,
+            full_power_config,
+            low_power_config_for_receiver,
+            normalized_receiver_model,
+        )
+        from ublox_support.qzss_dcr import (
+            build_qzss_dcr_event,
+            build_qzss_dcr_test_event,
+            parse_qzqsm_sentence,
+            qzss_dcr_blocked_by_power_save,
+            qzss_dcr_cfg_data,
+            qzss_dcr_configure_status,
+            qzss_dcr_enabled,
+            qzss_dcr_output_status,
+            sfrbx_to_qzqsm,
+        )
+        from ublox_support.transport import (
+            I2CStream,
+            I2C_ADDRESS as _I2C_ADDRESS,
+            I2C_BUS as _I2C_BUS,
+            READ_TIMEOUT as _READ_TIMEOUT,
+            UART_BAUDRATE as _UART_BAUDRATE,
+            detect_sensor_ublox as _detect_sensor_ublox,
+            is_interrupted_system_call as _is_interrupted_system_call,
+            retry_interrupted_system_call as _retry_interrupted_system_call,
+        )
+        from ublox_support.tx_ready import TxReadyLine
+    else:
+        from .ublox_support.assistnow import AssistNowClient
+        from .ublox_support.power_save import (
+            STATE_RECEIVER_MODEL as _STATE_RECEIVER_MODEL,
+            full_power_config,
+            low_power_config_for_receiver,
+            normalized_receiver_model,
+        )
+        from .ublox_support.qzss_dcr import (
+            build_qzss_dcr_event,
+            build_qzss_dcr_test_event,
+            parse_qzqsm_sentence,
+            qzss_dcr_blocked_by_power_save,
+            qzss_dcr_cfg_data,
+            qzss_dcr_configure_status,
+            qzss_dcr_enabled,
+            qzss_dcr_output_status,
+            sfrbx_to_qzqsm,
+        )
+        from .ublox_support.transport import (
+            I2CStream,
+            I2C_ADDRESS as _I2C_ADDRESS,
+            I2C_BUS as _I2C_BUS,
+            READ_TIMEOUT as _READ_TIMEOUT,
+            UART_BAUDRATE as _UART_BAUDRATE,
+            detect_sensor_ublox as _detect_sensor_ublox,
+            is_interrupted_system_call as _is_interrupted_system_call,
+            retry_interrupted_system_call as _retry_interrupted_system_call,
+        )
+        from .ublox_support.tx_ready import TxReadyLine
 except ModuleNotFoundError as exc:
     missing_dependency = (exc.name or "").split(".", maxsplit=1)[0]
     if missing_dependency not in _OPTIONAL_DEPENDENCIES:
         raise
     _UBLOX_IMPORT_ERROR = exc
+
+if _UBLOX_IMPORT_ERROR is not None:
+    _I2C_BUS = 1
+    _I2C_ADDRESS = 0x42
+    _READ_TIMEOUT = 0.2
+    _UART_BAUDRATE = 9600
 
 _POLL_INTERVAL = 0.05
 _INFO_POLL_ATTEMPTS = 3
@@ -75,7 +128,7 @@ _I2C_CONFIG_MESSAGE_MAX_LENGTH = 32
 _I2C_CONFIG_CHUNK_DELAY = 0.02
 
 
-if _UBLOX_IMPORT_ERROR is None:
+if _UBLOX_IMPORT_ERROR is None and __name__ != "__main__":
     _SENSOR_GPS_UBLOX, _DETECTED_UART_DEVICE = _detect_sensor_ublox()
 else:
     _SENSOR_GPS_UBLOX, _DETECTED_UART_DEVICE = False, None
@@ -384,7 +437,7 @@ class UBlox(AbstractSensorGPS):
         if self.transport_type != "uart":
             return
 
-        # Keep the 9600 bps UART quiet until MON-VER and SEC-UNIQID are read.
+        # Keep UART output quiet until MON-VER and SEC-UNIQID are read.
         port = "UART1"
         quiet_cfg_data = [
             (f"CFG_MSGOUT_UBX_NAV_PVT_{port}", 0),
@@ -1105,3 +1158,223 @@ class UBlox(AbstractSensorGPS):
 
         if futures:
             await asyncio.gather(*futures)
+
+
+def _parse_int_auto(value):
+    return int(value, 0)
+
+
+def _format_diag_value(value, precision=None):
+    if value is None:
+        return "-"
+    if precision is None:
+        return str(value)
+    return f"{value:.{precision}f}"
+
+
+def _scale_diag_value(value, factor):
+    if value is None:
+        return None
+    return value * factor
+
+
+def _nonnegative_diag_speed(value):
+    if value is None:
+        return None
+    return max(value, 0) / 1000.0
+
+
+def _diagnostic_gps_time(parsed):
+    if not getattr(parsed, "validDate", 0) or not getattr(parsed, "validTime", 0):
+        return "-"
+    return datetime(
+        parsed.year,
+        parsed.month,
+        parsed.day,
+        parsed.hour,
+        parsed.min,
+        parsed.second,
+        tzinfo=timezone.utc,
+    ).isoformat()
+
+
+def _diagnostic_poll_mon_ver(gps):
+    gps.write(UBXMessage("MON", "MON-VER", POLL).serialize())
+
+
+def _diagnostic_enable_i2c_output(gps):
+    cfg_data = [
+        ("CFG_MSGOUT_UBX_NAV_PVT_I2C", 1),
+        ("CFG_MSGOUT_UBX_NAV_DOP_I2C", 1),
+        ("CFG_MSGOUT_UBX_NAV_SAT_I2C", 1),
+    ]
+    for key, value in cfg_data:
+        message = UBXMessage.config_set(
+            SET_LAYER_RAM,
+            TXN_NONE,
+            [(key, value)],
+        ).serialize()
+        gps.write(message)
+        time.sleep(_I2C_CONFIG_CHUNK_DELAY)
+    print("[CFG] enabled UBX NAV-PVT/NAV-DOP/NAV-SAT output on I2C RAM layer")
+
+
+def _diagnostic_nav_pvt_line(parsed, dop, satellites):
+    head_mot = getattr(parsed, "headMot", None)
+    if head_mot is not None:
+        head_mot %= 360
+
+    used_sats, total_sats = satellites
+    if total_sats is None:
+        total_sats = getattr(parsed, "numSV", None)
+    alt = _scale_diag_value(getattr(parsed, "hMSL", None), 0.001)
+    speed = _nonnegative_diag_speed(getattr(parsed, "gSpeed", None))
+
+    return (
+        f"time={_diagnostic_gps_time(parsed)} "
+        f"lat={_format_diag_value(getattr(parsed, 'lat', None), 7)} "
+        f"lon={_format_diag_value(getattr(parsed, 'lon', None), 7)} "
+        f"alt={_format_diag_value(alt, 1)}m "
+        f"spd={_format_diag_value(speed, 2)}m/s "
+        f"track={_format_diag_value(head_mot, 1)} "
+        f"fix={_format_diag_value(getattr(parsed, 'fixType', None))} "
+        f"sat={_format_diag_value(used_sats)}/{_format_diag_value(total_sats)} "
+        f"DOP(p/h/v)="
+        f"{_format_diag_value(dop[0])}/"
+        f"{_format_diag_value(dop[1])}/"
+        f"{_format_diag_value(dop[2])}"
+    )
+
+
+def _run_i2c_diagnostic(args):
+    if _UBLOX_IMPORT_ERROR is not None:
+        print(
+            "[ERROR] u-blox optional dependency is not available: "
+            f"{_UBLOX_IMPORT_ERROR.name}"
+        )
+        return 1
+
+    gps = None
+    try:
+        gps = I2CStream(args.bus, args.address, args.timeout)
+        available = gps.available()
+        print(
+            f"[INIT] u-blox ready on {gps.name}, "
+            f"available={available} bytes, timeout={args.timeout}s"
+        )
+
+        _diagnostic_poll_mon_ver(gps)
+        if not args.no_configure:
+            _diagnostic_enable_i2c_output(gps)
+
+        reader = UBXReader(
+            gps,
+            protfilter=UBX_PROTOCOL,
+            quitonerror=ERR_IGNORE,
+        )
+        print("[READ] waiting for UBX messages. Ctrl+C to stop.")
+
+        end_time = None
+        if args.duration > 0:
+            end_time = time.monotonic() + args.duration
+
+        next_mon_ver_poll = time.monotonic() + 2.0
+        dop = (None, None, None)
+        satellites = (None, None)
+        nav_pvt_count = 0
+
+        while True:
+            now = time.monotonic()
+            if end_time is not None and now >= end_time:
+                return 0
+            if now >= next_mon_ver_poll:
+                _diagnostic_poll_mon_ver(gps)
+                next_mon_ver_poll = now + 2.0
+
+            raw, parsed = reader.read()
+            if parsed is None:
+                continue
+
+            identity = getattr(parsed, "identity", "")
+            if identity == "MON-VER":
+                version = process_monver(parsed)
+                model = version["hwversion"] or version["swversion"]
+                print(f"[MON-VER] model={model}, sw={version['swversion']}")
+            elif identity == "NAV-DOP":
+                dop = (parsed.pDOP, parsed.hDOP, parsed.vDOP)
+                if args.verbose:
+                    print("[NAV-DOP] " f"p/h/v={dop[0]}/{dop[1]}/{dop[2]}")
+            elif identity == "NAV-SAT":
+                total_sats = parsed.numSvs
+                used_sats = sum(
+                    getattr(parsed, f"svUsed_{i:02d}", 0)
+                    for i in range(1, total_sats + 1)
+                )
+                satellites = (used_sats, total_sats)
+                if args.verbose:
+                    print(f"[NAV-SAT] used/total={used_sats}/{total_sats}")
+            elif identity == "NAV-PVT":
+                print(_diagnostic_nav_pvt_line(parsed, dop, satellites))
+                nav_pvt_count += 1
+                if args.count > 0 and nav_pvt_count >= args.count:
+                    return 0
+            elif identity == "ACK-NAK":
+                print(f"[WARN] UBX command NAK: {parsed}")
+            elif identity == "ACK-ACK" and args.verbose:
+                print(f"[ACK] {parsed}")
+            elif args.verbose:
+                print(f"[{identity}] {parsed}")
+    except KeyboardInterrupt:
+        print("\n[EXIT] stop requested.")
+        return 0
+    except Exception as exc:
+        print(f"[ERROR] {exc}")
+        return 1
+    finally:
+        if gps is not None:
+            gps.close()
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Run a standalone u-blox I2C GPS diagnostic.",
+    )
+    parser.add_argument("--bus", type=int, default=_I2C_BUS, help="I2C bus number")
+    parser.add_argument(
+        "--address",
+        type=_parse_int_auto,
+        default=_I2C_ADDRESS,
+        help="I2C address, for example 0x42",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=_READ_TIMEOUT,
+        help="read timeout seconds",
+    )
+    parser.add_argument(
+        "--duration",
+        type=float,
+        default=0.0,
+        help="stop after this many seconds; 0 means run until Ctrl+C",
+    )
+    parser.add_argument(
+        "--count",
+        type=int,
+        default=0,
+        help="stop after this many NAV-PVT messages; 0 means unlimited",
+    )
+    parser.add_argument(
+        "--no-configure",
+        action="store_true",
+        help="do not enable periodic UBX output on the receiver RAM layer",
+    )
+    parser.add_argument("--verbose", action="store_true", help="print extra messages")
+    args = parser.parse_args(argv)
+    return _run_i2c_diagnostic(args)
+
+
+if __name__ == "__main__":
+    # example:
+    #  python3 modules/sensor/gps/ublox.py --verbose --timeout 0.5
+    raise SystemExit(main())

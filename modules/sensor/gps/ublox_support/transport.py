@@ -2,11 +2,13 @@ import errno
 import time
 
 import serial
-from pyubx2 import POLL_LAYER_RAM, UBXMessage
+from pyubx2 import POLL_LAYER_RAM, SET_LAYER_RAM, TXN_NONE, UBXMessage
 
-UART_BAUDRATE = 9600
+UART_BAUDRATE = 115200
+UART_DEFAULT_BAUDRATE = 9600
 UART_AUTO_DETECT_DEVICES = ("/dev/serial0", "/dev/ttyS0", "/dev/ttyAMA0")
 UART_DETECT_TIMEOUT = 2.0
+UART_BAUDRATE_SWITCH_DELAY = 0.1
 I2C_BUS = 1
 I2C_ADDRESS = 0x42
 READ_TIMEOUT = 0.2
@@ -79,29 +81,62 @@ def has_valid_ubx_frame(buffer):
         start = index + 2
 
 
-def detect_uart_ublox_device():
+def _uart_responds(device, baudrate):
     poll_cfg_rate_nav = UBXMessage.config_poll(
         POLL_LAYER_RAM,
         0,
         ["CFG_RATE_NAV"],
     ).serialize()
+    try:
+        with serial.Serial(
+            device,
+            baudrate,
+            timeout=READ_TIMEOUT,
+            write_timeout=0.5,
+        ) as gps:
+            gps.write(poll_cfg_rate_nav)
+            buffer = bytearray()
+            end_time = time.monotonic() + UART_DETECT_TIMEOUT
+            while time.monotonic() < end_time:
+                buffer.extend(gps.read(256))
+                if has_valid_ubx_frame(buffer):
+                    return True
+    except Exception:
+        pass
+    return False
+
+
+def _set_uart_baudrate(device, current_baudrate):
+    set_baudrate = UBXMessage.config_set(
+        SET_LAYER_RAM,
+        TXN_NONE,
+        [("CFG_UART1_BAUDRATE", UART_BAUDRATE)],
+    ).serialize()
+    try:
+        with serial.Serial(
+            device,
+            current_baudrate,
+            timeout=READ_TIMEOUT,
+            write_timeout=0.5,
+        ) as gps:
+            gps.write(set_baudrate)
+            gps.flush()
+        time.sleep(UART_BAUDRATE_SWITCH_DELAY)
+        return True
+    except Exception:
+        return False
+
+
+def detect_uart_ublox_device():
     for device in UART_AUTO_DETECT_DEVICES:
-        try:
-            with serial.Serial(
-                device,
-                UART_BAUDRATE,
-                timeout=READ_TIMEOUT,
-                write_timeout=0.5,
-            ) as gps:
-                gps.write(poll_cfg_rate_nav)
-                buffer = bytearray()
-                end_time = time.monotonic() + UART_DETECT_TIMEOUT
-                while time.monotonic() < end_time:
-                    buffer.extend(gps.read(256))
-                    if has_valid_ubx_frame(buffer):
-                        return device
-        except Exception:
+        if _uart_responds(device, UART_BAUDRATE):
+            return device
+        if not _uart_responds(device, UART_DEFAULT_BAUDRATE):
             continue
+        if not _set_uart_baudrate(device, UART_DEFAULT_BAUDRATE):
+            continue
+        if _uart_responds(device, UART_BAUDRATE):
+            return device
     return None
 
 
