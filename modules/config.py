@@ -802,11 +802,13 @@ class Config:
                 elif key == "L" and self.gui:
                     self.gui.turn_on_off_light()
                 elif key == "t" and self.gui:
+
                     def fn():
                         app_logger.info("OK")
-                    self.gui.show_dialog(fn=self.display.screen_flash_long, title="test")
-                elif key == "d" and self.ble_uart is not None:
-                    await self.ble_uart.show_gadgetbridge_download()
+
+                    self.gui.show_dialog(
+                        fn=self.display.screen_flash_long, title="test"
+                    )
         except asyncio.CancelledError:
             pass
 
