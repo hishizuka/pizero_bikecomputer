@@ -544,7 +544,7 @@ Another button mode
 | D | Move up | Zoom in |
 | E | Move right | Search route(*) |
 
-(*)Search route by Google Directions API. Set your API key in setting.conf.
+(*)Search route by Google Routes API. Set your API key in setting.conf.
 
 #### Course Profile
 
@@ -644,7 +644,7 @@ Touch UI:
   - lock / unlock
   - zoom in
   - zoom out
-  - route search by Google Directions API (shown only when token is configured)
+  - route search by Google Routes API (shown only when token is configured)
 - right side
   - overlay selector
   - previous / next time buttons for rain and wind overlays
@@ -1039,9 +1039,13 @@ If you want to use heatmap or upload activities to RidewithGPS, set your `token`
 
 If you want to upload activities to Garmin Connect, set your `email` and `password`.
 
-#### GOOGLE_DIRECTION_API section
+#### GOOGLE_ROUTES_API section
 
-If you want to search for a route on a map, set your `token` of the Google Directions API.
+If you want to search for a route on a map, set your `token` of the Google Routes API.
+The `token` value is your Google Maps Platform API key. You usually do not need to
+create a new API key when migrating from the legacy route search API, but you must
+enable the Routes API in the same Google Cloud project and allow the Routes API in
+the API key restrictions if you use them.
 
 #### THINGSBOARD_API section
 

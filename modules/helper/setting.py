@@ -258,23 +258,25 @@ class Setting:
                         "STRAVA_COOKIE"
                     ][k]
 
-        for token in (
-            "GOOGLE_DIRECTION",
-            "RIDEWITHGPS",
-            "THINGSBOARD",
-        ):
-            token_str = token + "_API"
-            config = eval("self.config.G_" + token + "_API")
-            if token_str in self.config_parser:
-                for k in config.keys():
-                    c = self.config_parser[token_str]
-                    if k in c:
-                        if k == "STATUS":
-                            config[k] = c.getboolean(k)
-                        else:
-                            config[k] = c[k]
-                if config["TOKEN"] != "":
-                    config["HAVE_API_TOKEN"] = True
+        api_sections = (
+            ("GOOGLE_ROUTES_API", self.config.G_GOOGLE_ROUTES_API),
+            ("RIDEWITHGPS_API", self.config.G_RIDEWITHGPS_API),
+            ("THINGSBOARD_API", self.config.G_THINGSBOARD_API),
+        )
+        for section_name, config in api_sections:
+            if section_name not in self.config_parser:
+                continue
+
+            c = self.config_parser[section_name]
+            for k in config.keys():
+                if k not in c:
+                    continue
+                if k == "STATUS":
+                    config[k] = c.getboolean(k)
+                elif isinstance(config[k], str):
+                    config[k] = c[k]
+            if config["TOKEN"] != "":
+                config["HAVE_API_TOKEN"] = True
 
         if "GARMINCONNECT_API" in self.config_parser:
             for k in ["EMAIL", "PASSWORD"]:
@@ -388,19 +390,18 @@ class Setting:
         for k in self.config.G_STRAVA_COOKIE.keys():
             self.config_parser["STRAVA_COOKIE"][k] = self.config.G_STRAVA_COOKIE[k]
 
-        for token in (
-            "GOOGLE_DIRECTION",
-            "RIDEWITHGPS",
-            "THINGSBOARD",
-        ):
-            token_str = token + "_API"
-            config = eval("self.config.G_" + token + "_API")
-            self.config_parser[token_str] = {}
-            self.config_parser[token_str]["TOKEN"] = config["TOKEN"]
-            if token == "RIDEWITHGPS":
-                self.config_parser[token_str]["APIKEY"] = config["APIKEY"]
-            if token == "THINGSBOARD":
-                self.config_parser[token_str]["STATUS"] = str(config["STATUS"])
+        api_sections = (
+            ("GOOGLE_ROUTES_API", self.config.G_GOOGLE_ROUTES_API),
+            ("RIDEWITHGPS_API", self.config.G_RIDEWITHGPS_API),
+            ("THINGSBOARD_API", self.config.G_THINGSBOARD_API),
+        )
+        for section_name, config in api_sections:
+            self.config_parser[section_name] = {}
+            self.config_parser[section_name]["TOKEN"] = config["TOKEN"]
+            if section_name == "RIDEWITHGPS_API":
+                self.config_parser[section_name]["APIKEY"] = config["APIKEY"]
+            if section_name == "THINGSBOARD_API":
+                self.config_parser[section_name]["STATUS"] = str(config["STATUS"])
 
         self.config_parser["GARMINCONNECT_API"] = {}
         for k in ["EMAIL", "PASSWORD"]:

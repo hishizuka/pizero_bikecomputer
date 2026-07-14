@@ -148,7 +148,7 @@ USB dongle is required if using ANT+ sensors.
 | Positioning from smartphones | Yes | Using the Android app [GadgetBridge](https://gadgetbridge.org). |
 | Map | Yes | Support raster map tile format like OSM (z/x/y.png or jpg). So, offline map is available with local caches. Also, raster .mbtile format is supported. |
 | Course on the map| Yes | Local `.tcx` files, cloud courses from Ride with GPS, and routes shared from Google Maps on Android via Bluetooth. |
-| Search route | Yes | Google Directions API |
+| Search route | Yes | Google Routes API (Compute Routes) |
 | Course profile | Yes |  |
 | Detect climbs | Yes | Like Garmin ClimbPro. Only climbs on the course, not detect nearby climbs. |
 | Cuesheet | Yes | Use course points included in course files(.tcx). |

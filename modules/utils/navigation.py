@@ -1,6 +1,5 @@
 import re
 
-
 _GADGETBRIDGE_ACTION_TURN_TYPE = {
     "continue": "Straight",
     "left": "Left",
@@ -89,6 +88,14 @@ def normalize_turn_type(point_type):
 
 
 def maneuver_to_turn_type(maneuver):
+    if _normalize_text(maneuver or "") in (
+        "arrive",
+        "depart",
+        "maneuver unspecified",
+        "name change",
+    ):
+        return ""
+
     turn_type = normalize_turn_type(maneuver)
     if turn_type in ("", "Straight", "Merge", "Keep", "Ferry", "Ferry Train"):
         return ""
@@ -110,7 +117,7 @@ def parse_gadgetbridge_distance(distance):
     if distance is None:
         return None
 
-    normalized = str(distance).replace("\u00A0", " ").strip().lower()
+    normalized = str(distance).replace("\u00a0", " ").strip().lower()
     if not normalized:
         return None
 

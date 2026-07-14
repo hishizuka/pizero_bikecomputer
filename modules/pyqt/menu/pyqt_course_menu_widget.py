@@ -37,7 +37,7 @@ class CoursesMenuWidget(MenuWidget):
             ),
             ("Android Google Maps", None, self.receive_route),
             ("", None, None),
-            # ('Google Directions API mode', 'submenu', self.google_directions_api_setting_menu),
+            # ('Google Routes API mode', 'submenu', self.google_routes_api_setting_menu),
             (
                 "Cancel Course",
                 "dialog",
@@ -49,12 +49,12 @@ class CoursesMenuWidget(MenuWidget):
         )
         self.add_buttons(button_conf)
 
-        # if not self.config.G_GOOGLE_DIRECTION_API["HAVE_API_TOKEN"]:
-        #  self.buttons['Google Directions API mode'].disable()
+        # if not self.config.G_GOOGLE_ROUTES_API["HAVE_API_TOKEN"]:
+        #  self.buttons['Google Routes API mode'].disable()
 
         if not self.config.G_IS_RASPI or not os.path.isfile(self.config.G_OBEXD_CMD):
             self.buttons["Android Google Maps"].disable()
-        
+
         self.onoff_course_calc(False)
 
     def preprocess(self):
@@ -79,8 +79,8 @@ class CoursesMenuWidget(MenuWidget):
         )
         await widget.list_ride_with_gps(reset=True)
 
-    def google_directions_api_setting_menu(self):
-        self.change_page("Google Directions API mode", preprocess=True)
+    def google_routes_api_setting_menu(self):
+        self.change_page("Google Routes API mode", preprocess=True)
 
     def onoff_course_cancel_button(self):
         status = self.config.logger.course.is_set
@@ -89,7 +89,7 @@ class CoursesMenuWidget(MenuWidget):
     def cancel_course(self, replace=False):
         self.config.logger.reset_course(delete_course_file=True, replace=replace)
         self.onoff_course_cancel_button()
-    
+
     def set_new_course(self, course_file):
         self.config.logger.set_new_course(course_file)
         self.config.gui.init_course()
@@ -348,7 +348,7 @@ class CourseDetailWidget(MenuWidget):
         outer_layout = QtWidgets.QHBoxLayout()
         outer_layout.setContentsMargins(0, 0, 0, 0)
         outer_layout.setSpacing(0)
-        
+
         if self.config.gui.horizontal:
             info_layout = QtWidgets.QVBoxLayout()
             info_layout.setContentsMargins(0, 0, 0, 0)
@@ -742,16 +742,14 @@ class CourseDetailWidget(MenuWidget):
         return super().resizeEvent(event)
 
 
-class GoogleDirectionsAPISettingMenuWidget(ListWidget):
+class GoogleRoutesAPISettingMenuWidget(ListWidget):
     def __init__(self, parent, page_name, config):
         # keys are used for item label
-        self.settings = config.G_GOOGLE_DIRECTION_API["API_MODE"]
+        self.settings = config.G_GOOGLE_ROUTES_API["API_MODE"]
         super().__init__(parent=parent, page_name=page_name, config=config)
 
     def get_default_value(self):
-        return self.config.G_GOOGLE_DIRECTION_API["API_MODE_SETTING"]
+        return self.config.G_GOOGLE_ROUTES_API["API_MODE_SETTING"]
 
     async def button_func_extra(self):
-        self.config.G_GOOGLE_DIRECTION_API[
-            "API_MODE_SETTING"
-        ] = self.selected_item.title
+        self.config.G_GOOGLE_ROUTES_API["API_MODE_SETTING"] = self.selected_item.title

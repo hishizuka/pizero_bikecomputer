@@ -6,7 +6,6 @@ import aiohttp
 
 from modules.app_logger import app_logger
 
-
 DEFAULT_COROUTINE_SEM = 100
 
 
@@ -15,13 +14,15 @@ def _write_binary_file(save_path, data):
         file_handle.write(data)
 
 
-async def get_response(url, params=None, headers=None, timeout=30, response_type="json"):
+async def get_response(
+    url, params=None, headers=None, timeout=30, response_type="json"
+):
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
                 url, params=params, headers=headers, timeout=timeout
             ) as res:
-                if res.status != 200:
+                if not 200 <= res.status < 300:
                     data = await res.read()
                     text = data.decode("utf-8", errors="replace")
                     app_logger.error(
@@ -60,12 +61,23 @@ async def get_bytes(url, params=None, headers=None, timeout=30):
     )
 
 
-async def post(url, headers=None, params=None, data=None):
+async def post(url, headers=None, params=None, data=None, json_data=None, timeout=None):
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(
-                url, headers=headers, params=params, data=data
-            ) as res:
+            request_kwargs = {
+                "headers": headers,
+                "params": params,
+                "data": data,
+                "json": json_data,
+            }
+            if timeout is not None:
+                request_kwargs["timeout"] = timeout
+            async with session.post(url, **request_kwargs) as res:
+                if not 200 <= res.status < 300:
+                    data = await res.read()
+                    text = data.decode("utf-8", errors="replace")
+                    app_logger.error(f"post status {res.status}: {text[:200]}\n{url}")
+                    return None
                 data = await res.json()
                 return data
     except asyncio.CancelledError:
@@ -75,7 +87,9 @@ async def post(url, headers=None, params=None, data=None):
         return None
 
 
-async def _get_http_request(session, url, save_path, headers, params, semaphore, timeout):
+async def _get_http_request(
+    session, url, save_path, headers, params, semaphore, timeout
+):
     start_time = datetime.now().strftime("%H:%M:%S")
     async with semaphore:
         response_code = None

@@ -126,7 +126,7 @@ class Course:
 
     # for wind
     load_weather_status = 0
-    #wind_distance = []
+    # wind_distance = []
     wind_coordinates = []
     wind_timeline = []
     wind_speed = []
@@ -151,7 +151,7 @@ class Course:
         # we keep checking distance as it's how it was done in the original code,
         # but we can load tcx file with no distance in it load (it gets populated as np.zeros in load)
         return bool(len(self.distance))
-    
+
     @property
     def has_altitude(self):
         return bool(len(self.altitude))
@@ -196,7 +196,7 @@ class Course:
         if first_char in ("{", "["):
             return "json"
         return ""
-    
+
     def reset(self, delete_course_file=False, replace=False):
         # for course
         self.info = {}
@@ -213,7 +213,7 @@ class Course:
         self.colored_altitude = np.array([])
         self.climb_segment = []
         self.load_weather_status = 0
-        #self.wind_distance = []
+        # self.wind_distance = []
         self.wind_coordinates = []
         self.wind_timeline = []
         self.wind_speed = []
@@ -405,43 +405,66 @@ class Course:
 
         json_routes = await self.config.api.get_google_routes(x1, y1, x2, y2)
 
-        if json_routes is None or json_routes["status"] != "OK":
+        routes = json_routes.get("routes") if json_routes else None
+        if not routes:
+            app_logger.warning("Google Routes API returned no route")
             return
 
-        self.info["Name"] = "Google routes"
-        self.info["DistanceMeters"] = round(
-            json_routes["routes"][0]["legs"][0]["distance"]["value"] / 1000, 1
-        )
+        route = routes[0]
+        self.info["Name"] = "Google Routes"
+        self.info["DistanceMeters"] = round(route.get("distanceMeters", 0) / 1000, 1)
 
-        # points = np.array(polyline.decode(json_routes["routes"][0]["overview_polyline"]["points"]))
         points_detail = []
         self.course_points.reset()
 
         dist = 0
         pre_dist = 0
 
-        for step in json_routes["routes"][0]["legs"][0]["steps"]:
-            points_detail.extend(polyline.decode(step["polyline"]["points"]))
-            dist += pre_dist
-            pre_dist = step["distance"]["value"] / 1000
+        steps = []
+        for leg in route.get("legs", []):
+            steps.extend(leg.get("steps", []))
 
-            turn_str = maneuver_to_turn_type(step.get("maneuver"))
+        for step in steps:
+            encoded_polyline = step.get("polyline", {}).get("encodedPolyline")
+            if encoded_polyline:
+                points_detail.extend(polyline.decode(encoded_polyline))
+            dist += pre_dist
+            pre_dist = step.get("distanceMeters", 0) / 1000
+
+            navigation_instruction = step.get("navigationInstruction", {})
+            turn_str = maneuver_to_turn_type(navigation_instruction.get("maneuver"))
+
             if not turn_str:
+                continue
+
+            start_location = step.get("startLocation", {}).get("latLng", {})
+            start_lat = start_location.get("latitude")
+            start_lon = start_location.get("longitude")
+            if start_lat is None or start_lon is None:
                 continue
 
             self.course_points.type = np.append(self.course_points.type, turn_str)
             self.course_points.latitude = np.append(
-                self.course_points.latitude, step["start_location"]["lat"]
+                self.course_points.latitude, start_lat
             )
             self.course_points.longitude = np.append(
-                self.course_points.longitude, step["start_location"]["lng"]
+                self.course_points.longitude, start_lon
             )
             self.course_points.distance = np.append(self.course_points.distance, dist)
             self.course_points.notes = np.append(
                 self.course_points.notes,
-                self.remove_html_tag(step["html_instructions"]),
+                self.remove_html_tag(navigation_instruction.get("instructions", "")),
             )
             self.course_points.name = np.append(self.course_points.name, turn_str)
+
+        if not points_detail:
+            encoded_polyline = route.get("polyline", {}).get("encodedPolyline")
+            if encoded_polyline:
+                points_detail.extend(polyline.decode(encoded_polyline))
+
+        if not points_detail:
+            return
+
         points_detail = np.array(points_detail)
 
         self.latitude = np.array(points_detail)[:, 0]
@@ -466,7 +489,7 @@ class Course:
                 privacy_code = json_contents["route"]["privacy_code"]
 
         return privacy_code
-    
+
     def downsample(self):
         len_lat = len(self.latitude)
         len_lon = len(self.longitude)
@@ -535,9 +558,9 @@ class Course:
 
         diff_dist_max = int(np.max(dist_diff)) * 2 / 1000  # [m->km]
         if diff_dist_max > self.config.G_GPS_SEARCH_RANGE:  # [km]
-            #app_logger.debug(
+            # app_logger.debug(
             #    f"G_GPS_SEARCH_RANGE[km]: {self.config.G_GPS_SEARCH_RANGE} -> {diff_dist_max}"
-            #)
+            # )
             self.config.G_GPS_SEARCH_RANGE = diff_dist_max
 
         app_logger.info(f"downsampling:{len_lat} -> {len(self.latitude)}")
@@ -675,9 +698,9 @@ class Course:
                             self.climb_segment[-1]["volume"]
                             > self.config.G_CLIMB_CATEGORY[j]["volume"]
                         ):
-                            self.climb_segment[-1][
-                                "cat"
-                            ] = self.config.G_CLIMB_CATEGORY[j]["name"]
+                            self.climb_segment[-1]["cat"] = (
+                                self.config.G_CLIMB_CATEGORY[j]["name"]
+                            )
                             break
                 climb_search_state = False
             # detect climb start
@@ -901,13 +924,13 @@ class Course:
 
         if not self.is_set:
             return
-        
-        #self.wind_distance = []
+
+        # self.wind_distance = []
         self.wind_coordinates = []
         self.wind_timeline = []
         self.wind_speed = []
         self.wind_direction = []
-        self.load_weather_status = 1  # 0:no update, 1:updating, 2:updated 
+        self.load_weather_status = 1  # 0:no update, 1:updating, 2:updated
 
         # Todo: consider start point with course_distance
         current_time = datetime.now(timezone.utc).replace(second=0, microsecond=0)
@@ -915,20 +938,24 @@ class Course:
         self.wind_coordinates.append([self.longitude[index], self.latitude[index]])
         self.wind_timeline.append(current_time)
 
-        dist = int(self.index.distance/1000) + self.config.G_GROSS_AVE_SPEED  # [m] -> [km]
+        dist = (
+            int(self.index.distance / 1000) + self.config.G_GROSS_AVE_SPEED
+        )  # [m] -> [km]
         while dist < self.distance[-1]:
             index += np.argmin(np.abs(self.distance[index:] - dist))
             self.wind_coordinates.append([self.longitude[index], self.latitude[index]])
-            current_time += timedelta(hours=1) ####### need pace model
+            current_time += timedelta(hours=1)  ####### need pace model
             self.wind_timeline.append(current_time)
-            dist += self.config.G_GROSS_AVE_SPEED ####### [km], need pace model
-        
+            dist += self.config.G_GROSS_AVE_SPEED  ####### [km], need pace model
+
         rest_dist = int(self.distance[-1] % self.config.G_GROSS_AVE_SPEED)
-        if rest_dist > 0 and rest_dist / self.config.G_GROSS_AVE_SPEED > 0.5: ####### need pace model
+        if (
+            rest_dist > 0 and rest_dist / self.config.G_GROSS_AVE_SPEED > 0.5
+        ):  ####### need pace model
             self.wind_coordinates.append([self.longitude[-1], self.latitude[-1]])
-            current_time += timedelta(hours=rest_dist/self.config.G_GROSS_AVE_SPEED)
+            current_time += timedelta(hours=rest_dist / self.config.G_GROSS_AVE_SPEED)
             self.wind_timeline.append(current_time)
-    
+
         n = len(self.wind_coordinates)
         self.wind_speed = [np.nan] * n
         self.wind_direction = [np.nan] * n
@@ -941,8 +968,7 @@ class Course:
                 if not any(np.isnan((self.wind_speed[i], self.wind_direction[i]))):
                     continue
                 w_spd, w_dir, _, _ = await self.config.api.get_wind(
-                    self.wind_coordinates[i],
-                    forecast_time=self.wind_timeline[i]
+                    self.wind_coordinates[i], forecast_time=self.wind_timeline[i]
                 )
                 if not any(np.isnan((w_spd, w_dir))):
                     self.wind_speed[i] = float(w_spd)
@@ -970,7 +996,8 @@ class Course:
 
         h_lon = (
             self.longitude[segment_index]
-            + (self.longitude[segment_index + 1] - self.longitude[segment_index]) * inner
+            + (self.longitude[segment_index + 1] - self.longitude[segment_index])
+            * inner
         )
         h_lat = (
             self.latitude[segment_index]
@@ -1049,9 +1076,7 @@ class Course:
         p_a_y = lat_diff[0:-1]
         p_b_x = lon_diff[1:]
         p_b_y = lat_diff[1:]
-        inner_p = (
-            b_a_x * p_a_x + b_a_y * p_a_y
-        ) / self.points_diff_sum_of_squares
+        inner_p = (b_a_x * p_a_x + b_a_y * p_a_y) / self.points_diff_sum_of_squares
 
         azimuth_diff = np.full(len(self.azimuth), np.nan)
 
@@ -1128,9 +1153,9 @@ class Course:
                 # app_logger.debug(course.azimuth)
                 # app_logger.debug(f"azimuth_diff:{azimuth_diff}")
                 continue
-            #app_logger.debug(
+            # app_logger.debug(
             #    f"i:{i}, s:{s}, m:{m}, azimuth_diff:{azimuth_diff[m]}, course_index:{self.index.value}, course_point_index:{self.index.course_points_index}"
-            #)
+            # )
             # app_logger.debug(f"\t lat_lon: {lat}, {lon}")
             # app_logger.debug(f"\t course: {self.latitude[self.index.value]}, {self.longitude[self.index.value]}")
             # app_logger.debug(f"\t course_point: {self.course_points.latitude[self.index.course_points_index]}, {self.course_points.longitude[self.index.course_points_index]}")

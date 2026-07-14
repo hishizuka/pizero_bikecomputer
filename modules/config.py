@@ -393,13 +393,31 @@ class Config:
         "PASSWORD": "",
     }
 
-    G_GOOGLE_DIRECTION_API = {
+    G_GOOGLE_ROUTES_API = {
         "TOKEN": "",
         "HAVE_API_TOKEN": False,
-        "URL": "https://maps.googleapis.com/maps/api/directions/json?units=metric",
+        "URL": "https://routes.googleapis.com/directions/v2:computeRoutes",
+        "FIELD_MASK": ",".join(
+            (
+                "routes.distanceMeters",
+                "routes.polyline.encodedPolyline",
+                "routes.legs.steps.distanceMeters",
+                "routes.legs.steps.polyline.encodedPolyline",
+                "routes.legs.steps.startLocation",
+                "routes.legs.steps.navigationInstruction",
+            )
+        ),
+        "TIMEOUT": 30,
         "API_MODE": {
-            "bicycling": "mode=bicycling",
-            "driving": "mode=driving&avoid=tolls|highways",
+            "bicycling": {"travelMode": "BICYCLE"},
+            "walking": {"travelMode": "WALK"},
+            "driving": {
+                "travelMode": "DRIVE",
+                "routeModifiers": {
+                    "avoidHighways": True,
+                    "avoidTolls": True,
+                },
+            },
         },
         "API_MODE_SETTING": "bicycling",
     }

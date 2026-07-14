@@ -68,7 +68,7 @@ class MapOverlayMixin:
         left_layout.addWidget(self.buttons["zoomup"])
         left_layout.addWidget(self.buttons["zoomdown"])
 
-        if self.config.G_GOOGLE_DIRECTION_API["HAVE_API_TOKEN"]:
+        if self.config.G_GOOGLE_ROUTES_API["HAVE_API_TOKEN"]:
             self.buttons["go"] = DirectionButton()
             self.buttons["go"].clicked.connect(self.search_route)
             left_layout.addSpacing(4)

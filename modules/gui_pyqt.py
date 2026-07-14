@@ -6,6 +6,7 @@ import asyncio
 
 from modules.app_logger import app_logger
 import modules._qt_ver as _qt_ver
+
 _qt_ver.QtMode = "QtWidgets"
 
 from modules._qt_qtwidgets import (
@@ -35,7 +36,7 @@ class SplashScreen(QtWidgets.QWidget):
     """
     # gradient style
     #    qlineargradient(
-    #        x1:0 y1:0, x2:0 y2:1.0, 
+    #        x1:0 y1:0, x2:0 y2:1.0,
     #        stop:0 blue, stop:0.19 blue, stop:0.2 red, stop:0.39 red, stop:0.4 black, stop:0.59 black, stop:0.6 yellow, stop:0.79 yellow, stop:0.8 green
     #    );
 
@@ -161,7 +162,7 @@ class GUI_PyQt(GUI_Qt_Base):
 
     # for dialog
     display_dialog = False
-    
+
     @property
     def grab_func(self):
         if self.root_widget is not None:
@@ -321,8 +322,8 @@ class GUI_PyQt(GUI_Qt_Base):
                 CoursesMenuWidget,
                 CourseListWidget,
                 CourseDetailWidget,
-                #GoogleDirectionsAPISettingMenuWidget
-            ) 
+                # GoogleRoutesAPISettingMenuWidget
+            )
             from modules.pyqt.menu.pyqt_map_menu_widget import (
                 MapMenuWidget,
                 MapListWidget,
@@ -401,7 +402,7 @@ class GUI_PyQt(GUI_Qt_Base):
                 ("Map Overlay", MapOverlayMenuWidget),
                 ("Select Map", MapListWidget),
                 ("Map and Data", MapMenuWidget),
-                # ("Google Directions API mode", GoogleDirectionsAPISettingMenuWidget),
+                # ("Google Routes API mode", GoogleRoutesAPISettingMenuWidget),
                 ("Course Detail", CourseDetailWidget),
                 ("Courses List", CourseListWidget),
                 ("Courses", CoursesMenuWidget),
@@ -472,8 +473,7 @@ class GUI_PyQt(GUI_Qt_Base):
                 else:
                     if (
                         k == "ALTITUDE_GRAPH"
-                        and "i2c_baro_temp"
-                        in self.sensor.sensor_i2c.sensor
+                        and "i2c_baro_temp" in self.sensor.sensor_i2c.sensor
                     ):
                         self.altitude_graph_widget = (
                             pyqt_value_graph.AltitudeGraphWidget(
@@ -482,8 +482,7 @@ class GUI_PyQt(GUI_Qt_Base):
                         )
                         self.main_page.addWidget(self.altitude_graph_widget)
                     elif (
-                        k == "ACC_GRAPH"
-                        and self.sensor.sensor_i2c.motion_sensor["ACC"]
+                        k == "ACC_GRAPH" and self.sensor.sensor_i2c.motion_sensor["ACC"]
                     ):
                         self.acc_graph_widget = (
                             pyqt_value_graph.AccelerationGraphWidget(
@@ -511,14 +510,12 @@ class GUI_PyQt(GUI_Qt_Base):
                                 self.main_page, self.config
                             )
                             self.main_page.addWidget(self.map_widget)
-                    elif (
-                        k == "CUESHEET"
-                    ):
+                    elif k == "CUESHEET":
                         self.cuesheet_widget = CueSheetWidget(
                             self.main_page, self.config
                         )
                         self.main_page.addWidget(self.cuesheet_widget)
-                    
+
             if self.config.G_ANT["STATUS"]:
                 self.multi_scan_widget = MultiScanWidget(self.main_page, self.config)
                 self.main_page.addWidget(self.multi_scan_widget)
@@ -812,15 +809,13 @@ class GUI_PyQt(GUI_Qt_Base):
                 )
                 or (
                     w == self.cuesheet_widget
-                    and (                
-                            not self.course.course_points.is_set
-                            or not self.config.G_COURSE_INDEXING
-                            or not self.config.G_CUESHEET_DISPLAY_NUM
-                    ) 
+                    and (
+                        not self.course.course_points.is_set
+                        or not self.config.G_COURSE_INDEXING
+                        or not self.config.G_CUESHEET_DISPLAY_NUM
+                    )
                 )
-                or (
-                    w == self.multi_scan_widget
-                )
+                or (w == self.multi_scan_widget)
             ):
                 d = delta
             else:
@@ -936,7 +931,7 @@ class GUI_PyQt(GUI_Qt_Base):
         else:
             app_logger.warning(
                 f"change_menu_back skipped: current widget {type(current_widget).__name__} has no back() method"
-                #"change_menu_back skipped: current widget QWidget                         has no back() method"
+                # "change_menu_back skipped: current widget QWidget                         has no back() method"
             )
 
     def goto_menu(self):
