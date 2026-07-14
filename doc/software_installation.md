@@ -286,9 +286,9 @@ $ pip install adafruit-circuitpython-bmp280
 |:-|:-|:-|:-|
 | [Bosch BMP280](https://www.adafruit.com/product/2651) | [Adafruit](https://www.adafruit.com/product/2651) | | None |
 | [Bosch BMP390](https://www.adafruit.com/product/4816) | [Adafruit](https://www.adafruit.com/product/4816) | | None |
-| [Bosch BMP581](https://www.sparkfun.com/products/20170) | [SparkFun](https://www.sparkfun.com/products/20170) | | bundled Cython helper(*1) |
-| [Bosch BMI270](https://www.bosch-sensortec.com/products/motion-sensors/imus/bmi270/) | | | bundled Cython helper(*1) |
-| [Bosch BMM150 (Obsolete)](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm150/) | | | bundled Cython helper(*1) |
+| [Bosch BMP581](https://www.sparkfun.com/products/20170) | [SparkFun](https://www.sparkfun.com/products/20170) | o | bundled Cython helper(*1) |
+| [Bosch BMI270](https://www.bosch-sensortec.com/products/motion-sensors/imus/bmi270/) | | o | bundled Cython helper(*1) |
+| [Bosch BMM150 (Obsolete)](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm150/) | | o | bundled Cython helper(*1) |
 | [Bosch BMM350](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm350/) | | | bundled Cython helper(*1) |
 | [Bosch BHI360 Shuttle Board 3.0](https://www.bosch-sensortec.com/en/products/smart-sensor-systems/bhi360) | | o | bundled Cython helper(*1) |
 | [Bosch BHI385 Shuttle Board 3.0](https://www.bosch-sensortec.com/en/products/smart-sensor-systems/bhi385) | | o | bundled Cython helper(*1) |
@@ -498,9 +498,9 @@ The buttons at the bottom of the screen are assigned the following functions fro
 The hardware buttons are designed to roughly match the software screen.
 You can change both short and long presses in `modules/button_config.py`.
 
-Button actions are generated from common templates in `button_templates` (`5_BUTTON`, `4_BUTTON`, `3_BUTTON`, `2_BUTTON`) and hardware/profile definitions in `button_profile_defs`. The generated result is stored in `button_def`.
+Button actions are generated from the `ButtonTemplate` definitions and hardware/profile definitions in `button_profile_defs`. The generated result is stored in `button_def`.
 
-For display-attached GPIO buttons, edit `gpio_buttons` only when the BCM GPIO pin assignment differs from the built-in profile. For direct custom GPIO buttons, set `use_custom_gpio_buttons = True`, select `custom_gpio_button_template`, and edit `custom_gpio_buttons`.
+For display-attached GPIO buttons, edit `gpio_buttons` only when the BCM GPIO pin assignment differs from the built-in profile. Direct GPIO buttons on supported boards are selected by the board presets in `modules/board_config.py`.
 
 `OVERRIDES` in `button_profile_defs` only needs to contain actions that differ from the selected template. Omitted keys keep the template defaults.
 
@@ -881,6 +881,11 @@ Set the value before starting the program. If the value is set during running, i
 
 #### GENERAL section
 
+- `board`
+  - Select the board preset, including I2C sensors, GPIO buttons, buzzer, and display mode.
+  - `auto`: detect all supported I2C sensors and do not enable custom GPIO buttons.
+  - `pizero_bikecomputer`: use the Pi Zero Bikecomputer PCB preset.
+  - `bryton_rider_s800`: use the Bryton Rider S800 board preset.
 - `display`
   - Set the type of display.
   - There are definitions in `modules/display/display_core.py`.

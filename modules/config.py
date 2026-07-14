@@ -1,15 +1,16 @@
 import argparse
 import asyncio
-from datetime import datetime
 import logging
 import os
 import shutil
+from datetime import datetime
 from glob import glob
 
 import numpy as np
 import oyaml as yaml
 
 from modules.app_logger import app_logger
+from modules.board_config import BoardType, get_board_preset
 from modules.map_config import add_map_config
 from modules.helper.setting import Setting
 from modules.button_config import Button_Config
@@ -60,7 +61,7 @@ class Config:
     G_POWER_W_PRIME = 15000
     G_POWER_W_PRIME_ALGORITHM = "WATERWORTH"  # WATERWORTH, DIFFERENTIAL
 
-    G_USE_PCB_PIZERO_BIKECOMPUTER = False
+    G_BOARD_TYPE = BoardType.AUTO
     G_USE_BUZZER = False
 
     ###########################
@@ -532,6 +533,8 @@ class Config:
         except:
             pass
 
+        self.apply_board_preset()
+
         # buzzer
         self.buzzer = BuzzerController(self)
 
@@ -603,6 +606,27 @@ class Config:
             post_add_test_config(self)
         except:
             pass
+
+    @property
+    def board_preset(self):
+        return get_board_preset(self.G_BOARD_TYPE)
+
+    def apply_board_preset(self):
+        preset = self.board_preset
+        buttons = preset.gpio_buttons
+
+        self.use_custom_gpio_buttons = buttons is not None
+        self.custom_gpio_button_template = (
+            buttons.template if buttons is not None else None
+        )
+        self.custom_gpio_buttons = dict(buttons.pins) if buttons is not None else {}
+        self.custom_gpio_button_overrides = (
+            buttons.overrides if buttons is not None and buttons.overrides else {}
+        )
+        self.G_USE_BUZZER = preset.use_buzzer
+        self.G_DUAL_DISPLAY_MODE = preset.dual_display_mode
+
+        app_logger.info(f"board preset: {BoardType(self.G_BOARD_TYPE).value}")
 
     @property
     def loop(self):

@@ -44,8 +44,8 @@ Pros&Cons
 - (good) very visible even in direct sunshine
 - (good) ultra-low power consumption
 - (good) backlight
-- (bad) very expensive ($170, Alternatives: $100~)
-- (bad) 8 colors only (but can use more colors with dithering)
+- (bad) Some kind of conversion board is needed, which effectively means a custom PCB is required.
+- (bad) 8 or 64 colors only (but can use more colors with dithering.)
 - Recommend if you don't think costs. Commercial products often uses a reflective LCD.
 
 - <img src="https://user-images.githubusercontent.com/12926652/206317535-71345000-8dfa-4051-a674-15e21afb4203.jpeg" width=480 />
@@ -191,7 +191,7 @@ for altitude, grade, and total ascent/descent
 - [BMP390](https://www.adafruit.com/product/4816)
 - [MS5637](https://gps-pie.com)
 - [LPS33HW](https://www.adafruit.com/product/4414)
-- [BMP581](https://www.sparkfun.com/products/20170)
+- [BMP581](https://www.sparkfun.com/products/20170) (Recommended)
 
 ### IMU
 
@@ -206,18 +206,18 @@ The accelerometer is used for stop detection when using GPS. The magnetometer is
 - [ICM20948](https://www.waveshare.com/environment-sensor-hat.htm): Accel / Gyro / Mag
 - [ISM330DHCX](https://www.sparkfun.com/products/19895): Accel / Gyro
 - [MMC5983MA](https://www.sparkfun.com/products/19895): Mag
-- [BMI270](https://www.bosch-sensortec.com/products/motion-sensors/imus/bmi270/): Accel / Gyro
-- [BMM150](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm150/): Mag
+- [BMI270](https://www.bosch-sensortec.com/products/motion-sensors/imus/bmi270/): Accel / Gyro (Recommended)
+- [BMM150](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm150/): Mag (Recommended)
 - [BMM350](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm350/): Mag
-- Bosch BHI360 Shuttle Board 3.0: custom board with BHI360 + BMM350 + pressure sensor support
-- Bosch BHI385 Shuttle Board 3.0: custom board with BHI385 + BMM350 + BMP58X + BME688 support
+- Bosch BHI360 Shuttle Board 3.0: custom board with BHI360 + BMM350 + pressure sensor support (Recommended)
+- Bosch BHI385 Shuttle Board 3.0: custom board with BHI385 + BMM350 + BMP58X + BME688 support (Recommended)
 
 ### Light
 
 for auto backlight when using MIP Reflective color LCD
 
 - [TCS3472](https://shop.pimoroni.com/products/enviro-phat)
-- [VCNL4040](https://www.adafruit.com/product/4161)
+- [VCNL4040](https://www.adafruit.com/product/4161) (Recommended)
 - [LTR-308ALS-01](https://optoelectronics.liteon.com/upload/download/DS86-2016-0027/LTR-308ALS-01_Final_%20DS_V2.1.PDF)
 - [TSL2591](https://www.waveshare.com/environment-sensor-hat.htm)
 
@@ -247,13 +247,15 @@ This is essential for displays without buttons, like MIP displays.
 
 - <img width="526" alt="Image" src="https://github.com/user-attachments/assets/8d2532a1-5e8b-4710-9c9f-fc227330d6f0" />
 
-#### Direct GPIO buttons
+#### Direct GPIO buttons (Recommended)
 
 You can also connect momentary buttons directly to Raspberry Pi GPIO pins on a custom board.
 
-The software side handles GPIO buttons in `modules/button_config.py`. Common action templates are defined in `button_templates` (`5_BUTTON`, `4_BUTTON`, `3_BUTTON`, `2_BUTTON`), and hardware/profile mappings are expanded into `button_def`.
+The software side handles GPIO buttons in `modules/button_config.py`. Common action templates use the `ButtonTemplate` enum, and hardware/profile mappings are expanded into `button_def`.
 
-Display-attached GPIO pins are defined in `gpio_buttons` (`PiTFT`, `Papirus`, `DFRobot_RPi_Display`, `Pirate_Audio`, `Pirate_Audio_old`, `Display_HAT_Mini`). For custom direct GPIO buttons, set `use_custom_gpio_buttons = True`, choose `custom_gpio_button_template`, and edit `custom_gpio_buttons`. `custom_gpio_buttons` maps logical template buttons such as `"A"`/`"B"`/`"C"` to BCM GPIO numbers.
+Display-attached GPIO pins are defined in `gpio_buttons` (`PiTFT`, `Papirus`, `DFRobot_RPi_Display`, `Pirate_Audio`, `Pirate_Audio_old`, `Display_HAT_Mini`). Direct GPIO buttons on supported boards are defined by `GPIOButtonPreset` in `modules/board_config.py`. The pin map assigns logical template buttons such as `"A"`/`"B"`/`"C"` to BCM GPIO numbers.
+
+Select `auto`, `pizero_bikecomputer`, or `bryton_rider_s800` with the `board` key in the `GENERAL` section of `setting.conf`. Add new board hardware definitions to `BOARD_PRESETS`.
 
 Use `OVERRIDES` in `button_profile_defs` only for button actions that differ from the selected template. Override entries are merged into the generated profile, so keys omitted from `OVERRIDES` keep the template defaults.
 
@@ -268,7 +270,7 @@ get battery percent, etc.
 - [PiSugar3](https://www.pisugar.com) ([Github](https://github.com/PiSugar/PiSugar/wiki/PiSugar-3-Series))
 
 
-## ANT+ USB dongle
+## ANT+ USB dongle (Recommended)
 - available in eBay or aliexpress
 - also need micro USB OTG Adapter : like [adafruit adapter](https://www.adafruit.com/product/2910). 
 - ![ANT+ USB dongle + USB OTG Adapter](https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F100741%2F2a2639eb-7515-4dff-33d1-864a274a4919.png?ixlib=rb-1.2.2&auto=format&gif-q=60&q=75&w=1400&fit=max&s=348720e6c0bc82111195ac699fdc04b6)

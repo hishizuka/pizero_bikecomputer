@@ -5,6 +5,9 @@ import struct
 
 import numpy as np
 
+from modules.app_logger import app_logger
+from modules.board_config import BoardType
+
 
 class Setting:
     config = None
@@ -25,6 +28,13 @@ class Setting:
 
         if "GENERAL" in self.config_parser:
             c = self.config_parser["GENERAL"]
+            if "BOARD" in c:
+                try:
+                    self.config.G_BOARD_TYPE = BoardType(c["BOARD"].strip().lower())
+                except ValueError:
+                    app_logger.warning(
+                        f"Unknown board preset in setting.conf: {c['BOARD']!r}"
+                    )
             if "AUTOSTOP_STATUS" in c:
                 self.config.G_AUTOSTOP_STATUS = c.getboolean("AUTOSTOP_STATUS")
             if "AUTOSTOP_CUTOFF" in c:
@@ -276,6 +286,7 @@ class Setting:
     def write_config(self):
         self.config_parser["GENERAL"] = {}
         c = self.config_parser["GENERAL"]
+        c["BOARD"] = BoardType(self.config.G_BOARD_TYPE).value
         c["DISPLAY"] = self.config.G_DISPLAY
         c["AUTOSTOP_STATUS"] = str(self.config.G_AUTOSTOP_STATUS)
         c["AUTOSTOP_CUTOFF"] = str(int(self.config.G_AUTOSTOP_CUTOFF * 3.6))

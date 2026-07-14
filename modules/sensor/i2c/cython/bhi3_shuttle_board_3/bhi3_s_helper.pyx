@@ -84,6 +84,11 @@ cdef class BHI3_S:
     return [self.datas.acc_x, self.datas.acc_y, self.datas.acc_z]
 
   @property
+  def acc_accuracy(self):
+    self.read_data()
+    return int(self.datas.acc_accuracy)
+
+  @property
   def acc_rms_norm(self):
     self.read_data()
     return self.datas.acc_rms_norm
@@ -98,14 +103,34 @@ cdef class BHI3_S:
     ]
 
   @property
+  def linear_acc_accuracy(self):
+    self.read_data()
+    return int(self.datas.linear_acc_accuracy)
+
+  @property
+  def gravity_accuracy(self):
+    self.read_data()
+    return int(self.datas.gravity_accuracy)
+
+  @property
   def gyro(self):
     self.read_data()
     return [self.datas.gyro_x, self.datas.gyro_y, self.datas.gyro_z]
 
   @property
+  def gyro_accuracy(self):
+    self.read_data()
+    return int(self.datas.gyro_accuracy)
+
+  @property
   def mag(self):
     self.read_data()
     return [self.datas.mag_x, self.datas.mag_y, self.datas.mag_z]
+
+  @property
+  def mag_accuracy(self):
+    self.read_data()
+    return int(self.datas.mag_accuracy)
 
   @property
   def moving(self):
@@ -116,6 +141,11 @@ cdef class BHI3_S:
   def heading(self):
     self.read_data()
     return int(self.datas.heading)
+
+  @property
+  def orientation_accuracy(self):
+    self.read_data()
+    return int(self.datas.orientation_accuracy)
 
   @property
   def pitch(self):

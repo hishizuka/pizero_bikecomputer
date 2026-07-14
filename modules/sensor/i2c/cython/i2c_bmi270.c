@@ -6,7 +6,7 @@ static struct bmi2_dev dev;
 static struct bmi2_sens_config config[2];
 static uint8_t sensor_list[2] = { BMI2_ACCEL, BMI2_GYRO };
 static struct bmi2_sens_data sensor_data = { { 0 } };
-static int fd;
+static int fd = -1;
 static float lsb_to_mps_factor = 0.0f;
 static float lsb_to_dps_factor = 0.0f;
 static float lsb_to_rps_factor = 0.0f;
@@ -33,10 +33,13 @@ void i2c_bmi270_read_data(float* acc, float* gyro) {
     }
 };
 
-int8_t i2c_bmi270_init() {
+static int8_t i2c_bmi270_init_at(uint8_t addr) {
     int8_t rslt;
 
-    fd = i2c_open(I2C_DEVICE, BMI270_I2C_ADDR);
+    fd = i2c_open(I2C_DEVICE, addr);
+    if (fd < 0) {
+        return -1;
+    }
 
     dev.intf_ptr = &fd;
     dev.intf = BMI2_I2C_INTF;
@@ -46,8 +49,7 @@ int8_t i2c_bmi270_init() {
 
     rslt = bmi270_init(&dev);
     if (rslt != BMI2_OK) {
-        printf("BMI270 initialization failed\n");
-        i2c_close(fd);
+        i2c_bmi270_close();
         return rslt;
     }
 
@@ -57,12 +59,12 @@ int8_t i2c_bmi270_init() {
     rslt = bmi2_get_sensor_config(config, 2, &dev);
     //printf("bmi2_get_sensor_config [%d]\n", rslt);
 
-    config[ACCEL].cfg.acc.odr = BMI2_ACC_ODR_200HZ;
+    config[ACCEL].cfg.acc.odr = BMI2_ACC_ODR_50HZ;
     config[ACCEL].cfg.acc.range = BMI2_ACC_RANGE_2G;
     config[ACCEL].cfg.acc.bwp = BMI2_ACC_NORMAL_AVG4;
     config[ACCEL].cfg.acc.filter_perf = BMI2_PERF_OPT_MODE;
 
-    config[GYRO].cfg.gyr.odr = BMI2_GYR_ODR_200HZ;
+    config[GYRO].cfg.gyr.odr = BMI2_GYR_ODR_50HZ;
     config[GYRO].cfg.gyr.range = BMI2_GYR_RANGE_2000;
     config[GYRO].cfg.gyr.bwp = BMI2_GYR_NORMAL_MODE;
     config[GYRO].cfg.gyr.noise_perf = BMI2_POWER_OPT_MODE;
@@ -79,12 +81,46 @@ int8_t i2c_bmi270_init() {
 
     rslt = bmi2_sensor_enable(sensor_list, 2, &dev);
     //printf("bmi2_sensor_enable [%d]\n", rslt);
+    if (rslt != BMI2_OK) {
+        i2c_bmi270_close();
+        return rslt;
+    }
+
+    if (rslt == BMI2_OK) {
+        float warmup_acc[3];
+        float warmup_gyro[3];
+
+        dev.delay_us(100000, dev.intf_ptr);
+        i2c_bmi270_read_data(&warmup_acc[0], &warmup_gyro[0]);
+    }
+
+    return rslt;
+};
+
+int8_t i2c_bmi270_init() {
+    int8_t rslt;
+
+    rslt = i2c_bmi270_init_at(BMI270_I2C_ADDR_PRIMARY);
+    if (rslt == BMI2_OK) {
+        return rslt;
+    }
+
+    if (BMI270_I2C_ADDR_SECONDARY != BMI270_I2C_ADDR_PRIMARY) {
+        rslt = i2c_bmi270_init_at(BMI270_I2C_ADDR_SECONDARY);
+    }
+
+    if (rslt != BMI2_OK) {
+        printf("BMI270 initialization failed [%d]\n", rslt);
+    }
 
     return rslt;
 };
 
 void i2c_bmi270_close() {
-    i2c_close(fd);
+    if (fd >= 0) {
+        i2c_close(fd);
+        fd = -1;
+    }
 };
 
 #ifndef NOUSE_MAIN
@@ -115,4 +151,3 @@ int main() {};
 #endif
 
 #endif
-

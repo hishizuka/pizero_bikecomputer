@@ -4,7 +4,7 @@
 static struct bmp3_dev dev;
 static struct bmp3_settings settings = { 0 };
 static struct bmp3_data data = { 0 };
-static int fd;
+static int fd = -1;
 
 void i2c_bmp3_read_data(float* value) {
     int8_t rslt;
@@ -21,6 +21,9 @@ int8_t i2c_bmp3_init() {
     uint16_t settings_sel;
 
     fd = i2c_open(I2C_DEVICE, BMP3_I2C_ADDR);
+    if (fd < 0) {
+        return -1;
+    }
 
     dev.read = i2c_read;
     dev.write = i2c_write;
@@ -31,7 +34,7 @@ int8_t i2c_bmp3_init() {
     rslt = bmp3_init(&dev);
     if (rslt != BMP3_OK) {
         printf("bmp3 initialization failed\n");
-        i2c_close(fd);
+        i2c_bmp3_close();
         return rslt;
     }
 
@@ -53,7 +56,10 @@ int8_t i2c_bmp3_init() {
 };
 
 void i2c_bmp3_close() {
-    i2c_close(fd);
+    if (fd >= 0) {
+        i2c_close(fd);
+        fd = -1;
+    }
 };
 
 #ifndef NOUSE_MAIN
@@ -83,4 +89,3 @@ int main() {};
 #endif
 
 #endif
-

@@ -5,7 +5,7 @@
 static struct bmm350_dev dev;
 static struct bmm350_mag_temp_data mag_temp_data = { 0 };
 static struct bmm350_pmu_cmd_status_0 pmu_cmd_stat_0 = { 0 };
-static int fd;
+static int fd = -1;
 
 void i2c_bmm350_read_mag(float* mag) {
     int8_t rslt;
@@ -23,6 +23,9 @@ int8_t i2c_bmm350_init() {
     uint8_t err_reg_data = 0;
 
     fd = i2c_open(I2C_DEVICE, BMM350_I2C_ADDR);
+    if (fd < 0) {
+        return -1;
+    }
 
     dev.intf_ptr = &fd;
     dev.read = i2c_read;
@@ -32,7 +35,7 @@ int8_t i2c_bmm350_init() {
     rslt = bmm350_init(&dev);
     if (rslt != BMM350_OK) {
         printf("BMM350 initialization failed\n");
-        i2c_close(fd);
+        i2c_bmm350_close();
         return rslt;
     }
 
@@ -61,7 +64,10 @@ int8_t i2c_bmm350_init() {
 };
 
 void i2c_bmm350_close() {
-    i2c_close(fd);
+    if (fd >= 0) {
+        i2c_close(fd);
+        fd = -1;
+    }
 };
 
 #ifndef NOUSE_MAIN
@@ -91,4 +97,3 @@ int main() {};
 #endif
 
 #endif
-

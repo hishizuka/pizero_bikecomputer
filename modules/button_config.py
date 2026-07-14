@@ -1,6 +1,7 @@
 import copy
 
 from modules.app_logger import app_logger
+from modules.board_config import ButtonTemplate
 
 
 def _button_key_map(*button_names):
@@ -44,7 +45,7 @@ class Button_Config:
     button_long_press = 1
 
     button_templates = {
-        "5_BUTTON": {
+        ButtonTemplate.FIVE_BUTTON: {
             "MAIN": {
                 "A": ("scroll_prev", "get_screenshot"),
                 "B": ("count_laps", "reset_count"),
@@ -89,18 +90,16 @@ class Button_Config:
                 "E": ("map_move_x_plus", ""),
             },
         },
-        "4_BUTTON": {
+        ButtonTemplate.FOUR_BUTTON: {
+            # Examples of Button Layouts
+            #  A |-------| C
+            #    |display|
+            #  B |-------| D
             "MAIN": {
-                "A": ("scroll_prev", "change_mode"),
+                "A": ("scroll_prev", "get_screenshot"),
                 "B": ("count_laps", "reset_count"),
                 "C": ("scroll_next", "enter_menu"),
                 "D": ("start_and_stop_manual", ""),
-            },
-            "MAIN_1": {
-                "A": ("scroll_prev", "change_mode"),
-                "B": ("count_laps", ""),
-                "C": ("scroll_next", "enter_menu"),
-                "D": ("brightness_control", ""),
             },
             "MENU": {
                 "A": ("press_shift_tab", ""),
@@ -109,19 +108,19 @@ class Button_Config:
                 "D": ("press_space", ""),
             },
             "MAP": {
-                "A": ("scroll_prev", ""),
+                "A": ("scroll_prev", "get_screenshot"),
                 "B": ("map_zoom_minus", ""),
                 "C": ("scroll_next", "enter_menu"),
                 "D": ("map_zoom_plus", "change_map_overlays"),
             },
             "COURSE_PROFILE": {
-                "A": ("scroll_prev", ""),
+                "A": ("scroll_prev", "get_screenshot"),
                 "B": ("map_zoom_minus", ""),
                 "C": ("scroll_next", "enter_menu"),
                 "D": ("map_zoom_plus", ""),
             },
         },
-        "3_BUTTON": {
+        ButtonTemplate.THREE_BUTTON: {
             "MAIN": {
                 "A": ("scroll_prev", "get_screenshot"),
                 "B": ("start_and_stop_manual", "count_laps"),
@@ -153,7 +152,7 @@ class Button_Config:
                 "C": ("map_move_x_plus", ""),
             },
         },
-        "2_BUTTON": {
+        ButtonTemplate.TWO_BUTTON: {
             "MAIN": {
                 "A": ("start_and_stop_manual", "reset_count"),
                 "B": ("scroll_next", "enter_menu"),
@@ -176,29 +175,22 @@ class Button_Config:
         "Display_HAT_Mini": {"A": 5, "B": 6, "C": 16, "D": 24},
     }
 
-    # Select one of 5_BUTTON, 4_BUTTON, 3_BUTTON, or 2_BUTTON.
-    custom_gpio_button_template = "5_BUTTON"
+    custom_gpio_button_template: ButtonTemplate | None = None
 
     # Enable custom direct GPIO buttons defined below.
     use_custom_gpio_buttons = False
 
     # BCM GPIO pin assignment for Custom_GPIO.
     # Remove entries to use fewer physical buttons.
-    custom_gpio_buttons = {
-        "A": 4,
-        "B": 27,
-        "C": 5,
-        "D": 6,
-        "E": 26,
-    }
+    custom_gpio_buttons = {}
 
     button_profile_defs = {
         "Button_Shim": {
-            "TEMPLATE": "5_BUTTON",
+            "TEMPLATE": ButtonTemplate.FIVE_BUTTON,
             "BUTTONS": _button_key_map("A", "B", "C", "D", "E"),
         },
         "IOExpander": {
-            "TEMPLATE": "5_BUTTON",
+            "TEMPLATE": ButtonTemplate.FIVE_BUTTON,
             "BUTTONS": {
                 "A": "GP0",
                 "B": "GP1",
@@ -207,12 +199,8 @@ class Button_Config:
                 "E": "GP4",
             },
         },
-        "Custom_GPIO": {
-            "TEMPLATE": custom_gpio_button_template,
-            "BUTTONS": _button_key_map(*custom_gpio_buttons.keys()),
-        },
         "PiTFT": {
-            "TEMPLATE": "5_BUTTON",
+            "TEMPLATE": ButtonTemplate.FIVE_BUTTON,
             "BUTTONS": gpio_buttons["PiTFT"],
             "PAGES": ("MAIN", "MENU"),
             "OVERRIDES": {
@@ -226,7 +214,7 @@ class Button_Config:
             },
         },
         "Papirus": {
-            "TEMPLATE": "4_BUTTON",
+            "TEMPLATE": ButtonTemplate.FOUR_BUTTON,
             "BUTTONS": gpio_buttons["Papirus"],
             "PAGES": ("MAIN", "MENU"),
             "OVERRIDES": {
@@ -239,24 +227,25 @@ class Button_Config:
             },
         },
         "DFRobot_RPi_Display": {
-            "TEMPLATE": "2_BUTTON",
+            "TEMPLATE": ButtonTemplate.TWO_BUTTON,
             "BUTTONS": gpio_buttons["DFRobot_RPi_Display"],
         },
         "Pirate_Audio": {
-            "TEMPLATE": "4_BUTTON",
+            "TEMPLATE": ButtonTemplate.FOUR_BUTTON,
             "BUTTONS": gpio_buttons["Pirate_Audio"],
         },
         "Pirate_Audio_old": {
-            "TEMPLATE": "4_BUTTON",
+            "TEMPLATE": ButtonTemplate.FOUR_BUTTON,
             "BUTTONS": gpio_buttons["Pirate_Audio_old"],
         },
         "Display_HAT_Mini": {
-            "TEMPLATE": "4_BUTTON",
+            "TEMPLATE": ButtonTemplate.FOUR_BUTTON,
             "BUTTONS": gpio_buttons["Display_HAT_Mini"],
         },
     }
 
     button_def = _build_button_profiles(button_templates, button_profile_defs)
+    button_def["Custom_GPIO"] = {}
     button_def.update({
         # call from sensor_ant
         "Edge_Remote": {
@@ -455,8 +444,62 @@ class Button_Config:
     def __init__(self, config):
         self.config = config
         self._dual_map_mode_active = False
+        self.button_def = copy.deepcopy(type(self).button_def)
+        self.custom_gpio_button_template = getattr(
+            config,
+            "custom_gpio_button_template",
+            type(self).custom_gpio_button_template,
+        )
+        self.custom_gpio_buttons = dict(
+            getattr(config, "custom_gpio_buttons", type(self).custom_gpio_buttons)
+        )
+        self.custom_gpio_button_overrides = copy.deepcopy(
+            getattr(config, "custom_gpio_button_overrides", {})
+        )
         if hasattr(config, "use_custom_gpio_buttons"):
             self.use_custom_gpio_buttons = config.use_custom_gpio_buttons
+
+        self._set_custom_gpio_profile()
+
+    def _set_custom_gpio_profile(self):
+        if self.custom_gpio_button_template is None or not self.custom_gpio_buttons:
+            self.button_def["Custom_GPIO"] = {}
+            self.use_custom_gpio_buttons = False
+            return
+
+        try:
+            template = ButtonTemplate(self.custom_gpio_button_template)
+        except (TypeError, ValueError):
+            app_logger.warning(
+                "Unknown custom GPIO button template: "
+                f"{self.custom_gpio_button_template!r}"
+            )
+            self.use_custom_gpio_buttons = False
+            return
+
+        self.custom_gpio_button_template = template
+        self.button_def["Custom_GPIO"] = _expand_button_template(
+            self.button_templates[template],
+            _button_key_map(*self.custom_gpio_buttons),
+        )
+        for page_name, page_overrides in self.custom_gpio_button_overrides.items():
+            page_buttons = self.button_def["Custom_GPIO"].get(page_name)
+            if page_buttons is None:
+                app_logger.warning(
+                    f"Unknown Custom_GPIO override page: {page_name!r}"
+                )
+                continue
+            for button_name, actions in page_overrides.items():
+                if button_name not in page_buttons:
+                    app_logger.warning(
+                        f"Unknown Custom_GPIO override button: {button_name!r}"
+                    )
+                    continue
+                page_buttons[button_name] = tuple(actions)
+        if "MENU" in self.button_def["Custom_GPIO"]:
+            self.button_def["Custom_GPIO"]["DIALOG"] = copy.deepcopy(
+                self.button_def["Custom_GPIO"]["MENU"]
+            )
 
     def _resolve_button_profile(self, button_hard):
         if button_hard != "Zwift_Click_V2":
@@ -544,20 +587,20 @@ class Button_Config:
             return
         func_str = self.button_def[profile][self.page_mode][press_button][index]
         if func_str in ("", "dummy"):
-            app_logger.debug(
-                "[BUTTON] noop "
-                f"device={button_hard}, profile={profile}, page={self.page_mode}, "
-                f"key={press_button}, index={index}, action={func_str!r}"
-            )
+            # app_logger.debug(
+            #     "[BUTTON] noop "
+            #     f"device={button_hard}, profile={profile}, page={self.page_mode}, "
+            #     f"key={press_button}, index={index}, action={func_str!r}"
+            # )
             return
 
-        app_logger.debug(
-            "[BUTTON] dispatch "
-            f"device={button_hard}, profile={profile}, "
-            f"stack_index={stack_index}, main_page_index={main_page_index}, "
-            f"dialog_active={dialog_active}, page={self.page_mode}, "
-            f"key={press_button}, index={index}, action={func_str}"
-        )
+        # app_logger.debug(
+        #     "[BUTTON] dispatch "
+        #     f"device={button_hard}, profile={profile}, "
+        #     f"stack_index={stack_index}, main_page_index={main_page_index}, "
+        #     f"dialog_active={dialog_active}, page={self.page_mode}, "
+        #     f"key={press_button}, index={index}, action={func_str}"
+        # )
 
         getattr(self.config.gui, func_str)()
 

@@ -17,7 +17,9 @@ extern "C" {
 
 #define I2C_DEVICE "/dev/i2c-1"
 //#define I2C_BUS 1
-#define BMI270_I2C_ADDR 0x68
+#define BMI270_I2C_ADDR_PRIMARY 0x68
+#define BMI270_I2C_ADDR_SECONDARY 0x69
+#define BMI270_I2C_ADDR BMI270_I2C_ADDR_PRIMARY
 
 int8_t i2c_bmi270_init();
 void i2c_bmi270_read_data(float* acc, float* gyro);

@@ -16,7 +16,9 @@ extern "C" {
 
 #define I2C_DEVICE "/dev/i2c-1"
 #define I2C_BUS 1
-#define BMP5_I2C_ADDR 0x47
+#define BMP5_I2C_ADDR_PRIMARY 0x46
+#define BMP5_I2C_ADDR_SECONDARY 0x47
+#define BMP5_I2C_ADDR BMP5_I2C_ADDR_PRIMARY
 
 int8_t i2c_bmp5_init();
 void i2c_bmp5_read_data(float* value);

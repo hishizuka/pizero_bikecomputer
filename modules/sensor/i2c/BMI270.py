@@ -499,7 +499,8 @@ BMI270_CONFIG_FILE = [
 
 class BMI270(i2c.i2c):
     # address
-    SENSOR_ADDRESS = 0x68  # Assuming SA0 grounded
+    SENSOR_ADDRESSES = (0x68, 0x69)
+    SENSOR_ADDRESS = SENSOR_ADDRESSES[0]  # Assuming SA0 grounded
 
     # for reset (#soft reset)
     RESET_ADDRESS = 0x00 #0x7E
@@ -522,6 +523,15 @@ class BMI270(i2c.i2c):
     gyro_factor = (125 * (1 << (GYR_RANGE_125 - gyro_range))) / 32768 * math.pi / 180  # rad/sec
 
     struct_pattern = struct.Struct("<hhh")
+
+    @classmethod
+    def test(cls, bus=1, address=None):
+        addresses = (address,) if address is not None else cls.SENSOR_ADDRESSES
+        for addr in addresses:
+            if i2c.i2c.test.__func__(cls, bus=bus, address=addr):
+                cls.SENSOR_ADDRESS = addr
+                return True
+        return False
 
     def init_sensor(self):
 
@@ -553,7 +563,7 @@ class BMI270(i2c.i2c):
         self.bus.write_byte_data(
             self.SENSOR_ADDRESS,
             ACC_CONF,
-            (1 << 7) | (ACC_BWP_OSR4 << 4) | (ACC_ODR_200) # normal & performance
+            (1 << 7) | (ACC_BWP_OSR4 << 4) | (ACC_ODR_50) # normal & performance
             #(0 << 7) | (ACC_BWP_OSR2 << 4) | (ACC_ODR_50) # lowpower
         )
 
@@ -562,8 +572,8 @@ class BMI270(i2c.i2c):
         self.bus.write_byte_data(
             self.SENSOR_ADDRESS,
             GYR_CONF,
-            (1 << 7) | (0 << 6) | (GYR_BWP_OSR4 << 4) | GYR_ODR_200 # normal
-            #(1 << 7) | (1 << 6) | (GYR_BWP_NORMAL << 4) | GYR_ODR_200 # performance
+            (1 << 7) | (0 << 6) | (GYR_BWP_OSR4 << 4) | GYR_ODR_50 # normal
+            #(1 << 7) | (1 << 6) | (GYR_BWP_NORMAL << 4) | GYR_ODR_50 # performance
         )
         
         # power conf
@@ -617,6 +627,15 @@ class BMI270(i2c.i2c):
 
     def read_gyro(self):
         pass
+
+    @property
+    def acceleration(self):
+        self.read()
+        return self.values["acc"]
+
+    @property
+    def gyro(self):
+        return self.values["gyro"]
 
 
 if __name__ == "__main__":

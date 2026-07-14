@@ -85,7 +85,8 @@ CONFIG_FILTER_2 = (FILTER_P << 3) + FILTER_T
 
 class BMP581(i2c.i2c):
     # address
-    SENSOR_ADDRESS = 0x47  # or 0x46
+    SENSOR_ADDRESSES = (0x46, 0x47)
+    SENSOR_ADDRESS = SENSOR_ADDRESSES[0]
 
     # for reset
     RESET_ADDRESS = 0x7E
@@ -103,6 +104,15 @@ class BMP581(i2c.i2c):
 
     temperature = None
     pressure = None
+
+    @classmethod
+    def test(cls, bus=1, address=None):
+        addresses = (address,) if address is not None else cls.SENSOR_ADDRESSES
+        for addr in addresses:
+            if i2c.i2c.test.__func__(cls, bus=bus, address=addr):
+                cls.SENSOR_ADDRESS = addr
+                return True
+        return False
 
     def init_sensor(self):
         # enable pressure and config OSR

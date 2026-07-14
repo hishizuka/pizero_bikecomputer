@@ -47,12 +47,10 @@
 #define BHI3_CALIB_ACC_FILE BHI3_CALIB_DIR "/bhi385_calib_acc.bin"
 #define BHI3_CALIB_GYRO_FILE BHI3_CALIB_DIR "/bhi385_calib_gyro.bin"
 #define BHI3_CALIB_MAG_FILE BHI3_CALIB_DIR "/bhi385_calib_mag.bin"
-#define BHI3_CALIB_SIC_FILE BHI3_CALIB_DIR "/bhi385_sic_matrix.bin"
 #else
 #define BHI3_CALIB_ACC_FILE BHI3_CALIB_DIR "/bhi360_calib_acc.bin"
 #define BHI3_CALIB_GYRO_FILE BHI3_CALIB_DIR "/bhi360_calib_gyro.bin"
 #define BHI3_CALIB_MAG_FILE BHI3_CALIB_DIR "/bhi360_calib_mag.bin"
-#define BHI3_CALIB_SIC_FILE BHI3_CALIB_DIR "/bhi360_sic_matrix.bin"
 #endif
 #define BHI3_CALIB_COMPLETED 3U
 #define BHI3_CALIB_DIRTY 1U
@@ -75,9 +73,6 @@
 
 #ifndef BHI360_BSX_CALIBRATE_STATE_BASE
 #define BHI360_BSX_CALIBRATE_STATE_BASE UINT16_C(0x200)
-#endif
-#ifndef BHI360_BSX_SIC_MATRIX
-#define BHI360_BSX_SIC_MATRIX UINT16_C(0x27D)
 #endif
 #ifndef BHI360_BSX_STATE_BLOCK_LEN
 #define BHI360_BSX_STATE_BLOCK_LEN UINT8_C(64)
@@ -323,6 +318,8 @@ int8_t bhi3_s_init(void)
     ctx.data_valid = false;
     ctx.last_error = BHI360_OK;
     memset(&ctx.latest_data, 0, sizeof(ctx.latest_data));
+    ctx.latest_data.pressure_raw = NAN;
+    ctx.latest_data.pressure = NAN;
     bhi3_s_reset_local_data();
     pthread_mutex_unlock(&ctx.lock);
 
@@ -513,7 +510,7 @@ static int8_t bhi3_s_device_bootstrap(void)
     uint8_t hintr_ctrl;
     uint8_t hif_ctrl;
     uint8_t boot_status;
-    struct bhi360_virtual_sensor_conf_param_conf sensor_conf_eular = { 0 };
+    struct bhi360_virtual_sensor_conf_param_conf sensor_conf_euler = { 0 };
     struct bhi360_virtual_sensor_conf_param_conf sensor_conf_acc = { 0 };
     struct bhi360_virtual_sensor_conf_param_conf sensor_conf_gyro = { 0 };
     struct bhi360_virtual_sensor_conf_param_conf sensor_conf_mag = { 0 };
@@ -745,7 +742,7 @@ static int8_t bhi3_s_device_bootstrap(void)
 
     bhi3_s_restore_calibration_profiles();
 
-    rslt = bhi3_s_set_sensor_rate_with_fallback(BHI360_SENSOR_ID_ORI, &sensor_conf_eular);
+    rslt = bhi3_s_set_sensor_rate_with_fallback(BHI360_SENSOR_ID_ORI, &sensor_conf_euler);
     if (rslt != BHI360_OK)
     {
         close_interfaces(intf);
@@ -794,7 +791,7 @@ static int8_t bhi3_s_device_bootstrap(void)
         return rslt;
     }
 
-    sensor_conf_mag.sample_rate = 1.0f;
+    sensor_conf_mag.sample_rate = BHI3_SENSOR_PRIMARY_RATE_HZ;
     sensor_conf_mag.latency = 0;
     rslt = bhi360_virtual_sensor_conf_param_set_cfg(BHI360_SENSOR_ID_MAG, &sensor_conf_mag, &bhy);
     if (rslt != BHI360_OK)
@@ -1732,15 +1729,6 @@ static void bhi3_s_restore_calibration_profiles(void)
 
         (void)bhi3_s_restore_param_from_file(param_id, path, label, true);
     }
-
-    /* SIC matrix restore is intentionally disabled.
-     * Keep calibration profile restore enabled.
-     */
-    // rslt = bhi3_s_restore_param_from_file(BHI360_BSX_SIC_MATRIX, BHI3_CALIB_SIC_FILE, "sic matrix", true);
-    // if (rslt != BHI360_OK)
-    // {
-    //     fprintf(stderr, "[BHI3] SIC matrix restore skipped (err=%d)\n", rslt);
-    // }
 }
 
 static void bhi3_s_try_save_calibration_profile(uint8_t phys_sensor_id, uint8_t accuracy)
@@ -1785,18 +1773,6 @@ static void bhi3_s_try_save_calibration_profile(uint8_t phys_sensor_id, uint8_t 
     {
         return;
     }
-
-    /* SIC matrix save is intentionally disabled.
-     * Keep calibration profile save enabled.
-     */
-    // if (phys_sensor_id == BHI360_PHYS_SENSOR_ID_MAGNETOMETER)
-    // {
-    //     rslt = bhi3_s_save_param_to_file(BHI360_BSX_SIC_MATRIX, BHI3_CALIB_SIC_FILE, "sic matrix");
-    //     if (rslt != BHI360_OK)
-    //     {
-    //         fprintf(stderr, "[BHI3] SIC matrix save skipped (err=%d)\n", rslt);
-    //     }
-    // }
 }
 
 static int8_t bhi3_s_set_sensor_rate_with_fallback(uint8_t sensor_id,
@@ -1858,6 +1834,8 @@ static void bhi3_s_reset_local_data(void)
     ts_baro_sensor_ns = 0U;
 
     memset(&bhi3_s_datas, 0, sizeof(bhi3_s_datas));
+    bhi3_s_datas.pressure_raw = NAN;
+    bhi3_s_datas.pressure = NAN;
     pressure_ema_initialized = false;
     pressure_ema_hpa = 0.0f;
     memset(&acc_window, 0, sizeof(acc_window));
@@ -2175,6 +2153,14 @@ static void parse_pressure(const struct bhi360_fifo_parse_data_info *callback_in
 
     bhi360_parse_pressure(callback_info->data_ptr, &pressure);
     pressure_hpa = pressure / 100.0f;
+
+    if (pressure_hpa == 0.0f)
+    {
+        bhi3_s_datas.pressure_raw = NAN;
+        bhi3_s_datas.pressure = NAN;
+        return;
+    }
+
     bhi3_s_datas.pressure_raw = pressure_hpa;
 
     if (!pressure_ema_initialized)
@@ -2354,6 +2340,7 @@ static void parse_meta_event(const struct bhi360_fifo_parse_data_info *callback_
                 case BHI360_SENSOR_ID_MAG_BIAS_WU:
                     prev_accuracy = mag_accuracy_state;
                     mag_accuracy_state = byte2;
+                    bhi3_s_datas.mag_accuracy = mag_accuracy_state;
                     save_phys_sensor_id = BHI360_PHYS_SENSOR_ID_MAGNETOMETER;
                     if ((byte2 == BHI3_CALIB_COMPLETED) && (prev_accuracy != BHI3_CALIB_COMPLETED))
                     {

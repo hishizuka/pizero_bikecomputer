@@ -52,7 +52,8 @@ MAG_ODR_30  = 0x07
 
 class BMM150(i2c.i2c):
     # address
-    SENSOR_ADDRESS = 0x13 # 0x11
+    SENSOR_ADDRESSES = (0x10, 0x11, 0x12, 0x13)
+    SENSOR_ADDRESS = SENSOR_ADDRESSES[0]
 
     # for reset (#soft reset)
     RESET_ADDRESS = 0x00 #0x7E
@@ -72,6 +73,15 @@ class BMM150(i2c.i2c):
     mag_factor = 1 #(2 << acc_range) / 32768
     
     struct_pattern = struct.Struct("<hhhh")
+
+    @classmethod
+    def test(cls, bus=1, address=None):
+        addresses = (address,) if address is not None else cls.SENSOR_ADDRESSES
+        for addr in addresses:
+            if i2c.i2c.test.__func__(cls, bus=bus, address=addr):
+                cls.SENSOR_ADDRESS = addr
+                return True
+        return False
 
     def init_sensor(self):
 

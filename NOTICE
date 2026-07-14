@@ -41,8 +41,8 @@ and licensed under the BSD 3-Clause License:
 
 - BHI360_SensorAPI
 - BHI385_SensorAPI
-- modules/sensor/i2c/cython/bhi360_shuttle_board_3/common.c
-- modules/sensor/i2c/cython/bhi360_shuttle_board_3/common.h
+- modules/sensor/i2c/cython/bhi3_shuttle_board_3/common.c
+- modules/sensor/i2c/cython/bhi3_shuttle_board_3/common.h
 
 The full text of the BSD 3-Clause License is available at the top of the source file.
 

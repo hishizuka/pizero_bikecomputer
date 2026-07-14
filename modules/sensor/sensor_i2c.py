@@ -8,6 +8,7 @@ import time
 import numpy as np
 
 from modules.app_logger import app_logger
+from modules.board_config import I2CDevice
 from modules.helper.network.http_client import get_json
 from modules.utils.geo import get_dist_on_earth, get_track_str
 from .sensor import Sensor
@@ -41,12 +42,15 @@ BHI3_I2C_ADDR = 0x28
 BHI3_CHIP_ID_REG = 0x2B
 BHI360_CHIP_ID = 0x7A
 BHI385_CHIP_ID = 0x7C
-BHI3_HELPER_DIR = Path(__file__).resolve().parent / "i2c/cython/bhi360_shuttle_board_3"
+BHI3_HELPER_DIR = Path(__file__).resolve().parent / "i2c/cython/bhi3_shuttle_board_3"
 BHI3_HELPER_GLOB = "bhi3_s_helper*.so"
 BHI3_TARGET_MARKER = BHI3_HELPER_DIR / "__pycache__" / "bhi3_s_helper.target"
-BMP5_I2C_ADDR = 0x47
-BMI270_I2C_ADDR = 0x68
-BMM150_I2C_ADDR = 0x13
+BMP5_I2C_ADDRS = (0x46, 0x47)
+BMP5_I2C_ADDR = BMP5_I2C_ADDRS[0]
+BMI270_I2C_ADDRS = (0x68, 0x69)
+BMI270_I2C_ADDR = BMI270_I2C_ADDRS[0]
+BMM150_I2C_ADDRS = (0x10, 0x11, 0x12, 0x13)
+BMM150_I2C_ADDR = BMM150_I2C_ADDRS[0]
 BMM350_I2C_ADDR = 0x14
 
 
@@ -241,6 +245,24 @@ class SensorI2C(Sensor):
     quit_status = False
 
     def sensor_init(self):
+        self.sensor = {}
+        self.available_sensors = {
+            "PRESSURE": {},
+            "MOTION": {},
+            "LIGHT": {},
+            "UV": {},
+            "GAS": {},
+            "BUTTON": {},
+            "BATTERY": {},
+        }
+        self.motion_sensor = {
+            "ACC": False,
+            "GYRO": False,
+            "MAG": False,
+            "EULER": False,
+            "QUATERNION": False,
+        }
+        self.sensor_label = {"MAG": ""}
         self.bhi3_s_target = ""
         self.reset()
         self.is_mag_declination_modified = False
@@ -251,24 +273,13 @@ class SensorI2C(Sensor):
         if not _SENSOR_I2C:
             return
 
-        if self.config.G_USE_PCB_PIZERO_BIKECOMPUTER:
-            # BHI3 Shuttle Board 3.0
-            self.set_bhi3_s()
-            if self.detect_light_vncl4040():
-                self.available_sensors["LIGHT"]["VCNL4040"] = True
-                self.sensor["lux"] = self.sensor_vcnl4040
-            elif self.detect_light_ltr308als():
-                self.available_sensors["LIGHT"]["LTR308ALS"] = True
-                self.sensor["lux"] = self.sensor_ltr308als
-            if self.detect_button_mcp230xx():
-                self.available_sensors["BUTTON"]["MCP23008"] = True
-
-            self.print_sensors()
-        else:
+        if self.config.board_preset.i2c_sensors is None:
             self.detect_sensors()
             self.set_sensors()
-        
-        #self.reset()
+        else:
+            self._init_configured_sensors()
+
+        # self.reset()
 
         restored_sealevel_pa = self.config.state.get_value("sealevel_pa", None)
         if restored_sealevel_pa is not None:
@@ -293,6 +304,64 @@ class SensorI2C(Sensor):
 
         for k in ("fixed_pitch", "fixed_roll"):
             self.values[k] = self.config.state.get_value(k, 0.0)
+
+    def _init_configured_sensors(self):
+        initializers = {
+            I2CDevice.BHI3: self._enable_bhi3,
+            I2CDevice.VCNL4040: self._enable_vcnl4040,
+            I2CDevice.LTR308ALS: self._enable_ltr308als,
+            I2CDevice.BMP581: self._enable_bmp581,
+            I2CDevice.BMI270: self._enable_bmi270,
+            I2CDevice.BMM150: self._enable_bmm150,
+        }
+
+        for choice in self.config.board_preset.i2c_sensors:
+            detected = False
+            for device in choice.candidates:
+                if initializers[device]():
+                    detected = True
+                    break
+            if choice.required and not detected:
+                names = ", ".join(device.value for device in choice.candidates)
+                app_logger.warning(f"Required I2C sensor not detected: {names}")
+
+        self.set_sensors()
+        self.print_sensors()
+
+    def _enable_bhi3(self):
+        self.set_bhi3_s()
+        return self.available_sensors["MOTION"].get("BHI3_S", False)
+
+    def _enable_vcnl4040(self):
+        detected = self.detect_light_vncl4040()
+        self.available_sensors["LIGHT"]["VCNL4040"] = detected
+        return detected
+
+    def _enable_ltr308als(self):
+        detected = self.detect_light_ltr308als()
+        self.available_sensors["LIGHT"]["LTR308ALS"] = detected
+        return detected
+
+    def _enable_bmp581(self):
+        detected = self.detect_pressure_bmp581()
+        self.available_sensors["PRESSURE"]["BMP581"] = detected
+        return detected
+
+    def _enable_bmi270(self):
+        detected = self.detect_motion_bmi270()
+        self.available_sensors["MOTION"]["BMI270"] = detected
+        if detected:
+            self.motion_sensor["ACC"] = True
+            self.motion_sensor["GYRO"] = True
+        return detected
+
+    def _enable_bmm150(self):
+        detected = self.detect_motion_bmm150()
+        self.available_sensors["MOTION"]["BMM150"] = detected
+        if detected:
+            self.motion_sensor["MAG"] = True
+            self.sensor_label["MAG"] = "BMM150"
+        return detected
 
     def detect_sensors(self):
         # pressure sensors
@@ -426,8 +495,10 @@ class SensorI2C(Sensor):
             self.sensor["i2c_imu"] = self.sensor_bhi3_s
             self.motion_sensor["ACC"] = True
             self.motion_sensor["GYRO"] = True
-            self.motion_sensor["MAG"] = True
-            self.sensor_label["MAG"] = self._bhi3_s_log_name()
+            # BHI3 handles magnetometer fusion internally for its orientation sensor.
+            # Keep MAG disabled to bypass the generic Python heading/tilt path.
+            self.motion_sensor["MAG"] = False
+            self.sensor_label["MAG"] = ""
             self.available_sensors["PRESSURE"]["BHI3_S"] = True  # includes BMP581 and BME688
             self.sensor["i2c_baro_temp"] = self.sensor_bhi3_s
             self.bhi3_s_heading_corr = 0
@@ -908,6 +979,8 @@ class SensorI2C(Sensor):
                 and self.values_mod["mag_max"] is not None
             ):
                 self.config.state.write()
+                app_logger.info(f'mag_min: {self.values_mod["mag_min"]}')
+                app_logger.info(f'mag_max: {self.values_mod["mag_max"]}')
             msg = "[MAG] calibration stopped"
         else:
             self.mag_calib_ready = False
@@ -945,11 +1018,13 @@ class SensorI2C(Sensor):
         if not imu.ready:
             return
 
-        # self.values["raw_heading"] = (
-        #     int(imu.heading) - self.bhi3_s_heading_corr + self.config.G_IMU_MAG_DECLINATION
-        # ) % 360
-        # self.values["heading"] = self.values["raw_heading"]
-        # self.values["heading_str"] = get_track_str(self.values["heading"])
+        self.values["raw_heading"] = (
+            int(imu.heading)
+            - self.bhi3_s_heading_corr
+            + self.config.G_IMU_MAG_DECLINATION
+        ) % 360
+        self.values["heading"] = self.values["raw_heading"]
+        self.values["heading_str"] = get_track_str(self.values["heading"])
 
         # BHI3 Shuttle mounting can be corrected by the common heading offset.
         # Map BHI roll -> bike pitch (look down is plus),
@@ -1059,12 +1134,15 @@ class SensorI2C(Sensor):
             # get raw acc (normalized by gravitational acceleration, g = 9.80665)
             if self.available_sensors["MOTION"].get("BHI3_S"):
                 self.values["acc_raw"] = np.array(self.sensor["i2c_imu"].acc)
-            elif (
-                self.available_sensors["MOTION"].get("LSM303_ORIG")
-                or self.available_sensors["MOTION"].get("BMI270")
-            ):
+            elif self.available_sensors["MOTION"].get("LSM303_ORIG"):
                 self.sensor["i2c_imu"].read_acc()
-                self.values["acc_raw"] = np.array(self.sensor["i2c_imu"].values["acc"])
+                self.values["acc_raw"] = np.array(
+                    self.sensor["i2c_imu"].values["acc"]
+                )
+            elif self.available_sensors["MOTION"].get("BMI270"):
+                self.values["acc_raw"] = np.array(
+                    self.sensor["i2c_imu"].acceleration
+                )
             elif (
                 self.available_sensors["MOTION"].get("LSM6DS")
                 or self.available_sensors["MOTION"].get("ISM330DHCX")
@@ -1099,7 +1177,7 @@ class SensorI2C(Sensor):
             if self.available_sensors["MOTION"].get("BHI3_S"): # rad/sec
                 self.values["gyro_raw"] = np.array(self.sensor["i2c_imu"].gyro)
             elif self.available_sensors["MOTION"].get("BMI270"): # rad/sec
-                self.values["gyro_raw"] = np.array(self.sensor["i2c_imu"].values["gyro"])
+                self.values["gyro_raw"] = np.array(self.sensor["i2c_imu"].gyro)
             elif (
                 self.available_sensors["MOTION"].get("LSM6DS") # rad/sec
                 or self.available_sensors["MOTION"].get("ISM330DHCX") # rad/sec
@@ -1162,9 +1240,7 @@ class SensorI2C(Sensor):
         if not self.motion_sensor["MAG"]:
             return
         try:
-            if self.available_sensors["MOTION"].get("BHI3_S"):
-                self.values["mag_raw"] = np.array(self.sensor["i2c_imu"].mag)
-            elif (
+            if (
                 self.available_sensors["MOTION"].get("MMC5983MA")
                 or self.available_sensors["MOTION"].get("BMM150")
                 or self.available_sensors["MOTION"].get("BMM350")
@@ -1244,7 +1320,6 @@ class SensorI2C(Sensor):
                 self.config.state.set_value(
                     k + "_" + self.sensor_label["MAG"], self.values_mod[k]
                 )
-                app_logger.info(f"update {k}: {self.values_mod[k]}")
         if update_mag_min_max:
             self.calc_mag_scales()
 
@@ -1398,10 +1473,10 @@ class SensorI2C(Sensor):
             self.config.state.set_value("fixed_pitch", pitch)
             self.config.state.set_value("fixed_roll", roll, force_apply=True)
             self.values["gyro"] = np.zeros(3)
-            app_logger.info(
-                f"calibrated position: pitch:{int(math.degrees(pitch))}, roll:{int(math.degrees(roll))}"
-            )
             self.do_pitch_roll_calibration = False
+            app_logger.info(f"fixed_pitch: {pitch}")
+            app_logger.info(f"fixed_roll: {roll}")
+            app_logger.info("[PITCH_ROLL] calibration stopped")
 
     def update_moving_threshold(self):
         if self.motion_sensor["ACC"]:
@@ -1520,17 +1595,25 @@ class SensorI2C(Sensor):
             return
 
         try:
-            if (
-                sp.get("LPS3XHW_ORIG")
-                or sp.get("BMP280_ORIG")
-                or sp.get("BME280")
-                or sp.get("BMP3XX")
-                or sp.get("MS5637")
-                or sp.get("BMP581")
-            ):
-                self.sensor["i2c_baro_temp"].read()
-            get_temperature()
-            self.values["pressure_raw"] = self.sensor["i2c_baro_temp"].pressure
+            baro = self.sensor["i2c_baro_temp"]
+            if sp.get("BMP581") and not hasattr(baro, "read"):
+                # BMP5_C refreshes both values when pressure is accessed.
+                pressure = baro.pressure
+                temperature = baro.temperature
+            else:
+                if (
+                    sp.get("LPS3XHW_ORIG")
+                    or sp.get("BMP280_ORIG")
+                    or sp.get("BME280")
+                    or sp.get("BMP3XX")
+                    or sp.get("MS5637")
+                    or sp.get("BMP581")
+                ):
+                    baro.read()
+                pressure = baro.pressure
+                temperature = baro.temperature
+            self.values["temperature"] = round(temperature, 1)
+            self.values["pressure_raw"] = pressure
             if sp.get("BME280"):
                 self.values["humidity"] = self.sensor["i2c_baro_temp"].relative_humidity
                 get_discomfort_index()
@@ -1717,11 +1800,11 @@ class SensorI2C(Sensor):
             bhi3_target = _prepare_bhi3_build_target()
             # Prefer a prebuilt Cython extension if available.
             try:
-                from .i2c.cython.bhi360_shuttle_board_3.bhi3_s_helper import BHI3_S
+                from .i2c.cython.bhi3_shuttle_board_3.bhi3_s_helper import BHI3_S
             except Exception:
                 import pyximport
                 pyximport.install(inplace=True, language_level=3)
-                from .i2c.cython.bhi360_shuttle_board_3.bhi3_s_helper import BHI3_S
+                from .i2c.cython.bhi3_shuttle_board_3.bhi3_s_helper import BHI3_S
 
             self.sensor_bhi3_s = BHI3_S(1)
             if not self.sensor_bhi3_s.status:
@@ -1879,7 +1962,7 @@ class SensorI2C(Sensor):
             return False
     
     def detect_pressure_bmp581_c(self):
-        if not _i2c_addr_present(BMP5_I2C_ADDR):
+        if not any(_i2c_addr_present(addr) for addr in BMP5_I2C_ADDRS):
             return False
         try:
             # Prefer a prebuilt Cython extension if available.
@@ -2060,7 +2143,7 @@ class SensorI2C(Sensor):
             return False
 
     def detect_motion_bmi270_c(self):
-        if not _i2c_addr_present(BMI270_I2C_ADDR):
+        if not any(_i2c_addr_present(addr) for addr in BMI270_I2C_ADDRS):
             return False
         try:
             # Prefer a prebuilt Cython extension if available.
@@ -2104,8 +2187,6 @@ class SensorI2C(Sensor):
             # device test
             if BMM150.test():
                 self.sensor_bmm150 = BMM150()
-            elif BMM150.test(address=0x12):
-                self.sensor_bmm150 = BMM150(address=0x12)
             else:
                 return False
             return True
@@ -2113,7 +2194,7 @@ class SensorI2C(Sensor):
             return False
 
     def detect_motion_bmm150_c(self):
-        if not _i2c_addr_present(BMM150_I2C_ADDR):
+        if not any(_i2c_addr_present(addr) for addr in BMM150_I2C_ADDRS):
             return False
         try:
             # Prefer a prebuilt Cython extension if available.

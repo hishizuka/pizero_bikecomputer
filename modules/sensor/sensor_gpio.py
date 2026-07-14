@@ -81,6 +81,11 @@ class SensorGPIO(Sensor):
             }
 
         use_pullup = self._button_profile in self._PULLUP_BUTTON_PROFILES
+        if self._button_profile == "Custom_GPIO":
+            board_preset = getattr(self.config, "board_preset", None)
+            gpio_preset = getattr(board_preset, "gpio_buttons", None)
+            if gpio_preset is not None:
+                use_pullup = gpio_preset.pull_up
 
         try:
             self._init_gpiod(button_keys, use_pullup)
@@ -166,8 +171,11 @@ class SensorGPIO(Sensor):
                 config=config,
             )
         except OSError as e:
+            detail = e.strerror or str(e)
             raise RuntimeError(
-                f"Failed to request GPIO lines via gpiod. chip={self._GPIOCHIP_PATH}, pins={pins}."
+                "Failed to request GPIO lines via gpiod. "
+                f"chip={self._GPIOCHIP_PATH}, pins={pins}, "
+                f"errno={e.errno}, reason={detail}."
             ) from e
 
     def update(self):

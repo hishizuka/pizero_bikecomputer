@@ -16,7 +16,11 @@ extern "C" {
 
 #define I2C_DEVICE "/dev/i2c-1"
 //#define I2C_BUS 1
-#define BMM150_I2C_ADDR 0x13
+#define BMM150_I2C_ADDR_PRIMARY 0x10
+#define BMM150_I2C_ADDR_SECONDARY_1 0x11
+#define BMM150_I2C_ADDR_SECONDARY_2 0x12
+#define BMM150_I2C_ADDR_SECONDARY_3 0x13
+#define BMM150_I2C_ADDR BMM150_I2C_ADDR_PRIMARY
 
 int8_t i2c_bmm150_init();
 void i2c_bmm150_read_mag(float* mag);
