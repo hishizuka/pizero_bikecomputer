@@ -53,7 +53,7 @@ Utility sounds:
   beep              Simple single beep at 4kHz
   beep-double       Double beep at 4kHz
   beep-triple       Triple beep at 4kHz
-  alert             Urgent alert pattern
+  alert             Earthquake early warning buzzer
   navi-turn         Navigation turn notification
 
 Options:
@@ -176,8 +176,9 @@ trap cleanup EXIT
 
 tone_on() {
     local freq=$1
+    local duty_percent=${2:-50}
     local period_ns=$((1000000000 / freq))
-    local duty_ns=$((period_ns / 2))
+    local duty_ns=$((period_ns * duty_percent / 100))
     # Set duty to 0 first to safely change period (duty must be <= period)
     echo 0 > "$PWM_PATH/duty_cycle"
     echo "$period_ns" > "$PWM_PATH/period"
@@ -288,14 +289,29 @@ beep_triple() {
 }
 
 alert_sound() {
-    # Urgent repeated alert
-    local i
-    for i in 1 2 3; do
-        tone_on 4000; sleep 0.150; tone_off; sleep 0.100
-    done
-    sleep 0.200
-    for i in 1 2 3; do
-        tone_on 4000; sleep 0.150; tone_off; sleep 0.100
+    # Two groups of three low-to-high mobile earthquake warning sweeps.
+    # The changing duty cycle approximates its envelope and peaks at full output.
+    local group pulse step tone duty
+    for group in 1 2; do
+        for pulse in 1 2 3; do
+            for step in \
+                120:20 180:30 240:40 300:46 360:50 \
+                420:50 480:50 540:50 600:50 660:50 \
+                720:50 780:50 840:50 900:50 960:50 \
+                1020:50 1080:50 1140:50 1200:46 1260:34 1320:20; do
+                tone=${step%:*}
+                duty=${step#*:}
+                tone_on "$tone" "$duty"
+                sleep 0.0090
+            done
+            tone_off
+            if [ "$pulse" -lt 3 ]; then
+                sleep 0.150
+            fi
+        done
+        if [ "$group" -lt 2 ]; then
+            sleep 0.600
+        fi
     done
 }
 
