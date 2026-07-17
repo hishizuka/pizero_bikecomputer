@@ -9,7 +9,7 @@ from .bt_pan import (
     HAS_DBUS_FAST,
 )
 
-# Optional Gadgetbridge support (requires gadgetbridge-rpi-link[bluez])
+# Optional Gadgetbridge support (requires gadgetbridge-rpi-link)
 try:
     from gadgetbridge_rpi_link.bluez import is_bluez_supported
 

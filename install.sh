@@ -251,7 +251,8 @@ if [[ "$install_bluetooth" == "true" ]]; then
     sudo apt install -y bluez-obexd libffi-dev
     # for raspberry pi zero (building with pip is extremely heavy.)
     sudo apt install -y python3-pydantic python3-orjson
-    pip install garminconnect stravacookies bluez-peripheral==0.2.0a5 tb-mqtt-client mmh3
+    pip install gadgetbridge-rpi-link
+    pip install garminconnect stravacookies tb-mqtt-client mmh3
     install_timezonefinder_and_flatbuffers
 
     echo "✅ Bluetooth packages installed successfully."

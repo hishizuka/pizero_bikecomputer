@@ -6,7 +6,7 @@
   - [macOS or Linux](#macOS-or-Linux)
   - [Raspberry Pi OS](#Raspberry-Pi-OS)
     - [common](#common)
-    - [Bluetooth and Cloud(Strava, Garmin and ThingsBoard)](#bluetooth-and-cloud)
+    - [Bluetooth and Cloud](#bluetooth-and-cloud)
     - [GPS module](#gps-module)
     - [ANT+ USB dongle](#ant-usb-dongle)
     - [Display](#display)
@@ -119,11 +119,12 @@ so no separate `crdp` installation is required.
 
 ### Bluetooth and Cloud
 
-Strava, Garmin and ThingsBoard
+Gadgetbridge, Strava, Garmin and ThingsBoard
 
 ```
 $ sudo apt install bluez-obexd
-$ pip install garminconnect stravacookies bluez-peripheral==0.2.0a5 tb-mqtt-client mmh3 timezonefinder
+$ pip install gadgetbridge-rpi-link
+$ pip install garminconnect stravacookies tb-mqtt-client mmh3 timezonefinder
 ```
 
 ### GPS module
@@ -853,7 +854,8 @@ If ANT+ powermeter is available, set both parameters are used in W'balance (%). 
 #### Gadgetbridge
 
 - Install [GadgetBridge](https://gadgetbridge.org) on Android and enable the `Connectivity` menu items.
-- `bluez-peripheral` (`bluez-peripheral==0.2.0a5` above) package is required.
+- The `gadgetbridge-rpi-link` package installed in
+  [Bluetooth and Cloud](#bluetooth-and-cloud) is required.
 - GadgetBridge app settings
   - Enable all permissions. Most Android app permissions are enabled by default when the app is installed.
   - `Settings` > `Discovery and Pairing options` > `Discover unsupported devices`: On.
