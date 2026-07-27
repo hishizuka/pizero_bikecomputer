@@ -53,7 +53,7 @@ class GUI_None():
         if fn is not None:
             fn()
 
-    def show_dialog_ok_only(self, fn, title):
+    def show_dialog_ok_only(self, fn, title, buzzer_sound="beep", button_label="OK"):
         print(title)
         if fn is not None:
             fn()

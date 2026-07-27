@@ -319,13 +319,13 @@ class GUI_Qt_Base(QtCore.QObject):
     def show_dialog(self, fn, title):
         self._enqueue_msg({"fn": fn, "title": title, "button_num": 2})
 
-    def show_dialog_ok_only(self, fn, title, buzzer_sound="beep"):
+    def show_dialog_ok_only(self, fn, title, buzzer_sound="beep", button_label="OK"):
         self._enqueue_msg(
             {
                 "fn": fn,
                 "title": title,
                 "button_num": 1,
-                "button_label": ["OK"],
+                "button_label": [button_label],
                 "buzzer_sound": buzzer_sound,
             }
         )

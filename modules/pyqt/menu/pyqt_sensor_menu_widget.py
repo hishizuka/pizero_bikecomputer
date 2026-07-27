@@ -54,8 +54,12 @@ class I2CMenuWidget(MenuWidget):
                 lambda: self.onoff_map_heading(True),
             ),
             ("Adjust Altitude", "submenu", self.adjust_altitude),
-            (self.MAG_CALIBRATION_BUTTON, "toggle", self.calib_mag),
-            (self.PITCH_ROLL_CALIBRATION_BUTTON, "toggle", self.calib_pitch_roll),
+            (self.MAG_CALIBRATION_BUTTON, "dialog", self.calib_mag),
+            (
+                self.PITCH_ROLL_CALIBRATION_BUTTON,
+                "dialog",
+                self.calib_pitch_roll,
+            ),
         )
         self.add_buttons(button_conf)
         self.update_button_status()
@@ -101,11 +105,12 @@ class I2CMenuWidget(MenuWidget):
         )
         self.buttons["Auto Light"].change_toggle(self.config.G_ANT["USE_AUTO_LIGHT"])
         self.onoff_map_heading(change=False)
-        self.buttons[self.MAG_CALIBRATION_BUTTON].change_toggle(
-            self.sensor_i2c.do_mag_calibration
+        self.buttons[self.MAG_CALIBRATION_BUTTON].onoff_button(
+            self.sensor_i2c.motion_sensor["MAG"]
         )
-        self.buttons[self.PITCH_ROLL_CALIBRATION_BUTTON].change_toggle(
-            self.sensor_i2c.do_pitch_roll_calibration
+        self.buttons[self.PITCH_ROLL_CALIBRATION_BUTTON].onoff_button(
+            self.sensor_i2c.motion_sensor["ACC"]
+            or self.sensor_i2c.motion_sensor["QUATERNION"]
         )
 
 
