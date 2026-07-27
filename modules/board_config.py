@@ -40,9 +40,27 @@ class GPIOButtonPreset:
 
 
 @dataclass(frozen=True)
+class IMUAxisPreset:
+    axis_swap_xy_status: bool = False
+    axis_conversion_status: bool = False
+    axis_conversion_coef: tuple[float, float, float] = (1.0, 1.0, 1.0)
+    mag_axis_swap_xy_status: bool = False
+    mag_axis_conversion_status: bool = False
+    mag_axis_conversion_coef: tuple[float, float, float] = (1.0, 1.0, 1.0)
+
+
+@dataclass(frozen=True)
+class DisplayPreset:
+    use_backlight: bool = False
+    auto_backlight_cutoff: int = 10
+
+
+@dataclass(frozen=True)
 class BoardPreset:
     i2c_sensors: tuple[I2CSensorChoice, ...] | None
     gpio_buttons: GPIOButtonPreset | None = None
+    imu_axis: IMUAxisPreset | None = None
+    display: DisplayPreset | None = None
     use_buzzer: bool = False
     dual_display_mode: bool = False
 
@@ -63,6 +81,18 @@ BOARD_PRESETS: dict[BoardType, BoardPreset] = {
                 },
             },
         ),
+        imu_axis=IMUAxisPreset(
+            axis_swap_xy_status=True,
+            axis_conversion_status=True,
+            axis_conversion_coef=(1.0, 1.0, -1.0),
+            mag_axis_swap_xy_status=True,
+            mag_axis_conversion_status=True,
+            mag_axis_conversion_coef=(1.0, 1.0, -1.0),
+        ),
+        display=DisplayPreset(
+            use_backlight=True,
+            auto_backlight_cutoff=2,
+        ),
         use_buzzer=True,
         dual_display_mode=True,
     ),
@@ -76,6 +106,18 @@ BOARD_PRESETS: dict[BoardType, BoardPreset] = {
         gpio_buttons=GPIOButtonPreset(
             template=ButtonTemplate.FOUR_BUTTON,
             pins={"A": 23, "B": 4, "C": 26, "D": 16},
+        ),
+        imu_axis=IMUAxisPreset(
+            axis_swap_xy_status=False,
+            axis_conversion_status=False,
+            axis_conversion_coef=(1.0, 1.0, -1.0),
+            mag_axis_swap_xy_status=False,
+            mag_axis_conversion_status=True,
+            mag_axis_conversion_coef=(1.0, -1.0, 1.0),
+        ),
+        display=DisplayPreset(
+            use_backlight=True,
+            auto_backlight_cutoff=2,
         ),
         use_buzzer=True,
     ),

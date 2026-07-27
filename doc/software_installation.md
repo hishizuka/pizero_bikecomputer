@@ -988,6 +988,9 @@ If ANT+ power meter is available, set `cp` as CP and `w_prime` as W prime balanc
 #### SENSOR_IMU section
 In modules/sensor_i2c.py, use the change_axis method to change the axis direction of the IMU (accelerometer/magnetometer/gyroscope) according to its mounting direction.
 The settings are common, so if you use individual sensors, make sure they are all pointing in the same direction.
+With `board = auto`, axis values are read from this section. For a specific board,
+runtime values are defined by its preset in `modules/board_config.py`, and values
+manually entered in `setting.conf` are ignored.
 
 X, Y, and Z printed on the board are set to the following orientations by default.
 
@@ -1016,6 +1019,10 @@ Axis conversion is performed with the following variables.
   - Enable backlight control for supported MIP color displays.
 - `auto_backlight_cutoff`
   - Threshold for automatic backlight control.
+
+With `board = auto`, these values are read from `setting.conf`. For a specific
+board, they are defined by its preset in `modules/board_config.py`, and values
+manually entered in `setting.conf` are ignored.
 
 #### STRAVA_API section
 

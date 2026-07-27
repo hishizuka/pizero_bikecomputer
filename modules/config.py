@@ -643,6 +643,24 @@ class Config:
         self.G_USE_BUZZER = preset.use_buzzer
         self.G_DUAL_DISPLAY_MODE = preset.dual_display_mode
 
+        if preset.imu_axis is not None:
+            imu_axis = preset.imu_axis
+            self.G_IMU_AXIS_SWAP_XY = {"STATUS": imu_axis.axis_swap_xy_status}
+            self.G_IMU_AXIS_CONVERSION = {
+                "STATUS": imu_axis.axis_conversion_status,
+                "COEF": np.array(imu_axis.axis_conversion_coef),
+            }
+            self.G_IMU_MAG_AXIS_SWAP_XY = {"STATUS": imu_axis.mag_axis_swap_xy_status}
+            self.G_IMU_MAG_AXIS_CONVERSION = {
+                "STATUS": imu_axis.mag_axis_conversion_status,
+                "COEF": np.array(imu_axis.mag_axis_conversion_coef),
+            }
+
+        if preset.display is not None:
+            self.G_DISPLAY_PARAM = self.G_DISPLAY_PARAM.copy()
+            self.G_DISPLAY_PARAM["USE_BACKLIGHT"] = preset.display.use_backlight
+            self.G_AUTO_BACKLIGHT_CUTOFF = preset.display.auto_backlight_cutoff
+
         app_logger.info(f"board preset: {BoardType(self.G_BOARD_TYPE).value}")
 
     @property

@@ -6,7 +6,7 @@ import struct
 import numpy as np
 
 from modules.app_logger import app_logger
-from modules.board_config import BoardType
+from modules.board_config import BoardType, get_board_preset
 
 
 class Setting:
@@ -157,43 +157,49 @@ class Setting:
                     )
 
         if "SENSOR_IMU" in self.config_parser:
-            for s, c, m in [
-                [
-                    "AXIS_CONVERSION_STATUS",
-                    "AXIS_CONVERSION_COEF",
-                    self.config.G_IMU_AXIS_CONVERSION,
-                ],
-                ["AXIS_SWAP_XY_STATUS", "", self.config.G_IMU_AXIS_SWAP_XY],
-                [
-                    "MAG_AXIS_CONVERSION_STATUS",
-                    "MAG_AXIS_CONVERSION_COEF",
-                    self.config.G_IMU_MAG_AXIS_CONVERSION,
-                ],
-                ["MAG_AXIS_SWAP_XY_STATUS", "", self.config.G_IMU_MAG_AXIS_SWAP_XY],
-            ]:
-                if s.lower() in self.config_parser["SENSOR_IMU"]:
-                    m["STATUS"] = self.config_parser["SENSOR_IMU"].getboolean(s)
-                if c != "" and c.lower() in self.config_parser["SENSOR_IMU"]:
-                    coef = np.array(json.loads(self.config_parser["SENSOR_IMU"][c]))
-                    n = m["COEF"].shape[0]
-                    if np.sum((coef == 1) | (coef == -1)) == n:
-                        m["COEF"] = coef[0:n]
-                if "MAG_DECLINATION" in self.config_parser["SENSOR_IMU"]:
-                    self.config.G_IMU_MAG_DECLINATION = int(
-                        self.config_parser["SENSOR_IMU"]["MAG_DECLINATION"]
-                    )
+            c = self.config_parser["SENSOR_IMU"]
+            if BoardType(self.config.G_BOARD_TYPE) == BoardType.AUTO:
+                for status_key, coef_key, setting in [
+                    (
+                        "AXIS_CONVERSION_STATUS",
+                        "AXIS_CONVERSION_COEF",
+                        self.config.G_IMU_AXIS_CONVERSION,
+                    ),
+                    ("AXIS_SWAP_XY_STATUS", "", self.config.G_IMU_AXIS_SWAP_XY),
+                    (
+                        "MAG_AXIS_CONVERSION_STATUS",
+                        "MAG_AXIS_CONVERSION_COEF",
+                        self.config.G_IMU_MAG_AXIS_CONVERSION,
+                    ),
+                    (
+                        "MAG_AXIS_SWAP_XY_STATUS",
+                        "",
+                        self.config.G_IMU_MAG_AXIS_SWAP_XY,
+                    ),
+                ]:
+                    if status_key in c:
+                        setting["STATUS"] = c.getboolean(status_key)
+                    if coef_key and coef_key in c:
+                        coef = np.array(json.loads(c[coef_key]))
+                        n = setting["COEF"].shape[0]
+                        if np.sum((coef == 1) | (coef == -1)) == n:
+                            setting["COEF"] = coef[0:n]
+            if "MAG_DECLINATION" in c:
+                self.config.G_IMU_MAG_DECLINATION = int(c["MAG_DECLINATION"])
 
         if "DISPLAY_PARAM" in self.config_parser:
             c = self.config_parser["DISPLAY_PARAM"]
             if "SPI_CLOCK" in c:
                 self.config.G_DISPLAY_PARAM["SPI_CLOCK"] = int(c["SPI_CLOCK"])
-            if "USE_BACKLIGHT" in c:
-                self.config.G_DISPLAY_PARAM["USE_BACKLIGHT"] = c.getboolean(
-                    "USE_BACKLIGHT"
-                )
-            if "AUTO_BACKLIGHT_CUTOFF" in c:
-                # store temporary
-                self.config.G_AUTO_BACKLIGHT_CUTOFF = int(c["AUTO_BACKLIGHT_CUTOFF"])
+            if BoardType(self.config.G_BOARD_TYPE) == BoardType.AUTO:
+                if "USE_BACKLIGHT" in c:
+                    self.config.G_DISPLAY_PARAM["USE_BACKLIGHT"] = c.getboolean(
+                        "USE_BACKLIGHT"
+                    )
+                if "AUTO_BACKLIGHT_CUTOFF" in c:
+                    self.config.G_AUTO_BACKLIGHT_CUTOFF = int(
+                        c["AUTO_BACKLIGHT_CUTOFF"]
+                    )
 
         if "GPSD_PARAM" in self.config_parser:
             if "EPX_EPY_CUTOFF" in self.config_parser["GPSD_PARAM"]:
@@ -320,25 +326,44 @@ class Setting:
 
         self.config_parser["SENSOR_IMU"] = {}
         c = self.config_parser["SENSOR_IMU"]
-        c["AXIS_SWAP_XY_STATUS"] = str(self.config.G_IMU_AXIS_SWAP_XY["STATUS"])
-        c["AXIS_CONVERSION_STATUS"] = str(self.config.G_IMU_AXIS_CONVERSION["STATUS"])
-        c["AXIS_CONVERSION_COEF"] = str(
-            self.config.G_IMU_AXIS_CONVERSION["COEF"].tolist()
-        )
-        c["MAG_AXIS_SWAP_XY_STATUS"] = str(self.config.G_IMU_MAG_AXIS_SWAP_XY["STATUS"])
-        c["MAG_AXIS_CONVERSION_STATUS"] = str(
-            self.config.G_IMU_MAG_AXIS_CONVERSION["STATUS"]
-        )
-        c["MAG_AXIS_CONVERSION_COEF"] = str(
-            self.config.G_IMU_MAG_AXIS_CONVERSION["COEF"].tolist()
-        )
+        board_preset = get_board_preset(self.config.G_BOARD_TYPE)
+        imu_axis = board_preset.imu_axis
+        if imu_axis is None:
+            c["AXIS_SWAP_XY_STATUS"] = str(self.config.G_IMU_AXIS_SWAP_XY["STATUS"])
+            c["AXIS_CONVERSION_STATUS"] = str(
+                self.config.G_IMU_AXIS_CONVERSION["STATUS"]
+            )
+            c["AXIS_CONVERSION_COEF"] = str(
+                self.config.G_IMU_AXIS_CONVERSION["COEF"].tolist()
+            )
+            c["MAG_AXIS_SWAP_XY_STATUS"] = str(
+                self.config.G_IMU_MAG_AXIS_SWAP_XY["STATUS"]
+            )
+            c["MAG_AXIS_CONVERSION_STATUS"] = str(
+                self.config.G_IMU_MAG_AXIS_CONVERSION["STATUS"]
+            )
+            c["MAG_AXIS_CONVERSION_COEF"] = str(
+                self.config.G_IMU_MAG_AXIS_CONVERSION["COEF"].tolist()
+            )
+        else:
+            c["AXIS_SWAP_XY_STATUS"] = str(imu_axis.axis_swap_xy_status)
+            c["AXIS_CONVERSION_STATUS"] = str(imu_axis.axis_conversion_status)
+            c["AXIS_CONVERSION_COEF"] = str(list(imu_axis.axis_conversion_coef))
+            c["MAG_AXIS_SWAP_XY_STATUS"] = str(imu_axis.mag_axis_swap_xy_status)
+            c["MAG_AXIS_CONVERSION_STATUS"] = str(imu_axis.mag_axis_conversion_status)
+            c["MAG_AXIS_CONVERSION_COEF"] = str(list(imu_axis.mag_axis_conversion_coef))
         c["MAG_DECLINATION"] = str(int(self.config.G_IMU_MAG_DECLINATION))
 
         self.config_parser["DISPLAY_PARAM"] = {}
         c = self.config_parser["DISPLAY_PARAM"]
+        display = board_preset.display
         c["SPI_CLOCK"] = str(int(self.config.G_DISPLAY_PARAM["SPI_CLOCK"]))
-        c["USE_BACKLIGHT"] = str(self.config.G_DISPLAY_PARAM["USE_BACKLIGHT"])
-        c["AUTO_BACKLIGHT_CUTOFF"] = str(int(self.config.G_AUTO_BACKLIGHT_CUTOFF))
+        if display is None:
+            c["USE_BACKLIGHT"] = str(self.config.G_DISPLAY_PARAM["USE_BACKLIGHT"])
+            c["AUTO_BACKLIGHT_CUTOFF"] = str(int(self.config.G_AUTO_BACKLIGHT_CUTOFF))
+        else:
+            c["USE_BACKLIGHT"] = str(display.use_backlight)
+            c["AUTO_BACKLIGHT_CUTOFF"] = str(display.auto_backlight_cutoff)
 
         self.config_parser["GPSD_PARAM"] = {}
         c = self.config_parser["GPSD_PARAM"]
