@@ -88,7 +88,15 @@ async def post(url, headers=None, params=None, data=None, json_data=None, timeou
 
 
 async def _get_http_request(
-    session, url, save_path, headers, params, semaphore, timeout
+    session,
+    url,
+    save_path,
+    headers,
+    params,
+    semaphore,
+    timeout,
+    log_suppressed_statuses,
+    log_url,
 ):
     start_time = datetime.now().strftime("%H:%M:%S")
     async with semaphore:
@@ -99,9 +107,12 @@ async def _get_http_request(
             ) as dl_file:
                 response_code = dl_file.status
                 if dl_file.status != 200:
-                    app_logger.info(
-                        f"dl_file status {dl_file.status}: {dl_file.reason}\n{url}"
-                    )
+                    if dl_file.status not in log_suppressed_statuses:
+                        request_target = url if log_url else save_path
+                        app_logger.info(
+                            f"dl_file status {dl_file.status}: "
+                            f"{dl_file.reason}\n{request_target}"
+                        )
                     return response_code
 
                 data = await dl_file.read()
@@ -109,8 +120,10 @@ async def _get_http_request(
         except asyncio.CancelledError:
             pass
         except Exception as exc:
+            request_target = url if log_url else save_path
             app_logger.error(
-                f"Download Error ({start_time}->{datetime.now().strftime('%H:%M:%S')}): {exc}\n{url}"
+                f"Download Error ({start_time}->{datetime.now().strftime('%H:%M:%S')}): "
+                f"{exc}\n{request_target}"
             )
             if "cannot connect" in str(exc).lower() or "dns server" in str(exc).lower():
                 response_code = -1
@@ -125,12 +138,22 @@ async def download_files(
     retry_count=None,
     limit=None,
     timeout=120,
+    log_suppressed_statuses=(),
+    log_url=True,
 ):
     semaphore = asyncio.Semaphore(1 if limit else DEFAULT_COROUTINE_SEM)
     async with aiohttp.ClientSession() as session:
         tasks = [
             _get_http_request(
-                session, url, save_path, headers, params, semaphore, timeout
+                session,
+                url,
+                save_path,
+                headers,
+                params,
+                semaphore,
+                timeout,
+                log_suppressed_statuses,
+                log_url,
             )
             for url, save_path in zip(urls, save_paths)
         ]

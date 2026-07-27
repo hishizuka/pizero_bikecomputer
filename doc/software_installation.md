@@ -61,7 +61,7 @@ $ pip install PyQt6 numpy cython pillow pyqtgraph oyaml polyline aiohttp qasync 
 $ sudo apt install sqlite3 libsqlite3-dev
 
 # optional: cloud upload / live track
-$ pip install garminconnect stravacookies tb-mqtt-client mmh3 timezonefinder
+$ pip install garminconnect tb-mqtt-client mmh3 timezonefinder
 
 $ git clone https://github.com/hishizuka/pizero_bikecomputer.git
 $ cd pizero_bikecomputer
@@ -124,7 +124,7 @@ Gadgetbridge, Strava, Garmin and ThingsBoard
 ```
 $ sudo apt install bluez-obexd
 $ pip install gadgetbridge-rpi-link
-$ pip install garminconnect stravacookies tb-mqtt-client mmh3 timezonefinder
+$ pip install garminconnect tb-mqtt-client mmh3 timezonefinder
 ```
 
 ### GPS module
@@ -743,7 +743,10 @@ Uploads the most recent activity record file(.fit) created by the reset operatio
 <img width="400" alt="menu-04-upload_activity" src="https://user-images.githubusercontent.com/12926652/206076198-55803175-ef4c-4f9b-9408-b44dbe98b1b3.png">
 
 - Strava
-  - You need to set the Strava Token in [Strava API section](#strava_api-section) of setting.conf.
+  - Direct upload is a legacy, unsupported feature. See the
+    [Strava API section](#strava_api-section).
+  - For automatic delivery to Strava, upload to Garmin Connect or Ride with GPS
+    and configure that service to sync activities to Strava.
 - Garmin
   - You need to set the Garmin setting in [GARMINCONNECT_API section](#garminconnect_api-section) of setting.conf.
 - Ride with GPS
@@ -1018,12 +1021,52 @@ Axis conversion is performed with the following variables.
 
 Set up for uploading your .fit file to Strava in the "Strava Upload" of the menu. The upload is limited to the most recently reset and exported .fit file.
 
+A paid [Strava subscription](https://developers.strava.com/docs/getting-started/)
+is required to set up direct upload because Strava requires a subscription to
+create the API application used by this feature.
+
+**Maintenance status (July 2026):** Direct Strava upload is retained temporarily
+for existing users, but the project author does not intend to support it after
+July 2026. If a future Strava API or authentication change breaks the current
+implementation, the feature will be removed rather than updated.
+
+For automatic uploads to Strava, use Garmin Connect or Ride with GPS as the
+upload destination in Pi Zero Bikecomputer, then connect that service to Strava:
+
+- [Garmin Connect and Strava automatic sync](https://support.strava.com/en-us/articles/15401903-garmin-and-strava)
+- [Ride with GPS Connected Services](https://support.ridewithgps.com/hc/en-us/articles/4419008470299-Connected-Services-Garmin-Connect-Strava-Relive-Wahoo-Hammerhead-and-Coros)
+
+Ride with GPS can forward activity files uploaded directly to it, including
+files uploaded by Pi Zero Bikecomputer. It does not forward activities that it
+received automatically from another connected service.
+
 To get the Strava token, see "[Trying the Authorization Method (OAuth2) of the Strava V3 API (In Japanese)](https://hhhhhskw.hatenablog.com/entry/2018/11/06/014206)".
 Set the `client_id`, `client_secret`, `code`, `access_token` and `refresh_token` as described in the article. Once set, they will be updated automatically.
 
 #### STRAVA_COOKIE section
 
-If you want to use Strava HeatMap, set `email` and `password`.
+If you want to use Strava HeatMap, open the Global Heatmap in a browser signed
+in to Strava and inspect a `content-a.strava.com` tile request in the browser's
+developer tools. Copy the `Key-Pair-Id`, `Policy`, and `Signature` query
+parameters and the `_strava_idcf` request cookie to `setting.conf`:
+
+```ini
+[STRAVA_COOKIE]
+key_pair_id =
+policy =
+signature =
+idcf =
+```
+
+The application does not load these values from `.env`; store them in
+`setting.conf`. These authentication values can expire; obtain fresh values
+when tile requests return 401 or 403. Treat all four values as secrets and do
+not commit or share them.
+The built-in overlay uses
+`https://content-a.strava.com/identified/globalheat/sport_Ride/{style}/{z}/{x}/{y}.png`
+at its native 512-pixel tile size. The signed query parameters and cookie are
+added automatically. A tile without heatmap data can return 404; this is
+expected and its log output is suppressed for the Strava Heatmap only.
 
 #### RIDEWITHGPS_API section
 
@@ -1093,21 +1136,24 @@ MAIN:
 
 ### map.yaml
 
-Register the map name, tile URL and copyright in this file.
-An example of Strava HeatMap is shown below.
+Register custom map names, tile URLs, tile sizes, and attribution in this file.
+The following is an example:
 
 ```
-strava_heatmap_hot:
-  url: https://heatmap-external-b.strava.com/tiles-auth/ride/hot/{z}/{x}/{y}.png?px=256
-  attribution: strava
+opentopomap:
+  url: https://a.tile.opentopomap.org/{z}/{x}/{y}.png
+  attribution: © OpenTopoMap
+  tile_size: 256
 ```
 
-- Line 1: Map name
+- Entry name: Map name
   - This is the string to be set to [MAP_AND_DATA](#map_and_data-section) -> `map` in `setting.conf`.
-- Second line: tile URL
+- `url`: Tile URL
   - Set the tile URL. Tile coordinates X, Y, and zoom Z should be listed with `{x}`, `{y}`, and `{z}`.
-- Line 3: Copyright.
+- `attribution`: Copyright
   - Set the copyright required for the map.
+- `tile_size`: Tile size in pixels
+  - This is optional and defaults to 256.
 
 ### config.py
 

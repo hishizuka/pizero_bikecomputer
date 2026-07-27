@@ -252,7 +252,7 @@ if [[ "$install_bluetooth" == "true" ]]; then
     # for raspberry pi zero (building with pip is extremely heavy.)
     sudo apt install -y python3-pydantic python3-orjson
     pip install gadgetbridge-rpi-link
-    pip install garminconnect stravacookies tb-mqtt-client mmh3
+    pip install garminconnect tb-mqtt-client mmh3
     install_timezonefinder_and_flatbuffers
 
     echo "✅ Bluetooth packages installed successfully."

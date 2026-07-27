@@ -42,14 +42,21 @@ class DownloadManager:
         save_paths = []
         request_header = {}
         additional_var = {}
+        download_options = {}
 
-        if (
+        is_strava_heatmap = (
             map_config == self.config.G_HEATMAP_OVERLAY_MAP_CONFIG
             and "strava_heatmap" in map_name
-        ):
+        )
+        if is_strava_heatmap:
             additional_var["key_pair_id"] = self.config.G_STRAVA_COOKIE["KEY_PAIR_ID"]
             additional_var["policy"] = self.config.G_STRAVA_COOKIE["POLICY"]
             additional_var["signature"] = self.config.G_STRAVA_COOKIE["SIGNATURE"]
+            idcf = self.config.G_STRAVA_COOKIE.get("IDCF")
+            if idcf:
+                request_header["Cookie"] = f"_strava_idcf={idcf}"
+            download_options["log_suppressed_statuses"] = (404,)
+            download_options["log_url"] = False
         elif "basetime" in map_settings and "validtime" in map_settings:
             if map_settings["basetime"] is None or map_settings["validtime"] is None:
                 return False
@@ -78,7 +85,12 @@ class DownloadManager:
             save_paths.append(save_path)
 
         enqueued = await self._maybe_enqueue_download_item(
-            {"urls": urls, "headers": request_header, "save_paths": save_paths}
+            {
+                "urls": urls,
+                "headers": request_header,
+                "save_paths": save_paths,
+                **download_options,
+            }
         )
         if not enqueued:
             return False
@@ -134,6 +146,7 @@ class DownloadManager:
                     "urls": additional_urls,
                     "headers": request_header,
                     "save_paths": additional_save_paths,
+                    **download_options,
                 }
             )
 

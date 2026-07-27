@@ -363,11 +363,10 @@ class Config:
         "REFRESH_TOKEN": "",
     }
     G_STRAVA_COOKIE = {
-        "EMAIL": "",
-        "PASSWORD": "",
         "KEY_PAIR_ID": "",
         "POLICY": "",
         "SIGNATURE": "",
+        "IDCF": "",
     }
     G_RIDEWITHGPS_API = {
         "APIKEY": "pizero_bikecomputer",

@@ -48,41 +48,41 @@ def add_map_config(config):
     }
     # strava heatmap
     # https://wiki.openstreetmap.org/wiki/Strava
-    # bluered / hot / blue / purple / gray
+    # bluered / hot / blue / purple / grayscale
     config.G_HEATMAP_OVERLAY_MAP_CONFIG["strava_heatmap_bluered"] = {
-        "url": "https://heatmap-external-b.strava.com/tiles-auth/ride/bluered/{z}/{x}/{y}.png?px=256&Key-Pair-Id={key_pair_id}&Policy={policy}&Signature={signature}",
+        "url": "https://content-a.strava.com/identified/globalheat/sport_Ride/bluered/{z}/{x}/{y}.png?Key-Pair-Id={key_pair_id}&Policy={policy}&Signature={signature}",
         "attribution": "STRAVA",
-        "tile_size": 256,
-        "max_zoomlevel": 16,
-        "min_zoomlevel": 10,
+        "tile_size": 512,
+        "max_zoomlevel": 15,
+        "min_zoomlevel": 9,
     }
     config.G_HEATMAP_OVERLAY_MAP_CONFIG["strava_heatmap_hot"] = {
-        "url": "https://heatmap-external-b.strava.com/tiles-auth/ride/hot/{z}/{x}/{y}.png?px=256&Key-Pair-Id={key_pair_id}&Policy={policy}&Signature={signature}",
+        "url": "https://content-a.strava.com/identified/globalheat/sport_Ride/hot/{z}/{x}/{y}.png?Key-Pair-Id={key_pair_id}&Policy={policy}&Signature={signature}",
         "attribution": "STRAVA",
-        "tile_size": 256,
-        "max_zoomlevel": 16,
-        "min_zoomlevel": 10,
+        "tile_size": 512,
+        "max_zoomlevel": 15,
+        "min_zoomlevel": 9,
     }
     config.G_HEATMAP_OVERLAY_MAP_CONFIG["strava_heatmap_blue"] = {
-        "url": "https://heatmap-external-b.strava.com/tiles-auth/ride/blue/{z}/{x}/{y}.png?px=256&Key-Pair-Id={key_pair_id}&Policy={policy}&Signature={signature}",
+        "url": "https://content-a.strava.com/identified/globalheat/sport_Ride/blue/{z}/{x}/{y}.png?Key-Pair-Id={key_pair_id}&Policy={policy}&Signature={signature}",
         "attribution": "STRAVA",
-        "tile_size": 256,
-        "max_zoomlevel": 16,
-        "min_zoomlevel": 10,
+        "tile_size": 512,
+        "max_zoomlevel": 15,
+        "min_zoomlevel": 9,
     }
     config.G_HEATMAP_OVERLAY_MAP_CONFIG["strava_heatmap_purple"] = {
-        "url": "https://heatmap-external-b.strava.com/tiles-auth/ride/purple/{z}/{x}/{y}.png?px=256&Key-Pair-Id={key_pair_id}&Policy={policy}&Signature={signature}",
+        "url": "https://content-a.strava.com/identified/globalheat/sport_Ride/purple/{z}/{x}/{y}.png?Key-Pair-Id={key_pair_id}&Policy={policy}&Signature={signature}",
         "attribution": "STRAVA",
-        "tile_size": 256,
-        "max_zoomlevel": 16,
-        "min_zoomlevel": 10,
+        "tile_size": 512,
+        "max_zoomlevel": 15,
+        "min_zoomlevel": 9,
     }
     config.G_HEATMAP_OVERLAY_MAP_CONFIG["strava_heatmap_gray"] = {
-        "url": "https://heatmap-external-b.strava.com/tiles-auth/ride/gray/{z}/{x}/{y}.png?px=256&Key-Pair-Id={key_pair_id}&Policy={policy}&Signature={signature}",
+        "url": "https://content-a.strava.com/identified/globalheat/sport_Ride/grayscale/{z}/{x}/{y}.png?Key-Pair-Id={key_pair_id}&Policy={policy}&Signature={signature}",
         "attribution": "STRAVA",
-        "tile_size": 256,
-        "max_zoomlevel": 16,
-        "min_zoomlevel": 10,
+        "tile_size": 512,
+        "max_zoomlevel": 15,
+        "min_zoomlevel": 9,
     }
 
     # worldwide rain tile

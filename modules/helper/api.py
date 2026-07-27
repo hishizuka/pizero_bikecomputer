@@ -1,5 +1,4 @@
 import os
-import traceback
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -32,14 +31,6 @@ try:
     )
 
     _IMPORT_GARMINCONNECT = True
-except ImportError:
-    pass
-
-_IMPORT_STRAVA_COOKIE = False
-try:
-    from stravacookies import StravaCookieFetcher
-
-    _IMPORT_STRAVA_COOKIE = True
 except ImportError:
     pass
 
@@ -752,35 +743,6 @@ class api:
                 return False
 
         return True
-
-    def get_strava_cookie(self):
-        blank_check = [
-            self.config.G_STRAVA_COOKIE["EMAIL"],
-            self.config.G_STRAVA_COOKIE["PASSWORD"],
-        ]
-        blank_msg = "set EMAIL or PASSWORD of STRAVA"
-        if not self.upload_check(blank_check, blank_msg, file_check=False):
-            return False
-
-        # import check
-        if not _IMPORT_STRAVA_COOKIE:
-            app_logger.warning("Install stravacookies")
-            return
-
-        if not detect_network():
-            return None
-
-        strava_cookie = StravaCookieFetcher()
-        try:
-            strava_cookie.fetchCookies(
-                self.config.G_STRAVA_COOKIE["EMAIL"],
-                self.config.G_STRAVA_COOKIE["PASSWORD"],
-            )
-            self.config.G_STRAVA_COOKIE["KEY_PAIR_ID"] = strava_cookie.keyPairId
-            self.config.G_STRAVA_COOKIE["POLICY"] = strava_cookie.policy
-            self.config.G_STRAVA_COOKIE["SIGNATURE"] = strava_cookie.signature
-        except:
-            traceback.print_exc()
 
     def thingsboard_check(self):
         return self.thingsboard_client is not None
