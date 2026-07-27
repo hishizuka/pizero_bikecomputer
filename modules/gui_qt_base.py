@@ -360,6 +360,6 @@ class GUI_Qt_Base(QtCore.QObject):
 
     async def show_dialog_base(self, msg):
         pass
-    
+
     def change_dialog(self, title=None, button_label=None):
         pass

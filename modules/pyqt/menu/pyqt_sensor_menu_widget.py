@@ -249,9 +249,7 @@ class ANTMenuWidget(MenuWidget):
     ANT_STATUS_BUTTON = "ANT+"
 
     def setup_menu(self):
-        button_conf = [
-            (self.ANT_STATUS_BUTTON, "toggle", lambda: self.onoff_ant(True))
-        ]
+        button_conf = [(self.ANT_STATUS_BUTTON, "toggle", lambda: self.onoff_ant(True))]
 
         for antName in self.config.G_ANT["ORDER"]:
             # Name(page_name), button_attribute, connected functions, layout
@@ -327,9 +325,7 @@ class ANTMenuWidget(MenuWidget):
 
     def update_button_label(self):
         ant_available = self.sensor_ant.is_transport_available()
-        self.buttons[self.ANT_STATUS_BUTTON].change_toggle(
-            self.config.G_ANT["STATUS"]
-        )
+        self.buttons[self.ANT_STATUS_BUTTON].change_toggle(self.config.G_ANT["STATUS"])
         for ant_name in self.config.G_ANT["ORDER"]:
             self.buttons[ant_name].setText(self.get_button_state(ant_name))
             self.buttons[ant_name].onoff_button(ant_available)

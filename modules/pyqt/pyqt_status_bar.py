@@ -47,11 +47,13 @@ class RecIndicator(QtWidgets.QWidget):
         if self._state == "recording":
             # Green triangle (play icon)
             painter.setBrush(QtGui.QColor("#2ecc71"))
-            triangle = QtGui.QPolygon([
-                QtCore.QPoint(int(cx), int(cy)),
-                QtCore.QPoint(int(cx), int(cy + self._size)),
-                QtCore.QPoint(int(cx + self._size), int(cy + self._size / 2)),
-            ])
+            triangle = QtGui.QPolygon(
+                [
+                    QtCore.QPoint(int(cx), int(cy)),
+                    QtCore.QPoint(int(cx), int(cy + self._size)),
+                    QtCore.QPoint(int(cx + self._size), int(cy + self._size / 2)),
+                ]
+            )
             painter.drawPolygon(triangle)
         elif self._state == "stop":
             # Red square
@@ -198,7 +200,7 @@ class StatusBarWidget(QtWidgets.QWidget):
             mode = int(self.config.logger.sensor.values["GPS"]["mode"])
         except Exception:
             mode = 0
-        
+
         if mode >= NMEA_MODE_3D:
             color = "#2ecc71"
         elif mode == NMEA_MODE_2D:

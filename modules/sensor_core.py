@@ -128,8 +128,9 @@ class SensorCore:
         self.brakelight_spd = [0] * self.brakelight_spd_range
         self.brakelight_cad = [np.nan] * self.brakelight_cad_range
         self.brakelight_power = [np.nan] * self.brakelight_power_range
-        self.auto_backlight_brightness = \
-            [self.config.G_AUTO_BACKLIGHT_CUTOFF+1] * self.auto_backlight_brightness_range
+        self.auto_backlight_brightness = [
+            self.config.G_AUTO_BACKLIGHT_CUTOFF + 1
+        ] * self.auto_backlight_brightness_range
         self.values["integrated"]["CPU_MEM"] = ""
 
         for s in self.average_secs:
@@ -367,7 +368,9 @@ class SensorCore:
             start_time = datetime.now()
             # print(start_time, self.wait_time)
 
-            time_profile = [start_time,]
+            time_profile = [
+                start_time,
+            ]
             hr = spd = cdc = pwr = temperature = self.config.G_ANT_NULLVALUE
             grade = grade_spd = glide = self.config.G_ANT_NULLVALUE
             ttlwork_diff = 0
@@ -401,10 +404,7 @@ class SensorCore:
                 delta[key] = float("inf")
             # need for ANT+ ID update
             for key in ["HR", "SPD", "CDC", "PWR", "TEMP"]:
-                if (
-                    ant_use[key]
-                    and ant_id_type[key] in self.values["ANT+"]
-                ):
+                if ant_use[key] and ant_id_type[key] in self.values["ANT+"]:
                     v[key] = self.values["ANT+"][ant_id_type[key]]
 
             # make intervals from timestamp
@@ -421,15 +421,13 @@ class SensorCore:
                     "CDC",
                     "CDC-PWR",
                     [0x12, 0x10],
-                    ant_use["CDC"]
-                    and self.config.G_ANT["TYPE"]["CDC"] == 0x0B,
+                    ant_use["CDC"] and self.config.G_ANT["TYPE"]["CDC"] == 0x0B,
                 ),
                 (
                     "SPD",
                     "SPD",
                     [0x11],
-                    ant_use["SPD"]
-                    and self.config.G_ANT["TYPE"]["SPD"] == 0x0B,
+                    ant_use["SPD"] and self.config.G_ANT["TYPE"]["SPD"] == 0x0B,
                 ),
                 (
                     "PWR",
@@ -516,9 +514,7 @@ class SensorCore:
                     pre_dst["ANT+"] = v["SPD"]["distance"]
                 elif self.config.G_ANT["TYPE"]["SPD"] == 0x0B:
                     if pre_dst["ANT+"] < v["SPD"][0x11]["distance"]:
-                        dst_diff["ANT+"] = (
-                            v["SPD"][0x11]["distance"] - pre_dst["ANT+"]
-                        )
+                        dst_diff["ANT+"] = v["SPD"][0x11]["distance"] - pre_dst["ANT+"]
                     pre_dst["ANT+"] = v["SPD"][0x11]["distance"]
                 dst_diff["USE"] = dst_diff["ANT+"]
                 grade_use["ANT+"] = True
@@ -546,10 +542,7 @@ class SensorCore:
                 # if 0x12 or 0x11 exists, never take 0x10
                 for page in [0x12, 0x11, 0x10]:
                     if "timestamp" in v["PWR"][page]:
-                        if (
-                            pre_ttlwork["ANT+"]
-                            < v["PWR"][page]["accumulated_power"]
-                        ):
+                        if pre_ttlwork["ANT+"] < v["PWR"][page]["accumulated_power"]:
                             ttlwork_diff = (
                                 v["PWR"][page]["accumulated_power"]
                                 - pre_ttlwork["ANT+"]
@@ -586,10 +579,10 @@ class SensorCore:
             # dem_altitude
             if self.config.G_USE_DEM_TILE:
                 api_alt_start = time.perf_counter()
-                self.values["integrated"][
-                    "dem_altitude"
-                ] = await self.config.api.get_altitude(
-                    [v["GPS"]["lon"], v["GPS"]["lat"]]
+                self.values["integrated"]["dem_altitude"] = (
+                    await self.config.api.get_altitude(
+                        [v["GPS"]["lon"], v["GPS"]["lat"]]
+                    )
                 )
                 api_alt_elapsed_ms = (time.perf_counter() - api_alt_start) * 1000.0
 
@@ -597,16 +590,14 @@ class SensorCore:
             if self.config.G_USE_WIND_DATA_SOURCE:
                 api_wind_start = time.perf_counter()
                 (
-                    self.values["integrated"]["wind_speed"], 
+                    self.values["integrated"]["wind_speed"],
                     self.values["integrated"]["wind_direction"],
                     self.values["integrated"]["wind_direction_str"],
-                    self.values["integrated"]["headwind"]
+                    self.values["integrated"]["headwind"],
                 ) = await self.config.api.get_wind(
                     [v["GPS"]["lon"], v["GPS"]["lat"]], v["GPS"]["track"]
                 )
-                api_wind_elapsed_ms = (
-                    time.perf_counter() - api_wind_start
-                ) * 1000.0
+                api_wind_elapsed_ms = (time.perf_counter() - api_wind_start) * 1000.0
 
             # grade (distance base)
             if dst_diff["USE"] > 0:
@@ -670,8 +661,7 @@ class SensorCore:
                 grade_spd = pre_grade_spd = gr
             # for sometimes speed sensor value is missing in running
             elif (
-                dst_diff_spd["ANT+"] == 0
-                and self.config.G_STOPWATCH_STATUS == "START"
+                dst_diff_spd["ANT+"] == 0 and self.config.G_STOPWATCH_STATUS == "START"
             ):
                 grade_spd = pre_grade_spd
 
@@ -687,8 +677,8 @@ class SensorCore:
             self.values["integrated"]["grade_spd"] = grade_spd
             self.values["integrated"]["glide_ratio"] = glide
             self.values["integrated"]["temperature"] = temperature
-            
-            #set self.values["integrated"]["w_prime_balance_normalized"] etc
+
+            # set self.values["integrated"]["w_prime_balance_normalized"] etc
             if ant_use["PWR"]:
                 self.calc_w_prime_balance(pwr)
                 self.calc_form_metrics(pwr)
@@ -763,9 +753,8 @@ class SensorCore:
 
             # auto backlight & brake light with brightness
             auto_light = False
-            if (
-                self.config.display.use_auto_backlight
-                and not np.isnan(v["I2C"]["light"])
+            if self.config.display.use_auto_backlight and not np.isnan(
+                v["I2C"]["light"]
             ):
                 self._shift_window_and_append(
                     self.auto_backlight_brightness, v["I2C"]["light"]
@@ -809,12 +798,12 @@ class SensorCore:
                 )
                 if self.config.G_DEBUG:
                     self._update_status_bar_color_by_cpu_usage()
-                self.values["integrated"][
-                    "CPU_MEM"
-                ] = "{0:.0f}%/{1:.0f}%, {2:.0f}MB".format(
-                    self.values["integrated"]["cpu_percent"],
-                    self.values["integrated"]["system_cpu_percent"],
-                    self.process.memory_info().rss / 1024**2,
+                self.values["integrated"]["CPU_MEM"] = (
+                    "{0:.0f}%/{1:.0f}%, {2:.0f}MB".format(
+                        self.values["integrated"]["cpu_percent"],
+                        self.values["integrated"]["system_cpu_percent"],
+                        self.process.memory_info().rss / 1024**2,
+                    )
                 )
 
             # adjust loop time

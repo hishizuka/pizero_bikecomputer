@@ -49,7 +49,7 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
         "mode",
         "status",
     ]
-    # status: 
+    # status:
     #    0=Unknown,
     #    1=Normal,
     #    2=DGPS,
@@ -93,8 +93,12 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
             self.config.G_GPS_AZIMUTH_CUTOFF,
             360 - self.config.G_GPS_AZIMUTH_CUTOFF,
         ]
-        self.config.G_DUMMY_POS_X = self.config.state.get_value("pos_lon", self.config.G_DUMMY_POS_X)
-        self.config.G_DUMMY_POS_Y = self.config.state.get_value("pos_lat", self.config.G_DUMMY_POS_Y)
+        self.config.G_DUMMY_POS_X = self.config.state.get_value(
+            "pos_lon", self.config.G_DUMMY_POS_X
+        )
+        self.config.G_DUMMY_POS_Y = self.config.state.get_value(
+            "pos_lat", self.config.G_DUMMY_POS_Y
+        )
 
     def reset(self):
         self.values["distance"] = 0
@@ -145,27 +149,45 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
             or None in dop
             or any([self.is_null_value(x) for x in dop])
             or any([x >= self.valid_cutoff_dof[i] for i, x in enumerate(dop)])
-            or (not self.check_3DGPS_FIX_status(status) and satellites[0] <= USED_SAT_CUTOFF)
+            or (
+                not self.check_3DGPS_FIX_status(status)
+                and satellites[0] <= USED_SAT_CUTOFF
+            )
         ):
             valid = False
         else:
             if type(lon) != float or type(lat) != float:
-                app_logger.error(f"GPS lon&lat are not float: {lon}, {type(lon)}, {lat}, {type(lat)}, {mode}, {dop}, {satellites}")
+                app_logger.error(
+                    f"GPS lon&lat are not float: {lon}, {type(lon)}, {lat}, {type(lat)}, {mode}, {dop}, {satellites}"
+                )
 
         return valid
-    
+
     def check_3DGPS_FIX_status(self, status):
         if self.is_null_value(status):
             return False
         else:
             # 3D DGPS FIX
-            if status in [2, ]:
+            if status in [
+                2,
+            ]:
                 return True
             else:
                 return False
 
     async def get_basic_values(
-        self, lat, lon, alt, speed, track, mode, status, error, dop, satellites, gps_time
+        self,
+        lat,
+        lon,
+        alt,
+        speed,
+        track,
+        mode,
+        status,
+        error,
+        dop,
+        satellites,
+        gps_time,
     ):
         # TODO, this probably has to go in the long term
         self.init_values()
@@ -192,7 +214,9 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
             dop = id_or_none(dop)
             # no need to check for satellites, manually computed
 
-        valid_pos = self.is_position_valid(lat, lon, mode, status, dop, satellites, error)
+        valid_pos = self.is_position_valid(
+            lat, lon, mode, status, dop, satellites, error
+        )
 
         # coordinate
         if valid_pos:
@@ -234,7 +258,7 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
 
             # unit: m
             self.values["distance"] += dist
-        
+
         # altitude
         if valid_pos and alt is not None:
             # floor
@@ -330,7 +354,7 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
         if error:
             for i, key in enumerate(["epx", "epy", "epv"]):
                 self.values[key] = error[i]
-        
+
         # timestamp
         self.values["timestamp"] = datetime.now()
 
@@ -420,4 +444,5 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
 
     async def output_dummy(self):
         from .dummy import Dummy_GPS
+
         await Dummy_GPS(self.config, self.values).update()

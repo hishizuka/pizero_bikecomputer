@@ -63,9 +63,7 @@ class MenuWidget(QtWidgets.QWidget):
         self.page_name_label = topbar.TopBarLabel(self.page_name)
         self.right_button_container = QtWidgets.QWidget()
         self.right_button_container.setFixedSize(self.icon_x, self.icon_y)
-        self.right_button_layout = QtWidgets.QHBoxLayout(
-            self.right_button_container
-        )
+        self.right_button_layout = QtWidgets.QHBoxLayout(self.right_button_container)
         self.right_button_layout.setContentsMargins(0, 0, 0, 0)
         self.right_button_layout.setSpacing(0)
 
@@ -594,7 +592,7 @@ class ConnectivityMenuWidget(MenuWidget):
     def setup_menu(self):
         button_conf = (
             # Name(page_name), button_attribute, connected functions, layout
-            ("Auto BT Tethering","toggle",lambda: self.bt_auto_tethering(True)),
+            ("Auto BT Tethering", "toggle", lambda: self.bt_auto_tethering(True)),
             ("Select BT device", "submenu", self.select_bt_device),
             ("Live Track", "toggle", lambda: self.onoff_live_track(True)),
             ("", None, None),
@@ -615,7 +613,7 @@ class ConnectivityMenuWidget(MenuWidget):
         ):
             self.buttons["Live Track"].disable()
 
-        #GadgetBridge
+        # GadgetBridge
         if self.config.ble_uart is None:
             self.buttons["Gadgetbridge"].disable()
             self.buttons["Get Location"].disable()
@@ -633,7 +631,9 @@ class ConnectivityMenuWidget(MenuWidget):
 
     def onoff_live_track(self, change=True):
         if change:
-            self.config.G_THINGSBOARD_API["STATUS"] = not self.config.G_THINGSBOARD_API["STATUS"]
+            self.config.G_THINGSBOARD_API["STATUS"] = not self.config.G_THINGSBOARD_API[
+                "STATUS"
+            ]
         self.buttons["Live Track"].change_toggle(
             self.config.G_THINGSBOARD_API["STATUS"]
         )
