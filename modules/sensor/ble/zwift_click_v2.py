@@ -341,6 +341,14 @@ def _format_packet_hex(packet: bytes) -> str:
     return " ".join(f"{b:02X}" for b in packet)
 
 
+def _is_duplicate_debug_packet(packet: bytes, previous: Dict[int, bytes]) -> bool:
+    if not packet or packet[0] not in (0x19, 0x23, 0x37):
+        return False
+    old_packet = previous.get(packet[0])
+    previous[packet[0]] = packet
+    return old_packet == packet
+
+
 def _read_varint(data: bytes, index: int) -> tuple[Optional[int], int]:
     value = 0
     shift = 0
@@ -433,6 +441,7 @@ async def connect_and_listen(
             last_rx_mono: Optional[float] = None
             stopped_notice_sent = False
             button_notifications_seen = False
+            previous_debug_packets: Dict[int, bytes] = {}
 
             def mark_rx() -> None:
                 nonlocal last_rx_mono
@@ -441,7 +450,10 @@ async def connect_and_listen(
             def handle_data(_sender, data: bytes) -> None:
                 nonlocal button_notifications_seen, stopped_notice_sent
                 packet = bytes(data)
-                if debug_log is not None:
+                if debug_log is not None and not _is_duplicate_debug_packet(
+                    packet,
+                    previous_debug_packets,
+                ):
                     sender_uuid = getattr(_sender, "uuid", _sender)
                     debug_log(
                         f"[{side}] rx char={sender_uuid} len={len(packet)} "

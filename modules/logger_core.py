@@ -333,6 +333,9 @@ class LoggerCore:
 
     async def restore_utc_time(self):
         # restore time from gps or last log(self.last_timestamp)
+        if not self.sensor.sensor_gps.is_real:
+            return
+
         count = 0
         count_max = 60
         while not self.sensor.sensor_gps.is_time_modified and count < count_max:
