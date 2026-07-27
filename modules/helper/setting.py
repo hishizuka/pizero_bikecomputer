@@ -201,24 +201,6 @@ class Setting:
                         c["AUTO_BACKLIGHT_CUTOFF"]
                     )
 
-        if "GPSD_PARAM" in self.config_parser:
-            if "EPX_EPY_CUTOFF" in self.config_parser["GPSD_PARAM"]:
-                self.config.G_GPSD_PARAM["EPX_EPY_CUTOFF"] = float(
-                    self.config_parser["GPSD_PARAM"]["EPX_EPY_CUTOFF"]
-                )
-            if "EPV_CUTOFF" in self.config_parser["GPSD_PARAM"]:
-                self.config.G_GPSD_PARAM["EPV_CUTOFF"] = float(
-                    self.config_parser["GPSD_PARAM"]["EPV_CUTOFF"]
-                )
-            if "SP1_EPV_CUTOFF" in self.config_parser["GPSD_PARAM"]:
-                self.config.G_GPSD_PARAM["SP1_EPV_CUTOFF"] = float(
-                    self.config_parser["GPSD_PARAM"]["SP1_EPV_CUTOFF"]
-                )
-            if "SP1_USED_SATS_CUTOFF" in self.config_parser["GPSD_PARAM"]:
-                self.config.G_GPSD_PARAM["SP1_USED_SATS_CUTOFF"] = int(
-                    self.config_parser["GPSD_PARAM"]["SP1_USED_SATS_CUTOFF"]
-                )
-
         if "GPSD_UBLOX_PARAM" in self.config_parser:
             c = self.config_parser["GPSD_UBLOX_PARAM"]
             assistnow = self.config.G_GPS_UBLOX["ASSISTNOW"]
@@ -365,14 +347,7 @@ class Setting:
             c["USE_BACKLIGHT"] = str(display.use_backlight)
             c["AUTO_BACKLIGHT_CUTOFF"] = str(display.auto_backlight_cutoff)
 
-        self.config_parser["GPSD_PARAM"] = {}
-        c = self.config_parser["GPSD_PARAM"]
-        c["EPX_EPY_CUTOFF"] = str(self.config.G_GPSD_PARAM["EPX_EPY_CUTOFF"])
-        c["EPV_CUTOFF"] = str(self.config.G_GPSD_PARAM["EPV_CUTOFF"])
-        c["SP1_EPV_CUTOFF"] = str(self.config.G_GPSD_PARAM["SP1_EPV_CUTOFF"])
-        c["SP1_USED_SATS_CUTOFF"] = str(
-            self.config.G_GPSD_PARAM["SP1_USED_SATS_CUTOFF"]
-        )
+        self.config_parser.remove_section("GPSD_PARAM")
 
         self.config_parser["GPSD_UBLOX_PARAM"] = {}
         c = self.config_parser["GPSD_UBLOX_PARAM"]

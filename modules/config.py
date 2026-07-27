@@ -238,13 +238,6 @@ class Config:
 
     # GPS speed cutoff (the distance in 1 seconds at 0.36km/h is 10cm)
     G_GPS_SPEED_CUTOFF = G_AUTOSTOP_CUTOFF  # m/s
-    # GPSd error handling
-    G_GPSD_PARAM = {
-        "EPX_EPY_CUTOFF": 100.0,
-        "EPV_CUTOFF": 100.0,
-        "SP1_EPV_CUTOFF": 100.0,
-        "SP1_USED_SATS_CUTOFF": 3,
-    }
     G_GPS_UBLOX = {
         "ASSISTNOW": {
             "STATUS": False,

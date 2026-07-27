@@ -92,7 +92,6 @@ if _SENSOR_GPS_GPSD and shutil.which("gpspipe"):
 
 class GPSD(AbstractSensorGPS):
     NULL_VALUE = float("nan") # for official gpsd client
-    valid_cutoff_ep = None
 
     gps_thread = None
     aiogps_client = None
@@ -108,11 +107,6 @@ class GPSD(AbstractSensorGPS):
             self.gps_thread.run_thread()
 
         super().sensor_init()
-        self.valid_cutoff_ep = (
-            self.config.G_GPSD_PARAM["EPX_EPY_CUTOFF"],
-            self.config.G_GPSD_PARAM["EPX_EPY_CUTOFF"],
-            self.config.G_GPSD_PARAM["EPV_CUTOFF"],
-        )
 
     async def quit(self):
         await super().quit()
@@ -209,21 +203,3 @@ class GPSD(AbstractSensorGPS):
                 g.time,
             )
             self.get_sleep_time()
-
-    def is_position_valid(self, lat, lon, mode, status, dop, satellites, error=None):
-        valid = super().is_position_valid(lat, lon, mode, status, dop, satellites, error)
-        if valid and error:
-            epv = error[2]
-            # special condition #1
-            if None in error or any(
-                [x >= self.valid_cutoff_ep[i] for i, x in enumerate(dop)]
-            ):
-                valid = False
-            # special condition #2 (exclude 3D DGPS FIX)
-            elif (
-                not self.check_3DGPS_FIX_status(status)
-                and satellites[0] < self.config.G_GPSD_PARAM["SP1_USED_SATS_CUTOFF"]
-                and epv > self.config.G_GPSD_PARAM["SP1_EPV_CUTOFF"]
-            ):
-                valid = False
-        return valid
