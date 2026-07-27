@@ -149,6 +149,7 @@ class GUI_PyQt(GUI_Qt_Base):
     signal_bhi3_raw_log = Signal()
     signal_calib_mag = Signal()
     signal_calib_pitch_roll = Signal()
+    signal_pitch_roll_calibration_completed = Signal()
     signal_start_and_stop_manual = Signal()
     signal_count_laps = Signal()
     signal_reset_count = Signal()
@@ -162,6 +163,7 @@ class GUI_PyQt(GUI_Qt_Base):
 
     # for dialog
     display_dialog = False
+    _pitch_roll_calibration_dialog_active = False
 
     @property
     def grab_func(self):
@@ -259,6 +261,9 @@ class GUI_PyQt(GUI_Qt_Base):
             self.signal_bhi3_raw_log.connect(self.signal_bhi3_raw_log_internal)
             self.signal_calib_mag.connect(self.signal_calib_mag_internal)
             self.signal_calib_pitch_roll.connect(self.signal_calib_pitch_roll_internal)
+            self.signal_pitch_roll_calibration_completed.connect(
+                self.pitch_roll_calibration_completed_internal
+            )
 
             self.signal_start_and_stop_manual.connect(
                 self.start_and_stop_manual_internal
@@ -867,13 +872,55 @@ class GUI_PyQt(GUI_Qt_Base):
         self.signal_calib_mag.emit()
 
     def signal_calib_mag_internal(self):
-        self.sensor.sensor_i2c.update_mag_calibration_state()
+        sensor_i2c = self.sensor.sensor_i2c
+        sensor_i2c.update_mag_calibration_state(show_popup=False)
+        if not sensor_i2c.do_mag_calibration:
+            self.show_dialog_ok_only(None, "Mag calibration is unavailable.")
+            return
+        self.show_dialog_ok_only(
+            self.finish_mag_calibration,
+            "[MAG] calibration started",
+            button_label="Finish",
+        )
+
+    def finish_mag_calibration(self):
+        sensor_i2c = self.sensor.sensor_i2c
+        if sensor_i2c.do_mag_calibration:
+            sensor_i2c.update_mag_calibration_state(show_popup=False)
 
     def calib_pitch_roll(self):
         self.signal_calib_pitch_roll.emit()
 
     def signal_calib_pitch_roll_internal(self):
-        self.sensor.sensor_i2c.update_pitch_roll_calibration_state()
+        sensor_i2c = self.sensor.sensor_i2c
+        self._pitch_roll_calibration_dialog_active = False
+        sensor_i2c.update_pitch_roll_calibration_state(show_popup=False)
+        if not sensor_i2c.do_pitch_roll_calibration:
+            self.show_dialog_ok_only(
+                None,
+                "Pitch/Roll calibration is unavailable.",
+            )
+            return
+        self._pitch_roll_calibration_dialog_active = True
+        self.show_dialog_cancel_only(
+            self.cancel_pitch_roll_calibration,
+            "[PITCH_ROLL] calibration started",
+        )
+
+    def cancel_pitch_roll_calibration(self):
+        self._pitch_roll_calibration_dialog_active = False
+        sensor_i2c = self.sensor.sensor_i2c
+        if sensor_i2c.do_pitch_roll_calibration:
+            sensor_i2c.update_pitch_roll_calibration_state(show_popup=False)
+
+    def pitch_roll_calibration_completed(self):
+        self.signal_pitch_roll_calibration_completed.emit()
+
+    def pitch_roll_calibration_completed_internal(self):
+        if not getattr(self, "_pitch_roll_calibration_dialog_active", False):
+            return
+        self._pitch_roll_calibration_dialog_active = False
+        self.delete_popup()
 
     def get_screenshot(self):
         self.signal_get_screenshot.emit()
@@ -1027,6 +1074,8 @@ class GUI_PyQt(GUI_Qt_Base):
         return self._dialog.background.isVisible()
 
     def close_dialog(self, index):
+        if self._pitch_roll_calibration_dialog_active:
+            self.cancel_pitch_roll_calibration()
         current_index = self.stack_widget.currentIndex()
         resolved_index = self._resolve_dialog_return_index(index)
         app_logger.debug(

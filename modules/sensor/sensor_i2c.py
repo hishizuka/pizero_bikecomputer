@@ -962,7 +962,7 @@ class SensorI2C(Sensor):
                 self.config.gui.show_popup(msg, 5)
             app_logger.debug(msg)
 
-    def update_mag_calibration_state(self):
+    def update_mag_calibration_state(self, show_popup=True):
         if not self.motion_sensor["MAG"]:
             msg = "[MAG] calibration unavailable"
         elif self.do_mag_calibration:
@@ -992,11 +992,11 @@ class SensorI2C(Sensor):
             self.do_mag_calibration = True
             msg = "[MAG] calibration started"
 
-        if self.config.gui is not None:
+        if show_popup and self.config.gui is not None:
             self.config.gui.show_popup(msg, 5)
         app_logger.info(msg)
 
-    def update_pitch_roll_calibration_state(self):
+    def update_pitch_roll_calibration_state(self, show_popup=True):
         if not self.motion_sensor["ACC"] and not self.motion_sensor["QUATERNION"]:
             msg = "[PITCH_ROLL] calibration unavailable"
         elif self.do_pitch_roll_calibration:
@@ -1006,7 +1006,7 @@ class SensorI2C(Sensor):
             self.do_pitch_roll_calibration = True
             msg = "[PITCH_ROLL] calibration started"
 
-        if self.config.gui is not None:
+        if show_popup and self.config.gui is not None:
             self.config.gui.show_popup(msg, 5)
         app_logger.info(msg)
 
@@ -1477,6 +1477,12 @@ class SensorI2C(Sensor):
             app_logger.info(f"fixed_pitch: {pitch}")
             app_logger.info(f"fixed_roll: {roll}")
             app_logger.info("[PITCH_ROLL] calibration stopped")
+            gui = getattr(self.config, "gui", None)
+            calibration_completed = getattr(
+                gui, "pitch_roll_calibration_completed", None
+            )
+            if callable(calibration_completed):
+                calibration_completed()
 
     def update_moving_threshold(self):
         if self.motion_sensor["ACC"]:
