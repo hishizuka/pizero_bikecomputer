@@ -653,6 +653,12 @@ class Course:
                 and (slope_smoothing_cat[i] < climb_end_cutoff or i == course_n - 1)
             ):
                 end_index = i
+                if slope_smoothing_cat[i] < climb_end_cutoff:
+                    end_index -= 1
+                if end_index <= self.climb_segment[-1]["start"]:
+                    self.climb_segment.pop()
+                    climb_search_state = False
+                    continue
                 self.climb_segment[-1]["end"] = end_index
                 self.climb_segment[-1]["distance"] = (
                     self.distance[end_index]
@@ -696,7 +702,7 @@ class Course:
                     for j in reversed(range(len(self.config.G_CLIMB_CATEGORY))):
                         if (
                             self.climb_segment[-1]["volume"]
-                            > self.config.G_CLIMB_CATEGORY[j]["volume"]
+                            >= self.config.G_CLIMB_CATEGORY[j]["volume"]
                         ):
                             self.climb_segment[-1]["cat"] = (
                                 self.config.G_CLIMB_CATEGORY[j]["name"]
