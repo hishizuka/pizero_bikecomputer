@@ -1474,8 +1474,8 @@ class SensorI2C(Sensor):
             self.config.state.set_value("fixed_roll", roll, force_apply=True)
             self.values["gyro"] = np.zeros(3)
             self.do_pitch_roll_calibration = False
-            app_logger.info(f"fixed_pitch: {pitch}")
-            app_logger.info(f"fixed_roll: {roll}")
+            app_logger.info("fixed_pitch: %.1f deg", math.degrees(pitch))
+            app_logger.info("fixed_roll: %.1f deg", math.degrees(roll))
             app_logger.info("[PITCH_ROLL] calibration stopped")
             gui = getattr(self.config, "gui", None)
             calibration_completed = getattr(
