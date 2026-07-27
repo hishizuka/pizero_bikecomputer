@@ -254,6 +254,14 @@ class Setting:
                         "GARMINCONNECT_API"
                     ][k]
 
+        if "AUTO_UPLOAD" in self.config_parser:
+            c = self.config_parser["AUTO_UPLOAD"]
+            if "STATUS" in c:
+                self.config.G_AUTO_UPLOAD = c.getboolean("STATUS")
+            for service in self.config.G_AUTO_UPLOAD_SERVICE:
+                if service in c:
+                    self.config.G_AUTO_UPLOAD_SERVICE[service] = c.getboolean(service)
+
     def write_config(self):
         self.config_parser["GENERAL"] = {}
         c = self.config_parser["GENERAL"]
@@ -382,6 +390,12 @@ class Setting:
             self.config_parser["GARMINCONNECT_API"][k] = (
                 self.config.G_GARMINCONNECT_API[k]
             )
+
+        self.config_parser["AUTO_UPLOAD"] = {}
+        c = self.config_parser["AUTO_UPLOAD"]
+        c["STATUS"] = str(self.config.G_AUTO_UPLOAD)
+        for service, status in self.config.G_AUTO_UPLOAD_SERVICE.items():
+            c[service] = str(status)
 
         with open(self.config_file, "w") as file:
             self.config_parser.write(file)

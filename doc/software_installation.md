@@ -739,8 +739,11 @@ When unlocked, you can drag the profile horizontally.
 ### Upload Activity
 
 Uploads the most recent activity record file(.fit) created by the reset operation after the power is turned on.
- 
-<img width="400" alt="menu-04-upload_activity" src="https://user-images.githubusercontent.com/12926652/206076198-55803175-ef4c-4f9b-9408-b44dbe98b1b3.png">
+
+- `Auto Upload`
+  - Enable or disable the upload confirmation shown after an activity is reset.
+  - Select each service toggle to choose the automatic upload destinations.
+- The Strava, Garmin, and Ride with GPS upload buttons remain available for manual uploads.
 
 - Strava
   - Direct upload is a legacy, unsupported feature. See the
@@ -932,6 +935,14 @@ Set the value before starting the program. If the value is set during running, i
 - `auto_wifi_off`
   - Turn Wifi off automatically while recording.
 
+#### AUTO_UPLOAD section
+
+- `status`
+  - Enable or disable the upload confirmation shown after an activity is reset.
+- `strava`, `garmin`, `rwgps`
+  - Select the services used by automatic activity upload.
+  - These values can also be changed from the Upload Activity menu.
+
 #### BT section
 
 - `bt_pan_device`
@@ -1090,6 +1101,11 @@ If you want to use heatmap or upload activities to RidewithGPS, set your `token`
 #### GARMINCONNECT_API section
 
 If you want to upload activities to Garmin Connect, set your `email` and `password`.
+Authentication tokens are stored by `garminconnect` in
+`~/.garminconnect/garmin_tokens.json` and refreshed automatically. Tokens saved by
+versions earlier than 0.3 are incompatible, so the first upload after upgrading
+requires a fresh login. If Garmin MFA is enabled, create this token once with an
+interactive `garminconnect` login before uploading from the application.
 
 #### GOOGLE_ROUTES_API section
 

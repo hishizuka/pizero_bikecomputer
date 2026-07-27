@@ -487,23 +487,56 @@ class ListItemWidget(QtWidgets.QWidget):
 
 
 class UploadActivityMenuWidget(MenuWidget):
+    AUTO_UPLOAD_BUTTON = "Auto Upload"
+    AUTO_UPLOAD_SERVICE_BUTTONS = {
+        "STRAVA": "Strava",
+        "GARMIN": "Garmin",
+        "RWGPS": "Ride with GPS",
+    }
+    MANUAL_UPLOAD_BUTTONS = {
+        "STRAVA": "Upload to Strava",
+        "GARMIN": "Upload to Garmin",
+        "RWGPS": "Upload to Ride with GPS",
+    }
+
     def setup_menu(self):
         button_conf = (
             # Name(page_name), button_attribute, connected functions, icon
             (
-                "Strava",
+                self.AUTO_UPLOAD_BUTTON,
+                "toggle",
+                lambda: self.onoff_auto_upload(True),
+            ),
+            (
+                self.AUTO_UPLOAD_SERVICE_BUTTONS["STRAVA"],
+                "toggle",
+                lambda: self.onoff_auto_upload_service("STRAVA", True),
+            ),
+            (
+                self.AUTO_UPLOAD_SERVICE_BUTTONS["GARMIN"],
+                "toggle",
+                lambda: self.onoff_auto_upload_service("GARMIN", True),
+            ),
+            (
+                self.AUTO_UPLOAD_SERVICE_BUTTONS["RWGPS"],
+                "toggle",
+                lambda: self.onoff_auto_upload_service("RWGPS", True),
+            ),
+            ("", None, None),
+            (
+                self.MANUAL_UPLOAD_BUTTONS["STRAVA"],
                 "cloud_upload",
                 self.strava_upload,
                 (icons.StravaIcon(), (icons.BASE_LOGO_SIZE * 4, icons.BASE_LOGO_SIZE)),
             ),
             (
-                "Garmin",
+                self.MANUAL_UPLOAD_BUTTONS["GARMIN"],
                 "cloud_upload",
                 self.garmin_upload,
                 (icons.GarminIcon(), (icons.BASE_LOGO_SIZE * 5, icons.BASE_LOGO_SIZE)),
             ),
             (
-                "Ride with GPS",
+                self.MANUAL_UPLOAD_BUTTONS["RWGPS"],
                 "cloud_upload",
                 self.rwgps_upload,
                 (
@@ -517,18 +550,44 @@ class UploadActivityMenuWidget(MenuWidget):
     def preprocess(self):
         for button in self.buttons.values():
             button.reset_loading_state()
+        self.onoff_auto_upload(False)
+        for service in self.AUTO_UPLOAD_SERVICE_BUTTONS:
+            self.onoff_auto_upload_service(service, False)
+
+    def onoff_auto_upload(self, change=True):
+        if change:
+            self.config.G_AUTO_UPLOAD = not self.config.G_AUTO_UPLOAD
+            self.config.setting.write_config()
+        self.buttons[self.AUTO_UPLOAD_BUTTON].change_toggle(self.config.G_AUTO_UPLOAD)
+
+    def onoff_auto_upload_service(self, service, change=True):
+        if change:
+            self.config.G_AUTO_UPLOAD_SERVICE[service] = (
+                not self.config.G_AUTO_UPLOAD_SERVICE[service]
+            )
+            self.config.setting.write_config()
+        button_name = self.AUTO_UPLOAD_SERVICE_BUTTONS[service]
+        self.buttons[button_name].change_toggle(
+            self.config.G_AUTO_UPLOAD_SERVICE[service]
+        )
 
     @qasync.asyncSlot()
     async def strava_upload(self):
-        await self.buttons["Strava"].run(self.config.api.strava_upload)
+        await self.buttons[self.MANUAL_UPLOAD_BUTTONS["STRAVA"]].run(
+            self.config.api.strava_upload
+        )
 
     @qasync.asyncSlot()
     async def garmin_upload(self):
-        await self.buttons["Garmin"].run(self.config.api.garmin_upload)
+        await self.buttons[self.MANUAL_UPLOAD_BUTTONS["GARMIN"]].run(
+            self.config.api.garmin_upload
+        )
 
     @qasync.asyncSlot()
     async def rwgps_upload(self):
-        await self.buttons["Ride with GPS"].run(self.config.api.rwgps_upload)
+        await self.buttons[self.MANUAL_UPLOAD_BUTTONS["RWGPS"]].run(
+            self.config.api.rwgps_upload
+        )
 
 
 class ConnectivityMenuWidget(MenuWidget):

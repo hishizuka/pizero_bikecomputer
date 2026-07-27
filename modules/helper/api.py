@@ -21,12 +21,11 @@ from modules.app_logger import app_logger
 
 _IMPORT_GARMINCONNECT = False
 try:
-    from garth.exc import GarthHTTPError
-    import requests
     from garminconnect import (
         Garmin,
         GarminConnectAuthenticationError,
         GarminConnectConnectionError,
+        GarminConnectInvalidFileFormatError,
         GarminConnectTooManyRequestsError,
     )
 
@@ -661,56 +660,38 @@ class api:
             return False
 
         try:
-            tokenstore = self.config.state.get_value("garmin_session", "")
-            if tokenstore == "":
-                raise ValueError
-            else:
-                garmin_api = Garmin()
-                garmin_api.login(tokenstore)
-        except (ValueError, GarthHTTPError, GarminConnectAuthenticationError):
-            try:
-                garmin_api = Garmin(
-                    email=self.config.G_GARMINCONNECT_API["EMAIL"],
-                    password=self.config.G_GARMINCONNECT_API["PASSWORD"],
-                )
-                garmin_api.login()
-                self.config.state.set_value(
-                    "garmin_session", garmin_api.garth.dumps(), force_apply=True
-                )
-            except (
-                GarthHTTPError,
-                GarminConnectAuthenticationError,
-                requests.exceptions.HTTPError,
-            ) as err:
-                app_logger.error(err)
-                return False
+            garmin_api = Garmin(
+                email=self.config.G_GARMINCONNECT_API["EMAIL"],
+                password=self.config.G_GARMINCONNECT_API["PASSWORD"],
+            )
+            garmin_api.login("~/.garminconnect")
+            if self.config.state.get_value("garmin_session", ""):
+                self.config.state.set_value("garmin_session", "", force_apply=True)
+        except (
+            GarminConnectConnectionError,
+            GarminConnectAuthenticationError,
+            GarminConnectTooManyRequestsError,
+        ) as err:
+            app_logger.error(err)
+            return False
 
-        end_status = False
+        try:
+            garmin_api.upload_activity(self.config.G_UPLOAD_FILE)
+        except GarminConnectConnectionError as err:
+            if "API Error 409" in str(err):
+                app_logger.info("This activity has already been uploaded.")
+                return True
+            app_logger.error(err)
+            return False
+        except (
+            GarminConnectAuthenticationError,
+            GarminConnectInvalidFileFormatError,
+            GarminConnectTooManyRequestsError,
+        ) as err:
+            app_logger.error(err)
+            return False
 
-        for i in range(3):
-            try:
-                garmin_api.upload_activity(self.config.G_UPLOAD_FILE)
-                end_status = True
-                break
-            except GarthHTTPError as err:
-                # detect 409 in garth.exc.GarthHTTPError
-                # Error in request: 409 Client Error: Conflict for url: https://connectapi.garmin.com/upload-service/upload
-                if " 409 " in str(err):
-                    app_logger.info("This activity has already been uploaded.")
-                    end_status = True
-                    break
-            except (
-                GarminConnectConnectionError,
-                GarminConnectAuthenticationError,
-                GarminConnectTooManyRequestsError,
-            ) as err:
-                app_logger.error(type(err))
-                app_logger.error(err)
-                return end_status
-
-            time.sleep(1.0)
-
-        return end_status
+        return True
 
     async def rwgps_upload(self):
         blank_check = [

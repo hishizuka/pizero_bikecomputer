@@ -339,8 +339,8 @@ class Config:
     G_UPLOAD_FILE = ""
     G_AUTO_UPLOAD = False
     G_AUTO_UPLOAD_SERVICE = {
-        "STRAVA": True,
-        "RWGPS": False,
+        "STRAVA": False,
+        "RWGPS": True,
         "GARMIN": False,
     }
     # STRAVA token (need to write setting.conf manually)
