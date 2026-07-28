@@ -1,4 +1,5 @@
 import asyncio
+import os
 import socket
 import shutil
 import time
@@ -54,6 +55,7 @@ class BluetoothManager:
         self._bt_open_block_until = 0
 
         self.bt_pairing_proc = None
+        self.bt_pairing_obexd_proc = None
         self.bt_paired_devices = {}
 
     @property
@@ -67,8 +69,44 @@ class BluetoothManager:
             return
 
         self.get_paired_bt_devices()
+        await self.open_bt_pairing_obexd_proc()
         await self.open_btctl_proc()
         await self.btctl_write("scan on")
+
+    async def open_bt_pairing_obexd_proc(self):
+        if self.bt_pairing_obexd_proc is not None:
+            return True
+        if not self.config.G_IS_RASPI or not os.path.isfile(self.config.G_OBEXD_CMD):
+            return False
+
+        try:
+            self.bt_pairing_obexd_proc = await asyncio.create_subprocess_exec(
+                self.config.G_OBEXD_CMD,
+                "-n",
+                "-r",
+                os.path.abspath(self.config.G_COURSE_DIR),
+                "-p",
+                "filesystem,bluetooth,opp,ftp",
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+        except OSError as error:
+            app_logger.error(f"[BT] Failed to start obexd for pairing: {error}")
+            self.bt_pairing_obexd_proc = None
+            return False
+
+        try:
+            return_code = await asyncio.wait_for(
+                self.bt_pairing_obexd_proc.wait(), timeout=0.2
+            )
+        except asyncio.TimeoutError:
+            return True
+
+        app_logger.error(
+            f"[BT] obexd exited during pairing startup: return_code={return_code}"
+        )
+        self.bt_pairing_obexd_proc = None
+        return False
 
     async def open_btctl_proc(self):
         if self.bt_pairing_proc is not None:
@@ -81,10 +119,15 @@ class BluetoothManager:
         )
         await self.btctl_write("agent DisplayOnly")
         await self.btctl_write("default-agent")
+        await self.btctl_write("pairable on")
         await self.btctl_write("discoverable on")
 
     async def stop_bt_pairing(self):
+        await self.btctl_write("scan off")
+        await self.btctl_write("discoverable off")
+        await self.btctl_write("pairable off")
         await self.close_btctl_proc()
+        await self.close_bt_pairing_obexd_proc()
 
     async def btctl_write(self, cmd):
         if self.bt_pairing_proc is None:
@@ -97,6 +140,23 @@ class BluetoothManager:
             self.bt_pairing_proc.terminate()
             await self.bt_pairing_proc.wait()
             self.bt_pairing_proc = None
+
+    async def close_bt_pairing_obexd_proc(self):
+        proc = self.bt_pairing_obexd_proc
+        if proc is None:
+            return
+
+        try:
+            if proc.returncode is None:
+                proc.terminate()
+            await asyncio.wait_for(proc.wait(), timeout=3)
+        except ProcessLookupError:
+            pass
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+        finally:
+            self.bt_pairing_obexd_proc = None
 
     async def pair_bt_device(self, mac):
         if self.bt_pairing_proc is None:
@@ -361,6 +421,7 @@ class BluetoothManager:
         return not status
 
     async def shutdown(self):
+        await self.stop_bt_pairing()
         if self.config.G_IS_RASPI and check_bnep0():
             await self.bluetooth_tethering(disconnect=True)
             await asyncio.sleep(5)
