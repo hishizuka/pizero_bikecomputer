@@ -112,11 +112,23 @@ Some functions depend on your parts.
 | Resume | Yes | Recording continues even if the power is suddenly turned off and restored. |
 | Output .fit log file | Yes | The standard format used by famous services as Strava and Garmin Connect. Also .csv format output is supported. |
 | Upload | Yes | Strava, Garmin and Ride with GPS. |
-| Live Track | Yes | Track data is uploaded in real time to [ThingsBoard.io](http://thingsboard.io) dashboard service, so you can share your activity with friends and family. |
+| Live Track | Yes | Track data is uploaded in real time to the [ThingsBoard](https://thingsboard.io) dashboard service, so you can share your activity with friends and family. |
 
-### Dashboard(ThingsBoard) example
+### ThingsBoard dashboard
 
-<img alt="thingsboard-01" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/c3df419f-4392-4d83-96ab-1f15508b3605"> <img alt="thingsboard-02" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/a72ffb58-2fa8-4a87-b9d7-0ba67aa3cfde">
+The repository provides one responsive
+[Pizero Bikecomputer dashboard](dashboards/pizero_bikecomputer.json) for both
+desktop and mobile screens. It shows the recorded track, loaded course, current
+cycling values, heart-rate/power history, and a ThingsBoard Live message
+composer placed between the history chart and current-value widgets. The
+supporting widget bundle and standalone notification rule chain are stored in
+the same [`dashboards/`](dashboards/) directory. The notification chain is
+called from the tenant's existing root rule chain; it does not replace it.
+
+<img width="400" alt="thingsboard-01" src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/100741/8c7d1b9b-9b58-4910-89f4-c3bb89fd3e82.png"> <img width="320" alt="thingsboard-02" src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/100741/9475bfe5-23b5-4c0c-8609-661946767a58.png">
+
+See [ThingsBoard setup](doc/thingsboard_setup.md) for the layout, data format,
+import, device connection, and notification setup instructions.
 
 
 ## Sensors

@@ -1,0 +1,110 @@
+{
+  "ruleChain": {
+    "name": "Pizero Bikecomputer Notifications",
+    "type": "CORE",
+    "firstRuleNodeId": null,
+    "root": false,
+    "debugMode": false,
+    "configuration": null,
+    "additionalInfo": null
+  },
+  "metadata": {
+    "firstNodeIndex": 0,
+    "nodes": [
+      {
+        "type": "org.thingsboard.rule.engine.filter.TbJsFilterNode",
+        "name": "Bikecomputer message request",
+        "debugSettings": null,
+        "singletonMode": false,
+        "queueName": null,
+        "configurationVersion": 0,
+        "configuration": {
+          "scriptLang": "TBEL",
+          "jsScript": "return msg.temperature > 20;",
+          "tbelScript": "return msg.kind == 'bikecomputer_notification' && msg.notify_title != null && msg.notify_body != null && msg.notify_body.trim().length > 0;"
+        },
+        "additionalInfo": {
+          "description": "",
+          "layoutX": 200,
+          "layoutY": 200
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.transform.TbTransformMsgNode",
+        "name": "Prepare notification",
+        "debugSettings": null,
+        "singletonMode": false,
+        "queueName": null,
+        "configurationVersion": 0,
+        "configuration": {
+          "scriptLang": "TBEL",
+          "jsScript": "return {msg: msg, metadata: metadata, msgType: msgType};",
+          "tbelScript": "return {msg: {notify_title: msg.notify_title.trim(), notify_body: msg.notify_body.trim(), notify_request_id: msg.notify_request_id}, metadata: metadata, msgType: msgType};"
+        },
+        "additionalInfo": {
+          "description": "",
+          "layoutX": 480,
+          "layoutY": 200
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.notification.TbNotificationNode",
+        "name": "Send to ThingsBoard Live",
+        "debugSettings": null,
+        "singletonMode": false,
+        "queueName": null,
+        "configurationVersion": 0,
+        "configuration": {
+          "templateId": {
+            "entityType": "NOTIFICATION_TEMPLATE",
+            "id": "00000000-0000-0000-0000-000000000001"
+          },
+          "targets": [
+            "00000000-0000-0000-0000-000000000002"
+          ]
+        },
+        "additionalInfo": {
+          "description": "",
+          "layoutX": 760,
+          "layoutY": 200
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.rest.TbSendRestApiCallReplyNode",
+        "name": "Return send result",
+        "debugSettings": null,
+        "singletonMode": false,
+        "queueName": null,
+        "configurationVersion": 0,
+        "configuration": {
+          "serviceIdMetaDataAttribute": "serviceId",
+          "requestIdMetaDataAttribute": "requestUUID"
+        },
+        "additionalInfo": {
+          "description": "",
+          "layoutX": 1040,
+          "layoutY": 200
+        }
+      }
+    ],
+    "connections": [
+      {
+        "fromIndex": 0,
+        "toIndex": 1,
+        "type": "True"
+      },
+      {
+        "fromIndex": 1,
+        "toIndex": 2,
+        "type": "Success"
+      },
+      {
+        "fromIndex": 2,
+        "toIndex": 3,
+        "type": "Success"
+      }
+    ],
+    "ruleChainConnections": null,
+    "version": 2
+  }
+}

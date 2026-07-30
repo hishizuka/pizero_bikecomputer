@@ -720,16 +720,17 @@ When unlocked, you can drag the profile horizontally.
 <img width="400" alt="livetrack-01" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/9f9660fd-eca4-4b97-a60a-d2ff890bf3f0">
 
 - Auto BT Tethering
-  - Upload to ThingsBoard via bluetooth tethering via a paired smartphone which are already paired using `bluetoothctl`.
+  - Provide the network connection used by the ThingsBoard MQTT fallback through a smartphone paired with `bluetoothctl`.
   - The following `Select BT device` must also be specified.
-  - Since it operates intermittently once every two minutes, the power consumption of the Raspberry Pi and smartphone is much lower than a constant connection via Wifi tethering.
+  - Since it operates intermittently once every three minutes by default, the power consumption of the Raspberry Pi and smartphone is much lower than a constant connection via Wifi tethering.
 - Select BT device
   - Specify the device to use for bluetooth tethering.
 - Live Track
   - Enable real-time data upload to the [ThingsBoard](https://thingsboard.io) dashboard.
-  - `tb-mqtt-client` package, which can be installed with the `pip` command, is required.
-  - Also, thingsboard device access token is required in [THINGSBOARD_API](#thingsboard_api-section) of setting.conf.
-  - You will also need to upload and set up a dashboard.　For more details of Thingboard setup, see [thingsboard_setup.md](./thingsboard_setup.md).
+  - When Gadgetbridge is connected, telemetry and the course attribute are uploaded through its HTTP bridge.
+  - If that HTTP request fails, the program retries through MQTT over Bluetooth tethering.
+  - The `tb-mqtt-client` package and a ThingsBoard device access token in [THINGSBOARD_API](#thingsboard_api-section) are required.
+  - Import and connect the provided dashboard as described in [thingsboard_setup.md](./thingsboard_setup.md).
 - Gadgetbridge
   - Enable BLE UART service for the Android [Gadgetbridge](https://gadgetbridge.org) app.
 - Get Location
@@ -1118,7 +1119,10 @@ the API key restrictions if you use them.
 #### THINGSBOARD_API section
 
 If you want to use ThingsBoard dashboard, set your `token` of the Thingboard device access token.
-You can also override `server`, and `status` stores the current on/off state.
+The default server is `demo.thingsboard.io`, and `status` stores the current
+Live Track on/off state.
+The access token is a secret. Do not include it in dashboard exports, logs, or
+committed configuration files.
 
 
 ### state.pickle

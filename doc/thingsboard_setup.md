@@ -1,188 +1,320 @@
 [Back to software_installation.md](software_installation.md)
 
-# Table of Contents
+# ThingsBoard Live Track setup
+
+## Table of Contents
 
 - [About Live Track](#about-live-track)
-- [Create an account](#create-an-account)
-- [Create a device](#create-a-device)
-- [Import dashboards](#import-dashboards)
-- [Connect the device to the dashboard](#connect-the-device-to-the-dashboard)
-- [Check the dashboard](#check-the-dashboard)
-- [Make the dashboard public](#make-the-dashboard-public)
-- [Option](#option)
+- [Dashboard template](#dashboard-template)
+- [Create an account and device](#create-an-account-and-device)
+- [Configure Pizero Bikecomputer](#configure-pizero-bikecomputer)
+- [Import and connect the dashboard](#import-and-connect-the-dashboard)
+- [Configure dashboard messages](#configure-dashboard-messages)
+- [Enable and verify Live Track](#enable-and-verify-live-track)
+- [Data and transport](#data-and-transport)
+- [Map behavior and customization](#map-behavior-and-customization)
+- [Public sharing](#public-sharing)
 
-This document describes the setup of ThingsBoard.  
+## About Live Track
 
-# About Live Track
+[ThingsBoard](https://thingsboard.io) is an open-source IoT platform. Pizero
+Bikecomputer uses it to publish the current ride values, recorded track, and
+loaded course to a web dashboard.
 
-[ThingsBoard](https://thingsboard.io) is an open source dashboard platform. It is free to use and is one of the few platforms that can display tracks and paths (used as routes) on a map.
+This guide uses the [ThingsBoard Live Demo](https://demo.thingsboard.io). The
+dashboard can be viewed in a browser or with the ThingsBoard Live mobile app.
 
-The dashboard can be viewed from the web([Live Demo server](https://demo.thingsboard.io)) and from the application.
-
-- [Google Store](https://play.google.com/store/apps/details?id=org.thingsboard.demo.app)
+- [Google Play](https://play.google.com/store/apps/details?id=org.thingsboard.demo.app)
 - [App Store](https://apps.apple.com/us/app/thingsboard-live/id1594355695)
 
-For more details, see [ThingsBoard Documentation](https://thingsboard.io/docs/) and [Getting Started with ThingsBoard](https://thingsboard.io/docs/getting-started-guides/helloworld/).
+## Dashboard template
 
-## dashboards
+The repository provides one responsive dashboard and its supporting
+ThingsBoard definitions:
 
-Three types of dashboards are currently provided.
+- [Pizero Bikecomputer](../dashboards/pizero_bikecomputer.json)
+- [Pizero Bikecomputer widgets](../dashboards/pizero_bikecomputer_widgets.json)
+- [Pizero Bikecomputer rule chain](../dashboards/pizero_bikecomputer_rule_chain.json)
 
-### [Mobile (map with tracks)](../dashboards/pizero_bikecomputer_w_track_.json)
-![Screenshot_20230618-095206](https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/c3df419f-4392-4d83-96ab-1f15508b3605)
+It replaces the former separate track, course, and desktop dashboard
+templates. The same dashboard contains layouts for desktop and mobile screens.
+The widget bundle supplies the message composer, while the rule chain connects
+the composer to ThingsBoard Live notifications.
 
-### [Mobile (map with routes)](../dashboards/pizero_bikecomputer_w_course_.json)
+### Current dashboard
 
-![Screenshot_20230624-071451](https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/1750bb4d-4d93-4712-aa84-ab99e6b32159)
+<img width="640" alt="ThingsBoard desktop dashboard" src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/100741/8c7d1b9b-9b58-4910-89f4-c3bb89fd3e82.png">
+<img width="480" alt="ThingsBoard mobile dashboard" src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/100741/9475bfe5-23b5-4c0c-8609-661946767a58.png">
 
-### [PC desktop (map with tracks)](../dashboards/pizero_bikecomputer_browser_.json)
-![Screenshot_20230104-080601~2](https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/e4dfeab8-35a8-4a0c-b6cc-d77df87e86a8)
+### Desktop layout
 
-# Create an account
+| Section | Layout |
+|---|---|
+| Map | Recorded track and loaded course, full width |
+| History | Heart rate and Power time-series chart, full width |
+| Message | Name, message body, and send button, full width |
+| Main values | Speed / Heart rate / Power |
+| Additional values | Distance / Temperature / Work |
 
-Go to [ThingsBoard](https://thingsboard.io) and create a free account with "[Live Demo](https://demo.thingsboard.io/signup)" of Community Edition.
+### Mobile layout
 
-# Create a device
+The value widgets use a fixed two-column grid:
 
-Login to Live Demo server([demo.thingsboard.io](demo.thingsboard.io)).
- 
-Click "Entities" > "Devices" in the menu.
- 
-<img width="482" alt="thingsboard-01-02-devices" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/80b74243-a0a2-4b86-83b3-a96a9f642581">
- 
-Click "+" > "Add new device"
- 
-<img width="830" alt="thingsboard-03-01-add_device" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/248836db-3237-4d84-83e3-347d5dc19b58">
- 
-Input "Pizero Bikecomputer" in "Name" field and click "Add".
+| Left | Right |
+|---|---|
+| Speed | Distance |
+| Heart rate | Temperature |
+| Power | Work |
 
-<img width="668" alt="thingsboard-03-02-add_device" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/bcb9dd83-2c50-4816-83ad-c83235acd33a">
- 
-Now, the device is added. Click this.
+The map remains taller than a value row, and the heart-rate/power chart is
+shown above the message composer. The message composer is shown full width
+above the two-column value grid.
 
-<img width="830" alt="thingsboard-03-03-added_device" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/cc155b5a-58d7-40a9-8b3e-cefc66a12501">
- 
-Click "Copy access token" and paste [THINGSBOARD_API section](./software_installation.md#thingsboard_api-section) of setting.conf.
- 
-<img width="511" alt="thingsboard-03-04-get_token" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/2f400443-6d79-4c1e-bf90-8513df05965c">
+### Device Entity Alias
 
+The exported JSON intentionally contains the zero UUID
+`00000000-0000-0000-0000-000000000000` instead of a real ThingsBoard device
+Entity UUID. This prevents a repository export from identifying the source
+device.
 
-# Import dashboards
+After importing the dashboard, connect its `Pizero Bikecomputer` Entity Alias
+to your own device. The widgets will not receive data before this is done.
 
-Upload the [dashboards](#dashboards) provided.
- 
-Click "Dashboards" in the menu.
- 
-<img width="642" alt="thingsboard-01-01-dashboard" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/54840e7d-3663-4d7e-8c85-2d968e4d1718">
- 
-Click "+" > "Import dashboard". For example, upload ["pizero_bikecomputer_w_track_.json"](../dashboards/pizero_bikecomputer_w_track_.json).
- 
-<img width="828" alt="thingsboard-02-01-empty" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/f8ac2e19-847b-4e63-9638-19c2bab9a608">
- 
-Now, the dashboard is added. Click this.
- 
-<img width="828" alt="thingsboard-02-02-imported" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/47d96960-e8a9-43e3-816f-69fceace2950">
+## Create an account and device
 
-# Connect the device to the dashboard
+1. Create an account on the [ThingsBoard Live Demo](https://demo.thingsboard.io/signup)
+   and sign in.
+2. Open **Entities > Devices**.
+3. Add a device. `Pizero Bikecomputer` is the recommended device name.
+4. Open the new device and copy its device access token.
 
-Allow the imported dashboard to retrieve values for the device you just created.
- 
-Click edit button.
- 
-<img width="828" alt="thingsboard-02-03-dashboard" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/13872cf0-9880-4e78-9c1e-2fd13f5e4bd6">
- 
-Click "Entity aliases" button.
- 
-<img width="828" alt="thingsboard-02-04-click_entity" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/4b83d314-7d38-49f1-947e-b2c5602db461">
- 
-Click edit button.
- 
-<img width="600" alt="thingsboard-03-05-set_device" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/19c29f21-9377-4fee-ae6f-7266ed40e69a">
- 
-Click "Device" to see the devices created. Select this and save.
- 
-<img width="522" alt="thingsboard-03-06-set_device" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/3eff7763-0453-400e-8d5c-8ce6238985e8">
- 
-Click "Save" button.
- 
-<img width="600" alt="thingsboard-03-07-save_device" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/c8cdad9a-0491-4b0a-ae97-51eaf277c85c">
- 
-Click check button to save. 
- 
-<img width="638" alt="thingsboard-03-08-save_dashboard" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/09325e0f-9703-47d0-a7de-131fb8b8fb28">
+The access token authenticates data uploads. Treat it as a secret.
 
-# Check the dashboard
+## Configure Pizero Bikecomputer
 
-Now you have the dashboard which works with the program. Check to see if the dashboard works. Run the program in demo mode.
+Add the device access token to `setting.conf`:
 
-```
-$ python3 pizero_bikecomputer.py --demo
+```ini
+[THINGSBOARD_API]
+TOKEN = YOUR_DEVICE_ACCESS_TOKEN
+STATUS = False
 ```
 
-First, make sure that the value of Power, HR(heartrate) or Speed is available(not 0 or NaN). If you don't see any values, [disable ANT+ in setting.conf](./software_installation.md#ant-section).
- 
-Then click start button.
- 
-<img width="400" alt="demo-01" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/27f8a8fa-37d9-4080-b58d-55924d9c63ac">
- 
-Turn on Live Track from the menu.
- 
-<img width="400" alt="livetrack-on" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/7f5e190b-138e-4f16-ae4d-3fd0a7c713e0">
- 
-Open "Devices" section in "Entities" menu. The state of your device changed to "Active". Click it.
- 
-<img width="750" alt="thingsboard-04-01-device_is_active" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/8a463e9e-4e0d-4642-a635-d837b97d60c4">
- 
-Click "Latest telemetry" tab. Values sent from the program are displayed.
- 
-<img width="500" alt="thingsboard-04-02-device_is_active" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/7c7d8fff-ab73-454c-ada5-52808c8eb154">
- 
-Also, graph values(heartrate/power) are displayed.
- 
-<img width="600" alt="thingsboard-04-03-device_is_active" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/d5db6dd5-2d81-42c2-bdbd-09bd4299df0b">
+`demo.thingsboard.io` is the default server. `STATUS` stores the Live Track
+on/off state and can normally be changed from the application menu.
 
+Install dependencies with `install.sh`. Live Track requires the
+`tb-mqtt-client` package installed by that script.
 
-# Make the dashboard public
+Do not put the access token in dashboard JSON, documentation, command output,
+or a Git commit. `setting.conf` is intentionally excluded from Git.
 
-To allow others to see your dashboard, publish your device and dashboard.
- 
-Click submenu button and "Make device public" from "Devices" menu.
+## Import and connect the dashboard
 
-<img width="750" alt="thingsboard-05-01-public_device" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/65809bcb-c9ac-479e-b909-8853a05504bf">
- 
-Click "Yes".
-  
-<img width="570" alt="thingsboard-05-02-public_device" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/378fc791-288c-4282-a453-a7f63513a4eb">
- 
-Then, click submenu button and "Make dashboard public" from "Dashboards" menu.
+1. Open **Resources > Widget library** in ThingsBoard.
+2. Import
+   [`dashboards/pizero_bikecomputer_widgets.json`](../dashboards/pizero_bikecomputer_widgets.json).
+3. Open **Dashboards** in ThingsBoard.
+4. Select **Import dashboard** and upload
+   [`dashboards/pizero_bikecomputer.json`](../dashboards/pizero_bikecomputer.json).
+5. Open the imported **Pizero Bikecomputer** dashboard and enter edit mode.
+6. Open **Entity aliases** and edit the `Pizero Bikecomputer` alias.
+7. Select the device created above.
+8. Save the Entity Alias and then save the dashboard.
 
-<img width="750" alt="thingsboard-05-03-public_dashboard" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/3ed55e70-4928-4694-b5ee-53d173aa6b43">
- 
-You can get the public URL. Click "OK".
- 
-<img width="650" alt="thingsboard-05-04-public_dashboard" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/063de73e-513b-4a6b-910f-7315355099cb">
+ThingsBoard menu placement and icon shapes can differ by release, but the
+required operation is always to replace the zero-UUID single-device alias with
+your device.
 
-If you want to make it private again, do the reverse operation.
+## Configure dashboard messages
 
-# Option
+The message composer sends an authenticated `POST /api/rule-engine/` request.
+The supplied notification rule chain validates that request and creates a
+ThingsBoard Live mobile notification. It is deliberately separate from the
+tenant's root rule chain so importing it cannot replace the tenant's standard
+telemetry, attribute, or RPC processing.
 
-## Change default location in the map
+1. Open **Notification center > Templates**.
+2. Create a **Rule node** template, for example
+   `Bikecomputer rule message`.
+3. Enable the **Mobile app** delivery method.
+4. Set its subject to `${notify_title}` and its message to `${notify_body}`.
+5. Import
+   [`dashboards/pizero_bikecomputer_rule_chain.json`](../dashboards/pizero_bikecomputer_rule_chain.json).
+6. Open its **Send to ThingsBoard Live** node.
+7. Replace the placeholder notification template with the template created
+   above.
+8. Replace the placeholder notification target with **Tenant
+   administrators**, or select another recipient group.
+9. Save **Pizero Bikecomputer Notifications**. Do not set it as the tenant's
+   root rule chain.
+10. Open the tenant's existing root rule chain.
+11. Add a **Rule chain** node and select **Pizero Bikecomputer
+    Notifications** as its target.
+12. Connect **REST API request** from **Message Type Switch** to the new
+    **Rule chain** node.
+13. Save the root rule chain.
 
-The default location is Tokyo in Japan. If you want to change it, edit your dashboard.
+The imported JSON contains only the four notification-processing nodes. The
+root rule chain remains tenant-owned and contains just one additional
+delegation node. If the root chain has no **Message Type Switch**, add an
+equivalent message-type routing node first; the dashboard request must enter
+the notification chain with the **REST API request** relation.
 
-<img width="828" alt="thingsboard-02-03-dashboard" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/13872cf0-9880-4e78-9c1e-2fd13f5e4bd6">
+The two zero-like UUIDs ending in `0001` and `0002` are intentional
+placeholders for the notification template and target. They prevent
+tenant-specific recipient identifiers from being committed to the repository.
 
-Then click edit button in the map widget.
+The default target sends to tenant administrators. To support different or
+multiple destinations, create or select a notification target containing the
+required ThingsBoard users and choose it in **Send to ThingsBoard Live**.
 
-<img width="627" alt="thingsboard-06-01-change_default_location" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/0ce63d78-6493-4e32-8b3e-c369c3b66d05">
+The dashboard composer contains two input fields:
 
-Click "Advanced" tab and "Advanced settings" under "Common map settings".
+- **Name** is optional and limited to 64 characters. If it is empty,
+  `ThingsBoard` is used as the notification title. Its value is retained after
+  a successful send.
+- **Message** is required and limited to 500 characters. It is cleared after a
+  successful send.
 
-<img width="549" alt="thingsboard-06-02-change_default_location" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/d68a03ba-007b-4791-9dd6-ce7c8ba48029">
+On both desktop and mobile layouts, the composer is placed between the
+heart-rate/power history chart and the current-value widgets. On mobile, the
+**Send** button is shown beside **Name** so that it remains visible while
+editing the message. On desktop, **Name** and **Message** are single-line
+fields with the same height. On mobile, **Message** remains taller for
+multi-line input.
 
-Change the value of "Default map center position". The format is "latitude,longitude".
+## Enable and verify Live Track
 
-<img width="540" alt="thingsboard-06-03-change_default_location" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/ec09b780-c24f-4940-823a-0c51008a22c6">
+For a local functional check, start the application in demo mode:
 
+```bash
+python3 pizero_bikecomputer.py --demo
+```
+
+Then:
+
+1. Make sure Speed, Heart rate, or Power has a usable value.
+2. Start recording.
+3. Open **Menu > Connectivity** and enable **Live Track**.
+4. Wait for the next upload. The normal telemetry interval is 180 seconds.
+5. In ThingsBoard, open the device's **Latest telemetry** view and confirm the
+   keys listed below.
+6. Open the dashboard and confirm the values and recorded track.
+
+If the Live Track menu item is disabled, check that the device token and
+`tb-mqtt-client` package are available, then restart the application.
+
+## Data and transport
+
+### Time-series telemetry
+
+The following values are uploaded every 180 seconds by default:
+
+| Key | Meaning | Unit or format |
+|---|---|---|
+| `timestamp` | Display timestamp | `MM/DD HH:MM` |
+| `speed` | Current speed | km/h, integer |
+| `distance` | Accumulated distance | km, one decimal place |
+| `heartrate` | 60-second average heart rate | bpm |
+| `power` | 60-second average power | W |
+| `work` | Accumulated work | kJ |
+| `temperature` | Current temperature | °C |
+| `latitude` | Current latitude | decimal degrees |
+| `longitude` | Current longitude | decimal degrees |
+
+The map's recorded track uses the time-series `latitude` and `longitude`
+values. The visible track therefore follows the dashboard time window and the
+180-second upload interval; it is not the application's one-second ride log.
+
+### Course attribute
+
+The loaded course is stored as the client attribute `course_path`. It is one
+ordered polyline containing `[latitude, longitude]` pairs:
+
+```json
+{
+  "course_path": [
+    [35.0, 139.0],
+    [35.1, 139.1]
+  ]
+}
+```
+
+Loading or replacing a course overwrites this attribute. Clearing the course
+sends an empty array:
+
+```json
+{
+  "course_path": []
+}
+```
+
+Only the current course is retained. Course upload is attempted when a course
+is loaded or cleared. If it cannot be sent immediately, it remains pending and
+is retried after a successful telemetry upload.
+
+### Connection order
+
+1. If Gadgetbridge is connected, the program sends telemetry and
+   `course_path` through the Gadgetbridge HTTP bridge.
+2. If the HTTP request is unavailable or fails, it falls back to ThingsBoard
+   MQTT through Bluetooth tethering.
+
+The device access token is used for both paths. It must never be written to
+logs.
+
+### Dashboard messages
+
+The message composer does not send through the bikecomputer device token. It
+uses the signed-in ThingsBoard user's web session:
+
+```text
+Dashboard message composer
+  -> POST /api/rule-engine/
+  -> Root Rule Chain
+  -> Pizero Bikecomputer Notifications
+  -> ThingsBoard Live mobile notification
+  -> Android notification
+  -> Gadgetbridge notification forwarding
+```
+
+The notification target determines which ThingsBoard users receive the
+message. The optional **Name** becomes the notification title; if it is empty,
+`ThingsBoard` is used. **Message** becomes the notification body. An empty
+message cannot be sent.
+
+## Map behavior and customization
+
+The Route Map widget automatically fits its bounds to the available track and
+course data. It provides OpenStreetMap, satellite, and hybrid base layers.
+
+The current overlay styles are:
+
+| Overlay | Style |
+|---|---|
+| Recorded track | Blue `#307FE5`, width 4 |
+| Course outline | Dark gray-blue `#435B63`, width 7 |
+| Course inner line | Bright cyan `#00D4FF`, width 3 |
+
+The recorded track is drawn over the course so the traveled portion remains
+visible when both lines overlap.
+
+To change these settings, edit the **Route Map** widget:
+
+- change the recorded track under **Trips**;
+- change the two course layers under **Polylines**;
+- change base maps, automatic bounds, or controls under the common map
+  settings.
+
+## Public sharing
+
+To share Live Track with another person, use ThingsBoard's dashboard sharing
+or public-dashboard function. Depending on the ThingsBoard release and tenant
+settings, the associated device may also need public access.
+
+Making the dashboard public exposes the ride values, recorded locations, and
+loaded course to anyone with access to the public URL. Confirm that this is
+acceptable before enabling it.
 
 [Back to software_installation.md](software_installation.md)

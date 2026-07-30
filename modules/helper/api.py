@@ -96,8 +96,7 @@ class api:
             access_token = urllib.parse.quote(token, safe="")
             self.thingsboard_telemetry_url = f"{server}/api/v1/{access_token}/telemetry"
             self.thingsboard_attributes_url = (
-                f"{server}/api/v1/{access_token}/attributes?"
-                f"sharedKeys={','.join(self.THINGSBOARD_SHARED_KEYS)}"
+                f"{server}/api/v1/{access_token}/attributes"
             )
 
         if _IMPORT_THINGSBOARD and token and server:
@@ -791,34 +790,36 @@ class api:
     #            self.tb_message["name"], self.tb_message["message"].strip(), True
     #        )
 
-    async def _send_thingsboard_telemetry_via_gadgetbridge_http(
+    async def _send_thingsboard_via_gadgetbridge_http(
         self,
+        url,
         data,
         timeout=15,
     ):
         if self.gadgetbridge_service is None:
             return False
-        if self.thingsboard_telemetry_url is None:
+        if url is None:
             return False
 
         try:
             await self.gadgetbridge_service.request_http(
-                self.thingsboard_telemetry_url,
+                url,
                 method="POST",
                 headers={"Content-Type": "application/json"},
                 body=data,
                 timeout=timeout,
             )
-        except Exception as exc:
-            app_logger.error(
-                "[GB] ThingsBoard telemetry error: " f"{type(exc).__name__}: {exc!r}"
-            )
+        except Exception:
+            app_logger.error("[GB] ThingsBoard HTTP request failed")
             return False
 
         return True
 
     async def _send_livetrack_data_via_gadgetbridge_http(self, data):
-        if not await self._send_thingsboard_telemetry_via_gadgetbridge_http(data):
+        if not await self._send_thingsboard_via_gadgetbridge_http(
+            self.thingsboard_telemetry_url,
+            data,
+        ):
             return False
 
         # attributes_url = self.thingsboard_attributes_url
@@ -912,11 +913,12 @@ class api:
         return send_time_status == "success", send_time_status
 
     async def _send_livetrack_course_via_gadgetbridge_http(self, data):
-        success = await self._send_thingsboard_telemetry_via_gadgetbridge_http(
+        success = await self._send_thingsboard_via_gadgetbridge_http(
+            self.thingsboard_attributes_url,
             data,
         )
         if success:
-            app_logger.debug("[TB][GB] course telemetry sent successfully")
+            app_logger.debug("[TB][GB] course attributes sent successfully")
         return success
 
     async def _send_livetrack_course_via_mqtt(self, data):
@@ -932,12 +934,12 @@ class api:
 
         try:
             self.thingsboard_client.connect()
-            res = self.thingsboard_client.send_telemetry(data).get()
+            res = self.thingsboard_client.send_attributes(data).get()
             if res != TBPublishInfo.TB_ERR_SUCCESS:
                 app_logger.error(f"thingsboard upload error: {res}")
             else:
-                app_logger.debug("[TB][MQTT] course telemetry sent successfully")
-            return True
+                app_logger.debug("[TB][MQTT] course attributes sent successfully")
+            return res == TBPublishInfo.TB_ERR_SUCCESS
         finally:
             self.thingsboard_client.disconnect()
             await self.network.close_bt_tethering(f_name)
@@ -1019,21 +1021,20 @@ class api:
         ):
             return
 
-        course = []
+        course_path = []
         if not reset:
-            c = np.stack(
+            course_path = np.stack(
                 [
                     self.config.logger.course.latitude,
                     self.config.logger.course.longitude,
                 ],
                 axis=1,
             ).tolist()
-            course = c + c[-2:0:-1]
 
-        # send as polygon sources
-        data = {"perimeter": course}
+        # Send the ordered points as a polyline source.
+        data = {"course_path": course_path}
         app_logger.debug(
-            f"[TB] course send started: reset={reset}, points={len(course)}"
+            f"[TB] course send started: reset={reset}, points={len(course_path)}"
         )
 
         if await self._send_livetrack_course_via_gadgetbridge_http(data):
