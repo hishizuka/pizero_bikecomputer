@@ -72,7 +72,6 @@ try:
             I2C_BUS as _I2C_BUS,
             READ_TIMEOUT as _READ_TIMEOUT,
             UART_BAUDRATE as _UART_BAUDRATE,
-            detect_sensor_ublox as _detect_sensor_ublox,
             is_interrupted_system_call as _is_interrupted_system_call,
             retry_interrupted_system_call as _retry_interrupted_system_call,
         )
@@ -102,7 +101,6 @@ try:
             I2C_BUS as _I2C_BUS,
             READ_TIMEOUT as _READ_TIMEOUT,
             UART_BAUDRATE as _UART_BAUDRATE,
-            detect_sensor_ublox as _detect_sensor_ublox,
             is_interrupted_system_call as _is_interrupted_system_call,
             retry_interrupted_system_call as _retry_interrupted_system_call,
         )
@@ -128,14 +126,9 @@ _I2C_CONFIG_MESSAGE_MAX_LENGTH = 32
 _I2C_CONFIG_CHUNK_DELAY = 0.02
 
 
-if _UBLOX_IMPORT_ERROR is None and __name__ != "__main__":
-    _SENSOR_GPS_UBLOX, _DETECTED_UART_DEVICE = _detect_sensor_ublox()
-else:
-    _SENSOR_GPS_UBLOX, _DETECTED_UART_DEVICE = False, None
-
-
 class UBlox(AbstractSensorGPS):
     NULL_VALUE = None
+    detected_uart_device = None
 
     def sensor_init(self):
         super().sensor_init()
@@ -144,7 +137,7 @@ class UBlox(AbstractSensorGPS):
                 "u-blox GPS optional dependency is not available: "
                 f"{_UBLOX_IMPORT_ERROR.name}"
             ) from _UBLOX_IMPORT_ERROR
-        self.uart_device = _DETECTED_UART_DEVICE
+        self.uart_device = self.detected_uart_device
         self.transport = None
         self.transport_type = None
         self._reader = None

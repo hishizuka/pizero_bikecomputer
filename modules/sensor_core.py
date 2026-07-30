@@ -18,11 +18,13 @@ from modules.sensor.performance_metrics import (
 app_logger.info("detected sensor modules:")
 
 from modules.utils.timer import Timer, log_timers
-from .sensor.gps import SensorGPS
+from .sensor.gps import get_sensor_gps_class
 from .sensor.sensor_ant import SensorANT
 from .sensor.sensor_ble import SensorBLE
 from .sensor.sensor_gpio import SensorGPIO
 from .sensor.sensor_i2c import SensorI2C
+
+SensorGPS = get_sensor_gps_class()
 
 
 class SensorCore:
