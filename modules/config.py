@@ -280,6 +280,7 @@ class Config:
     # auto backlight
     G_USE_AUTO_BACKLIGHT = True
     G_AUTO_BACKLIGHT_CUTOFF = 10
+    G_MANUAL_BACKLIGHT_BRIGHTNESS = None
 
     # GUI mode
     G_GUI_MODE = "PyQt"

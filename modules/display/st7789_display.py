@@ -25,6 +25,7 @@ class ST7789Display(Display):
     pi = None
 
     has_touch = False
+    has_backlight = True
     send = True
 
     brightness = 100
@@ -66,6 +67,7 @@ class ST7789Display(Display):
         self.blank_draw = ImageDraw.Draw(self.blank_buffer)
         self.blank_draw.rectangle((0, 0, *self.size), (0, 0, 0))
         self.clear()
+        self.restore_backlight_state()
 
     def quit(self):
         self.clear()

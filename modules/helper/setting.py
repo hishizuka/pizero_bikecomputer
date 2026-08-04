@@ -191,6 +191,12 @@ class Setting:
             c = self.config_parser["DISPLAY_PARAM"]
             if "SPI_CLOCK" in c:
                 self.config.G_DISPLAY_PARAM["SPI_CLOCK"] = int(c["SPI_CLOCK"])
+            if "USE_AUTO_BACKLIGHT" in c:
+                self.config.G_USE_AUTO_BACKLIGHT = c.getboolean("USE_AUTO_BACKLIGHT")
+            if "MANUAL_BACKLIGHT_BRIGHTNESS" in c:
+                self.config.G_MANUAL_BACKLIGHT_BRIGHTNESS = int(
+                    c["MANUAL_BACKLIGHT_BRIGHTNESS"]
+                )
             if BoardType(self.config.G_BOARD_TYPE) == BoardType.AUTO:
                 if "USE_BACKLIGHT" in c:
                     self.config.G_DISPLAY_PARAM["USE_BACKLIGHT"] = c.getboolean(
@@ -354,6 +360,10 @@ class Setting:
         c = self.config_parser["DISPLAY_PARAM"]
         display = board_preset.display
         c["SPI_CLOCK"] = str(int(self.config.G_DISPLAY_PARAM["SPI_CLOCK"]))
+        c["USE_AUTO_BACKLIGHT"] = str(self.config.G_USE_AUTO_BACKLIGHT)
+        manual_brightness = self.config.G_MANUAL_BACKLIGHT_BRIGHTNESS
+        if manual_brightness is not None:
+            c["MANUAL_BACKLIGHT_BRIGHTNESS"] = str(int(manual_brightness))
         if display is None:
             c["USE_BACKLIGHT"] = str(self.config.G_DISPLAY_PARAM["USE_BACKLIGHT"])
             c["AUTO_BACKLIGHT_CUTOFF"] = str(int(self.config.G_AUTO_BACKLIGHT_CUTOFF))

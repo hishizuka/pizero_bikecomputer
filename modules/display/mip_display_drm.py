@@ -161,15 +161,13 @@ class MipDisplayDrm(Display):
                 f"{_DRM_BACKLIGHT_PATH}"
             )
 
-        self.allow_auto_backlight = self.has_backlight and config.G_USE_AUTO_BACKLIGHT
-        self.use_auto_backlight = self.allow_auto_backlight
-        if self.use_auto_backlight:
-            self.brightness_index = len(self.brightness_table)
-        else:
-            self.brightness_index = 0
+        self.allow_auto_backlight = self.has_backlight
+        self.use_auto_backlight = False
+        self.brightness_index = 0
         self.brightness = -1
         self.init_minimum_brightness()
         self.set_brightness(0)
+        self.restore_backlight_state()
 
     def quit(self):
         self.clear()

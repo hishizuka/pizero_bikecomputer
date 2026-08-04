@@ -753,21 +753,20 @@ class SensorCore:
                     ):
                         self.config.logger.start_and_stop()
 
-            # auto backlight & brake light with brightness
-            auto_light = False
-            if self.config.display.use_auto_backlight and not np.isnan(
-                v["I2C"]["light"]
-            ):
+            # Ambient light is shared by independent display and ANT+ light controls.
+            is_dark = False
+            if not np.isnan(v["I2C"]["light"]):
                 self._shift_window_and_append(
                     self.auto_backlight_brightness, v["I2C"]["light"]
                 )
                 brightness = int(np.mean(self.auto_backlight_brightness))
+                is_dark = brightness <= self.config.G_AUTO_BACKLIGHT_CUTOFF
 
-                if brightness <= self.config.G_AUTO_BACKLIGHT_CUTOFF:
-                    self.config.display.set_minimum_brightness()
-                    auto_light = True
-                else:
-                    self.config.display.set_brightness(0)
+                if self.config.display.use_auto_backlight:
+                    if is_dark:
+                        self.config.display.set_minimum_brightness()
+                    else:
+                        self.config.display.set_brightness(0)
 
             # brake light with speed/cadence/power conditions
             speed = self.values["integrated"]["speed"]
@@ -783,6 +782,7 @@ class SensorCore:
                 and ant_use["LGT"]
                 and self.config.G_MANUAL_STATUS == "START"
             ):
+                auto_light = is_dark
                 if speed_brake_hint or cadence_brake_hint or power_brake_hint:
                     auto_light = True
                 if auto_light:

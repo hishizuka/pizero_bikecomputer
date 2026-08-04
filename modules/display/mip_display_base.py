@@ -52,10 +52,8 @@ class MipDisplayBase(Display):
         super().__init__(config)
 
         self.has_backlight = config.G_DISPLAY_PARAM["USE_BACKLIGHT"]
-        self.allow_auto_backlight = self.has_backlight and config.G_USE_AUTO_BACKLIGHT
-        self.use_auto_backlight = self.allow_auto_backlight
-        if self.use_auto_backlight:
-            self.brightness_index = len(self.brightness_table)
+        self.allow_auto_backlight = self.has_backlight
+        self.use_auto_backlight = False
 
         if size:
             self.size = size
@@ -75,6 +73,7 @@ class MipDisplayBase(Display):
 
         if self.init_cython():
             # switch to cython
+            self.restore_backlight_state()
             return
 
         # init spi/gpio/backlight
@@ -83,6 +82,7 @@ class MipDisplayBase(Display):
         self.init_gpio_write()
         self.init_backlight()
         self.clear()
+        self.restore_backlight_state()
 
         self.init_buffer()
 

@@ -16,11 +16,13 @@ from .pyqt_menu_widget import MenuWidget, ListWidget
 
 
 class SystemMenuWidget(MenuWidget):
+    DISPLAY_BUTTON = "Display"
+
     def setup_menu(self):
         button_conf = (
             # Name(page_name), button_attribute, connected functions, layout
             ("Network", "submenu", self.network),
-            ("Brightness", None, None),
+            (self.DISPLAY_BUTTON, "submenu", self.display_settings),
             ("Language", None, None),
             (
                 "Update",
@@ -37,12 +39,94 @@ class SystemMenuWidget(MenuWidget):
             ),
         )
         self.add_buttons(button_conf)
+        self.update_button_status()
+
+    def preprocess(self):
+        self.update_button_status()
+
+    def update_button_status(self):
+        display = self.config.display
+        self.buttons[self.DISPLAY_BUTTON].onoff_button(
+            display.has_backlight and bool(display.brightness_table)
+        )
 
     def network(self):
         self.change_page("Network", preprocess=True)
 
+    def display_settings(self):
+        self.change_page("Display", preprocess=True)
+
     def debug(self):
         self.change_page("Debug", preprocess=True)
+
+
+class DisplayMenuWidget(MenuWidget):
+    AUTO_BRIGHTNESS_BUTTON = "Auto Brightness"
+    BRIGHTNESS_BUTTON = "Brightness"
+
+    def setup_menu(self):
+        button_conf = (
+            (
+                self.AUTO_BRIGHTNESS_BUTTON,
+                "toggle",
+                lambda: self.onoff_auto_brightness(True),
+            ),
+            (self.BRIGHTNESS_BUTTON, "submenu", self.brightness),
+        )
+        self.add_buttons(button_conf)
+        self.update_button_status()
+
+    def preprocess(self):
+        self.update_button_status()
+
+    def onoff_auto_brightness(self, change=True):
+        display = self.config.display
+        if change:
+            display.set_auto_backlight(not display.use_auto_backlight)
+            self.config.setting.write_config()
+        self.buttons[self.AUTO_BRIGHTNESS_BUTTON].change_toggle(
+            display.use_auto_backlight
+        )
+
+    def brightness(self):
+        self.change_page("Brightness", preprocess=True)
+
+    def update_button_status(self):
+        display = self.config.display
+        has_brightness = display.has_backlight and bool(display.brightness_table)
+        light_sensors = self.sensor_i2c.available_sensors.get("LIGHT", {})
+        self.buttons[self.AUTO_BRIGHTNESS_BUTTON].onoff_button(
+            display.allow_auto_backlight and any(light_sensors.values())
+        )
+        self.buttons[self.AUTO_BRIGHTNESS_BUTTON].change_toggle(
+            display.use_auto_backlight
+        )
+        self.buttons[self.BRIGHTNESS_BUTTON].onoff_button(has_brightness)
+
+
+class BrightnessListWidget(ListWidget):
+    def __init__(self, parent, page_name, config):
+        self.settings = {
+            self._brightness_label(value): value
+            for value in config.display.brightness_table
+        }
+        super().__init__(parent, page_name, config)
+
+    @staticmethod
+    def _brightness_label(value):
+        if value == 0:
+            return "Off (0%)"
+        return f"{value}%"
+
+    def get_default_value(self):
+        return self._brightness_label(self.config.display.manual_brightness)
+
+    async def button_func_extra(self):
+        if self.selected_item is None:
+            return
+        brightness = self.settings[self.selected_item.title]
+        if self.config.display.set_manual_brightness(brightness):
+            self.config.setting.write_config()
 
 
 class NetworkMenuWidget(MenuWidget):

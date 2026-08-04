@@ -847,8 +847,12 @@ If ANT+ powermeter is available, set both parameters are used in W'balance (%). 
 
 - Network
   - See below.
-- Brightness
-  - Reserved menu item. Currently not configurable from this menu.
+- Display
+  - Auto Brightness
+    - Automatically controls the display backlight from the internal ambient light sensor.
+  - Brightness
+    - Select a fixed backlight level supported by the current display.
+    - Selecting a fixed level disables Auto Brightness.
 - Language
   - Reserved menu item. Currently not configurable from this menu.
 - Update
@@ -1063,12 +1067,17 @@ Axis conversion is performed with the following variables.
   - applies to legacy `MIP_*` backends
 - `use_backlight`
   - Enable backlight control for supported MIP color displays.
+- `use_auto_backlight`
+  - Enable automatic display backlight control from the ambient light sensor.
 - `auto_backlight_cutoff`
   - Threshold for automatic backlight control.
+- `manual_backlight_brightness`
+  - Store the fixed backlight percentage selected from the System menu.
 
-With `board = auto`, these values are read from `setting.conf`. For a specific
-board, they are defined by its preset in `modules/board_config.py`, and values
-manually entered in `setting.conf` are ignored.
+With `board = auto`, `spi_clock`, `use_backlight`, and `auto_backlight_cutoff`
+are read from `setting.conf`. For a specific board, those hardware values are
+defined by its preset. `use_auto_backlight` and `manual_backlight_brightness`
+are user settings and are read for every board type.
 
 #### STRAVA_API section
 

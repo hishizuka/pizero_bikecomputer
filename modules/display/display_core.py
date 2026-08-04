@@ -56,6 +56,7 @@ class Display:
 
     # Backlight control state (auto backlight is used by MIP displays).
     use_auto_backlight = False
+    brightness = 0
     brightness_index = 0
     brightness_table = []
 
@@ -121,13 +122,69 @@ class Display:
         )
 
         # Auto backlight is selected only when allowed and the extra slot is reached.
-        if self.allow_auto_backlight and self.brightness_index == len(self.brightness_table):
-            self.use_auto_backlight = True
+        if self.allow_auto_backlight and self.brightness_index == len(
+            self.brightness_table
+        ):
+            self.set_auto_backlight(True)
             return
 
         # Otherwise apply a fixed brightness from the table.
+        self.set_manual_brightness(self.brightness_table[self.brightness_index])
+
+    def set_auto_backlight(self, enabled):
+        enabled = bool(enabled)
+        if not self.has_backlight or not self.brightness_table:
+            return False
+        if enabled and not self.allow_auto_backlight:
+            return False
+
+        self.use_auto_backlight = enabled
+        self.config.G_USE_AUTO_BACKLIGHT = enabled
+        if enabled:
+            self.brightness_index = len(self.brightness_table)
+        else:
+            brightness = self._get_manual_brightness()
+            self._apply_manual_brightness(brightness)
+        return True
+
+    def set_manual_brightness(self, brightness):
+        if brightness not in self.brightness_table:
+            return False
+
         self.use_auto_backlight = False
-        self.set_brightness(self.brightness_table[self.brightness_index])
+        self.config.G_USE_AUTO_BACKLIGHT = False
+        self.config.G_MANUAL_BACKLIGHT_BRIGHTNESS = brightness
+        self._apply_manual_brightness(brightness)
+        return True
+
+    def restore_backlight_state(self):
+        if not self.has_backlight or not self.brightness_table:
+            self.use_auto_backlight = False
+            return
+
+        if self.allow_auto_backlight and self.config.G_USE_AUTO_BACKLIGHT:
+            self.use_auto_backlight = True
+            self.brightness_index = len(self.brightness_table)
+            return
+
+        self.use_auto_backlight = False
+        self._apply_manual_brightness(self._get_manual_brightness())
+
+    def _get_manual_brightness(self):
+        brightness = getattr(self.config, "G_MANUAL_BACKLIGHT_BRIGHTNESS", None)
+        if brightness in self.brightness_table:
+            return brightness
+        if self.brightness in self.brightness_table:
+            return self.brightness
+        return self.brightness_table[0]
+
+    @property
+    def manual_brightness(self):
+        return self._get_manual_brightness()
+
+    def _apply_manual_brightness(self, brightness):
+        self.brightness_index = self.brightness_table.index(brightness)
+        self.set_brightness(brightness)
 
     def set_brightness(self, b):
         pass

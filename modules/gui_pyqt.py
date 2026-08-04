@@ -312,6 +312,8 @@ class GUI_PyQt(GUI_Qt_Base):
                 BluetoothPairingListWidget,
                 BluetoothPairedDeviceListWidget,
                 BluetoothTetheringListWidget,
+                DisplayMenuWidget,
+                BrightnessListWidget,
                 DebugMenuWidget,
                 DebugLogViewerWidget,
             )
@@ -410,6 +412,8 @@ class GUI_PyQt(GUI_Qt_Base):
                 ("Network", NetworkMenuWidget),
                 ("Debug Log", DebugLogViewerWidget),
                 ("Debug", DebugMenuWidget),
+                ("Brightness", BrightnessListWidget),
+                ("Display", DisplayMenuWidget),
                 ("System", SystemMenuWidget),
                 ("CP", AdjustCPWidget),
                 ("W Prime Balance", AdjustWPrimeBalanceWidget),

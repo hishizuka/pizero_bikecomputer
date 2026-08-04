@@ -27,6 +27,7 @@ class PiTFT28r(Display):
         self.brightness_index = len(self.brightness_table) - 1
         self.brightness = -1
         self.set_brightness(self.brightness_table[self.brightness_index])
+        self.restore_backlight_state()
 
     def quit(self):
         self.set_brightness(0)
