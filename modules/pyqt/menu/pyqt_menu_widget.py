@@ -356,7 +356,20 @@ class ListWidget(MenuWidget):
     # override for custom list
     def connect_buttons(self):
         self.list.itemSelectionChanged.connect(self.changed_item)
-        self.list.itemClicked.connect(self.button_func)
+        self.list.itemClicked.connect(self.clicked_item)
+
+    def clicked_item(self, list_item):
+        widget = self.list.itemWidget(list_item)
+        enter_signal = getattr(widget, "enter_signal", None)
+        if widget is None or not widget.isEnabled() or enter_signal is None:
+            selected_item = self.selected_item
+            self.list.clearSelection()
+            if selected_item is not None:
+                selected_item.clearFocus()
+            self.selected_item = None
+            return
+        self.selected_item = widget
+        enter_signal.emit()
 
     @qasync.asyncSlot()
     async def button_func(self):
@@ -369,8 +382,12 @@ class ListWidget(MenuWidget):
     def changed_item(self):
         # item is QListWidgetItem
         item = self.list.selectedItems()
-        if len(item):
-            self.selected_item = self.list.itemWidget(item[0])
+        for i in range(self.list.count()):
+            list_item = self.list.item(i)
+            widget = self.list.itemWidget(list_item)
+            if widget is not None:
+                widget.set_selected(list_item.isSelected())
+        self.selected_item = self.list.itemWidget(item[0]) if item else None
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -419,47 +436,76 @@ class ListItemWidget(QtWidgets.QWidget):
 
     enter_signal = Signal()
 
-    def get_styles(self):
-        border_style = "border-bottom: 1px solid #AAAAAA;"
+    @property
+    def has_detail_row(self):
+        return bool(self.detail or self.detail_icon)
+
+    def get_title_style(self):
         title_style = "padding-left: 10%; padding-top: 2%;"
-        detail_style = None
+        return (
+            title_style
+            if self.has_detail_row
+            else f"{title_style} border-bottom: 1px solid #AAAAAA;"
+        )
 
-        if self.detail:
-            detail_style = f"padding-left: 20%; padding-bottom: 2%; {border_style}"
-        else:
-            title_style = f"{title_style} {border_style}"
-        return title_style, detail_style
-
-    def __init__(self, parent, title, detail=None):
+    def __init__(
+        self,
+        parent,
+        title,
+        detail=None,
+        detail_icon=None,
+        detail_left=None,
+    ):
         self.title = title
         self.detail = detail
+        self.detail_icon = detail_icon
+        self.detail_left = detail_left
+        self.selected = False
         QtWidgets.QWidget.__init__(self, parent=parent)
         self.setup_ui()
 
     def setup_ui(self):
         self.setContentsMargins(0, 0, 0, 0)
-        self.setFocusPolicy(QT_STRONG_FOCUS)
+        focus_policy = (
+            QT_STRONG_FOCUS
+            if self.parentWidget().config.uses_keyboard_navigation
+            else QT_NO_FOCUS
+        )
+        self.setFocusPolicy(focus_policy)
 
         inner_layout = QtWidgets.QVBoxLayout()
         inner_layout.setContentsMargins(0, 0, 0, 0)
         inner_layout.setSpacing(0)
 
-        title_style, detail_style = self.get_styles()
-
         self.title_label = QtWidgets.QLabel()
         self.title_label.setMargin(0)
         self.title_label.setContentsMargins(0, 0, 0, 0)
-        self.title_label.setStyleSheet(title_style)
+        self.title_label.setStyleSheet(self.get_title_style())
         self.title_label.setText(self.title)
         inner_layout.addWidget(self.title_label)
 
-        if self.detail:
+        if self.has_detail_row:
+            self.detail_row = QtWidgets.QWidget()
+            self.detail_row.setObjectName("listItemDetailRow")
+            self.detail_row.setStyleSheet(
+                "#listItemDetailRow { border-bottom: 1px solid #AAAAAA; }"
+            )
+            self.detail_row_layout = QtWidgets.QHBoxLayout(self.detail_row)
+            self.detail_row_layout.setSpacing(4)
+            self.detail_row_layout.setContentsMargins(0, 0, 0, 0)
+
             self.detail_label = QtWidgets.QLabel()
             self.detail_label.setMargin(0)
             self.detail_label.setContentsMargins(0, 0, 0, 0)
-            self.detail_label.setStyleSheet(detail_style)
+            self.detail_label.setStyleSheet("padding-bottom: 2%;")
             self.detail_label.setText(self.detail)
-            inner_layout.addWidget(self.detail_label)
+            if self.detail_icon:
+                self.detail_icon_label = QtWidgets.QLabel()
+                self.detail_icon_label.setMargin(0)
+                self.detail_icon_label.setContentsMargins(0, 0, 0, 0)
+                self.detail_row_layout.addWidget(self.detail_icon_label)
+            self.detail_row_layout.addWidget(self.detail_label)
+            inner_layout.addWidget(self.detail_row)
 
         self.outer_layout = QtWidgets.QHBoxLayout(self)
         self.outer_layout.setSpacing(0)
@@ -471,6 +517,28 @@ class ListItemWidget(QtWidgets.QWidget):
         if e.key() == QT_KEY_SPACE:
             self.enter_signal.emit()
 
+    def focusInEvent(self, event):
+        super().focusInEvent(event)
+        self.update_selection_style()
+
+    def focusOutEvent(self, event):
+        super().focusOutEvent(event)
+        self.update_selection_style()
+
+    def set_selected(self, selected):
+        self.selected = selected
+        self.update_selection_style()
+
+    def update_selection_style(self):
+        self.setStyleSheet("color: white;" if self.selected or self.hasFocus() else "")
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        if not (self.selected or self.hasFocus()):
+            return
+        painter = QtGui.QPainter(self)
+        painter.fillRect(self.rect(), QtGui.QColor("#000000"))
+
     @staticmethod
     def resize_label(label, font_size):
         q = label.font()
@@ -480,8 +548,24 @@ class ListItemWidget(QtWidgets.QWidget):
     def resizeEvent(self, event):
         short_side_length = min(self.size().height(), self.size().width())
         self.resize_label(self.title_label, int(short_side_length * 0.45))
-        if self.detail:
+        if self.has_detail_row:
             self.resize_label(self.detail_label, int(short_side_length * 0.4))
+            self.detail_row_layout.setContentsMargins(
+                (
+                    self.detail_left
+                    if self.detail_left is not None
+                    else int(self.width() * 0.2)
+                ),
+                0,
+                0,
+                int(short_side_length * 0.02),
+            )
+        if self.detail_icon:
+            icon_size = int(short_side_length * 0.3)
+            self.detail_icon_label.setFixedSize(icon_size, icon_size)
+            self.detail_icon_label.setPixmap(
+                self.detail_icon.pixmap(QtCore.QSize(icon_size, icon_size))
+            )
 
 
 class UploadActivityMenuWidget(MenuWidget):

@@ -317,12 +317,16 @@ class GUI_PyQt(GUI_Qt_Base):
             from modules.pyqt.menu.pyqt_profile_widget import ProfileWidget
             from modules.pyqt.menu.pyqt_sensor_menu_widget import (
                 SensorMenuWidget,
-                I2CMenuWidget,
+                InternalSensorMenuWidget,
+                HeartRateMenuWidget,
                 SpeedMenuWidget,
-                ANTMenuWidget,
+                CadenceMenuWidget,
+                PowerMenuWidget,
+                LightMenuWidget,
+                ControlMenuWidget,
+                TemperatureMenuWidget,
+                TrainerMenuWidget,
                 ANTListWidget,
-                BLEMenuWidget,
-                GPSMenuWidget,
             )
             from modules.pyqt.menu.pyqt_course_menu_widget import (
                 CoursesMenuWidget,
@@ -374,16 +378,20 @@ class GUI_PyQt(GUI_Qt_Base):
 
             # reverse order (make children widget first, then make parent widget)
             menus = [
-                ("BLE Sensors", BLEMenuWidget),
-                ("ANT+ Detail", ANTListWidget),
-                ("ANT+ Sensors", ANTMenuWidget),
+                ("Pair ANT+ Sensor", ANTListWidget),
+                ("Heart Rate", HeartRateMenuWidget),
                 ("Wheel Size", AdjustWheelCircumferenceWidget),
                 ("Auto Stop Cutoff", AdjustAutoStopCutoffWidget),
                 ("Gross Ave Speed", AdjustGrossAverageSpeedWidget),
                 ("Speed", SpeedMenuWidget),
+                ("Cadence", CadenceMenuWidget),
+                ("Power", PowerMenuWidget),
+                ("Light", LightMenuWidget),
+                ("Control", ControlMenuWidget),
+                ("Temperature", TemperatureMenuWidget),
+                ("Trainer", TrainerMenuWidget),
                 ("Adjust Altitude", AdjustAltitudeWidget),
-                ("I2C Sensors", I2CMenuWidget),
-                ("GPS", GPSMenuWidget),
+                ("Internal Sensors", InternalSensorMenuWidget),
                 ("Sensors", SensorMenuWidget),
                 ("BT Pairing", BluetoothPairingListWidget),
                 ("BT Paired Devices", BluetoothPairedDeviceListWidget),

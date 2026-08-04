@@ -19,6 +19,11 @@ from .ant import ant_device_search
 # ANT+
 _SENSOR_ANT = False
 
+CONNECTION_STATUS_CONNECTED = "connected"
+CONNECTION_STATUS_CONNECTING = "connecting"
+CONNECTION_STATUS_DISCONNECTED = "disconnected"
+CONNECTION_STATUS_INACTIVE = "inactive"
+
 try:
     from ant.easy.node import Node
     from ant.base.driver import find_driver, DriverNotFound
@@ -118,8 +123,6 @@ class SensorANT(Sensor):
             self._create_node()
 
         # initialize scan channel (reserve ch0)
-        if _SENSOR_ANT:
-            app_logger.info("detected ANT+ sensors:")
         self._create_scan_search_devices()
 
         # auto connect ANT+ sensor from setting.conf
@@ -283,6 +286,39 @@ class SensorANT(Sensor):
             return self.config.G_ANT["USE"][ant_name]
         return self.is_transport_available() and self.config.G_ANT["USE"][ant_name]
 
+    def is_sensor_paired(self, ant_name):
+        ant_id = self.config.G_ANT["ID"].get(ant_name, 0)
+        ant_type = self.config.G_ANT["TYPE"].get(ant_name, 0)
+        return bool(ant_id and ant_type)
+
+    def get_sensor_connection_status(self, ant_name):
+        """Return the configured ANT sensor's live connection status."""
+        if not self.config.G_ANT["USE"].get(ant_name, False):
+            return CONNECTION_STATUS_INACTIVE
+
+        if self.config.G_DUMMY_OUTPUT and not self.config.G_ANT["STATUS"]:
+            return CONNECTION_STATUS_CONNECTED
+
+        if not self.config.G_ANT["STATUS"]:
+            return CONNECTION_STATUS_INACTIVE
+
+        if not self.is_transport_available():
+            return CONNECTION_STATUS_DISCONNECTED
+
+        ant_id_type = self.config.G_ANT["ID_TYPE"].get(ant_name)
+        device = self.device.get(ant_id_type)
+        if device is None:
+            return CONNECTION_STATUS_CONNECTING
+
+        last_data_timestamp = getattr(device, "last_data_timestamp", None)
+        if last_data_timestamp is None:
+            return CONNECTION_STATUS_CONNECTING
+
+        valid_time = max(getattr(device, "valid_time", 60), 5)
+        if (datetime.now() - last_data_timestamp).total_seconds() <= valid_time:
+            return CONNECTION_STATUS_CONNECTED
+        return CONNECTION_STATUS_CONNECTING
+
     def invalidate_sensor_values(self, ant_name=None):
         devices = []
         if ant_name is None:
@@ -397,9 +433,14 @@ class SensorANT(Sensor):
     def connect_ant_sensor(self, antName, antID, antType, connectStatus):
         if not self.is_transport_available():
             return
+        new_ant_id_type = struct.pack("<HB", antID, antType)
+        previous_ant_id_type = self.config.G_ANT["ID_TYPE"].get(antName)
+        if previous_ant_id_type and previous_ant_id_type != new_ant_id_type:
+            self._release_replaced_sensor(antName, previous_ant_id_type)
+
         self.config.G_ANT["ID"][antName] = antID
         self.config.G_ANT["TYPE"][antName] = antType
-        self.config.G_ANT["ID_TYPE"][antName] = struct.pack("<HB", antID, antType)
+        self.config.G_ANT["ID_TYPE"][antName] = new_ant_id_type
         antIDType = self.config.G_ANT["ID_TYPE"][antName]
         self.searcher.stop_search(resetWait=False)
 
@@ -457,30 +498,87 @@ class SensorANT(Sensor):
         self.device[antIDType].ant_state = "connect_ant_sensor"
         self.device[antIDType].init_after_connect()
 
-    def disconnect_ant_sensor(self, antName):
-        antIDType = self.config.G_ANT["ID_TYPE"][antName]
-        antNames = []
-        for k, v in self.config.G_ANT["USE"].items():
-            if v and k in self.config.G_ANT["ID_TYPE"]:
-                if self.config.G_ANT["ID_TYPE"][k] == antIDType:
-                    antNames.append(k)
-        dv = self.device[antIDType]
-        if self.is_transport_available():
+    def _configured_id_type(self, ant_name):
+        ant_id_type = self.config.G_ANT["ID_TYPE"].get(ant_name)
+        if ant_id_type:
+            return ant_id_type
+        if not self.is_sensor_paired(ant_name):
+            return 0
+        return struct.pack(
+            "<HB",
+            self.config.G_ANT["ID"][ant_name],
+            self.config.G_ANT["TYPE"][ant_name],
+        )
+
+    def _active_roles_for_id_type(self, ant_id_type, exclude=None):
+        return [
+            name
+            for name, enabled in self.config.G_ANT["USE"].items()
+            if (
+                name != exclude
+                and enabled
+                and self._configured_id_type(name) == ant_id_type
+            )
+        ]
+
+    def _release_replaced_sensor(self, ant_name, ant_id_type):
+        """Release an old channel when a role is paired with another sensor."""
+        shared_names = self._active_roles_for_id_type(ant_id_type, exclude=ant_name)
+        if shared_names:
+            device = self.device.get(ant_id_type)
+            if device is not None:
+                device.name = shared_names[0]
+            return
+
+        device = self.device.get(ant_id_type)
+        if device is not None:
             try:
-                dv.ant_state = "disconnect_ant_sensor"
-                dv.disconnect(isCheck=False, isChange=False)
-                dv.delete()
+                device.ant_state = "replace_ant_sensor"
+                device.disconnect(isCheck=False, isChange=False)
+                device.delete()
             except Exception:
                 pass
-        self.invalidate_sensor_values(antName)
-        self.device.pop(antIDType)
+        self.device.pop(ant_id_type, None)
+        self.values.pop(ant_id_type, None)
 
-        for k in antNames:
-            # USE: True -> False
-            self.config.G_ANT["ID_TYPE"][k] = 0
-            self.config.G_ANT["ID"][k] = 0
-            self.config.G_ANT["TYPE"][k] = 0
-            self.config.G_ANT["USE"][k] = False
+    def remove_ant_sensor(self, ant_name):
+        """Forget one ANT role while preserving any shared device channel."""
+        ant_id_type = self._configured_id_type(ant_name)
+        if not ant_id_type:
+            return False
+
+        shared_names = self._active_roles_for_id_type(ant_id_type, exclude=ant_name)
+        device = self.device.get(ant_id_type)
+
+        self.config.G_ANT["ID_TYPE"][ant_name] = 0
+        self.config.G_ANT["ID"][ant_name] = 0
+        self.config.G_ANT["TYPE"][ant_name] = 0
+        self.config.G_ANT["USE"][ant_name] = False
+
+        if shared_names:
+            if device is not None:
+                device.name = shared_names[0]
+            return True
+
+        if device is not None:
+            try:
+                device.ant_state = "remove_ant_sensor"
+                if self.is_transport_available():
+                    device.disconnect(isCheck=False, isChange=False)
+                device.delete()
+            except Exception:
+                pass
+            try:
+                device.reset_value()
+                device.set_null_value()
+            except Exception:
+                pass
+        self.device.pop(ant_id_type, None)
+        self.values.pop(ant_id_type, None)
+        return True
+
+    def disconnect_ant_sensor(self, ant_name):
+        return self.remove_ant_sensor(ant_name)
 
     def continuous_scan(self):
         if not self.is_transport_available():
@@ -515,6 +613,12 @@ class SensorANT(Sensor):
         if not self.is_sensor_available("LGT"):
             return
         self.device[self.config.G_ANT["ID_TYPE"]["LGT"]].send_light_mode(mode, auto)
+
+    def set_auto_light_enabled(self, enabled):
+        if not self.is_sensor_available("LGT"):
+            return
+        state = "AUTO" if enabled else "OFF"
+        self.device[self.config.G_ANT["ID_TYPE"]["LGT"]].set_light_state(state)
 
     def _register_transport_disconnect_callback(self):
         if self.node is None:

@@ -1,12 +1,10 @@
 from modules.app_logger import app_logger
 from modules._qt_qtwidgets import QtWidgets
-from modules.pyqt.components import box_buttons, icons
+from modules.pyqt.components import SECONDARY_BACKGROUND_COLOR, box_buttons, icons
 
 
 class ButtonBoxWidget(QtWidgets.QWidget):
-    STYLES = """
-      background-color: #CCCCCC;
-    """
+    STYLES = f"background-color: {SECONDARY_BACKGROUND_COLOR};"
 
     config = None
 
@@ -54,10 +52,7 @@ class ButtonBoxWidget(QtWidgets.QWidget):
             else:
                 self.lap_button_count += 1
                 app_logger.info(f"lap button pressing: {self.lap_button_count}")
-                if (
-                    self.lap_button_count
-                    == self.config.button_config.button_long_press
-                ):
+                if self.lap_button_count == self.config.button_config.button_long_press:
                     app_logger.info("reset")
                     self.config.gui.reset_count()
                     self.lap_button_count = 0

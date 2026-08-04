@@ -147,6 +147,10 @@ class BaseMenuIcon(QtWidgets.QLabel):
         icon = self.icon_hover if hover else self.icon
         self.set_icon(icon())
 
+    def apply_trailing_margin(self, layout):
+        left, top, _, bottom = layout.getContentsMargins()
+        layout.setContentsMargins(left, top, self.margin, bottom)
+
     def __init__(self, *args):
         super().__init__(*args)
         self.setAttribute(QT_WA_TRANSLUCENT_BACKGROUND)

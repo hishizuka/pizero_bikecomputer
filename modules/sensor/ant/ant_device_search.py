@@ -34,7 +34,10 @@ class ANT_Device_Search(ant_device.ANT_Device):
         if not self.mainAntDevice:
             return None
         for dv in self.mainAntDevice.values():
-            if isinstance(dv, ant_device_ctrl.ANT_Device_CTRL) and dv.channel is not None:
+            if (
+                isinstance(dv, ant_device_ctrl.ANT_Device_CTRL)
+                and dv.channel is not None
+            ):
                 return dv
         return None
 
@@ -42,10 +45,9 @@ class ANT_Device_Search(ant_device.ANT_Device):
         if not self.searchState:
             return
         if len(data) == 13:
-            (antID, antType) = self.structPattern["ID"].unpack(data[9:12])
+            antID, antType = self.structPattern["ID"].unpack(data[9:12])
             if antType in self.config.G_ANT["TYPES"][self.antName]:
-                # new ANT+ sensor
-                self.searchList[antID] = (antType, False)
+                self._add_detected_sensor(antID, antType)
 
     def on_data_ctrl(self, data):
         if not self.searchState:
@@ -54,8 +56,13 @@ class ANT_Device_Search(ant_device.ANT_Device):
             (antID,) = struct.Struct("<H").unpack(data[1:3])
             antType = 0x10
             if antType in self.config.G_ANT["TYPES"][self.antName]:
-                # new ANT+ sensor
-                self.searchList[antID] = (antType, False)
+                self._add_detected_sensor(antID, antType)
+
+    def _add_detected_sensor(self, ant_id, ant_type):
+        existing = self.searchList.get(ant_id)
+        if existing is not None and existing[1]:
+            return
+        self.searchList[ant_id] = (ant_type, False)
 
     def search(self, antName):
         self.searchList = {}
@@ -63,7 +70,7 @@ class ANT_Device_Search(ant_device.ANT_Device):
             if k == antName:
                 continue
             if v and k in self.config.G_ANT["ID_TYPE"]:
-                (antID, antType) = struct.unpack("<HB", self.config.G_ANT["ID_TYPE"][k])
+                antID, antType = struct.unpack("<HB", self.config.G_ANT["ID_TYPE"][k])
                 if antType in self.config.G_ANT["TYPES"][antName]:
                     # already connected
                     self.searchList[antID] = (antType, True)
@@ -120,7 +127,7 @@ class ANT_Device_Search(ant_device.ANT_Device):
                     # Restore default callback and stop background sending.
                     try:
                         ctrl.send_data = False
-                        ctrl.channel.on_acknowledge_data = ctrl.on_data
+                        ctrl.channel.on_acknowledge_data = ctrl._on_data
                     except Exception:
                         pass
 

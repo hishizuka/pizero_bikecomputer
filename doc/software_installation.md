@@ -672,12 +672,28 @@ When unlocked, you can drag the profile horizontally.
 
 <img width="400" alt="menu-02-sensors" src="https://user-images.githubusercontent.com/12926652/206076191-4b8a4084-64a0-443b-a434-f6c6b4d51e2a.png">
 
-- ANT+ Sensors
-  - Pairing with ANT+ sensors. 
+- Heart Rate / Cadence / Power
+  - Open a sensor role, then select ANT+ to pair or disconnect the corresponding sensor.
+  - BLE entries are reserved for the planned BLE cycling-sensor implementation.
+- Light
+  - Pair or disconnect an ANT+ bike light.
+  - Auto Control automatically controls a paired ANT+ bike light from ambient light and braking hints while recording.
+- Control
+  - Pair or disconnect an ANT+ remote.
+  - Enable or disable the BLE Zwift Click V2 remote.
+- Temperature
+  - Pair or disconnect an ANT+ temperature sensor.
+- Trainer
+  - BLE trainer pairing is reserved for the planned BLE cycling-sensor implementation.
+  - Fake Trainer for Zwift controls the existing Zwift compatibility helper.
+- ANT+ pairing
   - You need to install the ANT+ library and to set [ANT section](#ant-section) of setting.conf with `status = True`.
   - The pairing setting is saved in setting.conf when a sensor is connected, so it will be automatically connected next time you start the program.
+- ANT+ ON/OFF
+  - The global ANT+ transport switch is under **Connectivity**, separate from sensor roles.
 - ANT+ MultiScan
 - Speed
+  - Pair or disconnect an ANT+ speed sensor. BLE is reserved for the planned cycling-sensor implementation.
   - Wheel Size
     - Enter the wheel circumference in mm when the ANT+ speed sensor is available.
     - It is used to calculate the distance.
@@ -690,8 +706,13 @@ When unlocked, you can drag the profile horizontally.
     - This item is available when Auto Stop is enabled.
   - Gross Ave Speed
     - Enter the target gross average speed in km/h.
-- Adjust Altitude
-  - Enter the current altitude to correct the sea level and increase the accuracy when an I2C pressure sensor is connected.
+- Internal Sensors
+  - Map Magnetic Heading
+    - Use the internal magnetic heading for the map orientation.
+  - Adjust Altitude
+    - Enter the current altitude to correct the sea level and increase the accuracy when an internal pressure sensor is connected.
+  - Mag Calibration / Pitch/Roll Calibration
+    - Calibrate the available internal motion sensors.
 
 ### Courses
 

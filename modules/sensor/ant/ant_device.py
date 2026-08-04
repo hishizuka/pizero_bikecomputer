@@ -57,6 +57,7 @@ class ANT_Device:
         self.node = node
         self.config = config
         self.name = name
+        self.last_data_timestamp = None
         if values is None:
             self.values = {}
         else:
@@ -145,10 +146,14 @@ class ANT_Device:
     def make_channel(self, c_type, ext_assign=None):
         if self.config.G_ANT["STATUS"] and self.channel is None:
             self.channel = self.node.new_channel(c_type, ext_assign=ext_assign)
-            app_logger.info(f"  {self.name}")
-            self.channel.on_broadcast_data = self.on_data
-            self.channel.on_burst_data = self.on_data
-            self.channel.on_acknowledge_data = self.on_data
+            self.channel.on_broadcast_data = self._on_data
+            self.channel.on_burst_data = self._on_data
+            self.channel.on_acknowledge_data = self._on_data
+
+    def _on_data(self, data):
+        """Record reception before dispatching a packet to the device parser."""
+        self.last_data_timestamp = datetime.now()
+        self.on_data(data)
 
     def channel_set_id(self):  # for slave
         self.channel.set_id(
@@ -211,7 +216,11 @@ class ANT_Device:
         try:
             self.close_extra()
             self.channel.close()
-            self.channel.wait_for_event([0x07,])  # EVENT_CHANNEL_CLOSED
+            self.channel.wait_for_event(
+                [
+                    0x07,
+                ]
+            )  # EVENT_CHANNEL_CLOSED
             if isChange:
                 self.config.G_ANT["USE"][self.name] = False
         except:
@@ -224,16 +233,24 @@ class ANT_Device:
         self.channel = None
 
     def state_check(self, mode):
-        result = self.channel.get_channel_status()
-        # Bits 4~7: Channel type, Bits 2~3: Network number, Bits 0~1: Channel State
-        #  Channel State: Un-Assigned = 0, Assigned = 1, Searching = 2, Tracking = 3
-        channel_state = result[2][0] & 0b00000011
+        channel_state = self.get_channel_state()
         state = False
-        if mode == "OPEN" and channel_state != 1:
+        if mode == "OPEN" and channel_state is not None and channel_state != 1:
             state = True
-        elif mode == "CLOSE" and (channel_state == 0 or channel_state == 1):
+        elif mode == "CLOSE" and channel_state in (0, 1):
             state = True
         return state
+
+    def get_channel_state(self):
+        """Return the ANT channel state bits, or None when unavailable."""
+        if self.channel is None:
+            return None
+        try:
+            result = self.channel.get_channel_status()
+            # Bits 0~1: 0=unassigned, 1=assigned, 2=searching, 3=tracking.
+            return result[2][0] & 0b00000011
+        except Exception:
+            return None
 
     def close_extra(self):
         pass
@@ -245,7 +262,7 @@ class ANT_Device:
     # ANT+ pages #
     ##############
     def setCommonPage80(self, data, values):
-        (values["hw_ver"], values["manu_id"], values["model_num"]) = self.structPattern[
+        values["hw_ver"], values["manu_id"], values["model_num"] = self.structPattern[
             0x50
         ].unpack(data[0:8])
         if values["manu_id"] in ant_code.AntCode.MANUFACTURER:
@@ -253,7 +270,7 @@ class ANT_Device:
         values["stored_page"][0x50] = True
 
     def setCommonPage81(self, data, values):
-        (sw1, sw2, values["serial_num"]) = self.structPattern[0x51].unpack(data[0:8])
+        sw1, sw2, values["serial_num"] = self.structPattern[0x51].unpack(data[0:8])
         if sw1 != 0xFF:
             values["sw_ver"] = float((sw2 * 100 + sw1) / 1000)
         else:
