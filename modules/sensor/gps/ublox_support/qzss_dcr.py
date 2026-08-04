@@ -1,73 +1,39 @@
 from datetime import datetime
+from enum import IntEnum
 
 from pynmeagps import calc_checksum
 
-_QZQSM_MESSAGE_TYPE = {
-    43: "災危通報（気象庁防災情報）",
-    44: "災危通報（他機関）",
+JMA_MESSAGE_TYPE = 43
+DCX_MESSAGE_TYPE = 44
+# QZSS L1S uses 250 bits; some firmware adds a ninth SFRBX word.
+_QZSS_DCR_DATA_WORDS = 8
+
+
+class Category(IntEnum):
+    EEW = 1
+    EPICENTER = 2
+    INTENSITY = 3
+    NANKAI = 4
+    TSUNAMI = 5
+    NW_PACIFIC_TSUNAMI = 6
+    VOLCANO = 8
+    ASH_FALL = 9
+    WEATHER = 10
+    FLOOD = 11
+    TYPHOON = 12
+    MARINE = 14
+
+
+_QZQSM_URGENT_CATEGORY_NOS = {
+    Category.EEW,
+    Category.NANKAI,
+    Category.TSUNAMI,
+    Category.NW_PACIFIC_TSUNAMI,
+    Category.VOLCANO,
+    Category.FLOOD,
 }
-
-_QZQSM_REPORT_CLASSIFICATION = {
-    1: "最優先",
-    2: "優先",
-    3: "通常",
-    7: "訓練・試験",
-}
-
-_QZQSM_DISASTER_CATEGORY = {
-    1: "緊急地震速報",
-    2: "震源",
-    3: "震度",
-    4: "南海トラフ地震",
-    5: "津波",
-    6: "北西太平洋津波",
-    8: "火山",
-    9: "降灰",
-    10: "気象",
-    11: "洪水",
-    12: "台風",
-    14: "海上",
-}
-
-_QZQSM_URGENT_CATEGORIES = {
-    "緊急地震速報",
-    "津波",
-    "北西太平洋津波",
-    "火山",
-    "洪水",
-}
-
-_QZQSM_SUMMARY_KEYS = (
-    "震央地名",
-    "地震発生時刻",
-    "深さ",
-    "マグニチュード",
-    "震度(下限)",
-    "震度(上限)",
-    "長周期地震動階級(下限)",
-    "長周期地震動階級(上限)",
-    "津波到達予想時刻",
-    "津波の高さ",
-    "火山名",
-    "現象",
-    "警報等情報要素",
-    "警報レベル",
-    "台風番号",
-    "中心気圧",
-    "最大風速",
-    "最大瞬間風速",
-    "A4 - Hazard category and type",
-    "A5 - Severity",
-    "EX1 - Target area (ja)",
-    "EX9 - Target area list (ja)",
-)
-
-_QZQSM_SKIP_SUMMARY_PREFIXES = (
-    "防災気象情報(",
-    "JMA-DC Report",
-    "***",
-    "### DCX Message",
-)
+_QZQSM_WEATHER_URGENT_CODES = {2}
+_QZQSM_WEATHER_WARNING_CODES = {23}
 
 _QZSS_DCR_REPORT_FIELD_NAMES = (
     "information_type",
@@ -84,20 +50,122 @@ _QZSS_DCR_REPORT_FIELD_NAMES = (
     "ex1_target_area_ja",
 )
 
+_QZSS_DCR_REPORT_FIELD_EXCLUDES = {
+    "sentence",
+    "timestamp",
+    "message",
+    "nmea",
+    "message_header",
+    "satellite_id",
+    "satellite_prn",
+    "raw",
+    "preamble",
+    "message_type",
+    "camf",
+}
+
+
+def _as_list(value):
+    if value is None:
+        return []
+    return list(value) if isinstance(value, (list, tuple, set)) else [value]
+
+
+def _event_field_sets(event):
+    fields = [
+        fragment["report_fields"]
+        for fragment in event.get("fragments") or ()
+        if fragment.get("report_fields")
+    ]
+    return fields or [event.get("report_fields") or {}]
+
+
+def _marine_warning_states(event):
+    field_sets = _event_field_sets(event)
+    report_times = [
+        str(fields.get("report_time"))
+        for fields in field_sets
+        if fields.get("report_time")
+    ]
+    if report_times:
+        latest = max(report_times)
+        field_sets = [
+            fields for fields in field_sets if str(fields.get("report_time")) == latest
+        ]
+
+    states = {}
+    for fields in field_sets:
+        warnings = _as_list(fields.get("marine_warning_codes"))
+        raw_codes = _as_list(fields.get("marine_warning_codes_raw"))
+        regions = _as_list(fields.get("marine_forecast_regions"))
+        if len(warnings) == 1:
+            warnings *= len(regions)
+        if len(raw_codes) == 1:
+            raw_codes *= len(regions)
+        for index, region in enumerate(regions):
+            states[str(region)] = (
+                str(warnings[index]) if index < len(warnings) else "",
+                raw_codes[index] if index < len(raw_codes) else None,
+            )
+    return [
+        (region, warning, raw_code) for region, (warning, raw_code) in states.items()
+    ]
+
+
+def _marine_event_is_cancel(event):
+    states = _marine_warning_states(event)
+    if not states or any(raw_code is None for _, _, raw_code in states):
+        return None
+    return all(str(raw_code) == "0" for _, _, raw_code in states)
+
+
+def _weather_region_pairs(fields):
+    subcategories = _as_list(fields.get("weather_related_disaster_sub_categories"))
+    raw_subcategories = _as_list(
+        fields.get("weather_related_disaster_sub_categories_raw")
+    )
+    regions = _as_list(fields.get("weather_forecast_regions"))
+    raw_regions = _as_list(fields.get("weather_forecast_regions_raw"))
+    if len(subcategories) == 1:
+        subcategories *= len(regions)
+    if len(raw_subcategories) == 1:
+        raw_subcategories *= len(regions)
+    if len(regions) == 1:
+        regions *= max(len(subcategories), len(raw_subcategories))
+    if len(raw_regions) == 1:
+        raw_regions *= len(regions)
+    return [
+        (
+            subcategory,
+            (
+                raw_subcategories[index]
+                if index < len(raw_subcategories)
+                else subcategory
+            ),
+            region,
+            raw_regions[index] if index < len(raw_regions) else region,
+        )
+        for index, (subcategory, region) in enumerate(zip(subcategories, regions))
+    ]
+
 
 def sfrbx_to_qzqsm(parsed):
-    if parsed.gnssId != 5 or parsed.sigId != 1 or parsed.numWords < 9:
+    if (
+        parsed.gnssId != 5
+        or parsed.sigId != 1
+        or parsed.numWords < _QZSS_DCR_DATA_WORDS
+    ):
         return None
 
     data = bytearray()
-    for i in range(9):
+    for i in range(_QZSS_DCR_DATA_WORDS):
         word = getattr(parsed, f"dwrd_{i + 1:02d}", None)
         if word is None:
             return None
         data.extend(word.to_bytes(4, "big"))
 
     message_type = data[1] >> 2
-    if message_type not in [43, 44]:
+    if message_type not in (JMA_MESSAGE_TYPE, DCX_MESSAGE_TYPE):
         return None
 
     satellite_id = (parsed.svId + 182) & 0x3F
@@ -133,10 +201,23 @@ def qzss_dcr_output_status(enabled, requested, power_save_enabled):
 def qzss_dcr_cfg_data(transport_type, enabled):
     port = "I2C" if transport_type == "i2c" else "UART1"
     output_enabled = int(enabled)
-    return [
-        ("CFG_SIGNAL_QZSS_L1S_ENA", output_enabled),
-        (f"CFG_MSGOUT_UBX_RXM_SFRBX_{port}", output_enabled),
-    ]
+    cfg_data = []
+    if enabled:
+        # MAX-M10S and MAX-M10N share these QZSS SLAS configuration keys.
+        cfg_data.extend(
+            [
+                ("CFG_SIGNAL_QZSS_ENA", 1),
+                ("CFG_QZSS_USE_SLAS_DGNSS", 1),
+                ("CFG_QZSS_USE_SLAS_TESTMODE", 0),
+            ]
+        )
+    cfg_data.extend(
+        [
+            ("CFG_SIGNAL_QZSS_L1S_ENA", output_enabled),
+            (f"CFG_MSGOUT_UBX_RXM_SFRBX_{port}", output_enabled),
+        ]
+    )
+    return cfg_data
 
 
 def parse_qzqsm_sentence(sentence):
@@ -180,230 +261,213 @@ def decode_qzqsm_report(sentence):
         return {"report_text": None, "report_decoder_error": str(exc)}
 
     report_text = str(report)
-    report_fields = {
-        name: value
-        for name in _QZSS_DCR_REPORT_FIELD_NAMES
-        if (value := getattr(report, name, None)) is not None
-    }
+    report_fields = _decoded_report_fields(report)
     dcx_message_type = report_fields.get("dcx_message_type")
+    raw = getattr(report, "raw", None)
+    canonical_payload = raw.hex().upper() if isinstance(raw, bytes) else None
     return {
         "report_text": report_text,
         "report_decoder": "azarashi",
         "report_fields": report_fields,
+        "canonical_payload": canonical_payload,
         "dcx_message_type": dcx_message_type,
         "is_null_message": dcx_message_type == "Null Message",
     }
 
 
-def build_qzss_dcr_event(dcr, event_id=None, received_at=None):
+def _decoded_report_fields(report):
+    get_params = getattr(report, "get_params", None)
+    if callable(get_params):
+        try:
+            params = get_params()
+        except Exception:
+            params = {}
+    else:
+        params = {}
+    if not isinstance(params, dict):
+        params = {}
+
+    fields = {
+        name: _serialize_report_value(value)
+        for name, value in params.items()
+        if name not in _QZSS_DCR_REPORT_FIELD_EXCLUDES and value is not None
+    }
+    for name in _QZSS_DCR_REPORT_FIELD_NAMES:
+        value = getattr(report, name, None)
+        if value is not None:
+            fields[name] = _serialize_report_value(value)
+    return fields
+
+
+def _serialize_report_value(value):
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, bytes):
+        return value.hex().upper()
+    if isinstance(value, dict):
+        return {str(key): _serialize_report_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_serialize_report_value(item) for item in value]
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    return str(value)
+
+
+def _is_qzss_dcr_cancellation(message_type, category_no, report_fields, report_text):
+    if report_fields.get("information_type_no") == 2 or (
+        message_type == DCX_MESSAGE_TYPE
+        and report_fields.get("a1_message_type") == "All Clear"
+    ):
+        return True
+    if (
+        category_no == Category.TSUNAMI
+        and report_fields.get("tsunami_warning_code_raw") == 2
+    ):
+        return True
+    if category_no == Category.FLOOD and _all_raw_values(
+        report_fields.get("flood_warning_levels_raw"),
+        1,
+    ):
+        return True
+    if category_no == Category.WEATHER and _all_raw_values(
+        report_fields.get("weather_warning_state_raw"),
+        2,
+    ):
+        return True
+    if category_no == Category.MARINE and _all_raw_values(
+        report_fields.get("marine_warning_codes_raw"),
+        0,
+    ):
+        return True
+    return any(marker in report_text for marker in ("CANCELLATION", "ALL CLEAR"))
+
+
+def _all_raw_values(value, expected):
+    if value is None:
+        return False
+    values = list(value) if isinstance(value, (list, tuple)) else [value]
+    return bool(values) and all(item == expected for item in values)
+
+
+def build_qzss_dcr_event(dcr):
     message_type = dcr.get("message_type")
-    category = dcr.get("disaster_category_str")
-    classification = dcr.get("report_classification_str")
+    report_fields = dcr.get("report_fields") or {}
     report_text = dcr.get("report_text") or ""
-    is_training = dcr.get("report_classification") == 7
-    is_cancel = "取り消し" in report_text or "CANCELLATION" in report_text
+    is_training = (
+        dcr.get("report_classification") == 7
+        or report_fields.get("a1_message_type") == "Test"
+    )
+    category_no = dcr.get("disaster_category")
+    is_cancel = _is_qzss_dcr_cancellation(
+        message_type,
+        category_no,
+        report_fields,
+        report_text,
+    )
 
-    title = _build_qzss_dcr_title(dcr)
-
-    summary = _build_qzss_dcr_summary(dcr, report_text)
     priority = _qzss_dcr_priority(
         message_type=message_type,
-        category=category,
+        category_no=category_no,
         classification_no=dcr.get("report_classification"),
-        report_text=report_text,
+        report_fields=report_fields,
         is_training=is_training,
     )
 
     return {
-        "id": event_id,
-        "received_at": received_at,
-        "title": title,
-        "summary": summary,
         "body": report_text,
         "priority": priority,
-        "category": category,
-        "classification": classification,
+        "category_no": dcr.get("disaster_category"),
         "message_type": message_type,
-        "message_type_str": dcr.get("message_type_str"),
-        "satellite_id": dcr.get("satellite_id"),
-        "sentence": dcr.get("sentence"),
-        "message": dcr.get("message"),
+        "is_test": bool(dcr.get("is_test")),
         "is_training": is_training,
         "is_cancel": is_cancel,
-        "dedupe_key": dcr.get("sentence") or dcr.get("message"),
-        "decoder_error": dcr.get("report_decoder_error"),
-        "raw": dcr,
+        "report_fields": report_fields,
     }
 
 
-def build_qzss_dcr_test_event(event_id):
-    now = datetime.now()
+def build_qzss_dcr_test_event(event_id, alert_level="urgent"):
+    if alert_level not in {"urgent", "warning"}:
+        raise ValueError(f"Unsupported QZSS DCR test alert level: {alert_level}")
+
+    now = datetime.now().astimezone()
     received_at = now.isoformat()
-    report_time = now.strftime("%m月%d日%H時%M分")
-    sentence = f"TEST-QZSS-DCR-{event_id:04d}"
-    dcr = {
+    sentence = f"TEST-QZSS-DCR-{alert_level.upper()}-{event_id:04d}"
+    if alert_level == "urgent":
+        category = Category.EEW
+        classification = 1
+        report_text = "QZSS DCR urgent popup test"
+        report_fields = {
+            "report_time": received_at,
+            "information_type_no": 0,
+            "information_type": "発表",
+            "occurrence_time_of_earthquake": received_at,
+            "seismic_epicenter": "表示テスト震源",
+            "seismic_intensity_lower_limit": "震度6弱",
+            "eew_forecast_regions": ["関東地方"],
+            "magnitude": "7.1",
+            "depth_of_hypocenter": "10km",
+        }
+    else:
+        category = Category.TSUNAMI
+        classification = 2
+        report_text = "QZSS DCR warning popup test"
+        report_fields = {
+            "report_time": received_at,
+            "information_type_no": 0,
+            "information_type": "発表",
+            "tsunami_warning_code_raw": 3,
+            "tsunami_warning_code": "津波警報",
+            "tsunami_forecast_regions": ["東京湾内湾"],
+            "tsunami_heights": ["3m"],
+        }
+    return {
         "timestamp": received_at,
         "sentence": sentence,
-        "satellite_id": "99",
-        "message": sentence,
-        "message_type": 43,
-        "message_type_str": "災危通報（気象庁防災情報）",
-        "report_classification": 1,
-        "report_classification_str": "最優先",
-        "disaster_category": 1,
-        "disaster_category_str": "緊急地震速報",
-        "version": 1,
-        "report_text": (
-            "防災気象情報(緊急地震速報)(発表)(最優先)\n"
-            "緊急地震速報\n"
-            "強い揺れに警戒してください。\n\n"
-            f"発表時刻: {report_time}\n\n"
-            "震央地名: テスト沖\n"
-            "地震発生時刻: 5日12時33分\n"
-            "深さ: 10km\n"
-            "マグニチュード: 7.1\n"
-            "震度(下限): 震度5弱\n"
-            "震度(上限): 震度6弱\n"
-            "東京都、神奈川県、千葉県"
-        ),
-        "report_decoder": "test",
+        "canonical_payload": sentence,
+        "is_test": True,
+        "message_type": JMA_MESSAGE_TYPE,
+        "report_classification": classification,
+        "disaster_category": category,
+        "report_text": report_text,
+        "report_fields": report_fields,
     }
-    return dcr, build_qzss_dcr_event(
-        dcr,
-        event_id=event_id,
-        received_at=received_at,
-    )
 
 
-def _build_qzss_dcr_summary(dcr, report_text):
-    if not report_text:
-        error = dcr.get("report_decoder_error")
-        if error:
-            return f"Decode error: {error}"
-        return dcr.get("message_type_str", "No decoded message")
-
-    report_fields = dcr.get("report_fields") or {}
-    summary_lines = []
-
-    areas = (
-        report_fields.get("weather_forecast_regions")
-        or report_fields.get("marine_forecast_regions")
-        or report_fields.get("ex1_target_area_ja")
-    )
-    if areas:
-        summary_lines.append(f"対象：{_format_qzss_dcr_values(areas, limit=2)}")
-
-    report_time = _qzss_dcr_text_value(report_text, "発表時刻")
-    if report_time:
-        summary_lines.append(f"発表：{report_time}")
-
-    severity = report_fields.get("a5_severity")
-    if severity:
-        summary_lines.append(f"重要度：{severity}")
-
-    if dcr.get("message_type") == 43:
-        summary_lines.append("発信：気象庁")
-    elif dcr.get("message_type") == 44:
-        summary_lines.append("発信：他機関")
-
-    if summary_lines:
-        return "\n".join(summary_lines[:3])
-
-    lines = [line.strip() for line in report_text.splitlines() if line.strip()]
-    keyed_lines = [
-        line
-        for line in lines
-        if any(line.startswith(f"{key}:") for key in _QZQSM_SUMMARY_KEYS)
-    ]
-    if keyed_lines:
-        return "\n".join(keyed_lines[:3])
-
-    content_lines = [
-        line for line in lines if not line.startswith(_QZQSM_SKIP_SUMMARY_PREFIXES)
-    ]
-    if content_lines:
-        return "\n".join(content_lines[:2])
-    return lines[0] if lines else dcr.get("message_type_str", "QZSS DC Report")
-
-
-def _build_qzss_dcr_title(dcr):
-    report_fields = dcr.get("report_fields") or {}
-    information_type = report_fields.get("information_type")
-
-    weather_types = report_fields.get("weather_related_disaster_sub_categories")
-    if weather_types:
-        state = report_fields.get("weather_warning_state") or information_type
-        title = _format_qzss_dcr_values(weather_types, limit=2)
-        return f"{title}（{state}）" if state else title
-
-    typhoon_number = report_fields.get("typhoon_number")
-    if typhoon_number:
-        state = report_fields.get("reference_time_type") or information_type
-        title = f"台風{typhoon_number}"
-        return f"{title}（{state}）" if state else title
-
-    marine_warnings = report_fields.get("marine_warning_codes")
-    if marine_warnings:
-        state = information_type
-        title = _format_qzss_dcr_values(marine_warnings, limit=2)
-        return f"{title}（{state}）" if state else title
-
-    dcx_message_type = report_fields.get("dcx_message_type")
-    hazard_type = report_fields.get("a4_hazard_type")
-    if dcx_message_type and hazard_type:
-        return f"{dcx_message_type}: {hazard_type}"
-
-    return dcr.get("disaster_category_str") or dcr.get(
-        "message_type_str", "QZSS DC Report"
-    )
-
-
-def _format_qzss_dcr_values(values, limit):
-    if isinstance(values, str):
-        return values
-
-    unique_values = list(dict.fromkeys(str(value) for value in values if value))
-    visible_values = unique_values[:limit]
-    text = "、".join(visible_values)
-    remaining = len(unique_values) - len(visible_values)
-    if remaining > 0:
-        text += f"、ほか{remaining}件"
-    return text
-
-
-def _qzss_dcr_text_value(report_text, key):
-    prefix = f"{key}:"
-    for line in report_text.splitlines():
-        line = line.strip()
-        if line.startswith(prefix):
-            return line[len(prefix) :].strip()
-    return None
+def _qzss_dcx_priority(report_fields, is_training):
+    severity = str(report_fields.get("a5_severity") or "")
+    if is_training:
+        return "warning"
+    if severity.startswith(("Extreme", "Severe")):
+        return "urgent"
+    if severity.startswith("Moderate"):
+        return "warning"
+    return "normal"
 
 
 def _qzss_dcr_priority(
     message_type,
-    category,
+    category_no,
     classification_no,
-    report_text,
+    report_fields,
     is_training,
 ):
-    if is_training:
-        return "test"
     if classification_no == 1:
         return "urgent"
     if classification_no == 2:
         return "warning"
-    if message_type == 44:
-        text = report_text or ""
-        if (
-            "J-Alert" in text
-            or "J Alert" in text
-            or "Extreme" in text
-            or "Severe" in text
-        ):
+    if category_no == Category.WEATHER:
+        weather_codes = set(
+            report_fields.get("weather_related_disaster_sub_categories_raw") or []
+        )
+        if weather_codes.intersection(_QZQSM_WEATHER_URGENT_CODES):
             return "urgent"
-        return "normal"
-    if classification_no is None and category in _QZQSM_URGENT_CATEGORIES:
+        if weather_codes.intersection(_QZQSM_WEATHER_WARNING_CODES):
+            return "warning"
+    if is_training and category_no in _QZQSM_URGENT_CATEGORY_NOS:
+        return "warning"
+    if message_type == DCX_MESSAGE_TYPE:
+        return _qzss_dcx_priority(report_fields, is_training)
+    if classification_no is None and category_no in _QZQSM_URGENT_CATEGORY_NOS:
         return "warning"
     return "normal"
 
@@ -417,23 +481,14 @@ def parse_qzqsm_message(message):
     parsed = {
         "preamble": int(bits[0:8], 2),
         "message_type": message_type,
-        "message_type_str": _QZQSM_MESSAGE_TYPE.get(message_type, "不明"),
     }
-    if message_type == 43:
+    if message_type == JMA_MESSAGE_TYPE:
         report_classification = int(bits[14:17], 2)
         disaster_category = int(bits[17:21], 2)
         parsed.update(
             {
                 "report_classification": report_classification,
-                "report_classification_str": _QZQSM_REPORT_CLASSIFICATION.get(
-                    report_classification,
-                    "不明",
-                ),
                 "disaster_category": disaster_category,
-                "disaster_category_str": _QZQSM_DISASTER_CATEGORY.get(
-                    disaster_category,
-                    "不明",
-                ),
                 "version": int(bits[21:27], 2),
             }
         )

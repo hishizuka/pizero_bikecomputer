@@ -214,6 +214,10 @@ class Setting:
                 self.config.G_GPS_UBLOX["POWER_SAVE"] = c.getboolean("USE_POWER_SAVE")
             if "USE_QZSS_DCR" in c:
                 self.config.G_GPS_UBLOX["QZSS_DCR"] = c.getboolean("USE_QZSS_DCR")
+            if "QZSS_DCR_POPUP_DISTANCE_KM" in c:
+                self.config.G_GPS_UBLOX["QZSS_DCR_POPUP_DISTANCE_KM"] = c.getfloat(
+                    "QZSS_DCR_POPUP_DISTANCE_KM"
+                )
 
         if "STRAVA_API" in self.config_parser:
             for k in self.config.G_STRAVA_API.keys():
@@ -365,6 +369,9 @@ class Setting:
         c["assistnow_ztp_token"] = self.config.G_GPS_UBLOX["ASSISTNOW"]["ZTP_TOKEN"]
         c["use_power_save"] = str(self.config.G_GPS_UBLOX["POWER_SAVE"])
         c["use_qzss_dcr"] = str(self.config.G_GPS_UBLOX["QZSS_DCR"])
+        c["qzss_dcr_popup_distance_km"] = str(
+            self.config.G_GPS_UBLOX["QZSS_DCR_POPUP_DISTANCE_KM"]
+        )
 
         self.config_parser["STRAVA_API"] = {}
         for k in self.config.G_STRAVA_API.keys():

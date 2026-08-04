@@ -261,7 +261,15 @@ class GUI_Qt_Base(QtCore.QObject):
         self.config.display.update(buf, direct_update)
         # self.config.check_time("draw_display end")
 
-    def show_popup(self, title, timeout=None, buzzer_sound="beep"):
+    def show_popup(
+        self,
+        title,
+        timeout=None,
+        buzzer_sound="beep",
+        background_color="white",
+        text_color="black",
+        alert_level=None,
+    ):
         self._enqueue_msg(
             {
                 "title": title,
@@ -269,10 +277,22 @@ class GUI_Qt_Base(QtCore.QObject):
                 "position": QT_ALIGN_BOTTOM,
                 "timeout": timeout,
                 "buzzer_sound": buzzer_sound,
+                "background_color": background_color,
+                "text_color": text_color,
+                "alert_level": alert_level,
             }
         )
 
-    def show_popup_multiline(self, title, message, timeout=None, buzzer_sound="beep"):
+    def show_popup_multiline(
+        self,
+        title,
+        message,
+        timeout=None,
+        buzzer_sound="beep",
+        background_color="white",
+        text_color="black",
+        alert_level=None,
+    ):
         self._enqueue_msg(
             {
                 "title": title,
@@ -281,6 +301,9 @@ class GUI_Qt_Base(QtCore.QObject):
                 "text_align": QT_ALIGN_LEFT,
                 "timeout": timeout,
                 "buzzer_sound": buzzer_sound,
+                "background_color": background_color,
+                "text_color": text_color,
+                "alert_level": alert_level,
             }
         )
 

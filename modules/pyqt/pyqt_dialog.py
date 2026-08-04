@@ -3,6 +3,7 @@ Cached dialog system for popup messages.
 Classes are defined at module level for reuse, avoiding repeated class
 definitions and widget creation on each dialog display.
 """
+
 import asyncio
 
 from modules._qt_qtwidgets import (
@@ -105,6 +106,10 @@ class CachedDialog:
     """
 
     MAX_BUTTONS = 2
+    ALERT_COLORS = {
+        "urgent": ("black", "#FF0000"),
+        "warning": ("black", "#FFFF00"),
+    }
 
     def __init__(self, stack_widget, main_window, pe_widget, dual_mode=False):
         self._stack_widget = stack_widget
@@ -144,7 +149,9 @@ class CachedDialog:
     def _build(self):
         """Build all widgets once during initialization."""
         # Background
-        self._background = DialogBackground(self._stack_widget, dual_mode=self._dual_mode)
+        self._background = DialogBackground(
+            self._stack_widget, dual_mode=self._dual_mode
+        )
         self._back_layout = QtWidgets.QVBoxLayout(self._background)
 
         # Container
@@ -276,6 +283,23 @@ class CachedDialog:
         self._set_label(self._simple_title_label, title, text_align)
         self._simple_title_label.show()
 
+    def _apply_colors(self, background_color, text_color, alert_level):
+        background_color, text_color = self.ALERT_COLORS.get(
+            alert_level,
+            (background_color or "white", text_color or "black"),
+        )
+        self._container.setStyleSheet(
+            f"DialogContainer {{ background-color: {background_color}; }}"
+            f"DialogContainer QWidget {{ background-color: {background_color}; }}"
+            f"DialogContainer QLabel {{"
+            f" background-color: {background_color}; color: {text_color}; }}"
+            f"DialogContainer DialogButton {{"
+            f" background-color: {background_color}; color: {text_color}; }}"
+            f"DialogContainer DialogButton:pressed,"
+            f" DialogContainer DialogButton:focus {{"
+            f" background-color: {text_color}; color: {background_color}; }}"
+        )
+
     def _configure_buttons(self, button_num, button_label, fn, back, timeout_seconds):
         """Configure dialog buttons."""
         if button_num == 0:
@@ -319,6 +343,9 @@ class CachedDialog:
         text_align = msg.get("text_align", QT_ALIGN_CENTER)
         fn = msg.get("fn")
         timeout_seconds = msg.get("timeout", 5) or 5
+        background_color = msg.get("background_color", "white")
+        text_color = msg.get("text_color", "black")
+        alert_level = msg.get("alert_level")
 
         self._current_fn = fn
 
@@ -331,6 +358,7 @@ class CachedDialog:
         # Position container
         self._back_layout.setAlignment(self._container, position)
 
+        self._apply_colors(background_color, text_color, alert_level)
         self._show_layout(title, title_icon, message, text_align)
         self._configure_buttons(button_num, button_label, fn, back, timeout_seconds)
 

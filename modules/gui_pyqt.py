@@ -237,6 +237,9 @@ class GUI_PyQt(GUI_Qt_Base):
 
     def delay_init(self):
         asyncio.create_task(super().delay_init())
+        qzss_dcr_supported = bool(
+            getattr(self.sensor.sensor_gps, "supports_qzss_dcr", False)
+        )
 
         # ensure visually alignment for log
         timers = [
@@ -299,8 +302,6 @@ class GUI_PyQt(GUI_Qt_Base):
 
             from modules.pyqt.menu.pyqt_menu_widget import (
                 TopMenuWidget,
-                RideInfoMenuWidget,
-                QzssDcrViewerWidget,
                 ConnectivityMenuWidget,
                 LiveTrackMenuWidget,
                 UploadActivityMenuWidget,
@@ -355,6 +356,16 @@ class GUI_PyQt(GUI_Qt_Base):
             )
             from modules.pyqt.pyqt_cuesheet_widget import CueSheetWidget
             from modules.pyqt.pyqt_multiscan_widget import MultiScanWidget
+
+            if qzss_dcr_supported:
+                from modules.pyqt.menu.pyqt_ublox_menu import (
+                    GPSMenuWidget,
+                    QzssDcrDetailWidget,
+                    QzssDcrEventListWidget,
+                    QzssDcrViewerWidget,
+                    RideInfoMenuWidget,
+                    start_qzss_dcr_popup_monitor,
+                )
 
         with timers[2]:
             # self.main_window
@@ -421,6 +432,15 @@ class GUI_PyQt(GUI_Qt_Base):
                 ("Courses", CoursesMenuWidget),
                 ("Menu", TopMenuWidget),
             ]
+            if qzss_dcr_supported:
+                menus[0:0] = [
+                    ("GPS", GPSMenuWidget),
+                    ("QZSS DCR Detail", QzssDcrDetailWidget),
+                    (QzssDcrViewerWidget.ACTIVE_PAGE, QzssDcrEventListWidget),
+                    (QzssDcrViewerWidget.HISTORY_PAGE, QzssDcrEventListWidget),
+                    ("QZSS DC Report", QzssDcrViewerWidget),
+                    ("Ride Info", RideInfoMenuWidget),
+                ]
             menu_count = max(self.gui_config.G_GUI_INDEX.values()) + 1
             for m in menus:
                 m_widget = m[1](self.stack_widget, m[0], self.config)
@@ -554,7 +574,8 @@ class GUI_PyQt(GUI_Qt_Base):
 
             # Pre-add dialog to stack (after all main pages added)
             self._dialog.add_to_stack()
-            self._start_qzss_dcr_popup_monitor()
+            if qzss_dcr_supported:
+                start_qzss_dcr_popup_monitor(self)
 
         app_logger.info("Drawing components:")
         log_timers(timers, text_total="  total : {0:.3f} sec")
@@ -564,40 +585,6 @@ class GUI_PyQt(GUI_Qt_Base):
         self.main_page.widget(self.main_page_index).stop()
         self.main_page.widget(index).start()
         self.main_page_index = index
-
-    def _start_qzss_dcr_popup_monitor(self):
-        self._last_qzss_dcr_popup_key = None
-        self._qzss_dcr_popup_timer = QtCore.QTimer(parent=self)
-        self._qzss_dcr_popup_timer.timeout.connect(self._check_qzss_dcr_popup)
-        self._qzss_dcr_popup_timer.start(1000)
-
-    def _check_qzss_dcr_popup(self):
-        sensor_gps = getattr(self.sensor, "sensor_gps", None)
-        event = getattr(sensor_gps, "latest_qzss_dcr_event", None)
-        if not event:
-            return
-
-        event_key = event.get("id") or event.get("dedupe_key")
-        if event_key is None or event_key == self._last_qzss_dcr_popup_key:
-            return
-        self._last_qzss_dcr_popup_key = event_key
-
-        priority = event.get("priority")
-        if priority not in ("urgent", "warning"):
-            return
-
-        title = event.get("title") or "QZSS DC Report"
-        summary = event.get("summary") or "New disaster report received."
-        timeout = 10 if priority == "urgent" else 7
-        buzzer_sound = "alert" if priority == "urgent" else "beep"
-        if priority == "urgent" and self.dialog_exists():
-            self.delete_popup()
-        self.show_popup_multiline(
-            title,
-            summary,
-            timeout=timeout,
-            buzzer_sound=buzzer_sound,
-        )
 
     def start_and_stop_manual(self):
         self.signal_start_and_stop_manual.emit()

@@ -204,17 +204,18 @@ class TopMenuWidget(MenuWidget):
         self.back_index_key = "Main"
 
     def setup_menu(self):
-        button_conf = (
+        button_conf = [
             # Name(page_name), button_attribute, connected functions, layout
             ("Sensors", "submenu", self.sensors_menu),
             ("Courses", "submenu", self.courses_menu),
-            ("Ride Info", "submenu", self.ride_info_menu),
             ("Connectivity", "submenu", self.connectivity_menu),
             ("Upload Activity", "submenu", self.cloud_services_menu),
             ("Map and Data", "submenu", self.map_menu),
             ("Profile", "submenu", self.profile_menu),
             ("System", "submenu", self.setting_menu),
-        )
+        ]
+        if getattr(self.sensor_gps, "supports_qzss_dcr", False):
+            button_conf.insert(2, ("Ride Info", "submenu", self.ride_info_menu))
         self.add_buttons(button_conf)
 
     def sensors_menu(self):
@@ -239,72 +240,7 @@ class TopMenuWidget(MenuWidget):
         self.change_page("Ride Info")
 
     def setting_menu(self):
-        self.change_page("System")
-
-
-class RideInfoMenuWidget(MenuWidget):
-    def setup_menu(self):
-        button_conf = (
-            # Name(page_name), button_attribute, connected functions, layout
-            ("QZSS DC Report", "submenu", self.qzss_dcr_report),
-        )
-        self.add_buttons(button_conf)
-
-    def qzss_dcr_report(self):
-        self.change_page("QZSS DC Report", preprocess=True)
-
-
-class QzssDcrViewerWidget(MenuWidget):
-    def setup_menu(self):
-        self.make_menu_layout(QtWidgets.QVBoxLayout)
-
-        self.dcr_screen = QtWidgets.QTextEdit()
-        self.dcr_screen.setReadOnly(True)
-        self.dcr_screen.setHorizontalScrollBarPolicy(QT_SCROLLBAR_ALWAYSOFF)
-        self.menu_layout.addWidget(self.dcr_screen)
-
-    def preprocess(self):
-        sensor_gps = self.sensor_gps
-        history = list(getattr(sensor_gps, "qzss_dcr_history", []))
-        if not history:
-            status = getattr(sensor_gps, "qzss_dcr_status", {}).get("status", "unknown")
-            self.dcr_screen.setText(
-                "No QZSS DC Report received.\n\n" f"Receiver status: {status}"
-            )
-            return
-
-        self.dcr_screen.setText(self._format_history(history))
-        self.dcr_screen.moveCursor(QtGui.QTextCursor.MoveOperation.Start)
-
-    def _format_history(self, history):
-        reports = []
-        for i, event in enumerate(history, start=1):
-            reports.append(self._format_event(event, i, len(history)))
-        return "\n\n---\n\n".join(reports)
-
-    def _format_event(self, event, index, total):
-        header = [
-            f"[{index}/{total}] {event.get('title') or 'QZSS DC Report'}",
-            f"Priority: {event.get('priority', 'unknown')}",
-            f"Received: {self._format_received_at(event.get('received_at'))}",
-        ]
-        satellite_id = event.get("satellite_id")
-        if satellite_id:
-            header.append(f"Satellite: {satellite_id}")
-        decoder_error = event.get("decoder_error")
-        if decoder_error:
-            header.append(f"Decoder error: {decoder_error}")
-
-        body = event.get("body") or event.get("summary") or "No decoded message."
-        return "\n".join(header) + "\n\n" + body
-
-    @staticmethod
-    def _format_received_at(received_at):
-        if not received_at:
-            return "-"
-        if "T" in received_at:
-            return received_at.replace("T", " ")[:19]
-        return received_at[:19]
+        self.change_page("System", preprocess=True)
 
 
 class ListWidget(MenuWidget):

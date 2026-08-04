@@ -4,8 +4,8 @@ import queue
 import sys
 import threading
 import time
-from collections import deque
 from datetime import datetime, timezone
+from functools import cached_property
 from pathlib import Path
 
 if __name__ == "__main__" and __package__ is None:
@@ -56,7 +56,6 @@ try:
             normalized_receiver_model,
         )
         from ublox_support.qzss_dcr import (
-            build_qzss_dcr_event,
             build_qzss_dcr_test_event,
             parse_qzqsm_sentence,
             qzss_dcr_blocked_by_power_save,
@@ -66,6 +65,7 @@ try:
             qzss_dcr_output_status,
             sfrbx_to_qzqsm,
         )
+        from ublox_support.qzss_dcr_store import QzssDcrStore
         from ublox_support.transport import (
             I2CStream,
             I2C_ADDRESS as _I2C_ADDRESS,
@@ -85,7 +85,6 @@ try:
             normalized_receiver_model,
         )
         from .ublox_support.qzss_dcr import (
-            build_qzss_dcr_event,
             build_qzss_dcr_test_event,
             parse_qzqsm_sentence,
             qzss_dcr_blocked_by_power_save,
@@ -95,6 +94,7 @@ try:
             qzss_dcr_output_status,
             sfrbx_to_qzqsm,
         )
+        from .ublox_support.qzss_dcr_store import QzssDcrStore
         from .ublox_support.transport import (
             I2CStream,
             I2C_ADDRESS as _I2C_ADDRESS,
@@ -129,6 +129,7 @@ _I2C_CONFIG_CHUNK_DELAY = 0.02
 class UBlox(AbstractSensorGPS):
     NULL_VALUE = None
     detected_uart_device = None
+    supports_qzss_dcr = True
 
     def sensor_init(self):
         super().sensor_init()
@@ -147,7 +148,6 @@ class UBlox(AbstractSensorGPS):
         self._dop = (99.0, 99.0, 99.0)
         self._used_sats = 0
         self._total_sats = 0
-        self._last_dcr_sentence = None
         self._raw_mon_ver = None
         self._raw_sec_uniqid = None
         self._receiver_model = None
@@ -183,19 +183,12 @@ class UBlox(AbstractSensorGPS):
             "mode": None,
             "error": None,
         }
-        self.qzss_dcr_status = {
-            "status": self._qzss_dcr_configure_status(),
-        }
+        self.qzss_dcr_status = {"status": self._qzss_dcr_configure_status()}
         self.tx_ready_status = {
             "status": "pending" if self._tx_ready_requested() else "disabled",
             "gpio": self.config.G_GPS_UBLOX["TX_READY"]["GPIO"],
             "error": None,
         }
-        self.latest_qzss_dcr = None
-        self.latest_qzss_dcr_sentence = None
-        self.latest_qzss_dcr_event = None
-        self.qzss_dcr_history = deque(maxlen=20)
-        self._qzss_dcr_event_seq = 0
 
     async def quit(self):
         await super().quit()
@@ -657,11 +650,7 @@ class UBlox(AbstractSensorGPS):
         return qzss_dcr_cfg_data(self.transport_type, enabled)
 
     async def set_qzss_dcr_enabled(self, enabled):
-        return await asyncio.to_thread(
-            self._set_qzss_dcr_enabled,
-            enabled,
-            "menu",
-        )
+        return await asyncio.to_thread(self._set_qzss_dcr_enabled, enabled, "menu")
 
     def _set_qzss_dcr_enabled(self, enabled, reason):
         if self.transport is None:
@@ -684,9 +673,7 @@ class UBlox(AbstractSensorGPS):
         self.qzss_dcr_status["status"] = self._qzss_dcr_output_status(enabled)
         self.qzss_dcr_status["error"] = None
         cfg_summary = ", ".join(f"{key}={value}" for key, value in cfg_data)
-        app_logger.info(
-            "[UBlox] QZSS DC Report output set " f"({cfg_summary}, {reason})"
-        )
+        app_logger.info(f"[UBlox] QZSS DC Report output set ({cfg_summary}, {reason})")
         return True
 
     def _log_qzss_dcr_power_save_skip(self):
@@ -978,21 +965,22 @@ class UBlox(AbstractSensorGPS):
         self._total_sats = num_svs
         self._used_sats = used or self._used_sats
 
-    def inject_qzss_dcr_test_event(self):
-        self._qzss_dcr_event_seq += 1
-        dcr, dcr_event = build_qzss_dcr_test_event(self._qzss_dcr_event_seq)
+    @cached_property
+    def qzss_dcr_store(self):
+        return QzssDcrStore(history_limit=100)
 
-        self.latest_qzss_dcr = dcr
-        self.latest_qzss_dcr_sentence = dcr["sentence"]
-        self.latest_qzss_dcr_event = dcr_event
-        self.qzss_dcr_history.appendleft(dcr_event)
+    def inject_qzss_dcr_test_event(self, alert_level="urgent"):
+        dcr = build_qzss_dcr_test_event(time.time_ns(), alert_level=alert_level)
+        result = self.qzss_dcr_store.ingest(dcr, received_at=dcr["timestamp"])
+        dcr_event = result["event"]
 
         app_logger.info(
             "[QZSS DCR][TEST] injected "
-            f"id={self._qzss_dcr_event_seq}, "
-            f"title={dcr_event['title']}, "
+            f"id={dcr_event['id']}, "
+            f"category={dcr_event['category_no']}, "
             f"priority={dcr_event['priority']}"
         )
+        return dcr_event
 
     def _handle_rxm_sfrbx(self, parsed):
         if not self._qzss_dcr_enabled():
@@ -1002,26 +990,16 @@ class UBlox(AbstractSensorGPS):
         if not sentence:
             return
 
-        if sentence == self._last_dcr_sentence:
-            return
-        self._last_dcr_sentence = sentence
-
         dcr = parse_qzqsm_sentence(sentence)
         if dcr is None:
             return
 
-        received_at = datetime.now().isoformat()
+        received_at = datetime.now().astimezone().isoformat()
         dcr["timestamp"] = received_at
-        self._qzss_dcr_event_seq += 1
-        dcr_event = build_qzss_dcr_event(
-            dcr,
-            event_id=self._qzss_dcr_event_seq,
-            received_at=received_at,
-        )
-        self.latest_qzss_dcr = dcr
-        self.latest_qzss_dcr_sentence = sentence
-        self.latest_qzss_dcr_event = dcr_event
-        self.qzss_dcr_history.appendleft(dcr_event)
+        result = self.qzss_dcr_store.ingest(dcr, received_at=received_at)
+        if not result["is_new_content"]:
+            return
+
         app_logger.info(f"[UBlox] QZSS DC Report: {sentence}")
         if dcr.get("report_text"):
             app_logger.info(f"[UBlox] QZSS DC Report text:\n{dcr['report_text']}")

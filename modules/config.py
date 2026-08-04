@@ -250,6 +250,7 @@ class Config:
         },
         "POWER_SAVE": False,
         "QZSS_DCR": False,
+        "QZSS_DCR_POPUP_DISTANCE_KM": 100.0,
         "TX_READY": {
             "STATUS": True,
             "GPIOCHIP": "/dev/gpiochip4",
@@ -771,7 +772,9 @@ class Config:
         try:
             while True:
                 app_logger.info(
-                    "s:start/stop, l: lap, r:reset, p: previous screen, n: next screen, q: quit"
+                    "s:start/stop, l: lap, r:reset, p: previous screen, "
+                    "n: next screen, q: quit, z: QZSS urgent test, "
+                    "x: QZSS warning test"
                 )
                 key = await self.loop.run_in_executor(None, input, "> ")
 
@@ -806,12 +809,13 @@ class Config:
                 elif key == "@" and self.gui:
                     self.gui.show_dialog_ok_only(fn=None, title="test")
                     # self.gui.show_popup(f"test", 3)
-                elif key == "z" and self.gui:
+                elif key in {"z", "x"} and self.gui:
                     sensor_gps = self.logger.sensor.sensor_gps
                     if sensor_gps.__class__.__name__ != "UBlox":
                         app_logger.warning("[QZSS DCR][TEST] UBlox is not active")
                         continue
-                    sensor_gps.inject_qzss_dcr_test_event()
+                    alert_level = "urgent" if key == "z" else "warning"
+                    sensor_gps.inject_qzss_dcr_test_event(alert_level)
                 elif key == "L" and self.gui:
                     self.gui.turn_on_off_light()
                 elif key == "t" and self.gui:
