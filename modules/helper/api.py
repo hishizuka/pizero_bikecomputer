@@ -50,10 +50,6 @@ class api:
     UBLOX_ASSISTNOW_RETRY_DELAYS = (15.0, 30.0, 60.0)
 
     thingsboard_client = None
-    tb_message = {
-        "name": None,
-        "message": None,
-    }
     course_send_status = "RESET"
 
     maptile_with_values = None
@@ -62,7 +58,6 @@ class api:
 
     send_time = {}
     pre_value = {"OPENMETEO_WIND": [np.nan, np.nan]}
-    THINGSBOARD_SHARED_KEYS = ("message_name", "message_body")
     thingsboard_telemetry_url = None
     thingsboard_attributes_url = None
     livetrack_unavailable_reason = None
@@ -758,38 +753,6 @@ class api:
             return
         asyncio.create_task(self.send_livetrack_data_internal())
 
-    # def get_tb_message(self, result, exception):
-    #    if exception is not None:
-    #        app_logger.error(f"[BT] thingsboard attributes error: {exception}")
-    #        return
-    #    self._apply_thingsboard_attribute_result(result)
-
-    # def _apply_thingsboard_attribute_result(self, result):
-    #    if not isinstance(result, dict):
-    #        return
-
-    #    shared = result.get("shared")
-    #    if (
-    #        not isinstance(shared, dict)
-    #        or self.THINGSBOARD_SHARED_KEYS[0] not in shared
-    #        or self.THINGSBOARD_SHARED_KEYS[1] not in shared
-    #    ):
-    #        return
-
-    #    name = shared["message_name"]
-    #    body = shared["message_body"]
-    #    if self.tb_message["name"] is None and self.tb_message["message"] is None:
-    #        self.tb_message["name"] = name
-    #        self.tb_message["message"] = body
-    #        return
-
-    #    if self.tb_message["message"] != body and str(body).strip():
-    #        self.tb_message["name"] = name
-    #        self.tb_message["message"] = body
-    #        self.config.gui.popup_tb_message(
-    #            self.tb_message["name"], self.tb_message["message"].strip(), True
-    #        )
-
     async def _send_thingsboard_via_gadgetbridge_http(
         self,
         url,
@@ -821,37 +784,6 @@ class api:
             data,
         ):
             return False
-
-        # attributes_url = self.thingsboard_attributes_url
-        # if attributes_url is None:
-        #    server = self.config.G_THINGSBOARD_API["SERVER"].strip()
-        #    if server and not server.startswith(("http://", "https://")):
-        #        server = f"https://{server}"
-        #    server = server.rstrip("/")
-        #    access_token = urllib.parse.quote(
-        #        self.config.G_THINGSBOARD_API["TOKEN"],
-        #        safe="",
-        #    )
-        #    attributes_url = (
-        #        f"{server}/api/v1/{access_token}/attributes?"
-        #        f"sharedKeys={','.join(self.THINGSBOARD_SHARED_KEYS)}"
-        #    )
-        #    self.thingsboard_attributes_url = attributes_url
-
-        # app_logger.debug("[TB][GB] requesting livetrack attributes")
-        # try:
-        #    attributes = await ble_uart.request_http_json(
-        #        attributes_url,
-        #        headers={"Accept": "application/json"},
-        #        timeout=10,
-        #    )
-        # except json.JSONDecodeError as exc:
-        #    app_logger.error(f"[GB] ThingsBoard attributes JSON error: {exc}")
-        # except Exception as exc:
-        #    app_logger.error(f"[GB] ThingsBoard attributes error: {exc}")
-        # else:
-        #    self._apply_thingsboard_attribute_result(attributes)
-        #    app_logger.debug("[TB][GB] livetrack attributes updated")
 
         return True
 
@@ -948,10 +880,6 @@ class api:
         try:
             self.thingsboard_client.connect()
             res = self.thingsboard_client.send_telemetry(data).get()
-            # self.thingsboard_client.request_attributes(
-            #    shared_keys=["message_name", "message_body"],
-            #    callback=self.get_tb_message,
-            # )
             time.sleep(1)
             return res
         finally:
