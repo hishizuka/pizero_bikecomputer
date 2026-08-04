@@ -749,22 +749,11 @@ When unlocked, you can drag the profile horizontally.
 - Select BT device
   - Specify the device to use for bluetooth tethering.
 - Live Track
-  - Open the Live Track submenu to enable ThingsBoard or Garmin LiveTrack.
-  - ThingsBoard uploads real-time telemetry to a [ThingsBoard](https://thingsboard.io) dashboard.
-    - When Gadgetbridge is connected, telemetry and the course attribute are uploaded through its HTTP bridge.
-    - If that HTTP request fails, the program retries through MQTT over Bluetooth tethering.
-    - The `tb-mqtt-client` package and a ThingsBoard device access token in [THINGSBOARD_API](#thingsboard_api-section) are required.
-    - Import and connect the provided dashboard as described in [thingsboard_setup.md](./thingsboard_setup.md).
-  - Garmin LiveTrack creates and updates a Garmin Connect LiveTrack session using the Garmin Connect tokenstore and an automatically generated publisher identifier.
-    - The `garminconnect` and `requests` packages are required.
-    - Configure [GARMINCONNECT_API](#garminconnect_api-section), then enable **Menu > Connectivity > Live Track > Garmin**.
-    - The feature is disabled by default and must be enabled explicitly. Use it only with a Garmin account and device that you own or control.
-    - START creates one session. STOP sends a final point without closing it, and RESET closes the session.
-    - Session creation and closure use direct HTTP, with Bluetooth tethering when no other network is available. Points for an existing session use Gadgetbridge when connected.
-    - A loaded course is queued and associated with the Garmin dashboard after a successful position post. Course upload uses direct HTTP or Bluetooth tethering and does not require network access when the course is loaded.
-    - This is an unofficial integration that is not affiliated with, endorsed by, or warranted by Garmin. It uses Garmin Connect Mobile's private LiveTrack API, so API changes may break it, and its use may result in Garmin limiting account access or suspending the service.
-    - The integration is identified by name only and does not use the Garmin logo.
-  - Garmin Messages is reserved for LiveTrack message receiving. The current application stores its on/off setting, but message polling is not yet integrated.
+  - Enable real-time data upload to the [ThingsBoard](https://thingsboard.io) dashboard.
+  - When Gadgetbridge is connected, telemetry and the course attribute are uploaded through its HTTP bridge.
+  - If that HTTP request fails, the program retries through MQTT over Bluetooth tethering.
+  - The `tb-mqtt-client` package and a ThingsBoard device access token in [THINGSBOARD_API](#thingsboard_api-section) are required.
+  - Import and connect the provided dashboard as described in [thingsboard_setup.md](./thingsboard_setup.md).
 - Gadgetbridge
   - Enable BLE UART service for the Android [Gadgetbridge](https://gadgetbridge.org) app.
 - Get Location
@@ -1164,20 +1153,8 @@ livetrack_messages = False
 `livetrack_status` enables Garmin LiveTrack. `livetrack_messages` is reserved
 for LiveTrack message receiving and does not poll messages yet.
 
-Garmin LiveTrack support is an unofficial, independently developed integration.
-It is not affiliated with, endorsed by, or warranted by Garmin. It is disabled
-by default and must be enabled explicitly from **Menu > Connectivity > Live
-Track > Garmin** after Garmin Connect authentication succeeds. Use it only with
-a Garmin account and device that you own or control. Because it uses Garmin
-Connect Mobile's private LiveTrack API, API changes may break the integration,
-and its use may result in Garmin limiting account access or suspending the
-service. The integration is identified by name only and does not use the Garmin
-logo.
-
-The Garmin LiveTrack publisher identifier is generated automatically on first
-use and stored privately in `livetrack_state.json` under the tokenstore
-directory. An existing identifier is always preserved. It is not a user
-setting and requires no setup.
+Garmin LiveTrack is disabled by default and uses an unofficial private API that
+may stop working if Garmin changes it.
 
 Tokens saved by versions earlier than 0.3 are incompatible, so the first upload
 after upgrading requires a fresh login. If Garmin MFA is enabled, create this
