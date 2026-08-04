@@ -196,14 +196,15 @@ Then:
 
 1. Make sure Speed, Heart rate, or Power has a usable value.
 2. Start recording.
-3. Open **Menu > Connectivity** and enable **Live Track**.
+3. Open **Menu > Connectivity > Live Track** and enable **ThingsBoard**.
 4. Wait for the next upload. The normal telemetry interval is 180 seconds.
 5. In ThingsBoard, open the device's **Latest telemetry** view and confirm the
    keys listed below.
 6. Open the dashboard and confirm the values and recorded track.
 
-If the Live Track menu item is disabled, check that the device token and
-`tb-mqtt-client` package are available, then restart the application.
+If the ThingsBoard Live Track toggle is disabled, check that the device token,
+server, and `tb-mqtt-client` package are available, then restart the
+application.
 
 ## Data and transport
 
@@ -250,9 +251,15 @@ sends an empty array:
 }
 ```
 
-Only the current course is retained. Course upload is attempted when a course
-is loaded or cleared. If it cannot be sent immediately, it remains pending and
-is retried after a successful telemetry upload.
+Only the current course is retained. Loading or clearing a course queues the
+update without performing network I/O. After START, the update is attempted
+after a successful telemetry upload and remains pending for the next LiveTrack
+interval if it fails. Coordinates are rounded to five decimal places. Routes
+whose compact JSON approaches ThingsBoard's default 65,536-byte MQTT message
+limit are reduced to the largest evenly sampled point set that fits, with 128
+bytes reserved for the MQTT topic and packet metadata. Smaller routes retain
+every point produced by the course loader. The same bounded payload is used
+for Gadgetbridge HTTP so MQTT fallback remains possible.
 
 ### Connection order
 

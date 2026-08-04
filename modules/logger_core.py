@@ -575,7 +575,8 @@ class LoggerCore:
             )
 
         # send online
-        if self.config.G_THINGSBOARD_API["STATUS"]:
+        api_helper = getattr(self.config, "api", None)
+        if api_helper is not None and api_helper.livetrack_enabled():
             self.config.api.send_livetrack_data(quick_send=True)
 
         if self.config.G_AUTO_WIFI_OFF and self.config.G_MANUAL_STATUS == "START":
@@ -646,7 +647,7 @@ class LoggerCore:
         min_sec = divmod(hour_sec[1], 60)
         lap_time_str = f"{hour_sec[0]}:{min_sec[0]:02}"
         lap_message = f"LAP {self.values['lap']} {newline}({dist_str} km, {lap_time_str})"
- 
+
         u = self.config.gui.gui_config.G_UNIT
         value_message = f"{(pre_lap_avg['speed'] * 3.6):{u['Speed'][0]}} {u['Speed'][1]}"
         sensor_items = []
@@ -697,7 +698,20 @@ class LoggerCore:
         return start_date, end_date
 
     def reset_count(self):
-        if self.config.G_MANUAL_STATUS == "START" or self.values["count"] == 0:
+        if self.config.G_MANUAL_STATUS == "START":
+            return False
+
+        api_helper = getattr(self.config, "api", None)
+        if api_helper is not None:
+            stop_garmin_livetrack = getattr(
+                api_helper,
+                "send_garmin_livetrack_stop",
+                None,
+            )
+            if callable(stop_garmin_livetrack):
+                stop_garmin_livetrack()
+
+        if self.values["count"] == 0:
             return False
 
         # reset
@@ -996,12 +1010,11 @@ class LoggerCore:
 
         # send online
         send_online_elapsed_ms = 0.0
-        if self.config.G_THINGSBOARD_API["STATUS"]:
+        api_helper = getattr(self.config, "api", None)
+        if api_helper is not None and api_helper.livetrack_enabled():
             send_online_start = time.perf_counter()
             self.config.api.send_livetrack_data(quick_send=False)
-            send_online_elapsed_ms = (
-                time.perf_counter() - send_online_start
-            ) * 1000.0
+            send_online_elapsed_ms = (time.perf_counter() - send_online_start) * 1000.0
 
         record_elapsed_ms = (time.perf_counter() - record_start) * 1000.0
         self._perf_logger_calls += 1
@@ -1010,7 +1023,7 @@ class LoggerCore:
         self._perf_logger_sql_queue_ms_sum += sql_queue_elapsed_ms
         self._perf_logger_short_log_ms_sum += short_log_elapsed_ms
         self._perf_logger_send_online_ms_sum += send_online_elapsed_ms
-        if self.config.G_THINGSBOARD_API["STATUS"]:
+        if api_helper is not None and api_helper.livetrack_enabled():
             self._perf_logger_send_online_calls += 1
         self._maybe_log_perf_logger_window()
 

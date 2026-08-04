@@ -248,11 +248,13 @@ class Setting:
                 config["HAVE_API_TOKEN"] = True
 
         if "GARMINCONNECT_API" in self.config_parser:
-            for k in ["EMAIL", "PASSWORD"]:
+            c = self.config_parser["GARMINCONNECT_API"]
+            for k in self.config.G_GARMINCONNECT_API.keys():
                 if k in self.config_parser["GARMINCONNECT_API"]:
-                    self.config.G_GARMINCONNECT_API[k] = self.config_parser[
-                        "GARMINCONNECT_API"
-                    ][k]
+                    if isinstance(self.config.G_GARMINCONNECT_API[k], bool):
+                        self.config.G_GARMINCONNECT_API[k] = c.getboolean(k)
+                    else:
+                        self.config.G_GARMINCONNECT_API[k] = c[k]
 
         if "AUTO_UPLOAD" in self.config_parser:
             c = self.config_parser["AUTO_UPLOAD"]
@@ -386,8 +388,8 @@ class Setting:
                 self.config_parser[section_name]["STATUS"] = str(config["STATUS"])
 
         self.config_parser["GARMINCONNECT_API"] = {}
-        for k in ["EMAIL", "PASSWORD"]:
-            self.config_parser["GARMINCONNECT_API"][k] = (
+        for k in self.config.G_GARMINCONNECT_API.keys():
+            self.config_parser["GARMINCONNECT_API"][k] = str(
                 self.config.G_GARMINCONNECT_API[k]
             )
 

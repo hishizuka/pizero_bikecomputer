@@ -383,6 +383,9 @@ class Config:
     G_GARMINCONNECT_API = {
         "EMAIL": "",
         "PASSWORD": "",
+        "TOKENSTORE": "~/.garminconnect",
+        "LIVETRACK_STATUS": False,
+        "LIVETRACK_MESSAGES": False,
     }
 
     G_GOOGLE_ROUTES_API = {

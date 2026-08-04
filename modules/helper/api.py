@@ -2,7 +2,6 @@ import os
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime
-import socket
 import urllib.parse
 import asyncio
 import json
@@ -18,6 +17,17 @@ from modules.helper.network import (
 from modules.helper.maptile import MapTileWithValues, get_headwind
 from modules.utils.geo import get_track_str
 from modules.app_logger import app_logger
+from modules.helper.garmin_livetrack import (
+    GarminLiveTrackClient,
+    GarminLiveTrackError,
+)
+from modules.helper.livetrack import (
+    LiveTrackCoordinator,
+    LiveTrackRequest,
+    build_livetrack_sample,
+    run_with_bt_tethering,
+)
+from modules.helper.thingsboard_livetrack import ThingsBoardLiveTrackClient
 
 _IMPORT_GARMINCONNECT = False
 try:
@@ -33,74 +43,48 @@ try:
 except ImportError:
     pass
 
-_IMPORT_THINGSBOARD = False
-try:
-    from tb_device_mqtt import TBDeviceMqttClient, TBPublishInfo
-    import logging
-
-    logging.getLogger("tb_connection").setLevel(logging.ERROR)
-
-    _IMPORT_THINGSBOARD = True
-except ImportError:
-    pass
-
 
 class api:
     config = None
     UBLOX_ASSISTNOW_RETRY_DELAYS = (15.0, 30.0, 60.0)
 
-    thingsboard_client = None
-    course_send_status = "RESET"
-
     maptile_with_values = None
-
-    send_livetrack_data_lock = False
 
     send_time = {}
     pre_value = {"OPENMETEO_WIND": [np.nan, np.nan]}
-    thingsboard_telemetry_url = None
-    thingsboard_attributes_url = None
     livetrack_unavailable_reason = None
     livetrack_unavailable_notified = False
+    garmin_livetrack_client = None
+    garmin_livetrack_unavailable_reason = None
+    garmin_livetrack_unavailable_notified = False
 
     def __init__(self, config):
         self.config = config
+        self.send_time = {}
 
         t = int(time.time())
         self.send_time["OPENMETEO_WIND"] = t
 
         self.livetrack_unavailable_reason = None
         self.livetrack_unavailable_notified = False
+        self.garmin_livetrack_unavailable_reason = None
+        self.garmin_livetrack_unavailable_notified = False
 
-        livetrack_enabled = self.config.G_THINGSBOARD_API["STATUS"]
+        self.thingsboard_livetrack_client = ThingsBoardLiveTrackClient(
+            self.config,
+            lambda: self.gadgetbridge_service,
+        )
+        self.livetrack_unavailable_reason = (
+            self.thingsboard_livetrack_client.configuration_reason()
+        )
 
-        server = self.config.G_THINGSBOARD_API["SERVER"].strip()
-        if server and not server.startswith(("http://", "https://")):
-            server = f"https://{server}"
-        server = server.rstrip("/")
-        token = self.config.G_THINGSBOARD_API["TOKEN"].strip()
-        if livetrack_enabled and not token:
-            self.livetrack_unavailable_reason = (
-                "LiveTrack is disabled because ThingsBoard TOKEN is not configured."
-            )
-        elif livetrack_enabled and not server:
-            self.livetrack_unavailable_reason = (
-                "LiveTrack is disabled because ThingsBoard server is not configured."
-            )
-        elif token and server:
-            access_token = urllib.parse.quote(token, safe="")
-            self.thingsboard_telemetry_url = f"{server}/api/v1/{access_token}/telemetry"
-            self.thingsboard_attributes_url = (
-                f"{server}/api/v1/{access_token}/attributes"
-            )
+        garmin_settings = getattr(self.config, "G_GARMINCONNECT_API", {})
+        self.garmin_livetrack_client = GarminLiveTrackClient(garmin_settings)
+        self.garmin_livetrack_unavailable_reason = (
+            self.garmin_livetrack_client.unavailable_reason()
+        )
 
-        if _IMPORT_THINGSBOARD and token and server:
-            self.thingsboard_client = TBDeviceMqttClient(
-                self.config.G_THINGSBOARD_API["SERVER"],
-                1883,
-                self.config.G_THINGSBOARD_API["TOKEN"],
-            )
-            self.send_time["THINGSBOARD"] = t
+        self.livetrack_coordinator = self._create_livetrack_coordinator()
 
         self.maptile_with_values = MapTileWithValues(self.config)
 
@@ -110,38 +94,64 @@ class api:
 
     @property
     def gadgetbridge_service(self):
-        ble_uart = self.config.ble_uart
+        ble_uart = getattr(self.config, "ble_uart", None)
         if ble_uart is None or not ble_uart.status:
             return None
         return ble_uart
 
     def _check_livetrack_startup_config(self):
-        if not self.config.G_THINGSBOARD_API["STATUS"]:
+        client = self.thingsboard_livetrack_client
+        if not client.enabled():
             return False
 
+        self.livetrack_unavailable_reason = client.configuration_reason()
         if self.livetrack_unavailable_reason is None:
             return True
 
-        if not self.livetrack_unavailable_notified:
-            gui = self.config.gui
-            popup_multiline = getattr(gui, "show_popup_multiline", None)
-            if callable(popup_multiline) and getattr(gui, "msg_queue", None) is None:
-                return False
-
-            self.livetrack_unavailable_notified = True
-            app_logger.warning(self.livetrack_unavailable_reason)
-            if callable(popup_multiline):
-                popup_multiline(
-                    "LiveTrack disabled",
-                    self.livetrack_unavailable_reason,
-                    5,
-                )
-            else:
-                popup = getattr(gui, "show_popup", None)
-                if callable(popup):
-                    popup("LiveTrack disabled", 5)
+        self._notify_livetrack_unavailable(
+            "livetrack_unavailable_notified",
+            self.livetrack_unavailable_reason,
+        )
 
         return False
+
+    def _check_garmin_livetrack_startup_config(self):
+        garmin_config = getattr(self.config, "G_GARMINCONNECT_API", {})
+        if not garmin_config.get("LIVETRACK_STATUS", False):
+            return False
+
+        reason = getattr(self, "garmin_livetrack_unavailable_reason", None)
+        if reason is None:
+            return True
+
+        self._notify_livetrack_unavailable(
+            "garmin_livetrack_unavailable_notified",
+            reason,
+        )
+        return False
+
+    def _notify_livetrack_unavailable(self, notified_attr, reason):
+        if getattr(self, notified_attr, False):
+            return True
+
+        gui = self.config.gui
+        popup_multiline = getattr(gui, "show_popup_multiline", None)
+        if callable(popup_multiline) and getattr(gui, "msg_queue", None) is None:
+            return False
+
+        setattr(self, notified_attr, True)
+        app_logger.warning(reason)
+        if callable(popup_multiline):
+            popup_multiline(
+                "LiveTrack disabled",
+                reason,
+                5,
+            )
+        else:
+            popup = getattr(gui, "show_popup", None)
+            if callable(popup):
+                popup("LiveTrack disabled", 5)
+        return True
 
     async def get_google_routes(self, x1, y1, x2, y2):
         if (
@@ -495,26 +505,15 @@ class api:
             self.config.G_RIDEWITHGPS_API["URL_ROUTE_BASE_URL"]
             + "/elevation_profile.jpg"
         ).format(route_id=route_id)
-        tcx_url = (self.config.G_RIDEWITHGPS_API["URL_ROUTE_BASE_URL"] + ".tcx").format(
-            route_id=route_id
-        )
 
         if privacy_code:
             profile_url = f"{profile_url}?privacy_code={privacy_code}"
-            tcx_url = f"{tcx_url}?privacy_code={privacy_code}"
 
-        urls = [
-            profile_url,
-            tcx_url,
-        ]
+        urls = [profile_url]
         save_paths = [
             (
                 self.config.G_RIDEWITHGPS_API["URL_ROUTE_DOWNLOAD_DIR"]
                 + "elevation_profile-{route_id}.jpg"
-            ).format(route_id=route_id),
-            (
-                self.config.G_RIDEWITHGPS_API["URL_ROUTE_DOWNLOAD_DIR"]
-                + "course-{route_id}.tcx"
             ).format(route_id=route_id),
         ]
         await self.network.download_queue_put(
@@ -540,10 +539,6 @@ class api:
             (
                 self.config.G_RIDEWITHGPS_API["URL_ROUTE_DOWNLOAD_DIR"]
                 + "elevation_profile-{route_id}.jpg"
-            ).format(route_id=route_id),
-            (
-                self.config.G_RIDEWITHGPS_API["URL_ROUTE_DOWNLOAD_DIR"]
-                + "course-{route_id}.tcx"
             ).format(route_id=route_id),
         ]
 
@@ -640,12 +635,7 @@ class api:
         )
 
     def garmin_upload_internal(self):
-        blank_check = [
-            self.config.G_GARMINCONNECT_API["EMAIL"],
-            self.config.G_GARMINCONNECT_API["PASSWORD"],
-        ]
-        blank_msg = "set EMAIL or PASSWORD of Garmin Connect"
-        if not self.upload_check(blank_check, blank_msg):
+        if not self.upload_check([], "", file_check=True):
             return False
 
         # import check
@@ -654,11 +644,26 @@ class api:
             return False
 
         try:
-            garmin_api = Garmin(
-                email=self.config.G_GARMINCONNECT_API["EMAIL"],
-                password=self.config.G_GARMINCONNECT_API["PASSWORD"],
+            had_credentials = bool(
+                self.config.G_GARMINCONNECT_API["EMAIL"]
+                or self.config.G_GARMINCONNECT_API["PASSWORD"]
             )
-            garmin_api.login("~/.garminconnect")
+            garmin_api = Garmin(
+                email=self.config.G_GARMINCONNECT_API["EMAIL"] or None,
+                password=self.config.G_GARMINCONNECT_API["PASSWORD"] or None,
+            )
+            garmin_api.login(self.config.G_GARMINCONNECT_API["TOKENSTORE"])
+            if had_credentials:
+                self.config.G_GARMINCONNECT_API["EMAIL"] = ""
+                self.config.G_GARMINCONNECT_API["PASSWORD"] = ""
+                setting = getattr(self.config, "setting", None)
+                write_config = getattr(setting, "write_config", None)
+                if callable(write_config):
+                    write_config()
+                    app_logger.info(
+                        "[Garmin] cleared Garmin Connect email/password "
+                        "after tokenstore login"
+                    )
             if self.config.state.get_value("garmin_session", ""):
                 self.config.state.set_value("garmin_session", "", force_apply=True)
         except (
@@ -719,277 +724,287 @@ class api:
 
         return True
 
-    def thingsboard_check(self):
-        return self.thingsboard_client is not None
+    def livetrack_enabled(self):
+        garmin = getattr(self.config, "G_GARMINCONNECT_API", {})
+        return self.config.G_THINGSBOARD_API["STATUS"] or garmin.get(
+            "LIVETRACK_STATUS", False
+        )
 
-    def check_livetrack_http_check(self):
-        return self.gadgetbridge_service is not None
+    def garmin_livetrack_configuration_reason(self):
+        client = self.garmin_livetrack_client
+        if client is None:
+            return "Garmin LiveTrack is disabled because the client is not available."
+        return client.configuration_reason()
 
-    def check_livetrack_mqtt_check(self):
-        # import check
-        if not _IMPORT_THINGSBOARD:
-            return False
-        # Skip if there is no connectivity path available.
-        if not self.network.check_network_with_bt_tethering():
-            return False
-        return True
-
-    def send_livetrack_data(self, quick_send=False):
-        if not self._check_livetrack_startup_config():
+    def _persist_garmin_credentials_if_cleared(self):
+        client = self.garmin_livetrack_client
+        consume = getattr(client, "consume_credentials_cleared", None)
+        if not callable(consume) or not consume():
             return
 
-        # check lock
-        if self.send_livetrack_data_lock:
-            return
+        setting = getattr(self.config, "setting", None)
+        write_config = getattr(setting, "write_config", None)
+        if callable(write_config):
+            write_config()
+            app_logger.info(
+                "[Garmin] cleared Garmin Connect email/password after tokenstore login"
+            )
 
-        # check interval
-        if not self.check_time_interval(
-            "THINGSBOARD", self.config.G_THINGSBOARD_API["INTERVAL_SEC"], quick_send
-        ):
-            return
-
-        # Allow Gadgetbridge HTTP upload even when MQTT is not available.
-        if not (self.check_livetrack_http_check() or self.check_livetrack_mqtt_check()):
-            return
-        asyncio.create_task(self.send_livetrack_data_internal())
-
-    async def _send_thingsboard_via_gadgetbridge_http(
-        self,
-        url,
-        data,
-        timeout=15,
+    def send_livetrack_data(
+        self, quick_send=False, garmin_stop=False, include_thingsboard=True
     ):
-        if self.gadgetbridge_service is None:
+        request = LiveTrackRequest(
+            garmin_stop=garmin_stop,
+            include_thingsboard=include_thingsboard,
+        )
+        if not self._can_send_livetrack_request(request):
             return False
-        if url is None:
-            return False
+        return self.livetrack_coordinator.submit(
+            request,
+            quick_send=quick_send,
+        )
 
-        try:
-            await self.gadgetbridge_service.request_http(
-                url,
-                method="POST",
-                headers={"Content-Type": "application/json"},
-                body=data,
-                timeout=timeout,
-            )
-        except Exception:
-            app_logger.error("[GB] ThingsBoard HTTP request failed")
-            return False
+    def _can_send_livetrack_request(self, request):
+        thingsboard_ready = (
+            request.include_thingsboard
+            and self._check_livetrack_startup_config()
+            and self.thingsboard_livetrack_client.has_path()
+        )
+        garmin_ready = self._check_garmin_livetrack_startup_config() and (
+            self.gadgetbridge_service is not None
+            or self.network.check_network_with_bt_tethering()
+        )
+        return thingsboard_ready or garmin_ready
 
-        return True
+    def _create_livetrack_coordinator(self):
+        return LiveTrackCoordinator(
+            lambda: self.config.G_THINGSBOARD_API["INTERVAL_SEC"],
+            self._execute_livetrack_request,
+        )
 
-    async def _send_livetrack_data_via_gadgetbridge_http(self, data):
-        if not await self._send_thingsboard_via_gadgetbridge_http(
-            self.thingsboard_telemetry_url,
-            data,
-        ):
-            return False
-
-        return True
-
-    async def _send_livetrack_data_via_mqtt(self, data, caller_name):
-        if not _IMPORT_THINGSBOARD:
-            return None
-
-        app_logger.debug("[TB][MQTT] opening BT tethering for livetrack")
-        bt_open_result = await self.network.open_bt_tethering(caller_name)
-        if not bt_open_result.is_success():
-            app_logger.debug("[TB][MQTT] failed to open BT tethering for livetrack")
-            return "open_error"
-
+    async def _execute_livetrack_request(self, request):
+        caller_name = self._execute_livetrack_request.__name__
+        sample = build_livetrack_sample(self.config)
+        telemetry_success = garmin_success = False
         send_status = None
-        close_failed = False
-        try:
-            res = await asyncio.to_thread(
-                self._send_livetrack_telemetry_blocking,
-                data,
+
+        if request.include_thingsboard and self._check_livetrack_startup_config():
+            telemetry_success, send_status = (
+                await self.thingsboard_livetrack_client.send_sample(sample, caller_name)
             )
-            if res != TBPublishInfo.TB_ERR_SUCCESS:
-                app_logger.error(f"[BT] thingsboard upload error: {res}")
+
+        if self._check_garmin_livetrack_startup_config():
+            if request.garmin_stop:
+                garmin_status = await self._stop_garmin_livetrack(caller_name)
             else:
-                send_status = "success"
-                app_logger.debug("[TB][MQTT] livetrack telemetry sent successfully")
-        except socket.timeout as e:
-            app_logger.error(f"[BT] socket timeout: {e}")
-        except socket.error as e:
-            app_logger.error(f"[BT] socket error: {e}")
-        except json.JSONDecodeError as e:
-            app_logger.error(f"[BT] ThingsBoard invalid data: {e}\n{data=}")
-            for datum in data["values"].values():
-                app_logger.error(f"{datum} ({type(datum)})")
-        except Exception as exc:
-            app_logger.exception(f"[BT] unexpected ThingsBoard error: {exc}")
-        finally:
-            if not await self.network.close_bt_tethering(caller_name):
-                close_failed = True
-                app_logger.warning(
-                    "[TB][MQTT] failed to close BT tethering for livetrack"
+                garmin_status = await self._send_garmin_livetrack_sample(
+                    sample,
+                    caller_name,
+                    self.config.G_MANUAL_STATUS != "STOP",
                 )
+            garmin_success = garmin_status in ("success", "not_active")
 
-        if close_failed:
-            return "close_error"
-        return send_status
-
-    async def _send_livetrack_data_with_fallback(self, data, caller_name):
-        if await self._send_livetrack_data_via_gadgetbridge_http(data):
-            return True, "success"
-
-        app_logger.warning("[TB] livetrack HTTP failed, falling back to MQTT")
-        send_time_status = await self._send_livetrack_data_via_mqtt(
-            data,
-            caller_name,
+        suffix = {"success": "", "open_error": "OE", "close_error": "CE"}.get(
+            send_status
         )
-        app_logger.debug(
-            f"[TB] livetrack MQTT fallback completed: status={send_time_status}"
-        )
-        return send_time_status == "success", send_time_status
+        if suffix is not None or garmin_success:
+            self.config.logger.sensor.values["integrated"][
+                "send_time"
+            ] = datetime.now().strftime("%H:%M") + (suffix or "")
 
-    async def _send_livetrack_course_via_gadgetbridge_http(self, data):
-        success = await self._send_thingsboard_via_gadgetbridge_http(
-            self.thingsboard_attributes_url,
-            data,
-        )
-        if success:
-            app_logger.debug("[TB][GB] course attributes sent successfully")
-        return success
-
-    async def _send_livetrack_course_via_mqtt(self, data):
-        if not self.thingsboard_check():
-            return False
-
-        f_name = self.send_livetrack_course.__name__
-        app_logger.debug("[TB][MQTT] opening BT tethering for course")
-        bt_open_result = await self.network.open_bt_tethering(f_name)
-        if not bt_open_result.is_success():
-            app_logger.debug("[TB][MQTT] failed to open BT tethering for course")
-            return False
-
-        try:
-            self.thingsboard_client.connect()
-            res = self.thingsboard_client.send_attributes(data).get()
-            if res != TBPublishInfo.TB_ERR_SUCCESS:
-                app_logger.error(f"thingsboard upload error: {res}")
-            else:
-                app_logger.debug("[TB][MQTT] course attributes sent successfully")
-            return res == TBPublishInfo.TB_ERR_SUCCESS
-        finally:
-            self.thingsboard_client.disconnect()
-            await self.network.close_bt_tethering(f_name)
-
-    def _send_livetrack_telemetry_blocking(self, data):
-        try:
-            self.thingsboard_client.connect()
-            res = self.thingsboard_client.send_telemetry(data).get()
-            time.sleep(1)
-            return res
-        finally:
-            self.thingsboard_client.disconnect()
-
-    async def send_livetrack_data_internal(self):
-        self.send_livetrack_data_lock = True
-        f_name = self.send_livetrack_data_internal.__name__
-        timestamp_str = ""
-        t = int(time.time())
-        if not self.config.G_DUMMY_OUTPUT:
-            timestamp_str = datetime.fromtimestamp(t).strftime("%m/%d %H:%M")
-        # app_logger.info(f"[TB] start, network: {bool(detect_network())}")
-
-        v = self.config.logger.sensor.values
-        speed = v["integrated"]["speed"]
-        if not np.isnan(speed):
-            speed = int(speed * 3.6)
-        distance = v["integrated"]["distance"]
-        if not np.isnan(distance):
-            distance = float(round(distance / 1000, 1))
-
-        data = {
-            "ts": t * 1000,
-            "values": {
-                "timestamp": timestamp_str,
-                "speed": speed,
-                "distance": distance,
-                "heartrate": v["integrated"]["ave_heart_rate_60s"],
-                "power": v["integrated"]["ave_power_60s"],
-                "work": int(v["integrated"]["accumulated_power"] / 1000),
-                # 'w_prime_balance': v["integrated"]["w_prime_balance_normalized"],
-                "temperature": v["integrated"]["temperature"],
-                # 'altitude': float(v["I2C"]["altitude"]),
-                "latitude": float(v["GPS"]["lat"]),
-                "longitude": float(v["GPS"]["lon"]),
-            },
-        }
-        try:
-            telemetry_success, send_time_status = (
-                await self._send_livetrack_data_with_fallback(data, f_name)
+        course_status = self.thingsboard_livetrack_client.course_send_status
+        if telemetry_success and course_status in ("LOAD", "RESET"):
+            revision = self.thingsboard_livetrack_client.course_send_revision
+            success = await self.thingsboard_livetrack_client.send_course(
+                self.config.logger.course,
+                reset=course_status == "RESET",
             )
-            suffix = {
-                "success": "",
-                "open_error": "OE",
-                "close_error": "CE",
-            }.get(send_time_status)
-            if suffix is not None:
-                v["integrated"]["send_time"] = datetime.now().strftime("%H:%M") + suffix
-            await asyncio.sleep(5)
+            self._complete_livetrack_course(
+                self.thingsboard_livetrack_client,
+                revision,
+                success,
+            )
 
-            if telemetry_success:
-                if self.course_send_status == "LOAD":
-                    await self.send_livetrack_course()
-                elif self.course_send_status == "RESET":
-                    await self.send_livetrack_course(reset=True)
-        finally:
-            self.send_livetrack_data_lock = False
-
-    async def send_livetrack_course(self, reset=False):
-        if not self._check_livetrack_startup_config():
-            return
-
-        if not reset and (
-            not len(self.config.logger.course.latitude)
-            or not len(self.config.logger.course.longitude)
+        client = self.garmin_livetrack_client
+        course_status = getattr(client, "course_send_status", "")
+        if (
+            garmin_success
+            and not request.garmin_stop
+            and callable(getattr(client, "send_course", None))
+            and course_status in ("LOAD", "RESET")
         ):
+            revision = client.course_send_revision
+            result = await self._send_garmin_livetrack_course(
+                caller_name,
+                reset=course_status == "RESET",
+            )
+            self._complete_livetrack_course(
+                client,
+                revision,
+                result in ("success", "not_active"),
+            )
+
+    async def _run_garmin_livetrack_operation(
+        self, caller_name, operation, use_gadgetbridge=True
+    ):
+        client = self.garmin_livetrack_client
+        if client is None:
+            return "not_configured"
+
+        try:
+            if use_gadgetbridge and self.gadgetbridge_service is not None:
+                try:
+                    return await operation(self.gadgetbridge_service)
+                except GarminLiveTrackError:
+                    app_logger.warning(
+                        "[Garmin][GB] LiveTrack request failed; "
+                        "falling back to direct HTTP"
+                    )
+            if await detect_network_async(cache=False):
+                return await operation(None)
+            if not self.network.check_network_with_bt_tethering():
+                app_logger.debug("[Garmin] LiveTrack skipped: network unavailable")
+                return "network_unavailable"
+
+            async def direct_operation():
+                return await operation(None)
+
+            status, value = await run_with_bt_tethering(
+                self.network,
+                caller_name,
+                direct_operation,
+                log_prefix="[Garmin]",
+                purpose="LiveTrack",
+            )
+            return value if status == "success" else status
+        except GarminLiveTrackError as exc:
+            self.garmin_livetrack_unavailable_reason = str(exc)
+            self._notify_livetrack_unavailable(
+                "garmin_livetrack_unavailable_notified",
+                self.garmin_livetrack_unavailable_reason,
+            )
+            return "error"
+        finally:
+            self._persist_garmin_credentials_if_cleared()
+
+    async def _send_garmin_livetrack_sample(
+        self, sample, caller_name, create_session=True
+    ):
+        client = self.garmin_livetrack_client
+
+        async def operation(gadgetbridge_service):
+            return await client.post_point(
+                sample,
+                gadgetbridge_service=gadgetbridge_service,
+                create_session=create_session,
+            )
+
+        try:
+            session_active = client.active_session(client.load_state()) is not None
+        except GarminLiveTrackError:
+            session_active = False
+
+        # Creating a session needs a confirmed response. Existing-session points
+        # may use the legacy Gadgetbridge bridge, whose HTTP status is unavailable.
+        result = await self._run_garmin_livetrack_operation(
+            caller_name,
+            operation,
+            use_gadgetbridge=session_active,
+        )
+        if result == "success" and not session_active:
+            course = getattr(getattr(self.config, "logger", None), "course", None)
+            client.course_send_status = (
+                "LOAD" if getattr(course, "is_set", False) else "RESET"
+            )
+        return result
+
+    async def _stop_garmin_livetrack(self, caller_name):
+        async def operation(gadgetbridge_service):
+            return await self.garmin_livetrack_client.stop_session(
+                gadgetbridge_service=gadgetbridge_service,
+            )
+
+        result = await self._run_garmin_livetrack_operation(
+            caller_name,
+            operation,
+            use_gadgetbridge=False,
+        )
+        if result == "success":
+            app_logger.info("[Garmin] LiveTrack session stopped")
+        elif result == "not_active":
+            app_logger.info("[Garmin] LiveTrack stop skipped: no active session")
+        else:
+            app_logger.warning(
+                f"[Garmin] LiveTrack stop did not complete: status={result}"
+            )
+        return result
+
+    def send_garmin_livetrack_stop(self):
+        if not self._check_garmin_livetrack_startup_config():
             return
-
-        course_path = []
-        if not reset:
-            course_path = np.stack(
-                [
-                    self.config.logger.course.latitude,
-                    self.config.logger.course.longitude,
-                ],
-                axis=1,
-            ).tolist()
-
-        # Send the ordered points as a polyline source.
-        data = {"course_path": course_path}
-        app_logger.debug(
-            f"[TB] course send started: reset={reset}, points={len(course_path)}"
+        client = self.garmin_livetrack_client
+        if client is None:
+            return
+        try:
+            if client.active_session(client.load_state()) is None:
+                app_logger.info("[Garmin] LiveTrack stop skipped: no active session")
+                return
+        except GarminLiveTrackError as exc:
+            self.garmin_livetrack_unavailable_reason = str(exc)
+            self._notify_livetrack_unavailable(
+                "garmin_livetrack_unavailable_notified",
+                self.garmin_livetrack_unavailable_reason,
+            )
+            return
+        self.send_livetrack_data(
+            quick_send=True,
+            garmin_stop=True,
+            include_thingsboard=False,
         )
 
-        if await self._send_livetrack_course_via_gadgetbridge_http(data):
-            self.course_send_status = ""
-            app_logger.debug("[TB] course sent via GadgetBridge HTTP")
-            return
+    async def _send_garmin_livetrack_course(self, caller_name, reset=False):
+        async def operation(_gadgetbridge_service):
+            return await self.garmin_livetrack_client.send_course(
+                self.config.logger.course,
+                reset=reset,
+            )
 
-        app_logger.debug("[TB] course HTTP failed, falling back to MQTT")
-        if await self._send_livetrack_course_via_mqtt(data):
-            self.course_send_status = ""
-            app_logger.debug("[TB] course sent via MQTT")
+        result = await self._run_garmin_livetrack_operation(
+            caller_name,
+            operation,
+            use_gadgetbridge=False,
+        )
+        if result == "success":
+            action = "cleared" if reset else "attached"
+            app_logger.info(f"[Garmin] LiveTrack course {action}")
+        elif result != "not_active":
+            app_logger.warning(
+                f"[Garmin] LiveTrack course remains pending: status={result}"
+            )
+        return result
+
+    def _queue_livetrack_course(self, reset):
+        status = "RESET" if reset else "LOAD"
+        clients = (
+            self.thingsboard_livetrack_client,
+            self.garmin_livetrack_client,
+        )
+        for client in clients:
+            if client is None:
+                continue
+            client.course_send_revision = getattr(client, "course_send_revision", 0) + 1
+            client.course_send_status = status
+
+    @staticmethod
+    def _complete_livetrack_course(client, revision, success):
+        if success and client.course_send_revision == revision:
+            client.course_send_status = ""
 
     def send_livetrack_course_load(self):
-        self.course_send_status = "LOAD"
-        if not self._check_livetrack_startup_config():
-            return
-        if not (self.check_livetrack_http_check() or self.check_livetrack_mqtt_check()):
-            return
-        asyncio.create_task(self.send_livetrack_course(False))
+        self._queue_livetrack_course(False)
 
     def send_livetrack_course_reset(self):
-        self.course_send_status = "RESET"
-        if not self._check_livetrack_startup_config():
-            return
-        if not (self.check_livetrack_http_check() or self.check_livetrack_mqtt_check()):
-            return
-        asyncio.create_task(self.send_livetrack_course(True))
+        self._queue_livetrack_course(True)
 
     def check_time_interval(self, time_key, interval_sec, quick_send):
         t = int(time.time())

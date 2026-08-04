@@ -588,14 +588,140 @@ class UploadActivityMenuWidget(MenuWidget):
         )
 
 
+class LiveTrackMenuWidget(MenuWidget):
+    THINGSBOARD_BUTTON = "ThingsBoard"
+    GARMIN_BUTTON = "Garmin"
+    GARMIN_MESSAGES_BUTTON = "Garmin Messages"
+
+    def setup_menu(self):
+        button_conf = (
+            (
+                self.THINGSBOARD_BUTTON,
+                "toggle",
+                lambda: self.onoff_thingsboard_livetrack(True),
+            ),
+            (
+                self.GARMIN_BUTTON,
+                "toggle",
+                lambda: self.onoff_garmin_livetrack(True),
+            ),
+            (
+                self.GARMIN_MESSAGES_BUTTON,
+                "toggle",
+                lambda: self.onoff_garmin_messages(True),
+            ),
+        )
+        self.add_buttons(button_conf)
+        self.update_buttons()
+
+    def preprocess(self):
+        self.update_buttons()
+
+    def _thingsboard_available(self):
+        thingsboard = self.config.G_THINGSBOARD_API
+        return bool(
+            thingsboard.get("HAVE_API_TOKEN")
+            and thingsboard.get("TOKEN", "").strip()
+            and thingsboard.get("SERVER", "").strip()
+        )
+
+    def _garmin_unavailable_reason(self):
+        api_helper = getattr(self.config, "api", None)
+        if api_helper is None:
+            return "Garmin LiveTrack is disabled because API helper is not available."
+        return api_helper.garmin_livetrack_configuration_reason()
+
+    def _garmin_available(self):
+        return self._garmin_unavailable_reason() is None
+
+    def _show_unavailable(self, title, reason):
+        gui = getattr(self.config, "gui", None)
+        if gui is None:
+            return
+        popup_multiline = getattr(gui, "show_popup_multiline", None)
+        if callable(popup_multiline):
+            popup_multiline(title, reason, 5)
+            return
+        popup = getattr(gui, "show_popup", None)
+        if callable(popup):
+            popup(title, 5)
+
+    def update_buttons(self):
+        thingsboard_status = self.config.G_THINGSBOARD_API["STATUS"]
+        garmin_status = self.config.G_GARMINCONNECT_API["LIVETRACK_STATUS"]
+        messages_status = self.config.G_GARMINCONNECT_API["LIVETRACK_MESSAGES"]
+
+        self.buttons[self.THINGSBOARD_BUTTON].change_toggle(thingsboard_status)
+        self.buttons[self.GARMIN_BUTTON].change_toggle(garmin_status)
+        self.buttons[self.GARMIN_MESSAGES_BUTTON].change_toggle(messages_status)
+
+        self.buttons[self.THINGSBOARD_BUTTON].onoff_button(
+            self._thingsboard_available() or thingsboard_status
+        )
+        garmin_available = self._garmin_available()
+        self.buttons[self.GARMIN_BUTTON].onoff_button(garmin_available or garmin_status)
+        self.buttons[self.GARMIN_MESSAGES_BUTTON].onoff_button(
+            (garmin_available and garmin_status) or messages_status
+        )
+
+    def onoff_thingsboard_livetrack(self, change=True):
+        if change:
+            if (
+                not self.config.G_THINGSBOARD_API["STATUS"]
+                and not self._thingsboard_available()
+            ):
+                self._show_unavailable(
+                    "LiveTrack disabled",
+                    "ThingsBoard TOKEN or SERVER is not configured.",
+                )
+                return
+            self.config.G_THINGSBOARD_API["STATUS"] = not self.config.G_THINGSBOARD_API[
+                "STATUS"
+            ]
+            self.config.setting.write_config()
+        self.update_buttons()
+
+    def onoff_garmin_livetrack(self, change=True):
+        if change:
+            if (
+                not self.config.G_GARMINCONNECT_API["LIVETRACK_STATUS"]
+                and not self._garmin_available()
+            ):
+                self._show_unavailable(
+                    "Garmin LiveTrack disabled",
+                    self._garmin_unavailable_reason(),
+                )
+                return
+            self.config.G_GARMINCONNECT_API["LIVETRACK_STATUS"] = (
+                not self.config.G_GARMINCONNECT_API["LIVETRACK_STATUS"]
+            )
+            if not self.config.G_GARMINCONNECT_API["LIVETRACK_STATUS"]:
+                self.config.G_GARMINCONNECT_API["LIVETRACK_MESSAGES"] = False
+            self.config.setting.write_config()
+        self.update_buttons()
+
+    def onoff_garmin_messages(self, change=True):
+        if change:
+            if not self.config.G_GARMINCONNECT_API["LIVETRACK_STATUS"]:
+                self._show_unavailable(
+                    "Garmin Messages disabled",
+                    "Enable Garmin LiveTrack first.",
+                )
+                return
+            self.config.G_GARMINCONNECT_API["LIVETRACK_MESSAGES"] = (
+                not self.config.G_GARMINCONNECT_API["LIVETRACK_MESSAGES"]
+            )
+            self.config.setting.write_config()
+        self.update_buttons()
+
+
 class ConnectivityMenuWidget(MenuWidget):
     def setup_menu(self):
         button_conf = (
             # Name(page_name), button_attribute, connected functions, layout
             ("Auto BT Tethering", "toggle", lambda: self.bt_auto_tethering(True)),
             ("Select BT device", "submenu", self.select_bt_device),
-            ("Live Track", "toggle", lambda: self.onoff_live_track(True)),
-            ("", None, None),
+            ("Live Track", "submenu", self.live_track_menu),
             ("Gadgetbridge", "toggle", self.onoff_ble_uart_service),
             ("Get Location", "toggle", self.onoff_gadgetbridge_gps),
         )
@@ -606,12 +732,7 @@ class ConnectivityMenuWidget(MenuWidget):
             self.buttons["Auto BT Tethering"].disable()
             self.buttons["Select BT device"].disable()
 
-        # ThingsBoard
-        if (
-            not self.config.api.thingsboard_check()
-            or not self.config.G_THINGSBOARD_API["HAVE_API_TOKEN"]
-        ):
-            self.buttons["Live Track"].disable()
+        self.update_livetrack_button()
 
         # GadgetBridge
         if self.config.ble_uart is None:
@@ -619,7 +740,6 @@ class ConnectivityMenuWidget(MenuWidget):
             self.buttons["Get Location"].disable()
 
         # initialize toggle button status
-        self.onoff_live_track(change=False)
         self.bt_auto_tethering(change=False)
 
     def preprocess(self):
@@ -628,15 +748,33 @@ class ConnectivityMenuWidget(MenuWidget):
             self.buttons["Gadgetbridge"].change_toggle(status)
             self.buttons["Get Location"].change_toggle(self.config.ble_uart.gps_status)
             self.buttons["Get Location"].onoff_button(status)
+        self.update_livetrack_button()
 
-    def onoff_live_track(self, change=True):
-        if change:
-            self.config.G_THINGSBOARD_API["STATUS"] = not self.config.G_THINGSBOARD_API[
-                "STATUS"
-            ]
-        self.buttons["Live Track"].change_toggle(
-            self.config.G_THINGSBOARD_API["STATUS"]
+    def update_livetrack_button(self):
+        thingsboard = self.config.G_THINGSBOARD_API
+        thingsboard_available = bool(
+            thingsboard.get("HAVE_API_TOKEN")
+            and thingsboard.get("TOKEN", "").strip()
+            and thingsboard.get("SERVER", "").strip()
         )
+        api_helper = getattr(self.config, "api", None)
+        garmin_reason = (
+            api_helper.garmin_livetrack_configuration_reason()
+            if api_helper is not None
+            else "API helper is not available."
+        )
+        garmin_available = garmin_reason is None
+        active = (
+            thingsboard.get("STATUS")
+            or self.config.G_GARMINCONNECT_API["LIVETRACK_STATUS"]
+            or self.config.G_GARMINCONNECT_API["LIVETRACK_MESSAGES"]
+        )
+        self.buttons["Live Track"].onoff_button(
+            thingsboard_available or garmin_available or active
+        )
+
+    def live_track_menu(self):
+        self.change_page("Live Track", preprocess=True)
 
     def bt_auto_tethering(self, change=True):
         if change:

@@ -112,7 +112,11 @@ Some functions depend on your parts.
 | Resume | Yes | Recording continues even if the power is suddenly turned off and restored. |
 | Output .fit log file | Yes | The standard format used by famous services as Strava and Garmin Connect. Also .csv format output is supported. |
 | Upload | Yes | Strava, Garmin and Ride with GPS. |
-| Live Track | Yes | Track data is uploaded in real time to the [ThingsBoard](https://thingsboard.io) dashboard service, so you can share your activity with friends and family. |
+| Live Track | Yes | Track data can be uploaded in real time to [ThingsBoard](https://thingsboard.io) or Garmin LiveTrack. |
+
+Garmin LiveTrack support is unofficial, unaffiliated with and not warranted by
+Garmin, and disabled by default; enable it only for an account and device you
+own or control. Its private API may change or stop working without notice.
 
 ### ThingsBoard dashboard
 
@@ -128,7 +132,9 @@ called from the tenant's existing root rule chain; it does not replace it.
 <img width="400" alt="thingsboard-01" src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/100741/8c7d1b9b-9b58-4910-89f4-c3bb89fd3e82.png"> <img width="320" alt="thingsboard-02" src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/100741/9475bfe5-23b5-4c0c-8609-661946767a58.png">
 
 See [ThingsBoard setup](doc/thingsboard_setup.md) for the layout, data format,
-import, device connection, and notification setup instructions.
+import, device connection, and notification setup instructions. Garmin LiveTrack
+settings are described in the
+[software installation guide](doc/software_installation.md#garminconnect_api-section).
 
 
 ## Sensors

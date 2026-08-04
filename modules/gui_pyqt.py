@@ -302,6 +302,7 @@ class GUI_PyQt(GUI_Qt_Base):
                 RideInfoMenuWidget,
                 QzssDcrViewerWidget,
                 ConnectivityMenuWidget,
+                LiveTrackMenuWidget,
                 UploadActivityMenuWidget,
             )
             from modules.pyqt.menu.pyqt_system_menu_widget import (
@@ -394,8 +395,7 @@ class GUI_PyQt(GUI_Qt_Base):
                 ("CP", AdjustCPWidget),
                 ("W Prime Balance", AdjustWPrimeBalanceWidget),
                 ("Profile", ProfileWidget),
-                ("QZSS DC Report", QzssDcrViewerWidget),
-                ("Ride Info", RideInfoMenuWidget),
+                ("Live Track", LiveTrackMenuWidget),
                 ("Connectivity", ConnectivityMenuWidget),
                 ("Upload Activity", UploadActivityMenuWidget),
                 ("DEM Tile source", DEMTileListWidget),
