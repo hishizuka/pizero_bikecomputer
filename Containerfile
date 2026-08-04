@@ -5,6 +5,6 @@ RUN apt install -y build-essential git python3-venv python3-yaml cython3 cmake p
 
 WORKDIR /opt
 
-RUN python -m pip install oyaml polyline qasync pyqtgraph
+RUN python -m pip install fitparse oyaml polyline qasync pyqtgraph
 
 ENTRYPOINT ["python", "pizero_bikecomputer.py"]

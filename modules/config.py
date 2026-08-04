@@ -979,8 +979,17 @@ class Config:
             self.G_MAP_CONFIG.update(map_list)
 
     def get_courses(self):
+        from modules.loaders.fit import FitLoader
+
+        extensions = (".tcx", ".fit") if FitLoader.available else (".tcx",)
+        course_files = [
+            file
+            for file in glob(os.path.join(self.G_COURSE_DIR, "*"))
+            if os.path.splitext(file)[1].lower() in extensions
+        ]
+
         dirs = sorted(
-            glob(os.path.join(self.G_COURSE_DIR, "*.tcx")),
+            course_files,
             key=lambda f: os.stat(f).st_mtime,
             reverse=True,
         )

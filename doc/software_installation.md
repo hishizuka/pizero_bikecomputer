@@ -51,17 +51,17 @@ $ brew install python pyqt
 $ python3 -m venv .venv
 $ source .venv/bin/activate
 $ pip install -U pip setuptools
-$ pip install PyQt6 numpy cython pillow pyqtgraph oyaml polyline aiohttp qasync psutil
+$ pip install PyQt6 numpy cython pillow pyqtgraph fitparse oyaml polyline aiohttp qasync psutil
 
 # or Linux (Debian/Ubuntu)
 $ python3 -m venv .venv
 $ source .venv/bin/activate
 $ pip install -U pip setuptools
-$ pip install PyQt6 numpy cython pillow pyqtgraph oyaml polyline aiohttp qasync psutil
+$ pip install PyQt6 numpy cython pillow pyqtgraph fitparse oyaml polyline aiohttp qasync psutil
 $ sudo apt install sqlite3 libsqlite3-dev
 
 # optional: cloud upload / live track
-$ pip install garminconnect tb-mqtt-client mmh3 timezonefinder
+$ pip install garminconnect requests tb-mqtt-client mmh3 timezonefinder
 
 $ git clone https://github.com/hishizuka/pizero_bikecomputer.git
 $ cd pizero_bikecomputer
@@ -108,7 +108,7 @@ $ python -m venv --system-site-packages ~/.venv
 $ source ~/.venv/bin/activate
 $ echo "source ~/.venv/bin/activate" >> ~/.bashrc
 
-$ pip install oyaml polyline qasync pyqtgraph
+$ pip install fitparse oyaml polyline qasync pyqtgraph
 
 $ git clone https://github.com/hishizuka/pizero_bikecomputer.git
 $ cd pizero_bikecomputer
@@ -698,9 +698,11 @@ When unlocked, you can drag the profile horizontally.
 <img width="400" alt="menu-03-courses" src="https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/35322fa8-e41e-4f8d-a922-fc86c8481cf5">
 
 - Local Storage
-  - Select course .tcx file in `courses` folder.
+  - Select a `.tcx` or `.fit` course file in the `courses` folder.
+  - Loading `.fit` files uses the `fitparse` package included by the standard installation.
 - Ride with GPS
   - If you [set token in setting.conf](#ridewithgps_api-section), select course from Ride with GPS. Internet access is required. Sample image are shown as belows.
+  - Route data is downloaded as JSON together with the map preview and elevation profile images.
   - <img width="400" alt="RidewithGPS-01" src="https://user-images.githubusercontent.com/12926652/206076210-9c50f789-bac3-4bd0-8209-9dea3a61a132.png">
   - <img width="400" alt="RidewithGPS-02" src="https://user-images.githubusercontent.com/12926652/206076212-8696ac34-c9e6-485f-b1ba-687c0d2a0061.png">
 - Android Google Maps
@@ -1188,7 +1190,7 @@ There are some settings which the user doesn't need to care about and some varia
 
 ## Prepare course files and maps
 
-Put `.tcx` files in the `courses/` folder. They are listed in the `Courses > Local Storage` menu.
+Put `.tcx` or `.fit` course files in the `courses/` folder. They are listed in the `Courses > Local Storage` menu.
 
 To download the map in advance, run the program manually with the --demo option. It will start in demo mode.
 

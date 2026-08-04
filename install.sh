@@ -163,7 +163,7 @@ fi
 # Install additional requirements
 echo "🔧 Installing core pip packages..."
 # essential
-pip install oyaml polyline
+pip install fitparse oyaml polyline
 echo "✅ Core pip packages installed successfully."
 
 if command -v raspi-config >/dev/null 2>&1; then

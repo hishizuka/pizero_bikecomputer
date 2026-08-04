@@ -159,11 +159,11 @@ USB dongle is required if using ANT+ sensors.
 | GPS module | Yes | UART GPS module(via GPSd) and I2C GPS are supported. |
 | Positioning from smartphones | Yes | Using the Android app [GadgetBridge](https://gadgetbridge.org). |
 | Map | Yes | Support raster map tile format like OSM (z/x/y.png or jpg). So, offline map is available with local caches. Also, raster .mbtile format is supported. |
-| Course on the map| Yes | Local `.tcx` files, cloud courses from Ride with GPS, and routes shared from Google Maps on Android via Bluetooth. |
+| Course on the map| Yes | Local `.tcx` and `.fit` files, cloud courses from Ride with GPS, and routes shared from Google Maps on Android via Bluetooth. |
 | Search route | Yes | Google Routes API (Compute Routes) |
 | Course profile | Yes |  |
 | Detect climbs | Yes | Like Garmin ClimbPro. Only climbs on the course, not detect nearby climbs. |
-| Cuesheet | Yes | Use course points included in course files(.tcx). |
+| Cuesheet | Yes | Use course points included in `.tcx` and `.fit` course files. |
 | Map overlay | Yes | Heatmap (Strava / Ride with GPS), weather (rain / wind), and configurable wind / DEM data sources. |
 | DEM / wind data sources | Yes | External DEM tiles and wind data sources can be selected from the menu and settings. |
 
@@ -211,13 +211,17 @@ In Japan, [気象庁降水ナウキャスト](https://www.jma.go.jp/bosai/nowc/)
 | Graph | Yes | Altitude and performance(HR, PWR, W prime balance) |
 | Customize data pages | Yes | With layout.yaml |
 | ANT+ pairing | Yes |  |
-| Select course | Yes | local `.tcx`, Ride with GPS, and Android Google Maps via Bluetooth. |
+| Select course | Yes | local `.tcx` and `.fit`, Ride with GPS, and Android Google Maps via Bluetooth. |
 | Upload activity | Yes | Strava, Garmin and Ride with GPS. |
 | Select map | Yes | base maps, overlays, and external data sources |
 | Adjust parameter | Yes | wheel size, altitude, CP and W prime balance |
 | Network setting | Yes | Toggle Wi-Fi / Bluetooth, BT pairing / tethering, and GadgetBridge-related options. |
 | Language localization | Yes | Font and translation file of items are required. |
 | No GUI option | Yes | headless mode |
+
+Loading local `.fit` courses uses the `fitparse` package included by the
+standard installation. Custom installations without it hide `.fit` courses;
+the application and JSON/TCX course loading continue to work.
 
 
 ### Performance graph

@@ -162,9 +162,9 @@ class CoursesMenuWidget(MenuWidget):
                     )
                 )
                 self.onoff_course_cancel_button()
-        # tcx file
-        elif filename.lower().find(".tcx") >= 0:
-            await self.load_tcx_route(filename)
+        # course file
+        elif any(extension in filename.lower() for extension in (".tcx", ".fit")):
+            await self.load_course_route(filename)
         await self.cancel_receive_route()
 
     async def load_html_route(self, html_file):
@@ -185,10 +185,14 @@ class CoursesMenuWidget(MenuWidget):
         finally:
             self.config.gui.show_forced_message(msg)
 
-    async def load_tcx_route(self, filename):
+    async def load_course_route(self, filename):
         self.cancel_course()
+        extension = next(
+            extension for extension in (".tcx", ".fit") if extension in filename.lower()
+        )
         course_file = os.path.join(
-            self.config.G_COURSE_DIR, filename[: filename.lower().find(".tcx") + 4]
+            self.config.G_COURSE_DIR,
+            filename[: filename.lower().find(extension) + len(extension)],
         )
         shutil.move(os.path.join(self.config.G_COURSE_DIR, filename), course_file)
         self.set_new_course(course_file)
@@ -437,12 +441,6 @@ class CourseDetailWidget(MenuWidget):
             + "course-{route_id}.json"
         ).format(route_id=route_id)
 
-    def _get_course_filename(self, route_id):
-        return (
-            self.config.G_RIDEWITHGPS_API["URL_ROUTE_DOWNLOAD_DIR"]
-            + "course-{route_id}.tcx"
-        ).format(route_id=route_id)
-
     @staticmethod
     def _has_downloaded_file(filename):
         return os.path.exists(filename) and os.path.getsize(filename) > 0
@@ -583,7 +581,11 @@ class CourseDetailWidget(MenuWidget):
             return
 
         # 1st download
-        await self.config.api.get_ridewithgps_files(self.list_id)
+        if not (
+            self._has_downloaded_file(self._get_route_json_filename(self.list_id))
+            and self._has_downloaded_file(self._get_map_image_filename(self.list_id))
+        ):
+            await self.config.api.get_ridewithgps_files(self.list_id)
 
     def on_back_menu(self):
         self._stop_detail_session()
@@ -652,8 +654,8 @@ class CourseDetailWidget(MenuWidget):
         has_profile = self._has_downloaded_file(
             self._get_profile_image_filename(self.list_id)
         )
-        has_course_file = self._has_downloaded_file(
-            self._get_course_filename(self.list_id)
+        has_route_json = self._has_downloaded_file(
+            self._get_route_json_filename(self.list_id)
         )
 
         if has_map_preview or has_profile:
@@ -670,20 +672,16 @@ class CourseDetailWidget(MenuWidget):
                 draw_profile_image=has_profile,
             )
 
-        if has_course_file:
+        if has_route_json:
             self.all_downloaded = True
             self.enable_next_button()
-            return True
 
-        return False
+        return has_route_json and has_map_preview and has_profile
 
     def set_course(self):
         index = self.config.gui.gui_config.G_GUI_INDEX["Courses List"]
         self.parentWidget().widget(index).set_course(
-            (
-                self.config.G_RIDEWITHGPS_API["URL_ROUTE_DOWNLOAD_DIR"]
-                + "course-{route_id}.tcx"
-            ).format(route_id=self.list_id)
+            self._get_route_json_filename(self.list_id)
         )
 
     def draw_images(self, draw_map_image=True, draw_profile_image=True):
