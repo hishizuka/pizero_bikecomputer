@@ -517,9 +517,25 @@ class Button_Config:
 
     def press_button(self, button_hard, press_button, index):
         gui = self.config.gui
-        if gui is None or gui.stack_widget is None:
+        if gui is None:
             return
         profile = self._resolve_button_profile(button_hard)
+        mode_resolver = getattr(gui, "get_button_mode", None)
+        button_mode = mode_resolver() if callable(mode_resolver) else None
+        if button_mode is not None:
+            if button_mode not in self.button_def[profile]:
+                button_mode = "MAIN"
+            self.page_mode = button_mode
+            self._dispatch_button_action(
+                gui,
+                profile,
+                press_button,
+                index,
+            )
+            return
+
+        if getattr(gui, "stack_widget", None) is None:
+            return
         stack_index = gui.stack_widget.currentIndex()
         main_page_index = -1
         if gui.main_page is not None:
@@ -578,14 +594,44 @@ class Button_Config:
             elif w_index >= 2:
                 self.page_mode = "MENU"
 
-        if press_button not in self.button_def[profile][self.page_mode]:
+        self._dispatch_button_action(
+            gui,
+            profile,
+            press_button,
+            index,
+        )
+
+    def _dispatch_button_action(self, gui, profile, press_button, index):
+        profile_buttons = self.button_def.get(profile)
+        if profile_buttons is None:
+            app_logger.warning(f"Unknown button profile: {profile!r}")
+            return
+
+        page_buttons = profile_buttons.get(self.page_mode)
+        if page_buttons is None:
+            app_logger.warning(
+                f"Button page mode {self.page_mode!r} is not defined "
+                f"for profile {profile!r}"
+            )
+            return
+
+        if press_button not in page_buttons:
             app_logger.warning(
                 "button key error: "
                 f"'{press_button}' is not defined in "
                 f"self.button_def['{profile}']['{self.page_mode}']"
             )
             return
-        func_str = self.button_def[profile][self.page_mode][press_button][index]
+
+        actions = page_buttons[press_button]
+        if not 0 <= index < len(actions):
+            app_logger.warning(
+                f"Button action index {index} is out of range for "
+                f"{profile!r}/{self.page_mode!r}/{press_button!r}"
+            )
+            return
+
+        func_str = actions[index]
         if func_str in ("", "dummy"):
             # app_logger.debug(
             #     "[BUTTON] noop "
@@ -602,7 +648,14 @@ class Button_Config:
         #     f"key={press_button}, index={index}, action={func_str}"
         # )
 
-        getattr(self.config.gui, func_str)()
+        handler = getattr(gui, func_str, None)
+        if not callable(handler):
+            app_logger.warning(
+                f"GUI action {func_str!r} is not available for "
+                f"{type(gui).__name__}"
+            )
+            return
+        handler()
 
     def change_mode(self):
         # check MAP

@@ -35,7 +35,7 @@ def main():
         if config.G_GUI_MODE == "PyQt":
             from modules import gui_pyqt
         elif config.G_GUI_MODE == "QML":
-            from modules import gui_qml
+            from modules.qml.backend import gui as gui_qml
         elif config.G_GUI_MODE == "Kivy":
             from modules import gui_kivy
         elif config.G_GUI_MODE == "None":

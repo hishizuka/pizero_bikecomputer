@@ -12,7 +12,10 @@ from modules._qt_ver import (
     QT_PACKAGE,
 )
 import importlib
-_qt_import = importlib.import_module(f"modules._qt_{QtMode.lower()}")
+if QtMode == "QML":
+    _qt_import = importlib.import_module("modules.qml.backend.qt")
+else:
+    _qt_import = importlib.import_module(f"modules._qt_{QtMode.lower()}")
 QT_ALIGN_BOTTOM = _qt_import.QT_ALIGN_BOTTOM
 QT_ALIGN_LEFT = _qt_import.QT_ALIGN_LEFT
 QT_FORMAT_MONO = _qt_import.QT_FORMAT_MONO
@@ -63,6 +66,10 @@ class GUI_Qt_Base(QtCore.QObject):
 
     def set_render_widget(self, widget):
         self._render_widget = widget
+
+    def get_button_mode(self):
+        """Return a button profile page, or None for backend-specific resolution."""
+        return None
 
     def __init__(self, config):
         super().__init__()
