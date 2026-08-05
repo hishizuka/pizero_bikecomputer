@@ -304,6 +304,7 @@ class GUI_PyQt(GUI_Qt_Base):
                 TopMenuWidget,
                 ConnectivityMenuWidget,
                 LiveTrackMenuWidget,
+                RideInfoMenuWidget,
                 UploadActivityMenuWidget,
             )
             from modules.pyqt.menu.pyqt_system_menu_widget import (
@@ -365,7 +366,6 @@ class GUI_PyQt(GUI_Qt_Base):
                     QzssDcrDetailWidget,
                     QzssDcrEventListWidget,
                     QzssDcrViewerWidget,
-                    RideInfoMenuWidget,
                     start_qzss_dcr_popup_monitor,
                 )
 
@@ -434,6 +434,7 @@ class GUI_PyQt(GUI_Qt_Base):
                 ("Course Detail", CourseDetailWidget),
                 ("Courses List", CourseListWidget),
                 ("Courses", CoursesMenuWidget),
+                ("Ride Info", RideInfoMenuWidget),
                 ("Menu", TopMenuWidget),
             ]
             if qzss_dcr_supported:
@@ -443,7 +444,6 @@ class GUI_PyQt(GUI_Qt_Base):
                     (QzssDcrViewerWidget.ACTIVE_PAGE, QzssDcrEventListWidget),
                     (QzssDcrViewerWidget.HISTORY_PAGE, QzssDcrEventListWidget),
                     ("QZSS DC Report", QzssDcrViewerWidget),
-                    ("Ride Info", RideInfoMenuWidget),
                 ]
             menu_count = max(self.gui_config.G_GUI_INDEX.values()) + 1
             for m in menus:

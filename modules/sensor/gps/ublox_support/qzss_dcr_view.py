@@ -370,11 +370,7 @@ def _list_title(category, fields, show_state=True):
             else title or default
         )
     if category == Category.TYPHOON:
-        title = _typhoon_title(fields)
-        if not title:
-            return default
-        state = fields.get("reference_time_type") or fields.get("information_type")
-        return f"{title}（{state}）" if state and show_state else title
+        return _typhoon_title(fields) or default
     if category == Category.MARINE:
         title = _format_values(fields.get("marine_warning_codes")) or default
         state = fields.get("information_type")

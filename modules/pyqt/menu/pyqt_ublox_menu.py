@@ -113,15 +113,6 @@ class GPSMenuWidget(MenuWidget):
         )
 
 
-class RideInfoMenuWidget(MenuWidget):
-    def setup_menu(self):
-        button_conf = (("QZSS DC Report", "submenu", self.qzss_dcr_report),)
-        self.add_buttons(button_conf)
-
-    def qzss_dcr_report(self):
-        self.change_page("QZSS DC Report", preprocess=True)
-
-
 class QzssDcrViewerWidget(MenuWidget):
     ACTIVE_PAGE = "Active Alerts"
     HISTORY_PAGE = "History"

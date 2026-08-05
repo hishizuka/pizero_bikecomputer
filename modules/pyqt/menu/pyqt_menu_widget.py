@@ -208,14 +208,13 @@ class TopMenuWidget(MenuWidget):
             # Name(page_name), button_attribute, connected functions, layout
             ("Sensors", "submenu", self.sensors_menu),
             ("Courses", "submenu", self.courses_menu),
+            ("Ride Info", "submenu", self.ride_info_menu),
             ("Connectivity", "submenu", self.connectivity_menu),
             ("Upload Activity", "submenu", self.cloud_services_menu),
             ("Map and Data", "submenu", self.map_menu),
             ("Profile", "submenu", self.profile_menu),
             ("System", "submenu", self.setting_menu),
         ]
-        if getattr(self.sensor_gps, "supports_qzss_dcr", False):
-            button_conf.insert(2, ("Ride Info", "submenu", self.ride_info_menu))
         self.add_buttons(button_conf)
 
     def sensors_menu(self):
@@ -241,6 +240,18 @@ class TopMenuWidget(MenuWidget):
 
     def setting_menu(self):
         self.change_page("System", preprocess=True)
+
+
+class RideInfoMenuWidget(MenuWidget):
+    def setup_menu(self):
+        if getattr(self.sensor_gps, "supports_qzss_dcr", False):
+            button_conf = (("QZSS DC Report", "submenu", self.qzss_dcr_report),)
+        else:
+            button_conf = (("No information available", "dummy", None),)
+        self.add_buttons(button_conf)
+
+    def qzss_dcr_report(self):
+        self.change_page("QZSS DC Report", preprocess=True)
 
 
 class ListWidget(MenuWidget):
