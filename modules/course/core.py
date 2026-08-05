@@ -8,16 +8,17 @@ import numpy as np
 import oyaml
 
 from modules.app_logger import app_logger
-from modules.course_matcher import CourseMatcher
-from modules.course_processor import (
+from modules.utils.navigation import maneuver_to_turn_type
+from modules.utils.timer import Timer, log_timers
+
+from .loaders import FitLoader, JsonLoader, TcxLoader
+from .matcher import CourseMatcher
+from .processor import (
     CourseProcessor,
     _categorize_slope as _processor_slope,
 )
-from modules.course_state import CourseData, CourseIndex
-from modules.course_weather import CourseWeatherService
-from modules.loaders import FitLoader, JsonLoader, TcxLoader
-from modules.utils.navigation import maneuver_to_turn_type
-from modules.utils.timer import Timer, log_timers
+from .state import CourseData, CourseIndex
+from .weather import CourseWeatherService
 
 POLYLINE_DECODER = False
 try:

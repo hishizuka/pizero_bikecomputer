@@ -987,7 +987,7 @@ class Config:
             self.G_MAP_CONFIG.update(map_list)
 
     def get_courses(self):
-        from modules.loaders.fit import FitLoader
+        from modules.course.loaders.fit import FitLoader
 
         extensions = (".tcx", ".fit") if FitLoader.available else (".tcx",)
         course_files = [
