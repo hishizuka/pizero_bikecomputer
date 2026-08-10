@@ -1150,8 +1150,30 @@ livetrack_status = False
 livetrack_messages = False
 ```
 
-`livetrack_status` enables Garmin LiveTrack. `livetrack_messages` is reserved
-for LiveTrack message receiving and does not poll messages yet.
+`livetrack_status` enables Garmin LiveTrack. `livetrack_messages` enables the
+message form on the sharing page and receives its text messages while an
+activity is recording. The Messages toggle is selectable while Garmin LiveTrack
+is enabled. Its owner-only BTF credential is stored at
+`tokenstore/livetrack_btf_credentials.json`; the credential and its internal
+messaging device identifier are not `setting.conf` entries.
+
+ThingsBoard and Garmin LiveTrack share the same position sampling window. At
+the normal 180-second interval, the state at about 90 seconds and the current
+state at 180 seconds are sent together. Each attempted upload closes that
+window; failed points are not accumulated into the next interval.
+
+Messages are checked at the same interval as LiveTrack position updates
+(`INTERVAL_SEC`, normally 180 seconds), displayed without persistent storage,
+then acknowledged as delivered and read. Gadgetbridge responses containing a
+`messages` array are accepted as successful; missing, bodyless or malformed
+bridge responses are retried at the next interval without disabling the
+feature. Changing the Messages toggle synchronizes the sharing-page form when a
+session is active. Outside a session it only saves the setting, which is sent at
+the next session start. Direct HTTP failures are retried with the next LiveTrack
+update. A Gadgetbridge request is sent once per session or setting change because
+its HTTP result is unavailable. An expired BTF credential produces one popup
+while leaving the setting unchanged; offline and timed-out requests are retried
+later.
 
 Garmin LiveTrack is disabled by default and uses an unofficial private API that
 may stop working if Garmin changes it.

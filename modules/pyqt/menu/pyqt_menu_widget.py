@@ -691,9 +691,7 @@ class LiveTrackMenuWidget(MenuWidget):
         )
         garmin_available = self._garmin_available()
         self.buttons[self.GARMIN_BUTTON].onoff_button(garmin_available or garmin_status)
-        self.buttons[self.GARMIN_MESSAGES_BUTTON].onoff_button(
-            (garmin_available and garmin_status) or messages_status
-        )
+        self.buttons[self.GARMIN_MESSAGES_BUTTON].onoff_button(garmin_status)
 
     def onoff_thingsboard_livetrack(self, change=True):
         if change:
@@ -726,8 +724,6 @@ class LiveTrackMenuWidget(MenuWidget):
             self.config.G_GARMINCONNECT_API["LIVETRACK_STATUS"] = (
                 not self.config.G_GARMINCONNECT_API["LIVETRACK_STATUS"]
             )
-            if not self.config.G_GARMINCONNECT_API["LIVETRACK_STATUS"]:
-                self.config.G_GARMINCONNECT_API["LIVETRACK_MESSAGES"] = False
             self.config.setting.write_config()
         self.update_buttons()
 
@@ -743,6 +739,7 @@ class LiveTrackMenuWidget(MenuWidget):
                 not self.config.G_GARMINCONNECT_API["LIVETRACK_MESSAGES"]
             )
             self.config.setting.write_config()
+            self.config.api.request_garmin_message_capability_update()
         self.update_buttons()
 
 

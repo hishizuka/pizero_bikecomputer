@@ -19,7 +19,9 @@ from modules.utils.geo import get_track_str
 from modules.app_logger import app_logger
 from modules.helper.garmin_livetrack import (
     GarminLiveTrackClient,
+    GarminLiveTrackConfigurationError,
     GarminLiveTrackError,
+    GarminLiveTrackMessageHttpError,
 )
 from modules.helper.livetrack import (
     LiveTrackCoordinator,
@@ -57,6 +59,7 @@ class api:
     garmin_livetrack_client = None
     garmin_livetrack_unavailable_reason = None
     garmin_livetrack_unavailable_notified = False
+    garmin_messages_unavailable_notified = False
 
     def __init__(self, config):
         self.config = config
@@ -69,6 +72,7 @@ class api:
         self.livetrack_unavailable_notified = False
         self.garmin_livetrack_unavailable_reason = None
         self.garmin_livetrack_unavailable_notified = False
+        self.garmin_messages_unavailable_notified = False
 
         self.thingsboard_livetrack_client = ThingsBoardLiveTrackClient(
             self.config,
@@ -130,7 +134,9 @@ class api:
         )
         return False
 
-    def _notify_livetrack_unavailable(self, notified_attr, reason):
+    def _notify_livetrack_unavailable(
+        self, notified_attr, reason, title="LiveTrack disabled"
+    ):
         if getattr(self, notified_attr, False):
             return True
 
@@ -143,14 +149,14 @@ class api:
         app_logger.warning(reason)
         if callable(popup_multiline):
             popup_multiline(
-                "LiveTrack disabled",
+                title,
                 reason,
                 5,
             )
         else:
             popup = getattr(gui, "show_popup", None)
             if callable(popup):
-                popup("LiveTrack disabled", 5)
+                popup(title, 5)
         return True
 
     async def get_google_routes(self, x1, y1, x2, y2):
@@ -795,7 +801,8 @@ class api:
                 )
             )
 
-        if self._check_garmin_livetrack_startup_config():
+        garmin_ready = self._check_garmin_livetrack_startup_config()
+        if garmin_ready:
             if request.garmin_stop:
                 garmin_status = await self._stop_garmin_livetrack(caller_name)
             else:
@@ -845,6 +852,99 @@ class api:
                 revision,
                 result in ("success", "not_active"),
             )
+
+        if garmin_success and not request.garmin_stop:
+            messages_status = await self._sync_garmin_message_capability(caller_name)
+            if (
+                self.config.G_MANUAL_STATUS == "START"
+                and self.config.G_GARMINCONNECT_API["LIVETRACK_MESSAGES"]
+                and messages_status in ("success", "unchanged")
+            ):
+                await self._receive_garmin_messages(caller_name)
+
+    async def _run_garmin_messages_request(self, caller_name, action, operation):
+        try:
+            self.garmin_livetrack_client.load_btf_credentials()
+            gadgetbridge_service = self.gadgetbridge_service
+            if gadgetbridge_service is not None:
+                return await operation(gadgetbridge_service)
+            if await detect_network_async(cache=False):
+                return await operation(None)
+            if not self.network.check_network_with_bt_tethering():
+                app_logger.debug(
+                    f"[Garmin Messages] {action} retry later: network unavailable"
+                )
+                return "network_unavailable"
+
+            status, value = await run_with_bt_tethering(
+                self.network,
+                caller_name,
+                lambda: operation(None),
+                log_prefix="[Garmin Messages]",
+                purpose="message service",
+            )
+            if status != "success":
+                app_logger.debug(
+                    f"[Garmin Messages] {action} retry later: status={status}"
+                )
+            return value if status == "success" else status
+        except GarminLiveTrackMessageHttpError as exc:
+            if exc.status_code in (401, 403):
+                self._notify_livetrack_unavailable(
+                    "garmin_messages_unavailable_notified",
+                    str(exc),
+                    "Garmin Messages authentication failed",
+                )
+            else:
+                app_logger.debug(f"[Garmin Messages] {action} retry later: {exc}")
+        except GarminLiveTrackConfigurationError as exc:
+            if self.config.G_GARMINCONNECT_API["LIVETRACK_MESSAGES"]:
+                self._notify_livetrack_unavailable(
+                    "garmin_messages_unavailable_notified",
+                    str(exc),
+                    "Garmin Messages unavailable",
+                )
+        except GarminLiveTrackError as exc:
+            suffix = "[GB]" if self.gadgetbridge_service is not None else ""
+            app_logger.debug(f"[Garmin Messages]{suffix} {action} retry later: {exc}")
+        return "error"
+
+    async def _sync_garmin_message_capability(self, caller_name):
+        client = self.garmin_livetrack_client
+        enabled = self.config.G_GARMINCONNECT_API["LIVETRACK_MESSAGES"]
+
+        async def sync(gadgetbridge_service):
+            return await client.sync_message_capability(
+                enabled,
+                gadgetbridge_service=gadgetbridge_service,
+            )
+
+        return await self._run_garmin_messages_request(caller_name, "capability", sync)
+
+    def request_garmin_message_capability_update(self):
+        client = self.garmin_livetrack_client
+        if client.active_session(client.load_state()) is None:
+            return
+        asyncio.create_task(
+            self._sync_garmin_message_capability(
+                "request_garmin_message_capability_update"
+            )
+        )
+
+    async def _receive_garmin_messages(self, caller_name):
+        client = self.garmin_livetrack_client
+        show_message = getattr(self.config.gui, "show_message", None)
+        if not callable(show_message):
+            app_logger.debug("[Garmin Messages] skipped: display unavailable")
+            return
+
+        async def receive(gadgetbridge_service):
+            return await client.receive_messages(
+                show_message,
+                gadgetbridge_service=gadgetbridge_service,
+            )
+
+        await self._run_garmin_messages_request(caller_name, "receive", receive)
 
     async def _run_garmin_livetrack_operation(
         self, caller_name, operation, use_gadgetbridge=True

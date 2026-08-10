@@ -7,6 +7,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import quote
 
 from modules.helper.livetrack import (
     LiveTrackSample,
@@ -20,6 +21,7 @@ IT_TOKEN_URL = "https://services.garmin.com/api/oauth/token"
 DEFAULT_IT_CLIENT_ID = "GARMIN_CONNECT_MOBILE_ANDROID_2025Q2"
 DEFAULT_TOKENSTORE = "~/.garminconnect"
 IT_TOKEN_FILENAME = "livetrack_it_token.json"
+BTF_CREDENTIALS_FILENAME = "livetrack_btf_credentials.json"
 STATE_FILENAME = "livetrack_state.json"
 PUBLISHER_TYPE = "WEARABLE"
 DEFAULT_DURATION = "PT6H"
@@ -28,6 +30,13 @@ DEFAULT_ALTITUDE_METERS = 3.5
 COURSE_PATH = "/tracker/livetrack/api/v1/course"
 COURSES_PATH = "/tracker/livetrack/api/v1/courses"
 COURSE_SESSION_PATH = "/tracker/livetrack/api/v1/sessions"
+MESSAGE_PATH = "/messaging/fitness/api/v1/messages"
+MESSAGE_DEVICE_PATH = "/messaging/fitness/api/v1/device"
+BTF_DEVICE_HEADERS = (
+    "X-Garmin-Unit-ID",
+    "X-Garmin-SW-Part-Number",
+    "X-Garmin-Firmware-Version",
+)
 FIT_TIMESTAMP_BASE = 0x10000000
 
 
@@ -41,6 +50,14 @@ class GarminLiveTrackConfigurationError(GarminLiveTrackError):
 
 class GarminLiveTrackApiError(GarminLiveTrackError):
     """Raised when Garmin LiveTrack API calls fail."""
+
+
+class GarminLiveTrackMessageHttpError(GarminLiveTrackApiError):
+    """Raised when the Garmin Messages API returns an HTTP error."""
+
+    def __init__(self, status_code, message):
+        super().__init__(message)
+        self.status_code = status_code
 
 
 def semicircle(degrees):
@@ -268,6 +285,7 @@ class GarminLiveTrackClient:
         self.garmin_cls = garmin_cls
         self._garmin = None
         self._credentials_cleared = False
+        self._displayed_message_ids = set()
         self.course_send_status = "RESET"
         self.course_send_revision = 0
 
@@ -284,6 +302,10 @@ class GarminLiveTrackClient:
     @property
     def it_token_path(self):
         return self.tokenstore_path / IT_TOKEN_FILENAME
+
+    @property
+    def btf_credentials_path(self):
+        return self.tokenstore_path / BTF_CREDENTIALS_FILENAME
 
     def enabled(self):
         return bool(self.settings.get("LIVETRACK_STATUS"))
@@ -329,6 +351,72 @@ class GarminLiveTrackClient:
             raise GarminLiveTrackConfigurationError(
                 "Garmin LiveTrack state could not be saved."
             ) from exc
+
+    def load_btf_credentials(self):
+        try:
+            data = load_private_json(self.btf_credentials_path)
+        except (OSError, RuntimeError, json.JSONDecodeError) as exc:
+            raise GarminLiveTrackConfigurationError(
+                "Garmin Messages BTF credential could not be loaded."
+            ) from exc
+        if data is None:
+            raise GarminLiveTrackConfigurationError(
+                "Garmin Messages BTF credential is not configured."
+            )
+        device_headers = data.get("deviceHeaders")
+        if (
+            data.get("backend") != "BTF"
+            or not isinstance(device_headers, dict)
+            or any(
+                not isinstance(data.get(name), str) or not data[name]
+                for name in ("accessToken", "messagingDeviceId")
+            )
+            or any(
+                not isinstance(device_headers.get(name), str)
+                or not device_headers[name]
+                for name in BTF_DEVICE_HEADERS
+            )
+        ):
+            raise GarminLiveTrackConfigurationError(
+                "Garmin Messages BTF credential is invalid."
+            )
+        return data
+
+    def btf_headers(self):
+        credentials = self.load_btf_credentials()
+        headers = {
+            "Authorization": f"Bearer {credentials['accessToken']}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "X-Garmin-Backend": "BTF",
+        }
+        headers.update(credentials["deviceHeaders"])
+        return headers
+
+    async def sync_message_capability(self, enabled, gadgetbridge_service=None):
+        state = self.load_state()
+        session = self.active_session(state)
+        if session is None:
+            return "not_active"
+
+        if session.get("messagesEnabled") is enabled:
+            return "unchanged"
+
+        credentials = self.load_btf_credentials()
+        unit_id = credentials["deviceHeaders"]["X-Garmin-Unit-ID"]
+        path = (
+            f"{MESSAGE_DEVICE_PATH}/{quote(unit_id, safe='')}/"
+            f"{quote(credentials['messagingDeviceId'], safe='')}"
+        )
+        await self._request_btf(
+            "PATCH",
+            path,
+            payload={"audio": False, "text": enabled, "ble": True},
+            gadgetbridge_service=gadgetbridge_service,
+        )
+        session["messagesEnabled"] = enabled
+        self.save_state(state)
+        return "success"
 
     def load_cached_it_token(self, min_ttl_sec=60):
         try:
@@ -550,6 +638,15 @@ class GarminLiveTrackClient:
                 f"(request id: {request_id}){safe_response_details(response)}."
             )
 
+    @staticmethod
+    def _response_json(response, service):
+        if response.status_code == 204 or not response.content:
+            return None
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise GarminLiveTrackApiError(f"{service} returned non-JSON data.") from exc
+
     @classmethod
     def _require_status(cls, response, expected):
         cls._raise_for_response(response)
@@ -564,12 +661,7 @@ class GarminLiveTrackClient:
             method, path, payload=payload, params=params
         )
         self._raise_for_response(response)
-        if response.status_code == 204 or not response.content:
-            return None
-        try:
-            return response.json()
-        except ValueError as exc:
-            raise GarminLiveTrackApiError("Garmin GCS returned non-JSON data.") from exc
+        return self._response_json(response, "Garmin GCS")
 
     def ensure_course_registered(self, filename, fit_bytes, course_sha):
         response = self._request_direct_response("HEAD", f"{COURSES_PATH}/{course_sha}")
@@ -647,6 +739,147 @@ class GarminLiveTrackClient:
                 f"(request id: {request_id})."
             )
         return response
+
+    def _request_btf_direct(self, method, path, payload=None):
+        try:
+            import requests
+        except ImportError as exc:
+            raise GarminLiveTrackConfigurationError(
+                "Garmin Messages requires the requests package."
+            ) from exc
+
+        try:
+            response = requests.request(
+                method,
+                API_BASE_URL + path,
+                headers=self.btf_headers(),
+                json=payload,
+                timeout=20,
+            )
+        except requests.RequestException as exc:
+            raise GarminLiveTrackApiError("Garmin Messages connection failed.") from exc
+        if not response.ok:
+            request_id = (
+                response.headers.get("X-Request-Id")
+                or response.headers.get("X-Correlation-Id")
+                or "none"
+            )
+            raise GarminLiveTrackMessageHttpError(
+                response.status_code,
+                f"Garmin Messages returned HTTP {response.status_code} "
+                f"(request id: {request_id}){safe_response_details(response)}.",
+            )
+        return self._response_json(response, "Garmin Messages")
+
+    async def _request_btf(self, method, path, payload=None, gadgetbridge_service=None):
+        if gadgetbridge_service is None:
+            return await asyncio.to_thread(
+                self._request_btf_direct,
+                method,
+                path,
+                payload,
+            )
+        headers = await asyncio.to_thread(self.btf_headers)
+        try:
+            request = (
+                gadgetbridge_service.request_http
+                if method == "PATCH"
+                else gadgetbridge_service.request_http_json
+            )
+            response = await request(
+                API_BASE_URL + path,
+                method=method,
+                headers=headers,
+                body=payload,
+                timeout=20,
+            )
+            return None if method == "PATCH" else response
+        except Exception as exc:
+            raise GarminLiveTrackApiError(
+                "Garmin Messages request via Gadgetbridge failed."
+            ) from exc
+
+    @staticmethod
+    def _message_ids(response):
+        if not isinstance(response, dict) or not isinstance(
+            response.get("messages"), list
+        ):
+            raise GarminLiveTrackApiError(
+                "Garmin Messages returned an invalid message list."
+            )
+        identifiers = []
+        for message in response["messages"]:
+            if isinstance(message, str):
+                identifier = message
+            elif isinstance(message, dict):
+                identifier = message.get("messageId")
+            else:
+                identifier = None
+            if not isinstance(identifier, str) or not identifier:
+                raise GarminLiveTrackApiError(
+                    "Garmin Messages returned an invalid message list."
+                )
+            if identifier not in identifiers:
+                identifiers.append(identifier)
+        return identifiers
+
+    @staticmethod
+    def _printable_message_field(value, fallback):
+        if not isinstance(value, str) or not value:
+            return fallback
+        return "".join(
+            character if character.isprintable() else "�" for character in value
+        )
+
+    async def receive_messages(self, display_message, gadgetbridge_service=None):
+        response = await self._request_btf(
+            "GET",
+            MESSAGE_PATH,
+            gadgetbridge_service=gadgetbridge_service,
+        )
+        message_ids = self._message_ids(response)
+        self._displayed_message_ids.intersection_update(message_ids)
+
+        for message_id in message_ids:
+            if message_id not in self._displayed_message_ids:
+                detail = await self._request_btf(
+                    "GET",
+                    f"{MESSAGE_PATH}/{quote(message_id, safe='')}",
+                    gadgetbridge_service=gadgetbridge_service,
+                )
+                if not isinstance(detail, dict) or not isinstance(
+                    detail.get("mediaType"), str
+                ):
+                    raise GarminLiveTrackApiError(
+                        "Garmin Messages returned invalid message details."
+                    )
+                if detail["mediaType"].lower() == "text/plain":
+                    display_message(
+                        self._printable_message_field(
+                            detail.get("fromDisplay"), "Garmin"
+                        ),
+                        self._printable_message_field(
+                            detail.get("messageText"), "(No message text)"
+                        ),
+                        True,
+                    )
+                self._displayed_message_ids.add(message_id)
+
+            for receipt in ("deliveryReceipt", "readReceipt"):
+                await self._request_btf(
+                    "PATCH",
+                    MESSAGE_PATH,
+                    payload={
+                        "messages": [
+                            {
+                                "messageId": message_id,
+                                receipt: True,
+                            }
+                        ]
+                    },
+                    gadgetbridge_service=gadgetbridge_service,
+                )
+        return len(message_ids)
 
     async def request(self, method, path, payload=None, gadgetbridge_service=None):
         if gadgetbridge_service is not None:
