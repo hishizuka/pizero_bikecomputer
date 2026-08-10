@@ -426,11 +426,9 @@ if [[ "$install_services" == "true" ]]; then
         envs="Environment=\"QT_QPA_PLATFORM=xcb\"\\nEnvironment=\"DISPLAY=:0\"\\nEnvironment=\"XAUTHORITY=/home/$TARGET_USER/.Xauthority\"\\n"
         after="After=display-manager.service\\n"
     else
-        envs="Environment=\"QT_QPA_PLATFORM=offscreen\"\\n"
         # DRM
-        #envs="Environment=\"QT_QPA_PLATFORM=linuxfb:fb=/dev/fb1\"\\n"
-        # PiTFT
-        #envs="Environment=\"QT_QPA_FB_HIDECURSOR=1 QT_QPA_PLATFORM=linuxfb:fb=/dev/fb1\"\\n"
+        envs="Environment=\"QT_QPA_PLATFORM=linuxfb:fb=/dev/fb1\"\\n"
+        envs+="Environment=\"QT_QPA_FB_HIDECURSOR=1\"\\n"
         # and add vt.global_cursor_default=0 fbcon=map:0 or 1(map console with /dev/fbX)
         after=""
     fi
