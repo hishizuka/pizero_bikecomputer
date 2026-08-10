@@ -449,6 +449,7 @@ class MapStateMixin:
             self.lock_status,
             self.move_adjust_mode,
             self.zoomlevel,
+            self.config.G_COURSE_TRAFFIC_SIDE,
             self.overlay_index,
             self.config.G_MAP,
             overlay_map,

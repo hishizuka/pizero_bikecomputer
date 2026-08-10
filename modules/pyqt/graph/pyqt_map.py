@@ -408,6 +408,8 @@ class MapWidget(
                     (time.perf_counter() - load_course_start) * 1000.0
                 )
                 self.course_loaded = True
+            else:
+                self._refresh_course_plot()
             self._update_course_points_visibility(x_start, x_end, y_start, y_end)
 
             instruction_start = time.perf_counter()

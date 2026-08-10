@@ -4,8 +4,11 @@ from pyqtgraph import functions as fn
 from pyqtgraph.Qt import QtCore, QtGui
 from pyqtgraph.graphicsItems.GraphicsObject import GraphicsObject
 
+from modules.pyqt.graph.course_offset import direction_arrow_polygons
 
 __all__ = ["CoursePlotItem"]
+
+_ARROW_OUTLINE_WIDTH = 3
 
 
 def _as_array(values):
@@ -25,9 +28,10 @@ def _segment_color(brushes, index):
     brush_array = np.asarray(brush)
     if brush_array.size == 0:
         return None
-    if np.issubdtype(brush_array.dtype, np.number) and not np.isfinite(
-        brush_array
-    ).all():
+    if (
+        np.issubdtype(brush_array.dtype, np.number)
+        and not np.isfinite(brush_array).all()
+    ):
         return None
 
     return tuple(brush_array.tolist())
@@ -90,15 +94,14 @@ def _points_to_polyline(points):
     return polyline
 
 
-def _points_to_path(points):
+def _points_to_path(points, close=False):
     path = QtGui.QPainterPath()
-    if not points:
-        return path
-
     first_x, first_y = points[0]
     path.moveTo(first_x, first_y)
     for x_pos, y_pos in points[1:]:
         path.lineTo(x_pos, y_pos)
+    if close:
+        path.closeSubpath()
     return path
 
 
@@ -106,7 +109,8 @@ class CoursePlotItem(GraphicsObject):
     def __init__(self, **opts):
         """
         Valid keyword options are:
-        x, y, width, brushes, outline_width, outline_color
+        x, y, width, brushes, outline_width, outline_color,
+        pixel_scale, arrows (spacing, width)
 
         Example uses:
 
@@ -121,6 +125,8 @@ class CoursePlotItem(GraphicsObject):
             brushes=None,
             outline_width=None,
             outline_color=(0, 0, 0, 160),
+            pixel_scale=None,
+            arrows=None,
         )
         self._shape = None
         self._bounding_rect = None
@@ -185,6 +191,20 @@ class CoursePlotItem(GraphicsObject):
             stroker.setJoinStyle(QtCore.Qt.PenJoinStyle.RoundJoin)
             stroker.setWidth(stroke_width)
             self._shape.addPath(stroker.createStroke(seg_path))
+
+        if self.opts["arrows"] is not None:
+            arrow_path = QtGui.QPainterPath()
+            for arrow in direction_arrow_polygons(
+                x, y, self.opts["pixel_scale"], *self.opts["arrows"]
+            ):
+                arrow_path.addPath(_points_to_path(arrow, close=True))
+
+            arrow_outline_pen = fn.mkPen(color=(0, 0, 0), width=_ARROW_OUTLINE_WIDTH)
+            arrow_outline_pen.setJoinStyle(QtCore.Qt.PenJoinStyle.MiterJoin)
+            p.setPen(arrow_outline_pen)
+            p.setBrush(fn.mkBrush(color=(255, 255, 255)))
+            p.drawPath(arrow_path)
+            self._shape.addPath(arrow_path)
 
         p.end()
         self._bounding_rect = QtCore.QRectF(self.picture.boundingRect())

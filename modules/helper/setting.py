@@ -81,6 +81,15 @@ class Setting:
             c = self.config_parser["MAP_AND_DATA"]
             if "MAP" in c:
                 self.config.G_MAP = c["MAP"]
+            course_traffic_side = c.get(
+                "COURSE_TRAFFIC_SIDE", self.config.G_COURSE_TRAFFIC_SIDE
+            ).upper()
+            if course_traffic_side in ("LEFT", "RIGHT", "NONE"):
+                self.config.G_COURSE_TRAFFIC_SIDE = course_traffic_side
+            else:
+                app_logger.warning(
+                    f"Unknown course traffic side in setting.conf: {course_traffic_side!r}"
+                )
             if "USE_HEATMAP_OVERLAY_MAP" in c:
                 self.config.G_USE_HEATMAP_OVERLAY_MAP = c.getboolean(
                     "USE_HEATMAP_OVERLAY_MAP"
@@ -299,6 +308,7 @@ class Setting:
         self.config_parser["MAP_AND_DATA"] = {}
         c = self.config_parser["MAP_AND_DATA"]
         c["MAP"] = self.config.G_MAP
+        c["COURSE_TRAFFIC_SIDE"] = self.config.G_COURSE_TRAFFIC_SIDE
         c["USE_HEATMAP_OVERLAY_MAP"] = str(self.config.G_USE_HEATMAP_OVERLAY_MAP)
         c["HEATMAP_OVERLAY_MAP"] = self.config.G_HEATMAP_OVERLAY_MAP
         c["USE_RAIN_OVERLAY_MAP"] = str(self.config.G_USE_RAIN_OVERLAY_MAP)

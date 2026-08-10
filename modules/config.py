@@ -103,6 +103,7 @@ class Config:
     G_MAP_CONFIG = {}
     # external input of G_MAP_CONFIG
     G_MAP_LIST = "map.yaml"
+    G_COURSE_TRAFFIC_SIDE = "NONE"
 
     # overlay map
     G_USE_HEATMAP_OVERLAY_MAP = False

@@ -336,6 +336,7 @@ class GUI_PyQt(GUI_Qt_Base):
                 CoursesMenuWidget,
                 CourseListWidget,
                 CourseDetailWidget,
+                CourseTrafficSideListWidget,
                 # GoogleRoutesAPISettingMenuWidget
             )
             from modules.pyqt.menu.pyqt_map_menu_widget import (
@@ -428,6 +429,7 @@ class GUI_PyQt(GUI_Qt_Base):
                 ("Rain map List", RainmapListWidget),
                 ("Heatmap List", HeatmapListWidget),
                 ("Map Overlay", MapOverlayMenuWidget),
+                ("Course Traffic Side", CourseTrafficSideListWidget),
                 ("Select Map", MapListWidget),
                 ("Map and Data", MapMenuWidget),
                 # ("Google Routes API mode", GoogleRoutesAPISettingMenuWidget),

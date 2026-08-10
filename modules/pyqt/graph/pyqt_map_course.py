@@ -5,6 +5,7 @@ import numpy as np
 from modules.app_logger import app_logger
 from modules._qt_qtwidgets import QtCore, QtGui, QtWidgets, pg, qasync
 from modules.helper.maptile import get_wind_color
+from modules.pyqt.graph.course_offset import offset_points_by_segment, offset_polyline
 from modules.pyqt.graph.pyqtgraph.CoursePlotItem import CoursePlotItem
 from modules.pyqt.graph.pyqtgraph.WindVaneItem import WindVaneItem
 from modules.utils.crdp import rdp
@@ -37,6 +38,12 @@ class MapCourseMixin:
     course_point_marker_bg_color = (0, 128, 0, 240)
     course_point_marker_border_color = (0, 0, 0, 220)
     course_point_marker_border_width = 1
+    course_line_width = 7
+    course_outline_width = 11
+    course_offset_min_zoomlevel = 13
+    course_arrow_spacing = 112
+    course_arrow_width = 16
+    course_wind_marker_size = 42
 
     # tracks
     track_history_lon = []
@@ -57,6 +64,7 @@ class MapCourseMixin:
     track_history_rdp_task = None
 
     course_plot = None
+    course_plot_key = None
     plot_verification = None
     course_points_plot = None
     course_point_markers = None
@@ -138,22 +146,64 @@ class MapCourseMixin:
         self.course_point_icon_pixmaps[cache_key] = pixmap
         return pixmap
 
+    def _get_course_offset_pixels(self):
+        traffic_side = self.config.G_COURSE_TRAFFIC_SIDE
+        if traffic_side == "NONE" or self.zoomlevel < self.course_offset_min_zoomlevel:
+            return 0.0
+
+        offset_pixels = self.course_line_width / 2 + 0.5
+        if self.zoomlevel > self.course_offset_min_zoomlevel:
+            offset_pixels = self.course_outline_width / 2
+        return offset_pixels if traffic_side == "LEFT" else -offset_pixels
+
+    def _get_marker_offset_pixels(self, marker_size, side):
+        return self._get_course_offset_pixels() + side * (
+            (self.course_outline_width + marker_size) / 2 + 4
+        )
+
+    def _get_course_plot_key(self):
+        return (
+            self._get_course_offset_pixels(),
+            *self._get_view_data_per_px(),
+            self.config.G_COURSE_TRAFFIC_SIDE,
+        )
+
     def _update_course_plot(self):
         self._remove_plot_item(self.course_plot)
 
         if not len(self.course.latitude):
+            self.course_plot_key = None
             return False
 
+        pixel_scale = self._get_view_data_per_px()
+        offset_pixels = self._get_course_offset_pixels()
+        x_values = self.course.longitude
+        y_values = get_mod_lat_np(self.course.latitude)
+        brushes = self.course.colored_altitude
+        if offset_pixels:
+            x_values, y_values, source_indices = offset_polyline(
+                x_values, y_values, pixel_scale, offset_pixels
+            )
+            brushes = brushes[source_indices]
+
+        arrows = (
+            (self.course_arrow_spacing, self.course_arrow_width)
+            if self.zoomlevel >= self.course_offset_min_zoomlevel
+            else None
+        )
         self.course_plot = CoursePlotItem(
-            x=self.course.longitude,
-            y=get_mod_lat_np(self.course.latitude),
-            brushes=self.course.colored_altitude,
-            width=7,
-            outline_width=11,
+            x=x_values,
+            y=y_values,
+            brushes=brushes,
+            width=self.course_line_width,
+            outline_width=self.course_outline_width,
             outline_color=(0, 0, 0, 160),
+            pixel_scale=pixel_scale,
+            arrows=arrows,
         )
         self.course_plot.setZValue(20)
         self.plot.addItem(self.course_plot)
+        self.course_plot_key = self._get_course_plot_key()
 
         if self.config.G_IS_RASPI:
             return True
@@ -165,18 +215,79 @@ class MapCourseMixin:
             [
                 {
                     "pos": [
-                        self.course.longitude[i],
-                        get_mod_lat(self.course.latitude[i]),
+                        x_values[i],
+                        y_values[i],
                     ],
                     "size": 2,
                     "pen": {"color": "w", "width": 1},
                     "brush": pg.mkBrush(color=(255, 0, 0)),
                 }
-                for i in range(len(self.course.longitude))
+                for i in range(len(x_values))
             ]
         )
         self.plot.addItem(self.plot_verification)
         return True
+
+    def _refresh_course_plot(self):
+        if self.course_plot_key == self._get_course_plot_key():
+            return
+        self._update_course_plot()
+        self._update_course_point_marker_positions()
+        self.add_course_wind()
+
+    def _get_course_point_segment_indices(self):
+        point_count = len(self.course_points.longitude)
+        if len(self.course_points.distance) == point_count:
+            return np.clip(
+                np.searchsorted(
+                    self.course.distance,
+                    self.course_points.distance,
+                    side="right",
+                )
+                - 1,
+                0,
+                len(self.course.longitude) - 2,
+            )
+
+        segment_indices = np.empty(point_count, dtype=np.int32)
+        search_start = 0
+        course_y = get_mod_lat_np(self.course.latitude)
+        point_y = get_mod_lat_np(self.course_points.latitude)
+        for i in range(point_count):
+            distances = (
+                self.course.longitude[search_start:] - self.course_points.longitude[i]
+            ) ** 2 + (course_y[search_start:] - point_y[i]) ** 2
+            course_index = search_start + int(np.argmin(distances))
+            segment_indices[i] = min(course_index, len(self.course.longitude) - 2)
+            search_start = min(course_index + 1, len(self.course.longitude) - 1)
+        return segment_indices
+
+    def _get_course_point_plot_positions(self):
+        x_values = self.course_points.longitude
+        y_values = get_mod_lat_np(self.course_points.latitude)
+        offset_pixels = self._get_course_offset_pixels()
+        if offset_pixels == 0 or len(self.course.longitude) < 2:
+            return x_values, y_values
+
+        return offset_points_by_segment(
+            self.course.longitude,
+            get_mod_lat_np(self.course.latitude),
+            x_values,
+            y_values,
+            self._get_course_point_segment_indices(),
+            self._get_view_data_per_px(),
+            self._get_marker_offset_pixels(
+                self.course_point_marker_size, np.sign(offset_pixels)
+            ),
+        )
+
+    def _update_course_point_marker_positions(self):
+        if not self.course_point_markers:
+            return
+        for marker, x_value, y_value in zip(
+            self.course_point_markers, *self._get_course_point_plot_positions()
+        ):
+            marker.setPos(x_value, y_value)
 
     def _update_course_points_plot(self):
         self._remove_plot_item(self.course_points_plot)
@@ -193,6 +304,7 @@ class MapCourseMixin:
         ignore_transformations = (
             QtWidgets.QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations
         )
+        x_values, y_values = self._get_course_point_plot_positions()
 
         for i in reversed(range(len(self.course_points.longitude))):
             icon_path = self._get_course_point_icon_path(self.course_points.type[i])
@@ -208,8 +320,8 @@ class MapCourseMixin:
                 -marker_pixmap.height() / 2.0,
             )
             marker.setPos(
-                self.course_points.longitude[i],
-                get_mod_lat(self.course_points.latitude[i]),
+                x_values[i],
+                y_values[i],
             )
             self.course_point_markers[i] = marker
 
@@ -366,23 +478,27 @@ class MapCourseMixin:
             self._remove_plot_item(course_wind)
 
         self.course_winds = []
-        for wc, wd, ws in zip(
-            self.course.wind_coordinates,
+        course_indices = np.asarray(self.course.wind_course_indices)
+        side = -1 if self.config.G_COURSE_TRAFFIC_SIDE == "RIGHT" else 1
+        wind_x, wind_y = offset_points_by_segment(
+            self.course.longitude,
+            get_mod_lat_np(self.course.latitude),
+            self.course.longitude[course_indices],
+            get_mod_lat_np(self.course.latitude[course_indices]),
+            np.minimum(course_indices, len(self.course.longitude) - 2),
+            self._get_view_data_per_px(),
+            self._get_marker_offset_pixels(self.course_wind_marker_size, side),
+        )
+        for x_value, y_value, wd, ws in zip(
+            wind_x,
+            wind_y,
             self.course.wind_direction,
             self.course.wind_speed,
         ):
-            if ws is None or wd is None:
-                continue
             if np.isnan(ws) or np.isnan(wd):
                 continue
-            vane = WindVaneItem(
-                angle=wd,
-                brush=get_wind_color(ws),
-                pen={"color": "k", "width": 2},
-                size=42,
-                offset_ratio=0.25,
-            )
-            vane.setPos(wc[0], get_mod_lat(wc[1]))
+            vane = WindVaneItem(wd, get_wind_color(ws), self.course_wind_marker_size)
+            vane.setPos(x_value, y_value)
             vane.setZValue(35)
             self.course_winds.append(vane)
             self.plot.addItem(vane)
@@ -547,6 +663,7 @@ class MapCourseMixin:
         self.external_instruction_name = ""
         self.external_instruction_distance = None
         self.init_instruction()
+        self.course_plot_key = None
         self.course_loaded = False
         self.resizeEvent(None)
 

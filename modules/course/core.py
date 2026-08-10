@@ -56,7 +56,7 @@ class Course(CourseProcessor, CourseMatcher):
         self._weather_task = None
         self._course_revision = 0
         self.load_weather_status = 0
-        self.wind_coordinates = []
+        self.wind_course_indices = []
         self.wind_timeline = []
         self.wind_speed = []
         self.wind_direction = []
@@ -137,7 +137,7 @@ class Course(CourseProcessor, CourseMatcher):
         self._course_revision += 1
         self._cancel_weather_load()
         self.load_weather_status = 0
-        self.wind_coordinates = []
+        self.wind_course_indices = []
         self.wind_timeline = []
         self.wind_speed = []
         self.wind_direction = []
@@ -427,7 +427,7 @@ class Course(CourseProcessor, CourseMatcher):
             return
 
         (
-            self.wind_coordinates,
+            self.wind_course_indices,
             self.wind_timeline,
             self.wind_speed,
             self.wind_direction,

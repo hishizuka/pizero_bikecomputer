@@ -36,7 +36,6 @@ class CoursesMenuWidget(MenuWidget):
                 ),
             ),
             ("Android Google Maps", None, self.receive_route),
-            ("", None, None),
             # ('Google Routes API mode', 'submenu', self.google_routes_api_setting_menu),
             (
                 "Cancel Course",
@@ -45,6 +44,7 @@ class CoursesMenuWidget(MenuWidget):
                     self.cancel_course, "Cancel Course"
                 ),
             ),
+            ("Course Traffic Side", "submenu", self.course_traffic_side),
             ("Course Calc", "toggle", lambda: self.onoff_course_calc(True)),
         )
         self.add_buttons(button_conf)
@@ -81,6 +81,9 @@ class CoursesMenuWidget(MenuWidget):
 
     def google_routes_api_setting_menu(self):
         self.change_page("Google Routes API mode", preprocess=True)
+
+    def course_traffic_side(self):
+        self.change_page("Course Traffic Side", preprocess=True)
 
     def onoff_course_cancel_button(self):
         status = self.config.logger.course.is_set
@@ -197,6 +200,26 @@ class CoursesMenuWidget(MenuWidget):
         shutil.move(os.path.join(self.config.G_COURSE_DIR, filename), course_file)
         self.set_new_course(course_file)
         self.config.gui.show_forced_message("Loading succeeded!")
+
+
+class CourseTrafficSideListWidget(ListWidget):
+    settings = {
+        "Left-side Traffic": "LEFT",
+        "Right-side Traffic": "RIGHT",
+        "None": "NONE",
+    }
+
+    def get_default_value(self):
+        return next(
+            label
+            for label, value in self.settings.items()
+            if value == self.config.G_COURSE_TRAFFIC_SIDE
+        )
+
+    async def button_func_extra(self):
+        self.config.G_COURSE_TRAFFIC_SIDE = self.settings[self.selected_item.title]
+        self.config.setting.write_config()
+        await self.config.gui.map_widget.update_display()
 
 
 class CourseListWidget(ListWidget):
