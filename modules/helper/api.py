@@ -779,26 +779,28 @@ class api:
     def _create_livetrack_coordinator(self):
         return LiveTrackCoordinator(
             lambda: self.config.G_THINGSBOARD_API["INTERVAL_SEC"],
+            lambda: build_livetrack_sample(self.config),
             self._execute_livetrack_request,
         )
 
-    async def _execute_livetrack_request(self, request):
+    async def _execute_livetrack_request(self, request, samples):
         caller_name = self._execute_livetrack_request.__name__
-        sample = build_livetrack_sample(self.config)
         telemetry_success = garmin_success = False
         send_status = None
 
         if request.include_thingsboard and self._check_livetrack_startup_config():
             telemetry_success, send_status = (
-                await self.thingsboard_livetrack_client.send_sample(sample, caller_name)
+                await self.thingsboard_livetrack_client.send_samples(
+                    samples, caller_name
+                )
             )
 
         if self._check_garmin_livetrack_startup_config():
             if request.garmin_stop:
                 garmin_status = await self._stop_garmin_livetrack(caller_name)
             else:
-                garmin_status = await self._send_garmin_livetrack_sample(
-                    sample,
+                garmin_status = await self._send_garmin_livetrack_samples(
+                    samples,
                     caller_name,
                     self.config.G_MANUAL_STATUS != "STOP",
                 )
@@ -887,14 +889,14 @@ class api:
         finally:
             self._persist_garmin_credentials_if_cleared()
 
-    async def _send_garmin_livetrack_sample(
-        self, sample, caller_name, create_session=True
+    async def _send_garmin_livetrack_samples(
+        self, samples, caller_name, create_session=True
     ):
         client = self.garmin_livetrack_client
 
         async def operation(gadgetbridge_service):
-            return await client.post_point(
-                sample,
+            return await client.post_points(
+                samples,
                 gadgetbridge_service=gadgetbridge_service,
                 create_session=create_session,
             )

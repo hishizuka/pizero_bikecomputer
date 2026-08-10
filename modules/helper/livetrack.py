@@ -10,6 +10,9 @@ from pathlib import Path
 
 from modules.app_logger import app_logger
 
+# Number of samples uploaded together at the end of each LiveTrack interval.
+LIVETRACK_SAMPLE_COUNT = 4
+
 
 def utc_now() -> str:
     """Return a Garmin-compatible UTC timestamp with millisecond precision."""
@@ -58,41 +61,64 @@ class LiveTrackRequest:
 class LiveTrackCoordinator:
     """Apply interval, locking, and pending-request rules to LiveTrack work."""
 
-    def __init__(self, interval_getter, executor):
+    def __init__(self, interval_getter, sample_getter, executor):
+        if LIVETRACK_SAMPLE_COUNT < 1:
+            raise ValueError("LIVETRACK_SAMPLE_COUNT must be at least 1")
         self._interval_getter = interval_getter
+        self._sample_getter = sample_getter
         self._executor = executor
         self._last_send_at = int(time.time())
+        self._interval_samples = []
         self._locked = False
         self._pending = None
 
     def submit(self, request, *, quick_send=False):
         if self._locked:
             if quick_send:
-                self._pending = (
-                    request if self._pending is None else self._pending.merge(request)
-                )
+                if self._pending is None:
+                    self._pending = (request, [self._sample_getter()])
+                else:
+                    pending_request, _pending_samples = self._pending
+                    self._pending = (
+                        pending_request.merge(request),
+                        [self._sample_getter()],
+                    )
             return False
 
         now = int(time.time())
         interval = self._interval_getter()
-        if not quick_send and now - self._last_send_at < interval:
-            return False
+        if not quick_send:
+            elapsed = now - self._last_send_at
+            if elapsed < interval:
+                next_sample_number = len(self._interval_samples) + 1
+                if (
+                    next_sample_number < LIVETRACK_SAMPLE_COUNT
+                    and elapsed * LIVETRACK_SAMPLE_COUNT
+                    >= interval * next_sample_number
+                ):
+                    self._interval_samples.append(self._sample_getter())
+                return False
+
+        samples = self._interval_samples
+        samples.append(self._sample_getter())
+        self._interval_samples = []
         self._last_send_at = now
 
         self._locked = True
-        asyncio.create_task(self._run_locked(request))
+        asyncio.create_task(self._run_locked(request, samples))
         return True
 
-    async def _run_locked(self, request):
+    async def _run_locked(self, request, samples):
         try:
-            await self._executor(request)
+            await self._executor(request, samples)
         finally:
             self._locked = False
             pending = self._pending
             self._pending = None
             if pending is not None:
+                pending_request, pending_samples = pending
                 self._locked = True
-                asyncio.create_task(self._run_locked(pending))
+                asyncio.create_task(self._run_locked(pending_request, pending_samples))
 
 
 def save_private_json(path, value):

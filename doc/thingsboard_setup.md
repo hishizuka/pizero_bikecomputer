@@ -197,7 +197,7 @@ Then:
 1. Make sure Speed, Heart rate, or Power has a usable value.
 2. Start recording.
 3. Open **Menu > Connectivity > Live Track** and enable **ThingsBoard**.
-4. Wait for the next upload. The normal telemetry interval is 180 seconds.
+4. Wait for the next upload. The normal network interval is 180 seconds.
 5. In ThingsBoard, open the device's **Latest telemetry** view and confirm the
    keys listed below.
 6. Open the dashboard and confirm the values and recorded track.
@@ -210,7 +210,11 @@ application.
 
 ### Time-series telemetry
 
-The following values are uploaded every 180 seconds by default:
+The following values are sampled at equal subdivisions of each interval and at
+the interval end. `LIVETRACK_SAMPLE_COUNT` in `modules/helper/livetrack.py`
+controls the number of samples shared by ThingsBoard and Garmin LiveTrack. Its
+default value is `4`, so samples are taken every 45 seconds and uploaded
+together every 180 seconds:
 
 | Key | Meaning | Unit or format |
 |---|---|---|
@@ -225,8 +229,9 @@ The following values are uploaded every 180 seconds by default:
 | `longitude` | Current longitude | decimal degrees |
 
 The map's recorded track uses the time-series `latitude` and `longitude`
-values. The visible track therefore follows the dashboard time window and the
-180-second upload interval; it is not the application's one-second ride log.
+values. With the default settings, the visible track therefore has points about
+45 seconds apart, uploaded in 180-second batches. It is not the application's
+one-second ride log. A failed batch is not carried into the next interval.
 
 ### Course attribute
 

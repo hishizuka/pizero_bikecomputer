@@ -121,8 +121,9 @@ class ThingsBoardLiveTrackClient:
         )
         return value if status == "success" else status
 
-    async def send_sample(self, sample, caller_name):
-        data = sample.to_thingsboard_payload()
+    async def send_samples(self, samples, caller_name):
+        payloads = [sample.to_thingsboard_payload() for sample in samples]
+        data = payloads[0] if len(payloads) == 1 else payloads
         if await self._send_via_gadgetbridge(self.telemetry_url, data):
             return True, "success"
 

@@ -733,75 +733,82 @@ class GarminLiveTrackClient:
         self.save_state(state)
         return "created"
 
-    def point_payload(self, sample, publisher, session):
-        now = utc_now()
+    def point_payload(self, samples, publisher, session):
+        first_sample = samples[0]
         created_at = str(
             session.get("activityCreatedAt")
-            or _utc_timestamp(sample.activity_start_timestamp)
+            or _utc_timestamp(first_sample.activity_start_timestamp)
             or session.get("createdAt")
-            or now
+            or utc_now()
         )
         point_count = int(session.get("pointCount", 0))
-        speed_mps = _decimal_string(sample.speed_mps, minimum=0.0)
-        distance_m = _decimal_string(sample.distance_m, minimum=0.0)
-        duration = _decimal_string(sample.active_duration_sec, minimum=0.0)
-        altitude = sample.altitude_m
-        if altitude is None:
-            altitude = sample.gps_altitude_m
-        if altitude is None:
-            altitude = DEFAULT_ALTITUDE_METERS
+        points = []
+        for index, sample in enumerate(samples):
+            speed_mps = _decimal_string(sample.speed_mps, minimum=0.0)
+            distance_m = _decimal_string(sample.distance_m, minimum=0.0)
+            duration = _decimal_string(sample.active_duration_sec, minimum=0.0)
+            altitude = sample.altitude_m
+            if altitude is None:
+                altitude = sample.gps_altitude_m
+            if altitude is None:
+                altitude = DEFAULT_ALTITUDE_METERS
 
-        fitness_data = {
-            "activityCreatedTime": created_at,
-            "activityType": "CYCLING",
-            "distanceMeters": distance_m,
-            "durationSecs": duration,
-            "pointStatus": ("MOVING" if float(speed_mps) > 0 else "STATIONARY"),
-            "speedMetersPerSec": speed_mps,
-            "totalDistanceMeters": distance_m,
-            "totalDurationSecs": duration,
-        }
-        cadence = _bounded_int(sample.cadence_rpm)
-        if cadence is not None:
-            fitness_data["cadenceCyclesPerMin"] = cadence
-        heart_rate = _bounded_int(sample.heart_rate_bpm)
-        if heart_rate is not None:
-            fitness_data["heartRateBeatsPerMin"] = heart_rate
-        if sample.power_w is not None:
-            fitness_data["powerWatts"] = _decimal_string(
-                sample.power_w,
+            fitness_data = {
+                "activityCreatedTime": created_at,
+                "activityType": "CYCLING",
+                "distanceMeters": distance_m,
+                "durationSecs": duration,
+                "pointStatus": ("MOVING" if float(speed_mps) > 0 else "STATIONARY"),
+                "speedMetersPerSec": speed_mps,
+                "totalDistanceMeters": distance_m,
+                "totalDurationSecs": duration,
+            }
+            cadence = _bounded_int(sample.cadence_rpm)
+            if cadence is not None:
+                fitness_data["cadenceCyclesPerMin"] = cadence
+            heart_rate = _bounded_int(sample.heart_rate_bpm)
+            if heart_rate is not None:
+                fitness_data["heartRateBeatsPerMin"] = heart_rate
+            if sample.power_w is not None:
+                fitness_data["powerWatts"] = _decimal_string(
+                    sample.power_w,
+                    minimum=0.0,
+                )
+            fitness_data["accumulatedPowerWatts"] = _decimal_string(
+                sample.accumulated_power_j,
                 minimum=0.0,
             )
-        fitness_data["accumulatedPowerWatts"] = _decimal_string(
-            sample.accumulated_power_j,
-            minimum=0.0,
-        )
-        if point_count == 0:
-            fitness_data["eventTypes"] = ["BEGIN"]
+            if point_count == 0 and index == 0:
+                fitness_data["eventTypes"] = ["BEGIN"]
 
-        point = {
-            "altitude": _decimal_string(altitude),
-            "dateTime": now,
-            "fitnessPointData": fitness_data,
-            "position": {
-                "lat": semicircle(sample.latitude),
-                "lon": semicircle(sample.longitude),
-            },
-            "speed": speed_mps,
-        }
+            points.append(
+                {
+                    "altitude": _decimal_string(altitude),
+                    "dateTime": _utc_timestamp(sample.timestamp) or utc_now(),
+                    "fitnessPointData": fitness_data,
+                    "position": {
+                        "lat": semicircle(sample.latitude),
+                        "lon": semicircle(sample.longitude),
+                    },
+                    "speed": speed_mps,
+                }
+            )
         return {
             "publisher": publisher,
-            "trackPoints": [point],
+            "trackPoints": points,
         }
 
-    async def post_point(self, sample, gadgetbridge_service=None, create_session=True):
-        if not sample.has_position():
+    async def post_points(
+        self, samples, gadgetbridge_service=None, create_session=True
+    ):
+        samples = [sample for sample in samples if sample.has_position()]
+        if not samples:
             return "no_position"
 
         state = self.load_state()
         if create_session:
             create_status = await self.create_session(
-                sample,
+                samples[0],
                 gadgetbridge_service=gadgetbridge_service,
             )
             if create_status == "no_position":
@@ -816,15 +823,17 @@ class GarminLiveTrackClient:
                 "Garmin LiveTrack session is missing after create."
             )
         publisher = self.publisher(state)
-        payload = self.point_payload(sample, publisher, session)
+        payload = self.point_payload(samples, publisher, session)
         await self.request(
             "POST",
             "/tracker/livetrack/api/v1/trackpoints",
             payload=payload,
             gadgetbridge_service=gadgetbridge_service,
         )
-        session["pointCount"] = int(session.get("pointCount", 0)) + 1
-        session["lastPointAt"] = payload["trackPoints"][0]["dateTime"]
+        session["pointCount"] = int(session.get("pointCount", 0)) + len(
+            payload["trackPoints"]
+        )
+        session["lastPointAt"] = payload["trackPoints"][-1]["dateTime"]
         state["activeSession"] = session
         self.save_state(state)
         return "success"
