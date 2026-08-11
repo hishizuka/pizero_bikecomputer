@@ -1,14 +1,14 @@
 MAIN:
   STATUS: true
   LAYOUT:
-    Power: [0, 0, 1, 2]
+    Power (3S / NP): [0, 0, 1, 2]
     HR: [0, 2]
     Speed: [1, 0]
     Cad.: [1, 1]
     Timer: [1, 2]
     Dist.: [2, 0]
     Work: [2, 1]
-    Ascent: [2, 2]
+    Asc. / Dsc.: [2, 2]
 
 GPS:
   STATUS: true

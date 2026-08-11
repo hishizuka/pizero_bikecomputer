@@ -10,6 +10,7 @@ from modules._qt_qtwidgets import (
 )
 
 BASE_LOGO_SIZE = 30
+_PIXMAP_CACHE = {}
 
 
 class _QIconWithPath(QtGui.QIcon):
@@ -123,6 +124,16 @@ class MapPrevIcon(_QIconWithPath):
 
 class BluetoothIcon(_QIconWithPath):
     path = "img/bluetooth.svg"
+
+
+def get_pixmap(icon_cls, size, color=None):
+    cache_key = (icon_cls, size, color)
+    pixmap = _PIXMAP_CACHE.get(cache_key)
+    if pixmap is None:
+        icon = icon_cls(color=color)
+        pixmap = icon.pixmap(QtCore.QSize(size, size))
+        _PIXMAP_CACHE[cache_key] = pixmap
+    return pixmap
 
 
 class LightBeamIcon(_QIconWithPath):

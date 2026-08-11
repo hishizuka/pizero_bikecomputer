@@ -1,5 +1,6 @@
-from datetime import datetime
+import math
 import time
+from datetime import datetime
 
 from modules._qt_qtwidgets import (
     QT_ALIGN_CENTER,
@@ -14,6 +15,7 @@ from modules._qt_qtwidgets import (
 from modules.helper.bluetooth.bluetooth_manager import check_bnep0
 from modules.pyqt.components import icons
 from modules.sensor.gps.base import NMEA_MODE_2D, NMEA_MODE_3D
+from modules.utils import round_half_away_from_zero
 
 
 class RecIndicator(QtWidgets.QWidget):
@@ -88,9 +90,9 @@ class StatusBarWidget(QtWidgets.QWidget):
         self._gps_size = 20
         self._bt_size = 20
         self._light_size = 20
-        self._icon_cache = {}
         self._bt_cached = False
         self._last_bt_check = 0.0
+        self._last_temperature = ""
         self._last_time = ""
         self._flash_token = 0
         self._flash_active = False
@@ -102,6 +104,7 @@ class StatusBarWidget(QtWidgets.QWidget):
         self.gps_label = QtWidgets.QLabel(self)
         self.bt_label = QtWidgets.QLabel(self)
         self.light_label = QtWidgets.QLabel(self)
+        self.temperature_label = QtWidgets.QLabel(self)
         self.time_label = QtWidgets.QLabel(self)
 
         self.gps_label.setFixedSize(self._gps_size, self._gps_size)
@@ -111,8 +114,11 @@ class StatusBarWidget(QtWidgets.QWidget):
         self.gps_label.setAlignment(QT_ALIGN_CENTER)
         self.bt_label.setAlignment(QT_ALIGN_CENTER)
         self.light_label.setAlignment(QT_ALIGN_CENTER)
+        self.temperature_label.setMinimumWidth(44)
+        self.temperature_label.setAlignment(QT_ALIGN_CENTER)
         self.time_label.setAlignment(QT_ALIGN_V_CENTER)
-        self.time_label.setStyleSheet("color: #f5f5f5;")
+        for label in (self.temperature_label, self.time_label):
+            label.setStyleSheet("color: #f5f5f5;")
 
         layout = QtWidgets.QHBoxLayout(self)
         layout.setContentsMargins(8, 0, 8, 0)
@@ -122,6 +128,7 @@ class StatusBarWidget(QtWidgets.QWidget):
         layout.addWidget(self.bt_label)
         layout.addWidget(self.light_label)
         layout.addWidget(self.gps_label)
+        layout.addWidget(self.temperature_label)
         layout.addWidget(self.time_label)
 
         self._timer = QtCore.QTimer(parent=self)
@@ -167,16 +174,18 @@ class StatusBarWidget(QtWidgets.QWidget):
         self.setStyleSheet(f"background-color: {color};")
 
     def resizeEvent(self, event):
-        font = self.time_label.font()
-        font.setPixelSize(max(10, int(self.height() * 0.7)))
-        font.setBold(True)
-        self.time_label.setFont(font)
+        for label in (self.temperature_label, self.time_label):
+            font = label.font()
+            font.setPixelSize(max(10, int(self.height() * 0.7)))
+            font.setBold(True)
+            label.setFont(font)
 
     def update_status(self):
         self._update_rec()
         self._update_gps()
         self._update_bt()
         self._update_light()
+        self._update_temperature()
         self._update_time()
 
     def _update_rec(self):
@@ -208,7 +217,7 @@ class StatusBarWidget(QtWidgets.QWidget):
         else:
             color = "#00000000"
 
-        pixmap = self._get_icon_pixmap(icons.SatelliteAltIcon, self._gps_size, color)
+        pixmap = icons.get_pixmap(icons.SatelliteAltIcon, self._gps_size, color)
         self.gps_label.setPixmap(pixmap)
 
     def _update_bt(self):
@@ -221,7 +230,7 @@ class StatusBarWidget(QtWidgets.QWidget):
                 self._bt_cached = check_bnep0()
 
         color = "#3da5ff" if self._bt_cached else "#00000000"
-        pixmap = self._get_icon_pixmap(icons.BluetoothIcon, self._bt_size, color)
+        pixmap = icons.get_pixmap(icons.BluetoothIcon, self._bt_size, color)
         self.bt_label.setPixmap(pixmap)
 
     def _update_light(self):
@@ -240,26 +249,23 @@ class StatusBarWidget(QtWidgets.QWidget):
             color = "#35c98a"
         else:
             color = "#00000000"
-        pixmap = self._get_icon_pixmap(icons.LightBeamIcon, self._light_size, color)
+        pixmap = icons.get_pixmap(icons.LightBeamIcon, self._light_size, color)
         self.light_label.setPixmap(pixmap)
+
+    def _update_temperature(self):
+        temperature = self.config.logger.sensor.values["integrated"]["temperature"]
+        text = (
+            f"{round_half_away_from_zero(temperature)}°C"
+            if math.isfinite(temperature)
+            else ""
+        )
+
+        if text != self._last_temperature:
+            self._last_temperature = text
+            self.temperature_label.setText(text)
 
     def _update_time(self):
         now_str = datetime.now().strftime("%H:%M")
         if now_str != self._last_time:
             self._last_time = now_str
             self.time_label.setText(now_str)
-
-    def _get_icon_pixmap(self, icon_cls, size, color):
-        cache_key = (icon_cls, size, color)
-        pixmap = self._icon_cache.get(cache_key)
-        if pixmap is not None:
-            return pixmap
-
-        icon = icon_cls(color=color)
-        pixmap = icon.pixmap(QtCore.QSize(size, size))
-        if pixmap.isNull():
-            pixmap = QtGui.QPixmap(size, size)
-            pixmap.fill(QtCore.Qt.GlobalColor.transparent)
-
-        self._icon_cache[cache_key] = pixmap
-        return pixmap

@@ -11,7 +11,7 @@ class GUI_Config:
     }
 
     G_UNIT = {
-        "HeartRate": (".0f","bpm"),
+        "HeartRate": (".0f", "bpm"),
         "Cadence": (".0f", "rpm"),
         "Speed": (".1f", "km/h"),
         "Distance": (".1f", "km"),
@@ -30,7 +30,12 @@ class GUI_Config:
 
     # Per-item font scale for value text in PyQt item widgets.
     G_ITEM_VALUE_FONT_SCALE = {
+        "Asc. / Dsc.": 0.6,
         "CPU_MEM": 0.8,
+    }
+
+    G_ITEM_VALUE_SEPARATOR = {
+        "Asc. / Dsc.": "\n",
     }
 
     G_ITEM_DEF = {
@@ -39,14 +44,20 @@ class GUI_Config:
         "NP": (G_UNIT["Power"], "self.sensor.values['integrated']['normalized_power']"),
         "Speed": (G_UNIT["Speed"], "self.sensor.values['integrated']['speed']"),
         "Dist.": (G_UNIT["Distance"], "self.sensor.values['integrated']['distance']"),
-        "Distance": (G_UNIT["Distance"], "self.sensor.values['integrated']['distance']"),
+        "Distance": (
+            G_UNIT["Distance"],
+            "self.sensor.values['integrated']['distance']",
+        ),
         "Cad.": (G_UNIT["Cadence"], "self.sensor.values['integrated']['cadence']"),
         "HR": (G_UNIT["HeartRate"], "self.sensor.values['integrated']['heart_rate']"),
         "Work": (
             G_UNIT["Work"],
             "self.sensor.values['integrated']['accumulated_power']",
         ),
-        "W'bal": (G_UNIT["Work"], "self.sensor.values['integrated']['w_prime_balance']"),
+        "W'bal": (
+            G_UNIT["Work"],
+            "self.sensor.values['integrated']['w_prime_balance']",
+        ),
         "W'bal(Norm)": (
             G_UNIT["Percent"],
             "self.sensor.values['integrated']['w_prime_balance_normalized']",
@@ -58,14 +69,19 @@ class GUI_Config:
             "self.sensor.values['integrated']['grade_spd']",
         ),
         "GlideRatio": (
-            G_UNIT["Altitude"], 
-            "self.sensor.values['integrated']['glide_ratio']"
+            G_UNIT["Altitude"],
+            "self.sensor.values['integrated']['glide_ratio']",
         ),
         "Temp": (G_UNIT["Temp"], "self.sensor.values['integrated']['temperature']"),
         # average_values
         "Power(3s)": (
             G_UNIT["Power"],
             "self.sensor.values['integrated']['ave_power_3s']",
+        ),
+        "Power (3S / NP)": (
+            ((G_UNIT["Power"], G_UNIT["Power"]), ""),
+            "(self.sensor.values['integrated']['ave_power_3s'], "
+            "self.sensor.values['integrated']['normalized_power'])",
         ),
         "Power(30s)": (
             G_UNIT["Power"],
@@ -75,10 +91,10 @@ class GUI_Config:
             G_UNIT["Power"],
             "self.sensor.values['integrated']['ave_power_60s']",
         ),
-        "WindSpeed": (G_UNIT["Wind"], "self.sensor.values['integrated']['wind_speed']"),
-        "WindDir": (
-            G_UNIT["String"], 
-            "self.sensor.values['integrated']['wind_direction_str']"
+        "Wind": (
+            (((".0f", "°"), G_UNIT["Wind"]), ""),
+            "(self.sensor.values['integrated']['wind_direction'], "
+            "self.sensor.values['integrated']['wind_speed'])",
         ),
         "HeadWind": (G_UNIT["Wind"], "self.sensor.values['integrated']['headwind']"),
         # GPS raw
@@ -221,12 +237,20 @@ class GUI_Config:
         "Vert.Spd": (("3.1f", "m/s"), "self.sensor.values['I2C']['vertical_speed']"),
         "Ascent": (G_UNIT["Altitude"], "self.sensor.values['I2C']['total_ascent']"),
         "Descent": (G_UNIT["Altitude"], "self.sensor.values['I2C']['total_descent']"),
+        "Asc. / Dsc.": (
+            ((G_UNIT["Altitude"], G_UNIT["Altitude"]), ""),
+            "(self.sensor.values['I2C']['total_ascent'], "
+            "self.sensor.values['I2C']['total_descent'])",
+        ),
         "Light": (G_UNIT["Int"], "self.sensor.values['I2C']['light']"),
         "Infrared": (G_UNIT["Int"], "self.sensor.values['I2C']['infrared']"),
         "UVI": (G_UNIT["Int"], "self.sensor.values['I2C']['uvi']"),
         "VOC_Index": (G_UNIT["Int"], "self.sensor.values['I2C']['voc_index']"),
         "Raw_Gas": (G_UNIT["Int"], "self.sensor.values['I2C']['raw_gas']"),
-        "Battery": (G_UNIT["Percent"], "self.sensor.values['I2C']['battery_percentage']"),
+        "Battery": (
+            G_UNIT["Percent"],
+            "self.sensor.values['I2C']['battery_percentage']",
+        ),
         "Motion": (("1.1f", ""), "self.sensor.values['I2C']['motion']"),
         "M_Stat": (("1.1f", ""), "self.sensor.values['I2C']['m_stat']"),
         "ACC_X": (("1.1f", ""), "self.sensor.values['I2C']['acc'][0]"),
@@ -241,21 +265,21 @@ class GUI_Config:
         "Pitch": (G_UNIT["Int"], "self.sensor.values['I2C']['grade_pitch']"),
         "Pitch_Fixed": (
             G_UNIT["Int"],
-            "int(180/3.1415*self.sensor.values['I2C']['fixed_pitch'])"
+            "int(180/3.1415*self.sensor.values['I2C']['fixed_pitch'])",
         ),
         "Roll_Fixed": (
             G_UNIT["Int"],
-            "int(180/3.1415*self.sensor.values['I2C']['fixed_roll'])"
+            "int(180/3.1415*self.sensor.values['I2C']['fixed_roll'])",
         ),
         "Pitch_Raw": (
             G_UNIT["Int"],
-            "int(180/3.1415*self.sensor.values['I2C']['pitch'])"
+            "int(180/3.1415*self.sensor.values['I2C']['pitch'])",
         ),
         "Roll_Raw": (
             G_UNIT["Int"],
-            "int(180/3.1415*self.sensor.values['I2C']['roll'])"
+            "int(180/3.1415*self.sensor.values['I2C']['roll'])",
         ),
-        "Grade(pitch)": (G_UNIT["Percent"],"self.sensor.values['I2C']['grade_pitch']"),
+        "Grade(pitch)": (G_UNIT["Percent"], "self.sensor.values['I2C']['grade_pitch']"),
         # General
         "Timer": (("timer", ""), "self.logger.values['count']"),
         "LapTime": (("timer", ""), "self.logger.values['count_lap']"),
@@ -389,8 +413,26 @@ class GUI_Config:
                 self.layout = yaml.safe_load(text)
         except FileNotFoundError:
             pass
-    
-    def format_text(self, name, value, G_STOPWATCH_STATUS, itemformat):
+
+    def format_text(
+        self,
+        name,
+        value,
+        G_STOPWATCH_STATUS,
+        itemformat,
+        unit_template=" {}",
+        line_separator="\n",
+    ):
+        if isinstance(itemformat, tuple):
+            separator = self.G_ITEM_VALUE_SEPARATOR.get(name, " / ").replace(
+                "\n", line_separator
+            )
+            return separator.join(
+                self.format_text(name, item, G_STOPWATCH_STATUS, item_format)
+                + (unit_template.format(unit) if unit else "")
+                for item, (item_format, unit) in zip(value, itemformat)
+            )
+
         text = "-"
         if value is None:
             pass
@@ -404,9 +446,7 @@ class GUI_Config:
             text = f"{(value / 1000):{itemformat}}"  # m to km
         elif "Work" in name or "WRK" in name:
             text = f"{(value / 1000):{itemformat}}"  # j to kj
-        elif (
-            "Grade" in name or "Glide" in name
-        ) and G_STOPWATCH_STATUS != "START":
+        elif ("Grade" in name or "Glide" in name) and G_STOPWATCH_STATUS != "START":
             text = "-"
         elif itemformat == "timer":
             # fmt = '%H:%M:%S' #default (too long)

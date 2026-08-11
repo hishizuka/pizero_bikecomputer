@@ -3,11 +3,10 @@ from functools import partial
 from modules.app_logger import app_logger
 from modules._qt_qtwidgets import QT_EXPANDING, QtCore, QtWidgets
 
-from .pyqt_item import Item
+from .pyqt_item import Item, WindItem
 
 
 class ScreenWidget(QtWidgets.QWidget):
-    config = None
     layout_class = QtWidgets.QGridLayout
 
     def __init__(self, parent, config, item_layout=None):
@@ -16,7 +15,6 @@ class ScreenWidget(QtWidgets.QWidget):
         self.item_layout = {}
         self.max_width = self.max_height = 0
         self.font_size = 20
-        self._value_getters = {}
 
         if item_layout:
             self.item_layout = item_layout
@@ -65,7 +63,7 @@ class ScreenWidget(QtWidgets.QWidget):
         self.setup_ui_extra()
 
         self.add_items()
-        
+
         self.set_font_size(min(self.config.display.resolution))
 
     # call from on_change_main_page in gui_pyqt.py
@@ -81,8 +79,8 @@ class ScreenWidget(QtWidgets.QWidget):
 
     def set_font_size(self, length):
         # get rows/columns for own grid layout
-        short_side_items = self.max_height # width > height
-        f = 1.0 # quick hack. considering aspect ratio?
+        short_side_items = self.max_height  # width > height
+        f = 1.0  # quick hack. considering aspect ratio?
         if self.size().height() > self.size().width():
             short_side_items = self.max_width
             f = 0.8
@@ -105,12 +103,7 @@ class ScreenWidget(QtWidgets.QWidget):
     def _build_value_getter(self, expr):
         """Create a plain callable without per-frame eval/exec."""
         local_ns = {}
-        try:
-            exec(f"def _getter(self):\n    return {expr}\n", {}, local_ns)
-        except Exception:
-            app_logger.exception(f"failed to compile item expr: {expr}")
-            return lambda: None
-
+        exec(f"def _getter(self):\n    return {expr}\n", {}, local_ns)
         return partial(local_ns["_getter"], self)
 
     def add_items(self):
@@ -144,9 +137,8 @@ class ScreenWidget(QtWidgets.QWidget):
                     continue
 
                 expr = self.config.gui.gui_config.G_ITEM_DEF[key][1]
-                self._value_getters[key] = self._build_value_getter(expr)
-
-                item = Item(
+                item_class = WindItem if key == "Wind" else Item
+                item = item_class(
                     config=self.config,
                     name=key,
                     font_size=self.font_size,
@@ -154,7 +146,7 @@ class ScreenWidget(QtWidgets.QWidget):
                     right_flag=right_flag,
                 )
                 item.value_expr = expr
-                item.value_getter = self._value_getters[key]
+                item.value_getter = self._build_value_getter(expr)
 
                 self.items.append(item)
 
@@ -166,22 +158,16 @@ class ScreenWidget(QtWidgets.QWidget):
     # This handles by default items displays, but each screen can implement its own logic
     def update_display(self):
         for item in self.items:
-            getter = getattr(item, "value_getter", None)
-            if getter is None:
-                continue
             try:
-                value = getter()
+                value = item.value_getter()
             except KeyError:
                 continue
             except ValueError:
                 # Some sensors may temporarily yield NaN; skip noisy tracebacks and render as blank
                 value = float("nan")
             except Exception:  # noqa
-                value = None
                 app_logger.exception(f"not found in items: {item.name}")
-                try:
-                    app_logger.exception(f"    {item.value_expr}")
-                except Exception:
-                    pass
+                app_logger.exception(f"    {item.value_expr}")
+                continue
 
             item.update_value(value)
