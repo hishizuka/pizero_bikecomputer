@@ -124,8 +124,17 @@ prompt_and_store "Install Bluetooth packages?" install_bluetooth
 prompt_and_store "Enable I2C?" enable_i2c
 prompt_and_store "Enable SPI?" enable_spi
 prompt_and_store "Install services?" install_services
+install_services_use_x=false
+install_services_use_sharp_drm=false
+install_services_use_pitft=false
 if [[ "$install_services" == "true" ]]; then
-    prompt_and_store "Using TFT/XWindow to start pizero_bikecomputer.service?" install_services_use_x
+    prompt_and_store "Use X Window (xcb) to start pizero_bikecomputer.service?" install_services_use_x
+    if [[ "$install_services_use_x" != "true" ]]; then
+        prompt_and_store "Use sharp-drm-driver (linuxfb)?" install_services_use_sharp_drm
+        if [[ "$install_services_use_sharp_drm" != "true" ]]; then
+            prompt_and_store "Use PiTFT (linuxfb)?" install_services_use_pitft
+        fi
+    fi
 fi
 set -e
 TARGET_USER="${SUDO_USER:-${LOGNAME:-$USER}}"
@@ -425,11 +434,15 @@ if [[ "$install_services" == "true" ]]; then
         script="$script -f"
         envs="Environment=\"QT_QPA_PLATFORM=xcb\"\\nEnvironment=\"DISPLAY=:0\"\\nEnvironment=\"XAUTHORITY=/home/$TARGET_USER/.Xauthority\"\\n"
         after="After=display-manager.service\\n"
-    else
-        # DRM
+    elif [[ "$install_services_use_sharp_drm" == "true" ||
+            "$install_services_use_pitft" == "true" ]]; then
+        # DRM / PiTFT
         envs="Environment=\"QT_QPA_PLATFORM=linuxfb:fb=/dev/fb1\"\\n"
         envs+="Environment=\"QT_QPA_FB_HIDECURSOR=1\"\\n"
         # and add vt.global_cursor_default=0 fbcon=map:0 or 1(map console with /dev/fbX)
+        after=""
+    else
+        envs="Environment=\"QT_QPA_PLATFORM=offscreen\"\\n"
         after=""
     fi
 
