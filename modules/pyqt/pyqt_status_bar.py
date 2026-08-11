@@ -253,7 +253,11 @@ class StatusBarWidget(QtWidgets.QWidget):
         self.light_label.setPixmap(pixmap)
 
     def _update_temperature(self):
-        temperature = self.config.logger.sensor.values["integrated"]["temperature"]
+        sensor = self.config.logger.sensor
+        if sensor is None:
+            return
+
+        temperature = sensor.values["integrated"]["temperature"]
         text = (
             f"{round_half_away_from_zero(temperature)}°C"
             if math.isfinite(temperature)
