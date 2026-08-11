@@ -3,6 +3,13 @@ from datetime import datetime
 import math
 
 from modules.app_logger import app_logger
+from modules.sensor.cycling_sensor import (
+    MAX_CADENCE_RPM,
+    MAX_POWER_WATTS,
+    MAX_SPEED_MPS,
+    counter_delta,
+)
+
 from . import ant_device
 
 
@@ -52,7 +59,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
             self.values[page] = {}
         for page in self.elements:
             for element in self.elements[page]:
-                self.values[page][element] = self.config.G_ANT_NULLVALUE
+                self.values[page][element] = self.config.G_SENSOR_NULLVALUE
         self.init_common_page_status()
 
     def reset_value(self):
@@ -169,8 +176,8 @@ class ANT_Device_Power(ant_device.ANT_Device):
             return
 
         delta = [
-            self.delta_with_rollover(power_values[0], pre_values[0], 256),
-            self.delta_with_rollover(power_values[1], pre_values[1], 65536),
+            counter_delta(power_values[0], pre_values[0], 256),
+            counter_delta(power_values[1], pre_values[1], 65536),
         ]
         delta_t = (t - values["on_data_timestamp"]).total_seconds()
 
@@ -179,7 +186,9 @@ class ANT_Device_Power(ant_device.ANT_Device):
             values["last_event_timestamp"] = t
             values["last_event_interval"] = delta_t / delta[0]
             # max value in .fit file is 65536 [w]
-            if pwr <= 65535 and (pwr - values["power"]) < self.spike_threshold["power"]:
+            if pwr <= MAX_POWER_WATTS and (
+                pwr - values["power"] < self.spike_threshold["power"]
+            ):
                 values["power"] = pwr
                 values["power_16_simple"] = power_16_simple
                 if cadence != 0xFF:
@@ -253,8 +262,8 @@ class ANT_Device_Power(ant_device.ANT_Device):
                 "ant+_power_values_17", pre_values
             )
             self.extend_list(pre_pwr_value, self.page_value_lengths[0x11])
-            pwr_diff = self.delta_with_rollover(pre_values[1], pre_pwr_value[1], 65536)
-            spd_diff = self.delta_with_rollover(pre_values[3], pre_pwr_value[3], 256)
+            pwr_diff = counter_delta(pre_values[1], pre_pwr_value[1], 65536)
+            spd_diff = counter_delta(pre_values[3], pre_pwr_value[3], 256)
             if pwr_diff > 0:
                 values["accumulated_power"] += (
                     128 * math.pi * pwr_diff / self.torque_time_base
@@ -264,10 +273,10 @@ class ANT_Device_Power(ant_device.ANT_Device):
             return
 
         delta = [
-            self.delta_with_rollover(power_values[0], pre_values[0], 65536),
-            self.delta_with_rollover(power_values[1], pre_values[1], 65536),
-            self.delta_with_rollover(power_values[2], pre_values[2], 256),
-            self.delta_with_rollover(power_values[3], pre_values[3], 256),
+            counter_delta(power_values[0], pre_values[0], 65536),
+            counter_delta(power_values[1], pre_values[1], 65536),
+            counter_delta(power_values[2], pre_values[2], 256),
+            counter_delta(power_values[3], pre_values[3], 256),
             0,
         ]
         delta_t = (t - values["on_data_timestamp"]).total_seconds()
@@ -280,11 +289,13 @@ class ANT_Device_Power(ant_device.ANT_Device):
         ):
             pwr = 128 * math.pi * delta[1] / delta[0]
             values["last_event_timestamp"] = t
-            values["last_event_interval"] = (
-                delta[0] / (self.torque_time_base * delta[2])
+            values["last_event_interval"] = delta[0] / (
+                self.torque_time_base * delta[2]
             )
             # max value in .fit file is 65536 [w]
-            if pwr <= 65535 and (pwr - values["power"]) < self.spike_threshold["power"]:
+            if pwr <= MAX_POWER_WATTS and (
+                pwr - values["power"] < self.spike_threshold["power"]
+            ):
                 values["power"] = pwr
                 if self.config.G_MANUAL_STATUS == "START":
                     # unit: J
@@ -303,7 +314,9 @@ class ANT_Device_Power(ant_device.ANT_Device):
                 / (delta[0] / self.torque_time_base)
             )
             # max value in .fit file is 65.536 [m/s]
-            if spd <= 65 and (spd - values["speed"]) < self.spike_threshold["speed"]:
+            if spd <= MAX_SPEED_MPS and (
+                spd - values["speed"] < self.spike_threshold["speed"]
+            ):
                 values["speed"] = spd
                 if self.config.G_MANUAL_STATUS == "START":
                     values["distance"] += self.config.G_WHEEL_CIRCUMFERENCE * delta[3]
@@ -368,7 +381,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
             if not isinstance(pre_pwr_value, list):
                 pre_pwr_value = [-1, pre_pwr_value, -1, -1, -1]
             self.extend_list(pre_pwr_value, self.page_value_lengths[0x12])
-            diff = self.delta_with_rollover(pre_values[1], pre_pwr_value[1], 65536)
+            diff = counter_delta(pre_values[1], pre_pwr_value[1], 65536)
             if diff > 0:
                 recovered_work = 128 * math.pi * diff / self.torque_time_base
                 values["accumulated_power"] += recovered_work
@@ -383,10 +396,10 @@ class ANT_Device_Power(ant_device.ANT_Device):
             return
 
         delta = [
-            self.delta_with_rollover(power_values[0], pre_values[0], 65536),
-            self.delta_with_rollover(power_values[1], pre_values[1], 65536),
-            self.delta_with_rollover(power_values[2], pre_values[2], 256),
-            self.delta_with_rollover(power_values[3], pre_values[3], 256),
+            counter_delta(power_values[0], pre_values[0], 65536),
+            counter_delta(power_values[1], pre_values[1], 65536),
+            counter_delta(power_values[2], pre_values[2], 256),
+            counter_delta(power_values[3], pre_values[3], 256),
             0,
         ]
         delta_t = (t - values["on_data_timestamp"]).total_seconds()
@@ -400,13 +413,15 @@ class ANT_Device_Power(ant_device.ANT_Device):
             pwr = 128 * math.pi * delta[1] / delta[0]
             cad = 60 * delta[2] * self.torque_time_base / delta[0]
             values["last_event_timestamp"] = t
-            values["last_event_interval"] = (
-                delta[0] / (self.torque_time_base * delta[2])
+            values["last_event_interval"] = delta[0] / (
+                self.torque_time_base * delta[2]
             )
             # max value in .fit file is 65536 [w]
-            if pwr <= 65535 and (pwr - values["power"]) < self.spike_threshold["power"]:
+            if pwr <= MAX_POWER_WATTS and (
+                pwr - values["power"] < self.spike_threshold["power"]
+            ):
                 values["power"] = pwr
-                if cad <= 255:
+                if cad <= MAX_CADENCE_RPM:
                     values["cadence"] = cad
                 elif cadence != 0xFF:
                     values["cadence"] = cadence

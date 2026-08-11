@@ -121,37 +121,37 @@ class GUI_Config:
         # ANT+ raw
         "HR(ANT+)": (
             G_UNIT["HeartRate"],
-            "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['HR']]['heart_rate']",
+            "self.sensor.values['ANT+'][self.config.get_ant_id_type('HR')]['heart_rate']",
         ),
         "Speed(ANT+)": (
             G_UNIT["Speed"],
-            "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['SPD']]['speed']",
+            "self.sensor.values['ANT+'][self.config.get_ant_id_type('SPD')]['speed']",
         ),
         "Dist.(ANT+)": (
             G_UNIT["Distance"],
-            "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['SPD']]['distance']",
+            "self.sensor.values['ANT+'][self.config.get_ant_id_type('SPD')]['distance']",
         ),
         "Cad.(ANT+)": (
             G_UNIT["Cadence"],
-            "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['CDC']]['cadence']",
+            "self.sensor.values['ANT+'][self.config.get_ant_id_type('CDC')]['cadence']",
         ),
         # get from sensor as powermeter pairing
         # (cannot get from other pairing not including power sensor pairing)
         "Power16(ANT+)": (
             G_UNIT["Power"],
-            "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x10]['power']",
+            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x10]['power']",
         ),
         "Power16s(ANT+)": (
             G_UNIT["Power"],
-            "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x10]['power_16_simple']",
+            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x10]['power_16_simple']",
         ),
         "Cad.16(ANT+)": (
             G_UNIT["Cadence"],
-            "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x10]['cadence']",
+            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x10]['cadence']",
         ),
         "Work16(ANT+)": (
             G_UNIT["Work"],
-            "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x10]['accumulated_power']",
+            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x10]['accumulated_power']",
         ),
         "NP16(ANT+)": (
             G_UNIT["Power"],
@@ -159,31 +159,31 @@ class GUI_Config:
         ),
         "Power R(ANT+)": (
             G_UNIT["Power"],
-            "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x10]['power_r']",
+            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x10]['power_r']",
         ),
         "Power L(ANT+)": (
             G_UNIT["Power"],
-            "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x10]['power_l']",
+            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x10]['power_l']",
         ),
         "Balance(ANT+)": (
             G_UNIT["String"],
-            "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x10]['lr_balance']",
+            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x10]['lr_balance']",
         ),
         "Power17(ANT+)": (
             G_UNIT["Power"],
-            "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x11]['power']",
+            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x11]['power']",
         ),
         "Speed17(ANT+)": (
             G_UNIT["Speed"],
-            "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x11]['speed']",
+            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x11]['speed']",
         ),
         "Dist.17(ANT+)": (
             G_UNIT["Distance"],
-            "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x11]['distance']",
+            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x11]['distance']",
         ),
         "Work17(ANT+)": (
             G_UNIT["Work"],
-            "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x11]['accumulated_power']",
+            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x11]['accumulated_power']",
         ),
         "NP17(ANT+)": (
             G_UNIT["Power"],
@@ -191,15 +191,15 @@ class GUI_Config:
         ),
         "Power18(ANT+)": (
             G_UNIT["Power"],
-            "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x12]['power']",
+            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x12]['power']",
         ),
         "Cad.18(ANT+)": (
             G_UNIT["Cadence"],
-            "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x12]['cadence']",
+            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x12]['cadence']",
         ),
         "Work18(ANT+)": (
             G_UNIT["Work"],
-            "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x12]['accumulated_power']",
+            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x12]['accumulated_power']",
         ),
         "NP18(ANT+)": (
             G_UNIT["Power"],
@@ -207,15 +207,15 @@ class GUI_Config:
         ),
         "Torque Ef.(ANT+)": (
             G_UNIT["String"],
-            "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x13]['torque_eff']",
+            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x13]['torque_eff']",
         ),
         "Pedal Sm.(ANT+)": (
             G_UNIT["String"],
-            "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['PWR']][0x13]['pedal_sm']",
+            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x13]['pedal_sm']",
         ),
         "Light(ANT+)": (
             G_UNIT["String"],
-            "self.sensor.values['ANT+'][self.config.G_ANT['ID_TYPE']['LGT']]['light_mode']",
+            "self.sensor.values['ANT+'][self.config.get_ant_id_type('LGT')]['light_mode']",
         ),
         # ANT+ multi
         "PWR1": (G_UNIT["Power"], "None"),

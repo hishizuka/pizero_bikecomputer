@@ -21,6 +21,7 @@ class ANT_Device_Search(ant_device.ANT_Device):
     def __init__(self, node, config, values=None):
         self.node = node
         self.config = config
+        self.ctrl_searcher = None
         if self.config.G_ANT["STATUS"]:
             # special use of make_channel(c_type, search=False)
             self.make_channel(self.ant_config["channel_type"], ext_assign=0x01)
@@ -46,7 +47,7 @@ class ANT_Device_Search(ant_device.ANT_Device):
             return
         if len(data) == 13:
             antID, antType = self.structPattern["ID"].unpack(data[9:12])
-            if antType in self.config.G_ANT["TYPES"][self.antName]:
+            if antType in self.config.G_ANT_SENSOR_TYPES[self.antName]:
                 self._add_detected_sensor(antID, antType)
 
     def on_data_ctrl(self, data):
@@ -55,7 +56,7 @@ class ANT_Device_Search(ant_device.ANT_Device):
         if len(data) == 8:
             (antID,) = struct.Struct("<H").unpack(data[1:3])
             antType = 0x10
-            if antType in self.config.G_ANT["TYPES"][self.antName]:
+            if antType in self.config.G_ANT_SENSOR_TYPES[self.antName]:
                 self._add_detected_sensor(antID, antType)
 
     def _add_detected_sensor(self, ant_id, ant_type):
@@ -66,12 +67,13 @@ class ANT_Device_Search(ant_device.ANT_Device):
 
     def search(self, antName):
         self.searchList = {}
-        for k, v in self.config.G_ANT["USE"].items():
+        for k in self.config.G_SENSORS:
             if k == antName:
                 continue
-            if v and k in self.config.G_ANT["ID_TYPE"]:
-                antID, antType = struct.unpack("<HB", self.config.G_ANT["ID_TYPE"][k])
-                if antType in self.config.G_ANT["TYPES"][antName]:
+            ant_id_type = self.config.get_ant_id_type(k)
+            if ant_id_type:
+                antID, antType = struct.unpack("<HB", ant_id_type)
+                if antType in self.config.G_ANT_SENSOR_TYPES[antName]:
                     # already connected
                     self.searchList[antID] = (antType, True)
 
@@ -122,7 +124,7 @@ class ANT_Device_Search(ant_device.ANT_Device):
                     self.set_wait_normal_mode()
 
             elif self.antName == "CTRL":
-                ctrl = getattr(self, "ctrl_searcher", None)
+                ctrl = self.ctrl_searcher
                 if ctrl is not None:
                     # Restore default callback and stop background sending.
                     try:

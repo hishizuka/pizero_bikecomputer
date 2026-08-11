@@ -1,7 +1,6 @@
 import configparser
 import json
 import os
-import struct
 
 import numpy as np
 
@@ -35,15 +34,6 @@ class Setting:
                     app_logger.warning(
                         f"Unknown board preset in setting.conf: {c['BOARD']!r}"
                     )
-            if "AUTOSTOP_STATUS" in c:
-                self.config.G_AUTOSTOP_STATUS = c.getboolean("AUTOSTOP_STATUS")
-            if "AUTOSTOP_CUTOFF" in c:
-                self.config.G_AUTOSTOP_CUTOFF = int(c["AUTOSTOP_CUTOFF"]) / 3.6
-                self.config.G_GPS_SPEED_CUTOFF = self.config.G_AUTOSTOP_CUTOFF
-            if "WHEEL_CIRCUMFERENCE" in c:
-                self.config.G_WHEEL_CIRCUMFERENCE = int(c["WHEEL_CIRCUMFERENCE"]) / 1000
-            if "GROSS_AVE_SPEED" in c:
-                self.config.G_GROSS_AVE_SPEED = int(c["GROSS_AVE_SPEED"])
             if "DISPLAY" in c:
                 # store temporary
                 self.config.G_DISPLAY = c["DISPLAY"]
@@ -127,43 +117,74 @@ class Setting:
                     self.config_parser["POWER"]["W_PRIME"]
                 )
 
-        if "ANT" in self.config_parser:
-            c = self.config_parser["ANT"]
-            for key in c:
-                if key.upper() in ["STATUS", "USE_AUTO_LIGHT"]:
-                    self.config.G_ANT[key.upper()] = c.getboolean(key)
-                    continue
+        if "SENSOR_ANT" in self.config_parser:
+            c = self.config_parser["SENSOR_ANT"]
+            if "STATUS" in c:
+                self.config.G_ANT["STATUS"] = c.getboolean("STATUS")
 
-                i = key.rfind("_")
-                if i < 0:
-                    continue
+        if "SENSOR_BLE" in self.config_parser:
+            c = self.config_parser["SENSOR_BLE"]
+            if "USE_INTERNAL" in c:
+                self.config.G_BLE["USE_INTERNAL"] = c.getboolean("USE_INTERNAL")
+            if "USE_EXTERNAL" in c:
+                self.config.G_BLE["USE_EXTERNAL"] = c.getboolean("USE_EXTERNAL")
 
-                k1 = key[0:i].upper()
-                k2 = key[i + 1 :].upper()
-                if k2 in self.config.G_ANT["ID"].keys():
-                    if k1 == "USE":
-                        self.config.G_ANT[k1][k2] = c.getboolean(key)
-                    elif k1 in ["ID", "TYPE"]:
-                        self.config.G_ANT[k1][k2] = c.getint(key)
+        for role in self.config.G_SENSOR_ROLE_ORDER:
+            self.config.clear_sensor(role)
+            section = f"SENSOR_{role}"
+            if section not in self.config_parser:
+                continue
+            c = self.config_parser[section]
 
-            for key in self.config.G_ANT["ID"].keys():
-                if (
-                    not (0 <= self.config.G_ANT["ID"][key] <= 0xFFFF)
-                    or not self.config.G_ANT["TYPE"][key]
-                    in self.config.G_ANT["TYPES"][key]
-                ):
-                    self.config.G_ANT["USE"][key] = False
-                    self.config.G_ANT["ID"][key] = 0
-                    self.config.G_ANT["TYPE"][key] = 0
-                if (
-                    self.config.G_ANT["ID"][key] != 0
-                    and self.config.G_ANT["TYPE"][key] != 0
-                ):
-                    self.config.G_ANT["ID_TYPE"][key] = struct.pack(
-                        "<HB",
-                        self.config.G_ANT["ID"][key],
-                        self.config.G_ANT["TYPE"][key],
+            if role == "SPD":
+                if "AUTOSTOP_STATUS" in c:
+                    self.config.G_AUTOSTOP_STATUS = c.getboolean("AUTOSTOP_STATUS")
+                if "AUTOSTOP_CUTOFF" in c:
+                    self.config.G_AUTOSTOP_CUTOFF = int(c["AUTOSTOP_CUTOFF"]) / 3.6
+                    self.config.G_GPS_SPEED_CUTOFF = self.config.G_AUTOSTOP_CUTOFF
+                if "WHEEL_CIRCUMFERENCE" in c:
+                    self.config.G_WHEEL_CIRCUMFERENCE = (
+                        int(c["WHEEL_CIRCUMFERENCE"]) / 1000
                     )
+                if "GROSS_AVE_SPEED" in c:
+                    self.config.G_GROSS_AVE_SPEED = int(c["GROSS_AVE_SPEED"])
+            elif role == "LGT" and "AUTO_LIGHT" in c:
+                self.config.G_AUTO_LIGHT = c.getboolean("AUTO_LIGHT")
+
+            try:
+                use_ant = c.getboolean("USE_ANT", fallback=False)
+                use_ble = c.getboolean("USE_BLE", fallback=False)
+            except ValueError as exc:
+                app_logger.warning(f"Invalid {role} sensor selection: {exc}")
+                continue
+            if use_ant and use_ble:
+                app_logger.warning(
+                    f"Invalid {role} sensor selection: "
+                    "USE_ANT and USE_BLE are both True"
+                )
+                continue
+            if not use_ant and not use_ble:
+                continue
+
+            identifier = c.get("ID", "").strip()
+            try:
+                if use_ant:
+                    sensor_type = int(c.get("TYPE", ""), 0)
+                    self.config.set_sensor(
+                        role,
+                        self.config.SENSOR_PROTOCOL_ANT,
+                        int(identifier, 0),
+                        sensor_type,
+                    )
+                else:
+                    self.config.set_sensor(
+                        role,
+                        self.config.SENSOR_PROTOCOL_BLE,
+                        identifier,
+                    )
+            except (TypeError, ValueError) as exc:
+                app_logger.warning(f"Invalid {role} sensor setting: {exc}")
+                self.config.clear_sensor(role)
 
         if "SENSOR_IMU" in self.config_parser:
             c = self.config_parser["SENSOR_IMU"]
@@ -284,57 +305,56 @@ class Setting:
                     self.config.G_AUTO_UPLOAD_SERVICE[service] = c.getboolean(service)
 
     def write_config(self):
+        # Rebuild from the supported schema so obsolete settings are dropped.
+        self.config_parser = configparser.ConfigParser()
+
         self.config_parser["GENERAL"] = {}
         c = self.config_parser["GENERAL"]
         c["BOARD"] = BoardType(self.config.G_BOARD_TYPE).value
         c["DISPLAY"] = self.config.G_DISPLAY
-        c["AUTOSTOP_STATUS"] = str(self.config.G_AUTOSTOP_STATUS)
-        c["AUTOSTOP_CUTOFF"] = str(int(self.config.G_AUTOSTOP_CUTOFF * 3.6))
-        c["WHEEL_CIRCUMFERENCE"] = str(int(self.config.G_WHEEL_CIRCUMFERENCE * 1000))
-        c["GROSS_AVE_SPEED"] = str(int(self.config.G_GROSS_AVE_SPEED))
         c["LANG"] = self.config.G_LANG
         c["FONT_FILE"] = self.config.G_FONT_FILE
         c["AUTO_WIFI_OFF"] = str(self.config.G_AUTO_WIFI_OFF)
 
-        self.config_parser["BT"] = {}
-        c = self.config_parser["BT"]
-        c["BT_PAN_DEVICE"] = str(self.config.G_BT_PAN_DEVICE)
-        c["AUTO_BT_TETHERING"] = str(self.config.G_AUTO_BT_TETHERING)
-        c["USE_ZWIFT_CLICK_V2"] = str(self.config.G_ZWIFT_CLICK_V2["STATUS"])
-        c["ZWIFT_CLICK_V2_ADDRESS"] = str(self.config.G_ZWIFT_CLICK_V2["ADDRESS"])
-        c["GADGETBRIDGE_STATUS"] = str(self.config.G_GADGETBRIDGE["STATUS"])
-        c["GADGETBRIDGE_USE_GPS"] = str(self.config.G_GADGETBRIDGE["USE_GPS"])
-
-        self.config_parser["MAP_AND_DATA"] = {}
-        c = self.config_parser["MAP_AND_DATA"]
-        c["MAP"] = self.config.G_MAP
-        c["COURSE_TRAFFIC_SIDE"] = self.config.G_COURSE_TRAFFIC_SIDE
-        c["USE_HEATMAP_OVERLAY_MAP"] = str(self.config.G_USE_HEATMAP_OVERLAY_MAP)
-        c["HEATMAP_OVERLAY_MAP"] = self.config.G_HEATMAP_OVERLAY_MAP
-        c["USE_RAIN_OVERLAY_MAP"] = str(self.config.G_USE_RAIN_OVERLAY_MAP)
-        c["RAIN_OVERLAY_MAP"] = self.config.G_RAIN_OVERLAY_MAP
-        c["USE_WIND_OVERLAY_MAP"] = str(self.config.G_USE_WIND_OVERLAY_MAP)
-        c["WIND_OVERLAY_MAP"] = self.config.G_WIND_OVERLAY_MAP
-        c["USE_WIND_DATA_SOURCE"] = str(self.config.G_USE_WIND_DATA_SOURCE)
-        c["WIND_DATA_SOURCE"] = self.config.G_WIND_DATA_SOURCE
-        c["USE_DEM_TILE"] = str(self.config.G_USE_DEM_TILE)
-        c["DEM_MAP"] = self.config.G_DEM_MAP
-
-        self.config_parser["POWER"] = {}
-        self.config_parser["POWER"]["CP"] = str(int(self.config.G_POWER_CP))
-        self.config_parser["POWER"]["W_PRIME"] = str(int(self.config.G_POWER_W_PRIME))
-
         if not self.config.G_DUMMY_OUTPUT:
-            self.config_parser["ANT"] = {}
-            c = self.config_parser["ANT"]
+            self.config_parser["SENSOR_ANT"] = {}
+            c = self.config_parser["SENSOR_ANT"]
             c["STATUS"] = str(self.config.G_ANT["STATUS"])
-            for key1 in ["USE", "ID", "TYPE"]:
-                for key2 in self.config.G_ANT[key1]:
-                    if (
-                        key2 in self.config.G_ANT["ID"].keys()
-                    ):  # ['HR','SPD','CDC','PWR']:
-                        c[key1 + "_" + key2] = str(self.config.G_ANT[key1][key2])
-            c["USE_AUTO_LIGHT"] = str(self.config.G_ANT["USE_AUTO_LIGHT"])
+
+            self.config_parser["SENSOR_BLE"] = {}
+            c = self.config_parser["SENSOR_BLE"]
+            c["USE_INTERNAL"] = str(self.config.G_BLE["USE_INTERNAL"])
+            c["USE_EXTERNAL"] = str(self.config.G_BLE["USE_EXTERNAL"])
+
+            for role in self.config.G_SENSOR_ROLE_ORDER:
+                sensor = self.config.G_SENSORS[role]
+                configured = self.config.is_sensor_configured(role)
+
+                section = f"SENSOR_{role}"
+                self.config_parser[section] = {}
+                c = self.config_parser[section]
+                use_ant = configured and self.config.sensor_uses(
+                    role, self.config.SENSOR_PROTOCOL_ANT
+                )
+                use_ble = configured and self.config.sensor_uses(
+                    role, self.config.SENSOR_PROTOCOL_BLE
+                )
+                c["USE_ANT"] = str(use_ant)
+                c["USE_BLE"] = str(use_ble)
+                if use_ant or use_ble:
+                    c["ID"] = str(sensor["ID"])
+                if use_ant:
+                    c["TYPE"] = str(sensor["TYPE"])
+
+                if role == "SPD":
+                    c["WHEEL_CIRCUMFERENCE"] = str(
+                        int(self.config.G_WHEEL_CIRCUMFERENCE * 1000)
+                    )
+                    c["GROSS_AVE_SPEED"] = str(int(self.config.G_GROSS_AVE_SPEED))
+                    c["AUTOSTOP_STATUS"] = str(self.config.G_AUTOSTOP_STATUS)
+                    c["AUTOSTOP_CUTOFF"] = str(int(self.config.G_AUTOSTOP_CUTOFF * 3.6))
+                elif role == "LGT":
+                    c["AUTO_LIGHT"] = str(self.config.G_AUTO_LIGHT)
 
         self.config_parser["SENSOR_IMU"] = {}
         c = self.config_parser["SENSOR_IMU"]
@@ -365,6 +385,34 @@ class Setting:
             c["MAG_AXIS_CONVERSION_STATUS"] = str(imu_axis.mag_axis_conversion_status)
             c["MAG_AXIS_CONVERSION_COEF"] = str(list(imu_axis.mag_axis_conversion_coef))
         c["MAG_DECLINATION"] = str(int(self.config.G_IMU_MAG_DECLINATION))
+
+        self.config_parser["BT"] = {}
+        c = self.config_parser["BT"]
+        c["BT_PAN_DEVICE"] = str(self.config.G_BT_PAN_DEVICE)
+        c["AUTO_BT_TETHERING"] = str(self.config.G_AUTO_BT_TETHERING)
+        c["USE_ZWIFT_CLICK_V2"] = str(self.config.G_ZWIFT_CLICK_V2["STATUS"])
+        c["ZWIFT_CLICK_V2_ADDRESS"] = str(self.config.G_ZWIFT_CLICK_V2["ADDRESS"])
+        c["GADGETBRIDGE_STATUS"] = str(self.config.G_GADGETBRIDGE["STATUS"])
+        c["GADGETBRIDGE_USE_GPS"] = str(self.config.G_GADGETBRIDGE["USE_GPS"])
+
+        self.config_parser["MAP_AND_DATA"] = {}
+        c = self.config_parser["MAP_AND_DATA"]
+        c["MAP"] = self.config.G_MAP
+        c["COURSE_TRAFFIC_SIDE"] = self.config.G_COURSE_TRAFFIC_SIDE
+        c["USE_HEATMAP_OVERLAY_MAP"] = str(self.config.G_USE_HEATMAP_OVERLAY_MAP)
+        c["HEATMAP_OVERLAY_MAP"] = self.config.G_HEATMAP_OVERLAY_MAP
+        c["USE_RAIN_OVERLAY_MAP"] = str(self.config.G_USE_RAIN_OVERLAY_MAP)
+        c["RAIN_OVERLAY_MAP"] = self.config.G_RAIN_OVERLAY_MAP
+        c["USE_WIND_OVERLAY_MAP"] = str(self.config.G_USE_WIND_OVERLAY_MAP)
+        c["WIND_OVERLAY_MAP"] = self.config.G_WIND_OVERLAY_MAP
+        c["USE_WIND_DATA_SOURCE"] = str(self.config.G_USE_WIND_DATA_SOURCE)
+        c["WIND_DATA_SOURCE"] = self.config.G_WIND_DATA_SOURCE
+        c["USE_DEM_TILE"] = str(self.config.G_USE_DEM_TILE)
+        c["DEM_MAP"] = self.config.G_DEM_MAP
+
+        self.config_parser["POWER"] = {}
+        self.config_parser["POWER"]["CP"] = str(int(self.config.G_POWER_CP))
+        self.config_parser["POWER"]["W_PRIME"] = str(int(self.config.G_POWER_W_PRIME))
 
         self.config_parser["DISPLAY_PARAM"] = {}
         c = self.config_parser["DISPLAY_PARAM"]

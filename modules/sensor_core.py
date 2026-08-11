@@ -206,6 +206,7 @@ class SensorCore:
         self._perf_sensor_loop_ms = []
         self._perf_sensor_preprocess_ms_sum = 0.0
         self._perf_sensor_ant_update_ms_sum = 0.0
+        self._perf_sensor_ble_update_ms_sum = 0.0
         self._perf_sensor_calc_ms_sum = 0.0
         self._perf_sensor_post_ms_sum = 0.0
         self._perf_sensor_adjust_ms_sum = 0.0
@@ -227,6 +228,9 @@ class SensorCore:
         )
         ant_update_avg_ms = (
             self._perf_sensor_ant_update_ms_sum / self._perf_sensor_calls
+        )
+        ble_update_avg_ms = (
+            self._perf_sensor_ble_update_ms_sum / self._perf_sensor_calls
         )
         calc_avg_ms = self._perf_sensor_calc_ms_sum / self._perf_sensor_calls
         post_avg_ms = self._perf_sensor_post_ms_sum / self._perf_sensor_calls
@@ -257,6 +261,7 @@ class SensorCore:
             f"loop_max_ms={loop_max_ms:.3f} "
             f"preprocess_avg_ms={preprocess_avg_ms:.3f} "
             f"ant_update_avg_ms={ant_update_avg_ms:.3f} "
+            f"ble_update_avg_ms={ble_update_avg_ms:.3f} "
             f"calc_avg_ms={calc_avg_ms:.3f} "
             f"post_avg_ms={post_avg_ms:.3f} "
             f"adjust_avg_ms={adjust_avg_ms:.3f} "
@@ -297,6 +302,7 @@ class SensorCore:
     def reset(self):
         self.sensor_gps.reset()
         self.sensor_ant.reset()
+        self.sensor_ble.reset()
         self.sensor_i2c.reset()
         self.reset_internal()
 
@@ -310,6 +316,14 @@ class SensorCore:
 
     def update_normalized_power(self, pwr):
         perf_update_normalized_power(self, pwr)
+
+    def _update_power_metrics(self, power):
+        """Update source-independent power metrics from ANT+ or BLE power."""
+        self.update_normalized_power(power)
+        self.calc_w_prime_balance(power)
+        self.calc_form_metrics(power)
+        if not np.isnan(power):
+            self.get_ave_values("power", power)
 
     @staticmethod
     def _shift_window_and_append(window, value):
@@ -348,11 +362,11 @@ class SensorCore:
         return self._update_zero_window_brake_hint(self.brakelight_power, power)
 
     async def integrate(self):
-        pre_dst = {"ANT+": 0, "GPS": 0}
-        pre_ttlwork = {"ANT+": 0}
-        pre_alt = {"ANT+": np.nan, "GPS": np.nan}
-        pre_alt_spd = {"ANT+": np.nan}
-        pre_grade = pre_grade_spd = pre_glide = self.config.G_ANT_NULLVALUE
+        pre_dst = {"ANT+": 0, "BLE": 0, "GPS": 0}
+        pre_ttlwork = {"ANT+": 0, "BLE": 0}
+        pre_alt = {"ANT+": np.nan, "BLE": np.nan, "GPS": np.nan}
+        pre_alt_spd = {"ANT+": np.nan, "BLE": np.nan}
+        pre_grade = pre_grade_spd = pre_glide = self.config.G_SENSOR_NULLVALUE
         diff_sum = {"alt_diff": 0, "dst_diff": 0, "alt_diff_spd": 0, "dst_diff_spd": 0}
 
         # for w_prime_balance
@@ -373,14 +387,14 @@ class SensorCore:
             time_profile = [
                 start_time,
             ]
-            hr = spd = cdc = pwr = temperature = self.config.G_ANT_NULLVALUE
-            grade = grade_spd = glide = self.config.G_ANT_NULLVALUE
+            hr = spd = cdc = pwr = temperature = self.config.G_SENSOR_NULLVALUE
+            grade = grade_spd = glide = self.config.G_SENSOR_NULLVALUE
             ttlwork_diff = 0
-            dst_diff = {"ANT+": 0, "GPS": 0, "USE": 0}
-            alt_diff = {"ANT+": 0, "GPS": 0, "USE": 0}
-            dst_diff_spd = {"ANT+": 0}
-            alt_diff_spd = {"ANT+": 0}
-            grade_use = {"ANT+": False, "GPS": False}
+            dst_diff = {"ANT+": 0, "BLE": 0, "GPS": 0, "USE": 0}
+            alt_diff = {"ANT+": 0, "BLE": 0, "GPS": 0, "USE": 0}
+            dst_diff_spd = {"ANT+": 0, "BLE": 0}
+            alt_diff_spd = {"ANT+": 0, "BLE": 0}
+            grade_use = {"SENSOR": False, "GPS": False}
             time_profile.append(datetime.now())
             # self.sensor_i2c.update()
             # self.sensor_gps.update()
@@ -388,16 +402,30 @@ class SensorCore:
             preprocess_elapsed_ms = (ant_update_start - loop_start_perf) * 1000.0
             self.sensor_ant.update()  # for dummy
             ant_update_elapsed_ms = (time.perf_counter() - ant_update_start) * 1000.0
+            ble_update_start = time.perf_counter()
+            self.sensor_ble.update()
+            ble_update_elapsed_ms = (time.perf_counter() - ble_update_start) * 1000.0
             calc_start_perf = time.perf_counter()
             ant_use = {
                 key: self.sensor_ant.is_sensor_available(key)
                 for key in ["HR", "SPD", "CDC", "PWR", "TEMP", "LGT"]
             }
+            ble_hr_configured = self.sensor_ble.is_sensor_available("HR")
+            ble_spd_configured = self.sensor_ble.is_sensor_available("SPD")
+            ble_cdc_configured = self.sensor_ble.is_sensor_available("CDC")
+            ble_pwr_configured = self.sensor_ble.is_sensor_available("PWR")
+            power_sensor_configured = ant_use["PWR"] or ble_pwr_configured
 
             now_time = datetime.now()
             time_profile.append(now_time)
 
-            ant_id_type = self.config.G_ANT["ID_TYPE"]
+            ant_id_type = {
+                role: self.config.get_ant_id_type(role)
+                for role in ("HR", "SPD", "CDC", "PWR", "TEMP")
+            }
+            ant_type = {
+                role: self.config.G_SENSORS[role]["TYPE"] for role in ("SPD", "CDC")
+            }
             delta = {
                 "PWR": {0x10: float("inf"), 0x11: float("inf"), 0x12: float("inf")},
                 "CDC-PWR": {0x12: float("inf"), 0x10: float("inf")},
@@ -423,13 +451,13 @@ class SensorCore:
                     "CDC",
                     "CDC-PWR",
                     [0x12, 0x10],
-                    ant_use["CDC"] and self.config.G_ANT["TYPE"]["CDC"] == 0x0B,
+                    ant_use["CDC"] and ant_type["CDC"] == 0x0B,
                 ),
                 (
                     "SPD",
                     "SPD",
                     [0x11],
-                    ant_use["SPD"] and self.config.G_ANT["TYPE"]["SPD"] == 0x0B,
+                    ant_use["SPD"] and ant_type["SPD"] == 0x0B,
                 ),
                 (
                     "PWR",
@@ -453,26 +481,38 @@ class SensorCore:
             if elapsed is not None:
                 delta["GPS"] = elapsed
 
-            # HeartRate : ANT+
+            # Heart rate: ANT+ or BLE HRS
             if ant_use["HR"]:
                 if delta["HR"] < self.time_threshold["HR"]:
                     hr = v["HR"]["heart_rate"]
+            elif ble_hr_configured:
+                ble_hr_data = self.values["BLE"]["HR"]
+                if self.sensor_ble.is_sensor_connected("HR") and not np.isnan(
+                    ble_hr_data["heart_rate"]
+                ):
+                    hr = ble_hr_data["heart_rate"]
 
-            # Cadence : ANT+
+            # Cadence: ANT+ or BLE CSCS
             if ant_use["CDC"]:
                 cdc = 0
                 # get from cadence or speed&cadence sensor
-                if self.config.G_ANT["TYPE"]["CDC"] in [0x79, 0x7A]:
+                if ant_type["CDC"] in [0x79, 0x7A]:
                     if delta["CDC"] < self.time_threshold["CDC"]:
                         cdc = v["CDC"]["cadence"]
                 # get from powermeter
-                elif self.config.G_ANT["TYPE"]["CDC"] == 0x0B:
+                elif ant_type["CDC"] == 0x0B:
                     for page in [0x12, 0x10]:
                         if not "timestamp" in v["CDC"][page]:
                             continue
                         if delta["CDC-PWR"][page] < self.time_threshold["CDC"]:
                             cdc = v["CDC"][page]["cadence"]
                             break
+            elif ble_cdc_configured:
+                ble_cdc_data = self.values["BLE"]["CDC"]
+                if self.sensor_ble.is_sensor_connected("CDC") and not np.isnan(
+                    ble_cdc_data["cadence"]
+                ):
+                    cdc = ble_cdc_data["cadence"]
 
             # Power : ANT+(assumed crank type > wheel type)
             if ant_use["PWR"]:
@@ -482,12 +522,19 @@ class SensorCore:
                     if delta["PWR"][page] < self.time_threshold["PWR"]:
                         pwr = v["PWR"][page]["power"]
                         break
+            elif ble_pwr_configured:
+                ble_pwr_data = self.values["BLE"]["PWR"]
+                if self.sensor_ble.is_sensor_connected("PWR") and not np.isnan(
+                    ble_pwr_data["power"]
+                ):
+                    pwr = ble_pwr_data["power"]
 
-            # Speed : ANT+(SPD&CDC, (PWR)) > GPS
+            # Speed: ANT+ or BLE CSCS > GPS
             ant_spd_packet_received_recently = False
+            ble_spd_live = False
             if ant_use["SPD"]:
                 spd_data = v["SPD"]
-                if self.config.G_ANT["TYPE"]["SPD"] == 0x0B:
+                if ant_type["SPD"] == 0x0B:
                     spd_data = v["SPD"][0x11]
                 ant_spd_packet_received_recently = (
                     spd_data["on_data_timestamp"] is not None
@@ -504,27 +551,47 @@ class SensorCore:
                 # Complement from GPS speed when I2C acc sensor is available (using moving status).
                 elif v["I2C"]["m_stat"] == 1 and v["GPS"]["speed"] > 0:
                     spd = v["GPS"]["speed"]
+            elif ble_spd_configured:
+                ble_spd_data = self.values["BLE"]["SPD"]
+                ble_spd_live = self.sensor_ble.is_sensor_connected(
+                    "SPD"
+                ) and not np.isnan(ble_spd_data["speed"])
+                if ble_spd_live:
+                    spd = ble_spd_data["speed"]
+                elif not np.isnan(v["GPS"]["speed"]):
+                    spd = v["GPS"]["speed"]
             elif not np.isnan(v["GPS"]["speed"]):
                 spd = v["GPS"]["speed"]
 
-            # Distance: ANT+(SPD, (PWR)) > GPS
+            wheel_distance_source = None
+
+            # Distance: ANT+ or BLE CSCS > GPS
             if ant_use["SPD"]:
                 # normal speed meter
-                if self.config.G_ANT["TYPE"]["SPD"] in [0x79, 0x7B]:
+                if ant_type["SPD"] in [0x79, 0x7B]:
                     if pre_dst["ANT+"] < v["SPD"]["distance"]:
                         dst_diff["ANT+"] = v["SPD"]["distance"] - pre_dst["ANT+"]
                     pre_dst["ANT+"] = v["SPD"]["distance"]
-                elif self.config.G_ANT["TYPE"]["SPD"] == 0x0B:
+                elif ant_type["SPD"] == 0x0B:
                     if pre_dst["ANT+"] < v["SPD"][0x11]["distance"]:
                         dst_diff["ANT+"] = v["SPD"][0x11]["distance"] - pre_dst["ANT+"]
                     pre_dst["ANT+"] = v["SPD"][0x11]["distance"]
-                dst_diff["USE"] = dst_diff["ANT+"]
-                grade_use["ANT+"] = True
+                wheel_distance_source = "ANT+"
+            elif ble_spd_live:
+                ble_distance = self.values["BLE"]["SPD"]["distance"]
+                if pre_dst["BLE"] < ble_distance:
+                    dst_diff["BLE"] = ble_distance - pre_dst["BLE"]
+                pre_dst["BLE"] = ble_distance
+                wheel_distance_source = "BLE"
+
+            if wheel_distance_source is not None:
+                dst_diff["USE"] = dst_diff[wheel_distance_source]
+                grade_use["SENSOR"] = True
             if "timestamp" in v["GPS"]:
                 if pre_dst["GPS"] < v["GPS"]["distance"]:
                     dst_diff["GPS"] = v["GPS"]["distance"] - pre_dst["GPS"]
                 pre_dst["GPS"] = v["GPS"]["distance"]
-                if not ant_use["SPD"] and dst_diff["GPS"] > 0:
+                if wheel_distance_source is None and dst_diff["GPS"] > 0:
                     dst_diff["USE"] = dst_diff["GPS"]
                     grade_use["GPS"] = True
                 # Fall back to GPS distance when ANT+ speed packets are unavailable.
@@ -535,10 +602,10 @@ class SensorCore:
                         and dst_diff["GPS"] > 0
                     ):
                         dst_diff["USE"] = dst_diff["GPS"]
-                        grade_use["ANT+"] = False
+                        grade_use["SENSOR"] = False
                         grade_use["GPS"] = True
 
-            # Total Power: ANT+
+            # Total work: ANT+ or BLE
             if ant_use["PWR"]:
                 # both type are not exist in same ID(0x12:crank, 0x11:wheel)
                 # if 0x12 or 0x11 exists, never take 0x10
@@ -552,6 +619,13 @@ class SensorCore:
                         pre_ttlwork["ANT+"] = v["PWR"][page]["accumulated_power"]
                         # never take other powermeter
                         break
+            elif ble_pwr_configured:
+                accumulated_power = self.values["BLE"]["PWR"]["accumulated_power"]
+                if accumulated_power < pre_ttlwork["BLE"]:
+                    pre_ttlwork["BLE"] = accumulated_power
+                elif pre_ttlwork["BLE"] < accumulated_power:
+                    ttlwork_diff = accumulated_power - pre_ttlwork["BLE"]
+                    pre_ttlwork["BLE"] = accumulated_power
 
             # Temperature : ANT+
             if ant_use["TEMP"]:
@@ -564,19 +638,21 @@ class SensorCore:
             if not np.isnan(v["I2C"]["pre_altitude"]):
                 alt = v["I2C"]["altitude"]
                 # for grade (distance base)
-                for key in ["ANT+", "GPS"]:
+                for key in ["ANT+", "BLE", "GPS"]:
                     if dst_diff[key] > 0:
                         alt_diff[key] = alt - pre_alt[key]
                     pre_alt[key] = alt
-                if ant_use["SPD"]:
-                    alt_diff["USE"] = alt_diff["ANT+"]
-                elif not ant_use["SPD"] and dst_diff["GPS"] > 0:
+                if wheel_distance_source is not None:
+                    alt_diff["USE"] = alt_diff[wheel_distance_source]
+                elif dst_diff["GPS"] > 0:
                     alt_diff["USE"] = alt_diff["GPS"]
                 # for grade (speed base)
-                if ant_use["SPD"]:
-                    if dst_diff["ANT+"] > 0:
-                        alt_diff_spd["ANT+"] = alt - pre_alt_spd["ANT+"]
-                    pre_alt_spd["ANT+"] = alt
+                if wheel_distance_source is not None:
+                    if dst_diff[wheel_distance_source] > 0:
+                        alt_diff_spd[wheel_distance_source] = (
+                            alt - pre_alt_spd[wheel_distance_source]
+                        )
+                    pre_alt_spd[wheel_distance_source] = alt
 
             # dem_altitude
             if self.config.G_USE_DEM_TILE:
@@ -616,11 +692,11 @@ class SensorCore:
                         self.values["integrated"][key][-self.grade_window_size :]
                     )
                 # set grade
-                gl = self.config.G_ANT_NULLVALUE
-                gr = self.config.G_ANT_NULLVALUE
-                x = self.config.G_ANT_NULLVALUE
+                gl = self.config.G_SENSOR_NULLVALUE
+                gr = self.config.G_SENSOR_NULLVALUE
+                x = self.config.G_SENSOR_NULLVALUE
                 y = diff_sum["alt_diff"]
-                if grade_use["ANT+"]:
+                if grade_use["SENSOR"]:
                     x = math.sqrt(
                         abs(diff_sum["dst_diff"] ** 2 - diff_sum["alt_diff"] ** 2)
                     )
@@ -639,15 +715,16 @@ class SensorCore:
                 glide = pre_glide
 
             # grade (speed base)
-            if ant_use["SPD"]:
-                dst_diff_spd["ANT+"] = spd * self.actual_loop_interval
+            if wheel_distance_source is not None:
+                dst_diff_spd[wheel_distance_source] = spd * self.actual_loop_interval
                 diff_sources_spd = {
                     "alt_diff_spd": alt_diff_spd,
                     "dst_diff_spd": dst_diff_spd,
                 }
                 for key in ["alt_diff_spd", "dst_diff_spd"]:
                     self._shift_window_and_append(
-                        self.values["integrated"][key], diff_sources_spd[key]["ANT+"]
+                        self.values["integrated"][key],
+                        diff_sources_spd[key][wheel_distance_source],
                     )
                     diff_sum[key] = np.mean(
                         self.values["integrated"][key][-self.grade_window_size :]
@@ -656,14 +733,15 @@ class SensorCore:
                 # set grade
                 x = diff_sum["dst_diff_spd"] ** 2 - diff_sum["alt_diff_spd"] ** 2
                 y = diff_sum["alt_diff_spd"]
-                gr = self.config.G_ANT_NULLVALUE
+                gr = self.config.G_SENSOR_NULLVALUE
                 if x > 0:
                     x = math.sqrt(x)
                     gr = self.conv_grade(100 * y / x)
                 grade_spd = pre_grade_spd = gr
             # for sometimes speed sensor value is missing in running
             elif (
-                dst_diff_spd["ANT+"] == 0 and self.config.G_STOPWATCH_STATUS == "START"
+                all(value == 0 for value in dst_diff_spd.values())
+                and self.config.G_STOPWATCH_STATUS == "START"
             ):
                 grade_spd = pre_grade_spd
 
@@ -671,8 +749,6 @@ class SensorCore:
             self.values["integrated"]["speed"] = spd
             self.values["integrated"]["cadence"] = cdc
             self.values["integrated"]["power"] = pwr
-            if ant_use["PWR"]:
-                self.update_normalized_power(pwr)
             self.values["integrated"]["distance"] += dst_diff["USE"]
             self.values["integrated"]["accumulated_power"] += ttlwork_diff
             self.values["integrated"]["grade"] = grade
@@ -680,10 +756,9 @@ class SensorCore:
             self.values["integrated"]["glide_ratio"] = glide
             self.values["integrated"]["temperature"] = temperature
 
-            # set self.values["integrated"]["w_prime_balance_normalized"] etc
-            if ant_use["PWR"]:
-                self.calc_w_prime_balance(pwr)
-                self.calc_form_metrics(pwr)
+            # Update normalized power, W' balance, TSS and power averages.
+            if power_sensor_configured:
+                self._update_power_metrics(pwr)
 
             graph_values = {
                 "hr_graph": hr,
@@ -696,9 +771,7 @@ class SensorCore:
                 self._shift_window_and_append(self.values["integrated"][key], value)
 
             # average power, heart_rate
-            if ant_use["PWR"] and not np.isnan(pwr):
-                self.get_ave_values("power", pwr)
-            if ant_use["HR"] and not np.isnan(hr):
+            if (ant_use["HR"] or ble_hr_configured) and not np.isnan(hr):
                 self.get_ave_values("heart_rate", hr)
 
             time_profile.append(datetime.now())
@@ -725,6 +798,7 @@ class SensorCore:
                     if (
                         np.isnan(v["I2C"]["m_stat"])
                         or ant_use["SPD"]
+                        or ble_spd_live
                         or self.config.G_DUMMY_OUTPUT
                     ):
                         flag_moving = True
@@ -747,7 +821,11 @@ class SensorCore:
                 elif np.isnan(spd) and self.config.G_MANUAL_STATUS == "START":
                     # stop recording if speed is broken
                     if (
-                        (ant_use["SPD"] or "timestamp" in v["GPS"])
+                        (
+                            ant_use["SPD"]
+                            or ble_spd_configured
+                            or "timestamp" in v["GPS"]
+                        )
                         and self.config.G_STOPWATCH_STATUS == "START"
                         and self.config.logger is not None
                     ):
@@ -778,7 +856,7 @@ class SensorCore:
             power_brake_hint = self._update_power_brake_hint(power)
 
             if (
-                self.config.G_ANT["USE_AUTO_LIGHT"]
+                self.config.G_AUTO_LIGHT
                 and ant_use["LGT"]
                 and self.config.G_MANUAL_STATUS == "START"
             ):
@@ -828,7 +906,7 @@ class SensorCore:
             if time_progile_sec > 1.5 * self.config.G_SENSOR_INTERVAL:
                 app_logger.warning(
                     f"too long loop time, sec_diff: {sec_diff}"
-                    f"(def/sensor_ant.update()/make variables(too long)/post-processing)"
+                    f"(def/sensor updates/make variables(too long)/post-processing)"
                 )
 
             loop_time = (datetime.now() - start_time).total_seconds()
@@ -848,6 +926,7 @@ class SensorCore:
             self._perf_sensor_loop_ms.append(loop_elapsed_ms)
             self._perf_sensor_preprocess_ms_sum += preprocess_elapsed_ms
             self._perf_sensor_ant_update_ms_sum += ant_update_elapsed_ms
+            self._perf_sensor_ble_update_ms_sum += ble_update_elapsed_ms
             self._perf_sensor_calc_ms_sum += calc_elapsed_ms
             self._perf_sensor_post_ms_sum += post_elapsed_ms
             self._perf_sensor_adjust_ms_sum += adjust_elapsed_ms

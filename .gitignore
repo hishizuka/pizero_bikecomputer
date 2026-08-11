@@ -8,6 +8,8 @@
 /courses/ridewithgps/*
 /courses/*html*
 /fonts/*
+/img/logos/ant_plus_icon_standard.png
+/img/logos/ant_plus_icon_reverse.png
 /scripts/*
 !/scripts/install/
 !/scripts/install/**

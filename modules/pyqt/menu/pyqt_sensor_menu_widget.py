@@ -1,6 +1,9 @@
+import asyncio
+
 from modules.app_logger import app_logger
 from modules._qt_qtwidgets import QtCore, QtWidgets, QtGui, qasync
 from modules.pyqt.components import SECONDARY_BACKGROUND_COLOR, icons
+from modules.sensor.ble.identity import format_ble_identity
 from .pyqt_menu_widget import MenuWidget, ListWidget, ListItemWidget
 
 STATUS_CONNECTED = "connected"
@@ -31,9 +34,12 @@ class ConnectionStatusIndicator(QtWidgets.QWidget):
         self.timer = QtCore.QTimer(self)
         self.timer.setInterval(120)
         self.timer.timeout.connect(self.rotate)
+        self.setVisible(False)
         self.set_status(status)
 
     def set_status(self, status):
+        if status == self.status:
+            return
         if status not in self.COLORS:
             self.status = None
             self.setVisible(False)
@@ -305,23 +311,38 @@ class SensorActionListItemWidget(FullWidthSeparatorListItemWidget):
 
 
 class SensorPairingListItemWidget(SensorActionListItemWidget):
+    def get_title_style(self):
+        return "padding-top: 2%; border-bottom: 1px solid #AAAAAA;"
+
     def setup_ui(self):
         super().setup_ui()
         self.protocol_icon = ProtocolIconLabel(parent=self)
-        self.outer_layout.insertWidget(1, self.protocol_icon)
+        self.outer_layout.insertWidget(0, self.protocol_icon)
         self.status_indicator = ConnectionStatusIndicator(parent=self)
         self.outer_layout.insertWidget(
             self.outer_layout.indexOf(self.right_icon), self.status_indicator
         )
         self.set_pairing()
 
-    def set_pairing(self, protocol=None, sensor_id="", status=None):
+    def set_pairing(self, protocol=None, sensor_id="", sensor_name=""):
         paired = protocol is not None
-        self.setText("Paired Sensor" if paired else "Pair Sensor")
-        self.set_value(sensor_id)
+        if paired and protocol in ("Bluetooth", "BLE"):
+            self.setText(sensor_name or sensor_id)
+            self.setToolTip(format_ble_identity(sensor_name, sensor_id))
+        elif paired and protocol == "ANT+":
+            self.setText(sensor_id)
+            self.setToolTip(f"ANT+ {sensor_id}")
+        else:
+            self.setText("Pair Sensor")
+            self.setToolTip("")
+        self.set_value("")
+        self.value_label.setVisible(False)
+        self.right_icon.setVisible(not paired)
         self.protocol_icon.set_protocol(protocol)
-        self.status_indicator.set_status(status if paired else None)
         self.update_selection_style()
+
+    def set_connection_status(self, status):
+        self.status_indicator.set_status(status)
 
     def update_selection_style(self):
         super().update_selection_style()
@@ -330,16 +351,20 @@ class SensorPairingListItemWidget(SensorActionListItemWidget):
 
 class ProtocolIconLabel(QtWidgets.QLabel):
     ICON_SIZE = 24
+    LABEL_WIDTH = 38
 
     def __init__(self, protocol=None, parent=None):
         super().__init__(parent=parent)
         self.protocol = None
         self.reverse = False
-        self.setFixedSize(self.ICON_SIZE, self.ICON_SIZE)
+        self.setFixedSize(self.LABEL_WIDTH, self.ICON_SIZE)
         self.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.setVisible(False)
         self.set_protocol(protocol)
 
     def set_protocol(self, protocol):
+        if protocol == self.protocol:
+            return
         self.protocol = protocol
         self.setVisible(protocol is not None)
         self.setToolTip(protocol or "")
@@ -353,22 +378,35 @@ class ProtocolIconLabel(QtWidgets.QLabel):
         self.update_icon()
 
     def update_icon(self):
+        self.setContentsMargins(0, 0, 0, 0)
         if self.protocol == "ANT+":
-            self.clear()
-            self.setText("ANT+")
-            color = "#FFFFFF" if self.reverse else "#000000"
-            self.setStyleSheet(f"color: {color}; font-size: 8px; font-weight: bold;")
-            return
+            icon_cls = (
+                icons.AntPlusReverseIcon if self.reverse else icons.AntPlusStandardIcon
+            )
+            color = None
+            if icons.ANT_PLUS_ICONS_AVAILABLE:
+                # Asymmetric margins shift the wider artwork four pixels right.
+                self.setContentsMargins(8, 0, 0, 0)
+                self.setText("")
+                self.setStyleSheet("")
+            else:
+                self.clear()
+                self.setText("(ANT+)")
+                color = "#FFFFFF" if self.reverse else "#000000"
+                self.setStyleSheet(
+                    f"color: {color}; font-size: 8px; font-weight: bold;"
+                )
+                return
         elif self.protocol in ("Bluetooth", "BLE"):
             self.setText("")
             self.setStyleSheet("")
             color = "#FFFFFF" if self.reverse else "#000000"
-            icon = icons.BluetoothIcon(color=color)
+            icon_cls = icons.BluetoothIcon
         else:
             self.clear()
             self.setStyleSheet("")
             return
-        self.setPixmap(icon.pixmap(QtCore.QSize(self.ICON_SIZE, self.ICON_SIZE)))
+        self.setPixmap(icons.get_pixmap(icon_cls, self.ICON_SIZE, color))
 
 
 class SensorMenuWidget(ListWidget):
@@ -421,6 +459,8 @@ class SensorMenuWidget(ListWidget):
         ant_name = self.ROLE_TO_ANT.get(title)
         if ant_name is None:
             return None
+        if self.config.sensor_uses(ant_name, self.config.SENSOR_PROTOCOL_BLE):
+            return self.sensor_ble.get_sensor_connection_status(ant_name)
         return self.sensor_ant.get_sensor_connection_status(ant_name)
 
     def update_connection_statuses(self):
@@ -523,7 +563,7 @@ class SensorConnectionMenuWidget(ListWidget):
         self.list.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
         self.status_timer = QtCore.QTimer(parent=self)
         self.status_timer.setInterval(500)
-        self.status_timer.timeout.connect(self.refresh_sensor_state)
+        self.status_timer.timeout.connect(self.update_connection_status)
         self.refresh_sensor_state()
 
     def update_list(self):
@@ -605,6 +645,16 @@ class SensorConnectionMenuWidget(ListWidget):
             await result
 
     def open_sensor_pairing(self):
+        if self.SENSOR_ROLE in ("HR", "SPD", "CDC", "PWR"):
+            self.change_page(
+                "Pair Sensor Protocol",
+                preprocess=True,
+                sensor_role=self.SENSOR_ROLE,
+            )
+            return
+        self.open_ant_sensor_pairing()
+
+    def open_ant_sensor_pairing(self):
         if self.sensor_ant.scanner.isUse:
             return
         if not self.sensor_ant.is_transport_available():
@@ -617,7 +667,7 @@ class SensorConnectionMenuWidget(ListWidget):
         )
 
     def confirm_remove_sensor(self):
-        if not self.sensor_ant.is_sensor_paired(self.SENSOR_ROLE):
+        if not self.config.is_sensor_configured(self.SENSOR_ROLE):
             return
         self.config.gui.show_dialog(
             self.remove_sensor,
@@ -625,9 +675,21 @@ class SensorConnectionMenuWidget(ListWidget):
         )
 
     def remove_sensor(self):
-        if not self.sensor_ant.remove_ant_sensor(self.SENSOR_ROLE):
+        protocol = self.config.G_SENSORS[self.SENSOR_ROLE]["PROTOCOL"]
+        write_config = True
+        if protocol == self.config.SENSOR_PROTOCOL_ANT:
+            if not self.sensor_ant.remove_ant_sensor(self.SENSOR_ROLE):
+                return
+        elif protocol == self.config.SENSOR_PROTOCOL_BLE:
+            if self.SENSOR_ROLE in ("HR", "SPD", "CDC", "PWR"):
+                self.sensor_ble.remove_cycling_sensor(self.SENSOR_ROLE)
+                write_config = False
+            else:
+                self.config.clear_sensor(self.SENSOR_ROLE)
+        else:
             return
-        self.config.setting.write_config()
+        if write_config:
+            self.config.setting.write_config()
         self.refresh_sensor_state()
         self.list.clearSelection()
         self.selected_item = None
@@ -635,19 +697,42 @@ class SensorConnectionMenuWidget(ListWidget):
             self.focus_sensor_item()
 
     def refresh_sensor_state(self):
-        paired = self.sensor_ant.is_sensor_paired(self.SENSOR_ROLE)
-        status = self.sensor_ant.get_sensor_connection_status(self.SENSOR_ROLE)
-        sensor_id = f"{self.config.G_ANT['ID'][self.SENSOR_ROLE]:05d}" if paired else ""
+        sensor = self.config.G_SENSORS[self.SENSOR_ROLE]
+        protocol = sensor["PROTOCOL"]
+        paired = self.config.is_sensor_configured(self.SENSOR_ROLE)
+        if protocol == self.config.SENSOR_PROTOCOL_ANT:
+            sensor_id = f"{sensor['ID']:05d}" if paired else ""
+        elif protocol == self.config.SENSOR_PROTOCOL_BLE:
+            sensor_id = str(sensor["ID"] or "")
+        else:
+            sensor_id = ""
         self.sensor_item.set_pairing(
-            protocol="ANT+" if paired else None,
+            protocol=protocol if paired else None,
             sensor_id=sensor_id,
-            status=status,
+            sensor_name=str(sensor["NAME"] or ""),
         )
-        self.sensor_item.onoff_button(
+        ant_pairing_available = (
             self.sensor_ant.is_transport_available()
             and not self.sensor_ant.scanner.isUse
         )
+        ble_pairing_available = self.SENSOR_ROLE in (
+            "HR",
+            "SPD",
+            "CDC",
+            "PWR",
+        ) and self.sensor_ble.can_scan_cycling_sensors(self.SENSOR_ROLE)
+        self.sensor_item.onoff_button(ant_pairing_available or ble_pairing_available)
         self.remove_sensor_item.onoff_button(paired)
+        self.update_connection_status()
+
+    def update_connection_status(self):
+        if not self.config.is_sensor_configured(self.SENSOR_ROLE):
+            status = None
+        elif self.config.sensor_uses(self.SENSOR_ROLE, self.config.SENSOR_PROTOCOL_ANT):
+            status = self.sensor_ant.get_sensor_connection_status(self.SENSOR_ROLE)
+        else:
+            status = self.sensor_ble.get_sensor_connection_status(self.SENSOR_ROLE)
+        self.sensor_item.set_connection_status(status)
 
     def resizeEvent(self, event):
         ListWidget.resizeEvent(self, event)
@@ -740,26 +825,100 @@ class LightMenuWidget(SensorConnectionMenuWidget):
 
     def onoff_auto_control(self, change=True):
         if change:
-            enabled = not self.config.G_ANT["USE_AUTO_LIGHT"]
-            self.config.G_ANT["USE_AUTO_LIGHT"] = enabled
+            enabled = not self.config.G_AUTO_LIGHT
+            self.config.G_AUTO_LIGHT = enabled
             self.sensor_ant.set_auto_light_enabled(enabled)
             self.config.setting.write_config()
-        self.buttons[self.AUTO_CONTROL_BUTTON].change_toggle(
-            self.config.G_ANT["USE_AUTO_LIGHT"]
-        )
+        self.buttons[self.AUTO_CONTROL_BUTTON].change_toggle(self.config.G_AUTO_LIGHT)
 
     def refresh_sensor_state(self):
         super().refresh_sensor_state()
+        self.onoff_auto_control(False)
+
+    def update_connection_status(self):
+        super().update_connection_status()
         self.buttons[self.AUTO_CONTROL_BUTTON].onoff_button(
             self.sensor_ant.is_sensor_available("LGT")
         )
-        self.onoff_auto_control(False)
+
+
+class SensorProtocolMenuWidget(MenuWidget):
+    ANT_BUTTON = "ANT+"
+    BLE_BUTTON = "Bluetooth"
+
+    def __init__(self, parent, page_name, config):
+        self.sensor_role = None
+        super().__init__(parent, page_name, config)
+
+    def setup_menu(self):
+        self.add_buttons(
+            (
+                (self.ANT_BUTTON, "submenu", self.open_ant_pairing),
+                (self.BLE_BUTTON, "submenu", self.open_ble_pairing),
+            )
+        )
+
+    def preprocess(self, sensor_role=None):
+        self.sensor_role = sensor_role
+        self.buttons[self.ANT_BUTTON].setEnabled(
+            bool(
+                sensor_role
+                and self.sensor_ant.is_transport_available()
+                and not self.sensor_ant.scanner.isUse
+            )
+        )
+        self.buttons[self.BLE_BUTTON].setEnabled(
+            sensor_role in ("HR", "SPD", "CDC", "PWR")
+            and self.sensor_ble.can_scan_cycling_sensors(sensor_role)
+        )
+        if self.config.uses_keyboard_navigation:
+            for name in (self.ANT_BUTTON, self.BLE_BUTTON):
+                button = self.buttons[name]
+                if button.isEnabled():
+                    self.focus_widget = button
+                    break
+
+    def open_ant_pairing(self):
+        if self.sensor_role is None or not self.buttons[self.ANT_BUTTON].isEnabled():
+            return
+        self.change_page(
+            "Pair ANT+ Sensor",
+            preprocess=True,
+            reset=True,
+            list_type=self.sensor_role,
+            paired_return_page=self.back_index_key,
+        )
+
+    def open_ble_pairing(self):
+        if (
+            self.sensor_role
+            not in (
+                "HR",
+                "SPD",
+                "CDC",
+                "PWR",
+            )
+            or not self.buttons[self.BLE_BUTTON].isEnabled()
+        ):
+            return
+        self.change_page(
+            "Pair BLE Sensor",
+            preprocess=True,
+            reset=True,
+            list_type=self.sensor_role,
+            paired_return_page=self.back_index_key,
+        )
 
 
 class ANTListWidget(ListWidget):
     def __init__(self, parent, page_name, config):
         self.ant_sensor_types = {}
+        self.paired_return_page = None
         super().__init__(parent, page_name, config)
+
+    def preprocess(self, **kwargs):
+        self.paired_return_page = kwargs.pop("paired_return_page", None)
+        super().preprocess(**kwargs)
 
     def setup_menu(self):
         super().setup_menu()
@@ -780,13 +939,18 @@ class ANTListWidget(ListWidget):
         app_logger.info(f"connect {self.list_type}: {self.selected_item.id}")
 
         ant_id = int(self.selected_item.id)
+        if self.config.sensor_uses(self.list_type, self.config.SENSOR_PROTOCOL_BLE):
+            self.sensor_ble.disconnect_cycling_sensors()
         self.sensor_ant.connect_ant_sensor(
             self.list_type,  # sensor type
             ant_id,  # ID
             self.ant_sensor_types[ant_id][0],  # id_type
             self.ant_sensor_types[ant_id][1],  # connection status
         )
+        self.sensor_ble.connect_cycling_sensors()
         self.config.setting.write_config()
+        if self.paired_return_page is not None:
+            self.back_index_key = self.paired_return_page
 
     def on_back_menu(self):
         self.timer.stop()
@@ -856,6 +1020,125 @@ class ANTListItemWidget(FullWidthSeparatorListItemWidget):
         self.right_icon.hover(self.selected or self.hasFocus())
 
 
+class BLEListWidget(ListWidget):
+    SCAN_TIMEOUT = 10.0
+
+    def __init__(self, parent, page_name, config):
+        self.candidates = {}
+        self.paired_return_page = None
+        self.scan_task = None
+        self.scan_generation = 0
+        super().__init__(parent, page_name, config)
+
+    def setup_menu(self):
+        super().setup_menu()
+        self.list.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        self.search_indicator = ConnectionStatusIndicator(parent=self)
+        self.right_button_layout.addWidget(self.search_indicator)
+
+    def preprocess(self, **kwargs):
+        self.paired_return_page = kwargs.pop("paired_return_page", None)
+        super().preprocess(**kwargs)
+
+    def preprocess_extra(self):
+        self.cancel_scan()
+        self.candidates.clear()
+        self.scan_generation += 1
+        generation = self.scan_generation
+        self.search_indicator.set_status(STATUS_CONNECTING)
+        self.scan_task = asyncio.create_task(self.scan(generation))
+
+    async def scan(self, generation):
+        try:
+            candidates = await self.sensor_ble.discover_cycling_sensors(
+                self.list_type, timeout=self.SCAN_TIMEOUT
+            )
+        except asyncio.CancelledError:
+            return
+        except Exception as exc:
+            app_logger.warning(f"BLE cycling scan failed: {exc}")
+            candidates = []
+
+        if generation != self.scan_generation:
+            return
+        self.search_indicator.set_status(None)
+        if not candidates:
+            item = FullWidthSeparatorListItemWidget(self, "No sensors found")
+            item.setEnabled(False)
+            self.add_list_item(item)
+            return
+
+        for candidate in candidates:
+            if candidate.identifier in self.candidates:
+                continue
+            self.candidates[candidate.identifier] = candidate
+            item = BLEListItemWidget(self, candidate)
+            self.add_list_item(item)
+            app_logger.debug(
+                f"Adding BLE cycling sensor: {candidate.identifier} "
+                f"{candidate.name or ''}"
+            )
+
+        if self.config.uses_keyboard_navigation and self.list.count():
+            self.list.setCurrentRow(0)
+            item = self.list.itemWidget(self.list.item(0))
+            if item is not None:
+                item.setFocus()
+
+    async def button_func_extra(self):
+        if self.selected_item is None:
+            return
+        candidate = self.selected_item.candidate
+        profiles = candidate.profiles
+        profile = profiles[0] if len(profiles) == 1 else None
+        if self.config.sensor_uses(self.list_type, self.config.SENSOR_PROTOCOL_ANT):
+            self.sensor_ant.remove_ant_sensor(self.list_type)
+        self.sensor_ble.set_cycling_sensor(
+            self.list_type,
+            candidate.identifier,
+            candidate.name or "",
+            profile,
+        )
+        if self.paired_return_page is not None:
+            self.back_index_key = self.paired_return_page
+
+    def cancel_scan(self):
+        if self.scan_task is not None and not self.scan_task.done():
+            self.scan_task.cancel()
+        self.scan_task = None
+
+    def on_back_menu(self):
+        self.scan_generation += 1
+        self.cancel_scan()
+        self.search_indicator.set_status(None)
+        back_index_key = self.back_index_key
+        gui_index = self.config.gui.gui_config.G_GUI_INDEX
+        if back_index_key not in gui_index:
+            return
+        widget = self.parentWidget().widget(gui_index[back_index_key])
+        widget.refresh_sensor_state()
+
+
+class BLEListItemWidget(FullWidthSeparatorListItemWidget):
+    def __init__(self, parent, candidate):
+        self.candidate = candidate
+        rssi = "" if candidate.rssi is None else f"  {candidate.rssi} dBm"
+        detail = f"{candidate.identifier}{rssi}"
+        super().__init__(parent, candidate.name or "Unnamed sensor", detail=detail)
+
+    def setup_ui(self):
+        super().setup_ui()
+        self.outer_layout.setStretch(0, 1)
+        self.right_icon = icons.MenuRightIcon(self)
+        self.outer_layout.addWidget(self.right_icon)
+        self.right_icon.apply_trailing_margin(self.outer_layout)
+        self.enter_signal.connect(self.parentWidget().button_func)
+
+    def update_selection_style(self):
+        super().update_selection_style()
+        self.right_icon.hover(self.selected or self.hasFocus())
+
+
 class ControlMenuWidget(SensorConnectionMenuWidget):
     SENSOR_ROLE = "CTRL"
     ZWIFT_CLICK_BUTTON = "Zwift Click V2"
@@ -908,9 +1191,6 @@ class TrainerMenuWidget(MenuWidget):
         )
         self.add_buttons(button_conf)
         self.onoff_fake_trainer(False)
-
-        if self.config.ble_uart is None:
-            self.buttons[self.FAKE_TRAINER_BUTTON].disable()
 
     def preprocess(self):
         self.onoff_fake_trainer(False)

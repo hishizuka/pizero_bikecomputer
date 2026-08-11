@@ -1705,16 +1705,15 @@ class SensorI2C(Sensor):
         ant_values = sensor.values["ANT+"]
         sensor_ant = sensor.sensor_ant
         ant_temp_available = sensor_ant.is_sensor_available("TEMP")
+        ant_temp_id = self.config.get_ant_id_type("TEMP")
 
-        if self.config.G_ANT["ID_TYPE"]["TEMP"] in ant_values:
-            ant_temperature = ant_values[self.config.G_ANT["ID_TYPE"]["TEMP"]][
-                "temperature"
-            ]
+        if ant_temp_id in ant_values:
+            ant_temperature = ant_values[ant_temp_id]["temperature"]
 
         # from ANT+ sensor (tempe), not use I2C sensor because of inaccuracy
         if (
             ant_temp_available
-            and self.config.G_ANT["ID_TYPE"]["TEMP"] != 0
+            and ant_temp_id != 0
             and not np.isnan(ant_temperature)
         ):
             temperature = ant_temperature

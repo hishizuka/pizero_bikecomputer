@@ -237,7 +237,7 @@ class StatusBarWidget(QtWidgets.QWidget):
         light_state = None
         try:
             ant_values = self.config.logger.sensor.values["ANT+"]
-            ant_id = self.config.G_ANT["ID_TYPE"]["LGT"]
+            ant_id = self.config.get_ant_id_type("LGT")
             light_state = ant_values[ant_id]["light_state"]
         except Exception:
             light_state = None

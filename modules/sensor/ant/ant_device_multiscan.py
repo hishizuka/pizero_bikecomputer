@@ -93,8 +93,8 @@ class ANT_Device_MultiScan(ant_device.ANT_Device):
             return
 
         # HR
-        if antType in self.config.G_ANT["TYPES"]["HR"]:
-            if antIDType == self.config.G_ANT["ID_TYPE"]["HR"]:
+        if antType in self.config.G_ANT_SENSOR_TYPES["HR"]:
+            if antIDType == self.config.get_ant_id_type("HR"):
                 self.mainAntDevice[antIDType].on_data(data)
             else:
                 if antIDType not in self.values:
@@ -102,22 +102,22 @@ class ANT_Device_MultiScan(ant_device.ANT_Device):
                 self.values[antIDType]["timestamp"] = datetime.now()
                 self.values[antIDType]["heart_rate"] = data[7]
         # Power
-        elif antType in self.config.G_ANT["TYPES"]["PWR"]:
-            if antIDType == self.config.G_ANT["ID_TYPE"]["PWR"]:
+        elif antType in self.config.G_ANT_SENSOR_TYPES["PWR"]:
+            if antIDType == self.config.get_ant_id_type("PWR"):
                 self.mainAntDevice[antIDType].on_data(data)
             else:
                 self.on_data_power_scan(antIDType, data)
         # Speed
-        elif antType in self.config.G_ANT["TYPES"]["SPD"]:
-            if antIDType == self.config.G_ANT["ID_TYPE"]["SPD"]:
+        elif antType in self.config.G_ANT_SENSOR_TYPES["SPD"]:
+            if antIDType == self.config.get_ant_id_type("SPD"):
                 self.mainAntDevice[antIDType].on_data(data)
         # Cadence
-        elif antType in self.config.G_ANT["TYPES"]["CDC"]:
-            if antIDType == self.config.G_ANT["ID_TYPE"]["CDC"]:
+        elif antType in self.config.G_ANT_SENSOR_TYPES["CDC"]:
+            if antIDType == self.config.get_ant_id_type("CDC"):
                 self.mainAntDevice[antIDType].on_data(data)
         # Temperature
-        elif antType in self.config.G_ANT["TYPES"]["TEMP"]:
-            if antIDType == self.config.G_ANT["ID_TYPE"]["TEMP"]:
+        elif antType in self.config.G_ANT_SENSOR_TYPES["TEMP"]:
+            if antIDType == self.config.get_ant_id_type("TEMP"):
                 self.mainAntDevice[antIDType].on_data(data)
 
     def on_data_power_scan(self, antIDType, data):

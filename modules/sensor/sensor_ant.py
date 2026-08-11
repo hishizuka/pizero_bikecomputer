@@ -127,41 +127,29 @@ class SensorANT(Sensor):
 
         # auto connect ANT+ sensor from setting.conf
         if self.config.G_ANT["STATUS"] and not self.config.G_DUMMY_OUTPUT:
-            for key in self.config.G_ANT["ID"].keys():
-                if self.config.G_ANT["USE"][key]:
-                    antID = self.config.G_ANT["ID"][key]
-                    antType = self.config.G_ANT["TYPE"][key]
-                    self.connect_ant_sensor(key, antID, antType, False)
+            for key, sensor in self.config.G_SENSORS.items():
+                if self.config.is_sensor_configured(
+                    key, self.config.SENSOR_PROTOCOL_ANT
+                ):
+                    self.connect_ant_sensor(key, sensor["ID"], sensor["TYPE"], False)
             return
         # otherwise, initialize
         elif self.config.G_DUMMY_OUTPUT:
-            for key in self.config.G_ANT["ID"].keys():
-                self.config.G_ANT["USE"][key] = False
-                self.config.G_ANT["ID"][key] = 0
-                self.config.G_ANT["TYPE"][key] = 0
+            for key in self.config.G_SENSORS:
+                self.config.clear_sensor(key)
 
         # for dummy output
         if not self.config.G_ANT["STATUS"] and self.config.G_DUMMY_OUTPUT:
             # need to set dummy ANT+ device id 0
-            self.config.G_ANT["USE"]["HR"] = True
-            self.config.G_ANT["USE"]["SPD"] = True
-            self.config.G_ANT["USE"]["CDC"] = True  # same as SPD
-            self.config.G_ANT["USE"]["PWR"] = True
-            self.config.G_ANT["USE"]["TEMP"] = False
+            self.config.set_sensor("HR", self.config.SENSOR_PROTOCOL_ANT, 0, 0x78)
+            self.config.set_sensor("SPD", self.config.SENSOR_PROTOCOL_ANT, 0, 0x79)
+            self.config.set_sensor("CDC", self.config.SENSOR_PROTOCOL_ANT, 0, 0x79)
+            self.config.set_sensor("PWR", self.config.SENSOR_PROTOCOL_ANT, 0, 0x0B)
 
-            self.config.G_ANT["ID_TYPE"]["HR"] = struct.pack("<HB", 0, 0x78)
-            self.config.G_ANT["ID_TYPE"]["SPD"] = struct.pack("<HB", 0, 0x79)
-            self.config.G_ANT["ID_TYPE"]["CDC"] = struct.pack(
-                "<HB", 0, 0x79
-            )  # same as SPD
-            self.config.G_ANT["ID_TYPE"]["PWR"] = struct.pack("<HB", 0, 0x0B)
-
-            self.config.G_ANT["TYPE"]["HR"] = 0x78
-            self.config.G_ANT["TYPE"]["SPD"] = 0x79
-            self.config.G_ANT["TYPE"]["CDC"] = 0x79  # same as SPD
-            self.config.G_ANT["TYPE"]["PWR"] = 0x0B
-
-            ac = self.config.G_ANT["ID_TYPE"]
+            ac = {
+                role: self.config.get_ant_id_type(role)
+                for role in ("HR", "SPD", "CDC", "PWR")
+            }
             self.values[ac["HR"]] = {
                 "heart_rate": 0,
                 **self._dummy_timestamp_fields(),
@@ -197,7 +185,10 @@ class SensorANT(Sensor):
         power_value = random.randint(0, 250)
         timestamp = datetime.now()
 
-        ac = self.config.G_ANT["ID_TYPE"]
+        ac = {
+            role: self.config.get_ant_id_type(role)
+            for role in ("HR", "SPD", "CDC", "PWR")
+        }
         self.values[ac["HR"]]["heart_rate"] = hr_value
         self.values[ac["SPD"]]["speed"] = speed_value
         self.values[ac["CDC"]]["cadence"] = cad_value
@@ -253,13 +244,11 @@ class SensorANT(Sensor):
     def _drop_runtime_devices(self):
         devices = list({id(dv): dv for dv in self.device.values()}.values())
         for dv in devices:
-            send_queue = getattr(dv, "send_queue", None)
-            if send_queue is None:
-                continue
-            try:
-                send_queue.put_nowait(None)
-            except Exception:
-                pass
+            if isinstance(dv, ant_device_light.ANT_Device_Light):
+                try:
+                    dv.send_queue.put_nowait(None)
+                except Exception:
+                    pass
         self.device.clear()
 
     def _ensure_node_started(self):
@@ -283,17 +272,38 @@ class SensorANT(Sensor):
 
     def is_sensor_available(self, ant_name):
         if self.config.G_DUMMY_OUTPUT and not self.config.G_ANT["STATUS"]:
-            return self.config.G_ANT["USE"][ant_name]
-        return self.is_transport_available() and self.config.G_ANT["USE"][ant_name]
+            return self.config.sensor_uses(ant_name, self.config.SENSOR_PROTOCOL_ANT)
+        return self.is_transport_available() and self.config.is_sensor_configured(
+            ant_name, self.config.SENSOR_PROTOCOL_ANT
+        )
 
     def is_sensor_paired(self, ant_name):
-        ant_id = self.config.G_ANT["ID"].get(ant_name, 0)
-        ant_type = self.config.G_ANT["TYPE"].get(ant_name, 0)
-        return bool(ant_id and ant_type)
+        return self.config.is_sensor_configured(
+            ant_name, self.config.SENSOR_PROTOCOL_ANT
+        )
+
+    @staticmethod
+    def _has_recent_data(device, now=None):
+        timestamp = device.last_data_timestamp
+        if timestamp is None:
+            return False
+        valid_time = max(device.valid_time, 5)
+        return ((now or datetime.now()) - timestamp).total_seconds() <= valid_time
+
+    def is_receiving(self):
+        """Return whether any ANT sensor has recently sent data."""
+        if self.config.G_DUMMY_OUTPUT and not self.config.G_ANT["STATUS"]:
+            return True
+        if not self.is_transport_available():
+            return False
+        now = datetime.now()
+        return any(
+            self._has_recent_data(device, now) for device in self.device.values()
+        )
 
     def get_sensor_connection_status(self, ant_name):
         """Return the configured ANT sensor's live connection status."""
-        if not self.config.G_ANT["USE"].get(ant_name, False):
+        if not self.config.sensor_uses(ant_name, self.config.SENSOR_PROTOCOL_ANT):
             return CONNECTION_STATUS_INACTIVE
 
         if self.config.G_DUMMY_OUTPUT and not self.config.G_ANT["STATUS"]:
@@ -305,17 +315,11 @@ class SensorANT(Sensor):
         if not self.is_transport_available():
             return CONNECTION_STATUS_DISCONNECTED
 
-        ant_id_type = self.config.G_ANT["ID_TYPE"].get(ant_name)
+        ant_id_type = self.config.get_ant_id_type(ant_name)
         device = self.device.get(ant_id_type)
         if device is None:
             return CONNECTION_STATUS_CONNECTING
-
-        last_data_timestamp = getattr(device, "last_data_timestamp", None)
-        if last_data_timestamp is None:
-            return CONNECTION_STATUS_CONNECTING
-
-        valid_time = max(getattr(device, "valid_time", 60), 5)
-        if (datetime.now() - last_data_timestamp).total_seconds() <= valid_time:
+        if self._has_recent_data(device):
             return CONNECTION_STATUS_CONNECTED
         return CONNECTION_STATUS_CONNECTING
 
@@ -324,8 +328,10 @@ class SensorANT(Sensor):
         if ant_name is None:
             devices = list({id(dv): dv for dv in self.device.values()}.values())
         else:
-            ant_id_type = self.config.G_ANT["ID_TYPE"][ant_name]
-            devices.append(self.device[ant_id_type])
+            ant_id_type = self.config.get_ant_id_type(ant_name)
+            device = self.device.get(ant_id_type)
+            if device is not None:
+                devices.append(device)
 
         for dv in devices:
             try:
@@ -356,11 +362,13 @@ class SensorANT(Sensor):
             self._create_scan_search_devices()
             self._ensure_node_started()
 
-        for key in self.config.G_ANT["ID"].keys():
-            if not self.config.G_ANT["USE"][key]:
+        for key, sensor in self.config.G_SENSORS.items():
+            if not self.config.is_sensor_configured(
+                key, self.config.SENSOR_PROTOCOL_ANT
+            ):
                 continue
-            ant_id = self.config.G_ANT["ID"][key]
-            ant_type = self.config.G_ANT["TYPE"][key]
+            ant_id = sensor["ID"]
+            ant_type = sensor["TYPE"]
             if ant_id == 0 or ant_type == 0:
                 continue
             self.connect_ant_sensor(key, ant_id, ant_type, False)
@@ -434,17 +442,13 @@ class SensorANT(Sensor):
         if not self.is_transport_available():
             return
         new_ant_id_type = struct.pack("<HB", antID, antType)
-        previous_ant_id_type = self.config.G_ANT["ID_TYPE"].get(antName)
+        previous_ant_id_type = self.config.get_ant_id_type(antName)
         if previous_ant_id_type and previous_ant_id_type != new_ant_id_type:
             self._release_replaced_sensor(antName, previous_ant_id_type)
 
-        self.config.G_ANT["ID"][antName] = antID
-        self.config.G_ANT["TYPE"][antName] = antType
-        self.config.G_ANT["ID_TYPE"][antName] = new_ant_id_type
-        antIDType = self.config.G_ANT["ID_TYPE"][antName]
+        self.config.set_sensor(antName, self.config.SENSOR_PROTOCOL_ANT, antID, antType)
+        antIDType = new_ant_id_type
         self.searcher.stop_search(resetWait=False)
-
-        self.config.G_ANT["USE"][antName] = True
 
         self.searcher.set_wait_normal_mode()
 
@@ -499,24 +503,15 @@ class SensorANT(Sensor):
         self.device[antIDType].init_after_connect()
 
     def _configured_id_type(self, ant_name):
-        ant_id_type = self.config.G_ANT["ID_TYPE"].get(ant_name)
-        if ant_id_type:
-            return ant_id_type
-        if not self.is_sensor_paired(ant_name):
-            return 0
-        return struct.pack(
-            "<HB",
-            self.config.G_ANT["ID"][ant_name],
-            self.config.G_ANT["TYPE"][ant_name],
-        )
+        return self.config.get_ant_id_type(ant_name)
 
     def _active_roles_for_id_type(self, ant_id_type, exclude=None):
         return [
             name
-            for name, enabled in self.config.G_ANT["USE"].items()
+            for name in self.config.G_SENSORS
             if (
                 name != exclude
-                and enabled
+                and self.config.sensor_uses(name, self.config.SENSOR_PROTOCOL_ANT)
                 and self._configured_id_type(name) == ant_id_type
             )
         ]
@@ -550,10 +545,7 @@ class SensorANT(Sensor):
         shared_names = self._active_roles_for_id_type(ant_id_type, exclude=ant_name)
         device = self.device.get(ant_id_type)
 
-        self.config.G_ANT["ID_TYPE"][ant_name] = 0
-        self.config.G_ANT["ID"][ant_name] = 0
-        self.config.G_ANT["TYPE"][ant_name] = 0
-        self.config.G_ANT["USE"][ant_name] = False
+        self.config.clear_sensor(ant_name)
 
         if shared_names:
             if device is not None:
@@ -597,9 +589,9 @@ class SensorANT(Sensor):
         self.scanner.set_wait_quick_mode()
         self.scanner.stop_scan()
         antIDTypes = set()
-        for k, v in self.config.G_ANT["USE"].items():
-            antIDType = self.config.G_ANT["ID_TYPE"][k]
-            if v and antIDType not in antIDTypes:
+        for k in self.config.G_SENSORS:
+            antIDType = self.config.get_ant_id_type(k)
+            if antIDType and antIDType not in antIDTypes:
                 antIDTypes.add(antIDType)
                 self.device[antIDType].connect(
                     isCheck=True, isChange=False
@@ -612,13 +604,13 @@ class SensorANT(Sensor):
     def set_light_mode(self, mode, auto=False):
         if not self.is_sensor_available("LGT"):
             return
-        self.device[self.config.G_ANT["ID_TYPE"]["LGT"]].send_light_mode(mode, auto)
+        self.device[self.config.get_ant_id_type("LGT")].send_light_mode(mode, auto)
 
     def set_auto_light_enabled(self, enabled):
         if not self.is_sensor_available("LGT"):
             return
         state = "AUTO" if enabled else "OFF"
-        self.device[self.config.G_ANT["ID_TYPE"]["LGT"]].set_light_state(state)
+        self.device[self.config.get_ant_id_type("LGT")].set_light_state(state)
 
     def _register_transport_disconnect_callback(self):
         if self.node is None:
@@ -673,5 +665,5 @@ class SensorANT(Sensor):
         self._transport_disconnect_popup_pending = False
         self._transport_disconnect_popup_shown = True
 
-        show_dialog(None, "ANT+ USB dongle disconnected.", buzzer_sound="alert")
+        show_dialog(None, "ANT+ USB dongle disconnected.")
         return True

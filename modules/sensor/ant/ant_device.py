@@ -2,6 +2,12 @@ import struct
 from datetime import datetime
 
 from modules.app_logger import app_logger
+from modules.sensor.cycling_sensor import (
+    MAX_CADENCE_RPM,
+    POWER_SPIKE_THRESHOLD,
+    SPEED_SPIKE_THRESHOLD,
+)
+
 from . import ant_code
 
 
@@ -44,9 +50,9 @@ class ANT_Device:
     # (speed -> distance, power -> accumulated_power)
     # spike_threshold is defined by "new value - pre value"
     spike_threshold = {
-        "speed": 15,  # m/s
-        "power": 500,  # w
-        "cadence": 255,  # rpm
+        "speed": SPEED_SPIKE_THRESHOLD,  # m/s
+        "power": POWER_SPIKE_THRESHOLD,  # w
+        "cadence": MAX_CADENCE_RPM,  # rpm
     }
     ant_idle_interval = {"NORMAL": 0.20, "QUICK": 0.01, "SCAN": 0.20}
     ant_time_base = 32768
@@ -88,12 +94,12 @@ class ANT_Device:
 
     def set_null_value(self):
         for element in self.elements:
-            self.values[element] = self.config.G_ANT_NULLVALUE
+            self.values[element] = self.config.G_SENSOR_NULLVALUE
         self.init_common_page_status()
 
     def init_common_page_status(self):
         for element in self.common_page_elements:
-            self.values[element] = self.config.G_ANT_NULLVALUE
+            self.values[element] = self.config.G_SENSOR_NULLVALUE
         self.values["stored_page"] = {}
         for key in (0x50, 0x51):
             self.values["stored_page"][key] = False
@@ -139,10 +145,6 @@ class ANT_Device:
         if len(values) < value_length:
             values.extend([-1] * (value_length - len(values)))
 
-    @staticmethod
-    def delta_with_rollover(current_value, pre_value, rollover):
-        return (current_value + rollover - pre_value) % rollover
-
     def make_channel(self, c_type, ext_assign=None):
         if self.config.G_ANT["STATUS"] and self.channel is None:
             self.channel = self.node.new_channel(c_type, ext_assign=ext_assign)
@@ -157,7 +159,7 @@ class ANT_Device:
 
     def channel_set_id(self):  # for slave
         self.channel.set_id(
-            self.config.G_ANT["ID"][self.name],
+            self.config.G_SENSORS[self.name]["ID"],
             self.ant_config["type"],
             self.ant_config["transmission_type"],
         )
@@ -187,16 +189,12 @@ class ANT_Device:
         if not self.config.G_ANT["STATUS"]:
             return
         if isCheck:
-            if not self.config.G_ANT["USE"][self.name]:
+            if not self.config.sensor_uses(self.name, self.config.SENSOR_PROTOCOL_ANT):
                 return
         if self.state_check("OPEN"):
-            if isChange:
-                self.config.G_ANT["USE"][self.name] = True
             return
         try:
             self.channel.open()
-            if isChange:
-                self.config.G_ANT["USE"][self.name] = True
         except:
             pass
 
@@ -207,11 +205,9 @@ class ANT_Device:
         if not self.config.G_ANT["STATUS"]:
             return
         if isCheck:
-            if not self.config.G_ANT["USE"][self.name]:
+            if not self.config.sensor_uses(self.name, self.config.SENSOR_PROTOCOL_ANT):
                 return
         if self.state_check("CLOSE"):
-            if isChange:
-                self.config.G_ANT["USE"][self.name] = False
             return
         try:
             self.close_extra()
@@ -221,8 +217,6 @@ class ANT_Device:
                     0x07,
                 ]
             )  # EVENT_CHANNEL_CLOSED
-            if isChange:
-                self.config.G_ANT["USE"][self.name] = False
         except:
             pass
 

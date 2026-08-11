@@ -123,6 +123,7 @@ Gadgetbridge, Strava, Garmin and ThingsBoard
 
 ```
 $ sudo apt install bluez-obexd
+$ pip install bleak pycycling
 $ pip install gadgetbridge-rpi-link
 $ pip install garminconnect tb-mqtt-client mmh3 timezonefinder
 ```
@@ -205,6 +206,22 @@ $ sudo usermod -aG dialout "$USER"
 
 `openant-install-udev` installs openant's udev rules. Log out and back in, or
 reboot, before using ANT+ so the udev and group changes are applied.
+
+#### Optional official ANT+ icons
+
+Official ANT+ icon files are not distributed with this project. ANT+ Adopters
+who are authorized to use them can manually download the
+[ANT+ Brand Tools package](https://www.thisisant.com/developer/ant-plus/certification/#115_tab)
+(login required) and place the official PNG files at:
+
+```
+img/logos/ant_plus_icon_standard.png
+img/logos/ant_plus_icon_reverse.png
+```
+
+The files are excluded from Git. Their use remains subject to the ANT+ Adopter
+Agreement and ANT Wireless Brand Guidelines. If either file is absent, the
+application displays `(ANT+)` instead.
  
 
 ### Display
@@ -672,9 +689,14 @@ When unlocked, you can drag the profile horizontally.
 
 <img width="400" alt="menu-02-sensors" src="https://user-images.githubusercontent.com/12926652/206076191-4b8a4084-64a0-443b-a434-f6c6b4d51e2a.png">
 
-- Heart Rate / Cadence / Power
-  - Open a sensor role, then select ANT+ to pair or disconnect the corresponding sensor.
-  - BLE entries are reserved for the planned BLE cycling-sensor implementation.
+- Heart Rate
+  - Pair or disconnect an ANT+ heart-rate sensor or a BLE HRS heart-rate sensor.
+- Power
+  - Pair or disconnect an ANT+ power meter or a BLE CPS power meter.
+  - A CPS device can share one BLE connection with the Cadence role when both roles use the same device.
+- Cadence
+  - Pair or disconnect an ANT+ cadence sensor or a BLE CSCS/CPS cadence sensor.
+  - A BLE sensor without crank revolution data is shown as disconnected for this role.
 - Light
   - Pair or disconnect an ANT+ bike light.
   - Auto Control automatically controls a paired ANT+ bike light from ambient light and braking hints while recording.
@@ -693,7 +715,7 @@ When unlocked, you can drag the profile horizontally.
   - The global ANT+ transport switch is under **Connectivity**, separate from sensor roles.
 - ANT+ MultiScan
 - Speed
-  - Pair or disconnect an ANT+ speed sensor. BLE is reserved for the planned cycling-sensor implementation.
+  - Pair or disconnect an ANT+ speed sensor or a BLE CSCS speed sensor.
   - Wheel Size
     - Enter the wheel circumference in mm when the ANT+ speed sensor is available.
     - It is used to calculate the distance.

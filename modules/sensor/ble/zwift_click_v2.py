@@ -19,11 +19,14 @@ import asyncio
 import signal
 import time
 from dataclasses import dataclass
-from typing import Callable, Dict, Iterable, List, Optional
+from typing import Callable, Dict, Iterable, List, Optional, Protocol
 
-from bleak import BleakClient, BleakScanner
+from bleak import BleakClient
 from bleak.backends.device import BLEDevice
 from bleak.backends.scanner import AdvertisementData
+
+from .discovery import discover_ble_devices
+from .identity import format_ble_identity
 
 # UUIDs and constants sourced from lib/bluetooth/devices/zwift/constants.dart
 ZWIFT_MANUFACTURER_ID = 0x094A  # 2378
@@ -78,9 +81,28 @@ DEFAULT_SCAN_TIMEOUT_SECONDS = 10.0
 DEFAULT_SCAN_INTERVAL_SECONDS = 30.0
 DEFAULT_RECONNECT_DELAY_SECONDS = 3.0
 STOPPED_PACKET_WARNING = (
-    "Zwift Click V2 may be locked. Connect it once in the Zwift app, "
-    "then reconnect."
+    "Zwift Click V2 may be locked. Connect it once in the Zwift app, " "then reconnect."
 )
+
+
+def _bluez_args(adapter: Optional[str]) -> dict:
+    if not adapter:
+        return {}
+    return {"bluez": {"adapter": adapter}}
+
+
+class BleHealthRecorder(Protocol):
+    def record_connect_attempt(self) -> None: ...
+
+    def record_connected(self, connected_at: float | None = None) -> None: ...
+
+    def record_connect_failure(self) -> None: ...
+
+    def record_notification(self, received_at: float | None = None) -> None: ...
+
+    def record_unexpected_disconnect(
+        self, disconnected_at: float | None = None
+    ) -> None: ...
 
 
 @dataclass
@@ -117,7 +139,13 @@ class PressDurationClassifier:
         self._on_classified = on_classified
         self._active: dict[tuple[str, str, str], _PressState] = {}
 
-    def observe_pressed(self, side: str, source: str, buttons: Iterable[str], now: Optional[float] = None) -> None:
+    def observe_pressed(
+        self,
+        side: str,
+        source: str,
+        buttons: Iterable[str],
+        now: Optional[float] = None,
+    ) -> None:
         now_mono = time.monotonic() if now is None else now
         for button in _dedupe(buttons):
             key = (side, source, button)
@@ -132,19 +160,35 @@ class PressDurationClassifier:
                     state.repeat_interval_est = interval
                 else:
                     # EWMA to smooth jitter.
-                    state.repeat_interval_est = (state.repeat_interval_est * 0.7) + (interval * 0.3)
+                    state.repeat_interval_est = (state.repeat_interval_est * 0.7) + (
+                        interval * 0.3
+                    )
             state.last_seen_at = now_mono
 
-    def observe_released(self, side: str, source: str, buttons: Iterable[str], now: Optional[float] = None) -> None:
+    def observe_released(
+        self,
+        side: str,
+        source: str,
+        buttons: Iterable[str],
+        now: Optional[float] = None,
+    ) -> None:
         now_mono = time.monotonic() if now is None else now
         for button in _dedupe(buttons):
             key = (side, source, button)
             state = self._active.pop(key, None)
             if state is None:
                 continue
-            self._emit_on_release(side, source, button, release_time=now_mono, state=state)
+            self._emit_on_release(
+                side, source, button, release_time=now_mono, state=state
+            )
 
-    def observe_snapshot(self, side: str, source: str, pressed_buttons: Iterable[str], now: Optional[float] = None) -> None:
+    def observe_snapshot(
+        self,
+        side: str,
+        source: str,
+        pressed_buttons: Iterable[str],
+        now: Optional[float] = None,
+    ) -> None:
         now_mono = time.monotonic() if now is None else now
         pressed = set(_dedupe(pressed_buttons))
 
@@ -152,7 +196,9 @@ class PressDurationClassifier:
         for (s, src, button), state in list(self._active.items()):
             if s == side and src == source and button not in pressed:
                 self._active.pop((s, src, button), None)
-                self._emit_on_release(s, src, button, release_time=now_mono, state=state)
+                self._emit_on_release(
+                    s, src, button, release_time=now_mono, state=state
+                )
 
         # Update currently pressed buttons.
         self.observe_pressed(side, source, pressed, now=now_mono)
@@ -189,9 +235,18 @@ class PressDurationClassifier:
             repeat = state.repeat_interval_est or self._default_repeat_interval_seconds
             # Approximate "release" near the next expected report to reduce under-estimation.
             release_time = min(now_mono, state.last_seen_at + repeat)
-            self._emit_on_release(side, source, button, release_time=release_time, state=state)
+            self._emit_on_release(
+                side, source, button, release_time=release_time, state=state
+            )
 
-    def _emit_on_release(self, side: str, source: str, button: str, release_time: float, state: _PressState) -> None:
+    def _emit_on_release(
+        self,
+        side: str,
+        source: str,
+        button: str,
+        release_time: float,
+        state: _PressState,
+    ) -> None:
         if state.long_fired:
             return
         duration = max(0.0, release_time - state.started_at)
@@ -422,7 +477,7 @@ def _is_button_notification_packet(data: bytes) -> bool:
 
 
 async def connect_and_listen(
-    address: str,
+    device: str | BLEDevice,
     side: str,
     classifier: PressDurationClassifier,
     stop_event: asyncio.Event,
@@ -432,12 +487,20 @@ async def connect_and_listen(
     debug_log: Optional[Callable[[str], None]] = None,
     on_connected: Optional[Callable[[str, str, Optional[str]], None]] = None,
     on_stopped: Optional[Callable[[str, bytes], None]] = None,
+    adapter: Optional[str] = None,
+    health: Optional[BleHealthRecorder] = None,
 ) -> bool:
     """Connect to a single Click V2 and feed button events to callback."""
     connected = False
+    address = device.address if isinstance(device, BLEDevice) else device
+    if health is not None:
+        health.record_connect_attempt()
     try:
-        async with BleakClient(address) as client:
+        async with BleakClient(device, **_bluez_args(adapter)) as client:
             connected = True
+            if health is not None:
+                health.record_connected()
+            log(f"[{side}] connected to {format_ble_identity(name, address)}")
             last_rx_mono: Optional[float] = None
             stopped_notice_sent = False
             button_notifications_seen = False
@@ -446,6 +509,8 @@ async def connect_and_listen(
             def mark_rx() -> None:
                 nonlocal last_rx_mono
                 last_rx_mono = time.monotonic()
+                if health is not None:
+                    health.record_notification(last_rx_mono)
 
             def handle_data(_sender, data: bytes) -> None:
                 nonlocal button_notifications_seen, stopped_notice_sent
@@ -493,16 +558,25 @@ async def connect_and_listen(
             while client.is_connected and not stop_event.is_set():
                 await asyncio.sleep(0.2)
             if not stop_event.is_set() and not client.is_connected:
+                if health is not None:
+                    health.record_unexpected_disconnect()
                 if last_rx_mono is None:
                     log(f"[{side}] disconnected (no notifications received)")
                 else:
                     since_last = time.monotonic() - last_rx_mono
-                    log(f"[{side}] disconnected (last notification {since_last:.1f}s ago)")
+                    log(
+                        f"[{side}] disconnected (last notification {since_last:.1f}s ago)"
+                    )
     except asyncio.CancelledError:
         if connected:
             stop_event.set()
         return connected
     except Exception as exc:  # noqa: BLE errors are runtime
+        if health is not None:
+            if connected:
+                health.record_unexpected_disconnect()
+            else:
+                health.record_connect_failure()
         log(f"[{side}] error: {exc}")
     return connected
 
@@ -577,6 +651,8 @@ async def listen(
     reconnect_delay_seconds: float = DEFAULT_RECONNECT_DELAY_SECONDS,
     prefer_left: bool = True,
     preferred_address: Optional[str] = None,
+    adapter: Optional[str] = None,
+    health: Optional[BleHealthRecorder] = None,
     on_connected: Optional[Callable[[str, str, Optional[str]], None]] = None,
     on_stopped: Optional[Callable[[str, bytes], None]] = None,
     log: Callable[[str], None] = print,
@@ -597,47 +673,42 @@ async def listen(
     timeout_task = asyncio.create_task(_press_timeout_poller(classifier, stop_event))
     try:
         while not stop_event.is_set():
-            if preferred_address:
-                connected = await connect_and_listen(
-                    preferred_address,
-                    "left",
-                    classifier,
-                    stop_event,
-                    name=None,
-                    log=log,
-                    debug_log=debug_log,
-                    on_connected=on_connected,
-                    on_stopped=on_stopped,
+            try:
+                devices = await scan_for_click_v2(
+                    timeout=scan_timeout_seconds,
+                    prefer_left=prefer_left,
+                    preferred_address=preferred_address,
+                    adapter=adapter,
                 )
-                if stop_event.is_set():
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BlueZ discovery errors are runtime
+                log(f"scan failed: {exc}")
+                if not scan_forever:
                     return
-                if connected:
-                    if not scan_forever:
-                        return
-                    await asyncio.sleep(reconnect_delay_seconds)
-                    continue
-                preferred_address = None
-            devices = await scan_for_click_v2(
-                timeout=scan_timeout_seconds,
-                prefer_left=prefer_left,
-            )
-            selected = [d for d in devices if d.side == "left"]
+                await asyncio.sleep(reconnect_delay_seconds)
+                continue
+
+            preferred = [
+                device
+                for device in devices
+                if preferred_address
+                and device.device.address.casefold() == preferred_address.casefold()
+            ]
+            selected = preferred or [d for d in devices if d.side == "left"]
             if not selected:
                 if not scan_forever:
-                    log("Zwift Click V2 not found. Ensure the device is awake and advertising.")
+                    log(
+                        "Zwift Click V2 not found. Ensure the device is awake and advertising."
+                    )
                     return
                 await asyncio.sleep(scan_interval_seconds)
                 continue
 
-            log("Connecting to:")
-            for d in selected:
-                label = d.device.name or d.device.address
-                log(f"  - {label} ({d.device.address})")
-
             tasks = [
                 asyncio.create_task(
                     connect_and_listen(
-                        d.device.address,
+                        d.device,
                         d.side,
                         classifier,
                         stop_event,
@@ -646,6 +717,8 @@ async def listen(
                         debug_log=debug_log,
                         on_connected=on_connected,
                         on_stopped=on_stopped,
+                        adapter=adapter,
+                        health=health,
                     )
                 )
                 for d in selected
@@ -678,10 +751,10 @@ async def listen(
 async def scan_for_click_v2(
     timeout: float = 10.0,
     prefer_left: bool = True,
+    preferred_address: Optional[str] = None,
+    adapter: Optional[str] = None,
 ) -> List[ZwiftClickSide]:
     """Scan for Click V2 left/right units using manufacturer data."""
-    found: dict[str, ZwiftClickSide] = {}
-    found_preferred = asyncio.Event()
 
     def classify(ad: AdvertisementData) -> Optional[str]:
         md = ad.manufacturer_data.get(ZWIFT_MANUFACTURER_ID)
@@ -694,24 +767,27 @@ async def scan_for_click_v2(
             return "right"
         return None
 
-    def detection_callback(device: BLEDevice, adv: AdvertisementData) -> None:
+    def matches_click(_device: BLEDevice, adv: AdvertisementData) -> bool:
+        return classify(adv) is not None
+
+    def matches_preferred(device: BLEDevice, adv: AdvertisementData) -> bool:
         side = classify(adv)
-        if side:
-            found[device.address] = ZwiftClickSide(device=device, side=side)
-            if prefer_left and side == "left":
-                # Stop scanning early when the preferred side is found.
-                found_preferred.set()
+        if preferred_address is not None:
+            return device.address.casefold() == preferred_address.casefold()
+        return prefer_left and side == "left"
 
-    async with BleakScanner(detection_callback=detection_callback) as _:
-        if prefer_left:
-            try:
-                await asyncio.wait_for(found_preferred.wait(), timeout=timeout)
-            except asyncio.TimeoutError:
-                pass
-        else:
-            await asyncio.sleep(timeout)
-
-    return list(found.values())
+    devices = await discover_ble_devices(
+        adapter=adapter,
+        timeout=timeout,
+        predicate=matches_click,
+        stop_when=matches_preferred if prefer_left or preferred_address else None,
+    )
+    found = []
+    for device, advertisement in devices:
+        side = classify(advertisement)
+        if side is not None:
+            found.append(ZwiftClickSide(device=device, side=side))
+    return found
 
 
 def _dedupe(seq: Iterable[str]) -> List[str]:
@@ -741,7 +817,9 @@ async def _press_timeout_poller(
 
 
 async def main() -> None:
-    parser = argparse.ArgumentParser(description="Listen to Zwift Click V2 and classify short/long presses.")
+    parser = argparse.ArgumentParser(
+        description="Listen to Zwift Click V2 and classify short/long presses."
+    )
     parser.add_argument(
         "--long-press-seconds",
         type=float,

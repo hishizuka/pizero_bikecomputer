@@ -2,6 +2,14 @@ import struct
 from datetime import datetime
 
 from modules.app_logger import app_logger
+from modules.sensor.cycling_sensor import (
+    MAX_CADENCE_RPM,
+    MAX_SPEED_MPS,
+    REVOLUTION_SPIKE_THRESHOLD,
+    counter_delta,
+    revolution_rate,
+)
+
 from . import ant_device
 from . import ant_code
 
@@ -68,25 +76,26 @@ class ANT_Device_Speed_Cadence(ant_device.ANT_Device):
 
         # cad_time, cad, speed_time, speed
         self.delta = [
-            self.delta_with_rollover(value, pre_value, 65536)
+            counter_delta(value, pre_value, 65536)
             for value, pre_value in zip(self.sc_values, self.pre_values)
         ]
 
         # speed
-        if self.delta[2] > 0 and 0 < self.delta[3] < 6553:  # for spike
+        if self.delta[2] > 0 and 0 < self.delta[3] < REVOLUTION_SPIKE_THRESHOLD:
             # unit: m/s
-            spd = (
-                self.config.G_WHEEL_CIRCUMFERENCE * self.delta[3] * 1024 / self.delta[2]
+            spd = self.config.G_WHEEL_CIRCUMFERENCE * revolution_rate(
+                self.delta[3],
+                self.delta[2],
+                1024.0,
             )
             # max value in .fit file is 65.536 [m/s]
-            if (
-                spd <= 65
-                and (spd - self.values["speed"]) < self.spike_threshold["speed"]
+            if spd <= MAX_SPEED_MPS and (
+                spd - self.values["speed"] < self.spike_threshold["speed"]
             ):
                 self.values["speed"] = spd
                 self.values["last_event_timestamp_spd"] = t
-                self.values["last_event_interval_spd"] = (
-                    self.delta[2] / (1024 * self.delta[3])
+                self.values["last_event_interval_spd"] = self.delta[2] / (
+                    1024 * self.delta[3]
                 )
                 if self.config.G_MANUAL_STATUS == "START":
                     # unit: m
@@ -112,13 +121,13 @@ class ANT_Device_Speed_Cadence(ant_device.ANT_Device):
         self.config.state.set_value(self.pickle_key, self.sc_values[3])
 
         # cadence
-        if self.delta[0] > 0 and 0 < self.delta[1] < 6553:  # for spike
-            cad = 60 * self.delta[1] * 1024 / self.delta[0]
-            if cad <= 255:  # max value in .fit file is 255 [rpm]
+        if self.delta[0] > 0 and 0 < self.delta[1] < REVOLUTION_SPIKE_THRESHOLD:
+            cad = 60 * revolution_rate(self.delta[1], self.delta[0], 1024.0)
+            if cad <= MAX_CADENCE_RPM:
                 self.values["cadence"] = cad
                 self.values["last_event_timestamp_cdc"] = t
-                self.values["last_event_interval_cdc"] = (
-                    self.delta[0] / (1024 * self.delta[1])
+                self.values["last_event_interval_cdc"] = self.delta[0] / (
+                    1024 * self.delta[1]
                 )
                 # refresh timestamp called from sensor_core
                 self.values["timestamp"] = t
@@ -150,7 +159,7 @@ class ANT_Device_Cadence(ant_device.ANT_Device):
     pre_delta = []
     elements = ("cadence",)
     const = 60
-    fit_max = 255
+    fit_max = MAX_CADENCE_RPM
     stop_missing_events = 2
 
     pickle_key = "ant+_cdc_values"
@@ -187,22 +196,25 @@ class ANT_Device_Cadence(ant_device.ANT_Device):
 
         # time, value
         self.delta = [
-            self.delta_with_rollover(value, pre_value, 65536)
+            counter_delta(value, pre_value, 65536)
             for value, pre_value in zip(self.sc_values, self.pre_values)
         ]
 
-        if self.delta[0] > 0 and 0 < self.delta[1] < 6553:  # for spike
-            val = self.const * self.delta[1] * 1024 / self.delta[0]
+        if self.delta[0] > 0 and 0 < self.delta[1] < REVOLUTION_SPIKE_THRESHOLD:
+            val = self.const * revolution_rate(
+                self.delta[1],
+                self.delta[0],
+                1024.0,
+            )
             # max value in .fit file is fit_max
-            if (
-                val <= self.fit_max
-                and (val - self.values[self.elements[0]])
+            if val <= self.fit_max and (
+                val - self.values[self.elements[0]]
                 < self.spike_threshold[self.elements[0]]
             ):
                 self.values[self.elements[0]] = val
                 self.values["last_event_timestamp"] = t
-                self.values["last_event_interval"] = (
-                    self.delta[0] / (1024 * self.delta[1])
+                self.values["last_event_interval"] = self.delta[0] / (
+                    1024 * self.delta[1]
                 )
                 self.accumulateValue()
                 # refresh timestamp called from sensor_core
@@ -259,7 +271,7 @@ class ANT_Device_Speed(ANT_Device_Cadence):
     }
     elements = ("speed", "distance")
     const = None
-    fit_max = 65
+    fit_max = MAX_SPEED_MPS
 
     pickle_key = "ant+_spd_values"
 

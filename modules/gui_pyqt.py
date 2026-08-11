@@ -330,7 +330,9 @@ class GUI_PyQt(GUI_Qt_Base):
                 ControlMenuWidget,
                 TemperatureMenuWidget,
                 TrainerMenuWidget,
+                SensorProtocolMenuWidget,
                 ANTListWidget,
+                BLEListWidget,
             )
             from modules.pyqt.menu.pyqt_course_menu_widget import (
                 CoursesMenuWidget,
@@ -392,7 +394,9 @@ class GUI_PyQt(GUI_Qt_Base):
 
             # reverse order (make children widget first, then make parent widget)
             menus = [
+                ("Pair BLE Sensor", BLEListWidget),
                 ("Pair ANT+ Sensor", ANTListWidget),
+                ("Pair Sensor Protocol", SensorProtocolMenuWidget),
                 ("Heart Rate", HeartRateMenuWidget),
                 ("Wheel Size", AdjustWheelCircumferenceWidget),
                 ("Auto Stop Cutoff", AdjustAutoStopCutoffWidget),

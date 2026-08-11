@@ -126,6 +126,19 @@ class BluetoothIcon(_QIconWithPath):
     path = "img/bluetooth.svg"
 
 
+class AntPlusStandardIcon(_QIconWithPath):
+    path = "img/logos/ant_plus_icon_standard.png"
+
+
+class AntPlusReverseIcon(_QIconWithPath):
+    path = "img/logos/ant_plus_icon_reverse.png"
+
+
+ANT_PLUS_ICONS_AVAILABLE = os.path.isfile(AntPlusStandardIcon.path) and os.path.isfile(
+    AntPlusReverseIcon.path
+)
+
+
 def get_pixmap(icon_cls, size, color=None):
     cache_key = (icon_cls, size, color)
     pixmap = _PIXMAP_CACHE.get(cache_key)

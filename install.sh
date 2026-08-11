@@ -260,6 +260,7 @@ if [[ "$install_bluetooth" == "true" ]]; then
     sudo apt install -y bluez-obexd libffi-dev
     # for raspberry pi zero (building with pip is extremely heavy.)
     sudo apt install -y python3-pydantic python3-orjson
+    pip install bleak pycycling
     pip install gadgetbridge-rpi-link
     pip install garminconnect tb-mqtt-client mmh3
     install_timezonefinder_and_flatbuffers
@@ -351,6 +352,18 @@ if [ ! -d "$pgm_dir" ]; then
 fi
 
 cd "$pgm_dir"
+
+if [[ "$install_ant_plus" == "true" ]] && \
+    { [[ ! -f img/logos/ant_plus_icon_standard.png ]] || \
+      [[ ! -f img/logos/ant_plus_icon_reverse.png ]]; }; then
+    echo "ℹ️ Official ANT+ icons are not included in this repository."
+    echo "   ANT+ Adopters can download the ANT+ Brand Tools package here:"
+    echo "   https://www.thisisant.com/developer/ant-plus/certification/#115_tab"
+    echo "   Place the official PNG files at:"
+    echo "   $pgm_dir/img/logos/ant_plus_icon_standard.png"
+    echo "   $pgm_dir/img/logos/ant_plus_icon_reverse.png"
+    echo "   The application uses (ANT+) text until both files are installed."
+fi
 
 # Create a named pipe (FIFO) to monitor output
 OUT_PIPE=$(mktemp -u)

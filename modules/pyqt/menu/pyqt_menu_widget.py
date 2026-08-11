@@ -34,6 +34,10 @@ class MenuWidget(QtWidgets.QWidget):
         return self.config.logger.sensor.sensor_ant
 
     @property
+    def sensor_ble(self):
+        return self.config.logger.sensor.sensor_ble
+
+    @property
     def sensor_gps(self):
         return self.config.logger.sensor.sensor_gps
 

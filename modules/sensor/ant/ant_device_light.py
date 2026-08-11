@@ -81,8 +81,11 @@ class ANT_Device_Light(ant_device.ANT_Device):
 
     def _queue_send(self, payload):
         """Enqueue payload on the configured event loop in a thread-safe way."""
-        loop = getattr(self.config, "loop", None)
-        if loop and loop.is_running():
+        try:
+            loop = self.config.loop
+        except RuntimeError:
+            loop = None
+        if loop is not None and loop.is_running():
             asyncio.run_coroutine_threadsafe(self.send_queue.put(payload), loop)
         else:
             asyncio.create_task(self.send_queue.put(payload))
@@ -141,7 +144,7 @@ class ANT_Device_Light(ant_device.ANT_Device):
             self._auto_on_mode = self.default_on_mode
 
     def _default_light_state(self):
-        if self.config.G_ANT["USE_AUTO_LIGHT"]:
+        if self.config.G_AUTO_LIGHT:
             return LightState.AUTO
         return LightState.OFF
 
@@ -245,7 +248,7 @@ class ANT_Device_Light(ant_device.ANT_Device):
                     0xFF,
                     0x5A,
                     0b01001000,
-                    self.config.G_ANT["ID"][self.name],
+                    self.config.G_SENSORS[self.name]["ID"],
                     0x00,
                 ),
             )
@@ -308,7 +311,7 @@ class ANT_Device_Light(ant_device.ANT_Device):
                 self._manual_on_mode = self.default_on_mode
                 next_state = LightState.ON
             elif current == LightState.ON:
-                if self.config.G_ANT["USE_AUTO_LIGHT"]:
+                if self.config.G_AUTO_LIGHT:
                     next_state = LightState.AUTO
                 else:
                     next_state = LightState.OFF
@@ -387,7 +390,7 @@ class ANT_Device_Light(ant_device.ANT_Device):
         if state == LightState.ON:
             return manual_on_mode
         if state == LightState.AUTO:
-            if not self.config.G_ANT["USE_AUTO_LIGHT"]:
+            if not self.config.G_AUTO_LIGHT:
                 return "OFF"
             return auto_on_mode if self._auto_should_on() else "OFF"
         return "OFF"

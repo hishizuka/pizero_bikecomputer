@@ -7,6 +7,7 @@ from .pyqt_screen_widget import ScreenWidget
 # multi scan widget
 #################################
 
+
 class MultiScanWidget(ScreenWidget):
     values = {
         "HR": [],
@@ -20,15 +21,25 @@ class MultiScanWidget(ScreenWidget):
     }
 
     elements_horizontal = (
-        "Power(3s)", "HR", "Speed",
-        "PWR1", "PWR2", "PWR3",
-        "HR1", "HR2", "HR3",
+        "Power(3s)",
+        "HR",
+        "Speed",
+        "PWR1",
+        "PWR2",
+        "PWR3",
+        "HR1",
+        "HR2",
+        "HR3",
     )
     elements_vertical = (
-        "Power(3s)", "HR",
-        "PWR1", "HR1",
-        "PWR2", "HR2",
-        "PWR3", "HR3",
+        "Power(3s)",
+        "HR",
+        "PWR1",
+        "HR1",
+        "PWR2",
+        "HR2",
+        "PWR3",
+        "HR3",
     )
     item_layout = {}
 
@@ -78,11 +89,11 @@ class MultiScanWidget(ScreenWidget):
         self.reset_values()
         count = {"HR": 0, "PWR": 0}
         for ant_id_type, values in self.scanner.values.items():
-            (ant_id, ant_type) = self.struct_pattern["ID"].unpack(ant_id_type)
+            ant_id, ant_type = self.struct_pattern["ID"].unpack(ant_id_type)
             # only HR and PWR
             if (
-                ant_type not in self.config.G_ANT["TYPES"]["HR"]
-                and ant_type not in self.config.G_ANT["TYPES"]["PWR"]
+                ant_type not in self.config.G_ANT_SENSOR_TYPES["HR"]
+                and ant_type not in self.config.G_ANT_SENSOR_TYPES["PWR"]
             ):
                 continue
             # check timestamp
@@ -92,12 +103,12 @@ class MultiScanWidget(ScreenWidget):
             if timedelta >= 5:
                 continue
 
-            if ant_type in self.config.G_ANT["TYPES"]["HR"] and count["HR"] < 3:
+            if ant_type in self.config.G_ANT_SENSOR_TYPES["HR"] and count["HR"] < 3:
                 if "heart_rate" in values:
                     self.values["HR"][count["HR"]] = values["heart_rate"]
                     self.values["HR_ID"][count["HR"]] = ant_id_type
                     count["HR"] += 1
-            elif ant_type in self.config.G_ANT["TYPES"]["PWR"] and count["PWR"] < 3:
+            elif ant_type in self.config.G_ANT_SENSOR_TYPES["PWR"] and count["PWR"] < 3:
                 if "power" in values:
                     self.values["PWR"][count["PWR"]] = values["power"]
                     self.values["PWR_ID"][count["PWR"]] = ant_id_type
@@ -109,7 +120,7 @@ class MultiScanWidget(ScreenWidget):
                     eval(self.config.gui.gui_config.G_ITEM_DEF[item.name][1])
                 )
                 continue
-            
+
             item.label.setText(item.name)
 
             key = item.name[0:-1]
@@ -120,11 +131,8 @@ class MultiScanWidget(ScreenWidget):
                 item.update_value(None)
                 continue
 
-            (ant_id, ant_type) = self.struct_pattern["ID"].unpack(ant_id_type)
+            ant_id, ant_type = self.struct_pattern["ID"].unpack(ant_id_type)
             item.update_value(self.values[key][i])
 
-            if (
-                key == "PWR"
-                and "manu_name" in self.scanner.values[ant_id_type]
-            ):
+            if key == "PWR" and "manu_name" in self.scanner.values[ant_id_type]:
                 item.label.setText(self.scanner.values[ant_id_type]["manu_name"])

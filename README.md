@@ -145,6 +145,9 @@ USB dongle is required if using ANT+ sensors.
 | ANT+ Light |  Yes | Bontrager Flare RT only. |
 | ANT+ Control |  Yes | Garmin Edge Remote only. |
 | ANT+ Environment |  Yes | Garmin tempe (temperature sensor) |
+| BLE Heart Rate sensor | Partial | Bluetooth HRS 8/16-bit heart rate and RR intervals are supported. |
+| BLE Speed / Cadence sensor | Partial | Bluetooth CSCS wheel and CSCS/CPS crank revolution data are supported. |
+| BLE Power sensor | Partial | Bluetooth CPS instantaneous power and recording work are supported. Calibration is not supported. |
 | BLE peripherals |  Partial | Zwift Click V2 remote and Fake Trainer for Zwift are supported. |
 | Barometric altimeter | Yes | I2C sensor(pressure, temperature) |
 | Accelerometer | Yes | I2C sensor |
@@ -289,6 +292,8 @@ Third-party boards are independent projects and are not official, endorsed, or s
 The software in this repository is available under the [GNU General Public License v3.0](https://github.com/hishizuka/pizero_bikecomputer/blob/master/LICENSE).
 
 Official hardware design files, when published by this project, are available under the [CERN Open Hardware Licence Version 2 - Strongly Reciprocal (CERN-OHL-S-2.0)](/LICENSES/CERN-OHL-S-2.0.txt), unless otherwise stated.
+
+ANT and ANT+ are trademarks of Garmin Canada Inc. Official ANT+ icon files are not included in this repository. Authorized ANT+ Adopters may obtain the icons from the [ANT+ Brand Tools package](https://www.thisisant.com/developer/ant-plus/certification/#115_tab) and place them at `img/logos/ant_plus_icon_standard.png` and `img/logos/ant_plus_icon_reverse.png`. Their use remains subject to the ANT+ Adopter Agreement and ANT Wireless Brand Guidelines. Without these files, the application displays `(ANT+)` instead.
 
 The code shown below is ported and modified from Azumo's code under the Apache License 2.0 (third_party/apache/LICENSE.Apache2). See the NOTICE file for details.
 - modules/display/mip_display_base.py

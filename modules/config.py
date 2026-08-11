@@ -1,8 +1,10 @@
 import argparse
 import asyncio
+import copy
 import logging
 import os
 import shutil
+import struct
 from datetime import datetime
 from glob import glob
 
@@ -159,82 +161,74 @@ class Config:
     # 700x23c: 2.096, 700x25c: 2.105, 700x28c: 2.136
     G_WHEEL_CIRCUMFERENCE = 2.105
 
-    # ANT Null value
-    G_ANT_NULLVALUE = np.nan
-    # ANT+ setting (overwritten with setting.conf)
-    # [Todo] multiple pairing(2 or more riders), ANT+ ctrl(like edge remote)
+    G_SENSOR_NULLVALUE = np.nan
+    SENSOR_PROTOCOL_ANT = "ANT+"
+    SENSOR_PROTOCOL_BLE = "BLE"
+
+    # Logical sensor bindings (overwritten with setting.conf)
+    G_SENSOR_ROLE_ORDER = ("HR", "SPD", "CDC", "PWR", "LGT", "CTRL", "TEMP")
+    G_SENSOR_ROLE_NAMES = {
+        "HR": "HeartRate",
+        "SPD": "Speed",
+        "CDC": "Cadence",
+        "PWR": "Power",
+        "LGT": "Light",
+        "CTRL": "Control",
+        "TEMP": "Temperature",
+    }
+    G_ANT_SENSOR_TYPES = {
+        "HR": (0x78,),
+        "SPD": (0x79, 0x7B),
+        "CDC": (0x79, 0x7A, 0x0B),
+        "PWR": (0x0B,),
+        "LGT": (0x23,),
+        "CTRL": (0x10,),
+        "TEMP": (0x19,),
+    }
+    G_ANT_TYPE_NAMES = {
+        0x78: "HeartRate",
+        0x79: "Speed and Cadence",
+        0x7A: "Cadence",
+        0x7B: "Speed",
+        0x0B: "Power",
+        0x23: "Light",
+        0x10: "Control",
+        0x19: "Temperature",
+    }
+    G_BLE_SENSOR_TYPES = {
+        "HR": ("HRS",),
+        "SPD": ("CSCS",),
+        "CDC": ("CSCS", "CPS"),
+        "PWR": ("CPS",),
+        "LGT": (),
+        "CTRL": (),
+        "TEMP": (),
+    }
+    G_SENSORS = {
+        role: {
+            "PROTOCOL": "",
+            "ID": None,
+            "TYPE": None,
+            "NAME": "",
+        }
+        for role in G_SENSOR_ROLE_ORDER
+    }
+    G_AUTO_LIGHT = False
+
+    # ANT+ transport setting
     G_ANT = {
         # ANT+ interval internal variable: 0:4Hz(0.25s), 1:2Hz(0.5s), 2:1Hz(1.0s)
         # initialized by G_ANT_INTERVAL in __init()__
         "INTERVAL": 2,
         "STATUS": True,
-        "USE": {
-            "HR": False,
-            "SPD": False,
-            "CDC": False,
-            "PWR": False,
-            "LGT": False,
-            "CTRL": False,
-            "TEMP": False,
-        },
-        "NAME": {
-            "HR": "HeartRate",
-            "SPD": "Speed",
-            "CDC": "Cadence",
-            "PWR": "Power",
-            "LGT": "Light",
-            "CTRL": "Control",
-            "TEMP": "Temperature",
-        },
-        "ID": {
-            "HR": 0,
-            "SPD": 0,
-            "CDC": 0,
-            "PWR": 0,
-            "LGT": 0,
-            "CTRL": 0,
-            "TEMP": 0,
-        },
-        "TYPE": {
-            "HR": 0,
-            "SPD": 0,
-            "CDC": 0,
-            "PWR": 0,
-            "LGT": 0,
-            "CTRL": 0,
-            "TEMP": 0,
-        },
-        "ID_TYPE": {
-            "HR": 0,
-            "SPD": 0,
-            "CDC": 0,
-            "PWR": 0,
-            "LGT": 0,
-            "CTRL": 0,
-            "TEMP": 0,
-        },
-        "TYPES": {
-            "HR": (0x78,),
-            "SPD": (0x79, 0x7B),
-            "CDC": (0x79, 0x7A, 0x0B),
-            "PWR": (0x0B,),
-            "LGT": (0x23,),
-            "CTRL": (0x10,),
-            "TEMP": (0x19,),
-        },
-        "TYPE_NAME": {
-            0x78: "HeartRate",
-            0x79: "Speed and Cadence",
-            0x7A: "Cadence",
-            0x7B: "Speed",
-            0x0B: "Power",
-            0x23: "Light",
-            0x10: "Control",
-            0x19: "Temperature",
-        },
-        # for display order in ANT+ menu (antMenuWidget)
-        "ORDER": ["HR", "SPD", "CDC", "PWR", "LGT", "CTRL", "TEMP"],
-        "USE_AUTO_LIGHT": False,
+    }
+
+    # BLE cycling sensor setting (overwritten with setting.conf)
+    # Device identifiers are opaque strings because CoreBluetooth does not expose
+    # Bluetooth MAC addresses on macOS.
+    G_BLE = {
+        "USE_INTERNAL": True,
+        "USE_EXTERNAL": False,
     }
 
     # GPS speed cutoff (the distance in 1 seconds at 0.36km/h is 10cm)
@@ -488,6 +482,11 @@ class Config:
     boot_time = 0
 
     def __init__(self):
+        self.G_SENSORS = copy.deepcopy(type(self).G_SENSORS)
+        self.G_ANT = copy.deepcopy(type(self).G_ANT)
+        self.G_BLE = copy.deepcopy(type(self).G_BLE)
+        self.G_AUTO_LIGHT = type(self).G_AUTO_LIGHT
+
         # Raspbian OS detection
         proc_model = "/proc/device-tree/model"
         if os.path.exists(proc_model) and os.path.exists(proc_model):
@@ -622,6 +621,85 @@ class Config:
             post_add_test_config(self)
         except:
             pass
+
+    def sensor_uses(self, role, protocol):
+        return self.G_SENSORS[role]["PROTOCOL"] == protocol
+
+    def is_sensor_configured(self, role, protocol=None):
+        sensor = self.G_SENSORS[role]
+        if protocol is not None and sensor["PROTOCOL"] != protocol:
+            return False
+        if sensor["PROTOCOL"] == self.SENSOR_PROTOCOL_ANT:
+            return bool(sensor["ID"] and sensor["TYPE"])
+        if sensor["PROTOCOL"] == self.SENSOR_PROTOCOL_BLE:
+            return bool(str(sensor["ID"] or "").strip())
+        return False
+
+    def set_sensor(self, role, protocol, identifier, sensor_type=None, name=""):
+        if role not in self.G_SENSORS:
+            raise ValueError(f"Unknown sensor role: {role}")
+        if protocol == self.SENSOR_PROTOCOL_ANT:
+            identifier = int(identifier)
+            sensor_type = int(sensor_type)
+            if not 0 <= identifier <= 0xFFFF:
+                raise ValueError(f"Invalid ANT+ device ID: {identifier}")
+            if sensor_type not in self.G_ANT_SENSOR_TYPES[role]:
+                raise ValueError(
+                    f"Invalid ANT+ device type for {role}: 0x{sensor_type:02X}"
+                )
+        elif protocol == self.SENSOR_PROTOCOL_BLE:
+            identifier = str(identifier).strip()
+            if not identifier:
+                raise ValueError("BLE identifier must not be empty")
+            if not self.G_BLE_SENSOR_TYPES[role]:
+                raise ValueError(f"BLE sensor is not supported for {role}")
+            if sensor_type is not None:
+                sensor_type = str(sensor_type).strip().upper() or None
+            if (
+                sensor_type is not None
+                and sensor_type not in self.G_BLE_SENSOR_TYPES[role]
+            ):
+                raise ValueError(f"Invalid BLE sensor type for {role}: {sensor_type}")
+        else:
+            raise ValueError(f"Unknown sensor protocol: {protocol}")
+
+        self.G_SENSORS[role].update(
+            {
+                "PROTOCOL": protocol,
+                "ID": identifier,
+                "TYPE": sensor_type,
+                "NAME": str(name).strip(),
+            }
+        )
+
+    def ble_sensor_enabled(self):
+        return bool(self.G_BLE["USE_INTERNAL"] or self.G_BLE["USE_EXTERNAL"])
+
+    def get_ble_sensor_adapter_policies(self):
+        policies = []
+        if self.G_BLE["USE_EXTERNAL"]:
+            policies.append("NRF52840_BRIDGE")
+        if self.G_BLE["USE_INTERNAL"]:
+            policies.append("BUILTIN")
+        return tuple(policies)
+
+    def clear_sensor(self, role):
+        self.G_SENSORS[role].update(
+            {
+                "PROTOCOL": "",
+                "ID": None,
+                "TYPE": None,
+                "NAME": "",
+            }
+        )
+
+    def get_ant_id_type(self, role):
+        if not self.sensor_uses(role, self.SENSOR_PROTOCOL_ANT):
+            return 0
+        sensor = self.G_SENSORS[role]
+        if sensor["ID"] is None or sensor["TYPE"] is None:
+            return 0
+        return struct.pack("<HB", int(sensor["ID"]), int(sensor["TYPE"]))
 
     @property
     def board_preset(self):

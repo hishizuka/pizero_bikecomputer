@@ -651,11 +651,11 @@ class LoggerCore:
         u = self.config.gui.gui_config.G_UNIT
         value_message = f"{(pre_lap_avg['speed'] * 3.6):{u['Speed'][0]}} {u['Speed'][1]}"
         sensor_items = []
-        if self.config.G_ANT["USE"]["HR"]:
+        if self.config.is_sensor_configured("HR"):
             sensor_items.append(
                 f"{pre_lap_avg['heart_rate']:{u['HeartRate'][0]}} {u['HeartRate'][1]}"
             )
-        if self.config.G_ANT["USE"]["PWR"]:
+        if self.config.is_sensor_configured("PWR"):
             sensor_items.append(
                 f"{pre_lap_avg['power']:{u['Power'][0]}} {u['Power'][1]}"
             )
@@ -1180,7 +1180,7 @@ class LoggerCore:
         # print(self.record_stats)
         # print(self.average)
 
-        if self.config.G_ANT["USE"]["PWR"]:
+        if self.config.is_sensor_configured("PWR"):
             self._restore_np_state_from_log_db(window_size=self.sensor.np_window_size)
 
         # start_time
