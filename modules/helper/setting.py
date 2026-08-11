@@ -429,8 +429,6 @@ class Setting:
             c["USE_BACKLIGHT"] = str(display.use_backlight)
             c["AUTO_BACKLIGHT_CUTOFF"] = str(display.auto_backlight_cutoff)
 
-        self.config_parser.remove_section("GPSD_PARAM")
-
         self.config_parser["GPSD_UBLOX_PARAM"] = {}
         c = self.config_parser["GPSD_UBLOX_PARAM"]
         c["assistnow_status"] = str(self.config.G_GPS_UBLOX["ASSISTNOW"]["STATUS"])
