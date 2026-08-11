@@ -7,6 +7,7 @@ from modules.app_logger import app_logger
 
 class BuzzerController:
     _STOP_TIMEOUT_SEC = 0.2
+    _POWER_OFF_TIMEOUT_SEC = 3.0
     _SUPPORTED_SOUNDS = {
         "sgx-ca600-poweron",
         "sgx-ca600-poweroff",
@@ -69,6 +70,19 @@ class BuzzerController:
             if not self._has_buzzer_script():
                 return
             await self._start_process_async("sgx-ca600-poweroff")
+            if self._proc is None:
+                return
+            try:
+                await asyncio.wait_for(
+                    self._proc.wait(), timeout=self._POWER_OFF_TIMEOUT_SEC
+                )
+            except asyncio.TimeoutError:
+                await self._stop_running_process()
+            except Exception as exc:
+                app_logger.warning(f"Buzzer power-off wait failed: {exc}")
+                await self._stop_running_process()
+            else:
+                self._proc = None
 
     async def _stop_running_process(self) -> None:
         if self._proc is None:
