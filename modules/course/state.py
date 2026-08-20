@@ -64,6 +64,8 @@ class CourseData:
     altitude: np.ndarray = field(default_factory=_empty_array)
     latitude: np.ndarray = field(default_factory=_empty_array)
     longitude: np.ndarray = field(default_factory=_empty_array)
+    source_altitude_min: float = np.nan
+    total_ascent: float = np.nan
     course_points: CoursePoints = field(default_factory=CoursePoints)
     points_diff: np.ndarray = field(default_factory=_empty_array)
     points_diff_sum_of_squares: np.ndarray = field(default_factory=_empty_array)

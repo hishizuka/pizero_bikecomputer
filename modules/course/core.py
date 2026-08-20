@@ -1,5 +1,4 @@
 import asyncio
-import json
 import os
 import re
 import shutil
@@ -8,6 +7,7 @@ import numpy as np
 import oyaml
 
 from modules.app_logger import app_logger
+from modules.utils.altitude import calculate_course_total_ascent
 from modules.utils.navigation import maneuver_to_turn_type
 from modules.utils.timer import Timer, log_timers
 
@@ -154,17 +154,12 @@ class Course(CourseProcessor, CourseMatcher):
         else:
             self.config.api.send_livetrack_course_reset()
 
-    def load(self, file=None):
-        # if file is given, copy it to self.config.G_COURSE_FILE_PATH firsthand, we are loading a new course
-        if file:
-            file = self._resolve_preferred_course_file(file)
-            shutil.copy(file, self.config.G_COURSE_FILE_PATH)
-            # shutil.copy2(file, self.config.G_COURSE_FILE_PATH)
-            # if ext:
-            #    os.setxattr(
-            #        self.config.G_COURSE_FILE_PATH, "user.ext", ext[1:].encode()
-            #    )
-
+    def _load_course_file(
+        self,
+        file,
+        update_search_range,
+        calculate_ascent,
+    ):
         self.reset()
 
         timers = [
@@ -176,31 +171,35 @@ class Course(CourseProcessor, CourseMatcher):
 
         with timers[0]:
             # get loader based on the extension
-            if os.path.exists(self.config.G_COURSE_FILE_PATH):
+            if os.path.exists(file):
                 try:
-                    ext = self._detect_course_file_extension(
-                        self.config.G_COURSE_FILE_PATH
-                    )
+                    ext = self._detect_course_file_extension(file)
                     if ext in LOADERS:
-                        course_data, course_points_data = LOADERS[ext].load_file(
-                            self.config.G_COURSE_FILE_PATH
-                        )
+                        course_data, course_points_data = LOADERS[ext].load_file(file)
                         if course_data:
                             for k, v in course_data.items():
                                 setattr(self, k, v)
                         if course_points_data:
                             for k, v in course_points_data.items():
                                 setattr(self.course_points, k, v)
+                        if calculate_ascent:
+                            finite_altitude = self.altitude[np.isfinite(self.altitude)]
+                            if len(finite_altitude):
+                                self.source_altitude_min = float(
+                                    np.min(finite_altitude)
+                                )
+                            self.total_ascent = calculate_course_total_ascent(
+                                self.distance,
+                                self.altitude,
+                            )
                     else:
-                        app_logger.warning(
-                            f"course file format is not handled: {self.config.G_COURSE_FILE_PATH}"
-                        )
+                        app_logger.warning(f"course file format is not handled: {file}")
                 except (AttributeError, OSError) as e:
                     app_logger.error(
                         f"Incorrect course file: {e}. Please reload the course."
                     )
         with timers[1]:
-            self.downsample()
+            self.downsample(update_search_range=update_search_range)
 
         with timers[2]:
             self.calc_slope_smoothing()
@@ -212,6 +211,33 @@ class Course(CourseProcessor, CourseMatcher):
             app_logger.info("[logger] Loading course:")
             log_timers(timers, text_total="  total               : {0:.3f} sec")
 
+    def load(self, file=None):
+        # If a file is given, copy it before loading a new active course.
+        if file:
+            file = self._resolve_preferred_course_file(file)
+            shutil.copy(file, self.config.G_COURSE_FILE_PATH)
+
+        self._load_course_file(
+            self.config.G_COURSE_FILE_PATH,
+            update_search_range=True,
+            calculate_ascent=False,
+        )
+
+        self._schedule_course_weather()
+        self._queue_livetrack_course()
+
+    def load_preview(self, file):
+        file = self._resolve_preferred_course_file(file)
+        self._load_course_file(
+            file,
+            update_search_range=False,
+            calculate_ascent=True,
+        )
+
+    def activate(self, file):
+        file = self._resolve_preferred_course_file(file)
+        shutil.copy(file, self.config.G_COURSE_FILE_PATH)
+        self.update_search_range()
         self._schedule_course_weather()
         self._queue_livetrack_course()
 
@@ -401,20 +427,6 @@ class Course(CourseProcessor, CourseMatcher):
         for r in self.html_remove_pattern:
             res = re.subn(r, "", res)[0]
         return res
-
-    def get_ridewithgps_privacycode(self, route_id):
-        privacy_code = None
-        filename = (
-            self.config.G_RIDEWITHGPS_API["URL_ROUTE_DOWNLOAD_DIR"]
-            + "course-{route_id}.json"
-        ).format(route_id=route_id)
-
-        with open(filename, "r") as json_file:
-            json_contents = json.load(json_file)
-            if "privacy_code" in json_contents["route"]:
-                privacy_code = json_contents["route"]["privacy_code"]
-
-        return privacy_code
 
     async def get_course_wind(self):
         if not self.config.G_USE_WIND_DATA_SOURCE or not self.is_set:

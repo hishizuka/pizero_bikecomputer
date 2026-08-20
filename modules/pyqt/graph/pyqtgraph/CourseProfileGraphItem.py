@@ -3,10 +3,39 @@ import numpy as np
 from pyqtgraph import functions as fn
 from pyqtgraph import getConfigOption
 from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.graphicsItems.AxisItem import AxisItem
 from pyqtgraph.graphicsItems.GraphicsObject import GraphicsObject
 
+__all__ = [
+    "CourseProfileAxisItem",
+    "CourseProfileGraphItem",
+    "configure_course_profile_axes",
+]
 
-__all__ = ["CourseProfileGraphItem"]
+
+class CourseProfileAxisItem(AxisItem):
+    minimum_label = None
+
+    def tickStrings(self, values, scale, spacing):
+        labels = super().tickStrings(values, scale, spacing)
+        if self.minimum_label is None:
+            return labels
+        return [
+            label if value >= self.minimum_label else ""
+            for value, label in zip(values, labels)
+        ]
+
+
+def configure_course_profile_axes(plot, font_size):
+    font = QtGui.QFont()
+    font.setPixelSize(font_size)
+    font.setBold(True)
+    grid_pen = fn.mkPen(color=(190, 190, 190))
+    for name in ("bottom", "left"):
+        axis = plot.getAxis(name)
+        axis.tickFont = font
+        axis.setTickPen(grid_pen)
+        axis.setStyle(maxTickLevel=0)
 
 
 def _as_array(values):
@@ -26,16 +55,17 @@ def _segment_color(brushes, index):
     brush_array = np.asarray(brush)
     if brush_array.size == 0:
         return None
-    if np.issubdtype(brush_array.dtype, np.number) and not np.isfinite(
-        brush_array
-    ).all():
+    if (
+        np.issubdtype(brush_array.dtype, np.number)
+        and not np.isfinite(brush_array).all()
+    ):
         return None
 
     return tuple(brush_array.tolist())
 
 
 def _resolve_baseline(y, baseline):
-    if baseline is not None:
+    if baseline is not None and np.isfinite(baseline):
         return float(baseline)
 
     if y is None or np.isscalar(y):
@@ -47,6 +77,10 @@ def _resolve_baseline(y, baseline):
 
     min_y = float(np.min(finite_y))
     max_y = float(np.max(finite_y))
+    if baseline == -np.inf:
+        # Qt requires finite polygon coordinates, so extend beyond any profile view.
+        return min_y - max(max_y - min_y, 100.0)
+
     margin = max((max_y - min_y) * 0.05, 1.0)
     return min(0.0, min_y - margin)
 

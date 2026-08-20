@@ -814,8 +814,13 @@ class LoggerCore:
         self.course.reset(delete_course_file=delete_course_file, replace=replace)
         self.course.index.reset()
 
-    def set_new_course(self, course_file):
-        self.course.load(course_file)
+    def set_new_course(self, course_file, prepared_course=None):
+        if prepared_course is None:
+            self.course.load(course_file)
+            return
+
+        self.course = prepared_course
+        self.course.activate(course_file)
 
     async def record_log(self):
         # need to detect location delta for smart recording

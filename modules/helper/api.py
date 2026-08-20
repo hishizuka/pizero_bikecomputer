@@ -477,49 +477,11 @@ class api:
             (self.config.G_RIDEWITHGPS_API["URL_ROUTE_BASE_URL"] + ".json").format(
                 route_id=route_id
             ),
-            (
-                self.config.G_RIDEWITHGPS_API["URL_ROUTE_BASE_URL"]
-                + "/hover_preview.png"
-            ).format(route_id=route_id),
-            # (self.config.G_RIDEWITHGPS_API["URL_ROUTE_BASE_URL"]+"/thumb.png").format(route_id=route_id),
-            # not implemented
-            # https://ridewithgps.com/routes/full/{route_id}.png
-            # https://ridewithgps.com/routes/{route_id}/hover_preview@2x.png
         ]
         save_paths = [
             (
                 self.config.G_RIDEWITHGPS_API["URL_ROUTE_DOWNLOAD_DIR"]
                 + "course-{route_id}.json"
-            ).format(route_id=route_id),
-            (
-                self.config.G_RIDEWITHGPS_API["URL_ROUTE_DOWNLOAD_DIR"]
-                + "preview-{route_id}.png"
-            ).format(route_id=route_id),
-            # (self.config.G_RIDEWITHGPS_API["URL_ROUTE_DOWNLOAD_DIR"]+"thumb-{route_id}.png").format(route_id=route_id),
-        ]
-        await self.network.download_queue_put(
-            {
-                "urls": urls,
-                "save_paths": save_paths,
-                "params": self.config.G_RIDEWITHGPS_API["PARAMS"],
-            }
-        )
-        return True
-
-    async def get_ridewithgps_files_with_privacy_code(self, route_id, privacy_code):
-        profile_url = (
-            self.config.G_RIDEWITHGPS_API["URL_ROUTE_BASE_URL"]
-            + "/elevation_profile.jpg"
-        ).format(route_id=route_id)
-
-        if privacy_code:
-            profile_url = f"{profile_url}?privacy_code={privacy_code}"
-
-        urls = [profile_url]
-        save_paths = [
-            (
-                self.config.G_RIDEWITHGPS_API["URL_ROUTE_DOWNLOAD_DIR"]
-                + "elevation_profile-{route_id}.jpg"
             ).format(route_id=route_id),
         ]
         await self.network.download_queue_put(
@@ -529,36 +491,6 @@ class api:
                 "params": self.config.G_RIDEWITHGPS_API["PARAMS"],
             }
         )
-        return True
-
-    def check_ridewithgps_files(self, route_id, mode):
-        save_paths = [
-            (
-                self.config.G_RIDEWITHGPS_API["URL_ROUTE_DOWNLOAD_DIR"]
-                + "course-{route_id}.json"
-            ).format(route_id=route_id),
-            (
-                self.config.G_RIDEWITHGPS_API["URL_ROUTE_DOWNLOAD_DIR"]
-                + "preview-{route_id}.png"
-            ).format(route_id=route_id),
-            # with privacy_code
-            (
-                self.config.G_RIDEWITHGPS_API["URL_ROUTE_DOWNLOAD_DIR"]
-                + "elevation_profile-{route_id}.jpg"
-            ).format(route_id=route_id),
-        ]
-
-        start = 0
-        end = len(save_paths)
-        if mode == "1st":
-            end = 2
-        elif mode == "2nd":
-            start = 2
-
-        for filename in save_paths[start:end]:
-            if not os.path.exists(filename) or os.path.getsize(filename) == 0:
-                return False
-
         return True
 
     def upload_check(self, blank_check, blank_msg, file_check=True):

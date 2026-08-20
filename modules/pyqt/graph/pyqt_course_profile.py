@@ -1,7 +1,10 @@
 import numpy as np
 
-from modules._qt_qtwidgets import QtCore, QtGui, QtWidgets, pg, qasync
-from modules.pyqt.graph.pyqtgraph.CourseProfileGraphItem import CourseProfileGraphItem
+from modules._qt_qtwidgets import QtCore, QtWidgets, pg, qasync
+from modules.pyqt.graph.pyqtgraph.CourseProfileGraphItem import (
+    CourseProfileGraphItem,
+    configure_course_profile_axes,
+)
 from modules.utils.timer import Timer
 from .pyqt_base_map import BaseMapWidget
 
@@ -41,8 +44,7 @@ class CourseProfileGraphWidget(BaseMapWidget):
                 QtCore.Qt.WidgetAttribute.WA_StyledBackground, True
             )
             self.button_group_left.setStyleSheet(
-                "background-color: rgba(255, 255, 255, 128);"
-                "border-radius: 8px;"
+                "background-color: rgba(255, 255, 255, 128);" "border-radius: 8px;"
             )
             left_layout = QtWidgets.QVBoxLayout(self.button_group_left)
             left_layout.setContentsMargins(8, 8, 8, 8)
@@ -61,9 +63,7 @@ class CourseProfileGraphWidget(BaseMapWidget):
         # for expanding column
         self.layout.setColumnMinimumWidth(
             0,
-            40
-            if button_group_offset is None
-            else max(40, button_group_offset),
+            40 if button_group_offset is None else max(40, button_group_offset),
         )
         self.layout.setColumnStretch(1, 1)
         self.layout.setColumnMinimumWidth(2, 40)
@@ -86,13 +86,7 @@ class CourseProfileGraphWidget(BaseMapWidget):
             self.plot.showGrid(x=True, y=True, alpha=1)
             self.plot.showAxis("left")
             self.plot.showAxis("bottom")
-            font = QtGui.QFont()
-            font.setPixelSize(16)
-            font.setBold(True)
-            self.plot.getAxis("bottom").tickFont = font
-            # self.plot.getAxis("bottom").setStyle(tickTextOffset = 5)
-            self.plot.getAxis("left").tickFont = font
-            # self.plot.getAxis("left").setStyle(tickTextOffset = 5)
+            configure_course_profile_axes(self.plot, 16)
             # self.plot.setAutoPan()
 
             self.course_profile_plot = CourseProfileGraphItem(
@@ -100,6 +94,7 @@ class CourseProfileGraphWidget(BaseMapWidget):
                 y=self.course.altitude,
                 brushes=self.course.colored_altitude,
                 pen=pg.mkPen(color=(255, 255, 255, 0), width=0.01),
+                baseline=-np.inf,
             )  # transparent(alpha=0) and thin line
             self.plot.addItem(self.course_profile_plot)
 

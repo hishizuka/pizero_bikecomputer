@@ -2,23 +2,32 @@ import asyncio
 import os
 import shutil
 
-from PIL import Image, ImageEnhance, ImageQt
+import numpy as np
 
 from modules._qt_qtwidgets import (
     QT_ALIGN_CENTER,
     QtCore,
-    QtWidgets,
     QtGui,
+    QtWidgets,
     qasync,
 )
+from modules.course import Course
 from modules.pyqt.components import icons, topbar
-from modules.utils.network import detect_network_async
-from .pyqt_menu_widget import (
-    MenuWidget,
-    ListWidget,
-    ListItemWidget,
+from modules.pyqt.components.course_point_marker import DEFAULT_COURSE_POINT_ICON_PATH
+from modules.pyqt.components.static_course_profile import StaticCourseProfileRenderer
+from modules.pyqt.components.static_map import (
+    GeoPoint,
+    StaticMapMarker,
+    StaticMapRenderer,
+    StaticMapScene,
 )
 from modules.pyqt.pyqt_item import Item
+from modules.utils.network import detect_network_async
+from .pyqt_menu_widget import (
+    ListItemWidget,
+    ListWidget,
+    MenuWidget,
+)
 
 
 class CoursesMenuWidget(MenuWidget):
@@ -93,8 +102,8 @@ class CoursesMenuWidget(MenuWidget):
         self.config.logger.reset_course(delete_course_file=True, replace=replace)
         self.onoff_course_cancel_button()
 
-    def set_new_course(self, course_file):
-        self.config.logger.set_new_course(course_file)
+    def set_new_course(self, course_file, prepared_course=None):
+        self.config.logger.set_new_course(course_file, prepared_course)
         self.config.gui.init_course()
         self.onoff_course_cancel_button()
 
@@ -238,10 +247,7 @@ class CourseListWidget(ListWidget):
 
     @qasync.asyncSlot()
     async def button_func(self):
-        if self.list_type == "Local Storage":
-            self.set_course()
-        elif self.list_type == "Ride with GPS":
-            await self.change_course_detail_page()
+        await self.change_course_detail_page()
 
     @qasync.asyncSlot()
     async def change_course_detail_page(self):
@@ -251,8 +257,9 @@ class CourseListWidget(ListWidget):
             "Course Detail",
             preprocess=True,
             course_info=self.selected_item.list_info,
+            list_type=self.list_type,
         )
-        await widget.load_images()
+        await widget.load_course()
 
     def preprocess_extra(self):
         self.page_name_label.setText(self.list_type)
@@ -270,16 +277,12 @@ class CourseListWidget(ListWidget):
             course_item = CourseListItemWidget(self, self.list_type, c)
             self.add_list_item(course_item)
 
-    def set_course(self, course_file=None):
+    def set_course(self, course_file, prepared_course):
         if self.selected_item is None:
             return
 
-        # from Local Storage (self.list)
-        if course_file is None:
-            self.course_file = self.selected_item.list_info["path"]
-        # from Ride with GPS (CourseDetailWidget)
-        else:
-            self.course_file = course_file
+        self.course_file = course_file
+        self.prepared_course = prepared_course
 
         # exist course: cancel and set new course
         if self.config.logger.course.is_set:
@@ -298,7 +301,7 @@ class CourseListWidget(ListWidget):
     def set_new_course(self):
         self.parentWidget().widget(
             self.config.gui.gui_config.G_GUI_INDEX[self.back_index_key]
-        ).set_new_course(self.course_file)
+        ).set_new_course(self.course_file, self.prepared_course)
         self.back()
 
 
@@ -321,10 +324,7 @@ class CourseListItemWidget(ListItemWidget):
 
         super().__init__(parent=parent, title=list_info["name"], detail=detail)
 
-        if self.list_type == "Local Storage":
-            self.enter_signal.connect(parent.set_course)
-        elif self.list_type == "Ride with GPS":
-            self.enter_signal.connect(parent.change_course_detail_page)
+        self.enter_signal.connect(parent.change_course_detail_page)
 
     def setup_ui(self):
         super().setup_ui()
@@ -335,25 +335,28 @@ class CourseListItemWidget(ListItemWidget):
 
 
 class CourseDetailWidget(MenuWidget):
-    list_id = None
-
-    privacy_code = None
-    all_downloaded = False
-    second_download_requested = False
-    map_image_size = None
-    profile_image_size = None
-    next_button = None
+    MAP_ZOOM = 10
+    MAP_MAX_POINTS = 2000
     font_size = 20
 
     def setup_menu(self):
-
-        self.make_menu_layout(QtWidgets.QVBoxLayout)
+        self.make_menu_layout(QtWidgets.QGridLayout)
 
         self.map_image = QtWidgets.QLabel()
-        self.map_image.setAlignment(QT_ALIGN_CENTER)
-
         self.profile_image = QtWidgets.QLabel()
-        self.profile_image.setAlignment(QT_ALIGN_CENTER)
+        for image in (self.map_image, self.profile_image):
+            image.setAlignment(QT_ALIGN_CENTER)
+            image.setSizePolicy(
+                QtWidgets.QSizePolicy.Policy.Ignored,
+                QtWidgets.QSizePolicy.Policy.Ignored,
+            )
+
+        self.map_renderer = StaticMapRenderer(
+            self.config,
+            zoom=self.MAP_ZOOM,
+            fit_bounds=True,
+        )
+        self.profile_renderer = StaticCourseProfileRenderer()
 
         self.set_font_size()
 
@@ -361,7 +364,7 @@ class CourseDetailWidget(MenuWidget):
             config=self.config,
             name="Distance",
             font_size=self.font_size,
-            right_flag=True,
+            right_flag=self.config.gui.horizontal,
             bottom_flag=False,
         )
         self.ascent_item = Item(
@@ -372,28 +375,32 @@ class CourseDetailWidget(MenuWidget):
             bottom_flag=False,
         )
 
-        outer_layout = QtWidgets.QHBoxLayout()
-        outer_layout.setContentsMargins(0, 0, 0, 0)
-        outer_layout.setSpacing(0)
-
+        separator = QtWidgets.QWidget()
+        separator.setStyleSheet("background-color: #AAAAAA")
         if self.config.gui.horizontal:
-            info_layout = QtWidgets.QVBoxLayout()
-            info_layout.setContentsMargins(0, 0, 0, 0)
-            info_layout.setSpacing(0)
-            info_layout.addLayout(self.distance_item)
-            info_layout.addLayout(self.ascent_item)
-
-            outer_layout.addWidget(self.map_image)
-            outer_layout.addLayout(info_layout)
+            separator.setFixedWidth(1)
+            self.menu_layout.addWidget(self.map_image, 0, 0, 2, 1)
+            self.menu_layout.addWidget(separator, 0, 1, 2, 1)
+            self.menu_layout.addLayout(self.distance_item, 0, 2)
+            self.menu_layout.addLayout(self.ascent_item, 1, 2)
+            self.menu_layout.addWidget(self.profile_image, 2, 0, 1, 3)
+            self.menu_layout.setColumnStretch(0, 2)
+            self.menu_layout.setColumnStretch(2, 1)
+            self.menu_layout.setRowStretch(0, 7)
+            self.menu_layout.setRowStretch(1, 7)
+            self.menu_layout.setRowStretch(2, 10)
         else:
-            self.menu_layout.addWidget(self.map_image)
-            outer_layout.addLayout(self.distance_item)
-            outer_layout.addLayout(self.ascent_item)
-
-        self.menu_layout.addLayout(outer_layout)
-        self.menu_layout.addWidget(self.profile_image)
-        spacer = QtWidgets.QWidget()
-        self.menu_layout.addWidget(spacer)
+            separator.setFixedHeight(1)
+            self.menu_layout.addWidget(self.map_image, 0, 0, 1, 2)
+            self.menu_layout.addWidget(separator, 1, 0, 1, 2)
+            self.menu_layout.addLayout(self.distance_item, 2, 0)
+            self.menu_layout.addLayout(self.ascent_item, 2, 1)
+            self.menu_layout.addWidget(self.profile_image, 3, 0, 1, 2)
+            self.menu_layout.setColumnStretch(0, 1)
+            self.menu_layout.setColumnStretch(1, 1)
+            self.menu_layout.setRowStretch(0, 8)
+            self.menu_layout.setRowStretch(2, 3)
+            self.menu_layout.setRowStretch(3, 4)
 
         # update panel for every 1 seconds
         self.timer = QtCore.QTimer(parent=self)
@@ -405,178 +412,101 @@ class CourseDetailWidget(MenuWidget):
 
         self.right_button_layout.addWidget(self.next_button)
 
-        self._detail_active = False
         self._detail_generation = 0
-        self._update_display_running = False
-        self._update_display_retrigger = False
-        self._reset_image_cache()
-
-    def enable_next_button(self):
-        self.next_button.setVisible(True)
-        self.next_button.setEnabled(True)
+        self._update_running = False
+        self._reset_detail()
 
     def connect_buttons(self):
         self.next_button.clicked.connect(self.set_course)
 
-    def _reset_image_cache(self):
-        self.map_image_size = None
-        self.profile_image_size = None
+    def _reset_detail(self):
+        self.course_file = None
+        self.route_id = None
+        self.preview_course = None
+        self.map_scene = None
         self.map_source_image = None
         self.profile_source_image = None
-        self.map_pixmap = None
-        self.profile_pixmap = None
-        self._map_render_width = None
-        self._profile_render_width = None
-
-    def _start_detail_session(self):
-        self._detail_generation += 1
-        self._detail_active = True
-        self._update_display_retrigger = False
+        self.map_render_key = None
 
     def _stop_detail_session(self):
-        self._detail_active = False
         self._detail_generation += 1
-        self._update_display_retrigger = False
         self.timer.stop()
 
-    def _is_active_detail_session(self, generation):
-        return (
-            self._detail_active
-            and generation == self._detail_generation
-            and self.list_id is not None
-        )
-
-    def _get_map_image_filename(self, route_id):
-        return (
-            self.config.G_RIDEWITHGPS_API["URL_ROUTE_DOWNLOAD_DIR"]
-            + "preview-{route_id}.png"
-        ).format(route_id=route_id)
-
-    def _get_profile_image_filename(self, route_id):
-        return (
-            self.config.G_RIDEWITHGPS_API["URL_ROUTE_DOWNLOAD_DIR"]
-            + "elevation_profile-{route_id}.jpg"
-        ).format(route_id=route_id)
+    def _is_active_detail_session(self, generation, course_file):
+        return generation == self._detail_generation and course_file == self.course_file
 
     def _get_route_json_filename(self, route_id):
-        return (
-            self.config.G_RIDEWITHGPS_API["URL_ROUTE_DOWNLOAD_DIR"]
-            + "course-{route_id}.json"
-        ).format(route_id=route_id)
+        directory = self.config.G_RIDEWITHGPS_API["URL_ROUTE_DOWNLOAD_DIR"]
+        return f"{directory}course-{route_id}.json"
 
     @staticmethod
     def _has_downloaded_file(filename):
         return os.path.exists(filename) and os.path.getsize(filename) > 0
 
     @staticmethod
-    def _load_map_source_image(filename):
-        with Image.open(filename) as image:
-            prepared = image.convert("RGBA")
-            prepared = ImageEnhance.Contrast(prepared).enhance(2.0)
-            return prepared.copy()
+    def _target_size(label):
+        size = label.contentsRect().size()
+        return size.width(), size.height()
+
+    def _make_map_scene(self):
+        course = self.preview_course
+        point_count = len(course.latitude)
+        step = max(1, (point_count + self.MAP_MAX_POINTS - 1) // self.MAP_MAX_POINTS)
+        indices = list(range(0, point_count, step))
+        if indices[-1] != point_count - 1:
+            indices.append(point_count - 1)
+        path = tuple(
+            GeoPoint(
+                latitude=float(course.latitude[index]),
+                longitude=float(course.longitude[index]),
+            )
+            for index in indices
+        )
+        return StaticMapScene(
+            path=path,
+            markers=(
+                StaticMapMarker(path[0], color="#18864B"),
+                StaticMapMarker(
+                    path[-1],
+                    icon_path=DEFAULT_COURSE_POINT_ICON_PATH,
+                ),
+            ),
+            line_color="#1565C0",
+            line_width=4,
+        )
 
     @staticmethod
-    def _load_profile_source_image(filename):
-        with Image.open(filename) as image:
-            return image.convert("RGBA").copy()
-
-    @staticmethod
-    def _pil_image_to_qimage(image):
-        return QtGui.QImage(ImageQt.ImageQt(image)).copy()
-
-    async def _ensure_image_cache(
-        self,
-        draw_map_image=True,
-        draw_profile_image=True,
-        generation=None,
-    ):
-        if generation is None:
-            generation = self._detail_generation
-        if not self._is_active_detail_session(generation):
-            return False
-
-        route_id = self.list_id
-
-        if draw_map_image and self.map_source_image is None:
-            filename = self._get_map_image_filename(route_id)
-            if not os.path.exists(filename):
-                return False
-            map_image = await asyncio.to_thread(self._load_map_source_image, filename)
-            if (
-                not self._is_active_detail_session(generation)
-                or route_id != self.list_id
-            ):
-                return False
-            self.map_source_image = self._pil_image_to_qimage(map_image)
-            self.map_image_size = (
-                self.map_source_image.width(),
-                self.map_source_image.height(),
-            )
-            self.map_pixmap = None
-            self._map_render_width = None
-
-        if draw_profile_image and self.profile_source_image is None:
-            filename = self._get_profile_image_filename(route_id)
-            if not os.path.exists(filename):
-                return False
-            profile_image = await asyncio.to_thread(
-                self._load_profile_source_image,
-                filename,
-            )
-            if (
-                not self._is_active_detail_session(generation)
-                or route_id != self.list_id
-            ):
-                return False
-            self.profile_source_image = self._pil_image_to_qimage(profile_image)
-            self.profile_image_size = (
-                self.profile_source_image.width(),
-                self.profile_source_image.height(),
-            )
-            self.profile_pixmap = None
-            self._profile_render_width = None
-
-        return True
-
-    def _draw_cached_image(
-        self,
-        label,
-        source_image,
-        target_width,
-        width_attr,
-        pixmap_attr,
-    ):
-        if (
-            source_image is None
-            or source_image.width() == 0
-            or source_image.height() == 0
-        ):
-            return False
-
-        target_width = max(1, int(target_width))
-        cached_width = getattr(self, width_attr)
-        pixmap = getattr(self, pixmap_attr)
-        if cached_width != target_width or pixmap is None:
-            scaled_image = source_image.scaledToWidth(
-                target_width,
+    def _draw_image(label, image):
+        target_size = CourseDetailWidget._target_size(label)
+        size = QtCore.QSize(*target_size)
+        if image.size() != size:
+            image = image.scaled(
+                size,
+                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
                 QtCore.Qt.TransformationMode.SmoothTransformation,
             )
-            pixmap = QtGui.QPixmap.fromImage(scaled_image)
-            setattr(self, width_attr, target_width)
-            setattr(self, pixmap_attr, pixmap)
+        label.setPixmap(QtGui.QPixmap.fromImage(image))
 
-        label.setPixmap(pixmap)
-        return True
+    def _draw_images(self):
+        if self.map_source_image is not None:
+            self._draw_image(self.map_image, self.map_source_image)
+        if self.profile_source_image is not None:
+            self._draw_image(self.profile_image, self.profile_source_image)
 
-    def preprocess(self, course_info):
+    def _update_course_summary(self):
+        self.distance_item.update_value(
+            self.course_info.get(
+                "distance",
+                float(self.preview_course.distance[-1]) * 1000,
+            )
+        )
+        self.ascent_item.update_value(
+            self.course_info.get("elevation_gain", self.preview_course.total_ascent)
+        )
+
+    def preprocess(self, course_info, list_type):
         self._stop_detail_session()
-
-        # reset
-        self.list_id = None
-        self.privacy_code = None
-        self.all_downloaded = False
-        self.second_download_requested = False
-        self._reset_image_cache()
+        self._reset_detail()
 
         self.map_image.clear()
         self.profile_image.clear()
@@ -584,164 +514,94 @@ class CourseDetailWidget(MenuWidget):
         self.next_button.setEnabled(False)
 
         self.page_name_label.setText(course_info["name"])
-        self.distance_item.update_value(course_info["distance"])
-        self.ascent_item.update_value(course_info["elevation_gain"])
+        self.distance_item.update_value(np.nan)
+        self.ascent_item.update_value(np.nan)
 
-        self.list_id = course_info["id"]
+        self.course_info = course_info
+        if list_type == "Local Storage":
+            self.course_file = course_info["path"]
+        else:
+            self.route_id = course_info["id"]
+            self.course_file = self._get_route_json_filename(self.route_id)
 
-        self._start_detail_session()
         self.timer.start(self.config.G_DRAW_INTERVAL)
 
-    async def load_images(self):
-        generation = self._detail_generation
-        if not self._is_active_detail_session(generation):
-            return
-        if await self.check_all_image_and_draw(generation):
-            if self._is_active_detail_session(generation):
-                self.timer.stop()
-            return
-        if self.config.api is None:
-            return
-
-        # 1st download
-        if not (
-            self._has_downloaded_file(self._get_route_json_filename(self.list_id))
-            and self._has_downloaded_file(self._get_map_image_filename(self.list_id))
+    async def load_course(self):
+        if (
+            self.route_id is not None
+            and not self._has_downloaded_file(self.course_file)
+            and self.config.api is not None
         ):
-            await self.config.api.get_ridewithgps_files(self.list_id)
+            await self.config.api.get_ridewithgps_files(self.route_id)
+        await self._update_course_detail()
 
     def on_back_menu(self):
         self._stop_detail_session()
 
     @qasync.asyncSlot()
     async def update_display(self):
-        if self._update_display_running:
-            self._update_display_retrigger = True
+        await self._update_course_detail()
+
+    async def _update_course_detail(self):
+        if self._update_running:
             return
-
-        self._update_display_running = True
+        self._update_running = True
         try:
-            generation = self._detail_generation
-            if not self._is_active_detail_session(generation):
-                return
-
-            if await self.check_all_image_and_draw(generation):
-                if self._is_active_detail_session(generation):
-                    self.timer.stop()
-                return
-
-            if self.config.api is None:
-                return
-
-            route_id = self.list_id
-            has_route_json = self._has_downloaded_file(
-                self._get_route_json_filename(route_id)
-            )
-            has_map_preview = self._has_downloaded_file(
-                self._get_map_image_filename(route_id)
-            )
-
-            # Start the 2nd download as soon as the route JSON is available.
-            if has_route_json and not self.second_download_requested:
-                if has_map_preview:
-                    if not await self._ensure_image_cache(
-                        draw_map_image=True,
-                        draw_profile_image=False,
-                        generation=generation,
-                    ):
-                        return
-                    if not self._is_active_detail_session(generation):
-                        return
-                    self.draw_images(draw_map_image=True, draw_profile_image=False)
-
-                self.privacy_code = (
-                    self.config.logger.course.get_ridewithgps_privacycode(route_id)
-                )
-                self.second_download_requested = True
-                await self.config.api.get_ridewithgps_files_with_privacy_code(
-                    route_id, self.privacy_code
-                )
+            await self._render_course_detail()
         finally:
-            self._update_display_running = False
-            if self._detail_active and self._update_display_retrigger:
-                self._update_display_retrigger = False
-                QtCore.QTimer.singleShot(0, self.update_display)
+            self._update_running = False
 
-    async def check_all_image_and_draw(self, generation):
-        if self.list_id is None:
+    async def _render_course_detail(self):
+        generation = self._detail_generation
+        course_file = self.course_file
+        if not self._is_active_detail_session(generation, course_file):
             return False
 
-        has_map_preview = self._has_downloaded_file(
-            self._get_map_image_filename(self.list_id)
-        )
-        has_profile = self._has_downloaded_file(
-            self._get_profile_image_filename(self.list_id)
-        )
-        has_route_json = self._has_downloaded_file(
-            self._get_route_json_filename(self.list_id)
-        )
+        if not self._has_downloaded_file(course_file):
+            if self.route_id is None or self.config.api is None:
+                self.timer.stop()
+            return False
 
-        if has_map_preview or has_profile:
-            if not await self._ensure_image_cache(
-                draw_map_image=has_map_preview,
-                draw_profile_image=has_profile,
-                generation=generation,
-            ):
+        if self.preview_course is None:
+            course = Course(self.config)
+            await asyncio.to_thread(course.load_preview, course_file)
+            if not self._is_active_detail_session(generation, course_file):
                 return False
-            if not self._is_active_detail_session(generation):
+            if not course.is_set:
+                self.timer.stop()
                 return False
-            self.draw_images(
-                draw_map_image=has_map_preview,
-                draw_profile_image=has_profile,
+            self.preview_course = course
+            self.map_scene = self._make_map_scene()
+            self.profile_source_image = self.profile_renderer.render(
+                course,
+                self._target_size(self.profile_image),
             )
+            self._update_course_summary()
+            self._draw_images()
 
-        if has_route_json:
-            self.all_downloaded = True
-            self.enable_next_button()
+        target_size = self._target_size(self.map_image)
+        render_key = (self.config.G_MAP, target_size)
+        if self.map_render_key != render_key:
+            rendered = await self.map_renderer.render(self.map_scene, target_size)
+            if not self._is_active_detail_session(generation, course_file):
+                return False
+            self.map_source_image = rendered.image
+            self.map_render_key = render_key if rendered.complete else None
 
-        return has_route_json and has_map_preview and has_profile
+        self._draw_images()
+        self.next_button.setVisible(True)
+        self.next_button.setEnabled(True)
+        complete = self.map_render_key == render_key
+        if complete:
+            self.timer.stop()
+        return complete
 
     def set_course(self):
         index = self.config.gui.gui_config.G_GUI_INDEX["Courses List"]
         self.parentWidget().widget(index).set_course(
-            self._get_route_json_filename(self.list_id)
+            self.course_file,
+            self.preview_course,
         )
-
-    def draw_images(self, draw_map_image=True, draw_profile_image=True):
-
-        if self.list_id is None:
-            return False
-
-        if draw_map_image:
-            if self.map_image_size is None:
-                return False
-
-            ratio = 1
-            if self.config.gui.horizontal:
-                ratio = 0.5
-            if not self._draw_cached_image(
-                self.map_image,
-                self.map_source_image,
-                self.size().width() * ratio,
-                "_map_render_width",
-                "map_pixmap",
-            ):
-                return False
-
-        if draw_profile_image:
-            if self.profile_image_size is None:
-                return False
-
-            if not self._draw_cached_image(
-                self.profile_image,
-                self.profile_source_image,
-                self.size().width(),
-                "_profile_render_width",
-                "profile_pixmap",
-            ):
-                return False
-
-        return True
 
     def set_font_size(self, init=False):
         if init:
@@ -751,10 +611,7 @@ class CourseDetailWidget(MenuWidget):
 
     def resizeEvent(self, event):
         if self.map_source_image is not None or self.profile_source_image is not None:
-            self.draw_images(
-                draw_map_image=self.map_source_image is not None,
-                draw_profile_image=self.profile_source_image is not None,
-            )
+            self._draw_images()
 
         self.set_font_size(event.oldSize() == QtCore.QSize(-1, -1))
         for i in [self.distance_item, self.ascent_item]:

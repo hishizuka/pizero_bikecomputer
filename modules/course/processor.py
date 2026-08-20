@@ -22,7 +22,7 @@ def _categorize_slope(slope_smoothing, slope_cutoff):
 
 
 class CourseProcessor:
-    def downsample(self):
+    def downsample(self, update_search_range=True):
         len_lat = len(self.latitude)
         len_lon = len(self.longitude)
         len_alt = len(self.altitude)
@@ -70,8 +70,6 @@ class CourseProcessor:
             )
             self.distance = np.insert(self.distance, 0, 0)
             self.distance = np.cumsum(self.distance)
-        dist_diff = 1000 * np.diff(self.distance)  # [m]
-
         if len_alt:
             modified_altitude = savitzky_golay(self.altitude, 53, 3)
             # do not apply if length is different (occurs when too short course)
@@ -88,14 +86,18 @@ class CourseProcessor:
             #  alt_dem[i] = self.config.api.get_altitude([self.longitude[i], self.latitude[i]])
             # np.savetxt('log/course_altitude_dem.csv', alt_dem, fmt='%.3f')
 
-        diff_dist_max = int(np.max(dist_diff)) * 2 / 1000  # [m->km]
-        if diff_dist_max > self.config.G_GPS_SEARCH_RANGE:  # [km]
-            # app_logger.debug(
-            #    f"G_GPS_SEARCH_RANGE[km]: {self.config.G_GPS_SEARCH_RANGE} -> {diff_dist_max}"
-            # )
-            self.config.G_GPS_SEARCH_RANGE = diff_dist_max
+        if update_search_range:
+            self.update_search_range()
 
         app_logger.info(f"downsampling:{len_lat} -> {len(self.latitude)}")
+
+    def update_search_range(self):
+        if len(self.distance) < 2:
+            return
+
+        diff_dist_max = int(np.max(1000 * np.diff(self.distance))) * 2 / 1000
+        if diff_dist_max > self.config.G_GPS_SEARCH_RANGE:
+            self.config.G_GPS_SEARCH_RANGE = diff_dist_max
 
     # make route colors by slope for MapWidget, CourseProfileWidget
     def calc_slope_smoothing(self):
