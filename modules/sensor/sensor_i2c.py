@@ -10,6 +10,7 @@ import numpy as np
 from modules.app_logger import app_logger
 from modules.board_config import I2CDevice
 from modules.helper.network.http_client import get_json
+from modules.utils.altitude import TOTAL_ASCENT_THRESHOLD, update_altitude_reference
 from modules.utils.geo import get_dist_on_earth, get_track_str
 from .sensor import Sensor
 from .i2c_utils import i2c_addr_present as _i2c_addr_present
@@ -232,7 +233,7 @@ class SensorI2C(Sensor):
     sealevel_pa = 1013.25
     sealevel_temp = 273.15 + 20  # The temperature is fixed at 20 degrees Celsius.
     sealevel_altitude_calibrated = False
-    total_ascent_threshold = 2  # [m]
+    total_ascent_threshold = TOTAL_ASCENT_THRESHOLD
 
     # for vertical speed
     vspeed_array = []
@@ -1658,17 +1659,16 @@ class SensorI2C(Sensor):
         if self.config.G_STOPWATCH_STATUS == "START":
             # total ascent/descent
             v = self.values["altitude"]
-            if np.isnan(self.values["pre_altitude"]) and not np.isnan(v):
-                self.values["pre_altitude"] = v
-            else:
-                alt_diff = v - self.values["pre_altitude"]
-                if abs(alt_diff) > self.total_ascent_threshold:
-                    if alt_diff > 0:
-                        self.values["total_ascent"] += alt_diff
-                    elif alt_diff < 0:
-                        self.values["total_descent"] += -alt_diff
-                    self.values["accumulated_altitude"] += alt_diff
-                    self.values["pre_altitude"] = v
+            self.values["pre_altitude"], alt_diff = update_altitude_reference(
+                v,
+                self.values["pre_altitude"],
+                self.total_ascent_threshold,
+            )
+            if alt_diff > 0:
+                self.values["total_ascent"] += alt_diff
+            elif alt_diff < 0:
+                self.values["total_descent"] += -alt_diff
+            self.values["accumulated_altitude"] += alt_diff
 
             # vertical speed (m/s)
             self.vspeed_array[0:-1] = self.vspeed_array[1:]
