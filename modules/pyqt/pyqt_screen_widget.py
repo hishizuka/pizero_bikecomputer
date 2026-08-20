@@ -3,7 +3,7 @@ from functools import partial
 from modules.app_logger import app_logger
 from modules._qt_qtwidgets import QT_EXPANDING, QtCore, QtWidgets
 
-from .pyqt_item import Item, WindItem
+from .pyqt_item import AscDescItem, Item, WindItem
 
 
 class ScreenWidget(QtWidgets.QWidget):
@@ -137,7 +137,10 @@ class ScreenWidget(QtWidgets.QWidget):
                     continue
 
                 expr = self.config.gui.gui_config.G_ITEM_DEF[key][1]
-                item_class = WindItem if key == "Wind" else Item
+                item_class = {
+                    "Asc. / Dsc.": AscDescItem,
+                    "Wind": WindItem,
+                }.get(key, Item)
                 item = item_class(
                     config=self.config,
                     name=key,

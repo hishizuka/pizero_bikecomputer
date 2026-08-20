@@ -30,12 +30,8 @@ class GUI_Config:
 
     # Per-item font scale for value text in PyQt item widgets.
     G_ITEM_VALUE_FONT_SCALE = {
-        "Asc. / Dsc.": 0.6,
+        "Asc. / Dsc.": 0.8,
         "CPU_MEM": 0.8,
-    }
-
-    G_ITEM_VALUE_SEPARATOR = {
-        "Asc. / Dsc.": "\n",
     }
 
     G_ITEM_DEF = {
@@ -238,7 +234,7 @@ class GUI_Config:
         "Ascent": (G_UNIT["Altitude"], "self.sensor.values['I2C']['total_ascent']"),
         "Descent": (G_UNIT["Altitude"], "self.sensor.values['I2C']['total_descent']"),
         "Asc. / Dsc.": (
-            ((G_UNIT["Altitude"], G_UNIT["Altitude"]), ""),
+            (((G_UNIT["Altitude"][0], ""), G_UNIT["Altitude"]), ""),
             "(self.sensor.values['I2C']['total_ascent'], "
             "self.sensor.values['I2C']['total_descent'])",
         ),
@@ -421,13 +417,9 @@ class GUI_Config:
         G_STOPWATCH_STATUS,
         itemformat,
         unit_template=" {}",
-        line_separator="\n",
     ):
         if isinstance(itemformat, tuple):
-            separator = self.G_ITEM_VALUE_SEPARATOR.get(name, " / ").replace(
-                "\n", line_separator
-            )
-            return separator.join(
+            return " / ".join(
                 self.format_text(name, item, G_STOPWATCH_STATUS, item_format)
                 + (unit_template.format(unit) if unit else "")
                 for item, (item_format, unit) in zip(value, itemformat)

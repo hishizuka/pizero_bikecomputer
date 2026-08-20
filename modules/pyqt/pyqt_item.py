@@ -56,9 +56,11 @@ class WindItemValue(ItemValue):
             if np.isfinite(direction) and np.isfinite(speed)
             else None
         )
-        if wind == self._wind:
+        text = "-" if wind is None else ""
+        if wind == self._wind and text == self.text():
             return
         self._wind = wind
+        self.setText(text)
         self.update()
 
     def paintEvent(self, event):
@@ -113,6 +115,56 @@ class WindItemValue(ItemValue):
         painter.end()
 
 
+class AscDescItemValue(ItemValue):
+    def __init__(self, *args):
+        super().__init__(*args)
+        self._values = None
+        self.horizontal_scale = 1.0
+
+    def set_values(self, ascent, descent):
+        values = (
+            (ascent, descent) if np.isfinite(ascent) and np.isfinite(descent) else None
+        )
+        text = "-" if values is None else ""
+        if values == self._values and text == self.text():
+            return
+        self._values = values
+        self.setText(text)
+        self.update()
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        if self._values is None:
+            return
+
+        ascent, descent = self._values
+        value_text = f"{ascent:.0f} / {descent:.0f}"
+        unit_text = f" {self.unit}"
+        value_font = self.font()
+        unit_font = QtGui.QFont(value_font)
+        unit_font.setPixelSize(int(value_font.pixelSize() * UNIT_FONT_SCALE))
+        value_metrics = QtGui.QFontMetricsF(value_font)
+        unit_metrics = QtGui.QFontMetricsF(unit_font)
+        value_width = value_metrics.horizontalAdvance(value_text)
+        unit_width = unit_metrics.horizontalAdvance(unit_text)
+        content_width = value_width + unit_width
+        self.horizontal_scale = min(1.0, (self.width() - 4) / content_width)
+        left = (self.width() - content_width * self.horizontal_scale) / 2
+        baseline = (
+            self.height() / 2 + (value_metrics.ascent() - value_metrics.descent()) / 2
+        )
+
+        painter = QtGui.QPainter(self)
+        painter.translate(left, 0)
+        painter.scale(self.horizontal_scale, 1)
+        painter.setPen(self.palette().color(QtGui.QPalette.ColorRole.WindowText))
+        painter.setFont(value_font)
+        painter.drawText(QtCore.QPointF(0, baseline), value_text)
+        painter.setFont(unit_font)
+        painter.drawText(QtCore.QPointF(value_width, baseline), unit_text)
+        painter.end()
+
+
 #################################
 # Item Class
 #################################
@@ -151,7 +203,6 @@ class Item(QtWidgets.QVBoxLayout):
             self.config.G_STOPWATCH_STATUS,
             self.itemformat,
             unit_template=self._unit_template,
-            line_separator="<br>",
         )
 
         new_text = base_text + self._unit_suffix
@@ -200,3 +251,14 @@ class WindItem(Item):
 
     def update_value(self, value):
         self.value.set_wind(*value)
+
+
+class AscDescItem(Item):
+    value_class = AscDescItemValue
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.value.unit = self.config.gui.gui_config.G_UNIT["Altitude"][1]
+
+    def update_value(self, value):
+        self.value.set_values(*value)
