@@ -113,6 +113,26 @@ class DetailView:
     received_at: str
 
 
+@dataclass(frozen=True)
+class TyphoonForecastView:
+    reference_time: str
+    reference_type: str
+    latitude: float
+    longitude: float
+    scale: str
+    intensity: str
+    pressure: str
+    wind: str
+    gust: str
+
+
+@dataclass(frozen=True)
+class TyphoonMapView:
+    title: str
+    timestamp: str
+    forecasts: tuple[TyphoonForecastView, ...]
+
+
 def _unique(values):
     return list(dict.fromkeys(str(value) for value in values if value))
 
@@ -633,7 +653,7 @@ def _known_typhoon_value(value):
     return value if str(value or "").strip() not in {"", "なし", "不明"} else None
 
 
-def _detail_typhoon(event):
+def _latest_typhoon_forecasts(event):
     fragments = _event_field_sets(event)
     latest = max(str(item.get("report_time") or "") for item in fragments)
     forecasts = {
@@ -641,11 +661,44 @@ def _detail_typhoon(event):
         for index, item in enumerate(fragments)
         if not latest or str(item.get("report_time")) == latest
     }
-    forecasts = sorted(
-        forecasts.values(), key=lambda item: item.get("reference_time") or ""
+    return sorted(forecasts.values(), key=lambda item: item.get("reference_time") or "")
+
+
+def build_typhoon_map_view(event):
+    fields = _display_fields(event)
+    forecasts = []
+    for forecast in _latest_typhoon_forecasts(event):
+        point = coordinate(forecast.get("coordinates_of_typhoon"))
+        if point is None:
+            continue
+        forecasts.append(
+            TyphoonForecastView(
+                reference_time=_clock(forecast.get("reference_time"), compact=True),
+                reference_type=str(forecast.get("reference_time_type") or ""),
+                latitude=point[0],
+                longitude=point[1],
+                scale=_known_typhoon_value(forecast.get("typhoon_scale_category"))
+                or "",
+                intensity=_known_typhoon_value(
+                    forecast.get("typhoon_intensity_category")
+                )
+                or "",
+                pressure=_known_typhoon_value(forecast.get("central_pressure")) or "",
+                wind=_known_typhoon_value(forecast.get("maximum_wind_speed")) or "",
+                gust=_known_typhoon_value(forecast.get("maximum_gust_wind_speed"))
+                or "",
+            )
+        )
+    return TyphoonMapView(
+        title=_title(event, fields),
+        timestamp=_official_time(event, fields),
+        forecasts=tuple(forecasts),
     )
+
+
+def _detail_typhoon(event):
     values = []
-    for forecast in forecasts:
+    for forecast in _latest_typhoon_forecasts(event):
         heading = _clock(forecast.get("reference_time"), compact=True)
         reference_type = forecast.get("reference_time_type")
         if reference_type:

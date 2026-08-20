@@ -1,3 +1,4 @@
+import math
 from pathlib import Path
 
 from modules._qt_qtwidgets import (
@@ -10,16 +11,22 @@ from modules._qt_qtwidgets import (
     qasync,
 )
 from modules.app_logger import app_logger
+from modules.pyqt.components.static_map import (
+    GeoPoint,
+    StaticMapMarker,
+    StaticMapRenderer,
+    StaticMapScene,
+)
 from modules.pyqt.menu.pyqt_menu_widget import (
     ListItemWidget,
     ListWidget,
     MenuWidget,
 )
-
-from modules.sensor.gps.ublox_support.qzss_dcr import Category
+from modules.sensor.gps.ublox_support.qzss_dcr import Category, JMA_MESSAGE_TYPE
 from modules.sensor.gps.ublox_support.qzss_dcr_view import (
     build_list_view,
     build_popup_view,
+    build_typhoon_map_view,
     format_qzss_dcr_detail,
 )
 
@@ -147,6 +154,156 @@ class QzssDcrDetailBrowser(QtWidgets.QTextBrowser):
         return True
 
 
+class QzssDcrTyphoonWidget(QtWidgets.QWidget):
+    MAP_ZOOM = 4
+
+    def __init__(self, config, parent=None):
+        super().__init__(parent)
+        self.config = config
+        self.renderer = StaticMapRenderer(config, zoom=self.MAP_ZOOM)
+        self.scene = None
+        self.map_source_image = None
+
+        self.summary = QtWidgets.QLabel()
+        self.summary.setWordWrap(True)
+        self.summary.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.summary.setStyleSheet("font-weight: 700; padding: 3px;")
+
+        self.map_label = QtWidgets.QLabel()
+        self.map_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.map_label.setMinimumSize(120, 100)
+
+        layout_type = (
+            QtWidgets.QHBoxLayout if config.gui.horizontal else QtWidgets.QVBoxLayout
+        )
+        layout = layout_type(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        if config.gui.horizontal:
+            layout.addWidget(self.map_label, 2)
+            layout.addWidget(self.summary, 1)
+        else:
+            layout.addWidget(self.summary)
+            layout.addWidget(self.map_label, 1)
+
+    @staticmethod
+    def _marker_label(forecast):
+        try:
+            date, time = forecast.reference_time.split()
+            day = date.split("/")[1]
+            hour, minute = time.split(":")
+            clock = f"{hour}時" if minute == "00" else time
+            label = f"{day}日{clock}"
+            if forecast.reference_type in {"実況", "推定"}:
+                label += f" {forecast.reference_type}"
+            return label
+        except (IndexError, ValueError):
+            return forecast.reference_time
+
+    def _current_location_marker(self):
+        gps_values = self.config.logger.sensor.values["GPS"]
+        latitude = gps_values["lat"]
+        longitude = gps_values["lon"]
+        try:
+            valid = math.isfinite(float(latitude)) and math.isfinite(float(longitude))
+        except (TypeError, ValueError):
+            valid = False
+        if not valid:
+            return None
+        return StaticMapMarker(
+            GeoPoint(float(latitude), float(longitude)),
+            label="現在地",
+            color="#1565C0",
+            radius=5,
+        )
+
+    def set_view(self, view):
+        actual = next(
+            (
+                forecast
+                for forecast in view.forecasts
+                if forecast.reference_type in {"実況", "推定"}
+            ),
+            view.forecasts[0] if view.forecasts else None,
+        )
+        if actual is None:
+            self.summary.setText(view.timestamp)
+            self.scene = None
+            return
+
+        strength = "　".join(
+            value for value in (actual.scale, actual.intensity) if value
+        )
+        metrics = "　".join(
+            value
+            for value in (
+                actual.pressure,
+                f"最大{actual.wind}" if actual.wind else "",
+                f"瞬間{actual.gust}" if actual.gust else "",
+            )
+            if value
+        )
+        self.summary.setText(
+            "\n".join(value for value in (view.timestamp, strength, metrics) if value)
+        )
+
+        path = tuple(
+            GeoPoint(forecast.latitude, forecast.longitude)
+            for forecast in view.forecasts
+        )
+        markers = [
+            StaticMapMarker(
+                point,
+                label=self._marker_label(forecast),
+                color=(
+                    "#D7191C"
+                    if forecast.reference_type in {"実況", "推定"}
+                    else "#F4A300"
+                ),
+                radius=6 if forecast.reference_type in {"実況", "推定"} else 4,
+            )
+            for point, forecast in zip(path, view.forecasts)
+        ]
+        current_location = self._current_location_marker()
+        if current_location is not None:
+            markers.append(current_location)
+        self.scene = StaticMapScene(
+            path=path,
+            markers=tuple(markers),
+            line_color="#D7191C",
+            line_width=3,
+        )
+        self.map_source_image = None
+
+    def _target_size(self):
+        return (
+            max(160, self.map_label.width()),
+            max(100, self.map_label.height()),
+        )
+
+    def _update_pixmap(self):
+        if self.map_source_image is None:
+            return
+        pixmap = QtGui.QPixmap.fromImage(self.map_source_image).scaled(
+            self.map_label.size(),
+            QtCore.Qt.AspectRatioMode.IgnoreAspectRatio,
+            QtCore.Qt.TransformationMode.SmoothTransformation,
+        )
+        self.map_label.setPixmap(pixmap)
+
+    async def render_map(self):
+        if self.scene is None:
+            return True
+        rendered = await self.renderer.render(self.scene, self._target_size())
+        self.map_source_image = rendered.image
+        self._update_pixmap()
+        return rendered.complete
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._update_pixmap()
+
+
 class QzssDcrDetailWidget(MenuWidget):
     STYLES = """
       QTextBrowser {
@@ -165,15 +322,47 @@ class QzssDcrDetailWidget(MenuWidget):
         self.detail_screen.setHorizontalScrollBarPolicy(QT_SCROLLBAR_ALWAYSOFF)
         self.detail_screen.setFocusPolicy(QT_STRONG_FOCUS)
         self.detail_screen.setStyleSheet(self.STYLES)
-        self.menu_layout.addWidget(self.detail_screen)
+        self.typhoon_screen = QzssDcrTyphoonWidget(self.config)
+        self.detail_stack = QtWidgets.QStackedLayout()
+        self.detail_stack.addWidget(self.detail_screen)
+        self.detail_stack.addWidget(self.typhoon_screen)
+        self.menu_layout.addLayout(self.detail_stack)
+        self.typhoon_timer = QtCore.QTimer(parent=self)
+        self.typhoon_timer.timeout.connect(self.update_typhoon_map)
         self.focus_widget = self.detail_screen
 
     def preprocess(self, event):
+        self.typhoon_timer.stop()
+        if (
+            event.get("message_type") == JMA_MESSAGE_TYPE
+            and event.get("category_no") == Category.TYPHOON
+        ):
+            view = build_typhoon_map_view(event)
+            if view.forecasts:
+                self.page_name_label.setText(view.title)
+                self.typhoon_screen.set_view(view)
+                self.detail_stack.setCurrentWidget(self.typhoon_screen)
+                self.focus_widget = self.back_button
+                self.typhoon_timer.start(self.config.G_DRAW_INTERVAL)
+                QtCore.QTimer.singleShot(0, self.update_typhoon_map)
+                self._resize_title()
+                return
+
         title, detail = format_qzss_dcr_detail(event)
         self.page_name_label.setText(title)
         self.detail_screen.setHtml(detail)
         self.detail_screen.verticalScrollBar().setValue(0)
+        self.detail_stack.setCurrentWidget(self.detail_screen)
+        self.focus_widget = self.detail_screen
         self._resize_title()
+
+    @qasync.asyncSlot()
+    async def update_typhoon_map(self):
+        if await self.typhoon_screen.render_map():
+            self.typhoon_timer.stop()
+
+    def on_back_menu(self):
+        self.typhoon_timer.stop()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
