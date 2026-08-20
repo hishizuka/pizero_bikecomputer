@@ -312,7 +312,10 @@ class SensorActionListItemWidget(FullWidthSeparatorListItemWidget):
 
 class SensorPairingListItemWidget(SensorActionListItemWidget):
     def get_title_style(self):
-        return "padding-top: 2%; border-bottom: 1px solid #AAAAAA;"
+        return (
+            f"{super().get_title_style()} "
+            "padding-top: 2%; border-bottom: 1px solid #AAAAAA;"
+        )
 
     def setup_ui(self):
         super().setup_ui()
