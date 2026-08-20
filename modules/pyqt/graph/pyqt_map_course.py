@@ -3,8 +3,17 @@ import asyncio
 import numpy as np
 
 from modules.app_logger import app_logger
-from modules._qt_qtwidgets import QtCore, QtGui, QtWidgets, pg, qasync
+from modules._qt_qtwidgets import QtCore, QtWidgets, pg, qasync
 from modules.helper.maptile import get_wind_color
+from modules.pyqt.components.course_point_marker import (
+    COURSE_POINT_ICON_SIZE,
+    COURSE_POINT_MARKER_BG_COLOR,
+    COURSE_POINT_MARKER_BORDER_COLOR,
+    COURSE_POINT_MARKER_BORDER_WIDTH,
+    COURSE_POINT_MARKER_SIZE,
+    DEFAULT_COURSE_POINT_ICON_PATH,
+    build_course_point_marker_pixmap,
+)
 from modules.pyqt.graph.course_offset import offset_points_by_segment, offset_polyline
 from modules.pyqt.graph.pyqtgraph.CoursePlotItem import CoursePlotItem
 from modules.pyqt.graph.pyqtgraph.WindVaneItem import WindVaneItem
@@ -27,17 +36,17 @@ class MapCourseMixin:
         "Uturn": "img/navi_uturn_right_white.svg",
         "Summit": "img/summit.png",
     }
-    _INSTRUCTION_DEFAULT_ICON_PATH = "img/navi_flag_white.svg"
+    _INSTRUCTION_DEFAULT_ICON_PATH = DEFAULT_COURSE_POINT_ICON_PATH
     _COURSE_POINT_ICON_PATH_MAP = _INSTRUCTION_ICON_PATH_MAP
     _COURSE_POINT_DEFAULT_ICON_PATH = _INSTRUCTION_DEFAULT_ICON_PATH
     course_point_min_zoomlevel = 13
     course_point_show_only_forward = True
     course_point_filter_by_view_bounds = False
-    course_point_icon_size = 16
-    course_point_marker_size = 24
-    course_point_marker_bg_color = (0, 128, 0, 240)
-    course_point_marker_border_color = (0, 0, 0, 220)
-    course_point_marker_border_width = 1
+    course_point_icon_size = COURSE_POINT_ICON_SIZE
+    course_point_marker_size = COURSE_POINT_MARKER_SIZE
+    course_point_marker_bg_color = COURSE_POINT_MARKER_BG_COLOR
+    course_point_marker_border_color = COURSE_POINT_MARKER_BORDER_COLOR
+    course_point_marker_border_width = COURSE_POINT_MARKER_BORDER_WIDTH
     course_line_width = 7
     course_outline_width = 11
     course_offset_min_zoomlevel = 13
@@ -70,7 +79,6 @@ class MapCourseMixin:
     course_point_markers = None
     course_point_last_index = None
     course_points_plot_visible = None
-    course_point_icon_pixmaps = None
     course_winds = []
 
     instruction = None
@@ -83,7 +91,6 @@ class MapCourseMixin:
     external_instruction_distance = None
 
     def _setup_course_widgets(self):
-        self.course_point_icon_pixmaps = {}
         self.course_point_markers = []
         self.course_point_last_index = None
         self.external_instruction_name = ""
@@ -109,42 +116,14 @@ class MapCourseMixin:
         return f'<img src="{icon_path}">'
 
     def _get_course_point_marker_pixmap(self, icon_path):
-        marker_size = int(self.course_point_marker_size)
-        icon_size = int(self.course_point_icon_size)
-        cache_key = (icon_path, marker_size, icon_size)
-        pixmap = self.course_point_icon_pixmaps.get(cache_key)
-        if pixmap is not None:
-            return pixmap
-
-        pixmap = QtGui.QPixmap(marker_size, marker_size)
-        pixmap.fill(QtCore.Qt.GlobalColor.transparent)
-
-        painter = QtGui.QPainter(pixmap)
-        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
-        painter.setPen(
-            QtGui.QPen(
-                QtGui.QColor(*self.course_point_marker_border_color),
-                self.course_point_marker_border_width,
-            )
+        return build_course_point_marker_pixmap(
+            icon_path,
+            self.course_point_marker_size,
+            self.course_point_icon_size,
+            self.course_point_marker_bg_color,
+            self.course_point_marker_border_color,
+            self.course_point_marker_border_width,
         )
-        painter.setBrush(QtGui.QColor(*self.course_point_marker_bg_color))
-        radius = marker_size / 2.0 - 1
-        painter.drawEllipse(
-            QtCore.QPointF(marker_size / 2.0, marker_size / 2.0),
-            radius,
-            radius,
-        )
-
-        icon = QtGui.QIcon(icon_path)
-        if icon.isNull():
-            icon = QtGui.QIcon(self._COURSE_POINT_DEFAULT_ICON_PATH)
-        x_pos = int(round((marker_size - icon_size) / 2))
-        y_pos = int(round((marker_size - icon_size) / 2))
-        icon.paint(painter, QtCore.QRect(x_pos, y_pos, icon_size, icon_size))
-        painter.end()
-
-        self.course_point_icon_pixmaps[cache_key] = pixmap
-        return pixmap
 
     def _get_course_offset_pixels(self):
         traffic_side = self.config.G_COURSE_TRAFFIC_SIDE
