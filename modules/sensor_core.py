@@ -18,6 +18,11 @@ from modules.sensor.performance_metrics import (
 app_logger.info("detected sensor modules:")
 
 from modules.utils.timer import Timer, log_timers
+from modules.utils.wind import (
+    get_speed_impact,
+    get_wind_elevation,
+    get_wind_impact,
+)
 from .sensor.gps import get_sensor_gps_class
 from .sensor.sensor_ant import SensorANT
 from .sensor.sensor_ble import SensorBLE
@@ -29,6 +34,7 @@ SensorGPS = get_sensor_gps_class()
 
 class SensorCore:
     NP_WINDOW_SIZE = NP_WINDOW_SIZE_DEFAULT
+    WIND_ACCUMULATED_STATE_KEY = "wind_accumulated_values"
 
     config = None
     sensor_gps = None
@@ -60,6 +66,12 @@ class SensorCore:
         "wind_direction",
         "wind_direction_str",
         "headwind",
+        "wind_power_delta",
+        "wind_grade",
+        "wind_work",
+        "wind_elevation",
+        "speed_impact",
+        "wind_time",
         "temperature",
         "cpu_percent",
         "system_cpu_percent",
@@ -115,30 +127,37 @@ class SensorCore:
         self.values["BLE"] = {}
         self.values["I2C"] = {}
         self.values["integrated"] = {}
+        integrated = self.values["integrated"]
 
         # reset
         for key in self.integrated_value_keys:
-            self.values["integrated"][key] = np.nan
+            integrated[key] = np.nan
         self.reset_internal()
+        wind_work, wind_time = self.config.state.get_value(
+            self.WIND_ACCUMULATED_STATE_KEY, (0.0, 0.0)
+        )
+        integrated["wind_work"] = wind_work
+        integrated["wind_elevation"] = get_wind_elevation(
+            wind_work, self.config.G_POWER_TOTAL_WEIGHT
+        )
+        integrated["wind_time"] = wind_time
 
         for g in self.graph_keys:
-            self.values["integrated"][g] = [
-                np.nan
-            ] * self.config.G_GUI_PERFORMANCE_GRAPH_DISPLAY_RANGE
+            integrated[g] = [np.nan] * self.config.G_GUI_PERFORMANCE_GRAPH_DISPLAY_RANGE
         for d in self.diff_keys:
-            self.values["integrated"][d] = [np.nan] * self.grade_range
+            integrated[d] = [np.nan] * self.grade_range
         self.brakelight_spd = [0] * self.brakelight_spd_range
         self.brakelight_cad = [np.nan] * self.brakelight_cad_range
         self.brakelight_power = [np.nan] * self.brakelight_power_range
         self.auto_backlight_brightness = [
             self.config.G_AUTO_BACKLIGHT_CUTOFF + 1
         ] * self.auto_backlight_brightness_range
-        self.values["integrated"]["CPU_MEM"] = ""
+        integrated["CPU_MEM"] = ""
 
         for s in self.average_secs:
             for v in self.average_values:
                 self.average_values[v][s] = []
-                self.values["integrated"][f"ave_{v}_{s}s"] = np.nan
+                integrated[f"ave_{v}_{s}s"] = np.nan
         self.process = psutil.Process()
 
         if SensorGPS:
@@ -307,8 +326,16 @@ class SensorCore:
         self.reset_internal()
 
     def reset_internal(self):
-        self.values["integrated"]["distance"] = 0
-        self.values["integrated"]["accumulated_power"] = 0
+        integrated = self.values["integrated"]
+        for key in (
+            "distance",
+            "accumulated_power",
+            "wind_work",
+            "wind_elevation",
+            "wind_time",
+        ):
+            integrated[key] = 0
+        integrated["speed_impact"] = np.nan
         reset_performance_metrics_state(self)
         self.brakelight_spd = [0] * self.brakelight_spd_range
         self.brakelight_cad = [np.nan] * self.brakelight_cad_range
@@ -372,6 +399,7 @@ class SensorCore:
         # for w_prime_balance
         # alias for self.values
         v = {"GPS": self.values["GPS"], "I2C": self.values["I2C"]}
+        integrated = self.values["integrated"]
         # loop control
         self.wait_time = self.config.G_SENSOR_INTERVAL
         self.actual_loop_interval = self.config.G_SENSOR_INTERVAL
@@ -389,6 +417,8 @@ class SensorCore:
             ]
             hr = spd = cdc = pwr = temperature = self.config.G_SENSOR_NULLVALUE
             grade = grade_spd = glide = self.config.G_SENSOR_NULLVALUE
+            wind_force_delta = np.nan
+            air_density = np.nan
             ttlwork_diff = 0
             dst_diff = {"ANT+": 0, "BLE": 0, "GPS": 0, "USE": 0}
             alt_diff = {"ANT+": 0, "BLE": 0, "GPS": 0, "USE": 0}
@@ -657,10 +687,8 @@ class SensorCore:
             # dem_altitude
             if self.config.G_USE_DEM_TILE:
                 api_alt_start = time.perf_counter()
-                self.values["integrated"]["dem_altitude"] = (
-                    await self.config.api.get_altitude(
-                        [v["GPS"]["lon"], v["GPS"]["lat"]]
-                    )
+                integrated["dem_altitude"] = await self.config.api.get_altitude(
+                    [v["GPS"]["lon"], v["GPS"]["lat"]]
                 )
                 api_alt_elapsed_ms = (time.perf_counter() - api_alt_start) * 1000.0
 
@@ -668,12 +696,25 @@ class SensorCore:
             if self.config.G_USE_WIND_DATA_SOURCE:
                 api_wind_start = time.perf_counter()
                 (
-                    self.values["integrated"]["wind_speed"],
-                    self.values["integrated"]["wind_direction"],
-                    self.values["integrated"]["wind_direction_str"],
-                    self.values["integrated"]["headwind"],
-                ) = await self.config.api.get_wind(
-                    [v["GPS"]["lon"], v["GPS"]["lat"]], v["GPS"]["track"]
+                    integrated["wind_speed"],
+                    integrated["wind_direction"],
+                    integrated["wind_direction_str"],
+                ) = await self.config.api.get_wind([v["GPS"]["lon"], v["GPS"]["lat"]])
+                (
+                    integrated["headwind"],
+                    wind_force_delta,
+                    integrated["wind_power_delta"],
+                    integrated["wind_grade"],
+                    air_density,
+                ) = get_wind_impact(
+                    spd,
+                    integrated["wind_speed"],
+                    integrated["wind_direction"],
+                    v["GPS"]["track"],
+                    temperature,
+                    v["I2C"]["pressure"],
+                    self.config.G_POWER_CDA,
+                    self.config.G_POWER_TOTAL_WEIGHT,
                 )
                 api_wind_elapsed_ms = (time.perf_counter() - api_wind_start) * 1000.0
 
@@ -685,11 +726,11 @@ class SensorCore:
                 }
                 for key in ["alt_diff", "dst_diff"]:
                     self._shift_window_and_append(
-                        self.values["integrated"][key], diff_sources[key]["USE"]
+                        integrated[key], diff_sources[key]["USE"]
                     )
                     # diff_sum[key] = np.mean(self.values['integrated'][key][-self.grade_window_size:])
                     diff_sum[key] = np.nansum(
-                        self.values["integrated"][key][-self.grade_window_size :]
+                        integrated[key][-self.grade_window_size :]
                     )
                 # set grade
                 gl = self.config.G_SENSOR_NULLVALUE
@@ -723,12 +764,10 @@ class SensorCore:
                 }
                 for key in ["alt_diff_spd", "dst_diff_spd"]:
                     self._shift_window_and_append(
-                        self.values["integrated"][key],
+                        integrated[key],
                         diff_sources_spd[key][wheel_distance_source],
                     )
-                    diff_sum[key] = np.mean(
-                        self.values["integrated"][key][-self.grade_window_size :]
-                    )
+                    diff_sum[key] = np.mean(integrated[key][-self.grade_window_size :])
                     # diff_sum[key] = np.nansum(self.values['integrated'][key][-self.grade_window_size:])
                 # set grade
                 x = diff_sum["dst_diff_spd"] ** 2 - diff_sum["alt_diff_spd"] ** 2
@@ -745,16 +784,49 @@ class SensorCore:
             ):
                 grade_spd = pre_grade_spd
 
-            self.values["integrated"]["heart_rate"] = hr
-            self.values["integrated"]["speed"] = spd
-            self.values["integrated"]["cadence"] = cdc
-            self.values["integrated"]["power"] = pwr
-            self.values["integrated"]["distance"] += dst_diff["USE"]
-            self.values["integrated"]["accumulated_power"] += ttlwork_diff
-            self.values["integrated"]["grade"] = grade
-            self.values["integrated"]["grade_spd"] = grade_spd
-            self.values["integrated"]["glide_ratio"] = glide
-            self.values["integrated"]["temperature"] = temperature
+            model_grade = grade_spd if not np.isnan(grade_spd) else grade
+            if np.isnan(model_grade):
+                model_grade = 0.0
+            speed_impact = get_speed_impact(
+                spd,
+                wind_force_delta,
+                air_density,
+                self.config.G_POWER_CDA,
+                self.config.G_POWER_TOTAL_WEIGHT,
+                self.config.G_POWER_CRR,
+                model_grade,
+            )
+            integrated["speed_impact"] = speed_impact.delta
+
+            if (
+                self.config.G_STOPWATCH_STATUS == "START"
+                and dst_diff["USE"] > 0
+                and not np.isnan(wind_force_delta)
+            ):
+                distance = dst_diff["USE"]
+                integrated["wind_work"] += wind_force_delta * distance
+                integrated["wind_elevation"] = get_wind_elevation(
+                    integrated["wind_work"], self.config.G_POWER_TOTAL_WEIGHT
+                )
+                if speed_impact.still_air_speed > 0:
+                    integrated["wind_time"] += distance * (
+                        1 / spd - 1 / speed_impact.still_air_speed
+                    )
+                self.config.state.set_value(
+                    self.WIND_ACCUMULATED_STATE_KEY,
+                    (integrated["wind_work"], integrated["wind_time"]),
+                )
+
+            integrated["heart_rate"] = hr
+            integrated["speed"] = spd
+            integrated["cadence"] = cdc
+            integrated["power"] = pwr
+            integrated["distance"] += dst_diff["USE"]
+            integrated["accumulated_power"] += ttlwork_diff
+            integrated["grade"] = grade
+            integrated["grade_spd"] = grade_spd
+            integrated["glide_ratio"] = glide
+            integrated["temperature"] = temperature
 
             # Update normalized power, W' balance, TSS and power averages.
             if power_sensor_configured:
@@ -763,12 +835,12 @@ class SensorCore:
             graph_values = {
                 "hr_graph": hr,
                 "power_graph": pwr,
-                "w_bal_graph": self.values["integrated"]["w_prime_balance_normalized"],
+                "w_bal_graph": integrated["w_prime_balance_normalized"],
                 "altitude_gps_graph": v["GPS"]["alt"],
                 "altitude_graph": v["I2C"]["altitude"],
             }
             for key, value in graph_values.items():
-                self._shift_window_and_append(self.values["integrated"][key], value)
+                self._shift_window_and_append(integrated[key], value)
 
             # average power, heart_rate
             if (ant_use["HR"] or ble_hr_configured) and not np.isnan(hr):

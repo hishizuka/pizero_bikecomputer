@@ -110,12 +110,17 @@ class Setting:
                 self.config.G_DEM_MAP = c["DEM_MAP"]
 
         if "POWER" in self.config_parser:
-            if "CP" in self.config_parser["POWER"]:
-                self.config.G_POWER_CP = int(self.config_parser["POWER"]["CP"])
-            if "W_PRIME" in self.config_parser["POWER"]:
-                self.config.G_POWER_W_PRIME = int(
-                    self.config_parser["POWER"]["W_PRIME"]
-                )
+            c = self.config_parser["POWER"]
+            if "CP" in c:
+                self.config.G_POWER_CP = int(c["CP"])
+            if "W_PRIME" in c:
+                self.config.G_POWER_W_PRIME = int(c["W_PRIME"])
+            if "CDA" in c:
+                self.config.G_POWER_CDA = float(c["CDA"])
+            if "TOTAL_WEIGHT" in c:
+                self.config.G_POWER_TOTAL_WEIGHT = float(c["TOTAL_WEIGHT"])
+            if "CRR" in c:
+                self.config.G_POWER_CRR = float(c["CRR"])
 
         if "SENSOR_ANT" in self.config_parser:
             c = self.config_parser["SENSOR_ANT"]
@@ -411,8 +416,12 @@ class Setting:
         c["DEM_MAP"] = self.config.G_DEM_MAP
 
         self.config_parser["POWER"] = {}
-        self.config_parser["POWER"]["CP"] = str(int(self.config.G_POWER_CP))
-        self.config_parser["POWER"]["W_PRIME"] = str(int(self.config.G_POWER_W_PRIME))
+        c = self.config_parser["POWER"]
+        c["CP"] = str(int(self.config.G_POWER_CP))
+        c["W_PRIME"] = str(int(self.config.G_POWER_W_PRIME))
+        c["CDA"] = str(self.config.G_POWER_CDA)
+        c["TOTAL_WEIGHT"] = str(self.config.G_POWER_TOTAL_WEIGHT)
+        c["CRR"] = str(self.config.G_POWER_CRR)
 
         self.config_parser["DISPLAY_PARAM"] = {}
         c = self.config_parser["DISPLAY_PARAM"]

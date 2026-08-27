@@ -2,7 +2,6 @@ import os
 from datetime import datetime, timedelta, timezone  #datetime is necessary for map_config["current_time_func"]()
 import locale
 from random import random
-import math
 import asyncio
 
 import numpy as np
@@ -179,17 +178,6 @@ async def get_scw_list(url, referer):
 
 def conv_colorcode(t):
     return f"#{t[0]:02X}{t[1]:02X}{t[2]:02X}"
-
-
-def get_headwind(wind_speed, wind_track, track):
-    if np.any(np.isnan([wind_speed, wind_track, track])):
-        return np.nan
-    if wind_speed == 0:
-        return 0
-    rad_diff = math.radians(wind_track-track)
-    # plus: headwind, minus: tailwind
-    return round(math.cos(rad_diff) * wind_speed, 1)
-    # abs(round(math.sin(rad_diff) * wind_speed, 1))  # crosswind
 
 
 def conv_image(image, map_name):

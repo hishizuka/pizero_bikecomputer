@@ -1044,7 +1044,11 @@ map.yaml entry
 
 #### Power section
 
-If ANT+ power meter is available, set `cp` as CP and `w_prime` as W prime balance.
+Set `cp` as CP and `w_prime` as W prime balance when a power meter is available.
+`cda` sets the rider and bicycle drag area used for the wind impact metrics. The
+default is `0.40` m². `total_weight` sets the total weight of the rider, bike, and
+gear. The default is `80.0` kg. `crr` sets the rolling resistance coefficient used
+to calculate `Wind Impact` and `Wind Time`. The default is `0.004`.
 
 #### SENSOR_IMU section
 In modules/sensor_i2c.py, use the change_axis method to change the axis direction of the IMU (accelerometer/magnetometer/gyroscope) according to its mounting direction.

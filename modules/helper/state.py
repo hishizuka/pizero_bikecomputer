@@ -63,7 +63,6 @@ class AppState:
         except OSError as backup_exc:
             return
 
-
     def set_value(self, key, value, force_apply=False):
         self.values[key] = value
 
@@ -85,26 +84,27 @@ class AppState:
     #  G_MANUAL_STATUS
     #  garmin_session
     #  mag_min, mag_max, sealevel_pa, sealevel_temp
-    #  pos_lon, pos_lat
+    #  pos_lon, pos_lat, wind_accumulated_values
     #  ant+_sc_values, ant+_spd_values, ant+_power_values_16, ant+_power_values_17, ant+_power_values_18
 
     # reset
     def reset(self):
-        for k, v in list(self.values.items()):
-            if k.startswith(("G_MANUAL_STATUS", "sealevel_", "ant+_")):
-                del self.values[k]
+        for key in list(self.values):
+            if key.startswith(("G_MANUAL_STATUS", "sealevel_", "ant+_", "wind_")):
+                del self.values[key]
         self.write()
 
     # quit (power_off)
     def delete(self):
-        for k, v in list(self.values.items()):
-            if k.startswith("ant+_"):
-                del self.values[k]
+        for key in list(self.values):
+            if key.startswith("ant+_"):
+                del self.values[key]
         self.write()
 
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--delete")
     parser.add_argument("-r", "--reset", action="store_true", default=False)

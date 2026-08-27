@@ -37,7 +37,7 @@ class CourseWeatherService:
             for i, course_index in enumerate(course_indices):
                 if not any(np.isnan((wind_speed[i], wind_direction[i]))):
                     continue
-                speed, direction, _, _ = await config.api.get_wind(
+                speed, direction, _ = await config.api.get_wind(
                     [course.longitude[course_index], course.latitude[course_index]],
                     forecast_time=timeline[i],
                 )

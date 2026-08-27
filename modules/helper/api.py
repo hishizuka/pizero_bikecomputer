@@ -14,7 +14,7 @@ from modules.helper.network import (
     get_json,
     post,
 )
-from modules.helper.maptile import MapTileWithValues, get_headwind
+from modules.helper.maptile import MapTileWithValues
 from modules.utils.geo import get_track_str
 from modules.app_logger import app_logger
 from modules.helper.garmin_livetrack import (
@@ -1048,7 +1048,7 @@ class api:
         self.send_time[time_key] = t
         return True
 
-    async def get_wind(self, pos, track=None, forecast_time=None):
+    async def get_wind(self, pos, forecast_time=None):
         if self.config.G_WIND_DATA_SOURCE.startswith("jpn_scw"):
             w_spd, w_dir = await self.maptile_with_values.get_wind(pos, forecast_time)
         else:
@@ -1057,14 +1057,7 @@ class api:
             )
 
         w_dir_str = get_track_str(w_dir)
-
-        if track is not None:
-            headwind = get_headwind(w_spd, w_dir, track)
-        else:
-            headwind = np.nan
-
-        # app_logger.info(f"pos:[{pos[0]:.5f},{pos[1]:.5f}], w_spd:{w_spd}, w_dir:{w_dir}, w_dir_str:{w_dir_str}, headwind:{headwind}")
-        return w_spd, w_dir, w_dir_str, headwind
+        return w_spd, w_dir, w_dir_str
 
     async def get_altitude(self, pos):
         return await self.maptile_with_values.get_altitude_from_tile(pos)
