@@ -92,7 +92,34 @@ class GUI_Config:
             "(self.sensor.values['integrated']['wind_direction'], "
             "self.sensor.values['integrated']['wind_speed'])",
         ),
-        "HeadWind": (G_UNIT["Wind"], "self.sensor.values['integrated']['headwind']"),
+        "HeadWind": (
+            G_UNIT["Wind"],
+            "self.sensor.values['integrated']['headwind']",
+        ),
+        "Wind Watts": (
+            ("+.0f", "W"),
+            "self.sensor.values['integrated']['wind_power_delta']",
+        ),
+        "Wind Grade": (
+            ("+.1f", "%"),
+            "self.sensor.values['integrated']['wind_grade']",
+        ),
+        "Wind Work": (
+            ("+.0f", "kJ"),
+            "self.sensor.values['integrated']['wind_work']",
+        ),
+        "Wind Asc.": (
+            ("+.0f", "m"),
+            "self.sensor.values['integrated']['wind_elevation']",
+        ),
+        "Wind Impact": (
+            ("+.1f", "km/h"),
+            "self.sensor.values['integrated']['speed_impact']",
+        ),
+        "Wind Time": (
+            ("signed_timer", ""),
+            "self.sensor.values['integrated']['wind_time']",
+        ),
         # GPS raw
         "Latitude": (G_UNIT["Position"], "self.sensor.values['GPS']['lat']"),
         "Longitude": (G_UNIT["Position"], "self.sensor.values['GPS']['lon']"),
@@ -432,7 +459,7 @@ class GUI_Config:
             text = value
         elif np.isnan(value):
             pass
-        elif name.startswith("Speed") or "SPD" in name:
+        elif name == "Wind Impact" or name.startswith("Speed") or "SPD" in name:
             text = f"{(value * 3.6):{itemformat}}"  # m/s to km/h
         elif "Dist" in name or "DIST" in name:
             text = f"{(value / 1000):{itemformat}}"  # m to km
@@ -440,12 +467,14 @@ class GUI_Config:
             text = f"{(value / 1000):{itemformat}}"  # j to kj
         elif ("Grade" in name or "Glide" in name) and G_STOPWATCH_STATUS != "START":
             text = "-"
-        elif itemformat == "timer":
-            # fmt = '%H:%M:%S' #default (too long)
-            fmt = "%H:%M"
-            if value < 3600:
-                fmt = "%M:%S"
-            text = time.strftime(fmt, time.gmtime(value))
+        elif itemformat in ("timer", "signed_timer"):
+            seconds = int(round(abs(value)))
+            if seconds < 3600:
+                text = f"{seconds // 60:02d}:{seconds % 60:02d}"
+            else:
+                text = f"{seconds // 3600:02d}:{seconds % 3600 // 60:02d}"
+            if itemformat == "signed_timer":
+                text = ("+" if value >= 0 else "-") + text
         elif itemformat == "time":
             text = time.strftime("%H:%M")
         else:

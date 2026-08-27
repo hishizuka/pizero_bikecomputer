@@ -6,6 +6,7 @@ from modules.pyqt.graph.pyqtgraph.WindVaneItem import build_wind_vane_picture
 from modules.utils import round_half_away_from_zero
 
 UNIT_FONT_SCALE = 0.7
+WIND_ITEM_SIZE_SCALE = 0.75
 
 
 class ItemLabel(QtWidgets.QLabel):
@@ -69,7 +70,10 @@ class WindItemValue(ItemValue):
             return
 
         direction, speed = self._wind
-        size = max(12, min(self.width(), self.height()) - 10)
+        size = max(
+            12,
+            int((min(self.width(), self.height()) - 10) * WIND_ITEM_SIZE_SCALE),
+        )
         color = tuple(get_wind_color(speed))
         picture_key = (direction, color, size)
         if picture_key != self._picture_key:
@@ -87,7 +91,12 @@ class WindItemValue(ItemValue):
         unit_width = unit_metrics.horizontalAdvance(self.unit)
         gap = 2
         unit_gap = max(2, int(value_font.pixelSize() * 0.15))
-        content_width = bounds.width() + gap + value_width + unit_gap + unit_width
+        text_width = value_width + unit_gap + unit_width
+        text_scale = min(
+            1.0,
+            (self.width() - 4 - bounds.width() - gap) / text_width,
+        )
+        content_width = bounds.width() + gap + text_width * text_scale
         left = (self.width() - content_width) / 2
         baseline = (
             self.height() / 2
@@ -105,13 +114,15 @@ class WindItemValue(ItemValue):
         painter.restore()
 
         text_left = left + bounds.width() + gap
+        painter.save()
+        painter.translate(text_left, 0)
+        painter.scale(text_scale, 1)
         painter.setPen(self.palette().color(QtGui.QPalette.ColorRole.WindowText))
         painter.setFont(value_font)
-        painter.drawText(QtCore.QPointF(text_left, baseline), value_text)
+        painter.drawText(QtCore.QPointF(0, baseline), value_text)
         painter.setFont(unit_font)
-        painter.drawText(
-            QtCore.QPointF(text_left + value_width + unit_gap, baseline), self.unit
-        )
+        painter.drawText(QtCore.QPointF(value_width + unit_gap, baseline), self.unit)
+        painter.restore()
         painter.end()
 
 
