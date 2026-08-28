@@ -415,7 +415,8 @@ def _report_title(event, fields, category, popup, weather):
         )
     if category == Category.WEATHER:
         primary, _ = weather
-        return primary["label"] if primary else default
+        title = primary["label"] if primary else default
+        return f"{title}解除" if event.get("is_cancel") else title
     if category == Category.FLOOD:
         if popup and event.get("is_cancel"):
             return "洪水警報解除"
@@ -452,10 +453,10 @@ def _title(event, fields, surface="detail", history=False, weather=None):
     if surface in {"list", "popup"} and event.get("is_test"):
         return f"[test] {title}"
     if surface in {"list", "popup"} and event.get("is_training"):
-        if list_view and event.get("is_cancel") and not history:
+        if list_view and event.get("is_cancel"):
             return f"[訓練・解除] {title}"
         return f"[訓練] {title}"
-    if list_view and event.get("is_cancel") and not history:
+    if list_view and event.get("is_cancel"):
         return f"[解除] {title}"
     return title
 
@@ -611,7 +612,7 @@ def _detail_tsunami(fields):
     return _blocks(*values)
 
 
-def _detail_weather(weather):
+def _detail_weather(weather, is_cancel=False):
     primary, others = weather
     if not primary:
         return ()
@@ -629,6 +630,8 @@ def _detail_weather(weather):
         ("area", line)
         for line in _format_lines([_compact_prefecture(value) for value in regions], 4)
     )
+    if is_cancel:
+        values.append(("action", "解除されました"))
     if others:
         values.extend((("rule", True), ("heading", "併せて発表")))
         for group in others:
@@ -795,7 +798,7 @@ def _detail_body(event, fields, weather=None):
             ("regions", "、".join(areas)),
         )
     if category == Category.WEATHER:
-        return _detail_weather(weather)
+        return _detail_weather(weather, event.get("is_cancel"))
     if category == Category.FLOOD:
         return _blocks(*(("section", value) for value in _flood_regions(fields)))
     if category == Category.TYPHOON:
