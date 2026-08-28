@@ -701,8 +701,7 @@ When unlocked, you can drag the profile horizontally.
   - Pair or disconnect an ANT+ bike light.
   - Auto Control automatically controls a paired ANT+ bike light from ambient light and braking hints while recording.
 - Control
-  - Pair or disconnect an ANT+ remote.
-  - Enable or disable the BLE Zwift Click V2 remote.
+  - Pair or disconnect an ANT+ remote or a BLE Zwift Click V2 remote.
 - Temperature
   - Pair or disconnect an ANT+ temperature sensor.
 - Trainer
@@ -1003,11 +1002,6 @@ Set the value before starting the program. If the value is set during running, i
   - Enable Gadgetbridge BLE UART service at startup.
 - `gadgetbridge_use_gps`
   - Enable GPS acquisition from Gadgetbridge.
-- `use_zwift_click_v2`
-  - Enable Zwift Click V2 support.
-- `zwift_click_v2_address`
-  - Store the paired Zwift Click V2 BLE address.
-
 #### MAP_AND_DATA section
 
 - `map`

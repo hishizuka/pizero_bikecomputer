@@ -648,7 +648,7 @@ class SensorConnectionMenuWidget(ListWidget):
             await result
 
     def open_sensor_pairing(self):
-        if self.SENSOR_ROLE in ("HR", "SPD", "CDC", "PWR"):
+        if self.config.G_BLE_SENSOR_TYPES[self.SENSOR_ROLE]:
             self.change_page(
                 "Pair Sensor Protocol",
                 preprocess=True,
@@ -684,11 +684,8 @@ class SensorConnectionMenuWidget(ListWidget):
             if not self.sensor_ant.remove_ant_sensor(self.SENSOR_ROLE):
                 return
         elif protocol == self.config.SENSOR_PROTOCOL_BLE:
-            if self.SENSOR_ROLE in ("HR", "SPD", "CDC", "PWR"):
-                self.sensor_ble.remove_cycling_sensor(self.SENSOR_ROLE)
-                write_config = False
-            else:
-                self.config.clear_sensor(self.SENSOR_ROLE)
+            self.sensor_ble.remove_ble_sensor(self.SENSOR_ROLE)
+            write_config = False
         else:
             return
         if write_config:
@@ -718,12 +715,7 @@ class SensorConnectionMenuWidget(ListWidget):
             self.sensor_ant.is_transport_available()
             and not self.sensor_ant.scanner.isUse
         )
-        ble_pairing_available = self.SENSOR_ROLE in (
-            "HR",
-            "SPD",
-            "CDC",
-            "PWR",
-        ) and self.sensor_ble.can_scan_cycling_sensors(self.SENSOR_ROLE)
+        ble_pairing_available = self.sensor_ble.can_scan_sensor(self.SENSOR_ROLE)
         self.sensor_item.onoff_button(ant_pairing_available or ble_pairing_available)
         self.remove_sensor_item.onoff_button(paired)
         self.update_connection_status()
@@ -871,8 +863,7 @@ class SensorProtocolMenuWidget(MenuWidget):
             )
         )
         self.buttons[self.BLE_BUTTON].setEnabled(
-            sensor_role in ("HR", "SPD", "CDC", "PWR")
-            and self.sensor_ble.can_scan_cycling_sensors(sensor_role)
+            bool(sensor_role and self.sensor_ble.can_scan_sensor(sensor_role))
         )
         if self.config.uses_keyboard_navigation:
             for name in (self.ANT_BUTTON, self.BLE_BUTTON):
@@ -893,16 +884,7 @@ class SensorProtocolMenuWidget(MenuWidget):
         )
 
     def open_ble_pairing(self):
-        if (
-            self.sensor_role
-            not in (
-                "HR",
-                "SPD",
-                "CDC",
-                "PWR",
-            )
-            or not self.buttons[self.BLE_BUTTON].isEnabled()
-        ):
+        if self.sensor_role is None or not self.buttons[self.BLE_BUTTON].isEnabled():
             return
         self.change_page(
             "Pair BLE Sensor",
@@ -943,7 +925,7 @@ class ANTListWidget(ListWidget):
 
         ant_id = int(self.selected_item.id)
         if self.config.sensor_uses(self.list_type, self.config.SENSOR_PROTOCOL_BLE):
-            self.sensor_ble.disconnect_cycling_sensors()
+            self.sensor_ble.remove_ble_sensor(self.list_type)
         self.sensor_ant.connect_ant_sensor(
             self.list_type,  # sensor type
             ant_id,  # ID
@@ -1053,13 +1035,13 @@ class BLEListWidget(ListWidget):
 
     async def scan(self, generation):
         try:
-            candidates = await self.sensor_ble.discover_cycling_sensors(
+            candidates = await self.sensor_ble.discover_sensors(
                 self.list_type, timeout=self.SCAN_TIMEOUT
             )
         except asyncio.CancelledError:
             return
         except Exception as exc:
-            app_logger.warning(f"BLE cycling scan failed: {exc}")
+            app_logger.warning(f"BLE sensor scan failed: {exc}")
             candidates = []
 
         if generation != self.scan_generation:
@@ -1078,8 +1060,7 @@ class BLEListWidget(ListWidget):
             item = BLEListItemWidget(self, candidate)
             self.add_list_item(item)
             app_logger.debug(
-                f"Adding BLE cycling sensor: {candidate.identifier} "
-                f"{candidate.name or ''}"
+                f"Adding BLE sensor: {candidate.identifier} " f"{candidate.name or ''}"
             )
 
         if self.config.uses_keyboard_navigation and self.list.count():
@@ -1096,7 +1077,7 @@ class BLEListWidget(ListWidget):
         profile = profiles[0] if len(profiles) == 1 else None
         if self.config.sensor_uses(self.list_type, self.config.SENSOR_PROTOCOL_ANT):
             self.sensor_ant.remove_ant_sensor(self.list_type)
-        self.sensor_ble.set_cycling_sensor(
+        self.sensor_ble.set_ble_sensor(
             self.list_type,
             candidate.identifier,
             candidate.name or "",
@@ -1144,39 +1125,6 @@ class BLEListItemWidget(FullWidthSeparatorListItemWidget):
 
 class ControlMenuWidget(SensorConnectionMenuWidget):
     SENSOR_ROLE = "CTRL"
-    ZWIFT_CLICK_BUTTON = "Zwift Click V2"
-
-    def extra_button_conf(self):
-        return [
-            (
-                self.ZWIFT_CLICK_BUTTON,
-                "toggle",
-                lambda: self.onoff_zwift_click_v2(True),
-            )
-        ]
-
-    def preprocess(self):
-        super().preprocess()
-        self.onoff_zwift_click_v2(False)
-
-    def onoff_zwift_click_v2(self, change=True):
-        sensor_ble = self.config.logger.sensor.sensor_ble
-        if change:
-            self.config.G_ZWIFT_CLICK_V2["STATUS"] = not self.config.G_ZWIFT_CLICK_V2[
-                "STATUS"
-            ]
-            if self.config.G_ZWIFT_CLICK_V2["STATUS"]:
-                if not sensor_ble.connect_zwift_click_v2():
-                    app_logger.warning("Zwift Click V2 toggle skipped: BLE not enabled")
-            else:
-                sensor_ble.disconnect_zwift_click_v2()
-            self.config.setting.write_config()
-
-        fake_trainer_running = sensor_ble.is_fake_trainer_running()
-        self.buttons[self.ZWIFT_CLICK_BUTTON].onoff_button(not fake_trainer_running)
-        self.buttons[self.ZWIFT_CLICK_BUTTON].change_toggle(
-            self.config.G_ZWIFT_CLICK_V2["STATUS"] and not fake_trainer_running
-        )
 
 
 class TrainerMenuWidget(MenuWidget):

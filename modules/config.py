@@ -204,7 +204,7 @@ class Config:
         "CDC": ("CSCS", "CPS"),
         "PWR": ("CPS",),
         "LGT": (),
-        "CTRL": (),
+        "CTRL": ("ZWIFT_CLICK_V2",),
         "TEMP": (),
     }
     G_SENSORS = {
@@ -460,13 +460,6 @@ class Config:
     G_AUTO_BT_TETHERING = False
     # Wi-Fi auto power saving
     G_AUTO_WIFI_OFF = False
-
-    # Zwift Click V2 (BLE remote buttons)
-    # Keep only the user-facing enable flag here; protocol/tuning defaults live in zwift_click_v2.py.
-    G_ZWIFT_CLICK_V2 = {
-        "STATUS": False,
-        "ADDRESS": "",
-    }
 
     #######################
     # class objects       #

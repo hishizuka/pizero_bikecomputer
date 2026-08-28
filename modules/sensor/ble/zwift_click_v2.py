@@ -489,6 +489,7 @@ async def connect_and_listen(
     log: Callable[[str], None] = print,
     debug_log: Optional[Callable[[str], None]] = None,
     on_connected: Optional[Callable[[str, str, Optional[str]], None]] = None,
+    on_disconnected: Optional[Callable[[str, str], None]] = None,
     on_stopped: Optional[Callable[[str, bytes], None]] = None,
     adapter: Optional[str] = None,
     health: Optional[BleHealthRecorder] = None,
@@ -583,6 +584,9 @@ async def connect_and_listen(
             else:
                 health.record_connect_failure()
         log(f"[{side}] error: {exc}")
+    finally:
+        if connected and on_disconnected is not None:
+            on_disconnected(side, address)
     return connected
 
 
@@ -659,6 +663,7 @@ async def listen(
     adapter: Optional[str] = None,
     health: Optional[BleHealthRecorder] = None,
     on_connected: Optional[Callable[[str, str, Optional[str]], None]] = None,
+    on_disconnected: Optional[Callable[[str, str], None]] = None,
     on_stopped: Optional[Callable[[str, bytes], None]] = None,
     log: Callable[[str], None] = print,
     debug_log: Optional[Callable[[str], None]] = None,
@@ -700,7 +705,11 @@ async def listen(
                 if preferred_address
                 and device.device.address.casefold() == preferred_address.casefold()
             ]
-            selected = preferred or [d for d in devices if d.side == "left"]
+            selected = (
+                preferred
+                if preferred_address
+                else [d for d in devices if d.side == "left"]
+            )
             if not selected:
                 if not scan_forever:
                     log(
@@ -721,6 +730,7 @@ async def listen(
                         log=log,
                         debug_log=debug_log,
                         on_connected=on_connected,
+                        on_disconnected=on_disconnected,
                         on_stopped=on_stopped,
                         adapter=adapter,
                         health=health,

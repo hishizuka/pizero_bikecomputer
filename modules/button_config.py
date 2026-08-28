@@ -509,8 +509,7 @@ class Button_Config:
         if "Zwift_Click_V2_DUAL" not in self.button_def:
             return button_hard
 
-        cfg = self.config.G_ZWIFT_CLICK_V2
-        if not cfg["STATUS"]:
+        if not self.config.sensor_uses("CTRL", self.config.SENSOR_PROTOCOL_BLE):
             return button_hard
 
         return "Zwift_Click_V2_DUAL"

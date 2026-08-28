@@ -5,6 +5,7 @@ import re
 import signal
 import sys
 import threading
+from dataclasses import dataclass
 from typing import Optional
 
 from modules.app_logger import app_logger
@@ -52,10 +53,19 @@ if _HAS_ZWIFT_CLICK_V2 or _HAS_BLE_CYCLING:
     app_logger.info("  BLE")
 
 
+@dataclass(frozen=True, slots=True)
+class BleSensorCandidate:
+    identifier: str
+    name: str | None
+    rssi: int | None
+    profiles: tuple[str, ...] = ()
+
+
 class SensorBLE(Sensor):
     CYCLING_ROLES = ("HR", "SPD", "CDC", "PWR")
-    _zwift_click_v2_stop_event: Optional[asyncio.Event] = None
-    _zwift_click_v2_task: Optional[asyncio.Task] = None
+    CONTROL_ROLE = "CTRL"
+    CONTROL_TYPE = "ZWIFT_CLICK_V2"
+    CONTROL_BUTTON_PROFILE = "Zwift_Click_V2"
 
     def __init__(self, config, values):
         super().__init__(config, values)
@@ -103,6 +113,7 @@ class SensorBLE(Sensor):
         self._zwift_click_v2_task: Optional[asyncio.Task] = None
         self._zwift_click_v2_thread: Optional[threading.Thread] = None
         self._zwift_click_v2_stop_requested = threading.Event()
+        self._zwift_click_v2_connection_status = "inactive"
 
     def reset(self):
         if self._csc_speed_processor is not None:
@@ -232,6 +243,12 @@ class SensorBLE(Sensor):
         }
 
     def is_sensor_available(self, role: str) -> bool:
+        if role == self.CONTROL_ROLE:
+            return bool(
+                _HAS_ZWIFT_CLICK_V2
+                and self.config.ble_sensor_enabled()
+                and self._is_zwift_click_v2_configured()
+            )
         if role not in self.CYCLING_ROLES or not _HAS_BLE_CYCLING:
             return False
         return bool(
@@ -240,6 +257,8 @@ class SensorBLE(Sensor):
         )
 
     def is_sensor_connected(self, role: str) -> bool:
+        if role == self.CONTROL_ROLE:
+            return self.get_sensor_connection_status(role) == "connected"
         if role not in self.CYCLING_ROLES:
             return False
         processor = self._cycling_processors[role]
@@ -252,6 +271,8 @@ class SensorBLE(Sensor):
             return "inactive"
         if not self.is_sensor_available(role):
             return "disconnected"
+        if role == self.CONTROL_ROLE:
+            return self._zwift_click_v2_connection_status
         status = self._cycling_processors[role].status.value
         if status in ("connected", "disconnected"):
             return status
@@ -264,6 +285,52 @@ class SensorBLE(Sensor):
             and self.config.ble_sensor_enabled()
             and not self.is_fake_trainer_running()
         )
+
+    def can_scan_sensor(self, role: str) -> bool:
+        if role in self.CYCLING_ROLES:
+            return self.can_scan_cycling_sensors(role)
+        return bool(
+            role == self.CONTROL_ROLE
+            and _HAS_ZWIFT_CLICK_V2
+            and self.config.ble_sensor_enabled()
+            and not self.is_fake_trainer_running()
+        )
+
+    async def discover_sensors(
+        self,
+        role: str,
+        timeout: float = 10.0,
+    ) -> list[BleSensorCandidate]:
+        if role in self.CYCLING_ROLES:
+            candidates = await self.discover_cycling_sensors(role, timeout)
+            return [
+                BleSensorCandidate(
+                    identifier=candidate.identifier,
+                    name=candidate.name,
+                    rssi=candidate.rssi,
+                    profiles=candidate.profiles,
+                )
+                for candidate in candidates
+            ]
+        if role != self.CONTROL_ROLE or not self.can_scan_sensor(role):
+            return []
+        adapter = self._resolve_sensor_adapter()
+        if sys.platform.startswith("linux") and adapter is None:
+            return []
+        devices = await zwift_click_v2.scan_for_click_v2(
+            timeout=timeout,
+            prefer_left=True,
+            adapter=adapter,
+        )
+        return [
+            BleSensorCandidate(
+                identifier=str(click.device.address),
+                name=click.device.name,
+                rssi=None,
+            )
+            for click in devices
+            if click.side == "left"
+        ]
 
     def _scan_profiles_for_role(self, role: str) -> tuple[str, ...]:
         if role == "HR":
@@ -325,6 +392,30 @@ class SensorBLE(Sensor):
         self.config.setting.write_config()
         self.connect_cycling_sensors()
 
+    def set_ble_sensor(
+        self,
+        role: str,
+        identifier: str,
+        name: str = "",
+        profile: str | None = None,
+    ) -> None:
+        if role in self.CYCLING_ROLES:
+            self.set_cycling_sensor(role, identifier, name, profile)
+            return
+        if role != self.CONTROL_ROLE:
+            raise ValueError(f"Unsupported BLE sensor role: {role}")
+        self.disconnect_zwift_click_v2()
+        self._join_zwift_click_v2_thread()
+        self.config.set_sensor(
+            role,
+            self.config.SENSOR_PROTOCOL_BLE,
+            identifier,
+            self.CONTROL_TYPE,
+            name,
+        )
+        self.config.setting.write_config()
+        self.connect_zwift_click_v2()
+
     def _select_pairing_profile(
         self,
         role: str,
@@ -362,6 +453,17 @@ class SensorBLE(Sensor):
             self.config.clear_sensor(role)
         self.config.setting.write_config()
         self.connect_cycling_sensors()
+
+    def remove_ble_sensor(self, role: str) -> None:
+        if role in self.CYCLING_ROLES:
+            self.remove_cycling_sensor(role)
+            return
+        if role != self.CONTROL_ROLE:
+            raise ValueError(f"Unsupported BLE sensor role: {role}")
+        self.disconnect_zwift_click_v2()
+        if self.config.sensor_uses(role, self.config.SENSOR_PROTOCOL_BLE):
+            self.config.clear_sensor(role)
+        self.config.setting.write_config()
 
     def _configured_cycling_roles(self) -> dict[str, list[str]]:
         roles_by_identifier = {}
@@ -473,13 +575,13 @@ class SensorBLE(Sensor):
             try:
                 policy = BleAdapterPolicy(configured_policy)
                 adapter = resolver.resolve(policy)
-                app_logger.debug(f"[BLE-CYCLING] using BlueZ adapter {adapter}")
+                app_logger.debug(f"[BLE-SENSOR] using BlueZ adapter {adapter}")
                 return adapter
             except (ValueError, BleAdapterResolutionError) as exc:
                 errors.append(str(exc))
         if errors:
             app_logger.warning(
-                f"[BLE-CYCLING] adapter resolution failed: {'; '.join(errors)}"
+                f"[BLE-SENSOR] adapter resolution failed: {'; '.join(errors)}"
             )
         return None
 
@@ -498,6 +600,7 @@ class SensorBLE(Sensor):
     def connect_zwift_click_v2(self) -> bool:
         """Start Zwift Click V2 listener if it is enabled and available."""
         if not self._is_zwift_click_v2_enabled():
+            self._zwift_click_v2_connection_status = self._control_idle_status()
             return False
         if self.is_zwift_click_v2_running():
             return True
@@ -506,6 +609,7 @@ class SensorBLE(Sensor):
             return False
 
         self._reset_zwift_click_v2_runtime()
+        self._zwift_click_v2_connection_status = "connecting"
         self._zwift_click_v2_thread = threading.Thread(
             target=self._run_zwift_click_v2_thread,
             name="zwift-click-v2",
@@ -516,6 +620,7 @@ class SensorBLE(Sensor):
 
     def disconnect_zwift_click_v2(self) -> None:
         """Stop Zwift Click V2 listener if running."""
+        self._zwift_click_v2_connection_status = self._control_idle_status()
         self._zwift_click_v2_stop_requested.set()
         loop = self._zwift_click_v2_loop
         if loop is None or not loop.is_running():
@@ -533,12 +638,25 @@ class SensorBLE(Sensor):
             pass
 
     def _is_zwift_click_v2_enabled(self) -> bool:
-        cfg = self.config.G_ZWIFT_CLICK_V2
-        if not cfg["STATUS"]:
-            return False
-        if not _HAS_ZWIFT_CLICK_V2:
-            return False
-        return True
+        return bool(
+            _HAS_ZWIFT_CLICK_V2
+            and self.config.ble_sensor_enabled()
+            and self._is_zwift_click_v2_configured()
+        )
+
+    def _is_zwift_click_v2_configured(self) -> bool:
+        return self.config.is_sensor_configured(
+            self.CONTROL_ROLE,
+            self.config.SENSOR_PROTOCOL_BLE,
+        )
+
+    def _control_idle_status(self) -> str:
+        if self.config.sensor_uses(
+            self.CONTROL_ROLE,
+            self.config.SENSOR_PROTOCOL_BLE,
+        ):
+            return "disconnected"
+        return "inactive"
 
     def _join_zwift_click_v2_thread(self) -> None:
         thread = self._zwift_click_v2_thread
@@ -557,9 +675,8 @@ class SensorBLE(Sensor):
         self._zwift_click_v2_task = asyncio.current_task()
         if self._zwift_click_v2_stop_requested.is_set():
             self._zwift_click_v2_stop_event.set()
-        cfg = self.config.G_ZWIFT_CLICK_V2
-        preferred_address = str(cfg["ADDRESS"]).strip()
-        button_hard = "Zwift_Click_V2"
+        preferred_address = str(self.config.G_SENSORS[self.CONTROL_ROLE]["ID"]).strip()
+        button_hard = self.CONTROL_BUTTON_PROFILE
 
         def normalize_button_key(button: str) -> str:
             """Normalize zwift_click_v2 button names into Button_Config keys."""
@@ -597,35 +714,35 @@ class SensorBLE(Sensor):
 
             self.config.button_config.press_button(button_hard, button_key, index)
 
-        def on_connected(side: str, address: str, _name: Optional[str]) -> None:
-            if not address:
+        def on_connected(_side: str, address: str, name: Optional[str]) -> None:
+            sensor = self.config.G_SENSORS[self.CONTROL_ROLE]
+            if str(sensor["ID"]).casefold() != address.casefold():
                 return
-            if cfg["ADDRESS"] == address:
+            sensor["NAME"] = str(name or "").strip()
+            self._zwift_click_v2_connection_status = "connected"
+
+        def on_disconnected(_side: str, _address: str) -> None:
+            if self._zwift_click_v2_stop_requested.is_set():
                 return
-            cfg["ADDRESS"] = address
-            setting = self.config.setting
-            if setting is not None:
-                setting.write_config()
+            self._zwift_click_v2_connection_status = "connecting"
 
         def on_stopped(_side: str, _packet: bytes) -> None:
             self._notify_zwift_click_v2_stopped()
 
-        adapter = None
-        if sys.platform.startswith("linux"):
-            try:
-                adapter = BleAdapterResolver().resolve(BleAdapterPolicy.BUILTIN)
-                debug_log(f"using BlueZ adapter {adapter}")
-            except BleAdapterResolutionError as exc:
-                log(f"built-in adapter resolution failed: {exc}")
-                return
-
         try:
+            adapter = None
+            if sys.platform.startswith("linux"):
+                adapter = self._resolve_sensor_adapter()
+                if adapter is None:
+                    return
+                debug_log(f"using BlueZ adapter {adapter}")
             await zwift_click_v2.listen(
                 on_classified=on_classified,
                 stop_event=self._zwift_click_v2_stop_event,
                 scan_forever=True,
-                preferred_address=preferred_address or None,
+                preferred_address=preferred_address,
                 on_connected=on_connected,
+                on_disconnected=on_disconnected,
                 on_stopped=on_stopped,
                 log=log,
                 debug_log=debug_log,
@@ -640,6 +757,7 @@ class SensorBLE(Sensor):
             self._zwift_click_v2_task = None
             self._zwift_click_v2_stop_event = None
             self._zwift_click_v2_loop = None
+            self._zwift_click_v2_connection_status = self._control_idle_status()
 
     def _notify_zwift_click_v2_stopped(self) -> None:
         gui = self.config.gui
