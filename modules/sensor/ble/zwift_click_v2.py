@@ -2,7 +2,7 @@
 Zwift Click V2 listener that mirrors the Flutter (Dart) implementation using `bleak`.
 
 - Discovers Zwift Click V2 units via manufacturer data (0x094A, device types 0x0A/0x0B).
-- Performs the same handshake as the app: write RIDE_ON, then write FF 04 00.
+- Starts the controller session with the Click V2 RIDE_ON command.
 - Subscribes to async (notify) and sync TX (indicate) characteristics and decodes button events.
 - Prints which side triggered which buttons, one line per classified press (short/long).
 
@@ -25,8 +25,13 @@ from bleak import BleakClient
 from bleak.backends.device import BLEDevice
 from bleak.backends.scanner import AdvertisementData
 
-from .discovery import discover_ble_devices
-from .identity import format_ble_identity
+if __package__:
+    from .discovery import discover_ble_devices
+    from .identity import format_ble_identity
+else:
+    # Allow running this file directly for hardware diagnostics.
+    from discovery import discover_ble_devices
+    from identity import format_ble_identity
 
 # UUIDs and constants sourced from lib/bluetooth/devices/zwift/constants.dart
 ZWIFT_MANUFACTURER_ID = 0x094A  # 2378
@@ -39,8 +44,6 @@ SYNC_RX_CHAR = "00000003-19ca-4651-86e5-fa29dcdd09d1"  # writes
 SYNC_TX_CHAR = "00000004-19ca-4651-86e5-fa29dcdd09d1"  # indications
 
 RIDE_ON = bytes([0x52, 0x69, 0x64, 0x65, 0x4F, 0x6E])
-HANDSHAKE_EXTRA = bytes([0xFF, 0x04, 0x00])
-HANDSHAKE_GAP_SECONDS = 0.1
 RESPONSE_START_CLICK_V2 = bytes([0x02, 0x03])
 RESPONSE_STOPPED_CLICK_V2_VARIANT_1 = bytes([0xFF, 0x05, 0x00, 0xEA, 0x05])
 RESPONSE_STOPPED_CLICK_V2_VARIANT_2 = bytes([0xFF, 0x05, 0x00, 0xFA, 0x05])
@@ -549,10 +552,12 @@ async def connect_and_listen(
             await client.start_notify(ASYNC_CHAR, handle_data)
             await client.start_notify(SYNC_TX_CHAR, handle_data)
 
-            # Handshake sequence mirrors Dart: RIDE_ON then FF 04 00.
-            await client.write_gatt_char(SYNC_RX_CHAR, RIDE_ON, response=False)
-            await asyncio.sleep(HANDSHAKE_GAP_SECONDS)
-            await client.write_gatt_char(SYNC_RX_CHAR, HANDSHAKE_EXTRA, response=False)
+            # Send the Click V2 session-start command as one BLE write.
+            await client.write_gatt_char(
+                SYNC_RX_CHAR,
+                START_COMMAND,
+                response=False,
+            )
 
             # Wait until disconnected or requested to stop.
             while client.is_connected and not stop_event.is_set():
@@ -843,12 +848,30 @@ async def main() -> None:
         default="",
         help="BLE address to connect directly (skip scan).",
     )
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress runtime output and print only a summary after stopping.",
+    )
     args = parser.parse_args()
 
     stop_event = asyncio.Event()
+    connection_count = 0
+    button_event_count = 0
+
+    def log(message: str) -> None:
+        if not args.quiet:
+            print(message)
+
+    def on_connected(_side: str, _address: str, _name: Optional[str]) -> None:
+        nonlocal connection_count
+        connection_count += 1
 
     def on_classified(side: str, button: str, kind: str, duration: float) -> None:
-        print(f"[{side}] {button} {kind} ({duration:.2f}s)")
+        nonlocal button_event_count
+        button_event_count += 1
+        if not args.quiet:
+            print(f"[{side}] {button} {kind} ({duration:.2f}s)")
 
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
@@ -866,8 +889,14 @@ async def main() -> None:
         scan_timeout_seconds=DEFAULT_SCAN_TIMEOUT_SECONDS,
         scan_forever=False,
         preferred_address=args.address or None,
-        log=print,
+        on_connected=on_connected,
+        log=log,
     )
+    if args.quiet:
+        print(
+            f"summary: connections={connection_count} "
+            f"button_events={button_event_count}"
+        )
 
 
 if __name__ == "__main__":
