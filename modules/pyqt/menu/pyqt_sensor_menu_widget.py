@@ -421,8 +421,6 @@ class SensorMenuWidget(ListWidget):
         "Light": None,
         "Control": None,
         "Temperature": None,
-        "Trainer": None,
-        "GPS": None,
         "Internal Sensors": None,
     }
 
@@ -499,14 +497,18 @@ class InternalSensorMenuWidget(MenuWidget):
     PITCH_ROLL_CALIBRATION_BUTTON = "Pitch/Roll Calibration"
 
     def setup_menu(self):
+        gps_action = (
+            self.gps_menu if "GPS" in self.config.gui.gui_config.G_GUI_INDEX else None
+        )
         button_conf = (
             # Name(page_name), button_attribute, connected functions, layout
+            ("GPS", "submenu", gps_action),
+            ("Adjust Altitude", "submenu", self.adjust_altitude),
             (
                 self.MAP_HEADING_BUTTON,
                 "toggle",
                 lambda: self.onoff_map_heading(True),
             ),
-            ("Adjust Altitude", "submenu", self.adjust_altitude),
             (self.MAG_CALIBRATION_BUTTON, "dialog", self.calib_mag),
             (
                 self.PITCH_ROLL_CALIBRATION_BUTTON,
@@ -519,6 +521,9 @@ class InternalSensorMenuWidget(MenuWidget):
 
     def preprocess(self):
         self.update_button_status()
+
+    def gps_menu(self):
+        self.change_page("GPS", preprocess=True)
 
     def adjust_altitude(self):
         self.change_page("Adjust Altitude")
@@ -1125,25 +1130,23 @@ class BLEListItemWidget(FullWidthSeparatorListItemWidget):
 
 class ControlMenuWidget(SensorConnectionMenuWidget):
     SENSOR_ROLE = "CTRL"
-
-
-class TrainerMenuWidget(MenuWidget):
-    BLE_BUTTON = "BLE (planned)"
     FAKE_TRAINER_BUTTON = "Fake Trainer for Zwift"
 
-    def setup_menu(self):
-        button_conf = (
-            (self.BLE_BUTTON, None, None),
+    def extra_button_conf(self):
+        return [
             (
                 self.FAKE_TRAINER_BUTTON,
                 "toggle",
                 lambda: self.onoff_fake_trainer(True),
-            ),
-        )
-        self.add_buttons(button_conf)
-        self.onoff_fake_trainer(False)
+            )
+        ]
 
     def preprocess(self):
+        super().preprocess()
+        self.onoff_fake_trainer(False)
+
+    def refresh_sensor_state(self):
+        super().refresh_sensor_state()
         self.onoff_fake_trainer(False)
 
     def onoff_fake_trainer(self, change=True):
