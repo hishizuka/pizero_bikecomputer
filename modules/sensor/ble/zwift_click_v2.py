@@ -120,6 +120,7 @@ class _PressState:
     last_seen_at: float
     repeat_interval_est: Optional[float] = None
     long_fired: bool = False
+    long_eligible: bool = True
 
 
 class PressDurationClassifier:
@@ -141,6 +142,7 @@ class PressDurationClassifier:
         self._default_repeat_interval_seconds = default_repeat_interval_seconds
         self._on_classified = on_classified
         self._active: dict[tuple[str, str, str], _PressState] = {}
+        self._latched_combos: dict[tuple[str, str], tuple[frozenset[str], str]] = {}
 
     def observe_pressed(
         self,
@@ -206,6 +208,48 @@ class PressDurationClassifier:
         # Update currently pressed buttons.
         self.observe_pressed(side, source, pressed, now=now_mono)
 
+    def observe_combo_snapshot(
+        self,
+        side: str,
+        source: str,
+        pressed_buttons: Iterable[str],
+        member_buttons: Iterable[str],
+        combo_button: str,
+        now: Optional[float] = None,
+    ) -> None:
+        """Latch a combo until all member buttons have been released."""
+        now_mono = time.monotonic() if now is None else now
+        pressed = set(_dedupe(pressed_buttons))
+        members = frozenset(_dedupe(member_buttons))
+        latch_key = (side, source)
+        latched = self._latched_combos.get(latch_key)
+
+        if latched is None and members.issubset(pressed):
+            self.suppress_buttons(side, source, members)
+            latched = (members, combo_button)
+            self._latched_combos[latch_key] = latched
+
+        if latched is not None:
+            latched_members, latched_button = latched
+            pressed_members = pressed & latched_members
+            self.suppress_buttons(side, source, latched_members)
+            state = self._active.get((side, source, latched_button))
+            if state is not None and pressed_members != latched_members:
+                self._fire_long_press_if_due(
+                    side,
+                    latched_button,
+                    state,
+                    now_mono,
+                )
+                state.long_eligible = False
+            pressed.difference_update(latched_members)
+            if pressed_members:
+                pressed.add(latched_button)
+            else:
+                self._latched_combos.pop(latch_key, None)
+
+        self.observe_snapshot(side, source, pressed, now=now_mono)
+
     def suppress_buttons(self, side: str, source: str, buttons: Iterable[str]) -> None:
         """Remove active buttons without emitting a release classification."""
         for button in _dedupe(buttons):
@@ -213,13 +257,22 @@ class PressDurationClassifier:
 
     def flush_long_presses(self, now: Optional[float] = None) -> None:
         now_mono = time.monotonic() if now is None else now
-        for (side, source, button), state in self._active.items():
-            if state.long_fired:
-                continue
-            duration = now_mono - state.started_at
-            if duration >= self._long_press_seconds:
-                state.long_fired = True
-                self._on_classified(side, button, "long", duration)
+        for (side, _source, button), state in self._active.items():
+            self._fire_long_press_if_due(side, button, state, now_mono)
+
+    def _fire_long_press_if_due(
+        self,
+        side: str,
+        button: str,
+        state: _PressState,
+        now: float,
+    ) -> None:
+        if state.long_fired or not state.long_eligible:
+            return
+        duration = now - state.started_at
+        if duration >= self._long_press_seconds:
+            state.long_fired = True
+            self._on_classified(side, button, "long", duration)
 
     def flush_timeouts(self, now: Optional[float] = None) -> None:
         now_mono = time.monotonic() if now is None else now
@@ -232,9 +285,12 @@ class PressDurationClassifier:
             state = self._active.pop(key, None)
             if state is None:
                 continue
+            side, source, button = key
+            latched = self._latched_combos.get((side, source))
+            if latched is not None and button == latched[1]:
+                self._latched_combos.pop((side, source), None)
             if state.long_fired:
                 continue
-            side, source, button = key
             repeat = state.repeat_interval_est or self._default_repeat_interval_seconds
             # Approximate "release" near the next expected report to reduce under-estimation.
             release_time = min(now_mono, state.last_seen_at + repeat)
@@ -384,15 +440,6 @@ def parse_click_keypad_status(payload: bytes) -> tuple[List[str], List[str]]:
         elif field == 2:
             target.append("minus")
     return pressed, released
-
-
-def _apply_shift_up_combo(buttons: Iterable[str]) -> List[str]:
-    """Add a synthetic combo button when both shift-up buttons are pressed."""
-    pressed = _dedupe(buttons)
-    if SHIFT_UP_LEFT in pressed and SHIFT_UP_RIGHT in pressed:
-        pressed = [b for b in pressed if b not in (SHIFT_UP_LEFT, SHIFT_UP_RIGHT)]
-        pressed.append(SHIFT_UP_BOTH)
-    return pressed
 
 
 def _format_packet_hex(packet: bytes) -> str:
@@ -627,11 +674,13 @@ def handle_notification(
 
     if opcode == MESSAGE_TYPE_RIDE_NOTIFICATION:
         buttons = parse_ride_keypad_status(payload)
-        if SHIFT_UP_LEFT in buttons and SHIFT_UP_RIGHT in buttons:
-            # Suppress single-button releases when the combo is active.
-            classifier.suppress_buttons(side, "ride", [SHIFT_UP_LEFT, SHIFT_UP_RIGHT])
-        buttons = _apply_shift_up_combo(buttons)
-        classifier.observe_snapshot(side, "ride", buttons)
+        classifier.observe_combo_snapshot(
+            side,
+            "ride",
+            buttons,
+            [SHIFT_UP_LEFT, SHIFT_UP_RIGHT],
+            SHIFT_UP_BOTH,
+        )
     elif opcode == MESSAGE_TYPE_CLICK_NOTIFICATION:
         pressed, released = parse_click_keypad_status(payload)
         if pressed:
