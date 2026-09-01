@@ -96,6 +96,12 @@ class Setting:
                 )
             if "WIND_DATA_SOURCE" in c:
                 self.config.G_WIND_DATA_SOURCE = c["WIND_DATA_SOURCE"]
+            if "USE_COURSE_WEATHER" in c:
+                self.config.G_USE_COURSE_WEATHER = c.getboolean("USE_COURSE_WEATHER")
+            if "COURSE_WEATHER_DATA_SOURCE" in c:
+                self.config.G_COURSE_WEATHER_DATA_SOURCE = c[
+                    "COURSE_WEATHER_DATA_SOURCE"
+                ]
             if "USE_DEM_TILE" in c:
                 self.config.G_USE_DEM_TILE = c.getboolean("USE_DEM_TILE")
             if "DEM_MAP" in c:
@@ -402,6 +408,8 @@ class Setting:
         c["WIND_OVERLAY_MAP"] = self.config.G_WIND_OVERLAY_MAP
         c["USE_WIND_DATA_SOURCE"] = str(self.config.G_USE_WIND_DATA_SOURCE)
         c["WIND_DATA_SOURCE"] = self.config.G_WIND_DATA_SOURCE
+        c["USE_COURSE_WEATHER"] = str(self.config.G_USE_COURSE_WEATHER)
+        c["COURSE_WEATHER_DATA_SOURCE"] = self.config.G_COURSE_WEATHER_DATA_SOURCE
         c["USE_DEM_TILE"] = str(self.config.G_USE_DEM_TILE)
         c["DEM_MAP"] = self.config.G_DEM_MAP
 

@@ -130,6 +130,10 @@ class Config:
     G_USE_WIND_DATA_SOURCE = True
     G_WIND_DATA_SOURCE = "openmeteo"  # openmeteo(worldwide), jpn_scw(japan)
 
+    # course weather forecast
+    G_USE_COURSE_WEATHER = True
+    G_COURSE_WEATHER_DATA_SOURCE = "openmeteo"
+
     # screenshot dir
     G_SCREENSHOT_DIR = "screenshots"
 

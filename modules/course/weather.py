@@ -29,25 +29,40 @@ class CourseWeatherService:
             current_time += timedelta(hours=rest_distance / config.G_GROSS_AVE_SPEED)
             timeline.append(current_time)
 
-        wind_speed = [np.nan] * len(course_indices)
-        wind_direction = [np.nan] * len(course_indices)
+        weather = {
+            key: [np.nan] * len(course_indices)
+            for key in (
+                "wind_speed",
+                "wind_direction",
+                "temperature",
+                "precipitation",
+                "cloud_cover",
+            )
+        }
+        loaded = [False] * len(course_indices)
         retry_delays = (1.0, 3.0, 8.0)
 
         for attempt in range(len(retry_delays) + 1):
             for i, course_index in enumerate(course_indices):
-                if not any(np.isnan((wind_speed[i], wind_direction[i]))):
+                if loaded[i]:
                     continue
-                speed, direction, _ = await config.api.get_wind(
+                result = await config.api.get_course_weather(
                     [course.longitude[course_index], course.latitude[course_index]],
-                    forecast_time=timeline[i],
+                    timeline[i],
                 )
-                if not any(np.isnan((speed, direction))):
-                    wind_speed[i] = float(speed)
-                    wind_direction[i] = float(direction)
+                if result is None:
+                    continue
+                for key in weather:
+                    weather[key][i] = result[key]
+                loaded[i] = True
 
-            if not any(np.isnan(wind_speed)) and not any(np.isnan(wind_direction)):
+            if all(loaded):
                 break
             if attempt < len(retry_delays):
                 await asyncio.sleep(retry_delays[attempt])
 
-        return course_indices, timeline, wind_speed, wind_direction
+        return {
+            "course_indices": course_indices,
+            "timeline": timeline,
+            **weather,
+        }

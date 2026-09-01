@@ -1,7 +1,6 @@
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone  #datetime is necessary for map_config["current_time_func"]()
-import locale
 from random import random
 import asyncio
 
@@ -101,6 +100,90 @@ SCW_WIND_SPEED_COLOR_VALUE = np.array([
 
 SCW_WIND_ARROW_MARGIN = 8
 SCW_WIND_ARROW_PIXEL_COUNT = 10
+SCW_VALUE_SEARCH_RADIUS = 8
+SCW_MONTHS = (
+    "JAN",
+    "FEB",
+    "MAR",
+    "APR",
+    "MAY",
+    "JUN",
+    "JUL",
+    "AUG",
+    "SEP",
+    "OCT",
+    "NOV",
+    "DEC",
+)
+
+# Bin colors from the SCW weather legends.
+SCW_PRECIPITATION_COLOR = np.array(
+    [
+        [143, 114, 217],
+        [92, 73, 232],
+        [45, 31, 239],
+        [2, 18, 249],
+        [3, 108, 250],
+        [4, 198, 250],
+        [9, 250, 216],
+        [7, 250, 131],
+        [2, 254, 38],
+        [54, 254, 2],
+        [144, 253, 4],
+        [236, 253, 11],
+        [254, 181, 2],
+        [250, 93, 5],
+        [243, 7, 2],
+    ],
+    dtype="uint8",
+)
+SCW_PRECIPITATION_VALUE = np.array(
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 25, 40, 65, 80]
+)
+SCW_CLOUD_COLOR = np.array(
+    [[gray, gray, gray] for gray in range(0, 181, 20)], dtype="uint8"
+)
+SCW_CLOUD_VALUE = np.array([0, 15, 25, 35, 45, 55, 65, 75, 85, 100])
+SCW_TEMPERATURE_COLOR = np.array(
+    [
+        [0, 0, 249],
+        [0, 19, 255],
+        [0, 45, 255],
+        [0, 70, 255],
+        [0, 96, 255],
+        [0, 121, 255],
+        [0, 147, 255],
+        [0, 172, 255],
+        [0, 198, 255],
+        [0, 223, 255],
+        [0, 249, 255],
+        [0, 255, 219],
+        [0, 255, 170],
+        [0, 255, 121],
+        [0, 255, 73],
+        [0, 255, 24],
+        [26, 255, 0],
+        [77, 255, 0],
+        [128, 255, 0],
+        [179, 255, 0],
+        [230, 255, 0],
+        [255, 244, 0],
+        [255, 221, 0],
+        [255, 199, 0],
+        [255, 176, 0],
+        [255, 157, 0],
+        [255, 140, 0],
+        [255, 124, 0],
+        [255, 107, 0],
+        [255, 91, 0],
+        [255, 74, 0],
+        [255, 58, 0],
+    ],
+    dtype="uint8",
+)
+# Midpoints of the verified 5-6 through 36-37 degree Celsius bins.
+SCW_TEMPERATURE_VALUE = np.arange(5.5, 37.5)
+
 
 JMA_RAIN_COLOR = np.array([
     [242, 242, 255], # #F2F2FF,   0~1[mm/h]
@@ -169,11 +252,18 @@ RAINVIEWER_NEXRAD_LEGEND = np.array([
 
 
 async def get_scw_list(url, referer):
-    try:
-        response = await get_json(url, headers={"referer": referer})
-    except:
-        response = None
-    return response
+    return await get_json(url, headers={"referer": referer})
+
+
+def _parse_scw_validtime(value):
+    return datetime(
+        int(value[10:14]),
+        SCW_MONTHS.index(value[7:10]) + 1,
+        int(value[5:7]),
+        int(value[0:2]),
+        int(value[2:4]),
+        tzinfo=timezone.utc,
+    )
 
 
 def conv_colorcode(t):
@@ -232,6 +322,86 @@ def get_wind_color(wind_speed):
     return list(SCW_WIND_SPEED_ARROW_CONV[max(idx-1, 0)])
 
 
+def _get_nearest_palette_index(color, palette):
+    dist = np.linalg.norm(
+        palette.astype("int16") - np.asarray(color[:3], dtype="int16"), axis=1
+    )
+    index = np.argmin(dist)
+    return int(index) if dist[index] < 10 else None
+
+
+def _get_palette_values(colors, palettes):
+    matches = [[] for _ in palettes]
+    for color in colors:
+        for palette_index, (palette, values) in enumerate(palettes):
+            color_index = _get_nearest_palette_index(color, palette)
+            if color_index is None:
+                continue
+            matches[palette_index].append(float(values[color_index]))
+            break
+
+    for palette_index, values in enumerate(matches):
+        if values:
+            return palette_index, values
+    return None, []
+
+
+def _iter_colors_at_radius(image, x, y, radius):
+    width, height = image.size
+    for pixel_y in range(max(y - radius, 0), min(y + radius + 1, height)):
+        for pixel_x in range(max(x - radius, 0), min(x + radius + 1, width)):
+            if max(abs(pixel_x - x), abs(pixel_y - y)) != radius:
+                continue
+            yield image.getpixel((pixel_x, pixel_y))
+
+
+def _get_nearest_palette_values(image, x, y, palettes):
+    color = image.getpixel((x, y))
+    palette_index, values = _get_palette_values((color,), palettes)
+    if values:
+        return palette_index, values
+
+    if color[0] != color[1] or color[1] != color[2]:
+        return None, []
+
+    for radius in range(1, SCW_VALUE_SEARCH_RADIUS + 1):
+        palette_index, values = _get_palette_values(
+            _iter_colors_at_radius(image, x, y, radius), palettes
+        )
+        if values:
+            return palette_index, values
+    return None, []
+
+
+def get_precipitation_cloud_with_tile_xy(image, x_in_tile, y_in_tile):
+    palette_index, values = _get_nearest_palette_values(
+        image,
+        x_in_tile,
+        y_in_tile,
+        (
+            (SCW_PRECIPITATION_COLOR, SCW_PRECIPITATION_VALUE),
+            (SCW_CLOUD_COLOR, SCW_CLOUD_VALUE),
+        ),
+    )
+    if not values:
+        return np.nan, np.nan
+
+    value = float(np.median(values))
+    if palette_index == 0:
+        return value, np.nan
+    return 0.0, value
+
+
+def get_temperature_with_tile_xy(image, x_in_tile, y_in_tile):
+    _, values = _get_nearest_palette_values(
+        image,
+        x_in_tile,
+        y_in_tile,
+        ((SCW_TEMPERATURE_COLOR, SCW_TEMPERATURE_VALUE),),
+    )
+    return float(np.median(values)) if values else np.nan
+
+
 def conv_image_internal(image, orig_colors, conv_colors):
 
     wing_speed_mod = []
@@ -240,12 +410,10 @@ def conv_image_internal(image, orig_colors, conv_colors):
     for c in colors:
         if c[1][0] == c[1][1] == c[1][2]:
             continue
-        dist = np.linalg.norm(orig_colors - c[1][0:3], axis=1)
-        min_index = np.argmin(dist)
-        if dist[min_index] < 10:
+        min_index = _get_nearest_palette_index(c[1], orig_colors)
+        if min_index is not None:
             wing_speed_mod.append(c[1])
             wing_speed_index.append(min_index)
-            # app_logger.debug(f"{c[1]} / {c[0]}: {dist[min_index]:.0f}")
 
     # mask and convert
     im_array = np.array(image)
@@ -299,246 +467,140 @@ def get_jma_prev_next_validtime(map_settings):
     return p_vt, n_vt
 
 
-def get_wind_with_tile_xy(img_files, x_in_tile, y_in_tile, tilesize, tiles_cond, image, im_array):
-    def get_wind_speed(color):
-        dist = np.linalg.norm(SCW_WIND_SPEED_COLOR - color, axis=1)
-        min_index = np.argmin(dist)
-        min_label = None
-        if dist[min_index] < 10:
-            min_label = float(SCW_WIND_SPEED_COLOR_VALUE[min_index])
-        # app_logger.debug(f"color: {color}")
-        # app_logger.debug(dist)
-        # app_logger.debug(f"min_index:{min_index}, min_label:{min_label}")
-        return min_label, dist[min_index]
-
-    def get_marginal_wind_speed(image, xy_in_tile, delta, image_size):
-        pixels = []
-        x = xy_in_tile[0]
-        y = xy_in_tile[1]
-        for j in range(y-delta, y+delta+1):
-            if j < 0 or j > image_size[0]:
+def get_wind_with_tile_xy(
+    img_files,
+    x_in_tile,
+    y_in_tile,
+    tilesize,
+    tiles_cond,
+    image,
+    arrow_mask,
+):
+    def get_marginal_contour(x, y, contour_count, mask, index):
+        for j in range(y - 1, y + 2):
+            if j < 0 or j >= mask.shape[0]:
                 continue
-            for i in range(x-delta, x+delta+1):
-                if (i == x and j == y) or i < 0 or i > image_size[1]:
-                    continue
-                pixels.append((i, j))
-        
-        labels = []
-        for p in pixels:
-            color = image.getpixel(p)
-            if color[0] == color[1] == color[2]:
-                continue
-            min_label, min_dist = get_wind_speed(color)
-            # app_logger.debug(f"{p}: {conv_colorcode(color)} {color}: {min_dist:.0f}, {min_label:.1f}[m/s]")
-            if min_label is not None:
-                labels.append(min_label)
-        
-        if len(labels):
-            return round(np.average(labels), 1)
-        else:
-            return get_marginal_wind_speed(image, xy_in_tile, delta+1, image_size)
-
-    def get_marginal_contour(x, y, contour_count, image_xy, mask, index):
-        for j in range(y-1, y+1+1):
-            if j < 0 or j >= image_xy[0]:
-                continue
-            for i in range(x-1, x+1+1):
-                if i < 0 or i >= image_xy[1]:
+            for i in range(x - 1, x + 2):
+                if i < 0 or i >= mask.shape[1]:
                     continue
                 if mask[j, i] and not index[j, i]:
                     index[j, i] = contour_count
-                    get_marginal_contour(i, j, contour_count, image_xy, mask, index)
+                    get_marginal_contour(i, j, contour_count, mask, index)
 
-    xy_in_tile = np.array([x_in_tile, y_in_tile])
-
-    if tiles_cond[0] < 0:
-        xy_in_tile[0] += 256
-    if tiles_cond[1] < 0:
-        xy_in_tile[1] += 256
-    # app_logger.debug(f"[{x_in_tile}, {y_in_tile}] -> {xy_in_tile}")
+    x = x_in_tile + (tilesize if tiles_cond[0] < 0 else 0)
+    y = y_in_tile + (tilesize if tiles_cond[1] < 0 else 0)
 
     if image is None:
-        # app_logger.info(f"open image: {img_files}")
-        if len(img_files) == 1:
-            image = Image.open(img_files[0]).convert("RGB")
-        elif len(img_files) == 2:
-            if tiles_cond[0] != 0:
-                image = Image.new('RGB', (tilesize*2, tilesize))
-                for i, m in enumerate(img_files):
-                    image.paste(Image.open(m).convert("RGB"), (tilesize*i,0))
-            elif tiles_cond[1] != 0:
-                image = Image.new('RGB', (tilesize, tilesize*2))
-                for i, m in enumerate(img_files):
-                    image.paste(Image.open(m).convert("RGB"), (0, tilesize*i))
-        elif len(img_files) == 4:
-            image = Image.new('RGB', (tilesize*2, tilesize*2))
-            for i, m in enumerate(img_files):
-                y, x = divmod(i, 2)
-                image.paste(Image.open(m).convert("RGB"), (tilesize*x, tilesize*y))
+        columns = 2 if tiles_cond[0] else 1
+        rows = 2 if tiles_cond[1] else 1
+        image = Image.new("RGB", (tilesize * columns, tilesize * rows))
+        for index, filename in enumerate(img_files):
+            row, column = divmod(index, columns)
+            with Image.open(filename) as tile:
+                image.paste(tile.convert("RGB"), (tilesize * column, tilesize * row))
 
-    #color = image.getpixel(tuple(xy_in_tile))
-    color = image.getpixel((xy_in_tile.item(0), xy_in_tile.item(1)))
-    # app_logger.info(f"image.size: {image.size}")
-
-    # get wind_speed
-    wind_speed, min_dist = get_wind_speed(color)
-    if color[0] == color[1] == color[2]:
-        # app_logger.debug("detect gray")
-        # search marginal pixel
-        wind_speed = get_marginal_wind_speed(image, xy_in_tile, 1, image.size[::-1])
-    # app_logger.debug(f"{conv_colorcode(color)} {color}: {min_dist:.0f}, {wind_speed:.0f}[m/s]")
+    _, wind_speeds = _get_nearest_palette_values(
+        image,
+        x,
+        y,
+        ((SCW_WIND_SPEED_COLOR, SCW_WIND_SPEED_COLOR_VALUE),),
+    )
+    wind_speed = round(np.average(wind_speeds), 1) if wind_speeds else np.nan
 
     # get wind_direction
     wind_direction = 0
 
-    # modify color palette of arrows
-    wing_speed_mod = []
-    colors = image.getcolors(image.size[0]*image.size[1])
-    for c in colors:
-        if c[1][0] == c[1][1] == c[1][2]:
-            continue
-        dist = np.linalg.norm(SCW_WIND_SPEED_ARROW - c[1], axis=1)
-        min_index = np.argmin(dist)
-        if dist[min_index] < 10:
-            wing_speed_mod.append(c[1])
-            # app_logger.debug(f"{conv_colorcode(c[1])} {c[1]} / {c[0]}: {dist[min_index]:.0f}")
+    if arrow_mask is None:
+        arrow_colors = [
+            color
+            for _, color in image.getcolors(image.size[0] * image.size[1])
+            if _get_nearest_palette_index(color, SCW_WIND_SPEED_ARROW) is not None
+        ]
 
-    # extract arrows
-    if im_array is None:
-        # app_logger.debug("create im_array")
-        im_array = np.array(image)
-        mask = np.zeros(im_array.shape[0:2], dtype='bool')
-        for w in wing_speed_mod:
-            mask = np.ma.mask_or(
-                mask, 
-                (im_array[:,:,0] == w[0]) & (im_array[:,:,1] == w[1]) & (im_array[:,:,2] == w[2])
-            )
-        im_array[:,:,:3][mask] = [255, 255, 255]
-        im_array[:,:,:3][~mask] = [0, 0, 0]
-    else:
-        mask = np.zeros(im_array.shape[0:2], dtype='bool')
-        mask = (im_array[:,:,0] == 255)
+        image_array = np.asarray(image)
+        arrow_mask = np.zeros(image_array.shape[:2], dtype=bool)
+        for color in arrow_colors:
+            arrow_mask |= np.all(image_array == color, axis=2)
 
-    # detect arrows in SCW_WIND_ARROW_MARGIN*SCW_WIND_ARROW_MARGIN pixels
+    # Detect arrows in the local search area around the requested position.
     x_border = [
-        max(xy_in_tile[0]-SCW_WIND_ARROW_MARGIN, 0),
-        min(xy_in_tile[0]+SCW_WIND_ARROW_MARGIN, im_array.shape[1])
+        max(x - SCW_WIND_ARROW_MARGIN, 0),
+        min(x + SCW_WIND_ARROW_MARGIN, arrow_mask.shape[1]),
     ]
     y_border = [
-        max(xy_in_tile[1]-SCW_WIND_ARROW_MARGIN, 0),
-        min(xy_in_tile[1]+SCW_WIND_ARROW_MARGIN, im_array.shape[0])
+        max(y - SCW_WIND_ARROW_MARGIN, 0),
+        min(y + SCW_WIND_ARROW_MARGIN, arrow_mask.shape[0]),
     ]
 
-    # detect contours
-    index = np.zeros((im_array.shape[0:2]), dtype="uint8")
+    local_mask = arrow_mask[
+        y_border[0] : y_border[1],
+        x_border[0] : x_border[1],
+    ]
+    index = np.zeros(local_mask.shape, dtype="uint8")
     contour_count = 1
-    # app_logger.debug(f"x_border: {x_border}, y_border: {y_border}")
-    for j in range(*y_border):
-        for i in range(*x_border):
-            if mask[j,i] and not index[j,i]:
-                index[j,i] = contour_count
-                get_marginal_contour(i, j, contour_count, im_array.shape[0:2], mask, index)
+    for j in range(local_mask.shape[0]):
+        for i in range(local_mask.shape[1]):
+            if local_mask[j, i] and not index[j, i]:
+                index[j, i] = contour_count
+                get_marginal_contour(
+                    i,
+                    j,
+                    contour_count,
+                    local_mask,
+                    index,
+                )
                 contour_count += 1
-    # app_logger.debug(index[y_border[0]:y_border[1]+1, x_border[0]:x_border[1]+1])
 
-    # get long edge, short edge, cerntroid and center of arrows to calculate direction
-    stats = []
-    for i in range(contour_count):
-        stats.append({
-            "max_width":0,
-            "min_width":im_array.shape[1],
-            "max_width_point": None,
-            "min_width_point": None,
-            "max_height":0,
-            "min_height":im_array.shape[0],
-            "max_height_point": None,
-            "min_height_point": None,
-            "centroid": np.array([0, 0]),
-            "count": 1,
-            "start": None,
-            
-        })
-    for j in range(*y_border):
-        for i in range(*x_border):
-            if not index[j, i]:
-                continue
-            c = index[j, i]
-            if stats[c]["max_width"] < i:
-                stats[c]["max_width"] = i
-                stats[c]["max_width_point"] = np.array([i, j])
-            if stats[c]["min_width"] > i:
-                stats[c]["min_width"] = i
-                stats[c]["min_width_point"] = np.array([i, j])
-            if stats[c]["max_height"] < j:
-                stats[c]["max_height"] = j
-                stats[c]["max_height_point"] = np.array([i, j])
-            if stats[c]["min_height"] > j:
-                stats[c]["min_height"] = j
-                stats[c]["min_height_point"] = np.array([i, j])
-            stats[c]["centroid"] = (
-                stats[c]["centroid"] * (stats[c]["count"] - 1) + np.array([i, j])
-            ) / stats[c]["count"]
-            stats[c]["count"] += 1
-    
+    xy_in_search_area = np.array([x - x_border[0], y - y_border[0]])
     dist_min = np.inf
-    for i in range(contour_count):
-        s = stats[i]
-        if s["max_width_point"] is None or s["count"] <= SCW_WIND_ARROW_PIXEL_COUNT:
+    for contour in range(1, contour_count):
+        points = np.argwhere(index == contour)[:, ::-1]
+        if len(points) < SCW_WIND_ARROW_PIXEL_COUNT:
             continue
-        w_h = np.array([
-            s["max_width"] - s["min_width"],
-            s["max_height"] - s["min_height"]
-        ])
-        center = np.array([
-            (s["max_width"] + s["min_width"]) / 2,
-            (s["max_height"] + s["min_height"]) / 2
-        ])
+        x = points[:, 0]
+        y = points[:, 1]
+        min_width, max_width = x.min(), x.max()
+        min_height, max_height = y.min(), y.max()
+        min_width_point = points[np.flatnonzero(x == min_width)[0]]
+        max_width_point = points[np.flatnonzero(x == max_width)[0]]
+        min_height_point = points[np.flatnonzero(y == min_height)[0]]
+        max_height_point = points[np.flatnonzero(y == max_height)[0]]
+        centroid = points.mean(axis=0)
+        center = np.array(
+            [(min_width + max_width) / 2, (min_height + max_height) / 2]
+        )
 
-        x_y = np.array([0, 0])
-        if w_h[0] > w_h[1]:
-            if s["centroid"][0] > center[0]:
-                x_y = s["max_width_point"] - s["min_width_point"]
-                s["start"] = s["min_width_point"]
+        if max_width - min_width > max_height - min_height:
+            if centroid[0] > center[0]:
+                x_y = max_width_point - min_width_point
+                start = min_width_point
             else:
-                x_y = s["min_width_point"] - s["max_width_point"]
-                s["start"] = s["max_width_point"]
+                x_y = min_width_point - max_width_point
+                start = max_width_point
         else:
-            if s["centroid"][1] > center[1]:
-                x_y = s["max_height_point"] - s["min_height_point"]
-                s["start"] = s["min_height_point"]
+            if centroid[1] > center[1]:
+                x_y = max_height_point - min_height_point
+                start = min_height_point
             else:
-                x_y = s["min_height_point"] - s["max_height_point"]
-                s["start"] = s["max_height_point"]
+                x_y = min_height_point - max_height_point
+                start = max_height_point
 
         d = round(np.degrees(np.arctan2(x_y[1], x_y[0]))) - 90
         if d < 0:
             d += 360
-        # app_logger.debug(f"{i}: {w_h}, {x_y}, {d} deg, start:{s['start']}"")
 
-        dist = np.linalg.norm(s["start"] - xy_in_tile)
+        dist = np.linalg.norm(start - xy_in_search_area)
         if dist < dist_min:
             wind_direction = d
             dist_min = dist
-            # app_logger.debug(f"  dist: {round(dist,1)}, from {s['start']} to {xy_in_tile}")
 
-    # app_logger.debug(stats)
-    return wind_speed, wind_direction, image, im_array
+    return wind_speed, wind_direction, image, arrow_mask
 
 
 class MapTileWithValues():
     config = None
 
-    # for jpn_scw
-    pre_wind_tile_xy = (np.nan, np.nan)
-    pre_wind_xy_in_tile = (np.nan, np.nan)
-    pre_wind_tiles = None
-    pre_wind_tiles_cond = None
-    pre_wind_speed = np.nan
-    pre_wind_direction = np.nan
     existing_tiles = {}
-    wind_image = None
-    wind_im_array = None
-    scw_wind_validtime = None
     
     # for jpn_kokudo_chiri_in_DEM~
     pre_alt_map_name = None
@@ -871,122 +933,208 @@ class MapTileWithValues():
         else:
             return False
 
-    async def get_wind(self, pos, forcast_time=None):
+    @staticmethod
+    def _get_scw_forecast_map_config(map_config, map_name, forecast_time):
+        map_settings = map_config[map_name].copy()
+        if map_settings["timeline"] is None:
+            return None
+
+        closest = min(
+            map_settings["timeline"],
+            key=lambda entry: abs(_parse_scw_validtime(entry["it"]) - forecast_time),
+        )
+
+        map_settings["validtime"] = closest["it"]
+        map_settings["subdomain"] = closest["sd"]
+        return {map_name: map_settings}
+
+    @staticmethod
+    def _get_scw_layer_map_config(map_name, map_settings, layer_name):
+        layer = map_settings["layers"][layer_name]
+        wind_layer = map_settings["layers"]["wind"]
+        layer_map_name = f"{map_name}_{layer}"
+        layer_settings = map_settings.copy()
+        layer_settings["url"] = map_settings["url"].replace(
+            f"/{wind_layer}/", f"/{layer}/"
+        )
+        return {layer_map_name: layer_settings}, layer_map_name
+
+    async def _get_scw_layer_value(
+        self, pos, forecast_time, map_name, layer_name, extractor
+    ):
         map_config = self.config.G_WIND_OVERLAY_MAP_CONFIG
-        map_name = self.config.G_WIND_DATA_SOURCE
         map_settings = map_config[map_name]
         z = map_settings["max_zoomlevel"]
         tilesize = map_settings["tile_size"]
+        if np.any(np.isnan(pos)):
+            return None
 
-        if not map_name.startswith("jpn_scw") or np.any(np.isnan(pos)):
+        tile_x, tile_y, x_in_tile, y_in_tile = get_tilexy_and_xy_in_tile(
+            z, *pos, tilesize
+        )
+        await self.update_overlay_windmap_timeline(map_settings, map_name, wait=True)
+        forecast_map_config = self._get_scw_forecast_map_config(
+            map_config, map_name, forecast_time
+        )
+        if forecast_map_config is None:
+            return None
+
+        layer_map_config, layer_map_name = self._get_scw_layer_map_config(
+            map_name,
+            forecast_map_config[map_name],
+            layer_name,
+        )
+        layer_settings = layer_map_config[layer_map_name]
+        tile = (tile_x, tile_y)
+        await self.download_maptiles([tile], layer_map_config, layer_map_name, z)
+        filename = get_maptile_filename(layer_map_name, z, *tile, layer_settings)
+        if not self.check_existing_tiles(filename):
+            return None
+
+        with Image.open(filename) as image:
+            return extractor(image.convert("RGB"), x_in_tile, y_in_tile)
+
+    async def get_precipitation_cloud(self, pos, forecast_time, map_name):
+        return await self._get_scw_layer_value(
+            pos,
+            forecast_time,
+            map_name,
+            "precipitation_cloud",
+            get_precipitation_cloud_with_tile_xy,
+        )
+
+    async def get_temperature(self, pos, forecast_time, map_name):
+        return await self._get_scw_layer_value(
+            pos,
+            forecast_time,
+            map_name,
+            "temperature",
+            get_temperature_with_tile_xy,
+        )
+
+    async def get_course_weather(self, pos, forecast_time, map_name):
+        wind_speed, wind_direction = await self.get_wind(pos, forecast_time, map_name)
+        if np.any(np.isnan((wind_speed, wind_direction))):
+            return None
+
+        precipitation_cloud = await self.get_precipitation_cloud(
+            pos, forecast_time, map_name
+        )
+        if precipitation_cloud is None:
+            return None
+
+        temperature = await self.get_temperature(pos, forecast_time, map_name)
+        if temperature is None or np.isnan(temperature):
+            return None
+
+        precipitation, cloud_cover = precipitation_cloud
+        return {
+            "wind_speed": float(wind_speed),
+            "wind_direction": float(wind_direction),
+            "temperature": temperature,
+            "precipitation": precipitation,
+            "cloud_cover": cloud_cover,
+        }
+
+    async def get_wind(self, pos, forecast_time=None, map_name=None):
+        map_config = self.config.G_WIND_OVERLAY_MAP_CONFIG
+        if map_name is None:
+            map_name = self.config.G_WIND_DATA_SOURCE
+        map_settings = map_config[map_name]
+        z = map_settings["max_zoomlevel"]
+        tilesize = map_settings["tile_size"]
+        is_current = forecast_time is None
+
+        if np.any(np.isnan(pos)):
             return np.nan, np.nan
 
         # initialize
         tile_x, tile_y, x_in_tile, y_in_tile = get_tilexy_and_xy_in_tile(
             z, *pos, tilesize
         )
-        wait = forcast_time is not None
-        await self.update_overlay_windmap_timeline(map_settings, map_name, wait)
-
-        time_updated = False
-        if self.scw_wind_validtime != map_config[map_name]["validtime"]:
-            # app_logger.debug(f"get_wind update: {self.scw_wind_validtime}, {map_config[map_name]['validtime']} / {map_config[map_name]['basetime']}")
-            self.scw_wind_validtime = map_config[map_name]["validtime"]
-            time_updated = True
-
-        if (
-            forcast_time is None
-            and self.pre_wind_tile_xy == (tile_x, tile_y)
-            and self.pre_wind_xy_in_tile == (x_in_tile, y_in_tile)
-            and not time_updated
-            and self.wind_image is not None
-        ):
-            return self.pre_wind_speed, self.pre_wind_direction
+        await self.update_overlay_windmap_timeline(
+            map_settings, map_name, wait=not is_current
+        )
 
         # check marginal tile
-        tiles_cond = [0, 0] # x:-1/0/+1, y:-1/0/+1
-        for i, t in enumerate([x_in_tile, y_in_tile]):
-            if t < SCW_WIND_ARROW_MARGIN:
-                tiles_cond[i] = -1
-            elif t > tilesize - SCW_WIND_ARROW_MARGIN:
-                tiles_cond[i] = +1
+        tiles_cond = [
+            (
+                -1
+                if value < SCW_WIND_ARROW_MARGIN
+                else 1 if value > tilesize - SCW_WIND_ARROW_MARGIN else 0
+            )
+            for value in (x_in_tile, y_in_tile)
+        ]
         # tile check and download
         tiles = self.get_tiles(tile_x, tile_y, tiles_cond)
 
+        if is_current:
+            wind_tile_cache_key = (
+                map_name,
+                map_settings["basetime"],
+                map_settings["validtime"],
+                tuple(map(tuple, tiles)),
+            )
+            wind_position_cache_key = wind_tile_cache_key + (
+                x_in_tile,
+                y_in_tile,
+            )
+            if (
+                self.wind_position_cache_key == wind_position_cache_key
+                and self.wind_image is not None
+            ):
+                return self.wind_result
+
         _map_config = map_config
         _map_settings = map_settings
-        if forcast_time is not None:
-            if map_settings["timeline"] is None:
-                return np.nan, np.nan
-            current_locale = locale.getlocale(locale.LC_TIME)
-            locale.setlocale(locale.LC_TIME, "C")
-            _map_config = map_config.copy()
-            _map_config[map_name] = map_config[map_name].copy()
-            _map_settings = _map_config[map_name]
-            closest = min(
-                _map_settings["timeline"], 
-                key = lambda d: abs(
-                    datetime.strptime(d["it"], _map_settings["time_format"]).replace(tzinfo=timezone.utc) - forcast_time
-                )
+        if not is_current:
+            _map_config = self._get_scw_forecast_map_config(
+                map_config, map_name, forecast_time
             )
-            _map_config[map_name]["validtime"] = closest["it"]
-            _map_config[map_name]["subdomain"] = closest["sd"]
-            locale.setlocale(locale.LC_TIME, current_locale)
+            if _map_config is None:
+                return np.nan, np.nan
+            _map_settings = _map_config[map_name]
 
         await self.download_maptiles(tiles, _map_config, map_name, z)
 
-        tile_files = []
-        for t in tiles:
-            filename = get_maptile_filename(
-                map_name, z, *t, _map_settings
-            )
-            if not self.check_existing_tiles(filename):
-                continue
-            tile_files.append(filename)
+        tile_files = [
+            get_maptile_filename(map_name, z, *tile, _map_settings) for tile in tiles
+        ]
 
         # download in progress
-        if len(tiles) != len(tile_files):
-            # app_logger.debug("dl in progress... reset wind_image, wind_im_array")
-            self.wind_image = None
-            self.wind_im_array = None
-            if forcast_time is None:
-                return self.pre_wind_speed, self.pre_wind_direction
-            else:
-                return np.nan, np.nan
-        # app_logger.debug(f"tiles: {tiles}")
-        # app_logger.debug(f"tile_cond: {tiles_cond}")
+        if not all(self.check_existing_tiles(filename) for filename in tile_files):
+            if is_current:
+                self.wind_image = None
+                self.wind_arrow_mask = None
+                self.wind_tile_cache_key = None
+                self.wind_position_cache_key = None
+                return self.wind_result
+            return np.nan, np.nan
 
-        # get wind
-        if (
-            forcast_time is None
-            and (
-                self.pre_wind_tiles != tiles
-                or self.pre_wind_tiles_cond != tiles_cond
-                or time_updated
-            )
-        ):
-            # app_logger.debug("reset wind_image, wind_im_array")
+        if is_current and self.wind_tile_cache_key != wind_tile_cache_key:
             self.wind_image = None
-            self.wind_im_array = None
+            self.wind_arrow_mask = None
 
-        cur_image = None if forcast_time is not None else self.wind_image
-        cur_array = None if forcast_time is not None else self.wind_im_array
         (
-            wind_speed, wind_direction,
-            self.wind_image, self.wind_im_array
+            wind_speed,
+            wind_direction,
+            wind_image,
+            wind_arrow_mask,
         ) = get_wind_with_tile_xy(
-            tile_files, x_in_tile, y_in_tile, tilesize, tiles_cond,
-            cur_image, cur_array
+            tile_files,
+            x_in_tile,
+            y_in_tile,
+            tilesize,
+            tiles_cond,
+            self.wind_image if is_current else None,
+            self.wind_arrow_mask if is_current else None,
         )
-        # app_logger.info(f"{wind_speed} [m/s], {wind_direction} deg")
-
-        if forcast_time is None:
-            self.pre_wind_tile_xy = (tile_x, tile_y)
-            self.pre_wind_xy_in_tile = (x_in_tile, y_in_tile)
-            self.pre_wind_tiles = tiles
-            self.pre_wind_tiles_cond = tiles_cond
-            self.pre_wind_speed = wind_speed
-            self.pre_wind_direction = wind_direction
+        if is_current:
+            self.wind_image = wind_image
+            self.wind_arrow_mask = wind_arrow_mask
+            self.wind_tile_cache_key = wind_tile_cache_key
+            self.wind_position_cache_key = wind_position_cache_key
+            self.wind_result = (wind_speed, wind_direction)
 
         return wind_speed, wind_direction
     

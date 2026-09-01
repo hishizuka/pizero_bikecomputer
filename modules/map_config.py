@@ -150,6 +150,11 @@ def add_map_config(config):
     # japanese wind tile
     config.G_WIND_OVERLAY_MAP_CONFIG["jpn_scw"] = {
         "url": "https://{subdomain}.supercweather.com/tl/msm/{basetime}/{validtime}/wa/{z}/{x}/{y}.png",
+        "layers": {
+            "wind": "wa",
+            "precipitation_cloud": "cp",
+            "temperature": "th",
+        },
         "attribution": "SCW",
         "tile_size": 256,
         "max_zoomlevel": 8,

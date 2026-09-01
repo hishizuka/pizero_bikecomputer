@@ -312,7 +312,7 @@ class MapOverlayMixin:
         )
         if overlay_type == "WIND" and updated:
             run_after(
-                a_func=self.course.get_course_wind,
+                a_func=self.course.get_course_weather,
                 b_func=self.add_course_wind,
             )
 

@@ -60,6 +60,9 @@ class Course(CourseProcessor, CourseMatcher):
         self.wind_timeline = []
         self.wind_speed = []
         self.wind_direction = []
+        self.temperature = []
+        self.precipitation = []
+        self.cloud_cover = []
 
     def __str__(self):
         return f"Course:\n" f"{oyaml.dump(self.info, allow_unicode=True)}\n"
@@ -129,7 +132,7 @@ class Course(CourseProcessor, CourseMatcher):
 
     def _schedule_course_weather(self):
         self._cancel_weather_load()
-        self._weather_task = asyncio.create_task(self.get_course_wind())
+        self._weather_task = asyncio.create_task(self.get_course_weather())
 
     def reset(self, delete_course_file=False, replace=False):
         self.__dict__.update(vars(CourseData()))
@@ -141,6 +144,9 @@ class Course(CourseProcessor, CourseMatcher):
         self.wind_timeline = []
         self.wind_speed = []
         self.wind_direction = []
+        self.temperature = []
+        self.precipitation = []
+        self.cloud_cover = []
 
         if delete_course_file:
             if os.path.exists(self.config.G_COURSE_FILE_PATH):
@@ -428,8 +434,8 @@ class Course(CourseProcessor, CourseMatcher):
             res = re.subn(r, "", res)[0]
         return res
 
-    async def get_course_wind(self):
-        if not self.config.G_USE_WIND_DATA_SOURCE or not self.is_set:
+    async def get_course_weather(self):
+        if not self.config.G_USE_COURSE_WEATHER or not self.is_set:
             return
 
         revision = self._course_revision
@@ -438,12 +444,13 @@ class Course(CourseProcessor, CourseMatcher):
         if revision != self._course_revision:
             return
 
-        (
-            self.wind_course_indices,
-            self.wind_timeline,
-            self.wind_speed,
-            self.wind_direction,
-        ) = weather
+        self.wind_course_indices = weather["course_indices"]
+        self.wind_timeline = weather["timeline"]
+        self.wind_speed = weather["wind_speed"]
+        self.wind_direction = weather["wind_direction"]
+        self.temperature = weather["temperature"]
+        self.precipitation = weather["precipitation"]
+        self.cloud_cover = weather["cloud_cover"]
         self.load_weather_status = 2
 
     def reset_load_weather_status(self):

@@ -340,52 +340,20 @@ class api:
         return await self.get_openmeteo_current_wind_data_internal(pos, forcast_time)
 
     async def get_openmeteo_current_wind_data_internal(self, pos, forcast_time=None):
-
-        # open connection
-        f_name = self.get_openmeteo_current_wind_data_internal.__name__
-        bt_open_result = await self.network.open_bt_tethering(f_name)
-        if not bt_open_result.is_success():
-            return [np.nan, np.nan]
-
-        # https://open-meteo.com/en/docs
-        # hourly=temperature_2m,precipitation,weathercode,windspeed_10m,winddirection_10m
-        vars_str = "wind_speed_10m,wind_direction_10m,wind_gusts_10m"
-        time_str = "current"
-        forecast_time_str = ""
-        if forcast_time is not None:
-            time_str = "hourly"
-            f = forcast_time.strftime("%Y-%m-%dT%H:%M")
-            forecast_time_str = "&start_hour={}&end_hour={}".format(f, f)
-        url = "{}?latitude={}&longitude={}&wind_speed_unit=ms&{}={}{}".format(
-            self.config.G_OPENMETEO_API["URL"],
-            pos[1],
-            pos[0],
-            time_str,
-            vars_str,
-            forecast_time_str,
+        variables = (
+            "wind_speed_10m",
+            "wind_direction_10m",
+            "wind_gusts_10m",
         )
-        response = None
-        try:
-            response = await get_json(url)
-        finally:
-            # close connection
-            try:
-                await self.network.close_bt_tethering(f_name)
-            except Exception as exc:
-                app_logger.error(f"close_bt_tethering error: {exc}")
-        # response["elevation"], response["current"][{vars}]
-
-        if not isinstance(response, dict):
+        values = await self.get_openmeteo_data_internal(pos, variables, forcast_time)
+        if values is None:
             if forcast_time is None:
                 return self.pre_value["OPENMETEO_WIND"]
             return [np.nan, np.nan]
 
         if forcast_time is None:
-            current = response.get("current")
-            if not isinstance(current, dict):
-                return self.pre_value["OPENMETEO_WIND"]
-            wind_speed = current.get("wind_speed_10m")
-            wind_direction = current.get("wind_direction_10m")
+            wind_speed = values.get("wind_speed_10m")
+            wind_direction = values.get("wind_direction_10m")
             if wind_speed is None or wind_direction is None:
                 return self.pre_value["OPENMETEO_WIND"]
             self.pre_value["OPENMETEO_WIND"] = [
@@ -394,14 +362,76 @@ class api:
             ]
             return self.pre_value["OPENMETEO_WIND"]
 
-        hourly = response.get("hourly")
-        if not isinstance(hourly, dict):
-            return [np.nan, np.nan]
-        wind_speeds = hourly.get("wind_speed_10m")
-        wind_directions = hourly.get("wind_direction_10m")
+        wind_speeds = values.get("wind_speed_10m")
+        wind_directions = values.get("wind_direction_10m")
         if not wind_speeds or not wind_directions:
             return [np.nan, np.nan]
         return [wind_speeds[0], wind_directions[0]]
+
+    async def get_openmeteo_data_internal(self, pos, variables, forecast_time=None):
+        caller_name = self.get_openmeteo_data_internal.__name__
+        bt_open_result = await self.network.open_bt_tethering(caller_name)
+        if not bt_open_result.is_success():
+            return None
+
+        time_key = "current" if forecast_time is None else "hourly"
+        params = {
+            "latitude": pos[1],
+            "longitude": pos[0],
+            "wind_speed_unit": "ms",
+            time_key: ",".join(variables),
+        }
+        if forecast_time is not None:
+            hour = forecast_time.strftime("%Y-%m-%dT%H:%M")
+            params["start_hour"] = hour
+            params["end_hour"] = hour
+        url = "{}?{}".format(
+            self.config.G_OPENMETEO_API["URL"], urllib.parse.urlencode(params)
+        )
+
+        try:
+            response = await get_json(url)
+        finally:
+            try:
+                await self.network.close_bt_tethering(caller_name)
+            except Exception as exc:
+                app_logger.error(f"close_bt_tethering error: {exc}")
+
+        if not isinstance(response, dict):
+            return None
+        values = response.get(time_key)
+        return values if isinstance(values, dict) else None
+
+    async def get_openmeteo_course_weather_data(self, pos, forecast_time):
+        if np.any(np.isnan(pos)):
+            return None
+        if not self.network.check_network_with_bt_tethering():
+            return None
+
+        variables = (
+            "wind_speed_10m",
+            "wind_direction_10m",
+            "temperature_2m",
+            "precipitation",
+            "cloud_cover",
+        )
+        hourly = await self.get_openmeteo_data_internal(pos, variables, forecast_time)
+        if hourly is None:
+            return None
+
+        weather = {}
+        for output_key, response_key in (
+            ("wind_speed", "wind_speed_10m"),
+            ("wind_direction", "wind_direction_10m"),
+            ("temperature", "temperature_2m"),
+            ("precipitation", "precipitation"),
+            ("cloud_cover", "cloud_cover"),
+        ):
+            values = hourly.get(response_key)
+            if not values or values[0] is None:
+                return None
+            weather[output_key] = float(values[0])
+        return weather
 
     async def get_ridewithgps_route(self, add=False, reset=False):
         if (
@@ -1058,6 +1088,14 @@ class api:
 
         w_dir_str = get_track_str(w_dir)
         return w_spd, w_dir, w_dir_str
+
+    async def get_course_weather(self, pos, forecast_time):
+        source = self.config.G_COURSE_WEATHER_DATA_SOURCE
+        if source.startswith("jpn_scw"):
+            return await self.maptile_with_values.get_course_weather(
+                pos, forecast_time, source
+            )
+        return await self.get_openmeteo_course_weather_data(pos, forecast_time)
 
     async def get_altitude(self, pos):
         return await self.maptile_with_values.get_altitude_from_tile(pos)

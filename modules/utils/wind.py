@@ -22,8 +22,14 @@ class WindImpact(NamedTuple):
     air_density: float
 
 
+class WindCost(NamedTuple):
+    power: float
+    grade: float
+
+
 _NO_WIND_IMPACT = WindImpact(np.nan, np.nan, np.nan, np.nan, np.nan)
 _NO_SPEED_IMPACT = SpeedImpact(np.nan, np.nan)
+_NO_WIND_COST = WindCost(np.nan, np.nan)
 
 
 def get_wind_impact(
@@ -73,6 +79,23 @@ def get_wind_elevation(wind_work, total_weight):
     if total_weight <= 0:
         return np.nan
     return wind_work / (total_weight * STANDARD_GRAVITY)
+
+
+def get_wind_cost(power, speed, still_air_speed, total_weight):
+    """Return the rider-borne share of the current wind impact."""
+    if (
+        np.any(np.isnan((power, speed, still_air_speed)))
+        or speed <= 0
+        or still_air_speed <= 0
+        or total_weight <= 0
+    ):
+        return _NO_WIND_COST
+
+    cost_power = power * (1 - speed / still_air_speed)
+    return WindCost(
+        cost_power,
+        cost_power / (total_weight * STANDARD_GRAVITY * speed) * 100,
+    )
 
 
 def _solve_still_air_speed(power, aero_factor, linear_force, current_speed):

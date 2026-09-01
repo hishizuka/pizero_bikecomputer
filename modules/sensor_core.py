@@ -20,6 +20,7 @@ app_logger.info("detected sensor modules:")
 from modules.utils.timer import Timer, log_timers
 from modules.utils.wind import (
     get_speed_impact,
+    get_wind_cost,
     get_wind_elevation,
     get_wind_impact,
 )
@@ -68,8 +69,13 @@ class SensorCore:
         "headwind",
         "wind_power_delta",
         "wind_grade",
+        "wind_cost_power",
+        "wind_cost_grade",
         "wind_work",
         "wind_elevation",
+        "wind_cost_work",
+        "wind_cost_elevation",
+        "wind_cost_available",
         "speed_impact",
         "wind_time",
         "temperature",
@@ -133,12 +139,19 @@ class SensorCore:
         for key in self.integrated_value_keys:
             integrated[key] = np.nan
         self.reset_internal()
-        wind_work, wind_time = self.config.state.get_value(
+        wind_accumulated_values = self.config.state.get_value(
             self.WIND_ACCUMULATED_STATE_KEY, (0.0, 0.0)
         )
+        if len(wind_accumulated_values) == 2:
+            wind_accumulated_values = (*wind_accumulated_values, 0.0)
+        wind_work, wind_time, wind_cost_work = wind_accumulated_values
         integrated["wind_work"] = wind_work
         integrated["wind_elevation"] = get_wind_elevation(
             wind_work, self.config.G_POWER_TOTAL_WEIGHT
+        )
+        integrated["wind_cost_work"] = wind_cost_work
+        integrated["wind_cost_elevation"] = get_wind_elevation(
+            wind_cost_work, self.config.G_POWER_TOTAL_WEIGHT
         )
         integrated["wind_time"] = wind_time
 
@@ -332,10 +345,14 @@ class SensorCore:
             "accumulated_power",
             "wind_work",
             "wind_elevation",
+            "wind_cost_work",
+            "wind_cost_elevation",
             "wind_time",
         ):
             integrated[key] = 0
-        integrated["speed_impact"] = np.nan
+        for key in ("wind_cost_power", "wind_cost_grade", "speed_impact"):
+            integrated[key] = np.nan
+        integrated["wind_cost_available"] = False
         reset_performance_metrics_state(self)
         self.brakelight_spd = [0] * self.brakelight_spd_range
         self.brakelight_cad = [np.nan] * self.brakelight_cad_range
@@ -445,6 +462,7 @@ class SensorCore:
             ble_cdc_configured = self.sensor_ble.is_sensor_available("CDC")
             ble_pwr_configured = self.sensor_ble.is_sensor_available("PWR")
             power_sensor_configured = ant_use["PWR"] or ble_pwr_configured
+            power_sensor_live = False
 
             now_time = datetime.now()
             time_profile.append(now_time)
@@ -551,6 +569,7 @@ class SensorCore:
                 for page in [0x12, 0x11, 0x10]:
                     if delta["PWR"][page] < self.time_threshold["PWR"]:
                         pwr = v["PWR"][page]["power"]
+                        power_sensor_live = True
                         break
             elif ble_pwr_configured:
                 ble_pwr_data = self.values["BLE"]["PWR"]
@@ -558,6 +577,7 @@ class SensorCore:
                     ble_pwr_data["power"]
                 ):
                     pwr = ble_pwr_data["power"]
+                    power_sensor_live = True
 
             # Speed: ANT+ or BLE CSCS > GPS
             ant_spd_packet_received_recently = False
@@ -797,6 +817,15 @@ class SensorCore:
                 model_grade,
             )
             integrated["speed_impact"] = speed_impact.delta
+            wind_cost = get_wind_cost(
+                pwr if power_sensor_live else np.nan,
+                spd,
+                speed_impact.still_air_speed,
+                self.config.G_POWER_TOTAL_WEIGHT,
+            )
+            integrated["wind_cost_power"] = wind_cost.power
+            integrated["wind_cost_grade"] = wind_cost.grade
+            integrated["wind_cost_available"] = power_sensor_configured
 
             if (
                 self.config.G_STOPWATCH_STATUS == "START"
@@ -812,9 +841,19 @@ class SensorCore:
                     integrated["wind_time"] += distance * (
                         1 / spd - 1 / speed_impact.still_air_speed
                     )
+                if not np.isnan(wind_cost.power):
+                    integrated["wind_cost_work"] += wind_cost.power * distance / spd
+                    integrated["wind_cost_elevation"] = get_wind_elevation(
+                        integrated["wind_cost_work"],
+                        self.config.G_POWER_TOTAL_WEIGHT,
+                    )
                 self.config.state.set_value(
                     self.WIND_ACCUMULATED_STATE_KEY,
-                    (integrated["wind_work"], integrated["wind_time"]),
+                    (
+                        integrated["wind_work"],
+                        integrated["wind_time"],
+                        integrated["wind_cost_work"],
+                    ),
                 )
 
             integrated["heart_rate"] = hr
