@@ -24,6 +24,8 @@ class ThingsBoardLiveTrackClient:
 
     # Leave room for the MQTT topic, packet identifier, properties, and header.
     MAX_COURSE_PAYLOAD_BYTES = 65536 - 128
+    TELEMETRY_CHUNK_SIZE = 2
+    TELEMETRY_CHUNK_INTERVAL_SEC = 1.0
 
     def __init__(self, config, gadgetbridge_service_getter):
         self.config = config
@@ -121,9 +123,7 @@ class ThingsBoardLiveTrackClient:
         )
         return value if status == "success" else status
 
-    async def send_samples(self, samples, caller_name):
-        payloads = [sample.to_thingsboard_payload() for sample in samples]
-        data = payloads[0] if len(payloads) == 1 else payloads
+    async def _send_telemetry_payload(self, data, caller_name):
         if await self._send_via_gadgetbridge(self.telemetry_url, data):
             return True, "success"
 
@@ -133,6 +133,29 @@ class ThingsBoardLiveTrackClient:
         )
         app_logger.debug(f"[TB] livetrack MQTT fallback completed: status={status}")
         return status == "success", status
+
+    async def send_samples(self, samples, caller_name):
+        payloads = [sample.to_thingsboard_payload() for sample in samples]
+        chunks = [
+            payloads[start : start + self.TELEMETRY_CHUNK_SIZE]
+            for start in range(0, len(payloads), self.TELEMETRY_CHUNK_SIZE)
+        ]
+
+        for chunk_number, chunk in enumerate(chunks, start=1):
+            if chunk_number > 1:
+                await asyncio.sleep(self.TELEMETRY_CHUNK_INTERVAL_SEC)
+
+            data = chunk[0] if len(chunk) == 1 else chunk
+            data_points = sum(len(payload["values"]) for payload in chunk)
+            app_logger.debug(
+                f"[TB] livetrack chunk {chunk_number}/{len(chunks)}: "
+                f"samples={len(chunk)}, datapoints={data_points}"
+            )
+            success, status = await self._send_telemetry_payload(data, caller_name)
+            if not success:
+                return False, status
+
+        return True, "success"
 
     async def send_course(
         self, course, reset=False, caller_name="send_livetrack_course"
