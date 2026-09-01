@@ -102,8 +102,8 @@ class MenuWidget(QtWidgets.QWidget):
         if not isinstance(self.menu_layout, QtWidgets.QGridLayout):
             return
 
-        left_width = self.menu.width() // 2
-        right_width = self.menu.width() - left_width
+        left_width = self.width() // 2
+        right_width = self.width() - left_width
 
         self.menu_layout.setColumnStretch(0, 0)
         self.menu_layout.setColumnStretch(1, 0)

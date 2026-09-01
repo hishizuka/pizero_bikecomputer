@@ -31,6 +31,10 @@ class GUI_Config:
     # Per-item font scale for value text in PyQt item widgets.
     G_ITEM_VALUE_FONT_SCALE = {
         "Asc. / Dsc.": 0.8,
+        "Wind Pwr. (C/T)": 0.8,
+        "Wind Grade (C/T)": 0.8,
+        "Wind Work (C/T)": 0.8,
+        "Wind Asc. (C/T)": 0.8,
         "CPU_MEM": 0.8,
     }
 
@@ -96,23 +100,30 @@ class GUI_Config:
             G_UNIT["Wind"],
             "self.sensor.values['integrated']['headwind']",
         ),
-        "Wind Watts": (
-            ("+.0f", "W"),
-            "self.sensor.values['integrated']['wind_power_delta']",
+        "Wind Pwr. (C/T)": (
+            ((("+.0f", ""), ("+.0f", "")), "W"),
+            "(self.sensor.values['integrated']['wind_cost_power'], "
+            "self.sensor.values['integrated']['wind_power_delta'])",
         ),
-        "Wind Grade": (
-            ("+.1f", "%"),
-            "self.sensor.values['integrated']['wind_grade']",
+        "Wind Grade (C/T)": (
+            ((("+.1f", ""), ("+.1f", "")), "%"),
+            "(self.sensor.values['integrated']['wind_cost_grade'], "
+            "self.sensor.values['integrated']['wind_grade'])",
         ),
-        "Wind Work": (
-            ("+.0f", "kJ"),
-            "self.sensor.values['integrated']['wind_work']",
+        "Wind Work (C/T)": (
+            ((("+.0f", ""), ("+.0f", "")), "kJ"),
+            "(self.sensor.values['integrated']['wind_cost_work'] "
+            "if self.sensor.values['integrated']['wind_cost_available'] "
+            "else float('nan'), self.sensor.values['integrated']['wind_work'])",
         ),
-        "Wind Asc.": (
-            ("+.0f", "m"),
-            "self.sensor.values['integrated']['wind_elevation']",
+        "Wind Asc. (C/T)": (
+            ((("+.0f", ""), ("+.0f", "")), "m"),
+            "(self.sensor.values['integrated']['wind_cost_elevation'] "
+            "if self.sensor.values['integrated']['wind_cost_available'] "
+            "else float('nan'), "
+            "self.sensor.values['integrated']['wind_elevation'])",
         ),
-        "Wind Impact": (
+        "Wind Diff": (
             ("+.1f", "km/h"),
             "self.sensor.values['integrated']['speed_impact']",
         ),
@@ -459,7 +470,7 @@ class GUI_Config:
             text = value
         elif np.isnan(value):
             pass
-        elif name == "Wind Impact" or name.startswith("Speed") or "SPD" in name:
+        elif name == "Wind Diff" or name.startswith("Speed") or "SPD" in name:
             text = f"{(value * 3.6):{itemformat}}"  # m/s to km/h
         elif "Dist" in name or "DIST" in name:
             text = f"{(value / 1000):{itemformat}}"  # m to km

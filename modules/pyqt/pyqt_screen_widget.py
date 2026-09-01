@@ -99,6 +99,9 @@ class ScreenWidget(QtWidgets.QWidget):
         w = int(self.width() / (self.max_width + 1))
         for i in range(self.max_width + 1):
             self.layout.setColumnMinimumWidth(i, w)
+            self.layout.setColumnStretch(i, 1)
+        for i in range(self.max_height + 1):
+            self.layout.setRowStretch(i, 1)
 
     def _build_value_getter(self, expr):
         """Create a plain callable without per-frame eval/exec."""
@@ -154,7 +157,15 @@ class ScreenWidget(QtWidgets.QWidget):
                 self.items.append(item)
 
                 if len(pos) == 4:
-                    self.layout.addLayout(item, pos[0], pos[1], pos[2], pos[3])
+                    bottom = self.max_height + 1 if pos[2] == -1 else pos[2]
+                    right = self.max_width + 1 if pos[3] == -1 else pos[3]
+                    self.layout.addLayout(
+                        item,
+                        pos[0],
+                        pos[1],
+                        bottom - pos[0],
+                        right - pos[1],
+                    )
                 else:
                     self.layout.addLayout(item, pos[0], pos[1])
 

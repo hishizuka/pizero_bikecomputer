@@ -38,6 +38,16 @@ I2C:
     GrossDiffTime: [3, 1]
     CPU_MEM: [4, 0, -1, -1]
 
+WIND:
+  STATUS: true
+  LAYOUT:
+    Wind: [0, 0]
+    HeadWind: [0, 1]
+    Wind Pwr. (C/T): [1, 0, 2, -1]
+    Wind Grade (C/T): [2, 0, 3, -1]
+    Wind Work (C/T): [3, 0, 4, -1]
+    Wind Asc. (C/T): [4, 0, -1, -1]
+
 ALTITUDE_GRAPH:
   STATUS: true
 
@@ -109,4 +119,3 @@ SIMPLE_MAP:
 
 CUESHEET:
   STATUS: true
-

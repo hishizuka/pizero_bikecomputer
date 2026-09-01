@@ -172,32 +172,6 @@ class FullWidthSeparatorListItemWidget(ListItemWidget):
             self.resize_label(self.detail_label, detail_size)
 
 
-class SensorListItemWidget(FullWidthSeparatorListItemWidget):
-    def __init__(self, parent, title, status=None):
-        self.connection_status = status
-        super().__init__(parent, title)
-
-    def setup_ui(self):
-        super().setup_ui()
-        self.outer_layout.setStretch(0, 1)
-        self.status_indicator = ConnectionStatusIndicator(
-            self.connection_status, parent=self
-        )
-        self.status_indicator.setContentsMargins(0, 0, 4, 0)
-        self.outer_layout.addWidget(self.status_indicator)
-        self.right_icon = icons.MenuRightIcon(self)
-        self.outer_layout.addWidget(self.right_icon)
-        self.right_icon.apply_trailing_margin(self.outer_layout)
-
-    def set_connection_status(self, status):
-        self.connection_status = status
-        self.status_indicator.set_status(status)
-
-    def update_selection_style(self):
-        super().update_selection_style()
-        self.right_icon.hover(self.selected or self.hasFocus())
-
-
 class SectionListItemWidget(QtWidgets.QWidget):
     BACKGROUND_COLOR = QtGui.QColor(SECONDARY_BACKGROUND_COLOR)
 
@@ -412,19 +386,8 @@ class ProtocolIconLabel(QtWidgets.QLabel):
         self.setPixmap(icons.get_pixmap(icon_cls, self.ICON_SIZE, color))
 
 
-class SensorMenuWidget(ListWidget):
-    settings = {
-        "Heart Rate": None,
-        "Speed": None,
-        "Cadence": None,
-        "Power": None,
-        "Light": None,
-        "Control": None,
-        "Temperature": None,
-        "Internal Sensors": None,
-    }
-
-    ROLE_TO_ANT = {
+class SensorMenuWidget(MenuWidget):
+    PAGE_ROLES = {
         "Heart Rate": "HR",
         "Speed": "SPD",
         "Cadence": "CDC",
@@ -433,62 +396,53 @@ class SensorMenuWidget(ListWidget):
         "Control": "CTRL",
         "Temperature": "TEMP",
     }
-
-    def __init__(self, parent, page_name, config):
-        self.role_items = {}
-        super().__init__(parent, page_name, config)
+    PAGES = (*PAGE_ROLES, "Internal Sensors")
 
     def setup_menu(self):
-        super().setup_menu()
-        self.list.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        self.add_buttons(
+            tuple(
+                (
+                    page,
+                    "submenu",
+                    lambda _checked=False, page=page: self.change_page(
+                        page, preprocess=True
+                    ),
+                )
+                for page in self.PAGES
+            )
+        )
+        self.status_indicators = {}
+        for page, role in self.PAGE_ROLES.items():
+            indicator = ConnectionStatusIndicator(
+                self.get_role_connection_status(role),
+                parent=self.buttons[page],
+            )
+            button_layout = self.buttons[page].layout()
+            button_layout.insertStretch(0, 1)
+            button_layout.insertWidget(1, indicator)
+            self.status_indicators[page] = indicator
+
         self.status_timer = QtCore.QTimer(parent=self)
         self.status_timer.setInterval(500)
         self.status_timer.timeout.connect(self.update_connection_statuses)
 
-    def update_list(self):
-        for title in self.settings:
-            item = SensorListItemWidget(
-                self,
-                title,
-                self.get_role_connection_status(title),
-            )
-            item.enter_signal.connect(self.button_func)
-            self.role_items[title] = item
-            self.add_list_item(item)
-
-    def get_role_connection_status(self, title):
-        ant_name = self.ROLE_TO_ANT.get(title)
-        if ant_name is None:
-            return None
-        if self.config.sensor_uses(ant_name, self.config.SENSOR_PROTOCOL_BLE):
-            return self.sensor_ble.get_sensor_connection_status(ant_name)
-        return self.sensor_ant.get_sensor_connection_status(ant_name)
-
-    def update_connection_statuses(self):
-        for title, item in self.role_items.items():
-            item.set_connection_status(self.get_role_connection_status(title))
-
-    def preprocess_extra(self):
+    def preprocess(self):
         self.update_connection_statuses()
         self.status_timer.start()
-        super().preprocess_extra()
 
     def on_back_menu(self):
         self.status_timer.stop()
 
-    @qasync.asyncSlot()
-    async def button_func(self):
-        if self.selected_item is None:
-            return
-        page = self.selected_item.title
-        if page not in self.config.gui.gui_config.G_GUI_INDEX:
-            return
-        self.change_page(page, preprocess=True)
+    def get_role_connection_status(self, role):
+        if self.config.sensor_uses(role, self.config.SENSOR_PROTOCOL_BLE):
+            return self.sensor_ble.get_sensor_connection_status(role)
+        return self.sensor_ant.get_sensor_connection_status(role)
 
-    def get_default_value(self):
-        if self.config.uses_keyboard_navigation:
-            return "Heart Rate"
-        return None
+    def update_connection_statuses(self):
+        for page, role in self.PAGE_ROLES.items():
+            self.status_indicators[page].set_status(
+                self.get_role_connection_status(role)
+            )
 
 
 class InternalSensorMenuWidget(MenuWidget):
