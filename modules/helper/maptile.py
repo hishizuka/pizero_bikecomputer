@@ -1,4 +1,5 @@
 import os
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone  #datetime is necessary for map_config["current_time_func"]()
 import locale
 from random import random
@@ -7,7 +8,6 @@ import asyncio
 import numpy as np
 from PIL import Image
 
-from modules.utils.network import detect_network_async
 from modules.helper.network import (
     get_json,
 )
@@ -547,38 +547,40 @@ class MapTileWithValues():
     pre_altitude = np.nan
     dem_array = None
 
-    get_scw_lock = False
-
     def __init__(self, config):
         self.config = config
+        self.get_scw_lock = False
+        self.wind_tile_cache_key = None
+        self.wind_position_cache_key = None
+        self.wind_result = (np.nan, np.nan)
+        self.wind_image = None
+        self.wind_arrow_mask = None
 
     @property
     def network(self):
         return self.config.network
 
+    @asynccontextmanager
+    async def _timeline_bt_session(self, caller_name):
+        bt_open_result = await self.network.open_bt_tethering(caller_name)
+        if not bt_open_result.is_success():
+            yield False
+            return
+        try:
+            yield True
+        finally:
+            await self.network.close_bt_tethering(caller_name)
+
     @staticmethod
     def get_tiles(tile_x, tile_y, tiles_cond):
-        tiles = []
-        
-        marginal_tiles_cond = [False]*9 # marginal 3*3 tiles
-        marginal_tiles_true_index = {
-            ( 0,  0): [4,],          # 1 tiles: center only
-            (-1,  0): [3, 4],        # 2 tiles: tile_x-1
-            (+1,  0): [4, 5],        # 2 tiles: tile_x+1
-            ( 0, -1): [1, 4],        # 2 tiles: tile_y-1
-            ( 0, +1): [4, 7],        # 2 tiles: tile_y+1
-            (-1, -1): [0, 1, 3, 4],  # 4 tiles: tile_x-1 * tile_y-1
-            (+1, -1): [1, 2, 4, 5],  # 4 tiles: tile_x+1 * tile_y-1
-            (-1, +1): [3, 4, 6, 7],  # 4 tiles: tile_x-1 * tile_y+1
-            (+1, +1): [4, 5, 7, 8],  # 4 tiles: tile_x+1 * tile_y+1
-        }
-        for i in marginal_tiles_true_index[tuple(tiles_cond)]:
-            marginal_tiles_cond[i] = True
-        for i, m in enumerate(marginal_tiles_cond):
-            if m:
-                y_delta, x_delta = divmod(i, 3)
-                tiles.append([tile_x + x_delta - 1, tile_y + y_delta - 1])
-        return tiles
+        offsets = {-1: (-1, 0), 0: (0,), 1: (0, 1)}
+        x_offsets = offsets[tiles_cond[0]]
+        y_offsets = offsets[tiles_cond[1]]
+        return [
+            [tile_x + x_offset, tile_y + y_offset]
+            for y_offset in y_offsets
+            for x_offset in x_offsets
+        ]
 
     @staticmethod
     def _decode_dem_altitude(rgb_pos, map_name):
@@ -653,11 +655,9 @@ class MapTileWithValues():
                 return
 
             if wait:
-                await self.update_jpn_scw_timeline(map_settings, self.update_overlay_wind_basetime)
+                await self.update_jpn_scw_timeline(map_settings)
             else:
-                asyncio.create_task(
-                    self.update_jpn_scw_timeline(map_settings, self.update_overlay_wind_basetime)
-                )
+                asyncio.create_task(self.update_jpn_scw_timeline(map_settings))
             return
 
         if not self.update_overlay_wind_basetime(map_settings):
@@ -669,35 +669,29 @@ class MapTileWithValues():
         map_settings["basetime"] = basetime_str
         map_settings["validtime"] = map_settings["basetime"]
 
-    async def update_jpn_scw_timeline(self, map_settings, update_basetime):
-        update_basetime(map_settings)
+    async def update_jpn_scw_timeline(self, map_settings):
+        self.update_overlay_wind_basetime(map_settings)
         if map_settings["timeline_update_date"] == map_settings["current_time"]:
             return
-        
-        # open connection
+
         self.get_scw_lock = True
-        f_name = self.update_jpn_scw_timeline.__name__
-        bt_open_result = await self.network.open_bt_tethering(f_name)
-        if not bt_open_result.is_success():
-            self.get_scw_lock = False
-            return
+        try:
+            f_name = self.update_jpn_scw_timeline.__name__
+            async with self._timeline_bt_session(f_name) as connected:
+                if not connected:
+                    return
 
-        # app_logger.info("get_scw_list connection start...")
-        url = map_settings["inittime"].format(rand=random())
-        init_time_list = await get_scw_list(url, map_settings["referer"])
-        if init_time_list is None:
-            # close connection
-            await self.network.close_bt_tethering(f_name)
-            self.get_scw_lock = False
-            return
-        basetime = init_time_list[0]["it"]
+                # app_logger.info("get_scw_list connection start...")
+                url = map_settings["inittime"].format(rand=random())
+                init_time_list = await get_scw_list(url, map_settings["referer"])
+                if init_time_list is None:
+                    return
+                basetime = init_time_list[0]["it"]
 
-        url = map_settings["fl"].format(basetime=basetime, rand=random())
-        timeline = await get_scw_list(url, map_settings["referer"])
-        
-        # close connection
-        await self.network.close_bt_tethering(f_name)
-        self.get_scw_lock = False
+                url = map_settings["fl"].format(basetime=basetime, rand=random())
+                timeline = await get_scw_list(url, map_settings["referer"])
+        finally:
+            self.get_scw_lock = False
 
         if timeline is None:
             return
@@ -727,7 +721,7 @@ class MapTileWithValues():
         ):
             return
 
-        if not await detect_network_async(cache=False):
+        if not self.network.check_network_with_bt_tethering():
             return
 
         past_url = map_settings.get("past_time_list")
@@ -735,8 +729,12 @@ class MapTileWithValues():
         if not past_url and not forecast_url:
             return
 
-        past_list = await get_json(past_url) if past_url else None
-        forecast_list = await get_json(forecast_url) if forecast_url else None
+        f_name = self.update_jpn_jma_bousai_timeline.__name__
+        async with self._timeline_bt_session(f_name) as connected:
+            if not connected:
+                return
+            past_list = await get_json(past_url) if past_url else None
+            forecast_list = await get_json(forecast_url) if forecast_url else None
         if not past_list and not forecast_list:
             return
 

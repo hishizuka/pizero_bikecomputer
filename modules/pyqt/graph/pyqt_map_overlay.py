@@ -374,26 +374,14 @@ class MapOverlayMixin:
             )
             - 1
         )
-        if (
-            map_config[map_name]["min_zoomlevel"]
-            <= z
-            <= map_config[map_name]["max_zoomlevel"]
-        ):
-            await self.draw_map_tile_by_overlay(
-                map_config, map_name, z, p0, p1, overlay=True
-            )
-        elif z > map_config[map_name]["max_zoomlevel"]:
-            await self.draw_map_tile_by_overlay(
-                map_config,
-                map_name,
-                z,
-                p0,
-                p1,
-                overlay=True,
-                expand=True,
-            )
-        else:
-            self.pre_zoomlevel[map_name] = z
+        await self.draw_map_tile_by_overlay(
+            map_config,
+            map_name,
+            z,
+            p0,
+            p1,
+            overlay=True,
+        )
 
     @qasync.asyncSlot()
     async def enable_overlay_time_and_button(self):

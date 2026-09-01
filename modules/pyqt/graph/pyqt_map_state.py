@@ -399,13 +399,11 @@ class MapStateMixin:
         map_settings = map_config[map_name]
         z = self._get_zoom_for_map(map_name, map_config)
         tile_size = map_settings["tile_size"]
-        max_zoomlevel = map_settings.get("max_zoomlevel")
-        expand = max_zoomlevel is not None and z > max_zoomlevel
-
-        z_draw, z_conv_factor, tile_x, tile_y = self.init_draw_map(
-            map_config, map_name, z, p0, p1, expand, tile_size
-        )
-        tiles = self.get_tiles_for_drawing(tile_x, tile_y, z_conv_factor, expand)
+        draw_params = self.init_draw_map(map_config, map_name, z, p0, p1, tile_size)
+        if draw_params is None:
+            return False
+        z_draw, z_conv_factor, tile_x, tile_y = draw_params
+        tiles = self.get_tiles_for_drawing(tile_x, tile_y, z_conv_factor)
 
         # Cache the result
         self._cached_tiles[map_name] = {
@@ -415,7 +413,6 @@ class MapStateMixin:
             "tile_x": tile_x,
             "tile_y": tile_y,
             "z_conv_factor": z_conv_factor,
-            "expand": expand,
         }
 
         # Check for pending downloads

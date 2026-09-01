@@ -44,6 +44,24 @@ def get_maptile_filename(map_name, z, x, y, map_settings=None):
         return f"maptile/{map_name}/{z}/{x}/{y}.{ext}"
 
 
+def get_native_tile_zoom(map_settings, zoom):
+    if "native_zoom_levels" in map_settings:
+        return max(
+            (level for level in map_settings["native_zoom_levels"] if level <= zoom),
+            default=None,
+        )
+
+    min_zoomlevel = map_settings.get("min_zoomlevel")
+    if min_zoomlevel is not None and zoom < min_zoomlevel:
+        return None
+
+    max_zoomlevel = map_settings.get("max_zoomlevel")
+    if max_zoomlevel is not None and zoom > max_zoomlevel:
+        return max_zoomlevel
+
+    return zoom
+
+
 def get_lon_lat_from_tile_xy(z, x, y):
     n = 2.0**z
     lon = x / n * 360.0 - 180.0

@@ -15,6 +15,7 @@ from modules.utils.geo import get_mod_lat
 from modules.utils.map import (
     get_lon_lat_from_tile_xy,
     get_maptile_filename,
+    get_native_tile_zoom,
     get_tilexy_and_xy_in_tile,
 )
 
@@ -150,7 +151,6 @@ class MapTileMixin:
         z_conv_factor,
         tile_x,
         tile_y,
-        expand,
         tile_modify_mode,
         use_mbtiles,
     ):
@@ -162,7 +162,6 @@ class MapTileMixin:
             tile_x[1],
             tile_y[0],
             tile_y[1],
-            expand,
             tile_modify_mode,
             bool(use_mbtiles),
         )
@@ -305,7 +304,6 @@ class MapTileMixin:
         p0,
         p1,
         overlay=False,
-        expand=False,
         use_mbtiles=False,
     ):
         tile_download_elapsed_ms = 0.0
@@ -322,9 +320,12 @@ class MapTileMixin:
         tile_size = map_config[map_name]["tile_size"]
 
         # Always resolve the current viewport first.
-        z_draw, z_conv_factor, tile_x, tile_y = self.init_draw_map(
-            map_config, map_name, z, p0, p1, expand, tile_size
-        )
+        draw_params = self.init_draw_map(map_config, map_name, z, p0, p1, tile_size)
+        if draw_params is None:
+            self.pre_zoomlevel[map_name] = z
+            return False
+        z_draw, z_conv_factor, tile_x, tile_y = draw_params
+        expand = z_conv_factor > 1
         self._init_tile_runtime_state()
 
         tile_modify_mode = (
@@ -336,7 +337,6 @@ class MapTileMixin:
             z_conv_factor,
             tile_x,
             tile_y,
-            expand,
             tile_modify_mode,
             use_mbtiles,
         )
@@ -358,17 +358,16 @@ class MapTileMixin:
         # Use cached tile info only when the viewport signature exactly matches.
         cached = self._cached_tiles.get(map_name)
         if (
-            cached
-            and cached.get("z") == z
-            and cached.get("z_draw") == z_draw
-            and cached.get("z_conv_factor") == z_conv_factor
-            and cached.get("expand") == expand
-            and tuple(cached.get("tile_x", ())) == tuple(tile_x)
-            and tuple(cached.get("tile_y", ())) == tuple(tile_y)
+            cached is not None
+            and cached["z"] == z
+            and cached["z_draw"] == z_draw
+            and cached["z_conv_factor"] == z_conv_factor
+            and tuple(cached["tile_x"]) == tuple(tile_x)
+            and tuple(cached["tile_y"]) == tuple(tile_y)
         ):
             tiles = cached["tiles"]
         else:
-            tiles = self.get_tiles_for_drawing(tile_x, tile_y, z_conv_factor, expand)
+            tiles = self.get_tiles_for_drawing(tile_x, tile_y, z_conv_factor)
             self._cached_tiles[map_name] = {
                 "z": z,
                 "z_draw": z_draw,
@@ -376,7 +375,6 @@ class MapTileMixin:
                 "tile_x": list(tile_x),
                 "tile_y": list(tile_y),
                 "z_conv_factor": z_conv_factor,
-                "expand": expand,
             }
 
         if not use_mbtiles:
@@ -408,7 +406,6 @@ class MapTileMixin:
                 z_conv_factor,
                 tile_x,
                 tile_y,
-                expand,
                 skip_keys=pending_state["key_set"],
             )
             tile_check_elapsed_ms += (time.perf_counter() - check_start) * 1000.0
@@ -444,9 +441,7 @@ class MapTileMixin:
                     continue
 
                 x, y = (
-                    keys[0:2]
-                    if not expand
-                    else pending_state["expand_keys"].get(keys, keys)[0:2]
+                    keys[0:2] if not expand else pending_state["expand_keys"][keys][0:2]
                 )
 
                 try:
@@ -458,11 +453,7 @@ class MapTileMixin:
                     if not expand:
                         img_pil = Image.open(img_file).convert("RGBA")
                     else:
-                        expand_val = pending_state["expand_keys"].get(keys)
-                        if expand_val is None:
-                            pending_state["queue"].append(keys)
-                            pending_state["key_set"].add(keys)
-                            continue
+                        expand_val = pending_state["expand_keys"][keys]
                         x_start, y_start = int(w_h * expand_val[2]), int(
                             w_h * expand_val[3]
                         )
@@ -552,15 +543,11 @@ class MapTileMixin:
                 self.con.close()
 
     @staticmethod
-    def init_draw_map(map_config, map_name, z, p0, p1, expand, tile_size):
-        z_draw = z
-        z_conv_factor = 1
-        if expand:
-            if z > map_config[map_name]["max_zoomlevel"]:
-                z_draw = map_config[map_name]["max_zoomlevel"]
-            elif z < map_config[map_name]["min_zoomlevel"]:
-                z_draw = map_config[map_name]["min_zoomlevel"]
-            z_conv_factor = 2 ** (z - z_draw)
+    def init_draw_map(map_config, map_name, z, p0, p1, tile_size):
+        z_draw = get_native_tile_zoom(map_config[map_name], z)
+        if z_draw is None:
+            return None
+        z_conv_factor = 2 ** (z - z_draw)
 
         t0 = get_tilexy_and_xy_in_tile(z, p0["x"], p0["y"], tile_size)
         t1 = get_tilexy_and_xy_in_tile(z, p1["x"], p1["y"], tile_size)
@@ -569,12 +556,12 @@ class MapTileMixin:
         return z_draw, z_conv_factor, tile_x, tile_y
 
     @staticmethod
-    def get_tiles_for_drawing(tile_x, tile_y, z_conv_factor, expand):
+    def get_tiles_for_drawing(tile_x, tile_y, z_conv_factor):
         tiles = list(MapTileMixin._iter_visible_tile_coords(tile_x, tile_y))
         tiles += [(i, j) for i in (tile_x[0] - 1, tile_x[1] + 1) for j in range(tile_y[0] - 1, tile_y[1] + 2)]
         tiles += [(i, j) for i in range(tile_x[0], tile_x[1] + 1) for j in (tile_y[0] - 1, tile_y[1] + 1)]
 
-        if expand and z_conv_factor > 1:
+        if z_conv_factor > 1:
             tiles = list({(i // z_conv_factor, j // z_conv_factor) for i, j in tiles})
 
         return tiles
@@ -589,7 +576,6 @@ class MapTileMixin:
         z_conv_factor,
         tile_x,
         tile_y,
-        expand,
         skip_keys=None,
     ):
         if skip_keys is None:
@@ -598,6 +584,7 @@ class MapTileMixin:
         expand_keys = {}
         map_settings = map_config[map_name]
         drawn_tiles = self.drawn_tile.get(map_name, {}).get(z, {})
+        expand = z_conv_factor > 1
 
         for i, j in self._iter_visible_tile_coords(tile_x, tile_y):
             drawn_tile_key = self._drawn_tile_key(i, j)

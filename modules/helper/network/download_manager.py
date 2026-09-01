@@ -102,14 +102,16 @@ class DownloadManager:
         additional_save_paths = []
         z_plus_1 = z + 1
         z_minus_1 = z - 1
+        native_zoom_levels = map_settings.get("native_zoom_levels")
 
-        max_zoom_cond = True
-        if "max_zoomlevel" in map_settings and z_plus_1 >= map_settings["max_zoomlevel"]:
-            max_zoom_cond = False
-
-        min_zoom_cond = True
-        if "min_zoomlevel" in map_settings and z_minus_1 <= map_settings["min_zoomlevel"]:
-            min_zoom_cond = False
+        max_zoom_cond = (
+            "max_zoomlevel" not in map_settings
+            or z_plus_1 < map_settings["max_zoomlevel"]
+        ) and (native_zoom_levels is None or z_plus_1 in native_zoom_levels)
+        min_zoom_cond = (
+            "min_zoomlevel" not in map_settings
+            or z_minus_1 > map_settings["min_zoomlevel"]
+        ) and (native_zoom_levels is None or z_minus_1 in native_zoom_levels)
 
         for tile in tiles:
             if max_zoom_cond:

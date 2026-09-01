@@ -111,6 +111,7 @@ def add_map_config(config):
         "tile_size": 256,
         "max_zoomlevel": 10,
         "min_zoomlevel": 4,
+        "native_zoom_levels": (4, 6, 8, 10),
         "past_time_list": "https://www.jma.go.jp/bosai/jmatile/data/nowc/targetTimes_N1.json",
         "forcast_time_list": "https://www.jma.go.jp/bosai/jmatile/data/nowc/targetTimes_N2.json",
         "timeline": None,
