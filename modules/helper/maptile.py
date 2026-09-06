@@ -1,5 +1,4 @@
 import os
-from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone  #datetime is necessary for map_config["current_time_func"]()
 from random import random
 import asyncio
@@ -622,17 +621,6 @@ class MapTileWithValues():
     def network(self):
         return self.config.network
 
-    @asynccontextmanager
-    async def _timeline_bt_session(self, caller_name):
-        bt_open_result = await self.network.open_bt_tethering(caller_name)
-        if not bt_open_result.is_success():
-            yield False
-            return
-        try:
-            yield True
-        finally:
-            await self.network.close_bt_tethering(caller_name)
-
     @staticmethod
     def get_tiles(tile_x, tile_y, tiles_cond):
         offsets = {-1: (-1, 0), 0: (0,), 1: (0, 1)}
@@ -739,7 +727,7 @@ class MapTileWithValues():
         self.get_scw_lock = True
         try:
             f_name = self.update_jpn_scw_timeline.__name__
-            async with self._timeline_bt_session(f_name) as connected:
+            async with self.network.bt_tethering_session(f_name) as connected:
                 if not connected:
                     return
 
@@ -792,7 +780,7 @@ class MapTileWithValues():
             return
 
         f_name = self.update_jpn_jma_bousai_timeline.__name__
-        async with self._timeline_bt_session(f_name) as connected:
+        async with self.network.bt_tethering_session(f_name) as connected:
             if not connected:
                 return
             past_list = await get_json(past_url) if past_url else None

@@ -370,32 +370,25 @@ class api:
 
     async def get_openmeteo_data_internal(self, pos, variables, forecast_time=None):
         caller_name = self.get_openmeteo_data_internal.__name__
-        bt_open_result = await self.network.open_bt_tethering(caller_name)
-        if not bt_open_result.is_success():
-            return None
+        async with self.network.bt_tethering_session(caller_name) as connected:
+            if not connected:
+                return None
 
-        time_key = "current" if forecast_time is None else "hourly"
-        params = {
-            "latitude": pos[1],
-            "longitude": pos[0],
-            "wind_speed_unit": "ms",
-            time_key: ",".join(variables),
-        }
-        if forecast_time is not None:
-            hour = forecast_time.strftime("%Y-%m-%dT%H:%M")
-            params["start_hour"] = hour
-            params["end_hour"] = hour
-        url = "{}?{}".format(
-            self.config.G_OPENMETEO_API["URL"], urllib.parse.urlencode(params)
-        )
-
-        try:
+            time_key = "current" if forecast_time is None else "hourly"
+            params = {
+                "latitude": pos[1],
+                "longitude": pos[0],
+                "wind_speed_unit": "ms",
+                time_key: ",".join(variables),
+            }
+            if forecast_time is not None:
+                hour = forecast_time.strftime("%Y-%m-%dT%H:%M")
+                params["start_hour"] = hour
+                params["end_hour"] = hour
+            url = "{}?{}".format(
+                self.config.G_OPENMETEO_API["URL"], urllib.parse.urlencode(params)
+            )
             response = await get_json(url)
-        finally:
-            try:
-                await self.network.close_bt_tethering(caller_name)
-            except Exception as exc:
-                app_logger.error(f"close_bt_tethering error: {exc}")
 
         if not isinstance(response, dict):
             return None

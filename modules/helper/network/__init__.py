@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from ..bluetooth.bluetooth_manager import BluetoothManager, BtOpenResult
 from .download_manager import DownloadManager
 from .http_client import get_bytes, get_json, post
@@ -76,11 +78,25 @@ class Network:
     async def bluetooth_tethering(self, disconnect=False):
         return await self.bluetooth.bluetooth_tethering(disconnect=disconnect)
 
-    async def open_bt_tethering(self, caller_name):
-        return await self.bluetooth.open_bt_tethering(caller_name)
+    async def open_bt_tethering(self, caller_name, wait_lock=False):
+        return await self.bluetooth.open_bt_tethering(
+            caller_name,
+            wait_lock=wait_lock,
+        )
 
     async def close_bt_tethering(self, caller_name):
         return await self.bluetooth.close_bt_tethering(caller_name)
+
+    @asynccontextmanager
+    async def bt_tethering_session(self, caller_name, wait_lock=False):
+        result = await self.open_bt_tethering(caller_name, wait_lock=wait_lock)
+        if not result.is_success():
+            yield False
+            return
+        try:
+            yield True
+        finally:
+            await self.close_bt_tethering(caller_name)
 
     def onoff_wifi_bt(self, key=None):
         return self.wifi.onoff_wifi_bt(key)
