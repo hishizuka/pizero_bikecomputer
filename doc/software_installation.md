@@ -364,28 +364,47 @@ Also, place the header files in LD_INCLUDE_PATH (/usr/local/include, etc.).
   ```
 
 - [BHI360_SensorAPI](https://github.com/boschsensortec/BHI360_SensorAPI)
-  - add `#include <stdint.h>` to examples/common/verbose.h
-  - 
+  - Use v2.3.1 (latest verified on 2026-09-06). Run these commands from the SDK repository root.
+  - Build the SensorAPI core used by the helper. The COINES console parser and API dispatch table are not required.
   ```
-  $ gcc -shared -fPIC -O2 -o libbhi360.so bhi*.c examples/common/verbose.c -I./examples/common/
-  $ sudo mv libbhi360.so /usr/local/lib/
-  $ sudo cp bhi*.h /usr/local/include/
-  $ sudo cp examples/common/verbose.h /usr/local/include/
+  $ git fetch --tags origin
+  $ git checkout v2.3.1
+  $ gcc -shared -fPIC -O2 -Wl,--no-undefined -o libbhi360.so source/bhi360.c source/bhi360_hif.c source/bhi360_*param.c source/bhi360_event_data.c source/bhi360_logbin.c
+  $ sudo install -m 755 libbhi360.so /usr/local/lib/
+  $ sudo cp source/bhi*.h /usr/local/include/
   $ sudo cp -a firmware/bhi360 /usr/local/include/
   $ sudo ldconfig
   ```
 
 - [BHI385_SensorAPI](https://github.com/boschsensortec/BHI385_SensorAPI)
-  - add `#include <stdint.h>` to examples/common/verbose.h
-  - 
+  - Use v2.1.1 (latest verified on 2026-09-06). Run these commands from the SDK repository root.
+  - Build the SensorAPI core as for BHI360 above.
   ```
-  $ gcc -shared -fPIC -O2 -o libbhi385.so source/bhi*.c examples/common/verbose.c -I./examples/common/
-  $ sudo mv libbhi385.so /usr/local/lib/
+  $ git fetch --tags origin
+  $ git checkout v2.1.1
+  $ gcc -shared -fPIC -O2 -Wl,--no-undefined -o libbhi385.so source/bhi385.c source/bhi385_hif.c source/bhi385_*param.c source/bhi385_event_data.c source/bhi385_logbin.c
+  $ sudo install -m 755 libbhi385.so /usr/local/lib/
   $ sudo cp source/bhi*.h /usr/local/include/
-  $ sudo cp examples/common/verbose.h /usr/local/include/
   $ sudo cp -a firmware/bhi385 /usr/local/include/
   $ sudo ldconfig
   ```
+
+Update the shared library, headers, and firmware together. After an SDK update,
+stop the application and remove the generated `bhi3_s_helper*.so` and
+`bhi3_s_helper*.c` files under
+`modules/sensor/i2c/cython/bhi3_shuttle_board_3/` (including its `__pycache__/`
+directory), as well as matching helper build artifacts under `~/.pyxbld/`.
+Then restart to rebuild the Cython helper.
+BHI360 v2.3.1 uses the `BMM350_BMP58X_BME688_bsxsam_ndof` firmware and BMP
+pressure sensor ID 150. The helper logs the BSX version and magnetic distortion
+state changes; it does not configure a product-specific SIC matrix.
+BHI360 and BHI385 explicitly enable magnetic distortion events in both FIFOs. Both
+magnetometer and orientation outputs are enabled at 50 Hz, including when
+running `bhi3_shuttle_board_3/build.py`; that script prints values once per
+second and does not print the magnetometer vector.
+Both targets were built on a Raspberry Pi Zero 2 W running Raspberry Pi OS
+Trixie (Debian 13). I2C acquisition and calibration save/restore were also
+verified with BHI360 and BHI385 Shuttle Boards 3.0.
 
 *2 You must enable i2c slowdown. Follow [the adafruit guide](https://learn.adafruit.com/circuitpython-on-raspberrypi-linux/i2c-clock-stretching).
 

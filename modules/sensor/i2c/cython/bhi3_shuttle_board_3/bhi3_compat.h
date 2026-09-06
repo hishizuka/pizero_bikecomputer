@@ -19,7 +19,6 @@
 /* ------------------------------------------------------------------ */
 #include "bhi385.h"
 #include "bhi385_defs.h"
-#include "bhi385_parse.h"
 #include "bhi385_event_data.h"
 #include "bhi385_virtual_sensor_conf_param.h"
 #include "bhi385_virtual_sensor_info_param.h"
@@ -42,6 +41,8 @@
 #define bhi360_event_data_xyz                    bhi385_event_data_xyz
 #define bhi360_event_data_orientation            bhi385_event_data_orientation
 #define bhi360_bsx_algo_param_state_exg          bhi385_bsx_algo_param_state_exg
+#define bhi360_bsx_algo_param_version           bhi385_bsx_algo_param_version
+#define bhi360_system_param_multi_meta_event_ctrl_t bhi385_system_param_multi_meta_event_ctrl_t
 #define bhi360_float                             bhi385_float
 
 /* ------------------------------------------------------------------ */
@@ -71,6 +72,8 @@
 #define bhi360_get_parameter                     bhi385_get_parameter
 #define bhi360_set_parameter                     bhi385_set_parameter
 #define bhi360_flush_fifo                        bhi385_flush_fifo
+#define bhi360_system_param_get_meta_event_control bhi385_system_param_get_meta_event_control
+#define bhi360_system_param_set_meta_event_control bhi385_system_param_set_meta_event_control
 
 /* Firmware blob symbol exposed by Bosch firmware header */
 #define bhi360_firmware_image                    bhi385_firmware_image
@@ -78,6 +81,7 @@
 /* BSX calibration */
 #define bhi360_bsx_algo_param_get_bsx_states     bhi385_bsx_algo_param_get_bsx_states
 #define bhi360_bsx_algo_param_set_bsx_states     bhi385_bsx_algo_param_set_bsx_states
+#define bhi360_bsx_algo_param_get_bsx_version    bhi385_bsx_algo_param_get_bsx_version
 
 /* Event data parsers */
 #define bhi360_event_data_parse_xyz              bhi385_event_data_parse_xyz
@@ -96,6 +100,8 @@
 #define BHI360_I2C_INTERFACE                     BHI385_I2C_INTERFACE
 #define BHI360_SPI_INTERFACE                     BHI385_SPI_INTERFACE
 #define BHI360_INTF_RET_SUCCESS                  BHI385_INTF_RET_SUCCESS
+#define BHI360_LE2U24                            BHI385_LE2U24
+#define BHI360_LE2S16                            BHI385_LE2S16
 
 /* Return codes */
 #define BHI360_OK                                BHI385_OK
@@ -140,6 +146,8 @@
 /* ------------------------------------------------------------------ */
 #define BHI360_SYS_ID_META_EVENT                 BHI385_SYS_ID_META_EVENT
 #define BHI360_SYS_ID_META_EVENT_WU              BHI385_SYS_ID_META_EVENT_WU
+#define BHI360_SYSTEM_PARAM_META_EVENT_CONTROL_NON_WAKE_UP_FIFO BHI385_SYSTEM_PARAM_META_EVENT_CONTROL_NON_WAKE_UP_FIFO
+#define BHI360_SYSTEM_PARAM_META_EVENT_CONTROL_WAKE_UP_FIFO BHI385_SYSTEM_PARAM_META_EVENT_CONTROL_WAKE_UP_FIFO
 
 #define BHI360_META_EVENT_FLUSH_COMPLETE         BHI385_META_EVENT_FLUSH_COMPLETE
 #define BHI360_META_EVENT_SAMPLE_RATE_CHANGED    BHI385_META_EVENT_SAMPLE_RATE_CHANGED
@@ -151,6 +159,9 @@
 #define BHI360_META_EVENT_INITIALIZED            BHI385_META_EVENT_INITIALIZED
 #define BHI360_META_EVENT_SENSOR_STATUS          BHI385_META_EVENT_SENSOR_STATUS
 #define BHI360_META_EVENT_RESET                  BHI385_META_EVENT_RESET
+#define BHI360_META_EVENT_SYSTEM_ERROR           BHI385_META_EVENT_SYSTEM_ERROR
+#define BHI360_META_EVENT_MAG_DISTORTION         BHI385_META_EVENT_MAG_DISTORTION
+#define BHI360_META_EVENT_IMU_SATURATION         BHI385_META_EVENT_IMU_SATURATION
 
 /* ------------------------------------------------------------------ */
 /* Physical sensor IDs                                                 */
@@ -159,7 +170,7 @@
 #define BHI360_PHYS_SENSOR_ID_GYROSCOPE          BHI385_PHYS_SENSOR_ID_GYROSCOPE
 #define BHI360_PHYS_SENSOR_ID_MAGNETOMETER       BHI385_PHYS_SENSOR_ID_MAGNETOMETER
 #define BHI360_PHYS_SENSOR_ID_TEMPERATURE        BHI385_PHYS_SENSOR_ID_TEMPERATURE
-#define BHI360_PHYS_SENSOR_ID_PRESSURE           BHI385_PHYS_SENSOR_ID_PRESSURE
+#define BHI360_PHYS_SENSOR_ID_BMP_PRESSURE       BHI385_PHYS_SENSOR_ID_PRESSURE
 #define BHI360_PHYS_SENSOR_ID_HUMIDITY           BHI385_PHYS_SENSOR_ID_HUMIDITY
 #define BHI360_PHYS_SENSOR_ID_ANY_MOTION         BHI385_PHYS_SENSOR_ID_ANY_MOTION
 #define BHI360_PHYS_SENSOR_ID_PHYS_ANY_MOTION    BHI385_PHYS_SENSOR_ID_PHYS_ANY_MOTION
@@ -265,51 +276,24 @@
 #define BHI360_SENSOR_ID_GPS                     BHI385_SENSOR_ID_GPS
 #define BHI360_SENSOR_ID_CUSTOM_START            BHI385_SENSOR_ID_CUSTOM_START
 #define BHI360_SENSOR_ID_CUSTOM_END              BHI385_SENSOR_ID_CUSTOM_END
-#define BHI360_SENSOR_BMP_TEMPERATURE            BHI385_SENSOR_BMP_TEMPERATURE
-#define BHI360_SENSOR_BMP_TEMPERATURE_WU         BHI385_SENSOR_BMP_TEMPERATURE_WU
+#define BHI360_SENSOR_ID_BMP_TEMPERATURE         BHI385_SENSOR_BMP_TEMPERATURE
+#define BHI360_SENSOR_ID_BMP_TEMPERATURE_WU      BHI385_SENSOR_BMP_TEMPERATURE_WU
 #define BHI360_SENSOR_ID_PRESSURE                BHI385_SENSOR_ID_PRESSURE
 #define BHI360_SENSOR_ID_PRESSURE_WU             BHI385_SENSOR_ID_PRESSURE_WU
 
-/* BHI385-specific API errors */
+/* Additional API errors */
 #define BHI360_E_INSUFFICIENT_MAX_SIMUL_SENSORS  BHI385_E_INSUFFICIENT_MAX_SIMUL_SENSORS
 #define BHI360_E_INVALID_DATA                    BHI385_E_INVALID_DATA
-
-/* ------------------------------------------------------------------ */
-/* Inline parse helpers: present in BHI360 SDK but absent in BHI385.  */
-/* Conversion factors verified against bhi360_parse.c source.         */
-/* ------------------------------------------------------------------ */
-#include <stdint.h>
-
-/* 1 LSB = 1/128 Pa  (same wire format as BHI360) */
-static inline void bhi360_parse_pressure(const uint8_t *data, float *out)
-{
-    *out = (float)BHI385_LE2U24(data) / 128.0f;
-}
-
-/* 1 LSB = 1/100 °C */
-static inline void bhi360_parse_temperature_celsius(const uint8_t *data, float *out)
-{
-    *out = (float)BHI385_LE2S16(data) / 100.0f;
-}
-
-/* 1 LSB = 1 % */
-static inline void bhi360_parse_humidity(const uint8_t *data, float *out)
-{
-    *out = (float)data[0];
-}
 
 #else /* BHI360 (default) -- include original SDK headers unchanged */
 
 #include "bhi360.h"
 #include "bhi360_defs.h"
-#include "bhi360_parse.h"
 #include "bhi360_event_data.h"
 #include "bhi360_virtual_sensor_conf_param.h"
 #include "bhi360_virtual_sensor_info_param.h"
 #include "bhi360_bsx_algo_param.h"
 #include "bhi360_activity_param.h"
-#include "bhi360_bsec_param.h"
-#include "bhi360_head_orientation_param.h"
 #include "bhi360_multi_tap_param.h"
 #include "bhi360_phy_sensor_ctrl_param.h"
 #include "bhi360_system_param.h"

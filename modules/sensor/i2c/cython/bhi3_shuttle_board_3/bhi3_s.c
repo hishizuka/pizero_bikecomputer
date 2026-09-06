@@ -5,8 +5,7 @@
 #ifdef USE_BHI385
 #include "bhi385/Bosch_Shuttle3_BHI385_BMM350_BMP58X_BME688_bsxsam_ndof.fw.h"
 #else
-//#include "bhi360/Bosch_Shuttle3_BHI360_BMM350C_BME688_IAQ.fw.h"
-#include "bhi360/Bosch_Shuttle3_BHI360_BMM350C_BMP580_BME688.fw.h"
+#include "bhi360/Bosch_Shuttle3_BHI360_BMM350_BMP58X_BME688_bsxsam_ndof.fw.h"
 #endif
 
 #include <errno.h>
@@ -59,14 +58,13 @@
 #define BHI3_CALIB_SLOT_GYRO 1U
 #define BHI3_CALIB_SLOT_MAG 2U
 
+#define BHI3_SENSOR_ID_PRESSURE BHI360_SENSOR_ID_PRESSURE
 #ifdef USE_BHI385
 #define BHI3_TARGET_IS_BHI385 1
-#define BHI3_SENSOR_ID_PRESSURE BHI360_SENSOR_ID_PRESSURE
 #define BHI3_ACC_RANGE_G BHI360_ACCEL_8G
 #define BHI3_POLL_FIFO_WITHOUT_INTERRUPT 1
 #else
 #define BHI3_TARGET_IS_BHI385 0
-#define BHI3_SENSOR_ID_PRESSURE BHI360_SENSOR_ID_BARO
 #define BHI3_ACC_RANGE_G BHI360_ACCEL_16G
 #define BHI3_POLL_FIFO_WITHOUT_INTERRUPT 0
 #endif
@@ -636,6 +634,19 @@ static int8_t bhi3_s_device_bootstrap(void)
         bhi3_s_report_api_error(rslt, &bhy);
     }
 
+    struct bhi360_bsx_algo_param_version bsx_version = { 0 };
+    rslt = bhi360_bsx_algo_param_get_bsx_version(&bsx_version, &bhy);
+    if (rslt == BHI360_OK)
+    {
+        bhi3_s_log_info("BSX version %u.%u.%u.%u\r\n",
+                       bsx_version.major_version, bsx_version.minor_version,
+                       bsx_version.major_bug_fix_version, bsx_version.minor_bug_fix_version);
+    }
+    else
+    {
+        bhi3_s_report_api_error(rslt, &bhy);
+    }
+
     rslt = bhi360_register_fifo_parse_callback(BHI360_SYS_ID_META_EVENT, parse_meta_event, NULL, &bhy);
     if (rslt != BHI360_OK)
     {
@@ -741,6 +752,28 @@ static int8_t bhi3_s_device_bootstrap(void)
     }
 
     bhi3_s_restore_calibration_profiles();
+
+    const uint8_t event_index = (BHI360_META_EVENT_MAG_DISTORTION - 1U) / 4U;
+    const uint8_t event_shift = 2U * ((BHI360_META_EVENT_MAG_DISTORTION - 1U) % 4U);
+    for (uint16_t param = BHI360_SYSTEM_PARAM_META_EVENT_CONTROL_NON_WAKE_UP_FIFO;
+         param <= BHI360_SYSTEM_PARAM_META_EVENT_CONTROL_WAKE_UP_FIFO; param++)
+    {
+        bhi360_system_param_multi_meta_event_ctrl_t meta_events = { 0 };
+        rslt = bhi360_system_param_get_meta_event_control(param, &meta_events, &bhy);
+        if (rslt == BHI360_OK)
+        {
+            /* Enable the event and its interrupt without changing other events. */
+            meta_events.group[event_index].as_uint8 |= (uint8_t)(3U << event_shift);
+            rslt = bhi360_system_param_set_meta_event_control(param, &meta_events, &bhy);
+        }
+        if (rslt != BHI360_OK)
+        {
+            bhi3_s_report_api_error(rslt, &bhy);
+            close_interfaces(intf);
+            return rslt;
+        }
+    }
+    bhi3_s_log_info("Enable magnetic distortion events (wake-up and non-wake-up).\r\n");
 
     rslt = bhi3_s_set_sensor_rate_with_fallback(BHI360_SENSOR_ID_ORI, &sensor_conf_euler);
     if (rslt != BHI360_OK)
@@ -2138,7 +2171,6 @@ static void parse_mag_data(const struct bhi360_fifo_parse_data_info *callback_in
 static void parse_pressure(const struct bhi360_fifo_parse_data_info *callback_info, void *callback_ref)
 {
     (void)callback_ref;
-    bhi360_float pressure;
     float pressure_hpa;
 
     if (!callback_info)
@@ -2151,8 +2183,8 @@ static void parse_pressure(const struct bhi360_fifo_parse_data_info *callback_in
         return;
     }
 
-    bhi360_parse_pressure(callback_info->data_ptr, &pressure);
-    pressure_hpa = pressure / 100.0f;
+    /* 1 LSB = 1/128 Pa; convert to hPa. */
+    pressure_hpa = (float)BHI360_LE2U24(callback_info->data_ptr) / 12800.0f;
 
     if (pressure_hpa == 0.0f)
     {
@@ -2181,7 +2213,6 @@ static void parse_pressure(const struct bhi360_fifo_parse_data_info *callback_in
 static void parse_temperature(const struct bhi360_fifo_parse_data_info *callback_info, void *callback_ref)
 {
     (void)callback_ref;
-    bhi360_float temperature;
 
     if (!callback_info)
     {
@@ -2193,14 +2224,13 @@ static void parse_temperature(const struct bhi360_fifo_parse_data_info *callback
         return;
     }
 
-    bhi360_parse_temperature_celsius(callback_info->data_ptr, &temperature);
-    bhi3_s_datas.temperature = temperature;
+    /* 1 LSB = 1/100 degree Celsius. */
+    bhi3_s_datas.temperature = (float)BHI360_LE2S16(callback_info->data_ptr) / 100.0f;
 }
 
 static void parse_humidity(const struct bhi360_fifo_parse_data_info *callback_info, void *callback_ref)
 {
     (void)callback_ref;
-    bhi360_float humidity;
 
     if (!callback_info)
     {
@@ -2212,8 +2242,8 @@ static void parse_humidity(const struct bhi360_fifo_parse_data_info *callback_in
         return;
     }
 
-    bhi360_parse_humidity(callback_info->data_ptr, &humidity);
-    bhi3_s_datas.humidity = humidity;
+    /* 1 LSB = 1 percent relative humidity. */
+    bhi3_s_datas.humidity = (float)callback_info->data_ptr[0];
 }
 
 static const char *bhi3_s_accuracy_name(uint8_t accuracy)
@@ -2360,6 +2390,15 @@ static void parse_meta_event(const struct bhi360_fifo_parse_data_info *callback_
         }
         case BHI360_META_EVENT_SENSOR_ERROR:
             bhi3_s_log_error("%s Sensor id %u (%s) reported error 0x%02X\r\n", event_text, byte1, get_sensor_name(byte1), byte2);
+            break;
+        case BHI360_META_EVENT_SYSTEM_ERROR:
+            bhi3_s_log_error("%s System error register 0x%02X, interrupt state 0x%02X\r\n", event_text, byte1, byte2);
+            break;
+        case BHI360_META_EVENT_MAG_DISTORTION:
+            bhi3_s_log_info("%s Magnetic distortion for sensor id %u changed to %u\r\n", event_text, byte1, byte2);
+            break;
+        case BHI360_META_EVENT_IMU_SATURATION:
+            bhi3_s_log_warning("%s IMU saturation for sensor id %u\r\n", event_text, byte1);
             break;
         case BHI360_META_EVENT_FIFO_OVERFLOW:
             bhi3_s_log_warning("%s FIFO overflow\r\n", event_text);

@@ -45,10 +45,6 @@
 #include <stdlib.h>
 #include <time.h>
 
-#ifndef USE_BHI385
-#include "bhi360_parse.h"
-#endif
-
 #ifndef BHI3_USE_I2C
 static void my_spi_open(const char *device);
 #endif
@@ -542,14 +538,12 @@ char *get_api_error(int8_t error_code)
         case BHI360_E_PARAM_NOT_SET:
             ret = "[API Error] Parameter not set";
             break;
-#ifdef USE_BHI385
         case BHI360_E_INSUFFICIENT_MAX_SIMUL_SENSORS:
             ret = "[API Error] Insufficient maximum simultaneous sensors";
             break;
         case BHI360_E_INVALID_DATA:
             ret = "[API Error] Invalid data";
             break;
-#endif
         default:
             ret = "[API Error] Unknown API error code";
     }
@@ -1062,10 +1056,12 @@ char *get_physical_sensor_name(uint8_t sensor_id)
         case BHI360_PHYS_SENSOR_ID_TEMP_GYRO:
             ret = "Temperature Gyroscope";
             break;
+#ifdef USE_BHI385
         case BHI360_PHYS_SENSOR_ID_ANY_MOTION:
             ret = "Any Motion not available now";
             break;
-        case BHI360_PHYS_SENSOR_ID_PRESSURE:
+#endif
+        case BHI360_PHYS_SENSOR_ID_BMP_PRESSURE:
             ret = "Pressure";
             break;
         case BHI360_PHYS_SENSOR_ID_POSITION:
@@ -1092,9 +1088,11 @@ char *get_physical_sensor_name(uint8_t sensor_id)
         case BHI360_PHYS_SENSOR_ID_PHYS_ANY_MOTION:
             ret = "Any Motion";
             break;
+#ifdef USE_BHI385
         case BHI360_PHYS_SENSOR_ID_EX_CAMERA_INPUT:
             ret = "External Camera Input";
             break;
+#endif
         case BHI360_PHYS_SENSOR_ID_GPS:
             ret = "GPS";
             break;
@@ -1343,7 +1341,7 @@ char *get_sensor_name(uint8_t sensor_id)
         case BHI360_SENSOR_ID_PICKUP_GESTURE:
             ret = "Pickup gesture";
             break;
-        case BHI360_SENSOR_BMP_TEMPERATURE:
+        case BHI360_SENSOR_ID_BMP_TEMPERATURE:
             ret = "BMP Temperature";
             break;
         case BHI360_SENSOR_ID_SIG_LP_WU:
@@ -1358,9 +1356,11 @@ char *get_sensor_name(uint8_t sensor_id)
         case BHI360_SENSOR_ID_AR:
             ret = "Activity recognition";
             break;
+#ifdef USE_BHI385
         case BHI360_SENSOR_ID_EXCAMERA:
             ret = "External camera trigger";
             break;
+#endif
         case BHI360_SENSOR_ID_GPS:
             ret = "GPS";
             break;
@@ -1376,17 +1376,15 @@ char *get_sensor_name(uint8_t sensor_id)
         case BHI360_SENSOR_ID_STATIONARY_DET:
             ret = "Stationary detect";
             break;
-        case BHI360_SENSOR_BMP_TEMPERATURE_WU:
+        case BHI360_SENSOR_ID_BMP_TEMPERATURE_WU:
             ret = "BMP Temperature wake up";
             break;
-#ifdef USE_BHI385
         case BHI360_SENSOR_ID_PRESSURE:
             ret = "BMP Pressure";
             break;
         case BHI360_SENSOR_ID_PRESSURE_WU:
             ret = "BMP Pressure wake up";
             break;
-#endif
         case BHI360_SENSOR_ID_ANY_MOTION_LP_WU:
             ret = "Low Power Any motion wake up";
             break;
@@ -1570,22 +1568,22 @@ char *get_sensor_parse_format(uint8_t sensor_id)
         case BHI360_SENSOR_ID_HUM_WU:
         case BHI360_SENSOR_ID_PROX:
         case BHI360_SENSOR_ID_PROX_WU:
+#ifdef USE_BHI385
         case BHI360_SENSOR_ID_EXCAMERA:
+#endif
         case BHI360_SENSOR_ID_MULTI_TAP:
             ret = "u8";
             break;
         case BHI360_SENSOR_ID_TEMP:
         case BHI360_SENSOR_ID_TEMP_WU:
-        case BHI360_SENSOR_BMP_TEMPERATURE:
-        case BHI360_SENSOR_BMP_TEMPERATURE_WU:
+        case BHI360_SENSOR_ID_BMP_TEMPERATURE:
+        case BHI360_SENSOR_ID_BMP_TEMPERATURE_WU:
             ret = "s16";
             break;
         case BHI360_SENSOR_ID_BARO:
         case BHI360_SENSOR_ID_BARO_WU:
-#ifdef USE_BHI385
         case BHI360_SENSOR_ID_PRESSURE:
         case BHI360_SENSOR_ID_PRESSURE_WU:
-#endif
             ret = "u24";
             break;
         case BHI360_SENSOR_ID_GAS:
@@ -1705,8 +1703,8 @@ char *get_sensor_axis_names(uint8_t sensor_id)
             break;
         case BHI360_SENSOR_ID_TEMP:
         case BHI360_SENSOR_ID_TEMP_WU:
-        case BHI360_SENSOR_BMP_TEMPERATURE:
-        case BHI360_SENSOR_BMP_TEMPERATURE_WU:
+        case BHI360_SENSOR_ID_BMP_TEMPERATURE:
+        case BHI360_SENSOR_ID_BMP_TEMPERATURE_WU:
             ret = "t";
             break;
         case BHI360_SENSOR_ID_BARO:
@@ -1733,9 +1731,11 @@ char *get_sensor_axis_names(uint8_t sensor_id)
         case BHI360_SENSOR_ID_STC_WU:
         case BHI360_SENSOR_ID_STC_LP:
         case BHI360_SENSOR_ID_STC_LP_WU:
+#ifdef USE_BHI385
         case BHI360_SENSOR_ID_EXCAMERA:
             ret = "c";
             break;
+#endif
         case BHI360_SENSOR_ID_SIG:
         case BHI360_SENSOR_ID_STD:
         case BHI360_SENSOR_ID_STD_WU:
@@ -1785,14 +1785,3 @@ char *get_sensor_axis_names(uint8_t sensor_id)
 
     return ret;
 }
-
-#ifndef PC
-void default_verbose_write(uint8_t *buffer, uint16_t length)
-{
-    //coines_write_intf(COINES_COMM_INTF_USB, buffer, length);
-}
-
-void verbose_write(uint8_t *buffer, uint16_t length) __attribute__ ((weak, alias("default_verbose_write")));
-
-
-#endif
