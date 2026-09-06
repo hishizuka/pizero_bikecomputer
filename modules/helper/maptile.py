@@ -115,24 +115,24 @@ SCW_MONTHS = (
     "DEC",
 )
 
-# Bin colors from the SCW weather legends.
+# Bin colors sampled from SCW forecast tiles; 80+ follows the same HSV ramp.
 SCW_PRECIPITATION_COLOR = np.array(
     [
-        [143, 114, 217],
-        [92, 73, 232],
-        [45, 31, 239],
-        [2, 18, 249],
-        [3, 108, 250],
-        [4, 198, 250],
-        [9, 250, 216],
-        [7, 250, 131],
-        [2, 254, 38],
-        [54, 254, 2],
-        [144, 253, 4],
-        [236, 253, 11],
-        [254, 181, 2],
-        [250, 93, 5],
-        [243, 7, 2],
+        [147, 112, 219],
+        [95, 72, 232],
+        [42, 32, 245],
+        [0, 18, 255],
+        [0, 109, 255],
+        [0, 200, 255],
+        [0, 255, 219],
+        [0, 255, 128],
+        [0, 255, 36],
+        [55, 255, 0],
+        [146, 255, 0],
+        [237, 255, 0],
+        [255, 182, 0],
+        [255, 91, 0],
+        [255, 0, 0],
     ],
     dtype="uint8",
 )
@@ -145,6 +145,8 @@ SCW_CLOUD_COLOR = np.array(
 SCW_CLOUD_VALUE = np.array([0, 15, 25, 35, 45, 55, 65, 75, 85, 100])
 SCW_TEMPERATURE_COLOR = np.array(
     [
+        [0, 0, 205],
+        [0, 0, 227],
         [0, 0, 249],
         [0, 19, 255],
         [0, 45, 255],
@@ -180,8 +182,8 @@ SCW_TEMPERATURE_COLOR = np.array(
     ],
     dtype="uint8",
 )
-# Midpoints of the verified 5-6 through 36-37 degree Celsius bins.
-SCW_TEMPERATURE_VALUE = np.arange(5.5, 37.5)
+# Midpoints of the verified 3-4 through 36-37 degree Celsius bins.
+SCW_TEMPERATURE_VALUE = np.arange(3.5, 37.5)
 
 
 JMA_RAIN_COLOR = np.array([
