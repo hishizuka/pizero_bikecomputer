@@ -4,6 +4,7 @@ import array
 import asyncio
 import threading
 from enum import StrEnum
+from time import monotonic
 
 from modules.app_logger import app_logger
 from . import ant_device
@@ -79,26 +80,35 @@ class ANT_Device_Light(ant_device.ANT_Device):
         self.send_queue = asyncio.Queue()
         asyncio.create_task(self.send_worker())
 
-    def _queue_send(self, payload):
+    def _queue_send(self, payload, pending=None):
         """Enqueue payload on the configured event loop in a thread-safe way."""
         try:
             loop = self.config.loop
         except RuntimeError:
             loop = None
         if loop is not None and loop.is_running():
-            asyncio.run_coroutine_threadsafe(self.send_queue.put(payload), loop)
+            asyncio.run_coroutine_threadsafe(self.send_queue.put((payload, pending)), loop)
         else:
-            asyncio.create_task(self.send_queue.put(payload))
+            asyncio.create_task(self.send_queue.put((payload, pending)))
 
     @staticmethod
     def format_list(l):
         return "[" + " ".join(map(lambda a: str.format("{0:02x}", a), l)) + "]"
 
+    def _send_queued(self, data, pending):
+        # Check in the executor too: a command can become obsolete while waiting.
+        with self._ensure_lock():
+            if pending is not None and self._pending_light_setting is not pending:
+                return True
+        return self.channel.send_acknowledged_data_with_retry(data)
+
     async def send_worker(self):
         while True:
-            data = await self.send_queue.get()
-            if data is None:
+            item = await self.send_queue.get()
+            if item is None:
+                self.send_queue.task_done()
                 break
+            data, pending = item
             send_ok = False
             for attempt in range(self.ack_retry_max):
                 try:
@@ -106,7 +116,7 @@ class ANT_Device_Light(ant_device.ANT_Device):
                     # to keep the main asyncio loop responsive (e.g., MCP230xx buttons).
                     loop = asyncio.get_running_loop()
                     send_ok = await loop.run_in_executor(
-                        None, self.channel.send_acknowledged_data_with_retry, data
+                        None, self._send_queued, data, pending
                     )
                 except Exception as e:
                     app_logger.error(f"{e}")
@@ -125,6 +135,10 @@ class ANT_Device_Light(ant_device.ANT_Device):
                 app_logger.error(
                     f"ANT+ light acknowledged_data retry exhausted: {self.format_list(data)}"
                 )
+            with self._ensure_lock():
+                if pending is not None and self._pending_light_setting is pending:
+                    # Start the state-response timeout after ACK attempts finish.
+                    pending["last_sent"] = monotonic()
             self.send_queue.task_done()
 
     def reset_value(self):
@@ -168,7 +182,7 @@ class ANT_Device_Light(ant_device.ANT_Device):
                 return k
 
     def on_data(self, data):
-        resend_mode = None
+        resend_setting = None
         if data[0] == 0x01:
             mode = self.get_light_mode(data[6] >> 2)
             seq_no = data[4]
@@ -191,8 +205,8 @@ class ANT_Device_Light(ant_device.ANT_Device):
                                 f"seq_no={seq_no}"
                             )
                         self._pending_light_setting = None
-                    else:
-                        time_delta = (datetime.now() - pending["last_sent"]).total_seconds()
+                    elif pending["last_sent"] is not None:
+                        time_delta = monotonic() - pending["last_sent"]
                         if time_delta > self.light_retry_timeout:
                             if pending["retry_count"] >= self.light_retry_max:
                                 app_logger.error(
@@ -208,7 +222,7 @@ class ANT_Device_Light(ant_device.ANT_Device):
                                     f"rx_seq_no={seq_no}, tx_seq_no={pending['seq_no']}, "
                                     f"time_delta={round(time_delta, 2)}s"
                                 )
-                                resend_mode = pending["mode"]
+                                resend_setting = pending
         elif data[0] == 0x02:
             pass
         # Common Data Page 80 (0x50): Manufacturer’s Information
@@ -218,8 +232,8 @@ class ANT_Device_Light(ant_device.ANT_Device):
         elif data[0] == 0x51 and not self.values["stored_page"][0x51]:
             self.setCommonPage81(data, self.values)
 
-        if resend_mode is not None:
-            self.send_light_setting_on_data(resend_mode)
+        if resend_setting is not None:
+            self.send_light_setting_on_data(resend_setting)
 
     def _build_light_setting_payload(self, mode, seq_no):
         light_code = self.light_modes[self.light_name][mode][1]
@@ -272,29 +286,28 @@ class ANT_Device_Light(ant_device.ANT_Device):
             seq_no = self.page_34_count
             now = datetime.now()
             self.values["changed_timestamp"] = now
-            self._pending_light_setting = {
+            pending = self._pending_light_setting = {
                 "mode": mode,
                 "seq_no": seq_no,
                 "retry_count": 0,
-                "last_sent": now,
+                "last_sent": None,  # Queued or waiting for ACK; no state retry yet.
             }
 
         payload = self._build_light_setting_payload(mode, seq_no)
-        self._queue_send(payload)
+        self._queue_send(payload, pending)
 
-    def send_light_setting_on_data(self, mode):
+    def send_light_setting_on_data(self, pending):
         lock = self._ensure_lock()
         with lock:
-            pending = self._pending_light_setting
-            if pending is None or pending["mode"] != mode:
-                # Mode changed while a retry was queued; drop the retry.
+            if self._pending_light_setting is not pending or pending["last_sent"] is None:
+                # Drop stale callbacks and retries already queued or in progress.
                 return
             pending["retry_count"] += 1
-            pending["last_sent"] = datetime.now()
+            pending["last_sent"] = None
             seq_no = pending["seq_no"]
 
-        payload = self._build_light_setting_payload(mode, seq_no)
-        self._queue_send(payload)
+        payload = self._build_light_setting_payload(pending["mode"], seq_no)
+        self._queue_send(payload, pending)
 
     def send_light_mode(self, mode, auto=False):
         if auto:
