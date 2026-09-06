@@ -36,7 +36,7 @@ def get_wind_impact(
     speed,
     wind_speed,
     wind_direction,
-    track,
+    heading_gps_deg,
     temperature,
     pressure,
     cda,
@@ -44,14 +44,14 @@ def get_wind_impact(
 ):
     """Return the current aerodynamic impact relative to still air."""
     if (
-        np.any(np.isnan((speed, wind_speed, wind_direction, track)))
+        np.any(np.isnan((speed, wind_speed, wind_direction, heading_gps_deg)))
         or speed <= 0
         or cda <= 0
         or total_weight <= 0
     ):
         return _NO_WIND_IMPACT
 
-    relative_direction = math.radians(wind_direction - track)
+    relative_direction = math.radians(wind_direction - heading_gps_deg)
     forward_wind = speed + math.cos(relative_direction) * wind_speed
     crosswind = math.sin(relative_direction) * wind_speed
     apparent_wind = math.hypot(forward_wind, crosswind)

@@ -91,7 +91,7 @@ class MapStateMixin:
     def _setup_map_state_items(self):
         self.map_pos["x"] = self.config.G_DUMMY_POS_X
         self.map_pos["y"] = self.config.G_DUMMY_POS_Y
-        self.set_map_track_source(self.config.G_DEBUG)
+        self.set_map_heading_source(self.config.G_DEBUG)
         self._overlay_refresh_time_cache = {}
         self._course_focus_active = False
         self._course_focus_off_frames = 0
@@ -106,24 +106,24 @@ class MapStateMixin:
         self._init_direction_arrows()
         self._init_center_point()
 
-    def set_map_track_source(self, use_i2c_heading):
-        self.use_i2c_heading_for_map_track = bool(use_i2c_heading)
-        if self.use_i2c_heading_for_map_track:
-            self._map_track_value_getter = self._get_i2c_heading_track_value
+    def set_map_heading_source(self, use_magnetic_heading):
+        self.use_magnetic_heading_for_map = bool(use_magnetic_heading)
+        if self.use_magnetic_heading_for_map:
+            self._map_heading_value_getter = self._get_magnetic_heading_value
         else:
-            self._map_track_value_getter = self._get_gps_track_value
+            self._map_heading_value_getter = self._get_gps_heading_value
 
-    def _get_gps_track_value(self):
-        return self.gps_values["track"]
+    def _get_gps_heading_value(self):
+        return self.gps_values["heading_gps_deg"]
 
-    def _get_i2c_heading_track_value(self):
-        heading = self.sensor.values["I2C"]["heading"]
+    def _get_magnetic_heading_value(self):
+        heading = self.sensor.values["I2C"]["heading_magnetic_deg"]
         if heading is not None and not self._is_nan_value(heading):
             return heading
-        return self._get_gps_track_value()
+        return self._get_gps_heading_value()
 
-    def _get_map_track_value(self):
-        return self._map_track_value_getter()
+    def _get_map_heading_value(self):
+        return self._map_heading_value_getter()
 
 
     def _get_viewport_px_size(self):
@@ -427,7 +427,7 @@ class MapStateMixin:
         display_key = (
             norm(gps_values["lon"]),
             norm(gps_values["lat"]),
-            norm(self._get_map_track_value()),
+            norm(self._get_map_heading_value()),
             norm(gps_values["mode"]),
             norm(self.map_pos["x"]),
             norm(self.map_pos["y"]),
@@ -598,11 +598,11 @@ class MapStateMixin:
         self.point["pos"][1] *= self.y_mod
         self.location.append(self.point)
 
-        track_value = self._get_map_track_value()
-        if not self._is_nan_value(track_value):
+        heading_value = self._get_map_heading_value()
+        if not self._is_nan_value(heading_value):
             self.current_point.setSymbol(
                 self.direction_arrows[
-                    self.get_arrow_angle_index(track_value)
+                    self.get_arrow_angle_index(heading_value)
                 ]
             )
         self.current_point.setData(self.location)

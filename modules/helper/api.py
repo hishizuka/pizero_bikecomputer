@@ -15,7 +15,7 @@ from modules.helper.network import (
     post,
 )
 from modules.helper.maptile import MapTileWithValues
-from modules.utils.geo import get_track_str
+from modules.utils.geo import get_heading_str
 from modules.app_logger import app_logger
 from modules.helper.garmin_livetrack import (
     GarminLiveTrackClient,
@@ -1079,7 +1079,7 @@ class api:
                 pos, forecast_time
             )
 
-        w_dir_str = get_track_str(w_dir)
+        w_dir_str = get_heading_str(w_dir)
         return w_spd, w_dir, w_dir_str
 
     async def get_course_weather(self, pos, forecast_time):

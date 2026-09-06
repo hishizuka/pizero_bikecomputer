@@ -11,7 +11,7 @@ from modules.app_logger import app_logger
 from modules.board_config import I2CDevice
 from modules.helper.network.http_client import get_json
 from modules.utils.altitude import TOTAL_ASCENT_THRESHOLD, update_altitude_reference
-from modules.utils.geo import get_dist_on_earth, get_track_str
+from modules.utils.geo import get_dist_on_earth
 from .sensor import Sensor
 from .i2c_utils import i2c_addr_present as _i2c_addr_present
 
@@ -166,13 +166,13 @@ class SensorI2C(Sensor):
         "pitch",
         "roll",
         "yaw",
-        "yaw_for_heading",
+        "yaw_for_magnetic_heading",
         "fixed_pitch",
         "fixed_roll",
         "grade_pitch",
-        "raw_heading",
-        "heading",
-        "heading_str",
+        "heading_magnetic_raw_deg",
+        "heading_magnetic_deg",
+        "heading_magnetic_timestamp",
         "motion",
         "m_stat",
         "voltage_battery",
@@ -1019,13 +1019,15 @@ class SensorI2C(Sensor):
         if not imu.ready:
             return
 
-        self.values["raw_heading"] = (
+        self.values["heading_magnetic_raw_deg"] = (
             int(imu.heading)
             - self.bhi3_s_heading_corr
             + self.config.G_IMU_MAG_DECLINATION
         ) % 360
-        self.values["heading"] = self.values["raw_heading"]
-        self.values["heading_str"] = get_track_str(self.values["heading"])
+        self.values["heading_magnetic_deg"] = self.values[
+            "heading_magnetic_raw_deg"
+        ]
+        self.values["heading_magnetic_timestamp"] = datetime.now()
 
         # BHI3 Shuttle mounting can be corrected by the common heading offset.
         # Map BHI roll -> bike pitch (look down is plus),
@@ -1346,9 +1348,8 @@ class SensorI2C(Sensor):
         # calc acc based on fixed_pitch and fixed_roll
         self.modified_acc()
 
-        # calc heading using yaw_for_heading, fixed_pitch and fixed_roll
-        #self.calc_heading()
-        self.calc_heading(self.values["yaw_for_heading"])
+        # Calculate magnetic heading using yaw and the fixed mounting angles.
+        self.calc_magnetic_heading(self.values["yaw_for_magnetic_heading"])
 
     def get_pitch_roll_yaw(self):
         # pitch : the direction to look down is plus
@@ -1374,7 +1375,7 @@ class SensorI2C(Sensor):
             self.values["pitch"] = math.asin(sinp)
 
         self.values["yaw"] = math.atan2(1 - 2 * (y2 + z * z), 2 * (w * z + x * y))
-        self.values["yaw_for_heading"] = self.values["yaw"]
+        self.values["yaw_for_magnetic_heading"] = self.values["yaw"]
 
     def calc_pitch_roll_yaw_from_acc_mag(self):
         if not self.motion_sensor["ACC"] or not self.motion_sensor["MAG"]:
@@ -1387,23 +1388,25 @@ class SensorI2C(Sensor):
             self.values["mag"], self.values["pitch"], self.values["roll"]
         )
 
-        self.values["yaw_for_heading"] = self.get_yaw(
+        self.values["yaw_for_magnetic_heading"] = self.get_yaw(
             self.values["mag"], self.values["fixed_pitch"], self.values["fixed_roll"]
         )
 
-    def calc_heading(self, yaw):
+    def calc_magnetic_heading(self, yaw):
         self._schedule_mag_declination_update()
 
         if np.isnan(yaw):
             if self.motion_sensor["MAG"]:
-                self.values["raw_heading"] = int(
+                self.values["heading_magnetic_raw_deg"] = int(
                     math.degrees(
                         math.atan2(self.values['mag'][1], self.values['mag'][0])
                     )
                     + self.config.G_IMU_MAG_DECLINATION
                 ) % 360        
-                self.values["heading_str"] = get_track_str(self.values["raw_heading"])
-                self.values["heading"] = self.values["raw_heading"]
+                self.values["heading_magnetic_deg"] = self.values[
+                    "heading_magnetic_raw_deg"
+                ]
+                self.values["heading_magnetic_timestamp"] = datetime.now()
             return
 
         # set heading with yaw
@@ -1413,8 +1416,8 @@ class SensorI2C(Sensor):
         elif tilt_heading > 2 * math.pi:
             tilt_heading -= 2 * math.pi
 
-        self.values["heading"] = int(math.degrees(tilt_heading))
-        self.values["heading_str"] = get_track_str(self.values["heading"])
+        self.values["heading_magnetic_deg"] = int(math.degrees(tilt_heading))
+        self.values["heading_magnetic_timestamp"] = datetime.now()
 
     @staticmethod
     def get_pitch_roll(acc):

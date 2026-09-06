@@ -3,6 +3,8 @@ import time
 
 import numpy as np
 
+from modules.utils.geo import get_heading_str
+
 
 class GUI_Config:
     G_GUI_INDEX = {
@@ -24,6 +26,7 @@ class GUI_Config:
         "GPS_error": (".0f", "m"),
         "GPS_DOP": (".1f", ""),
         "String": ("s", ""),
+        "Heading": ("heading", ""),
         "Percent": (".0f", "%"),
         "Int": (".0f", ""),
     }
@@ -137,8 +140,14 @@ class GUI_Config:
         "Alt.(GPS)": (G_UNIT["Altitude"], "self.sensor.values['GPS']['alt']"),
         "Speed(GPS)": (G_UNIT["Speed"], "self.sensor.values['GPS']['speed']"),
         "Dist.(GPS)": (G_UNIT["Distance"], "self.sensor.values['GPS']['distance']"),
-        "Heading_RAW(GPS)": (G_UNIT["Int"], "self.sensor.values['GPS']['track']"),
-        "Heading(GPS)": (G_UNIT["String"], "self.sensor.values['GPS']['track_str']"),
+        "Heading_RAW(GPS)": (
+            G_UNIT["Int"],
+            "self.sensor.values['GPS']['heading_gps_deg']",
+        ),
+        "Heading(GPS)": (
+            G_UNIT["Heading"],
+            "self.sensor.values['GPS']['heading_gps_deg']",
+        ),
         "Satellites": (G_UNIT["String"], "self.sensor.values['GPS']['used_sats_str']"),
         "Error(x)": (G_UNIT["GPS_error"], "self.sensor.values['GPS']['epx']"),
         "Error(y)": (G_UNIT["GPS_error"], "self.sensor.values['GPS']['epy']"),
@@ -293,9 +302,18 @@ class GUI_Config:
         "MAG_X": (("1.1f", ""), "self.sensor.values['I2C']['mag'][0]"),
         "MAG_Y": (("1.1f", ""), "self.sensor.values['I2C']['mag'][1]"),
         "MAG_Z": (("1.1f", ""), "self.sensor.values['I2C']['mag'][2]"),
-        "Heading": (G_UNIT["String"], "self.sensor.values['I2C']['heading_str']"),
-        "Heading_Raw(I2C)": (G_UNIT["Int"], "self.sensor.values['I2C']['raw_heading']"),
-        "Heading_Tilt": (G_UNIT["Int"], "self.sensor.values['I2C']['heading']"),
+        "Heading": (
+            G_UNIT["Heading"],
+            "self.sensor.values['I2C']['heading_magnetic_deg']",
+        ),
+        "Heading_Raw(I2C)": (
+            G_UNIT["Int"],
+            "self.sensor.values['I2C']['heading_magnetic_raw_deg']",
+        ),
+        "Heading_Tilt": (
+            G_UNIT["Int"],
+            "self.sensor.values['I2C']['heading_magnetic_deg']",
+        ),
         "Pitch": (G_UNIT["Int"], "self.sensor.values['I2C']['grade_pitch']"),
         "Pitch_Fixed": (
             G_UNIT["Int"],
@@ -488,6 +506,8 @@ class GUI_Config:
                 text = ("+" if value >= 0 else "-") + text
         elif itemformat == "time":
             text = time.strftime("%H:%M")
+        elif itemformat == "heading":
+            text = get_heading_str(value)
         else:
             text = f"{value:{itemformat}}"
 

@@ -2,7 +2,7 @@ from datetime import datetime
 
 import numpy as np
 
-from modules.utils.geo import calc_azimuth, get_track_str
+from modules.utils.geo import calc_azimuth
 from .base import AbstractSensorGPS
 
 
@@ -31,12 +31,12 @@ class Dummy_GPS(AbstractSensorGPS):
             distance = self.values["distance"]
         self.values["distance"] = distance
 
-        track = self._to_float_or_nan(current_position[3])
-        if np.isnan(track):
-            track = self._to_float_or_nan(self.values["pre_track"])
-        self.values["track"] = track
-        if not np.isnan(self.values["track"]):
-            self.values["track_str"] = get_track_str(self.values["track"])
+        heading_gps_deg = self._to_float_or_nan(current_position[3])
+        if np.isnan(heading_gps_deg):
+            heading_gps_deg = self._to_float_or_nan(
+                self.values["pre_heading_gps_deg"]
+            )
+        self.values["heading_gps_deg"] = heading_gps_deg
 
     def set_position_from_course(self, course, idx):
         lat = course.latitude
@@ -53,7 +53,7 @@ class Dummy_GPS(AbstractSensorGPS):
             self.values["distance"] += (
                 dist[idx + 1] - dist[idx]
             ) * self.COURSE_RAND_FACTOR
-        self.values["track"] = int(
+        self.values["heading_gps_deg"] = int(
             (
                 calc_azimuth(
                     [self.values["pre_lat"], self.values["lat"]],
@@ -61,8 +61,6 @@ class Dummy_GPS(AbstractSensorGPS):
                 )
             )[0]
         )
-        if not np.isnan(self.values["track"]):
-            self.values["track_str"] = get_track_str(self.values["track"])
 
     async def update(self):
         if not self.config.G_DUMMY_OUTPUT:
@@ -84,7 +82,7 @@ class Dummy_GPS(AbstractSensorGPS):
 
             self.values["pre_lat"] = self.values["lat"]
             self.values["pre_lon"] = self.values["lon"]
-            self.values["pre_track"] = self.values["track"]
+            self.values["pre_heading_gps_deg"] = self.values["heading_gps_deg"]
 
             # generate dummy position from log
             if self.config.logger.position_log.shape[0] > 0:
@@ -127,7 +125,7 @@ class Dummy_GPS(AbstractSensorGPS):
             self.config.logger.course.get_index(
                 self.values["lat"],
                 self.values["lon"],
-                self.values["track"],
+                self.values["heading_gps_deg"],
                 self.config.G_GPS_SEARCH_RANGE,
                 self.config.G_GPS_ON_ROUTE_CUTOFF,
                 self.azimuth_cutoff,

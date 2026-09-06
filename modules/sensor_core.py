@@ -25,6 +25,7 @@ from modules.utils.wind import (
     get_wind_impact,
 )
 from .sensor.gps import get_sensor_gps_class
+from .sensor.heading_fusion import HeadingFusion
 from .sensor.sensor_ant import SensorANT
 from .sensor.sensor_ble import SensorBLE
 from .sensor.sensor_gpio import SensorGPIO
@@ -79,6 +80,9 @@ class SensorCore:
         "speed_impact",
         "wind_time",
         "temperature",
+        "heading_gps_quality",
+        "heading_fused_deg",
+        "heading_fused_source",
         "cpu_percent",
         "system_cpu_percent",
         "send_time",
@@ -128,6 +132,7 @@ class SensorCore:
 
     def __init__(self, config):
         self.config = config
+        self.heading_fusion = HeadingFusion(config.G_GPS_SPEED_CUTOFF)
         self.values["GPS"] = {}
         self.values["ANT+"] = {}
         self.values["BLE"] = {}
@@ -138,6 +143,7 @@ class SensorCore:
         # reset
         for key in self.integrated_value_keys:
             integrated[key] = np.nan
+        integrated["heading_fused_source"] = "INVALID"
         self.reset_internal()
         wind_accumulated_values = self.config.state.get_value(
             self.WIND_ACCUMULATED_STATE_KEY, (0.0, 0.0)
@@ -369,6 +375,25 @@ class SensorCore:
         if not np.isnan(power):
             self.get_ave_values("power", power)
 
+    def _update_heading_fusion(self, now):
+        gps = self.values["GPS"]
+        i2c = self.values["I2C"]
+        result = self.heading_fusion.update(
+            heading_gps_deg=gps["heading_gps_deg"],
+            heading_gps_timestamp=gps["heading_gps_timestamp"],
+            gps_speed=gps["speed"],
+            gps_mode=gps["mode"],
+            gps_epx=gps["epx"],
+            gps_epy=gps["epy"],
+            heading_magnetic_deg=i2c["heading_magnetic_deg"],
+            heading_magnetic_timestamp=i2c["heading_magnetic_timestamp"],
+            now=now,
+        )
+        integrated = self.values["integrated"]
+        integrated["heading_gps_quality"] = result.heading_gps_quality
+        integrated["heading_fused_deg"] = result.heading_fused_deg
+        integrated["heading_fused_source"] = result.heading_fused_source
+
     @staticmethod
     def _shift_window_and_append(window, value):
         window[:-1] = window[1:]
@@ -466,6 +491,7 @@ class SensorCore:
             power_sensor_live = False
 
             now_time = datetime.now()
+            self._update_heading_fusion(now_time)
             time_profile.append(now_time)
 
             ant_id_type = {
@@ -731,7 +757,7 @@ class SensorCore:
                     spd,
                     integrated["wind_speed"],
                     integrated["wind_direction"],
-                    v["GPS"]["track"],
+                    v["GPS"]["heading_gps_deg"],
                     temperature,
                     v["I2C"]["pressure"],
                     self.config.G_POWER_CDA,

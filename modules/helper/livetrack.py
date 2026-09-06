@@ -200,8 +200,8 @@ class LiveTrackSample:
     power_60s_w: float | None
     accumulated_power_j: float | None
     ascent_m: float | None
-    heading_deg: int | None
-    gps_track_deg: int | None
+    heading_gps_deg: int | None
+    heading_magnetic_deg: int | None
     accuracy_m: int | None
     satellite_count: int | None
     temperature_c: float | None
@@ -252,8 +252,8 @@ def build_livetrack_sample(config):
     if not getattr(config, "G_DUMMY_OUTPUT", False):
         display_timestamp = datetime.fromtimestamp(timestamp).strftime("%m/%d %H:%M")
 
-    heading = _finite_int(i2c.get("heading"))
-    gps_track = _finite_int(gps.get("track"))
+    heading_gps_deg = _finite_int(gps.get("heading_gps_deg"))
+    heading_magnetic_deg = _finite_int(i2c.get("heading_magnetic_deg"))
     epx = _finite_number(gps.get("epx"))
     epy = _finite_number(gps.get("epy"))
     accuracy = None
@@ -276,8 +276,8 @@ def build_livetrack_sample(config):
         power_60s_w=_finite_number(integrated.get("ave_power_60s")),
         accumulated_power_j=_finite_number(integrated.get("accumulated_power")),
         ascent_m=_finite_number(i2c.get("total_ascent")),
-        heading_deg=heading,
-        gps_track_deg=gps_track,
+        heading_gps_deg=heading_gps_deg,
+        heading_magnetic_deg=heading_magnetic_deg,
         accuracy_m=accuracy,
         satellite_count=_finite_int(gps.get("used_sats")),
         temperature_c=_finite_number(integrated.get("temperature")),

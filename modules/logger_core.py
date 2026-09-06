@@ -419,7 +419,8 @@ class LoggerCore:
       gps_mode INTEGER,
       gps_used_sats INTEGER,
       gps_total_sats INTEGER,
-      gps_track INTEGER,
+      heading_gps_deg INTEGER,
+      heading_gps_quality FLOAT,
       gps_epx FLOAT,
       gps_epy FLOAT,
       gps_epv FLOAT,
@@ -441,7 +442,9 @@ class LoggerCore:
       wind_speed FLOAT,
       wind_direction INT,
       headwind FLOAT,
-      heading INTEGER,
+      heading_magnetic_deg INTEGER,
+      heading_fused_deg FLOAT,
+      heading_fused_source TEXT,
       pitch FLOAT,
       roll FLOAT,
       motion INTEGER,
@@ -932,7 +935,8 @@ class LoggerCore:
                 self.sensor.values["GPS"]["mode"],
                 self.sensor.values["GPS"]["used_sats"],
                 self.sensor.values["GPS"]["total_sats"],
-                self.sensor.values["GPS"]["track"],
+                self.sensor.values["GPS"]["heading_gps_deg"],
+                value["heading_gps_quality"],
                 self.sensor.values["GPS"]["epx"],
                 self.sensor.values["GPS"]["epy"],
                 self.sensor.values["GPS"]["epv"],
@@ -956,7 +960,9 @@ class LoggerCore:
                 value["wind_speed"],
                 value["wind_direction"],
                 value["headwind"],
-                self.sensor.values["I2C"]["heading"],
+                self.sensor.values["I2C"]["heading_magnetic_deg"],
+                value["heading_fused_deg"],
+                value["heading_fused_source"],
                 self.sensor.values["I2C"]["pitch"],
                 self.sensor.values["I2C"]["roll"],
                 self.sensor.values["I2C"]["m_stat"],
@@ -1199,7 +1205,8 @@ class LoggerCore:
         # if not self.config.G_IS_RASPI and self.config.G_DUMMY_OUTPUT:
         if self.config.G_DUMMY_OUTPUT:
             self.cur.execute(
-                "SELECT position_lat,position_long,distance,gps_track FROM BIKECOMPUTER_LOG"
+                "SELECT position_lat,position_long,distance,heading_gps_deg "
+                "FROM BIKECOMPUTER_LOG"
             )
             self.position_log = np.array(self.cur.fetchall())
 

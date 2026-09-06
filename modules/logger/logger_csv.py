@@ -24,8 +24,10 @@ class LoggerCsv(Logger):
             "lap,timer,timestamp,total_timer_time,elapsed_time,heart_rate,speed,cadence,power,distance,"
             "accumulated_power,position_long,position_lat,raw_long,raw_lat,altitude,gps_altitude,raw_gps_altitude,course_altitude,"
             "dem_altitude,gps_speed,gps_distance,gps_mode,gps_used_sats,gps_total_sats,gps_epx,gps_epy,gps_epv,"
-            "gps_pdop,gps_hdop,gps_vdop,total_ascent,total_descent,pressure,temperature,humidity,heading,pitch,roll,"
-            "gps_track,wind_speed,wind_direction,headwind,"
+            "gps_pdop,gps_hdop,gps_vdop,total_ascent,total_descent,pressure,temperature,humidity,"
+            "heading_gps_deg,heading_gps_quality,heading_magnetic_deg,"
+            "heading_fused_deg,heading_fused_source,pitch,roll,"
+            "wind_speed,wind_direction,headwind,"
             "motion,acc_x,acc_y,acc_z,gyro_x,gyro_y,gyro_z,cpu_percent,system_cpu_percent,light"
         )
         columns = r.split(",")

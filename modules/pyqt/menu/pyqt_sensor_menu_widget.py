@@ -489,11 +489,11 @@ class InternalSensorMenuWidget(MenuWidget):
             return
 
         if change:
-            map_widget.set_map_track_source(
-                not map_widget.use_i2c_heading_for_map_track
+            map_widget.set_map_heading_source(
+                not map_widget.use_magnetic_heading_for_map
             )
         self.buttons[self.MAP_HEADING_BUTTON].change_toggle(
-            map_widget.use_i2c_heading_for_map_track
+            map_widget.use_magnetic_heading_for_map
         )
 
     def calib_mag(self):

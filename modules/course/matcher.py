@@ -56,7 +56,15 @@ class CourseMatcher:
 
         return lon_sum / weight_sum, lat_sum / weight_sum
 
-    def get_index(self, lat, lon, track, search_range, on_route_cutoff, azimuth_cutoff):
+    def get_index(
+        self,
+        lat,
+        lon,
+        heading_gps_deg,
+        search_range,
+        on_route_cutoff,
+        azimuth_cutoff,
+    ):
         if not self.config.G_COURSE_INDEXING:
             self.index.on_course_status = False
             return
@@ -100,8 +108,8 @@ class CourseMatcher:
 
         azimuth_diff = np.full(len(self.azimuth), np.nan)
 
-        if not np.isnan(track) and track is not None:
-            azimuth_diff = (track - self.azimuth) % 360
+        if not np.isnan(heading_gps_deg) and heading_gps_deg is not None:
+            azimuth_diff = (heading_gps_deg - self.azimuth) % 360
 
         dist_diff = np.where(
             inner_p <= 0.0,
@@ -155,7 +163,7 @@ class CourseMatcher:
 
             # check azimuth
             # app_logger.debug(f"i:{i}, s:{s}, m:{m}, azimuth_diff:{azimuth_diff[m]}, {len(azimuth_diff)}")
-            # app_logger.debug(f"track:{track}, m:{m}")
+            # app_logger.debug(f"heading_gps_deg:{heading_gps_deg}, m:{m}")
             # app_logger.debug(f"self.azimuth:{self.azimuth}, {len(self.azimuth)}")
             # app_logger.debug(f"azimuth_diff:{azimuth_diff}")
             if np.isnan(azimuth_diff[m]):
@@ -169,7 +177,7 @@ class CourseMatcher:
                 pass
             else:
                 # go backward
-                # app_logger.debug(f"track:{track}, m:{m}")
+                # app_logger.debug(f"heading_gps_deg:{heading_gps_deg}, m:{m}")
                 # app_logger.debug(self.azimuth)
                 # app_logger.debug(f"azimuth_diff:{azimuth_diff}")
                 continue

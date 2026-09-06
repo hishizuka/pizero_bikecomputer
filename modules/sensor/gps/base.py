@@ -7,7 +7,7 @@ import numpy as np
 
 from modules.app_logger import app_logger
 from modules.sensor.sensor import Sensor
-from modules.utils.geo import get_dist_on_earth, get_track_str, calc_azimuth
+from modules.utils.geo import calc_azimuth, get_dist_on_earth
 from modules.utils.time import set_time, set_timezone
 
 USED_SAT_CUTOFF = 3
@@ -31,10 +31,10 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
         "pre_lat",
         "pre_lon",
         "pre_alt",
-        "pre_track",
+        "pre_heading_gps_deg",
         "speed",
-        "track",
-        "track_str",
+        "heading_gps_deg",
+        "heading_gps_timestamp",
         "used_sats",
         "total_sats",
         "used_sats_str",
@@ -128,10 +128,16 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
             self.values["pre_lat"] = self.values["lat"]
             self.values["pre_lon"] = self.values["lon"]
             self.values["pre_alt"] = self.values["alt"]
-            self.values["pre_track"] = self.values["track"]
+            self.values["pre_heading_gps_deg"] = self.values["heading_gps_deg"]
         # initialize
         for element in self.elements:
-            if element in ["pre_lat", "pre_lon", "pre_alt", "pre_track"]:
+            if element in [
+                "pre_lat",
+                "pre_lon",
+                "pre_alt",
+                "pre_heading_gps_deg",
+                "heading_gps_timestamp",
+            ]:
                 continue
             self.values[element] = np.nan
 
@@ -181,7 +187,7 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
         lon,
         alt,
         speed,
-        track,
+        heading_gps_deg,
         mode,
         status,
         error,
@@ -207,7 +213,7 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
             lon = id_or_none(lon)
             alt = id_or_none(alt)
             speed = id_or_none(speed)
-            track = id_or_none(track)
+            heading_gps_deg = id_or_none(heading_gps_deg)
             mode = id_or_none(mode)
             status = id_or_none(status)
             error = id_or_none(error)
@@ -278,23 +284,23 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
             else:
                 self.values["speed"] = speed
 
-        # track
+        # GPS heading
         if (
             valid_pos
-            and track is not None
+            and heading_gps_deg is not None
             and speed is not None
             and speed > self.config.G_GPS_SPEED_CUTOFF
         ):
-            self.values["track"] = int(track)
-            self.values["track_str"] = get_track_str(self.values["track"])
-        # for GPS unable to get track
+            self.values["heading_gps_deg"] = int(heading_gps_deg)
+            self.values["heading_gps_timestamp"] = datetime.now()
+        # Calculate heading when the GPS receiver does not provide it.
         elif (
             valid_pos
-            and track is None
+            and heading_gps_deg is None
             and speed is not None
             and speed > self.config.G_GPS_SPEED_CUTOFF
         ):
-            self.values["track"] = int(
+            self.values["heading_gps_deg"] = int(
                 (
                     calc_azimuth(
                         [self.values["pre_lat"], self.values["lat"]],
@@ -302,15 +308,15 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
                     )
                 )[0]
             )
-            self.values["track_str"] = get_track_str(self.values["track"])
+            self.values["heading_gps_timestamp"] = datetime.now()
         else:
-            self.values["track"] = self.values["pre_track"]
+            self.values["heading_gps_deg"] = self.values["pre_heading_gps_deg"]
 
         # distance in the course
         self.course.get_index(
             self.values["lat"],
             self.values["lon"],
-            self.values["track"],
+            self.values["heading_gps_deg"],
             self.config.G_GPS_SEARCH_RANGE,
             self.config.G_GPS_ON_ROUTE_CUTOFF,
             self.azimuth_cutoff,

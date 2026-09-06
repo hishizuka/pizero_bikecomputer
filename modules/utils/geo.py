@@ -13,8 +13,8 @@ GEO_R2_2 = (GEO_R2 * 1000) ** 2
 GEO_E2 = (GEO_R1_2 - GEO_R2_2) / GEO_R1_2
 G_DISTANCE_BY_LAT1S = GEO_R2 * 1000 * 2 * np.pi / 360 / 60 / 60  # [m]
 
-# for track
-TRACK_STR = [
+# Compass labels for headings and wind direction.
+HEADING_STR = [
     "N",
     "NE",
     "E",
@@ -112,11 +112,11 @@ def get_mod_lat_np(lat):
     return lat * GEO_R2 / (GEO_R1 * np.cos(lat / 180 * np.pi))
 
 
-def get_track_str(drc):
-    if np.isnan(drc):
+def get_heading_str(heading_deg):
+    if np.isnan(heading_deg):
         return None
-    track_int = int((drc + 22.5) / 45.0) % 8
-    return TRACK_STR[track_int]
+    heading_index = int((heading_deg + 22.5) / 45.0) % 8
+    return HEADING_STR[heading_index]
 
 
 def get_width_distance(lat, w):
