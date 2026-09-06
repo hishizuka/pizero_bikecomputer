@@ -721,11 +721,9 @@ When unlocked, you can drag the profile horizontally.
   - Auto Control automatically controls a paired ANT+ bike light from ambient light and braking hints while recording.
 - Control
   - Pair or disconnect an ANT+ remote or a BLE Zwift Click V2 remote.
+  - Fake Trainer for Zwift manually starts or stops the Zwift Click V2 compatibility helper.
 - Temperature
   - Pair or disconnect an ANT+ temperature sensor.
-- Trainer
-  - BLE trainer pairing is reserved for the planned BLE cycling-sensor implementation.
-  - Fake Trainer for Zwift controls the existing Zwift compatibility helper.
 - ANT+ pairing
   - You need to install the ANT+ library and to set [ANT section](#ant-section) of setting.conf with `status = True`.
   - The pairing setting is saved in setting.conf when a sensor is connected, so it will be automatically connected next time you start the program.
@@ -747,6 +745,8 @@ When unlocked, you can drag the profile horizontally.
   - Gross Ave Speed
     - Enter the target gross average speed in km/h.
 - Internal Sensors
+  - GPS
+    - Configure the available u-blox GPS functions.
   - Map Magnetic Heading
     - Use the internal magnetic heading for the map orientation.
   - Adjust Altitude
@@ -1061,7 +1061,9 @@ Set `cp` as CP and `w_prime` as W prime balance when a power meter is available.
 `cda` sets the rider and bicycle drag area used for the wind impact metrics. The
 default is `0.40` m². `total_weight` sets the total weight of the rider, bike, and
 gear. The default is `80.0` kg. `crr` sets the rolling resistance coefficient used
-to calculate `Wind Impact` and `Wind Time`. The default is `0.004`.
+to calculate `Wind Diff` and `Wind Time`. The default is `0.004`.
+Wind items marked `(C/T)` show the power-meter-based rider cost on the left and
+the total aerodynamic wind effect on the right.
 
 #### SENSOR_IMU section
 In modules/sensor_i2c.py, use the change_axis method to change the axis direction of the IMU (accelerometer/magnetometer/gyroscope) according to its mounting direction.
