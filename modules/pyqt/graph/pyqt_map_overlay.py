@@ -3,7 +3,6 @@ import asyncio
 import numpy as np
 
 from modules._qt_qtwidgets import QtCore, QtWidgets, qasync
-from modules.utils.asyncio import run_after
 from modules.utils.time import (
     format_jma_validtime_local,
     format_scw_validtime_local,
@@ -303,18 +302,13 @@ class MapOverlayMixin:
             "RAIN": self.maptile_with_values.update_overlay_rainmap_timeline,
             "WIND": self.maptile_with_values.update_overlay_windmap_timeline,
         }
-        updated = await self.overlay_map_internal(
+        await self.overlay_map_internal(
             overlay_type=overlay_type,
             main_view_changed=main_view_changed,
             p0=p0,
             p1=p1,
             update_func=update_funcs[overlay_type],
         )
-        if overlay_type == "WIND" and updated:
-            run_after(
-                a_func=self.course.get_course_weather,
-                b_func=self.add_course_wind,
-            )
 
     async def overlay_map_internal(
         self,
@@ -323,35 +317,22 @@ class MapOverlayMixin:
         p0,
         p1,
         update_func,
-    ) -> bool:
-        """Return True only when display_time changes after the first initialization."""
-
+    ):
         map_config, map_name = self._get_overlay_map_config_and_name(overlay_type)
         if map_config is None or map_name is None:
-            return False
+            return
         map_settings = map_config[map_name]
         self._apply_precomputed_overlay_time(overlay_type, map_name, map_settings)
 
         await update_func(map_settings, map_name)
-        # Compute new/prev display_time
         new_display_time = f"{map_settings['basetime']}/{map_settings['validtime']}"
-        prev_display_time = self.overlay_time[overlay_type]["display_time"]
-        display_time_changed = prev_display_time != new_display_time
-
-        if display_time_changed or prev_display_time is None:
-            await self.update_prev_next_overlay_time(overlay_type, map_config, map_name)
-
-        # If unchanged, just draw overlay and exit
-        if not display_time_changed:
+        if self.overlay_time[overlay_type]["display_time"] == new_display_time:
             await self.overlay_map(main_view_changed, p0, p1, map_config, map_name)
-            return False
+            return
 
-        # Changed: record and reset tiles
+        await self.update_prev_next_overlay_time(overlay_type, map_config, map_name)
         self.overlay_time[overlay_type]["display_time"] = new_display_time
         self.reset_overlay(map_name)
-
-        # Return True only if this is not the very first time (prev was already set)
-        return prev_display_time is not None
 
     def reset_overlay(self, map_name):
         self._clear_tile_items(self.config.G_MAP)

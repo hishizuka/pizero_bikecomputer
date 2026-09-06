@@ -79,7 +79,6 @@ class MapCourseMixin:
     course_point_markers = None
     course_point_last_index = None
     course_points_plot_visible = None
-    course_winds = []
 
     instruction = None
     instruction_visible = False
@@ -93,6 +92,8 @@ class MapCourseMixin:
     def _setup_course_widgets(self):
         self.course_point_markers = []
         self.course_point_last_index = None
+        self.course_winds = []
+        self.course_weather_revision = -1
         self.external_instruction_name = ""
         self.external_instruction_distance = None
         self.init_instruction()
@@ -208,11 +209,12 @@ class MapCourseMixin:
         return True
 
     def _refresh_course_plot(self):
-        if self.course_plot_key == self._get_course_plot_key():
-            return
-        self._update_course_plot()
-        self._update_course_point_marker_positions()
-        self.add_course_wind()
+        plot_changed = self.course_plot_key != self._get_course_plot_key()
+        if plot_changed:
+            self._update_course_plot()
+            self._update_course_point_marker_positions()
+        if plot_changed or self.course_weather_revision != self.course.weather_revision:
+            self.add_course_wind()
 
     def _get_course_point_segment_indices(self):
         point_count = len(self.course_points.longitude)
@@ -449,14 +451,17 @@ class MapCourseMixin:
             app_logger.info("Plotting course:")
             log_timers(timers, text_total=f"  total        : {0:.3f} sec")
 
+    def _clear_course_winds(self):
+        for course_wind in self.course_winds:
+            self._remove_plot_item(course_wind)
+        self.course_winds.clear()
+
     def add_course_wind(self):
+        self._clear_course_winds()
+        self.course_weather_revision = self.course.weather_revision
         if not self.course.has_weather:
             return
 
-        for course_wind in self.course_winds:
-            self._remove_plot_item(course_wind)
-
-        self.course_winds = []
         course_indices = np.asarray(self.course.wind_course_indices)
         side = -1 if self.config.G_COURSE_TRAFFIC_SIDE == "RIGHT" else 1
         wind_x, wind_y = offset_points_by_segment(
@@ -635,14 +640,15 @@ class MapCourseMixin:
         self.course_point_markers = []
         self.course_point_last_index = None
         self.course_points_plot_visible = False
-        for course_wind in self.course_winds:
-            self._remove_plot_item(course_wind)
+        self._clear_course_winds()
+        self.course_weather_revision = -1
 
     def init_course(self):
         self.external_instruction_name = ""
         self.external_instruction_distance = None
         self.init_instruction()
         self.course_plot_key = None
+        self.course_weather_revision = -1
         self.course_loaded = False
         self.resizeEvent(None)
 

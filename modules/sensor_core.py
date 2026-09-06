@@ -424,6 +424,7 @@ class SensorCore:
         while not self.status_quit:
             await asyncio.sleep(self.wait_time)
             loop_start_perf = time.perf_counter()
+            self.config.logger.course.schedule_course_weather_update_if_due()
             api_alt_elapsed_ms = 0.0
             api_wind_elapsed_ms = 0.0
             start_time = datetime.now()

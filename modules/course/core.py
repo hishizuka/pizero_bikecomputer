@@ -2,6 +2,7 @@ import asyncio
 import os
 import re
 import shutil
+from time import time
 
 import numpy as np
 import oyaml
@@ -54,15 +55,9 @@ class Course(CourseProcessor, CourseMatcher):
         self.__dict__.update(vars(CourseData()))
         self.index = CourseIndex(config.G_GPS_KEEP_ON_COURSE_CUTOFF)
         self._weather_task = None
+        self._weather_time_key = None
         self._course_revision = 0
-        self.load_weather_status = 0
-        self.wind_course_indices = []
-        self.wind_timeline = []
-        self.wind_speed = []
-        self.wind_direction = []
-        self.temperature = []
-        self.precipitation = []
-        self.cloud_cover = []
+        self.weather_revision = 0
 
     def __str__(self):
         return f"Course:\n" f"{oyaml.dump(self.info, allow_unicode=True)}\n"
@@ -131,22 +126,29 @@ class Course(CourseProcessor, CourseMatcher):
         self._weather_task = None
 
     def _schedule_course_weather(self):
+        if not self.config.G_USE_COURSE_WEATHER or not self.is_set:
+            return
         self._cancel_weather_load()
+        self._weather_time_key = int(time() // self.config.G_COURSE_WEATHER_INTERVAL)
         self._weather_task = asyncio.create_task(self.get_course_weather())
+
+    def schedule_course_weather_update_if_due(self):
+        if not self.config.G_USE_COURSE_WEATHER or not self.is_set:
+            return
+        time_key = int(time() // self.config.G_COURSE_WEATHER_INTERVAL)
+        if time_key == self._weather_time_key:
+            return
+        if self._weather_task is not None and not self._weather_task.done():
+            return
+        self._schedule_course_weather()
 
     def reset(self, delete_course_file=False, replace=False):
         self.__dict__.update(vars(CourseData()))
         self.index.reset()
         self._course_revision += 1
         self._cancel_weather_load()
-        self.load_weather_status = 0
-        self.wind_course_indices = []
-        self.wind_timeline = []
-        self.wind_speed = []
-        self.wind_direction = []
-        self.temperature = []
-        self.precipitation = []
-        self.cloud_cover = []
+        self._weather_time_key = None
+        self.weather_revision += 1
 
         if delete_course_file:
             if os.path.exists(self.config.G_COURSE_FILE_PATH):
@@ -439,9 +441,15 @@ class Course(CourseProcessor, CourseMatcher):
             return
 
         revision = self._course_revision
-        self.load_weather_status = 1
-        weather = await CourseWeatherService.fetch(self)
-        if revision != self._course_revision:
+        caller_name = f"course_weather_{revision}"
+        async with self.config.network.bt_tethering_session(
+            caller_name, wait_lock=True
+        ) as connected:
+            if not connected:
+                return
+            weather = await CourseWeatherService.fetch(self)
+
+        if weather is None or revision != self._course_revision:
             return
 
         self.wind_course_indices = weather["course_indices"]
@@ -451,7 +459,4 @@ class Course(CourseProcessor, CourseMatcher):
         self.temperature = weather["temperature"]
         self.precipitation = weather["precipitation"]
         self.cloud_cover = weather["cloud_cover"]
-        self.load_weather_status = 2
-
-    def reset_load_weather_status(self):
-        self.load_weather_status = 0
+        self.weather_revision += 1

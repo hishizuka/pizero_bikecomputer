@@ -329,16 +329,6 @@ class MapStateMixin:
             overlay_subdomain,
         )
 
-    def _get_course_display_state(self):
-        course_index_value = None
-        course_on_status = None
-        try:
-            course_index_value = self.course.index.value
-            course_on_status = self.course.index.on_course_status
-        except Exception:
-            pass
-        return course_index_value, course_on_status
-
     def _get_active_map_names(self):
         """Return list of currently active map names (base + overlays)."""
         names = [self.config.G_MAP]
@@ -434,8 +424,6 @@ class MapStateMixin:
             overlay_validtime,
             overlay_subdomain,
         ) = self._get_overlay_display_state()
-        course_index_value, course_on_status = self._get_course_display_state()
-
         display_key = (
             norm(gps_values["lon"]),
             norm(gps_values["lat"]),
@@ -457,8 +445,9 @@ class MapStateMixin:
             self.tile_modify_mode,
             self.plot.width(),
             self.plot.height(),
-            course_index_value,
-            course_on_status,
+            self.course.index.value,
+            self.course.index.on_course_status,
+            self.course.weather_revision,
             self.course_points.is_set,
         )
         return display_key, overlay_map

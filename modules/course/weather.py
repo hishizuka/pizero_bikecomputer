@@ -61,6 +61,9 @@ class CourseWeatherService:
             if attempt < len(retry_delays):
                 await asyncio.sleep(retry_delays[attempt])
 
+        if not any(loaded):
+            return None
+
         return {
             "course_indices": course_indices,
             "timeline": timeline,

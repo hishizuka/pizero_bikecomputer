@@ -44,6 +44,7 @@ class Config:
     G_DRAW_INTERVAL = 1000  # [ms] for GUI (QtCore.QTimer)
     G_LOGGING_INTERVAL = 1.0  # [s] for logger_core (log interval)
     G_REALTIME_GRAPH_INTERVAL = 1000  # 200 #[ms] for pyqt_graph
+    G_COURSE_WEATHER_INTERVAL = 60 * 60  # [s]
 
     # log format switch
     G_LOG_WRITE_CSV = True
