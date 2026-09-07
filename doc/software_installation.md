@@ -130,8 +130,18 @@ $ pip install garminconnect tb-mqtt-client mmh3 timezonefinder
 
 ### GPS module
 
-`install.sh` asks which GPS path to use. Install only the packages for the
-selected hardware path.
+`install.sh` displays a GPS menu. Choose one option by number:
+
+| Input | GPS option |
+| --- | --- |
+| `0` | No GPS |
+| `1` | u-blox direct UBX using pyubx2 (MAX-M10S/N etc., UART or I2C) |
+| `2` | UART GPS through GPSD (NMEA receivers) |
+| `3` | Sony CXD56xx GNSS over I2C |
+| `q` | Quit the installer before installing packages |
+
+Only the selected GPS option's packages are installed. Invalid input prompts
+you to choose again.
 
 For all GPS paths:
 
@@ -182,13 +192,84 @@ $ sudo systemctl enable gpsd.socket
 
 Check with `cgps` or `gpsmon` command.
 
-#### Sony CXD5610 GPS over I2C
+#### Sony CXD56xx GNSS over I2C
 
-Use this for the Sony CXD5610 I2C GPS path.
+This backend uses [rpi-cxd56xx-gnss](https://github.com/hishizuka/rpi-cxd56xx-gnss)
+and its `CXD56xx` Python class. The current driver targets CXD5610;
+CXD5605 compatibility is unverified. Python 3.13+ and libgpiod 2.0+ are required.
 
+With the application's virtual environment from [Common](#common) activated,
+install the build dependencies:
+
+```sh
+sudo apt install git build-essential python3-dev python3-smbus2 libgpiod-dev gpiod
 ```
-$ sudo apt install python3-smbus2 libgpiod3 libgpiod-dev python3-libgpiod
+
+Connect the GNSS module's I2C and interrupt signals according to its voltage
+requirements. Check the package's GPIO settings before building: defaults are
+`/dev/i2c-1`, address `0x24`, `/dev/gpiochip4`, and line offset `17`.
+GPIO chip numbering varies by board and OS; check it with `gpiodetect` / `gpioinfo`.
+If the GPIO chip is `/dev/gpiochip0`, set it before installing:
+
+```sh
+export CXD56XX_GPIO_CHIP=/dev/gpiochip0
 ```
+
+This build setting is also inherited by `./install.sh`. It is compiled into
+the driver; changing it after installation requires rebuilding the package.
+For other wiring settings, follow the package's
+[README](https://github.com/hishizuka/rpi-cxd56xx-gnss#readme).
+
+Install from PyPI using the selected GPIO chip (or the default if
+the environment variable is unset):
+
+```sh
+pip install --no-cache-dir rpi-cxd56xx-gnss
+sudo usermod -aG i2c,gpio "$USER"
+```
+
+`./install.sh` installs the same PyPI package when Sony CXD56xx is selected.
+
+Enable I2C at **400kHz** in `/boot/firmware/config.txt`. Back up the file first:
+
+```sh
+sudo cp -an /boot/firmware/config.txt /boot/firmware/config.txt.before-cxd56xx
+sudo nano /boot/firmware/config.txt
+```
+
+Set these lines near the top, before conditional sections or `dtoverlay`
+directives. Edit existing I2C settings instead of adding duplicates:
+
+```ini
+dtparam=i2c_arm=on
+dtparam=i2c_arm_baudrate=400000
+```
+
+Reboot to apply the I2C settings and group membership changes:
+
+```sh
+sudo reboot
+```
+
+After reconnecting, confirm the configured clock is `400000 Hz`:
+
+```sh
+python3 - <<'PY'
+from pathlib import Path
+
+path = Path("/sys/bus/i2c/devices/i2c-1/of_node/clock-frequency")
+print(int.from_bytes(path.read_bytes(), "big"), "Hz")
+PY
+```
+
+Activate the application's virtual environment and run `cxd56xx-gnss` for a
+standalone reception check. Stop it with Ctrl+C before starting the application.
+The application selects `CXD56xx_GPS` when address `0x24` responds and the
+package can be imported. If hardware or the package is unavailable, detection
+continues with the other GPS backends.
+
+The driver is built when the package is installed; it is no longer built at
+application startup. Older in-tree CXD5610 extensions are not used.
 
 
 ### ANT+ USB dongle

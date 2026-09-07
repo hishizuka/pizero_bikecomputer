@@ -7,51 +7,42 @@ from modules.app_logger import app_logger
 from .base import AbstractSensorGPS
 from ..i2c_utils import i2c_addr_present as _i2c_addr_present
 
-_SENSOR_GPS_CXD5610 = False
+_SENSOR_GPS_CXD56XX = False
 
-# Keep the same name/value as modules/sensor/gps/cython/cxd5610_rpi.h
-CXD5610_I2C_ADDR = 0x24
+# GNSS I2C slave address (7-bit).
+CXD56XX_I2C_ADDR = 0x24
 
 
-if _i2c_addr_present(CXD5610_I2C_ADDR):
+if _i2c_addr_present(CXD56XX_I2C_ADDR):
     try:
-        # Prefer a prebuilt Cython extension if available.
-        from .cython.cxd5610_helper import CXD5610 as CXD5610_C
-        _SENSOR_GPS_CXD5610 = True
-    except Exception:
-        # Fallback to an in-place build so future boots can import the .so directly.
-        try:
-            import pyximport
-
-            pyximport.install(inplace=True, language_level=3)
-            from .cython.cxd5610_helper import CXD5610 as CXD5610_C
-
-            _SENSOR_GPS_CXD5610 = True
-        except Exception as exc:
-            app_logger.warning(f"[CXD5610] Cython import failed: {exc}")
+        from cxd56xx_gnss import CXD56xx
+    except (ImportError, OSError) as exc:
+        app_logger.warning(f"[CXD56xx] rpi-cxd56xx-gnss import failed: {exc}")
+    else:
+        _SENSOR_GPS_CXD56XX = True
 
 
-class CXD5610_GPS(AbstractSensorGPS):
+class CXD56xx_GPS(AbstractSensorGPS):
     NULL_VALUE = None
 
     def sensor_init(self):
         super().sensor_init()
         self.dev = None
-        if not _SENSOR_GPS_CXD5610:
-            app_logger.warning("[CXD5610] Module not available")
+        if not _SENSOR_GPS_CXD56XX:
+            app_logger.warning("[CXD56xx] Module not available")
             self.quit_status = True
             return
         try:
-            self.dev = CXD5610_C()
+            self.dev = CXD56xx()
         except OSError as exc:
             if exc.errno == errno.ENODEV:
-                app_logger.info("[CXD5610] Disabled (device not detected)")
+                app_logger.info("[CXD56xx] Disabled (device not detected)")
             else:
-                app_logger.error(f"[CXD5610] Init failed: {exc}")
+                app_logger.error(f"[CXD56xx] Init failed: {exc}")
             self.dev = None
             self.quit_status = True
         except Exception as exc:
-            app_logger.error(f"[CXD5610] Init failed: {exc}")
+            app_logger.error(f"[CXD56xx] Init failed: {exc}")
             self.dev = None
             self.quit_status = True
 
@@ -65,13 +56,13 @@ class CXD5610_GPS(AbstractSensorGPS):
                 # Read the latest data snapshot updated by the C worker thread.
                 ret = self.dev.peek()
             except Exception as exc:
-                app_logger.error(f"[CXD5610] Read error: {exc}")
+                app_logger.error(f"[CXD56xx] Read error: {exc}")
                 await asyncio.sleep(1.0)
                 continue
 
             if ret < 0:
                 if ret != -errno.EAGAIN:
-                    app_logger.warning(f"[CXD5610] Read returned {ret}")
+                    app_logger.warning(f"[CXD56xx] Read returned {ret}")
                 self.get_sleep_time(self.config.G_GPS_INTERVAL)
                 await self.sleep()
                 continue

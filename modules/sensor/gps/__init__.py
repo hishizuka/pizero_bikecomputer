@@ -2,10 +2,10 @@ from modules.app_logger import app_logger
 
 
 def get_sensor_gps_class():
-    from .i2c_cxd5610 import _SENSOR_GPS_CXD5610, CXD5610_GPS
+    from .i2c_cxd56xx import _SENSOR_GPS_CXD56XX, CXD56xx_GPS
 
-    if _SENSOR_GPS_CXD5610:
-        sensor_gps = CXD5610_GPS
+    if _SENSOR_GPS_CXD56XX:
+        sensor_gps = CXD56xx_GPS
         sensor_detail = ""
     else:
         sensor_gps, sensor_detail = _detect_ublox()

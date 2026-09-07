@@ -107,19 +107,26 @@ if [[ "$setup_python_venv" == "true" ]]; then
 fi
 prompt_and_store "Install GUI(PyQt6) packages?" install_pyqt6
 prompt_and_store "Install ANT+ packages?" install_ant_plus
-prompt_and_store "Use GPS?" install_gps
-use_ublox_gps=false
-use_gpsd_uart_gps=false
-use_cxd5610_gps=false
-if [[ "$install_gps" == "true" ]]; then
-    prompt_and_store "Use u-blox GPS directly with UBX protocol? (MAX-M10S/N etc.)" use_ublox_gps
-    if [[ "$use_ublox_gps" != "true" ]]; then
-        prompt_and_store "Use UART GPS through GPSD?" use_gpsd_uart_gps
-        if [[ "$use_gpsd_uart_gps" != "true" ]]; then
-            prompt_and_store "Use Sony CXD5610 GPS over I2C?" use_cxd5610_gps
-        fi
+echo "Select GPS:"
+echo "  0) No GPS"
+echo "  1) u-blox direct UBX (pyubx2; MAX-M10S/N etc., UART or I2C)"
+echo "  2) UART GPS through GPSD (NMEA receivers)"
+echo "  3) Sony CXD56xx GNSS over I2C"
+echo "  q) Quit installer"
+while true; do
+    if ! read -rp "Choose GPS [0/1/2/3/q]: " gps_choice; then
+        echo "Input closed. Exiting installer."
+        exit 1
     fi
-fi
+    case "$gps_choice" in
+        0) gps_backend=none; break ;;
+        1) gps_backend=ublox; break ;;
+        2) gps_backend=gpsd; break ;;
+        3) gps_backend=cxd56xx; break ;;
+        q|Q|quit|QUIT) echo "👋 Quitting...bye!"; exit 0 ;;
+        *) echo "Invalid input. Please choose 0, 1, 2, 3, or q." ;;
+    esac
+done
 prompt_and_store "Install Bluetooth packages?" install_bluetooth
 prompt_and_store "Enable I2C?" enable_i2c
 prompt_and_store "Enable SPI?" enable_spi
@@ -210,14 +217,12 @@ if [[ "$install_ant_plus" == "true" ]]; then
 fi
 
 # Install GPS packages
-if [[ "$install_gps" == "true" ]]; then
+if [[ "$gps_backend" != "none" ]]; then
     echo "🔧 Installing GPS packages..."
 
-    if [[ "$use_ublox_gps" == "true" || "$use_gpsd_uart_gps" == "true" || "$use_cxd5610_gps" == "true" ]]; then
-        install_timezonefinder_and_flatbuffers
-    fi
+    install_timezonefinder_and_flatbuffers
 
-    if [[ "$use_ublox_gps" == "true" ]]; then
+    if [[ "$gps_backend" == "ublox" ]]; then
         echo "🔧 Installing u-blox direct UBX GPS packages..."
         # pyserial is required for UART; smbus2 keeps MAX-M10S I2C usable.
         sudo apt install -y python3-smbus2
@@ -227,7 +232,7 @@ if [[ "$install_gps" == "true" ]]; then
         echo "✅ u-blox direct UBX GPS packages installed successfully."
     fi
 
-    if [[ "$use_gpsd_uart_gps" == "true" ]]; then
+    if [[ "$gps_backend" == "gpsd" ]]; then
         echo "🔧 Installing GPSD UART GPS packages..."
         sudo apt install -y gpsd python3-gps libffi-dev
         enable_uart_interface
@@ -236,15 +241,16 @@ if [[ "$install_gps" == "true" ]]; then
         echo "✅ GPSD UART GPS packages installed successfully."
     fi
 
-    if [[ "$use_cxd5610_gps" == "true" ]]; then
-        echo "🔧 Installing Sony CXD5610 GPS packages..."
+    if [[ "$gps_backend" == "cxd56xx" ]]; then
+        echo "🔧 Installing Sony CXD56xx GNSS packages..."
         install_i2c_support_packages
+        sudo apt install -y build-essential python3-dev gpiod
+        pip install --no-cache-dir rpi-cxd56xx-gnss
+        sudo usermod -aG i2c,gpio "$TARGET_USER"
         enable_i2c_interface
-        echo "✅ Sony CXD5610 GPS packages installed successfully."
-    fi
-
-    if [[ "$use_ublox_gps" != "true" && "$use_gpsd_uart_gps" != "true" && "$use_cxd5610_gps" != "true" ]]; then
-        echo "ℹ️ GPS selected, but no supported GPS hardware path selected. Skipping GPS-specific packages."
+        echo "✅ Sony CXD56xx GNSS packages installed successfully."
+        echo "ℹ️ Configure I2C at 400kHz and check the GPIO settings before starting the application."
+        echo "   See the Sony CXD56xx section in doc/software_installation.md, then reboot."
     fi
 
     echo "✅ GPS packages installed successfully."
@@ -418,7 +424,7 @@ fi
 if [[ "$install_services" == "true" ]]; then
 
     # GPS service configuration
-    if [[ "$use_gpsd_uart_gps" == "true" ]]; then
+    if [[ "$gps_backend" == "gpsd" ]]; then
         sudo cp scripts/install/etc/default/gpsd /etc/default/gpsd
         sudo systemctl start gpsd
     fi

@@ -299,9 +299,8 @@ The code shown below is ported and modified from Azumo's code under the Apache L
 - modules/display/mip_display_base.py
 - modules/display/cython/mip_display.cpp
 
-This project also includes code ported and modified from the Apache NuttX RTOS project under the Apache License 2.0 (third_party/apache/LICENSE.Apache2). See the NOTICE file for details.
-- modules/sensor/gps/cython/cxd5610_rpi.c
-- modules/sensor/gps/cython/cxd5610_rpi.h
+Sony CXD56xx GNSS support uses the separately installed [rpi-cxd56xx-gnss](https://github.com/hishizuka/rpi-cxd56xx-gnss) package (Apache-2.0, including its NuttX-derived portions).
+See the [installation instructions](doc/software_installation.md#sony-cxd56xx-gnss-over-i2c) and the package's `NOTICE` and `THIRD_PARTY.md` for details.
 
 This project also includes code adapted from swiftcontrol under the GNU General Public License v3.0. See the NOTICE file for details.
 - modules/sensor/ble/zwift_click_v2.py
