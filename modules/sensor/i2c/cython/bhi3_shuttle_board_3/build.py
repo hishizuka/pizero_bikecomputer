@@ -70,12 +70,13 @@ while True:
         roll_deg = f"{bhi3_s.roll:.0f}°"
         acc_str = format_vec3(bhi3_s.acc)
         gyro_str = format_vec3(bhi3_s.gyro)
+        mag_str = format_vec3(bhi3_s.mag)
         print(
             f"heading={heading_deg}, pitch={pitch_deg}, roll={roll_deg}, "
             f"acc_rms_norm={bhi3_s.acc_rms_norm:.3f}, pressure={bhi3_s.pressure:.3f}, "
             f"temperature={bhi3_s.temperature}, humidity={bhi3_s.humidity}"
         )
-        print(f"moving={bhi3_s.moving}, acc={acc_str}, gyro={gyro_str}")
+        print(f"moving={bhi3_s.moving}, acc={acc_str}, gyro={gyro_str}, mag={mag_str}")
         print()
         time.sleep(1)
     except KeyboardInterrupt:

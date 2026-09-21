@@ -408,6 +408,16 @@ $ pip install adafruit-circuitpython-bmp280
 
 BHI360 Shuttle Board 3.0 and BHI385 Shuttle Board 3.0 are handled by the same BHI3 Cython helper. The helper reads the chip ID register before loading firmware and selects the BHI360 or BHI385 build target automatically.
 
+The application derives `bhi3_s_heading_corr` from the effective magnetometer
+axis settings using `get_bhi3_s_heading_corr()` in `modules/board_config.py`.
+With XY swapping disabled, enabled axis conversion with
+coefficients `[1.0, -1.0, -1.0]` subtracts 90 degrees from orientation heading.
+Disabled axis conversion ignores the coefficients and leaves the correction at
+0 degrees. Other mounting states currently leave the correction at 0 degrees.
+Set the magnetometer axes in the board's `IMUAxisPreset` in
+`modules/board_config.py`, or in `[SENSOR_IMU]` when the board is `auto`.
+The standalone `build.py` output does not apply this correction.
+
 *1 It is also possible to use the official BOSCH C library with cython. Create a shared library with the following command and name and place it under LD_LIBRARY_PATH (e.g. /usr/local/lib).
 Also, place the header files in LD_INCLUDE_PATH (/usr/local/include, etc.).
 
@@ -482,7 +492,7 @@ state changes; it does not configure a product-specific SIC matrix.
 BHI360 and BHI385 explicitly enable magnetic distortion events in both FIFOs. Both
 magnetometer and orientation outputs are enabled at 50 Hz, including when
 running `bhi3_shuttle_board_3/build.py`; that script prints values once per
-second and does not print the magnetometer vector.
+second, including the magnetometer XYZ vector to three decimal places.
 Both targets were built on a Raspberry Pi Zero 2 W running Raspberry Pi OS
 Trixie (Debian 13). I2C acquisition and calibration save/restore were also
 verified with BHI360 and BHI385 Shuttle Boards 3.0.

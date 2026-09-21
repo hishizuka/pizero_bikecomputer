@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Mapping
+from typing import Mapping, Sequence
 
 
 class BoardType(StrEnum):
@@ -126,3 +126,17 @@ BOARD_PRESETS: dict[BoardType, BoardPreset] = {
 
 def get_board_preset(board_type: BoardType | str) -> BoardPreset:
     return BOARD_PRESETS[BoardType(board_type)]
+
+
+def get_bhi3_s_heading_corr(
+    mag_axis_swap_xy_status: bool,
+    mag_axis_conversion_status: bool,
+    mag_axis_conversion_coef: Sequence[float],
+) -> int:
+    if (
+        not mag_axis_swap_xy_status
+        and mag_axis_conversion_status
+        and tuple(mag_axis_conversion_coef) == (1.0, -1.0, -1.0)
+    ):
+        return 90
+    return 0

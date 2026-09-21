@@ -8,7 +8,7 @@ import time
 import numpy as np
 
 from modules.app_logger import app_logger
-from modules.board_config import I2CDevice
+from modules.board_config import I2CDevice, get_bhi3_s_heading_corr
 from modules.helper.network.http_client import get_json
 from modules.utils.altitude import TOTAL_ASCENT_THRESHOLD, update_altitude_reference
 from modules.utils.geo import get_dist_on_earth
@@ -502,13 +502,11 @@ class SensorI2C(Sensor):
             self.sensor_label["MAG"] = ""
             self.available_sensors["PRESSURE"]["BHI3_S"] = True  # includes BMP581 and BME688
             self.sensor["i2c_baro_temp"] = self.sensor_bhi3_s
-            self.bhi3_s_heading_corr = 0
-            if (
-                not self.config.G_IMU_AXIS_SWAP_XY["STATUS"]
-                and self.config.G_IMU_AXIS_CONVERSION["STATUS"]
-                and list(self.config.G_IMU_AXIS_CONVERSION["COEF"]) == [1.0, -1.0, -1.0]
-            ):
-                self.bhi3_s_heading_corr = 90
+            self.bhi3_s_heading_corr = get_bhi3_s_heading_corr(
+                self.config.G_IMU_MAG_AXIS_SWAP_XY["STATUS"],
+                self.config.G_IMU_MAG_AXIS_CONVERSION["STATUS"],
+                self.config.G_IMU_MAG_AXIS_CONVERSION["COEF"],
+            )
 
     def set_sensors(self):
         # barometic pressure & temperature sensor
