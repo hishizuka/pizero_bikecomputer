@@ -290,6 +290,18 @@ class GUI_Qt_Base(QtCore.QObject):
             }
         )
 
+    def show_qzss_alert(self, event, weather_pairs=None):
+        self._enqueue_msg(
+            {
+                "title": "QZSS",
+                "layout": "qzss",
+                "event": event,
+                "weather_pairs": weather_pairs,
+                "timeout": 10,
+                "buzzer_sound": "alert" if event["priority"] == "urgent" else "beep",
+            }
+        )
+
     def show_popup_multiline(
         self,
         title,

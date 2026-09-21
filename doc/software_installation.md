@@ -1098,6 +1098,7 @@ Set the value before starting the program. If the value is set during running, i
 - `font_file`
   - Set the full path of the font which you want to use.
   - Place the fonts in `fonts/` folder.
+  - QZSS alerts use Noto Sans CJK JP Black when available, independently of this font.
 - `auto_wifi_off`
   - Turn Wifi off automatically while recording.
 

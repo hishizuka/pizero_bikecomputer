@@ -105,6 +105,16 @@ class PopupView:
 
 
 @dataclass(frozen=True)
+class PopupContent:
+    """Keep region boundaries and guidance separate until screen layout."""
+
+    title: str
+    regions: tuple[str, ...]
+    supplement: tuple[str, ...]
+    action: str
+
+
+@dataclass(frozen=True)
 class DetailView:
     title: str
     timestamp: str
@@ -549,6 +559,65 @@ def build_popup_view(event, weather_pairs=None):
         lines.append("New disaster report received.")
     title = _title(event, fields, surface="popup", weather=weather)
     return PopupView(title, tuple(_unique(lines)))
+
+
+def build_popup_content(event, weather_pairs=None):
+    view = build_popup_view(event, weather_pairs)
+    fields = event.get("report_fields") or {}
+    category = event.get("category_no")
+    regions, supplement, action = [], [], ""
+    if event.get("message_type") == DCX_MESSAGE_TYPE:
+        regions = _as_list(
+            fields.get("ex1_target_area_ja")
+            or fields.get("ex9_target_area_list_ja")
+        )
+        supplement = [fields.get("a5_severity")]
+        action = (
+            fields.get("a11_japanese_library_ja")
+            or fields.get("a11_international_library")
+            or ""
+        )
+    elif event.get("message_type") != JMA_MESSAGE_TYPE:
+        supplement = view.lines
+    elif category == Category.EEW:
+        regions = [
+            _compact_prefecture(value)
+            for value in _as_list(fields.get("eew_forecast_regions"))
+        ]
+        intensity = fields.get("seismic_intensity_lower_limit")
+        supplement = [f"{intensity}以上"] if intensity else []
+        action = "強い揺れに警戒"
+    elif category == Category.NANKAI:
+        supplement = [fields.get("information_serial_code")]
+        action = "大規模地震の可能性が平常時より高まっています"
+    elif category == Category.TSUNAMI:
+        regions = _tsunami_areas(fields, compact=True)
+        if event.get("is_cancel"):
+            guidance = _guidance(fields)
+            action = guidance[0].splitlines()[-1].rstrip("。") if guidance else ""
+        else:
+            height = _first(fields.get("tsunami_heights"))
+            supplement = [f"予想{height}"] if height else []
+            action = "ただちに高台へ避難"
+    elif category == Category.WEATHER:
+        primary, _ = _primary_weather(event, weather_pairs)
+        if primary:
+            regions = [_compact_prefecture(value) for value in primary["regions"]]
+    elif category == Category.VOLCANO:
+        supplement = [fields.get("volcano_name")]
+        regions = [
+            re.sub(r"^.+?[都道府県]", "", str(value))
+            for value in _as_list(fields.get("local_governments"))
+        ]
+    elif category == Category.FLOOD:
+        regions = _flood_regions(fields)
+    else:
+        supplement = view.lines
+    if not any(regions) and not any(supplement) and not action:
+        supplement = view.lines
+    return PopupContent(
+        view.title, tuple(_unique(regions)), tuple(_unique(supplement)), str(action)
+    )
 
 
 def _detail_eew(fields):

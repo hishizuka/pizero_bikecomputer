@@ -126,6 +126,18 @@ class BluetoothIcon(_QIconWithPath):
     path = "img/bluetooth.svg"
 
 
+class EarthquakeIcon(_QIconWithPath):
+    path = "img/qzss_earthquake.png"
+
+
+class TsunamiIcon(_QIconWithPath):
+    path = "img/qzss_tsunami.png"
+
+
+class WarningIcon(_QIconWithPath):
+    path = "img/warning.svg"
+
+
 class AntPlusStandardIcon(_QIconWithPath):
     path = "img/logos/ant_plus_icon_standard.png"
 

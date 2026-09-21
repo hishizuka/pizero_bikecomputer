@@ -25,7 +25,6 @@ from modules.pyqt.menu.pyqt_menu_widget import (
 from modules.sensor.gps.ublox_support.qzss_dcr import Category, JMA_MESSAGE_TYPE
 from modules.sensor.gps.ublox_support.qzss_dcr_view import (
     build_list_view,
-    build_popup_view,
     build_typhoon_map_view,
     format_qzss_dcr_detail,
 )
@@ -500,19 +499,8 @@ def _check_qzss_dcr_popup(gui):
             store.mark_popup_handled(event)
             continue
 
-        view = build_popup_view(event, weather_pairs=weather_pairs)
-        timeout = 10
-        buzzer_sound = "alert" if priority == "urgent" else "beep"
         if priority == "urgent" and gui.dialog_exists():
             gui.delete_popup()
-        gui.show_popup_multiline(
-            view.title,
-            "\n".join(view.lines),
-            timeout=timeout,
-            buzzer_sound=buzzer_sound,
-            alert_level=(
-                None if event.get("is_cancel") or event.get("is_training") else priority
-            ),
-        )
+        gui.show_qzss_alert(event, weather_pairs=weather_pairs)
         store.mark_popup_handled(event, displayed=True)
         break

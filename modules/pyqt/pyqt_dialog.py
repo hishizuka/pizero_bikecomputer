@@ -138,13 +138,15 @@ class CachedDialog:
         self._buttons = []
 
         # State
-        self._timeout_timer = None
-        self._current_fn = None
         self._stored_index = None
         self._ok_fn = None
         self._back_fn = None
+        self._qzss_widget = None
 
         self._build()
+        self._timeout_timer = QtCore.QTimer(self._background)
+        self._timeout_timer.setSingleShot(True)
+        self._timeout_timer.timeout.connect(self.trigger_back)
 
     def _build(self):
         """Build all widgets once during initialization."""
@@ -255,12 +257,6 @@ class CachedDialog:
             except TypeError:
                 pass  # No connections
 
-    def _stop_timer(self):
-        """Stop timeout timer if running."""
-        if self._timeout_timer is not None:
-            self._timeout_timer.stop()
-            self._timeout_timer = None
-
     @staticmethod
     def _set_label(label, text, align=None):
         """Set label text and optional alignment."""
@@ -303,9 +299,6 @@ class CachedDialog:
     def _configure_buttons(self, button_num, button_label, fn, back, timeout_seconds):
         """Configure dialog buttons."""
         if button_num == 0:
-            self._timeout_timer = QtCore.QTimer()
-            self._timeout_timer.setSingleShot(True)
-            self._timeout_timer.timeout.connect(back)
             self._timeout_timer.start(timeout_seconds * 1000)
             return
 
@@ -330,9 +323,12 @@ class CachedDialog:
                  button_label, position, text_align, fn, timeout
             close_callback: function to call on close (receives stored_index)
         """
-        self._stop_timer()
+        self._timeout_timer.stop()
         self._disconnect_buttons()
         self._hide_all()
+        if self._qzss_widget is not None:
+            self._qzss_widget.hide()
+        self._container.show()
 
         title = msg.get("title", "")
         title_icon = msg.get("title_icon")
@@ -347,13 +343,24 @@ class CachedDialog:
         text_color = msg.get("text_color", "black")
         alert_level = msg.get("alert_level")
 
-        self._current_fn = fn
-
         # Store back callback
         back = lambda: close_callback(self._stored_index)
         self._background.back = back
         self._ok_fn = fn
         self._back_fn = back
+
+        if msg.get("layout") == "qzss":
+            from modules.pyqt.components.qzss_alert import QzssAlertWidget
+
+            self._container.hide()
+            if self._qzss_widget is None:
+                self._qzss_widget = QzssAlertWidget(self._background, self.trigger_back)
+                self._qzss_widget.next_button.clicked.connect(
+                    lambda: self._timeout_timer.start(10_000)
+                )
+            self._qzss_widget.set_event(msg["event"], msg["weather_pairs"])
+            self._timeout_timer.start(timeout_seconds * 1000)
+            return
 
         # Position container
         self._back_layout.setAlignment(self._container, position)
@@ -376,6 +383,9 @@ class CachedDialog:
 
     def _apply_focus(self):
         """Focus the first visible button when dialog is shown."""
+        if self._qzss_widget is not None and self._qzss_widget.isVisible():
+            self._qzss_widget.setFocus()
+            return
         for btn in self._buttons:
             if btn.isVisible():
                 btn.setFocus()
@@ -384,7 +394,7 @@ class CachedDialog:
 
     def hide(self):
         """Hide dialog (keep in stack for reuse)."""
-        self._stop_timer()
+        self._timeout_timer.stop()
         self._disconnect_buttons()
         self._background.hide()
 
@@ -405,6 +415,8 @@ class CachedDialog:
 
     def click_primary(self):
         """Trigger OK action even if focus is elsewhere."""
+        if self._qzss_widget is not None and self._qzss_widget.isVisible():
+            return self.trigger_back()
         if not self._button_widget.isVisible():
             return False
         return self.trigger_ok()
