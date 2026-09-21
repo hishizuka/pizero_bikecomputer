@@ -862,7 +862,10 @@ class GUI_PyQt(GUI_Qt_Base):
             return
         self.show_dialog_ok_only(
             fn=self.finish_fake_trainer_session,
-            title="Operate Zwift, then press OK to restore Zwift Click V2.",
+            title=(
+                "Connect Click V2 in Zwift and wait 60 seconds. "
+                "Close Zwift, then press OK. Zwift controls may stay inactive."
+            ),
         )
 
     def bhi3_raw_log(self):

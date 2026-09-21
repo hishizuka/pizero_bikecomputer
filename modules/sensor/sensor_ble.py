@@ -66,6 +66,13 @@ class SensorBLE(Sensor):
     CONTROL_ROLE = "CTRL"
     CONTROL_TYPE = "ZWIFT_CLICK_V2"
     CONTROL_BUTTON_PROFILE = "Zwift_Click_V2"
+    CLICK_AUTH_UNKNOWN = "unknown"
+    CLICK_AUTHENTICATED = "authenticated"
+    CLICK_LOCKED = "locked"
+    CLICK_INPUT_UNKNOWN = "unknown"
+    CLICK_INPUT_WAITING = "waiting"
+    CLICK_INPUT_OPERATIONAL = "operational"
+    CLICK_INPUT_INACTIVE = "inactive"
 
     def __init__(self, config, values):
         super().__init__(config, values)
@@ -114,6 +121,9 @@ class SensorBLE(Sensor):
         self._zwift_click_v2_thread: Optional[threading.Thread] = None
         self._zwift_click_v2_stop_requested = threading.Event()
         self._zwift_click_v2_connection_status = "inactive"
+        self._zwift_click_v2_auth_status = self.CLICK_AUTH_UNKNOWN
+        self._zwift_click_v2_input_status = self.CLICK_INPUT_UNKNOWN
+        self._zwift_click_v2_recovery_pending = False
 
     def reset(self):
         if self._csc_speed_processor is not None:
@@ -720,14 +730,14 @@ class SensorBLE(Sensor):
                 return
             sensor["NAME"] = str(name or "").strip()
             self._zwift_click_v2_connection_status = "connected"
+            self._zwift_click_v2_auth_status = self.CLICK_AUTH_UNKNOWN
+            self._zwift_click_v2_input_status = self.CLICK_INPUT_WAITING
 
         def on_disconnected(_side: str, _address: str) -> None:
             if self._zwift_click_v2_stop_requested.is_set():
                 return
             self._zwift_click_v2_connection_status = "connecting"
-
-        def on_stopped(_side: str, _packet: bytes) -> None:
-            self._notify_zwift_click_v2_stopped()
+            self._zwift_click_v2_input_status = self.CLICK_INPUT_UNKNOWN
 
         try:
             adapter = None
@@ -743,7 +753,9 @@ class SensorBLE(Sensor):
                 preferred_address=preferred_address,
                 on_connected=on_connected,
                 on_disconnected=on_disconnected,
-                on_stopped=on_stopped,
+                on_stopped=self._handle_zwift_click_v2_stopped,
+                on_vendor_status=self._handle_zwift_click_v2_vendor_status,
+                on_button_notification=self._handle_zwift_click_v2_button_notification,
                 log=log,
                 debug_log=debug_log,
                 adapter=adapter,
@@ -759,7 +771,51 @@ class SensorBLE(Sensor):
             self._zwift_click_v2_loop = None
             self._zwift_click_v2_connection_status = self._control_idle_status()
 
-    def _notify_zwift_click_v2_stopped(self) -> None:
+    def _handle_zwift_click_v2_vendor_status(
+        self,
+        side: str,
+        status: int,
+        _packet: bytes,
+    ) -> None:
+        if status == 0:
+            auth_status = self.CLICK_AUTHENTICATED
+        elif status == 1:
+            auth_status = self.CLICK_LOCKED
+        else:
+            return
+        if auth_status == self._zwift_click_v2_auth_status:
+            return
+        self._zwift_click_v2_auth_status = auth_status
+        app_logger.info(f"[ZwiftClickV2] [{side}] authentication status={auth_status}")
+
+    def _handle_zwift_click_v2_button_notification(
+        self,
+        side: str,
+        _packet: bytes,
+    ) -> None:
+        first_notification = (
+            self._zwift_click_v2_input_status != self.CLICK_INPUT_OPERATIONAL
+        )
+        self._zwift_click_v2_input_status = self.CLICK_INPUT_OPERATIONAL
+        if first_notification:
+            app_logger.info(f"[ZwiftClickV2] [{side}] input status=operational")
+        if not self._zwift_click_v2_recovery_pending:
+            return
+        self._zwift_click_v2_recovery_pending = False
+        self._notify_zwift_click_v2_recovered()
+
+    def _handle_zwift_click_v2_stopped(
+        self,
+        _side: str,
+        _packet: bytes,
+    ) -> None:
+        self._zwift_click_v2_auth_status = self.CLICK_LOCKED
+        self._zwift_click_v2_input_status = self.CLICK_INPUT_INACTIVE
+        recovery_failed = self._zwift_click_v2_recovery_pending
+        self._zwift_click_v2_recovery_pending = False
+        self._notify_zwift_click_v2_stopped(recovery_failed=recovery_failed)
+
+    def _notify_zwift_click_v2_stopped(self, *, recovery_failed=False) -> None:
         gui = self.config.gui
         if gui is None:
             return
@@ -767,7 +823,24 @@ class SensorBLE(Sensor):
         def show() -> None:
             gui.show_dialog(
                 gui.toggle_fake_trainer,
-                "Click V2 is locked. Start Fake Trainer to reconnect?",
+                (
+                    "Click V2 unlock failed. Retry with Fake Trainer?"
+                    if recovery_failed
+                    else "Click V2 is locked. Start Fake Trainer to unlock?"
+                ),
+            )
+
+        self.config.loop.call_soon_threadsafe(show)
+
+    def _notify_zwift_click_v2_recovered(self) -> None:
+        gui = self.config.gui
+        if gui is None:
+            return
+
+        def show() -> None:
+            gui.show_dialog_ok_only(
+                None,
+                "Click V2 recovered. Button input is active.",
             )
 
         self.config.loop.call_soon_threadsafe(show)
@@ -831,6 +904,7 @@ class SensorBLE(Sensor):
         if not self.start_fake_trainer():
             return False
 
+        self._zwift_click_v2_recovery_pending = False
         self._fake_trainer_session_active = True
         self._pause_ble_sensors_for_fake_trainer()
         return True
@@ -841,6 +915,9 @@ class SensorBLE(Sensor):
 
         self._fake_trainer_session_active = False
         self.stop_fake_trainer()
+        self._zwift_click_v2_recovery_pending = (
+            self._zwift_click_v2_paused_for_fake_trainer
+        )
         self._resume_ble_sensors_after_fake_trainer()
         return True
 
@@ -850,8 +927,12 @@ class SensorBLE(Sensor):
             return self.is_fake_trainer_running()
         if self.is_fake_trainer_running():
             self.stop_fake_trainer()
+            self._zwift_click_v2_recovery_pending = (
+                self._zwift_click_v2_paused_for_fake_trainer
+            )
             self._resume_ble_sensors_after_fake_trainer()
         else:
+            self._zwift_click_v2_recovery_pending = False
             self._fake_trainer_session_active = False
             started = self.start_fake_trainer()
             if started:

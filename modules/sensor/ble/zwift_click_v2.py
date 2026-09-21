@@ -508,9 +508,7 @@ def _extract_click_v2_vendor_status(data: bytes) -> Optional[int]:
     return None
 
 
-def _is_stopped_event_packet(data: bytes, *, button_notifications_seen: bool) -> bool:
-    if not button_notifications_seen:
-        return False
+def _is_stopped_event_packet(data: bytes) -> bool:
     if data in (
         RESPONSE_STOPPED_CLICK_V2_VARIANT_1,
         RESPONSE_STOPPED_CLICK_V2_VARIANT_2,
@@ -538,6 +536,8 @@ async def connect_and_listen(
     on_connected: Optional[Callable[[str, str, Optional[str]], None]] = None,
     on_disconnected: Optional[Callable[[str, str], None]] = None,
     on_stopped: Optional[Callable[[str, bytes], None]] = None,
+    on_vendor_status: Optional[Callable[[str, int, bytes], None]] = None,
+    on_button_notification: Optional[Callable[[str, bytes], None]] = None,
     adapter: Optional[str] = None,
     health: Optional[BleHealthRecorder] = None,
 ) -> bool:
@@ -554,7 +554,6 @@ async def connect_and_listen(
             log(f"[{side}] connected to {format_ble_identity(name, address)}")
             last_rx_mono: Optional[float] = None
             stopped_notice_sent = False
-            button_notifications_seen = False
             previous_debug_packets: Dict[int, bytes] = {}
 
             def mark_rx() -> None:
@@ -564,7 +563,7 @@ async def connect_and_listen(
                     health.record_notification(last_rx_mono)
 
             def handle_data(_sender, data: bytes) -> None:
-                nonlocal button_notifications_seen, stopped_notice_sent
+                nonlocal stopped_notice_sent
                 packet = bytes(data)
                 if debug_log is not None and not _is_duplicate_debug_packet(
                     packet,
@@ -575,16 +574,19 @@ async def connect_and_listen(
                         f"[{side}] rx char={sender_uuid} len={len(packet)} "
                         f"packet={_format_packet_hex(packet)}"
                     )
+                vendor_status = _extract_click_v2_vendor_status(packet)
+                if vendor_status is not None and on_vendor_status is not None:
+                    on_vendor_status(side, vendor_status, packet)
                 stopped = handle_notification(
                     side,
                     packet,
                     classifier,
                     log=log,
                     on_rx=mark_rx,
-                    button_notifications_seen=button_notifications_seen,
                 )
                 if _is_button_notification_packet(packet):
-                    button_notifications_seen = True
+                    if on_button_notification is not None:
+                        on_button_notification(side, packet)
                 if not stopped or stopped_notice_sent:
                     return
                 stopped_notice_sent = True
@@ -644,7 +646,6 @@ def handle_notification(
     *,
     log: Callable[[str], None] = print,
     on_rx: Optional[Callable[[], None]] = None,
-    button_notifications_seen: bool = False,
 ) -> bool:
     """Process incoming data from SYNC_TX/ASYNC characteristics.
 
@@ -659,10 +660,7 @@ def handle_notification(
     if data == RIDE_ON:
         return False
 
-    if _is_stopped_event_packet(
-        data,
-        button_notifications_seen=button_notifications_seen,
-    ):
+    if _is_stopped_event_packet(data):
         return True
 
     # Ignore the startup public-key packet (RideOn + response header).
@@ -714,6 +712,8 @@ async def listen(
     on_connected: Optional[Callable[[str, str, Optional[str]], None]] = None,
     on_disconnected: Optional[Callable[[str, str], None]] = None,
     on_stopped: Optional[Callable[[str, bytes], None]] = None,
+    on_vendor_status: Optional[Callable[[str, int, bytes], None]] = None,
+    on_button_notification: Optional[Callable[[str, bytes], None]] = None,
     log: Callable[[str], None] = print,
     debug_log: Optional[Callable[[str], None]] = None,
 ) -> None:
@@ -781,6 +781,8 @@ async def listen(
                         on_connected=on_connected,
                         on_disconnected=on_disconnected,
                         on_stopped=on_stopped,
+                        on_vendor_status=on_vendor_status,
+                        on_button_notification=on_button_notification,
                         adapter=adapter,
                         health=health,
                     )
