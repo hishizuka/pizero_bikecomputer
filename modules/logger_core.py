@@ -419,6 +419,11 @@ class LoggerCore:
       gps_mode INTEGER,
       gps_used_sats INTEGER,
       gps_total_sats INTEGER,
+      gps_position_quality_state INTEGER,
+      gps_position_quality_reason INTEGER,
+      gps_position_distance_ratio FLOAT,
+      gps_position_distance_error FLOAT,
+      distance_source INTEGER,
       heading_gps_deg INTEGER,
       heading_gps_quality FLOAT,
       gps_epx FLOAT,
@@ -490,7 +495,9 @@ class LoggerCore:
             and len(res) >= 5
             and res[4].replace(" ", "") != self.create_table_sql.replace(" ", "")
         ):
-            log_db_moved = self.config.G_LOG_DB + "-old_layout"
+            log_db_moved = self.config.G_LOG_DB + datetime.now().strftime(
+                "-old_layout-%Y%m%d%H%M%S%f"
+            )
             self.cur.close()
             self.con.close()
 
@@ -935,7 +942,12 @@ class LoggerCore:
                 self.sensor.values["GPS"]["mode"],
                 self.sensor.values["GPS"]["used_sats"],
                 self.sensor.values["GPS"]["total_sats"],
-                self.sensor.values["GPS"]["heading_gps_deg"],
+                value["gps_position_quality_state"],
+                value["gps_position_quality_reason"],
+                value["gps_position_distance_ratio"],
+                value["gps_position_distance_error"],
+                value["distance_source"],
+                value["heading_gps_deg"],
                 value["heading_gps_quality"],
                 self.sensor.values["GPS"]["epx"],
                 self.sensor.values["GPS"]["epy"],
@@ -960,7 +972,7 @@ class LoggerCore:
                 value["wind_speed"],
                 value["wind_direction"],
                 value["headwind"],
-                self.sensor.values["I2C"]["heading_magnetic_deg"],
+                value["heading_magnetic_deg"],
                 value["heading_fused_deg"],
                 value["heading_fused_source"],
                 self.sensor.values["I2C"]["pitch"],

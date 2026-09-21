@@ -28,6 +28,7 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
         "raw_lat",
         "raw_lon",
         "raw_alt",
+        "position_basic_valid",
         "pre_lat",
         "pre_lon",
         "pre_alt",
@@ -223,6 +224,7 @@ class AbstractSensorGPS(Sensor, metaclass=abc.ABCMeta):
         valid_pos = self.is_position_valid(
             lat, lon, mode, status, dop, satellites, error
         )
+        self.values["position_basic_valid"] = valid_pos
 
         # coordinate
         if valid_pos:

@@ -25,6 +25,12 @@ from modules.utils.wind import (
     get_wind_impact,
 )
 from .sensor.gps import get_sensor_gps_class
+from .sensor.gps_position_quality import (
+    DistanceSource,
+    GPSPositionQuality,
+    GPSPositionQualityReason,
+    GPSPositionQualityState,
+)
 from .sensor.heading_fusion import HeadingFusion
 from .sensor.sensor_ant import SensorANT
 from .sensor.sensor_ble import SensorBLE
@@ -78,7 +84,14 @@ class SensorCore:
         "speed_impact",
         "wind_time",
         "temperature",
+        "gps_position_quality_state",
+        "gps_position_quality_reason",
+        "gps_position_distance_ratio",
+        "gps_position_distance_error",
+        "distance_source",
+        "heading_gps_deg",
         "heading_gps_quality",
+        "heading_magnetic_deg",
         "heading_fused_deg",
         "heading_fused_source",
         "cpu_percent",
@@ -130,6 +143,7 @@ class SensorCore:
 
     def __init__(self, config):
         self.config = config
+        self.gps_position_quality = GPSPositionQuality()
         self.heading_fusion = HeadingFusion(config.G_GPS_SPEED_CUTOFF)
         self.values["GPS"] = {}
         self.values["ANT+"] = {}
@@ -141,6 +155,13 @@ class SensorCore:
         # reset
         for key in self.integrated_value_keys:
             integrated[key] = np.nan
+        integrated["gps_position_quality_state"] = int(
+            GPSPositionQualityState.UNVERIFIED
+        )
+        integrated["gps_position_quality_reason"] = int(
+            GPSPositionQualityReason.WINDOW_WARMUP
+        )
+        integrated["distance_source"] = int(DistanceSource.NONE)
         integrated["heading_fused_source"] = "INVALID"
         self.reset_internal()
         wind_accumulated_values = self.config.state.get_value(
@@ -344,6 +365,7 @@ class SensorCore:
 
     def reset_internal(self):
         integrated = self.values["integrated"]
+        self.gps_position_quality.reset()
         for key in (
             "distance",
             "accumulated_power",
@@ -376,21 +398,46 @@ class SensorCore:
     def _update_heading_fusion(self, now):
         gps = self.values["GPS"]
         i2c = self.values["I2C"]
+        heading_gps_deg = gps["heading_gps_deg"]
+        heading_magnetic_deg = i2c["heading_magnetic_deg"]
         result = self.heading_fusion.update(
-            heading_gps_deg=gps["heading_gps_deg"],
+            heading_gps_deg=heading_gps_deg,
             heading_gps_timestamp=gps["heading_gps_timestamp"],
             gps_speed=gps["speed"],
             gps_mode=gps["mode"],
             gps_epx=gps["epx"],
             gps_epy=gps["epy"],
-            heading_magnetic_deg=i2c["heading_magnetic_deg"],
+            heading_magnetic_deg=heading_magnetic_deg,
             heading_magnetic_timestamp=i2c["heading_magnetic_timestamp"],
             now=now,
         )
         integrated = self.values["integrated"]
+        integrated["heading_gps_deg"] = heading_gps_deg
         integrated["heading_gps_quality"] = result.heading_gps_quality
+        integrated["heading_magnetic_deg"] = heading_magnetic_deg
         integrated["heading_fused_deg"] = result.heading_fused_deg
         integrated["heading_fused_source"] = result.heading_fused_source
+
+    def _update_gps_position_quality(
+        self,
+        gps_step_m,
+        wheel_step_m,
+        distance_source,
+    ):
+        gps = self.values["GPS"]
+        result = self.gps_position_quality.update(
+            gps_basic_valid=gps["position_basic_valid"],
+            gps_step_m=gps_step_m,
+            wheel_step_m=wheel_step_m,
+            distance_source=distance_source,
+            dt_s=self.actual_loop_interval,
+        )
+        integrated = self.values["integrated"]
+        integrated["gps_position_quality_state"] = int(result.state)
+        integrated["gps_position_quality_reason"] = int(result.reason)
+        integrated["gps_position_distance_ratio"] = result.distance_ratio
+        integrated["gps_position_distance_error"] = result.distance_error
+        integrated["distance_source"] = int(distance_source)
 
     @staticmethod
     def _shift_window_and_append(window, value):
@@ -639,6 +686,7 @@ class SensorCore:
                 spd = v["GPS"]["speed"]
 
             wheel_distance_source = None
+            distance_source = DistanceSource.NONE
 
             # Distance: ANT+ or BLE CSCS > GPS
             if ant_use["SPD"]:
@@ -662,6 +710,11 @@ class SensorCore:
             if wheel_distance_source is not None:
                 dst_diff["USE"] = dst_diff[wheel_distance_source]
                 grade_use["SENSOR"] = True
+                distance_source = (
+                    DistanceSource.ANT
+                    if wheel_distance_source == "ANT+"
+                    else DistanceSource.BLE
+                )
             if "timestamp" in v["GPS"]:
                 if pre_dst["GPS"] < v["GPS"]["distance"]:
                     dst_diff["GPS"] = v["GPS"]["distance"] - pre_dst["GPS"]
@@ -669,6 +722,7 @@ class SensorCore:
                 if wheel_distance_source is None and dst_diff["GPS"] > 0:
                     dst_diff["USE"] = dst_diff["GPS"]
                     grade_use["GPS"] = True
+                    distance_source = DistanceSource.GPS
                 # Fall back to GPS distance when ANT+ speed packets are unavailable.
                 elif ant_use["SPD"]:
                     if (
@@ -679,6 +733,18 @@ class SensorCore:
                         dst_diff["USE"] = dst_diff["GPS"]
                         grade_use["SENSOR"] = False
                         grade_use["GPS"] = True
+                        distance_source = DistanceSource.GPS
+
+            wheel_step_m = (
+                dst_diff[wheel_distance_source]
+                if distance_source in (DistanceSource.ANT, DistanceSource.BLE)
+                else np.nan
+            )
+            self._update_gps_position_quality(
+                dst_diff["GPS"],
+                wheel_step_m,
+                distance_source,
+            )
 
             # Total work: ANT+ or BLE
             if ant_use["PWR"]:

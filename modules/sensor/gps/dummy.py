@@ -25,6 +25,11 @@ class Dummy_GPS(AbstractSensorGPS):
     def set_position_from_log(self, current_position):
         self.values["lat"] = self._to_float_or_nan(current_position[0])
         self.values["lon"] = self._to_float_or_nan(current_position[1])
+        self.values["raw_lat"] = self.values["lat"]
+        self.values["raw_lon"] = self.values["lon"]
+        self.values["position_basic_valid"] = not np.any(
+            np.isnan([self.values["lat"], self.values["lon"]])
+        )
 
         distance = self._to_float_or_nan(current_position[2])
         if np.isnan(distance):
@@ -45,6 +50,9 @@ class Dummy_GPS(AbstractSensorGPS):
 
         self.values["lat"] = lat[idx]
         self.values["lon"] = lon[idx]
+        self.values["raw_lat"] = self.values["lat"]
+        self.values["raw_lon"] = self.values["lon"]
+        self.values["position_basic_valid"] = True
         self.values["distance"] = dist[idx]
 
         if idx + 1 < len(lat):

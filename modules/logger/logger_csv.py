@@ -23,7 +23,9 @@ class LoggerCsv(Logger):
         r = (
             "lap,timer,timestamp,total_timer_time,elapsed_time,heart_rate,speed,cadence,power,distance,"
             "accumulated_power,position_long,position_lat,raw_long,raw_lat,altitude,gps_altitude,raw_gps_altitude,course_altitude,"
-            "dem_altitude,gps_speed,gps_distance,gps_mode,gps_used_sats,gps_total_sats,gps_epx,gps_epy,gps_epv,"
+            "dem_altitude,gps_speed,gps_distance,gps_mode,gps_used_sats,gps_total_sats,"
+            "gps_position_quality_state,gps_position_quality_reason,gps_position_distance_ratio,"
+            "gps_position_distance_error,distance_source,gps_epx,gps_epy,gps_epv,"
             "gps_pdop,gps_hdop,gps_vdop,total_ascent,total_descent,pressure,temperature,humidity,"
             "heading_gps_deg,heading_gps_quality,heading_magnetic_deg,"
             "heading_fused_deg,heading_fused_source,pitch,roll,"
