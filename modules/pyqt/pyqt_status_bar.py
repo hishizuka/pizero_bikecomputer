@@ -125,6 +125,12 @@ class StatusBarWidget(QtWidgets.QWidget):
         layout.setSpacing(8)
         layout.addWidget(self.rec_indicator)
         layout.addStretch(1)
+        self.rain_label = QtWidgets.QLabel(self)
+        self.rain_label.setFixedSize(20, 20)
+        self.rain_label.setAlignment(QT_ALIGN_CENTER)
+        self._rain_cached = None
+        self.rain_label.hide()
+        layout.addWidget(self.rain_label)
         layout.addWidget(self.bt_label)
         layout.addWidget(self.light_label)
         layout.addWidget(self.gps_label)
@@ -181,12 +187,26 @@ class StatusBarWidget(QtWidgets.QWidget):
             label.setFont(font)
 
     def update_status(self):
+        self._update_rain()
         self._update_rec()
         self._update_gps()
         self._update_bt()
         self._update_light()
         self._update_temperature()
         self._update_time()
+
+    def _update_rain(self):
+        alert = self.config.rain_alert
+        result = alert.result if alert is not None and self.config.G_RAIN_ALERT else None
+        key = (result.size, result.color) if result is not None else None
+        if key == self._rain_cached:
+            return
+        self._rain_cached = key
+        if key is None:
+            self.rain_label.hide()
+        else:
+            self.rain_label.setPixmap(icons.get_pixmap(icons.UmbrellaIcon, *key))
+            self.rain_label.show()
 
     def _update_rec(self):
         manual = self.config.G_MANUAL_STATUS

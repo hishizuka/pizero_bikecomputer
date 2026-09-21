@@ -126,6 +126,22 @@ class BluetoothIcon(_QIconWithPath):
     path = "img/bluetooth.svg"
 
 
+class UmbrellaIcon(QtGui.QIcon):
+    path = "img/umbrella.png"
+
+    def __init__(self, color="white"):
+        source = QtGui.QImage(self.path)
+        source.setAlphaChannel(
+            source.convertToFormat(QtGui.QImage.Format.Format_Grayscale8)
+        )
+        pixmap = QtGui.QPixmap.fromImage(source)
+        painter = QtGui.QPainter(pixmap)
+        painter.setCompositionMode(QT_COMPOSITION_MODE_SOURCEIN)
+        painter.fillRect(pixmap.rect(), QtGui.QColor(color))
+        painter.end()
+        super().__init__(pixmap)
+
+
 class EarthquakeIcon(_QIconWithPath):
     path = "img/qzss_earthquake.png"
 

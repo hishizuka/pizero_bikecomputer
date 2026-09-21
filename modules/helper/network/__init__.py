@@ -58,6 +58,9 @@ class Network:
     def get_file_download_status(self, filename):
         return self._downloads.get_file_download_status(filename)
 
+    async def wait_for_files(self, filenames, timeout=120):
+        await self._downloads.wait_for_files(filenames, timeout)
+
     async def download_maptiles(self, *args, **kwargs):
         return await self._downloads.download_maptiles(*args, **kwargs)
 

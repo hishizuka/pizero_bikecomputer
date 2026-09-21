@@ -302,6 +302,25 @@ class GUI_Qt_Base(QtCore.QObject):
             }
         )
 
+    def show_rain_alert(self, message, color):
+        from modules.pyqt.components.icons import UmbrellaIcon
+
+        self._enqueue_msg(
+            {
+                "title": message,
+                "title_icon": UmbrellaIcon(color),
+                "frame": "banner",
+                "layout": "rain",
+                "button_num": 1,
+                "button_label": ["OK"],
+                "position": QT_ALIGN_BOTTOM,
+                "timeout": 10,
+                "buzzer_sound": "beep",
+                "background_color": "black",
+                "text_color": "white",
+            }
+        )
+
     def show_popup_multiline(
         self,
         title,
@@ -311,10 +330,14 @@ class GUI_Qt_Base(QtCore.QObject):
         background_color="white",
         text_color="black",
         alert_level=None,
+        frame=None,
+        title_icon=None,
     ):
         self._enqueue_msg(
             {
                 "title": title,
+                "frame": frame,
+                "title_icon": title_icon,
                 "message": message,
                 "position": QT_ALIGN_BOTTOM,
                 "text_align": QT_ALIGN_LEFT,

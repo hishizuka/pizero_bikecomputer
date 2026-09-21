@@ -248,11 +248,16 @@ class TopMenuWidget(MenuWidget):
 
 class RideInfoMenuWidget(MenuWidget):
     def setup_menu(self):
+        button_conf = [("Rain Alert", "toggle", self.onoff_rain_alert)]
         if getattr(self.sensor_gps, "supports_qzss_dcr", False):
-            button_conf = (("QZSS DC Report", "submenu", self.qzss_dcr_report),)
-        else:
-            button_conf = (("No information available", "dummy", None),)
+            button_conf.append(("QZSS DC Report", "submenu", self.qzss_dcr_report))
         self.add_buttons(button_conf)
+        self.buttons["Rain Alert"].change_toggle(self.config.G_RAIN_ALERT)
+
+    def onoff_rain_alert(self):
+        self.config.rain_alert.set_enabled(not self.config.G_RAIN_ALERT)
+        self.buttons["Rain Alert"].change_toggle(self.config.G_RAIN_ALERT)
+        self.config.setting.write_config()
 
     def qzss_dcr_report(self):
         self.change_page("QZSS DC Report", preprocess=True)

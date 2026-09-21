@@ -7,6 +7,7 @@ definitions and widget creation on each dialog display.
 import asyncio
 
 from modules._qt_qtwidgets import (
+    QT_ALIGN_BOTTOM,
     QT_ALIGN_CENTER,
     QT_ALIGN_LEFT,
     QtCore,
@@ -95,12 +96,53 @@ class DialogBackground(QtWidgets.QWidget):
         return False
 
 
+class RainBannerContent(QtWidgets.QWidget):
+    """Center an umbrella and a single phrase with a shared text baseline."""
+
+    def set_content(self, title, icon):
+        self.setAccessibleName(title)
+        self._icon = icon.pixmap(36, 36)
+        self._words = []
+        bounds = QtCore.QRectF()
+        for word in title.split():
+            number = word.isdecimal()
+            font = QtGui.QFont(self.font())
+            font.setPixelSize(36 if number else 26 if title == "Raining" else 18)
+            font.setBold(False)
+            path = QtGui.QPainterPath()
+            path.addText(0, 0, font, word)
+            bounds = bounds.united(path.boundingRect())
+            width = QtGui.QFontMetricsF(font).horizontalAdvance(word)
+            self._words.append((word, font, width))
+        self._baseline = -bounds.center().y()
+        self._width = 48 + sum(width for _, _, width in self._words)
+        self._width += 6 * (len(self._words) - 1)
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QtGui.QPainter(self)
+        scale = min(1.0, self.width() / (self._width + 16))
+        painter.translate(self.width() / 2, self.height() / 2)
+        painter.scale(scale, scale)
+        x = -self._width / 2
+        painter.drawPixmap(QtCore.QPointF(x, -18), self._icon)
+        x += 48
+        painter.setPen(QtGui.QColor("white"))
+        for word, font, width in self._words:
+            painter.setFont(font)
+            painter.drawText(QtCore.QPointF(x, self._baseline), word)
+            x += width + 6
+
+
 class CachedDialog:
     """
-    Manages a reusable dialog instance with three layout modes:
+    Manages a reusable dialog instance with four layout modes:
     - icon: title with left icon
-    - message: title + message (two lines)
+    - message: title with optional icon + multiline message
     - simple: title only
+    - rain: centered phrase with a right-side OK button
+
+    The optional banner frame controls only edge-to-edge bottom placement.
 
     Buttons (up to 2) are pre-created and shown/hidden as needed.
     """
@@ -128,6 +170,7 @@ class CachedDialog:
         self._icon_title_label = None
 
         self._message_widget = None
+        self._message_icon_label = None
         self._message_title_label = None
         self._message_label = None
 
@@ -155,6 +198,7 @@ class CachedDialog:
             self._stack_widget, dual_mode=self._dual_mode
         )
         self._back_layout = QtWidgets.QVBoxLayout(self._background)
+        self._default_back_margins = self._back_layout.contentsMargins()
 
         # Container
         self._container = DialogContainer(self._background)
@@ -164,6 +208,10 @@ class CachedDialog:
         self._back_layout.addWidget(self._container)
         self._content_layout = QtWidgets.QVBoxLayout(self._container)
         self._content_layout.setSpacing(0)
+        self._default_content_margins = self._content_layout.contentsMargins()
+
+        self._rain_widget = RainBannerContent(self._container)
+        self._content_layout.addWidget(self._rain_widget, stretch=1)
 
         # Create fonts with different sizes
         base_font = self._main_window.font()
@@ -209,7 +257,13 @@ class CachedDialog:
         self._message_label.setFont(medium_font)
         self._message_label.setContentsMargins(5, 5, 5, 5)
 
-        message_layout.addWidget(self._message_title_label)
+        message_title_layout = QtWidgets.QHBoxLayout()
+        message_title_layout.setSpacing(0)
+        self._message_icon_label = QtWidgets.QLabel()
+        self._message_icon_label.setFixedSize(36, 36)
+        message_title_layout.addWidget(self._message_icon_label)
+        message_title_layout.addWidget(self._message_title_label, stretch=1)
+        message_layout.addLayout(message_title_layout)
         message_layout.addWidget(self._message_label)
         self._content_layout.addWidget(self._message_widget)
 
@@ -244,8 +298,10 @@ class CachedDialog:
 
     def _hide_all(self):
         """Hide all layout variants."""
+        self._rain_widget.hide()
         self._icon_widget.hide()
         self._message_widget.hide()
+        self._message_icon_label.hide()
         self._simple_title_label.hide()
         self._button_widget.hide()
 
@@ -266,15 +322,18 @@ class CachedDialog:
 
     def _show_layout(self, title, title_icon, message, text_align):
         """Show the appropriate layout based on dialog content."""
+        if message is not None:
+            if title_icon is not None:
+                self._message_icon_label.setPixmap(title_icon.pixmap(36, 36))
+                self._message_icon_label.show()
+            self._set_label(self._message_title_label, title, text_align)
+            self._set_label(self._message_label, message, text_align)
+            self._message_widget.show()
+            return
         if title_icon is not None:
             self._icon_label.setPixmap(title_icon.pixmap(QtCore.QSize(32, 32)))
             self._set_label(self._icon_title_label, title, QT_ALIGN_LEFT)
             self._icon_widget.show()
-            return
-        if message is not None:
-            self._set_label(self._message_title_label, title, text_align)
-            self._set_label(self._message_label, message, text_align)
-            self._message_widget.show()
             return
         self._set_label(self._simple_title_label, title, text_align)
         self._simple_title_label.show()
@@ -284,6 +343,10 @@ class CachedDialog:
             alert_level,
             (background_color or "white", text_color or "black"),
         )
+        dark = QtGui.QColor(background_color).lightness() < 128
+        focus_background = background_color if dark else text_color
+        focus_text = text_color if dark else background_color
+        focus_border = f"border-color: {text_color};" if dark else ""
         self._container.setStyleSheet(
             f"DialogContainer {{ background-color: {background_color}; }}"
             f"DialogContainer QWidget {{ background-color: {background_color}; }}"
@@ -291,22 +354,65 @@ class CachedDialog:
             f" background-color: {background_color}; color: {text_color}; }}"
             f"DialogContainer DialogButton {{"
             f" background-color: {background_color}; color: {text_color}; }}"
-            f"DialogContainer DialogButton:pressed,"
-            f" DialogContainer DialogButton:focus {{"
+            f"DialogContainer DialogButton:focus {{"
+            f" background-color: {focus_background}; color: {focus_text};"
+            f" {focus_border} }}"
+            f"DialogContainer DialogButton:pressed {{"
             f" background-color: {text_color}; color: {background_color}; }}"
         )
 
-    def _configure_buttons(self, button_num, button_label, fn, back, timeout_seconds):
+    def _set_banner_frame(self, enabled):
+        self._back_layout.setContentsMargins(
+            QtCore.QMargins() if enabled else self._default_back_margins
+        )
+        if enabled:
+            self._container.setStyleSheet(
+                self._container.styleSheet()
+                + "DialogContainer { border: 0; border-radius: 0; padding: 0; }"
+            )
+
+    def _set_rain_layout(self, enabled):
+        direction = QtWidgets.QBoxLayout.Direction
+        self._content_layout.setDirection(
+            direction.LeftToRight if enabled else direction.TopToBottom
+        )
+        self._content_layout.setContentsMargins(
+            QtCore.QMargins(0, 0, 8, 0)
+            if enabled else self._default_content_margins
+        )
+        self._container.setMinimumHeight(72 if enabled else 0)
+        self._container.setMaximumHeight(72 if enabled else 16777215)
+        self._button_widget.layout().setContentsMargins(
+            QtCore.QMargins() if enabled else QtCore.QMargins(5, 10, 5, 10)
+        )
+        for button in self._buttons:
+            button.setFixedWidth(36 if enabled else 70)
+            button.setMinimumHeight(32 if enabled else 0)
+            button.setMaximumHeight(32 if enabled else 16777215)
+            font = QtGui.QFont(self._main_window.font())
+            if enabled:
+                font.setPixelSize(14)
+            button.setFont(font)
+        if enabled:
+            self._container.setStyleSheet(
+                self._container.styleSheet()
+                + "DialogContainer DialogButton { border-width: 1px; padding: 0; }"
+            )
+
+    def _configure_buttons(
+        self, button_num, button_label, timeout_seconds, auto_close=False
+    ):
         """Configure dialog buttons."""
-        if button_num == 0:
+        if button_num == 0 or auto_close:
             self._timeout_timer.start(timeout_seconds * 1000)
-            return
+            if button_num == 0:
+                return
 
         self._button_widget.show()
         for i, btn in enumerate(self._buttons):
             if i < button_num:
                 btn.setText(button_label[i] if i < len(button_label) else "")
-                if i == 0 and fn is not None:
+                if i == 0:
                     btn.clicked.connect(self.trigger_ok)
                 else:
                     btn.clicked.connect(self.trigger_back)
@@ -358,16 +464,33 @@ class CachedDialog:
                 self._qzss_widget.next_button.clicked.connect(
                     lambda: self._timeout_timer.start(10_000)
                 )
-            self._qzss_widget.set_event(msg["event"], msg["weather_pairs"])
+            self._qzss_widget.set_event(
+                msg["event"], msg["weather_pairs"]
+            )
             self._timeout_timer.start(timeout_seconds * 1000)
             return
 
         # Position container
-        self._back_layout.setAlignment(self._container, position)
+        banner = msg.get("frame") == "banner"
+        self._back_layout.setAlignment(
+            self._container, QT_ALIGN_BOTTOM if banner else position
+        )
 
         self._apply_colors(background_color, text_color, alert_level)
-        self._show_layout(title, title_icon, message, text_align)
-        self._configure_buttons(button_num, button_label, fn, back, timeout_seconds)
+        self._set_banner_frame(banner)
+        rain = msg.get("layout") == "rain"
+        self._set_rain_layout(rain)
+        if rain:
+            self._rain_widget.set_content(title, title_icon)
+            self._rain_widget.show()
+        else:
+            self._show_layout(title, title_icon, message, text_align)
+        self._configure_buttons(
+            button_num,
+            button_label,
+            timeout_seconds,
+            auto_close=msg.get("timeout") is not None,
+        )
 
     def add_to_stack(self):
         """Prepare dialog overlay (call after main pages are added)."""

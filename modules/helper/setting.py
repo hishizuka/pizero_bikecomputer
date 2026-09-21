@@ -25,6 +25,11 @@ class Setting:
     def read(self):
         self.config_parser.read(self.config_file)
 
+        if "RAIN_ALERT" in self.config_parser:
+            self.config.G_RAIN_ALERT = self.config_parser["RAIN_ALERT"].getboolean(
+                "enabled", fallback=False
+            )
+
         if "GENERAL" in self.config_parser:
             c = self.config_parser["GENERAL"]
             if "BOARD" in c:
@@ -414,6 +419,7 @@ class Setting:
         c["DEM_MAP"] = self.config.G_DEM_MAP
 
         self.config_parser["POWER"] = {}
+        self.config_parser["RAIN_ALERT"] = {"enabled": str(self.config.G_RAIN_ALERT)}
         c = self.config_parser["POWER"]
         c["CP"] = str(int(self.config.G_POWER_CP))
         c["W_PRIME"] = str(int(self.config.G_POWER_W_PRIME))

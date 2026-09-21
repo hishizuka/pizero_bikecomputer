@@ -45,6 +45,9 @@ class Config:
     G_LOGGING_INTERVAL = 1.0  # [s] for logger_core (log interval)
     G_REALTIME_GRAPH_INTERVAL = 1000  # 200 #[ms] for pyqt_graph
     G_COURSE_WEATHER_INTERVAL = 60 * 60  # [s]
+    G_RAIN_ALERT = False
+    G_RAIN_ALERT_INTERVAL_FACTOR = {"jpn_jma_bousai": 2, "rainviewer": 1}
+    G_RAIN_ALERT_RECHECK = 180  # [s], reevaluate movement using cached tiles
 
     # log format switch
     G_LOG_WRITE_CSV = True
@@ -473,6 +476,7 @@ class Config:
     display = None
     network = None
     api = None
+    rain_alert = None
     bt_pan = None
     ble_uart = None
     setting = None
@@ -812,6 +816,12 @@ class Config:
         await self.gui.set_boot_status("initialize sensor...")
         self.logger.delay_init()
 
+        from modules.helper.rain_alert import RainAlert
+
+        self.rain_alert = RainAlert(
+            self, self.gui.show_rain_alert if self.G_GUI_MODE == "PyQt" else None
+        )
+
         # GadgetBridge (has to be before gui but after sensors for proper init state of buttons)
         if self.G_IS_RASPI and bt_available:
             from modules.helper.bluetooth import HAS_GADGETBRIDGE, GadgetbridgeService
@@ -834,6 +844,7 @@ class Config:
         # gui
         await self.gui.set_boot_status("initialize screens...")
         self.gui.delay_init()
+        self.rain_alert.start()
 
         if self.G_HEADLESS:
             asyncio.create_task(self.keyboard_check())
@@ -980,6 +991,8 @@ class Config:
 
     async def quit(self):
         app_logger.info("########## QUIT START ##########")
+        if self.rain_alert is not None:
+            await self.rain_alert.stop()
         if self.ble_uart is not None:
             await self.ble_uart.quit()
         await self.network.quit()

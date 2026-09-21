@@ -14,6 +14,7 @@ class DownloadManager:
         self.config = config
         self.bluetooth = bluetooth_manager
         self.file_download_status = {}
+        self._pending_files = {}
         self._download_queue = asyncio.Queue()
         self._download_queue_block_until = 0.0
         self._queue_block_duration_sec = queue_block_duration_sec
@@ -29,6 +30,23 @@ class DownloadManager:
 
     def get_file_download_status(self, filename):
         return self.file_download_status.get(filename)
+
+    async def wait_for_files(self, filenames, timeout=120):
+        """Wait for shared downloads without canceling another consumer's work."""
+        pending = [
+            self._pending_files[name]
+            for name in filenames if name in self._pending_files
+        ]
+        if pending:
+            await asyncio.wait_for(
+                asyncio.gather(*(asyncio.shield(item) for item in pending)), timeout
+            )
+
+    def _finish_files(self, filenames):
+        for name in filenames:
+            future = self._pending_files.pop(name, None)
+            if future is not None and not future.done():
+                future.set_result(None)
 
     async def download_maptiles(self, map_config, map_name, z, tiles, additional_download=False):
         # Skip queueing if there is no connectivity path available.
@@ -189,12 +207,14 @@ class DownloadManager:
                 break
 
             retry_count = queue_item.get("retry_count", 0)
+            original_paths = tuple(queue_item["save_paths"])
 
             # download files with retry
             while True:
                 try:
                     results = await self._download_worker_handle_task(queue_item, caller_name)
                 except asyncio.CancelledError:
+                    self._finish_files(original_paths)
                     self._download_queue.task_done()
                     return
 
@@ -233,6 +253,7 @@ class DownloadManager:
                 retry_count += 1
                 continue
 
+            self._finish_files(original_paths)
             self._download_queue.task_done()
 
     async def put(self, queue_item):
@@ -242,6 +263,14 @@ class DownloadManager:
     async def _maybe_enqueue_download_item(self, queue_item):
         if self._is_download_queue_blocked():
             return False
+        pairs = list(dict.fromkeys(zip(queue_item["urls"], queue_item["save_paths"])))
+        pairs = [(url, path) for url, path in pairs if path not in self._pending_files]
+        if not pairs:
+            return True
+        queue_item = dict(queue_item)
+        queue_item["urls"], queue_item["save_paths"] = map(list, zip(*pairs))
+        for _, path in pairs:
+            self._pending_files[path] = asyncio.get_running_loop().create_future()
         await self._download_queue.put(queue_item)
         return True
 
@@ -271,6 +300,7 @@ class DownloadManager:
             self.config.api.maptile_with_values.delete_existing_tiles(combined)
             for save_path in combined:
                 self.file_download_status[save_path] = -1
+            self._finish_files(combined)
         await self.bluetooth.close_bt_tethering(caller_name)
 
     async def _drain_queue_and_collect_save_paths(self):
