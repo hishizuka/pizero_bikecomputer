@@ -235,10 +235,12 @@ class StatusBarWidget(QtWidgets.QWidget):
         elif mode == NMEA_MODE_2D:
             color = "#9a9a9a"
         else:
-            color = "#00000000"
+            self.gps_label.hide()
+            return
 
         pixmap = icons.get_pixmap(icons.SatelliteAltIcon, self._gps_size, color)
         self.gps_label.setPixmap(pixmap)
+        self.gps_label.show()
 
     def _update_bt(self):
         if not self.config.G_IS_RASPI:
@@ -249,9 +251,10 @@ class StatusBarWidget(QtWidgets.QWidget):
                 self._last_bt_check = now
                 self._bt_cached = check_bnep0()
 
-        color = "#3da5ff" if self._bt_cached else "#00000000"
-        pixmap = icons.get_pixmap(icons.BluetoothIcon, self._bt_size, color)
-        self.bt_label.setPixmap(pixmap)
+        self.bt_label.setVisible(self._bt_cached)
+        if self._bt_cached:
+            pixmap = icons.get_pixmap(icons.BluetoothIcon, self._bt_size, "#3da5ff")
+            self.bt_label.setPixmap(pixmap)
 
     def _update_light(self):
         light_state = None
@@ -268,13 +271,16 @@ class StatusBarWidget(QtWidgets.QWidget):
         elif state == "AUTO":
             color = "#35c98a"
         else:
-            color = "#00000000"
+            self.light_label.hide()
+            return
         pixmap = icons.get_pixmap(icons.LightBeamIcon, self._light_size, color)
         self.light_label.setPixmap(pixmap)
+        self.light_label.show()
 
     def _update_temperature(self):
         sensor = self.config.logger.sensor
         if sensor is None:
+            self.temperature_label.hide()
             return
 
         temperature = sensor.values["integrated"]["temperature"]
@@ -284,6 +290,7 @@ class StatusBarWidget(QtWidgets.QWidget):
             else ""
         )
 
+        self.temperature_label.setVisible(bool(text))
         if text != self._last_temperature:
             self._last_temperature = text
             self.temperature_label.setText(text)
