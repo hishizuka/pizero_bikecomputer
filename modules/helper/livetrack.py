@@ -48,12 +48,17 @@ async def run_with_bt_tethering(
 
 @dataclass(frozen=True)
 class LiveTrackRequest:
-    garmin_stop: bool = False
+    garmin_action: str = "update"
     include_thingsboard: bool = True
 
     def merge(self, other):
+        priorities = ("update", "stop", "reset")
         return LiveTrackRequest(
-            garmin_stop=self.garmin_stop or other.garmin_stop,
+            garmin_action=max(
+                self.garmin_action,
+                other.garmin_action,
+                key=priorities.index,
+            ),
             include_thingsboard=(self.include_thingsboard or other.include_thingsboard),
         )
 

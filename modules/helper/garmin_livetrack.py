@@ -25,6 +25,7 @@ BTF_CREDENTIALS_FILENAME = "livetrack_btf_credentials.json"
 STATE_FILENAME = "livetrack_state.json"
 PUBLISHER_TYPE = "WEARABLE"
 DEFAULT_DURATION = "PT6H"
+DEFAULT_DURATION_SEC = 6 * 60 * 60
 DEFAULT_VIEWABLE = "PT24H"
 DEFAULT_ALTITUDE_METERS = 3.5
 COURSE_PATH = "/tracker/livetrack/api/v1/course"
@@ -51,13 +52,16 @@ class GarminLiveTrackConfigurationError(GarminLiveTrackError):
 class GarminLiveTrackApiError(GarminLiveTrackError):
     """Raised when Garmin LiveTrack API calls fail."""
 
+    def __init__(self, message, status_code=None):
+        super().__init__(message)
+        self.status_code = status_code
+
 
 class GarminLiveTrackMessageHttpError(GarminLiveTrackApiError):
     """Raised when the Garmin Messages API returns an HTTP error."""
 
     def __init__(self, status_code, message):
-        super().__init__(message)
-        self.status_code = status_code
+        super().__init__(message, status_code=status_code)
 
 
 def semicircle(degrees):
@@ -120,6 +124,18 @@ def _utc_timestamp(timestamp):
     except (OSError, OverflowError, TypeError, ValueError):
         return None
     return value.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def _parse_utc_datetime(value):
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def _fit_definition(local_num, global_num, fields):
@@ -538,7 +554,8 @@ class GarminLiveTrackClient:
         if not response.ok:
             raise GarminLiveTrackApiError(
                 "Garmin IT token exchange failed with HTTP "
-                f"{response.status_code}{safe_response_details(response)}."
+                f"{response.status_code}{safe_response_details(response)}.",
+                status_code=response.status_code,
             )
 
         try:
@@ -635,7 +652,8 @@ class GarminLiveTrackClient:
             )
             raise GarminLiveTrackApiError(
                 f"Garmin GCS returned HTTP {response.status_code} "
-                f"(request id: {request_id}){safe_response_details(response)}."
+                f"(request id: {request_id}){safe_response_details(response)}.",
+                status_code=response.status_code,
             )
 
     @staticmethod
@@ -653,7 +671,8 @@ class GarminLiveTrackClient:
         if response.status_code != expected:
             raise GarminLiveTrackApiError(
                 "Garmin GCS returned unexpected HTTP "
-                f"{response.status_code}; expected {expected}."
+                f"{response.status_code}; expected {expected}.",
+                status_code=response.status_code,
             )
 
     def request_direct(self, method, path, payload=None, params=None):
@@ -671,7 +690,8 @@ class GarminLiveTrackClient:
             self._raise_for_response(response)
             raise GarminLiveTrackApiError(
                 "Garmin course HEAD returned unexpected HTTP "
-                f"{response.status_code}; expected 200 or 404."
+                f"{response.status_code}; expected 200 or 404.",
+                status_code=response.status_code,
             )
 
         response = self._request_direct_response(
@@ -906,6 +926,116 @@ class GarminLiveTrackClient:
             return None
         return session
 
+    @staticmethod
+    def pending_stop(state):
+        pending = state.get("pendingStop")
+        if not isinstance(pending, dict) or not pending.get("sessionId"):
+            return None
+        return pending
+
+    def session_status(self, state, sample, now_timestamp=None):
+        session = self.active_session(state)
+        pending = self.pending_stop(state)
+        pending_matches = pending is not None and (
+            session is None or str(pending["sessionId"]) == str(session["sessionId"])
+        )
+        if pending_matches and (
+            int(pending.get("attempts", 0)) >= 2 or pending.get("status") == "failed"
+        ):
+            return "stop_failed"
+        if session is None:
+            return "none"
+
+        created_at = _parse_utc_datetime(session.get("createdAt"))
+        now = datetime.fromtimestamp(
+            time.time() if now_timestamp is None else now_timestamp,
+            timezone.utc,
+        )
+        if created_at is None or created_at > now:
+            return "invalid"
+        if (now - created_at).total_seconds() >= DEFAULT_DURATION_SEC:
+            return "expired"
+
+        if pending_matches:
+            return "pending_stop"
+
+        if sample.activity_start_timestamp is not None:
+            activity_created_at = _parse_utc_datetime(session.get("activityCreatedAt"))
+            if activity_created_at is None:
+                return "invalid"
+            if (
+                abs(
+                    activity_created_at.timestamp()
+                    - float(sample.activity_start_timestamp)
+                )
+                > 1
+            ):
+                return "different_activity"
+        return "current"
+
+    def _load_stop_state(self):
+        state = self.load_state()
+        session = self.active_session(state)
+        if session is None:
+            return state, None
+
+        pending = self.pending_stop(state)
+        if pending is None or str(pending["sessionId"]) != str(session["sessionId"]):
+            pending = {
+                "sessionId": str(session["sessionId"]),
+                "attempts": 0,
+                "status": "pending",
+            }
+            state["pendingStop"] = pending
+        return state, pending
+
+    def request_stop(self):
+        state, pending = self._load_stop_state()
+        if pending is None:
+            return False
+        self.save_state(state)
+        return True
+
+    def begin_stop_attempt(self, force=False):
+        state, pending = self._load_stop_state()
+        if pending is None:
+            return None
+        attempts = int(pending.get("attempts", 0))
+        if attempts >= 2 and not force:
+            return None
+
+        pending["attempts"] = attempts + 1
+        pending["status"] = "attempting"
+        pending.pop("retryAt", None)
+        state["pendingStop"] = pending
+        self.save_state(state)
+        return pending["attempts"]
+
+    def record_stop_failure(self, retry_at=None):
+        state = self.load_state()
+        pending = state["pendingStop"]
+        pending["status"] = "waiting_retry" if retry_at is not None else "failed"
+        if retry_at is None:
+            pending.pop("retryAt", None)
+        else:
+            pending["retryAt"] = _utc_timestamp(retry_at)
+        state["pendingStop"] = pending
+        self.save_state(state)
+
+    def pending_retry_delay(self, state, now_timestamp=None):
+        retry_at = _parse_utc_datetime(state["pendingStop"].get("retryAt"))
+        if retry_at is None:
+            return 0
+        now = time.time() if now_timestamp is None else now_timestamp
+        return max(0, retry_at.timestamp() - now)
+
+    def clear_session(self, state=None, preserve_pending=False):
+        state = self.load_state() if state is None else state
+        state.pop("activeSession", None)
+        if not preserve_pending:
+            state.pop("pendingStop", None)
+        self.save_state(state)
+
     def create_session_payload(self, sample, publisher):
         return {
             "defaultName": True,
@@ -962,6 +1092,7 @@ class GarminLiveTrackClient:
             "viewable": payload["viewable"],
             "pointCount": 0,
         }
+        state.pop("pendingStop", None)
         state["schemaVersion"] = 1
         self.save_state(state)
         return "created"
@@ -1079,21 +1210,25 @@ class GarminLiveTrackClient:
             "viewable": DEFAULT_VIEWABLE,
         }
 
-    async def stop_session(self, gadgetbridge_service=None):
+    async def stop_session(self):
         state = self.load_state()
         session = self.active_session(state)
         if session is None:
             return "not_active"
         publisher = self.publisher(state)
         payload = self.stop_payload(publisher)
-        await self.request(
-            "PATCH",
-            "/tracker/livetrack/api/v1/sessions/",
-            payload=payload,
-            gadgetbridge_service=gadgetbridge_service,
-        )
-        state.pop("activeSession", None)
-        self.save_state(state)
+        try:
+            await self.request(
+                "PATCH",
+                "/tracker/livetrack/api/v1/sessions/",
+                payload=payload,
+            )
+        except GarminLiveTrackApiError as exc:
+            if exc.status_code not in (404, 410):
+                raise
+            self.clear_session(state)
+            return "not_active"
+        self.clear_session(state)
         return "success"
 
     async def send_course(self, course, reset=False):

@@ -632,6 +632,7 @@ class LiveTrackMenuWidget(MenuWidget):
     THINGSBOARD_BUTTON = "ThingsBoard"
     GARMIN_BUTTON = "Garmin"
     GARMIN_MESSAGES_BUTTON = "Garmin Messages"
+    GARMIN_RESET_BUTTON = "Reset Garmin Session"
 
     def setup_menu(self):
         button_conf = (
@@ -650,6 +651,14 @@ class LiveTrackMenuWidget(MenuWidget):
                 "toggle",
                 lambda: self.onoff_garmin_messages(True),
             ),
+            (
+                self.GARMIN_RESET_BUTTON,
+                "dialog",
+                lambda: self.config.gui.show_dialog(
+                    self.reset_garmin_session,
+                    "Reset Garmin LiveTrack session?",
+                ),
+            ),
         )
         self.add_buttons(button_conf)
         self.update_buttons()
@@ -660,31 +669,16 @@ class LiveTrackMenuWidget(MenuWidget):
     def _thingsboard_available(self):
         thingsboard = self.config.G_THINGSBOARD_API
         return bool(
-            thingsboard.get("HAVE_API_TOKEN")
-            and thingsboard.get("TOKEN", "").strip()
-            and thingsboard.get("SERVER", "").strip()
+            thingsboard["HAVE_API_TOKEN"]
+            and thingsboard["TOKEN"].strip()
+            and thingsboard["SERVER"].strip()
         )
 
     def _garmin_unavailable_reason(self):
-        api_helper = getattr(self.config, "api", None)
-        if api_helper is None:
-            return "Garmin LiveTrack is disabled because API helper is not available."
-        return api_helper.garmin_livetrack_configuration_reason()
-
-    def _garmin_available(self):
-        return self._garmin_unavailable_reason() is None
+        return self.config.api.garmin_livetrack_configuration_reason()
 
     def _show_unavailable(self, title, reason):
-        gui = getattr(self.config, "gui", None)
-        if gui is None:
-            return
-        popup_multiline = getattr(gui, "show_popup_multiline", None)
-        if callable(popup_multiline):
-            popup_multiline(title, reason, 5)
-            return
-        popup = getattr(gui, "show_popup", None)
-        if callable(popup):
-            popup(title, 5)
+        self.config.gui.show_popup_multiline(title, reason, 5)
 
     def update_buttons(self):
         thingsboard_status = self.config.G_THINGSBOARD_API["STATUS"]
@@ -698,7 +692,7 @@ class LiveTrackMenuWidget(MenuWidget):
         self.buttons[self.THINGSBOARD_BUTTON].onoff_button(
             self._thingsboard_available() or thingsboard_status
         )
-        garmin_available = self._garmin_available()
+        garmin_available = self._garmin_unavailable_reason() is None
         self.buttons[self.GARMIN_BUTTON].onoff_button(garmin_available or garmin_status)
         self.buttons[self.GARMIN_MESSAGES_BUTTON].onoff_button(garmin_status)
 
@@ -721,13 +715,14 @@ class LiveTrackMenuWidget(MenuWidget):
 
     def onoff_garmin_livetrack(self, change=True):
         if change:
+            unavailable_reason = self._garmin_unavailable_reason()
             if (
                 not self.config.G_GARMINCONNECT_API["LIVETRACK_STATUS"]
-                and not self._garmin_available()
+                and unavailable_reason is not None
             ):
                 self._show_unavailable(
                     "Garmin LiveTrack disabled",
-                    self._garmin_unavailable_reason(),
+                    unavailable_reason,
                 )
                 return
             self.config.G_GARMINCONNECT_API["LIVETRACK_STATUS"] = (
@@ -750,6 +745,9 @@ class LiveTrackMenuWidget(MenuWidget):
             self.config.setting.write_config()
             self.config.api.request_garmin_message_capability_update()
         self.update_buttons()
+
+    def reset_garmin_session(self):
+        self.config.api.reset_garmin_livetrack_session()
 
 
 class ConnectivityMenuWidget(MenuWidget):

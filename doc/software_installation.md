@@ -1298,9 +1298,27 @@ is enabled. Its owner-only BTF credential is stored at
 messaging device identifier are not `setting.conf` entries.
 
 ThingsBoard and Garmin LiveTrack share the same position sampling window. At
-the normal 180-second interval, the state at about 90 seconds and the current
-state at 180 seconds are sent together. Each attempted upload closes that
-window; failed points are not accumulated into the next interval.
+the normal 180-second interval, four samples at about 45, 90, 135, and 180
+seconds are sent together. Each attempted upload closes that window; failed
+points are not accumulated into the next interval.
+
+Garmin session creation and closure use direct HTTP so that their result can be
+confirmed. On recording start, an existing local session is resumed only when
+it belongs to the same activity and is less than six hours old. A session from
+another activity is closed before a new session is created; expired or invalid
+local state is discarded. Normal track points may still use Gadgetbridge. Its
+legacy HTTP bridge does not return an HTTP status, so track-point failures do
+not trigger automatic 404/410 session recreation.
+
+Before a reset closes a Garmin session, the pending STOP and its attempt count
+are saved in `tokenstore/livetrack_state.json`. A transient failure is retried
+once after the Bluetooth tethering cooldown (normally 180 seconds), or handled
+when recording is next started. HTTP 404 and 410 mean the remote session is
+already closed. If both attempts fail, the warning remains in the state file
+across shutdown and a popup warns that location sharing may still be active.
+**Menu > Connectivity > Live Track > Reset Garmin Session** attempts one final
+remote STOP, then clears the local active and pending session state even if the
+remote request fails.
 
 Messages are checked at the same interval as LiveTrack position updates
 (`INTERVAL_SEC`, normally 180 seconds), displayed without persistent storage,
