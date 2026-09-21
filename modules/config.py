@@ -26,7 +26,6 @@ from modules.utils.time import init_utc_offset
 from modules.utils.map import (
     get_maptile_ext_from_url,
     normalize_maptile_ext,
-    remove_maptiles,
 )
 from modules.utils.timer import Timer
 
@@ -938,14 +937,17 @@ class Config:
             os.makedirs(os.path.join("maptile", self.G_DEM_MAP), exist_ok=True)
 
     def delete_weather_overlay_tiles(self):
-        remove_maptiles(
-            self.G_RAIN_OVERLAY_MAP,
-            self.G_RAIN_OVERLAY_MAP_CONFIG[self.G_RAIN_OVERLAY_MAP]["basetime"],
+        weather_maps = set(self.G_RAIN_OVERLAY_MAP_CONFIG) | set(
+            self.G_WIND_OVERLAY_MAP_CONFIG
         )
-        remove_maptiles(
-            self.G_WIND_OVERLAY_MAP,
-            self.G_WIND_OVERLAY_MAP_CONFIG[self.G_WIND_OVERLAY_MAP]["basetime"],
-        )
+        for path in glob(os.path.join("maptile", "*")):
+            if not os.path.isdir(path):
+                continue
+            map_name = os.path.basename(path)
+            if map_name in weather_maps or any(
+                map_name.startswith(f"{name}_") for name in weather_maps
+            ):
+                shutil.rmtree(path)
 
     def get_serial(self):
         if not self.G_IS_RASPI:
