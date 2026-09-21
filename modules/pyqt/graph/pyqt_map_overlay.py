@@ -247,17 +247,23 @@ class MapOverlayMixin:
             return
         map_settings = map_config[map_name]
 
-        time_key = "next_time" if goto_next else "prev_time"
-        subdomain_key = "next_subdomain" if goto_next else "prev_subdomain"
-        time_value = self.overlay_time[overlay_type].get(time_key)
+        prev_time, prev_subdomain, next_time, next_subdomain = (
+            await self.maptile_with_values.get_prev_next_validtime(
+                overlay_type,
+                map_config,
+                map_name,
+                skip_update=True,
+            )
+        )
+        time_value = next_time if goto_next else prev_time
         if time_value is None:
             return
 
         map_settings["validtime"] = time_value
-        if map_name.startswith("jpn_scw"):
-            map_settings["subdomain"] = self.overlay_time[overlay_type].get(
-                subdomain_key
-            )
+        if map_name == "rainviewer":
+            self.maptile_with_values.set_rainviewer_validtime(map_settings, time_value)
+        elif map_name.startswith("jpn_scw"):
+            map_settings["subdomain"] = next_subdomain if goto_next else prev_subdomain
         elif map_name.startswith("jpn_jma_bousai"):
             basetime = self.maptile_with_values.get_jma_basetime_for_validtime(
                 map_settings, time_value
@@ -330,9 +336,12 @@ class MapOverlayMixin:
             await self.overlay_map(main_view_changed, p0, p1, map_config, map_name)
             return
 
-        await self.update_prev_next_overlay_time(overlay_type, map_config, map_name)
+        await self.update_prev_next_overlay_time(
+            overlay_type, map_config, map_name, skip_update=True
+        )
         self.overlay_time[overlay_type]["display_time"] = new_display_time
         self.reset_overlay(map_name)
+        self._update_display_retrigger = True
 
     def reset_overlay(self, map_name):
         self._clear_tile_items(self.config.G_MAP)

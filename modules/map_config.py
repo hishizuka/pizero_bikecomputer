@@ -87,12 +87,16 @@ def add_map_config(config):
 
     # worldwide rain tile
     config.G_RAIN_OVERLAY_MAP_CONFIG["rainviewer"] = {
-        "url": "https://tilecache.rainviewer.com/v2/radar/{validtime}/256/{z}/{x}/{y}/6/1_1.png",
+        "url": "{host}{path}/256/{z}/{x}/{y}/2/0_0.png",
         "attribution": "RainViewer",
         "tile_size": 256,
-        "max_zoomlevel": 10,
+        "max_zoomlevel": 7,
         "min_zoomlevel": 1,
         "time_list": "https://api.rainviewer.com/public/weather-maps.json",
+        "host": None,
+        "path": None,
+        "timeline": None,
+        "timeline_update_date": None,
         "current_time": None,
         "current_time_func": datetime.now,  # local?
         "refresh_time_mode": "cutoff",

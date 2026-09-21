@@ -932,6 +932,13 @@ Strava heatmap (bluered)
 
 RainViewer
 
+The public API provides the past two hours of radar frames at 10-minute
+intervals. The overlay uses the Universal Blue color scheme without smoothing,
+with separate snow colors (`2/0_1.png`).
+Native tiles are limited to zoom 7; closer map views enlarge those tiles.
+Future radar forecasts are no longer available from this API. See the
+[RainViewer API changes](https://www.rainviewer.com/api/transition-faq.html).
+
 ![map_overlay_rainviewer](https://user-images.githubusercontent.com/12926652/205876664-ae1b629c-5b3f-4d8a-b789-d3ac24753d7f.png)
 
 気象庁降水ナウキャスト(Japan)

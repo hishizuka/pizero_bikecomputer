@@ -1,12 +1,30 @@
 import asyncio
 from datetime import datetime
+from time import monotonic
 from typing import Iterable
+from urllib.parse import urlparse
 
 import aiohttp
 
 from modules.app_logger import app_logger
 
 DEFAULT_COROUTINE_SEM = 100
+_RAINVIEWER_REQUEST_INTERVAL = 0.65
+_rainviewer_next_request = 0.0
+_rainviewer_request_lock = asyncio.Lock()
+
+
+async def _wait_for_rainviewer(url):
+    global _rainviewer_next_request
+    hostname = urlparse(url).hostname or ""
+    if hostname != "rainviewer.com" and not hostname.endswith(".rainviewer.com"):
+        return
+    async with _rainviewer_request_lock:
+        delay = _rainviewer_next_request - monotonic()
+        if delay > 0:
+            await asyncio.sleep(delay)
+        # Share the public API's 100 requests/minute budget across JSON and tiles.
+        _rainviewer_next_request = monotonic() + _RAINVIEWER_REQUEST_INTERVAL
 
 
 def _write_binary_file(save_path, data):
@@ -18,6 +36,7 @@ async def get_response(
     url, params=None, headers=None, timeout=30, response_type="json"
 ):
     try:
+        await _wait_for_rainviewer(url)
         async with aiohttp.ClientSession() as session:
             async with session.get(
                 url, params=params, headers=headers, timeout=timeout
@@ -102,6 +121,7 @@ async def _get_http_request(
     async with semaphore:
         response_code = None
         try:
+            await _wait_for_rainviewer(url)
             async with session.get(
                 url, headers=headers, params=params, timeout=timeout
             ) as dl_file:

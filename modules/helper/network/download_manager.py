@@ -62,7 +62,10 @@ class DownloadManager:
                 return False
             additional_var["basetime"] = map_settings["basetime"]
             additional_var["validtime"] = map_settings["validtime"]
-            if map_name.startswith("jpn_scw"):
+            if map_name == "rainviewer":
+                additional_var["host"] = map_settings["host"]
+                additional_var["path"] = map_settings["path"]
+            elif map_name.startswith("jpn_scw"):
                 if map_settings["subdomain"] is None:
                     return False
                 additional_var["subdomain"] = map_settings["subdomain"]
@@ -95,7 +98,7 @@ class DownloadManager:
         if not enqueued:
             return False
 
-        if not additional_download:
+        if not additional_download or map_name == "rainviewer":
             return True
 
         additional_urls = []

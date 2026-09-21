@@ -4,7 +4,7 @@ from modules._qt_qtwidgets import QtCore, QtGui, QtWidgets, pg
 from modules.helper.maptile import (
     JMA_RAIN_COLOR_CONV,
     OPENPORTGUIDE_WIND_STREAM_LEGEND,
-    RAINVIEWER_NEXRAD_LEGEND,
+    RAINVIEWER_UNIVERSAL_BLUE_LEGEND,
     SCW_WIND_SPEED_ARROW_CONV,
 )
 from modules.utils.geo import get_width_distance
@@ -88,7 +88,7 @@ class MapHudMixin:
             ["L", "H"],
             9,
         ),
-        ("RAIN", "rainviewer"): (RAINVIEWER_NEXRAD_LEGEND, ["L", "H"], 12),
+        ("RAIN", "rainviewer"): (RAINVIEWER_UNIVERSAL_BLUE_LEGEND, ["L", "H"], 12),
         ("RAIN", "jpn_jma_bousai"): (JMA_RAIN_COLOR_CONV, [0, 80], 20),
     }
 

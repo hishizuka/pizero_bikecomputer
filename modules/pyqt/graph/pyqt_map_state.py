@@ -5,7 +5,7 @@ import numpy as np
 from modules.app_logger import app_logger
 from modules._qt_qtwidgets import pg
 from modules.utils.geo import calc_y_mod, get_mod_lat, get_width_distance
-from modules.utils.map import get_maptile_filename
+from modules.utils.map import get_maptile_filename, get_rain_time
 
 
 class MapStateMixin:
@@ -48,17 +48,6 @@ class MapStateMixin:
         current_time += timedelta(minutes=-delta_minutes)
         return current_time.replace(second=0, microsecond=0)
 
-    @staticmethod
-    def _get_interval_cutoff_time(map_settings):
-        current_time = map_settings["current_time_func"]()
-        delta_minutes = current_time.minute % map_settings["time_interval"]
-        delta_seconds = delta_minutes * 60 + current_time.second
-        delta_seconds_cutoff = map_settings["update_minutes"] * 60 + 15
-        if delta_seconds < delta_seconds_cutoff:
-            delta_minutes += map_settings["time_interval"]
-        current_time += timedelta(minutes=-delta_minutes)
-        return current_time.replace(second=0, microsecond=0)
-
     def _get_overlay_refresh_time_key(self, overlay_type, map_settings):
         # refresh_time_mode is shared by any time-series overlay.
         # fallback keeps existing behavior when mode is not set in map config.
@@ -67,7 +56,7 @@ class MapStateMixin:
             refresh_mode = "cutoff" if overlay_type == "RAIN" else "aligned"
 
         if refresh_mode == "cutoff":
-            return self._get_interval_cutoff_time(map_settings)
+            return get_rain_time(map_settings)
         return self._get_interval_aligned_time(map_settings)
 
     def _cache_overlay_refresh_time_key(self, overlay_type, overlay_map, time_key):

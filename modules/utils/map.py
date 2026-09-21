@@ -1,7 +1,17 @@
 import math
 import os
 import shutil
+from datetime import datetime, timedelta
 from urllib.parse import urlparse
+
+
+def get_rain_time(map_settings, multiplier=1):
+    """Return the radar update slot after the provider publication delay."""
+    current = map_settings["current_time_func"]()
+    current -= timedelta(minutes=map_settings["update_minutes"], seconds=15)
+    interval = timedelta(minutes=map_settings["time_interval"] * multiplier)
+    epoch = datetime(1970, 1, 1, tzinfo=current.tzinfo)
+    return current - (current - epoch) % interval
 
 
 def normalize_maptile_ext(ext, default="png"):

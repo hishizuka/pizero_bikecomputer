@@ -431,7 +431,6 @@ class MapTileMixin:
                 pending_state["key_set"].discard(key)
 
             map_items = self._get_map_tile_items(map_name)
-            w_h = int(tile_size / z_conv_factor) if expand else 0
             drawn_any = False
             for keys in draw_keys:
                 if (z, keys[0], keys[1]) in map_items:
@@ -454,12 +453,13 @@ class MapTileMixin:
                         img_pil = Image.open(img_file).convert("RGBA")
                     else:
                         expand_val = pending_state["expand_keys"][keys]
-                        x_start, y_start = int(w_h * expand_val[2]), int(
-                            w_h * expand_val[3]
-                        )
                         img_pil = (
                             Image.open(img_file)
-                            .crop((x_start, y_start, x_start + w_h, y_start + w_h))
+                            .crop(
+                                self.get_tile_crop_box(
+                                    tile_size, z_conv_factor, *expand_val[2:]
+                                )
+                            )
                             .convert("RGBA")
                         )
                     tile_io_elapsed_ms += (time.perf_counter() - io_start) * 1000.0
@@ -541,6 +541,14 @@ class MapTileMixin:
             if use_mbtiles:
                 self.cur.close()
                 self.con.close()
+
+    @staticmethod
+    def get_tile_crop_box(tile_size, z_conv_factor, offset_x, offset_y):
+        width = tile_size / z_conv_factor
+        x, y = int(width * offset_x), int(width * offset_y)
+        # A display tile can cover less than one source pixel at high zoom.
+        size = max(1, int(width))
+        return x, y, x + size, y + size
 
     @staticmethod
     def init_draw_map(map_config, map_name, z, p0, p1, tile_size):
