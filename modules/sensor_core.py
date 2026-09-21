@@ -31,8 +31,6 @@ from .sensor.sensor_ble import SensorBLE
 from .sensor.sensor_gpio import SensorGPIO
 from .sensor.sensor_i2c import SensorI2C
 
-SensorGPS = get_sensor_gps_class()
-
 
 class SensorCore:
     NP_WINDOW_SIZE = NP_WINDOW_SIZE_DEFAULT
@@ -179,8 +177,8 @@ class SensorCore:
                 integrated[f"ave_{v}_{s}s"] = np.nan
         self.process = psutil.Process()
 
-        if SensorGPS:
-            self.sensor_gps = SensorGPS(config, self.values["GPS"])
+        sensor_gps_class = get_sensor_gps_class(dummy=config.G_DUMMY_OUTPUT)
+        self.sensor_gps = sensor_gps_class(config, self.values["GPS"])
 
         timers = [
             Timer(auto_start=False, text="  ANT+ : {0:.3f} sec"),

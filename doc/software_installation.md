@@ -1398,6 +1398,7 @@ There are some settings which the user doesn't need to care about and some varia
 Put `.tcx` or `.fit` course files in the `courses/` folder. They are listed in the `Courses > Local Storage` menu.
 
 To download the map in advance, run the program manually with the --demo option. It will start in demo mode.
+Demo mode uses simulated GPS positions even when a GPS receiver is connected. If the log database contains position history, that history is replayed; otherwise, the position moves along the selected course.
 
 ```console
 $ python3 pizero_bikecomputer.py --demo
