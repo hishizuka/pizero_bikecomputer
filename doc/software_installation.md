@@ -1065,6 +1065,7 @@ Set the value before starting the program. If the value is set during running, i
   - `auto`: detect all supported I2C sensors and do not enable custom GPIO buttons.
   - `pizero_bikecomputer`: use the Pi Zero Bikecomputer PCB preset.
   - `bryton_rider_s800`: use the Bryton Rider S800 board preset.
+  - `bryton_rider_s800_bridge`: use the nRF52840 bridge board, GPIO4/23/20/21 buttons, and UART sensor stream.
 - `display`
   - Set the type of display.
   - There are definitions in `modules/display/display_core.py`.
@@ -1106,6 +1107,34 @@ Set the value before starting the program. If the value is set during running, i
   - QZSS alerts use Noto Sans CJK JP Black when available, independently of this font.
 - `auto_wifi_off`
   - Turn Wifi off automatically while recording.
+
+#### nRF52840 UART sensor bridge
+
+Set `board = bryton_rider_s800_bridge` in `[GENERAL]`. This preset uses GPIO4,
+GPIO23, GPIO20, and GPIO21 for the four buttons, receives sensor samples through
+`/dev/serial0`, and does not probe the on-board sensors from the Pi I2C bus.
+Select the BLE adapter separately in `[SENSOR_BLE]`. GPIO26 controls the nRF
+reset circuit; GPIO16/17 are not used for UART flow control in the current build.
+
+The controller UART is 115200 bps without RTS/CTS. It is a physical UART, not a
+third USB CDC port. Disable the Linux serial console/getty on this UART and
+keep `dtoverlay=disable-bt` and `gpio=16-17=a3` commented out in
+`/boot/firmware/config.txt`. Do not configure GPIO26 as an output at boot, and
+do not run a control UART capture script while the application uses `/dev/serial0`.
+
+Install the udev rule supplied with the nRF52840 bridge firmware before running
+the application. It must create the `/dev/ttyANT` and `/dev/ttyGPS` aliases:
+
+```sh
+sudo install -m 644 /path/to/99-bikecomputer-serial.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules
+```
+
+Reconnect the nRF USB device, then verify `/dev/ttyANT` and `/dev/ttyGPS`.
+GPS is detected only on `/dev/ttyGPS`; the receiver is switched from its current
+38400 or 9600 bps setting to 115200 bps before the application enables UBX
+navigation and optional QZSS `RXM-SFRBX` output. To receive QZSS DC Reports,
+set `use_qzss_dcr = True` and `use_power_save = False` in `[GPSD_UBLOX_PARAM]`.
 
 #### AUTO_UPLOAD section
 

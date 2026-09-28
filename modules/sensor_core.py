@@ -1,5 +1,6 @@
 import asyncio
 import math
+import os
 import time
 from datetime import datetime
 
@@ -36,6 +37,8 @@ from .sensor.sensor_ant import SensorANT
 from .sensor.sensor_ble import SensorBLE
 from .sensor.sensor_gpio import SensorGPIO
 from .sensor.sensor_i2c import SensorI2C
+from .sensor.control_uart import ControlUART
+from .sensor.sensor_uart_bridge import SensorUARTBridge
 
 
 class SensorCore:
@@ -47,6 +50,7 @@ class SensorCore:
     sensor_ant = None
     sensor_ble = None
     sensor_i2c = None
+    control_uart = None
     sensor_gpio = None
     values = {}
     integrated_value_keys = [
@@ -141,16 +145,18 @@ class SensorCore:
     status_quit = False
     _PERF_SENSOR_LOG_INTERVAL_SEC = 30.0
 
-    def __init__(self, config):
-        self.config = config
-        self.gps_position_quality = GPSPositionQuality()
-        self.heading_fusion = HeadingFusion(config.G_GPS_SPEED_CUTOFF)
     @property
     def has_buttons(self):
         return self.sensor_gpio.has_buttons or any(
             self.sensor_i2c.available_sensors["BUTTON"].values()
         )
 
+    def __init__(self, config):
+        self.status_quit = False
+        self._bridge_recovery_task = None
+        self.config = config
+        self.gps_position_quality = GPSPositionQuality()
+        self.heading_fusion = HeadingFusion(config.G_GPS_SPEED_CUTOFF)
         self.values["GPS"] = {}
         self.values["ANT+"] = {}
         self.values["BLE"] = {}
@@ -204,7 +210,10 @@ class SensorCore:
                 integrated[f"ave_{v}_{s}s"] = np.nan
         self.process = psutil.Process()
 
-        sensor_gps_class = get_sensor_gps_class(dummy=config.G_DUMMY_OUTPUT)
+        bridge = config.board_preset.uart_sensor_bridge
+        sensor_gps_class = get_sensor_gps_class(
+            dummy=config.G_DUMMY_OUTPUT, bridge=bridge
+        )
         self.sensor_gps = sensor_gps_class(config, self.values["GPS"])
 
         timers = [
@@ -220,7 +229,22 @@ class SensorCore:
             self.sensor_ble = SensorBLE(config, self.values["BLE"])
 
         with timers[2]:
-            self.sensor_i2c = SensorI2C(config, self.values["I2C"])
+            if bridge:
+                self.control_uart = ControlUART(
+                    period_ms=int(config.G_I2C_INTERVAL * 1000),
+                    expected_profile=config.board_preset.control_profile,
+                    rtscts=config.board_preset.control_uart_rtscts,
+                    nrf_reset_gpiochip=config.board_preset.nrf_reset_gpiochip,
+                    nrf_reset_gpio=config.board_preset.nrf_reset_gpio,
+                    reset_allowed=lambda: os.path.exists("/dev/ttyANT")
+                    and os.path.exists("/dev/ttyGPS"),
+                    on_configured=self._schedule_bridge_recovery,
+                )
+                self.sensor_i2c = SensorUARTBridge(
+                    config, self.values["I2C"], self.control_uart
+                )
+            else:
+                self.sensor_i2c = SensorI2C(config, self.values["I2C"])
 
         self.sensor_gpio = SensorGPIO(config, None)
         self.sensor_gpio.update()
@@ -348,14 +372,54 @@ class SensorCore:
 
     def start_coroutine(self):
         asyncio.create_task(self.integrate())
+        if self.control_uart is not None:
+            self.control_uart.start_coroutine()
         self.sensor_ant.start_coroutine()
         self.sensor_ble.start_coroutine()
         self.sensor_gps.start_coroutine()
         self.sensor_i2c.start_coroutine()
 
+    def _schedule_bridge_recovery(self, reconfigured):
+        if self._bridge_recovery_task is not None:
+            self._bridge_recovery_task.cancel()
+        self._bridge_recovery_task = asyncio.create_task(
+            self._recover_bridge_usb(reconfigured)
+        )
+
+    async def _recover_bridge_usb(self, reconfigured):
+        app_logger.info("bridge USB recovery started (reconfigured=%s)", reconfigured)
+        if reconfigured:
+            self.sensor_ant.invalidate_sensor_values()
+            self.sensor_ant.transport_disconnected = True
+            self.sensor_ble.disconnect_cycling_sensors()
+            self.sensor_ble.disconnect_zwift_click_v2()
+
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + 30.0
+        while not self.status_quit and loop.time() < deadline:
+            if os.path.exists("/dev/ttyANT"):
+                await asyncio.sleep(3.0)
+                if os.path.exists("/dev/ttyANT"):
+                    self.sensor_ant.reconnect_if_requested()
+                    self.sensor_ble.connect_cycling_sensors()
+                    self.sensor_ble.connect_zwift_click_v2()
+                    app_logger.info(
+                        "bridge USB recovery attempted (ant_available=%s)",
+                        self.sensor_ant.is_transport_available(),
+                    )
+                    return
+            await asyncio.sleep(1.0)
+        if not self.status_quit:
+            app_logger.warning("ANT+ USB interface unavailable after controller setup")
+
     async def quit(self):
         self.status_quit = True
+        if self._bridge_recovery_task is not None:
+            self._bridge_recovery_task.cancel()
+            await asyncio.gather(self._bridge_recovery_task, return_exceptions=True)
         self.sensor_i2c.quit()
+        if self.control_uart is not None:
+            await self.control_uart.quit()
         self.sensor_ant.quit()
         self.sensor_ble.quit()
         await self.sensor_gps.quit()

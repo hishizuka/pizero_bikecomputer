@@ -115,6 +115,7 @@ class SensorANT(Sensor):
     def sensor_init(self):
         self._init_runtime_state()
         self._init_transport_disconnect_state()
+        self.requested_enabled = self.config.G_ANT["STATUS"]
 
         if self.config.G_ANT["STATUS"] and not _SENSOR_ANT:
             self.config.G_ANT["STATUS"] = False
@@ -219,6 +220,8 @@ class SensorANT(Sensor):
     def _create_node(self):
         try:
             self.node = Node()
+            if self.config.board_preset.uart_sensor_bridge:
+                self.node.ant.reset_system()
             self._register_transport_disconnect_callback()
             self.node.set_network_key(self.NETWORK_NUM, self.NETWORK_KEY)
             return True
@@ -269,6 +272,10 @@ class SensorANT(Sensor):
             and self.node is not None
             and not self.transport_disconnected
         )
+
+    def reconnect_if_requested(self):
+        if self.requested_enabled and not self.is_transport_available():
+            self.enable_ant()
 
     def is_sensor_available(self, ant_name):
         if self.config.G_DUMMY_OUTPUT and not self.config.G_ANT["STATUS"]:
@@ -344,6 +351,7 @@ class SensorANT(Sensor):
                 pass
 
     def enable_ant(self):
+        self.requested_enabled = True
         if self.is_transport_available():
             return True
 
@@ -376,6 +384,7 @@ class SensorANT(Sensor):
         return True
 
     def disable_ant(self, reason="user"):
+        self.requested_enabled = False
         if self.node is not None and not self.transport_disconnected:
             try:
                 if self.scanner is not None:
@@ -436,6 +445,11 @@ class SensorANT(Sensor):
                 dv.ant_state = "quit"
                 dv.disconnect(isCheck=True, isChange=False)  # USE: True -> True
             self.searcher.stop_search(resetWait=False)
+        if self.config.board_preset.uart_sensor_bridge:
+            try:
+                self.node.ant.reset_system()
+            except Exception as exc:
+                app_logger.warning("ANT+ reset on quit failed: %s", exc)
         self.node.stop()
 
     def connect_ant_sensor(self, antName, antID, antType, connectStatus):

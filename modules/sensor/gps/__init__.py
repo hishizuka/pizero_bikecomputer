@@ -1,10 +1,12 @@
 from modules.app_logger import app_logger
 
 
-def get_sensor_gps_class(dummy=False):
+def get_sensor_gps_class(dummy=False, bridge=False):
     sensor_gps = None
     sensor_detail = ""
-    if not dummy:
+    if not dummy and bridge:
+        sensor_gps, sensor_detail = _detect_ublox(bridge=True)
+    elif not dummy:
         from .i2c_cxd56xx import _SENSOR_GPS_CXD56XX, CXD56xx_GPS
 
         if _SENSOR_GPS_CXD56XX:
@@ -24,11 +26,19 @@ def get_sensor_gps_class(dummy=False):
     return sensor_gps
 
 
-def _detect_ublox():
+def _detect_ublox(bridge=False):
     try:
         from .ublox_support.transport import detect_sensor_ublox
     except ModuleNotFoundError:
         return None, ""
+
+    if bridge:
+        from .ublox import UBlox, _UBLOX_IMPORT_ERROR
+
+        if _UBLOX_IMPORT_ERROR is not None:
+            return None, ""
+        UBlox.detected_uart_device = "/dev/ttyGPS"
+        return UBlox, ""
 
     detected, uart_device = detect_sensor_ublox()
     if not detected:

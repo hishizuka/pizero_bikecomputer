@@ -272,10 +272,11 @@ class SensorI2C(Sensor):
         self._mag_declination_fetch_started = False
         self._mag_declination_cache = self._load_mag_declination_cache()
 
-        if not _SENSOR_I2C:
+        if self.config.board_preset.uart_sensor_bridge:
+            self.sensor_label["MAG"] = "BMM150"
+        elif not _SENSOR_I2C:
             return
-
-        if self.config.board_preset.i2c_sensors is None:
+        elif self.config.board_preset.i2c_sensors is None:
             self.detect_sensors()
             self.set_sensors()
         else:

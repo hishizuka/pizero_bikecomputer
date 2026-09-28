@@ -7,6 +7,7 @@ class BoardType(StrEnum):
     AUTO = "auto"
     PIZERO_BIKECOMPUTER = "pizero_bikecomputer"
     BRYTON_RIDER_S800 = "bryton_rider_s800"
+    BRYTON_RIDER_S800_BRIDGE = "bryton_rider_s800_bridge"
 
 
 class ButtonTemplate(StrEnum):
@@ -63,6 +64,11 @@ class BoardPreset:
     display: DisplayPreset | None = None
     use_buzzer: bool = False
     dual_display_mode: bool = False
+    uart_sensor_bridge: bool = False
+    control_profile: str | None = None
+    control_uart_rtscts: bool = False
+    nrf_reset_gpio: int | None = None
+    nrf_reset_gpiochip: str = "/dev/gpiochip4"
 
 
 _S800_IMU_AXIS = IMUAxisPreset(
@@ -111,6 +117,25 @@ BOARD_PRESETS: dict[BoardType, BoardPreset] = {
         gpio_buttons=GPIOButtonPreset(
             template=ButtonTemplate.FOUR_BUTTON,
             pins={"A": 23, "B": 4, "C": 26, "D": 16},
+        ),
+        imu_axis=_S800_IMU_AXIS,
+        display=_BACKLIT_DISPLAY,
+        use_buzzer=True,
+    ),
+    BoardType.BRYTON_RIDER_S800_BRIDGE: BoardPreset(
+        i2c_sensors=(),
+        uart_sensor_bridge=True,
+        control_profile="s800",
+        nrf_reset_gpio=26,
+        gpio_buttons=GPIOButtonPreset(
+            template=ButtonTemplate.FOUR_BUTTON,
+            pins={"A": 23, "B": 4, "C": 21, "D": 20},
+            overrides={
+                "MAIN": {"A": ("scroll_prev", "open_quick_actions")},
+                "MAP": {"A": ("scroll_prev", "open_quick_actions")},
+                "COURSE_PROFILE": {"A": ("scroll_prev", "open_quick_actions")},
+                "MENU": {"A": ("press_shift_tab", "open_quick_actions")},
+            },
         ),
         imu_axis=_S800_IMU_AXIS,
         display=_BACKLIT_DISPLAY,

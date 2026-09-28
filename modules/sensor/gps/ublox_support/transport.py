@@ -8,6 +8,7 @@ UART_BAUDRATE = 115200
 UART_DEFAULT_BAUDRATE = 9600
 UART_AUTO_DETECT_DEVICES = ("/dev/serial0", "/dev/ttyS0", "/dev/ttyAMA0")
 UART_DETECT_TIMEOUT = 2.0
+UART_OPEN_SETTLE_DELAY = 0.25
 UART_BAUDRATE_SWITCH_DELAY = 0.1
 I2C_BUS = 1
 I2C_ADDRESS = 0x42
@@ -55,7 +56,7 @@ def retry_i2c_remote_io(func, *args):
             time.sleep(I2C_TRANSFER_RETRY_DELAY * (attempt + 1))
 
 
-def has_valid_ubx_frame(buffer):
+def has_valid_ubx_frame(buffer, message=None, key=None):
     start = 0
     while True:
         index = buffer.find(b"\xb5\x62", start)
@@ -76,12 +77,14 @@ def has_valid_ubx_frame(buffer):
             ck_a = (ck_a + value) & 0xFF
             ck_b = (ck_b + ck_a) & 0xFF
         if ck_a == buffer[frame_end - 2] and ck_b == buffer[frame_end - 1]:
-            return True
+            if message is None or buffer[index + 2 : index + 4] == message:
+                if key is None or buffer[index + 10 : index + 14] == key:
+                    return True
 
         start = index + 2
 
 
-def _uart_responds(device, baudrate):
+def _uart_responds(device, baudrate, require_cfg_response=False):
     poll_cfg_rate_nav = UBXMessage.config_poll(
         POLL_LAYER_RAM,
         0,
@@ -94,12 +97,17 @@ def _uart_responds(device, baudrate):
             timeout=READ_TIMEOUT,
             write_timeout=0.5,
         ) as gps:
+            time.sleep(UART_OPEN_SETTLE_DELAY)
             gps.write(poll_cfg_rate_nav)
             buffer = bytearray()
             end_time = time.monotonic() + UART_DETECT_TIMEOUT
             while time.monotonic() < end_time:
                 buffer.extend(gps.read(256))
-                if has_valid_ubx_frame(buffer):
+                if has_valid_ubx_frame(
+                    buffer,
+                    message=b"\x06\x8b" if require_cfg_response else None,
+                    key=poll_cfg_rate_nav[10:14] if require_cfg_response else None,
+                ):
                     return True
     except Exception:
         pass
@@ -119,6 +127,7 @@ def _set_uart_baudrate(device, current_baudrate):
             timeout=READ_TIMEOUT,
             write_timeout=0.5,
         ) as gps:
+            time.sleep(UART_OPEN_SETTLE_DELAY)
             gps.write(set_baudrate)
             gps.flush()
         time.sleep(UART_BAUDRATE_SWITCH_DELAY)
@@ -127,16 +136,21 @@ def _set_uart_baudrate(device, current_baudrate):
         return False
 
 
-def detect_uart_ublox_device():
-    for device in UART_AUTO_DETECT_DEVICES:
-        if _uart_responds(device, UART_BAUDRATE):
+def detect_uart_ublox_device(bridge=False):
+    devices = ("/dev/ttyGPS",) if bridge else UART_AUTO_DETECT_DEVICES
+    fallback_baudrates = (
+        (38400, UART_DEFAULT_BAUDRATE) if bridge else (UART_DEFAULT_BAUDRATE,)
+    )
+    for device in devices:
+        if _uart_responds(device, UART_BAUDRATE, require_cfg_response=bridge):
             return device
-        if not _uart_responds(device, UART_DEFAULT_BAUDRATE):
-            continue
-        if not _set_uart_baudrate(device, UART_DEFAULT_BAUDRATE):
-            continue
-        if _uart_responds(device, UART_BAUDRATE):
-            return device
+        for baudrate in fallback_baudrates:
+            if not _uart_responds(device, baudrate, require_cfg_response=bridge):
+                continue
+            if not _set_uart_baudrate(device, baudrate):
+                continue
+            if _uart_responds(device, UART_BAUDRATE, require_cfg_response=bridge):
+                return device
     return None
 
 
@@ -149,10 +163,12 @@ def detect_i2c_ublox():
         return False
 
 
-def detect_sensor_ublox():
-    uart_device = detect_uart_ublox_device()
+def detect_sensor_ublox(bridge=False):
+    uart_device = detect_uart_ublox_device(bridge=bridge)
     if uart_device:
         return True, uart_device
+    if bridge:
+        return False, None
     return detect_i2c_ublox(), None
 
 

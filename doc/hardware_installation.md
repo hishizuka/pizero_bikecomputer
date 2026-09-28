@@ -255,7 +255,7 @@ The software side handles GPIO buttons in `modules/button_config.py`. Common act
 
 Display-attached GPIO pins are defined in `gpio_buttons` (`PiTFT`, `Papirus`, `DFRobot_RPi_Display`, `Pirate_Audio`, `Pirate_Audio_old`, `Display_HAT_Mini`). Direct GPIO buttons on supported boards are defined by `GPIOButtonPreset` in `modules/board_config.py`. The pin map assigns logical template buttons such as `"A"`/`"B"`/`"C"` to BCM GPIO numbers.
 
-Select `auto`, `pizero_bikecomputer`, or `bryton_rider_s800` with the `board` key in the `GENERAL` section of `setting.conf`. Add new board hardware definitions to `BOARD_PRESETS`.
+Select `auto`, `pizero_bikecomputer`, `bryton_rider_s800`, or `bryton_rider_s800_bridge` with the `board` key in the `GENERAL` section of `setting.conf`. Add new board hardware definitions to `BOARD_PRESETS`.
 
 Use `OVERRIDES` in `button_profile_defs` only for button actions that differ from the selected template. Override entries are merged into the generated profile, so keys omitted from `OVERRIDES` keep the template defaults.
 

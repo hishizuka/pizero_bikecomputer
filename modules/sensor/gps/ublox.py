@@ -72,6 +72,7 @@ try:
             I2C_BUS as _I2C_BUS,
             READ_TIMEOUT as _READ_TIMEOUT,
             UART_BAUDRATE as _UART_BAUDRATE,
+            detect_uart_ublox_device,
             is_interrupted_system_call as _is_interrupted_system_call,
             retry_interrupted_system_call as _retry_interrupted_system_call,
         )
@@ -101,6 +102,7 @@ try:
             I2C_BUS as _I2C_BUS,
             READ_TIMEOUT as _READ_TIMEOUT,
             UART_BAUDRATE as _UART_BAUDRATE,
+            detect_uart_ublox_device,
             is_interrupted_system_call as _is_interrupted_system_call,
             retry_interrupted_system_call as _retry_interrupted_system_call,
         )
@@ -139,12 +141,15 @@ class UBlox(AbstractSensorGPS):
                 f"{_UBLOX_IMPORT_ERROR.name}"
             ) from _UBLOX_IMPORT_ERROR
         self.uart_device = self.detected_uart_device
+        self._bridge_gps = self.config.board_preset.uart_sensor_bridge
+        self._bridge_needs_detect = self._bridge_gps
         self.transport = None
         self.transport_type = None
         self._reader = None
         self._write_queue = queue.Queue()
         self._read_loop_active = False
         self._transport_open_time = None
+        self._last_ubx_receive_time = None
         self._dop = (99.0, 99.0, 99.0)
         self._used_sats = 0
         self._total_sats = 0
@@ -199,6 +204,13 @@ class UBlox(AbstractSensorGPS):
     async def update(self):
         while not self.quit_status:
             try:
+                if self._bridge_gps and self._bridge_needs_detect:
+                    self.uart_device = await asyncio.to_thread(
+                        detect_uart_ublox_device, True
+                    )
+                    if self.uart_device is None:
+                        raise ConnectionError("GPS bridge is unavailable")
+                    self._bridge_needs_detect = False
                 self._open_transport()
                 self._configure_receiver()
                 await self._read_loop()
@@ -234,6 +246,7 @@ class UBlox(AbstractSensorGPS):
             app_logger.info(f"[UBlox] connected via {self._transport_name()}")
             self._reset_receiver_state()
             self._transport_open_time = time.monotonic()
+            self._last_ubx_receive_time = self._transport_open_time
         except Exception:
             self._close_transport()
             raise
@@ -253,8 +266,13 @@ class UBlox(AbstractSensorGPS):
             self.transport_type = None
             self.receiver_info["transport"] = None
             self._transport_open_time = None
+            self._last_ubx_receive_time = None
             self._clear_write_queue(RuntimeError("receiver transport is closed"))
             self._reset_receiver_state()
+            if self._bridge_gps:
+                self._bridge_needs_detect = True
+                self.init_values()
+                self.values["heading_gps_timestamp"] = None
 
     def _reset_receiver_state(self):
         self._raw_mon_ver = None
@@ -877,8 +895,14 @@ class UBlox(AbstractSensorGPS):
                 await self._drain_write_queue()
                 raw, parsed = await asyncio.to_thread(self._read_transport)
                 if parsed is not None:
+                    self._last_ubx_receive_time = time.monotonic()
                     await self._handle_reader_message(raw, parsed)
                 else:
+                    if (
+                        self._bridge_gps
+                        and time.monotonic() - self._last_ubx_receive_time > 15.0
+                    ):
+                        raise TimeoutError("GPS bridge stopped receiving UBX")
                     await asyncio.sleep(_POLL_INTERVAL)
         finally:
             self._read_loop_active = False
