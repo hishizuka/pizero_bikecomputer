@@ -65,6 +65,14 @@ class BoardPreset:
     dual_display_mode: bool = False
 
 
+_S800_IMU_AXIS = IMUAxisPreset(
+    axis_conversion_status=True,
+    axis_conversion_coef=(1.0, 1.0, -1.0),
+    mag_axis_conversion_status=True,
+    mag_axis_conversion_coef=(1.0, -1.0, 1.0),
+)
+_BACKLIT_DISPLAY = DisplayPreset(use_backlight=True, auto_backlight_cutoff=2)
+
 BOARD_PRESETS: dict[BoardType, BoardPreset] = {
     BoardType.AUTO: BoardPreset(i2c_sensors=None),
     BoardType.PIZERO_BIKECOMPUTER: BoardPreset(
@@ -89,10 +97,7 @@ BOARD_PRESETS: dict[BoardType, BoardPreset] = {
             mag_axis_conversion_status=True,
             mag_axis_conversion_coef=(1.0, 1.0, -1.0),
         ),
-        display=DisplayPreset(
-            use_backlight=True,
-            auto_backlight_cutoff=2,
-        ),
+        display=_BACKLIT_DISPLAY,
         use_buzzer=True,
         dual_display_mode=True,
     ),
@@ -107,18 +112,8 @@ BOARD_PRESETS: dict[BoardType, BoardPreset] = {
             template=ButtonTemplate.FOUR_BUTTON,
             pins={"A": 23, "B": 4, "C": 26, "D": 16},
         ),
-        imu_axis=IMUAxisPreset(
-            axis_swap_xy_status=False,
-            axis_conversion_status=False,
-            axis_conversion_coef=(1.0, 1.0, -1.0),
-            mag_axis_swap_xy_status=False,
-            mag_axis_conversion_status=True,
-            mag_axis_conversion_coef=(1.0, -1.0, 1.0),
-        ),
-        display=DisplayPreset(
-            use_backlight=True,
-            auto_backlight_cutoff=2,
-        ),
+        imu_axis=_S800_IMU_AXIS,
+        display=_BACKLIT_DISPLAY,
         use_buzzer=True,
     ),
 }
