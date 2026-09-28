@@ -814,6 +814,10 @@ class SensorProtocolMenuWidget(MenuWidget):
 
     def preprocess(self, sensor_role=None):
         self.sensor_role = sensor_role
+        self.refresh_sensor_state()
+
+    def refresh_sensor_state(self):
+        sensor_role = self.sensor_role
         self.buttons[self.ANT_BUTTON].setEnabled(
             bool(
                 sensor_role
@@ -832,21 +836,16 @@ class SensorProtocolMenuWidget(MenuWidget):
                     break
 
     def open_ant_pairing(self):
-        if self.sensor_role is None or not self.buttons[self.ANT_BUTTON].isEnabled():
-            return
-        self.change_page(
-            "Pair ANT+ Sensor",
-            preprocess=True,
-            reset=True,
-            list_type=self.sensor_role,
-            paired_return_page=self.back_index_key,
-        )
+        self._open_pairing(self.ANT_BUTTON, "Pair ANT+ Sensor")
 
     def open_ble_pairing(self):
-        if self.sensor_role is None or not self.buttons[self.BLE_BUTTON].isEnabled():
+        self._open_pairing(self.BLE_BUTTON, "Pair BLE Sensor")
+
+    def _open_pairing(self, button, page):
+        if self.sensor_role is None or not self.buttons[button].isEnabled():
             return
         self.change_page(
-            "Pair BLE Sensor",
+            page,
             preprocess=True,
             reset=True,
             list_type=self.sensor_role,
@@ -854,15 +853,24 @@ class SensorProtocolMenuWidget(MenuWidget):
         )
 
 
-class ANTListWidget(ListWidget):
+class SensorPairingListWidget(ListWidget):
     def __init__(self, parent, page_name, config):
-        self.ant_sensor_types = {}
         self.paired_return_page = None
         super().__init__(parent, page_name, config)
 
     def preprocess(self, **kwargs):
         self.paired_return_page = kwargs.pop("paired_return_page", None)
         super().preprocess(**kwargs)
+
+    def on_back_menu(self):
+        index = self.config.gui.gui_config.G_GUI_INDEX[self.back_index_key]
+        self.parentWidget().widget(index).refresh_sensor_state()
+
+
+class ANTListWidget(SensorPairingListWidget):
+    def __init__(self, parent, page_name, config):
+        self.ant_sensor_types = {}
+        super().__init__(parent, page_name, config)
 
     def setup_menu(self):
         super().setup_menu()
@@ -900,16 +908,7 @@ class ANTListWidget(ListWidget):
         self.timer.stop()
         if self.sensor_ant.is_transport_available():
             self.sensor_ant.searcher.stop_search()
-        # button update
-        back_index_key = self.back_index_key
-        gui_index = self.config.gui.gui_config.G_GUI_INDEX
-        if back_index_key in gui_index:
-            index = gui_index[back_index_key]
-            self.parentWidget().widget(index).refresh_sensor_state()
-        else:
-            app_logger.warning(
-                f"on_back_menu skipped update: back_index_key {back_index_key} missing in G_GUI_INDEX"
-            )
+        super().on_back_menu()
 
     def preprocess_extra(self):
         if not self.sensor_ant.is_transport_available():
@@ -964,12 +963,11 @@ class ANTListItemWidget(FullWidthSeparatorListItemWidget):
         self.right_icon.hover(self.selected or self.hasFocus())
 
 
-class BLEListWidget(ListWidget):
+class BLEListWidget(SensorPairingListWidget):
     SCAN_TIMEOUT = 10.0
 
     def __init__(self, parent, page_name, config):
         self.candidates = {}
-        self.paired_return_page = None
         self.scan_task = None
         self.scan_generation = 0
         super().__init__(parent, page_name, config)
@@ -979,10 +977,6 @@ class BLEListWidget(ListWidget):
         self.list.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
         self.search_indicator = ConnectionStatusIndicator(parent=self)
         self.right_button_layout.addWidget(self.search_indicator)
-
-    def preprocess(self, **kwargs):
-        self.paired_return_page = kwargs.pop("paired_return_page", None)
-        super().preprocess(**kwargs)
 
     def preprocess_extra(self):
         self.cancel_scan()
@@ -1054,12 +1048,7 @@ class BLEListWidget(ListWidget):
         self.scan_generation += 1
         self.cancel_scan()
         self.search_indicator.set_status(None)
-        back_index_key = self.back_index_key
-        gui_index = self.config.gui.gui_config.G_GUI_INDEX
-        if back_index_key not in gui_index:
-            return
-        widget = self.parentWidget().widget(gui_index[back_index_key])
-        widget.refresh_sensor_state()
+        super().on_back_menu()
 
 
 class BLEListItemWidget(FullWidthSeparatorListItemWidget):
