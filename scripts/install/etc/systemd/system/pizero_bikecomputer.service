@@ -4,6 +4,7 @@
 Description=PizeroBikecomputer
 #Requires=gpsd.service
 #After=gpsd.service local-fs.target
+@AFTER@
 
 [Service]
 WorkingDirectory=
@@ -20,6 +21,8 @@ Restart=no
 StandardOutput=
 #StandardOutput=journal
 StandardError=inherit
+
+@ENVIRONMENT@
 
 [Install]
 WantedBy=multi-user.target

@@ -321,7 +321,7 @@ For `MIP_*` displays there are currently three practical paths:
 
 - legacy pigpio backend
 - legacy spidev + libgpiod backend
-- the newer `sharp-drm` framebuffer driver (`QT_QPA_PLATFORM=linuxfb:fb=/dev/fb1`)
+- the newer `sharp-drm` framebuffer driver (`QT_QPA_PLATFORM=linuxfb:fb=/dev/fb0`)
 
 `install.sh` enables SPI and installs libgpiod packages, but it does not install pigpio automatically.
 If you want to keep using the legacy pigpio backend on Raspberry Pi OS Trixie, install pigpio manually:
@@ -339,7 +339,23 @@ $ sudo systemctl start pigpiod
 ```
 
 If you use the newer `sharp-drm` driver, pigpio is not needed.
-In that case run the application with `QT_QPA_PLATFORM=linuxfb:fb=/dev/fb1`.
+The recommended PyQt/linuxfb setup uses one MIP framebuffer, `/dev/fb0`.
+Set `max_framebuffers=0` in `/boot/firmware/config.txt` to omit the firmware
+framebuffer, and keep `enable_uart=1` when UART hardware is used. In the single-line
+`/boot/firmware/cmdline.txt`, keep `console=tty1` and use `fbcon=map:9` to keep the
+kernel console off the MIP display and the UART. Remove any `console=` token
+that selects the GPS or nRF52840 UART, such as `console=serial0,115200`.
+Run the application with
+`QT_QPA_PLATFORM=linuxfb:fb=/dev/fb0`.
+
+`install.sh` selects `/dev/fb0` for linuxfb services. It does not install
+`sharp-drm` or configure these framebuffer boot settings; complete the
+[MIP boot display setup](../scripts/boot/splashasm/SETUP.md) before rebooting.
+Leave HDMI detection automatic and do not add `video=HDMI-A-1:640x480@60D` for
+this software rendering setup. The boot image script activates `/dev/fb0` directly
+with `FBIOBLANK`; no extra framebuffer, udev alias, or `con2fbmap` is needed.
+Verify that `/proc/fb` contains only `0 sharp_drmdrmfb` and
+`/sys/class/graphics/fb0/name` contains `sharp_drmdrmfb`.
 
 #### Display HAT Mini, Pirate Audio
 
@@ -567,7 +583,8 @@ see [hardware_installation_pitft.md](./hardware_installation_pitft.md#run-on-x-w
 ## Run in console
 
 For legacy MIP / SHARP / E-ink displays in console mode, use `QT_QPA_PLATFORM=offscreen`.
-If you use the newer `sharp-drm` driver, use `QT_QPA_PLATFORM=linuxfb:fb=/dev/fb1`.
+If you use the newer `sharp-drm` driver, use `QT_QPA_PLATFORM=linuxfb:fb=/dev/fb0`
+with the single-framebuffer setup described in [Display](#display).
 
 If your Qt build includes the VNC platform plugin, `QT_QPA_PLATFORM=vnc` can still be used for temporary remote debugging, but it is not a primary workflow for this project.
 
@@ -584,7 +601,7 @@ Before running the program, choose one of the following platform plugins:
 $ QT_QPA_PLATFORM=offscreen python3 pizero_bikecomputer.py
 
 # sharp-drm framebuffer driver
-$ QT_QPA_PLATFORM=linuxfb:fb=/dev/fb1 python3 pizero_bikecomputer.py
+$ QT_QPA_PLATFORM=linuxfb:fb=/dev/fb0 python3 pizero_bikecomputer.py
 ```
 
 `ctrl + c` to exit the application.
@@ -601,7 +618,9 @@ The current service template lives at `scripts/install/etc/systemd/system/pizero
 and the recommended way is to run `install.sh` and answer `Install services? -> y`.
 
 `install.sh` fills the placeholders in the template, installs `rotate_debug_log.sh`,
-and enables `pizero_bikecomputer.service` automatically.
+and enables `pizero_bikecomputer.service` automatically. The display mode is selected
+once during installation, and its environment variables are written directly to
+`/etc/systemd/system/pizero_bikecomputer.service`.
 
 When SPI is enabled, the installer asks whether PWM0 (GPIO18) drives the backlight.
 It asks whether PWM1 (GPIO13) drives the buzzer regardless of SPI. It updates
@@ -631,6 +650,8 @@ as a template and fill at least:
 - `User`
 - `Group`
 - `StandardOutput`
+- `@AFTER@` (a dependency line or empty)
+- `@ENVIRONMENT@` (environment lines for the selected display and touch input)
 
 Then reload and start it as usual:
 

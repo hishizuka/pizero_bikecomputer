@@ -130,6 +130,13 @@ $ sudo udevadm trigger
 
 Then, run the program with the following environment variables:
 
+The example below assumes the PiTFT is `/dev/fb1` in a setup with another
+framebuffer. Check `/proc/fb` and `/sys/class/graphics/fb*/name` first; use
+`/dev/fb0` if the PiTFT is the only framebuffer. `install.sh` generates a linuxfb
+service using `/dev/fb0` by default. For a PiTFT on `/dev/fb1`, update its
+`QT_QPA_PLATFORM` line in `/etc/systemd/system/pizero_bikecomputer.service`, then
+run `sudo systemctl daemon-reload` and restart the service.
+
 ```
 $ export QT_QPA_PLATFORM=linuxfb:fb=/dev/fb1
 $ export QT_QPA_GENERIC_PLUGINS=libinput

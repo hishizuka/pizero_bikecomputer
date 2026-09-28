@@ -6,15 +6,12 @@ set -euo pipefail
 # 1. Creates a Python virtual environment, installs necessary
 #    packages, and prepares the system for running pizero_bikecomputer
 #    application.
-# 2. Be aware that this script will not install pizero_bikecomputer_service
-#    and it will not install sensor specific packages.
-# 3. It is intended to be run once, before pizero_bikecomputer_service
-#    is installed.
+# 2. Optionally installs pizero_bikecomputer.service and sensor packages.
 #
 # This script is based on the instructions from the pizero_bikecomputer
 # foud here: https://qiita.com/hishi/items/46619b271daaa9ad41b3
 #
-# Usage: ./scripts/initial_setup.sh
+# Usage: ./install.sh
 #
 #############################################################
 
@@ -188,17 +185,23 @@ if [[ "$enable_spi" == "true" ]]; then
 fi
 prompt_and_store "Use PWM1 (GPIO13) for the buzzer?" use_pwm_buzzer
 prompt_and_store "Install services?" install_services
-install_services_use_x=false
-install_services_use_sharp_drm=false
-install_services_use_pitft=false
 if [[ "$install_services" == "true" ]]; then
-    prompt_and_store "Use X Window (xcb) to start pizero_bikecomputer.service?" install_services_use_x
-    if [[ "$install_services_use_x" != "true" ]]; then
-        prompt_and_store "Use sharp-drm-driver (linuxfb)?" install_services_use_sharp_drm
-        if [[ "$install_services_use_sharp_drm" != "true" ]]; then
-            prompt_and_store "Use PiTFT (linuxfb)?" install_services_use_pitft
+    echo "Select service display:"
+    echo "  0) linuxfb (/dev/fb0; sharp-drm-driver or PiTFT)"
+    echo "  1) Offscreen"
+    echo "  2) X Window (xcb)"
+    echo "  q) Quit installer"
+    while true; do
+        if ! read -rp "Choose display [0/1/2/q]: " service_display; then
+            echo "Input closed. Exiting installer."
+            exit 1
         fi
-    fi
+        case "$service_display" in
+            0|1|2) break ;;
+            q|Q|quit|QUIT) echo "👋 Quitting...bye!"; exit 0 ;;
+            *) echo "Invalid input. Please choose 0, 1, 2, or q." ;;
+        esac
+    done
 fi
 set -e
 TARGET_USER="${SUDO_USER:-${LOGNAME:-$USER}}"
@@ -515,22 +518,30 @@ if [[ "$install_services" == "true" ]]; then
     echo "No virtualenv used/activated. Default python will be used"
     fi
 
-    if [[ "$install_services_use_x" == "true" ]]; then
-        # add fullscreen option
-        script="$script -f"
-        envs="Environment=\"QT_QPA_PLATFORM=xcb\"\\nEnvironment=\"DISPLAY=:0\"\\nEnvironment=\"XAUTHORITY=/home/$TARGET_USER/.Xauthority\"\\n"
-        after="After=display-manager.service\\n"
-    elif [[ "$install_services_use_sharp_drm" == "true" ||
-            "$install_services_use_pitft" == "true" ]]; then
-        # DRM / PiTFT
-        envs="Environment=\"QT_QPA_PLATFORM=linuxfb:fb=/dev/fb1\"\\n"
-        envs+="Environment=\"QT_QPA_FB_HIDECURSOR=1\"\\n"
-        # and add vt.global_cursor_default=0 fbcon=map:0 or 1(map console with /dev/fbX)
-        after=""
-    else
-        envs="Environment=\"QT_QPA_PLATFORM=offscreen\"\\n"
-        after=""
-    fi
+    after=""
+    case "$service_display" in
+        2)
+            script="$script -f"
+            after="After=display-manager.service"
+            service_envs=(
+                'Environment="QT_QPA_PLATFORM=xcb"'
+                'Environment="DISPLAY=:0"'
+                "Environment=\"XAUTHORITY=/home/$TARGET_USER/.Xauthority\""
+            )
+            ;;
+        0)
+            service_envs=(
+                'Environment="QT_QPA_PLATFORM=linuxfb:fb=/dev/fb0"'
+                'Environment="QT_QPA_FB_HIDECURSOR=1"'
+            )
+            ;;
+        1)
+            service_envs=('Environment="QT_QPA_PLATFORM=offscreen"')
+            ;;
+    esac
+
+    printf -v envs '%s\n' "${service_envs[@]}"
+    envs="${envs%$'\n'}"
 
     if [ -f "$i_service_file" ]; then
         content=$(<"$i_service_file")
@@ -542,13 +553,10 @@ if [[ "$install_services" == "true" ]]; then
         content="${content/Group=/Group=$TARGET_USER}"
         content="${content/StandardOutput=/StandardOutput=append:$log_file}"
 
-        # inject environment variables
-        content=$(echo "$content" | sed "/\[Install\]/i $envs")
-
-        if [[ -n "$after" ]]; then
-            content=$(echo "$content" | sed "/\[Service\]/i $after")
-        fi
-        echo "$content" | sudo tee $o_service_file > /dev/null
+        content="${content/@AFTER@/$after}"
+        content="${content/@ENVIRONMENT@/$envs}"
+        printf '%s\n' "$content" | sudo tee "$o_service_file" > /dev/null
+        sudo systemctl daemon-reload
         sudo systemctl enable pizero_bikecomputer
     fi
 
@@ -556,8 +564,8 @@ if [[ "$install_services" == "true" ]]; then
         content=$(<"$i_post_exec_file")
         content="${content/LOG=/LOG=$log_file}"
 
-        echo "$content" | sudo tee $o_post_exec_file > /dev/null
-        chown $TARGET_USER:$TARGET_USER
+        printf '%s\n' "$content" | sudo tee "$o_post_exec_file" > /dev/null
+        sudo chmod 755 "$o_post_exec_file"
     fi
 
 fi
