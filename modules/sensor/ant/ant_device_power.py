@@ -3,7 +3,7 @@ from datetime import datetime
 import math
 
 from modules.app_logger import app_logger
-from modules.sensor.cycling_sensor import (
+from modules.utils.cycling_sensor import (
     MAX_CADENCE_RPM,
     MAX_POWER_WATTS,
     MAX_SPEED_MPS,

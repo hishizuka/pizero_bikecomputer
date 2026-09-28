@@ -5,7 +5,7 @@ import time
 from collections import deque
 from dataclasses import asdict, dataclass
 
-from modules.sensor.cycling_sensor import SensorConnectionStatus
+from modules.utils.cycling_sensor import SensorConnectionStatus
 
 
 def _percentile(values: list[float], percentile: float) -> float:

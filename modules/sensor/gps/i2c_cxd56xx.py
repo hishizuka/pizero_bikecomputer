@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from modules.app_logger import app_logger
 from .base import AbstractSensorGPS
-from ..i2c_utils import i2c_addr_present as _i2c_addr_present
+from ..i2c.detection import i2c_addr_present as _i2c_addr_present
 
 _SENSOR_GPS_CXD56XX = False
 

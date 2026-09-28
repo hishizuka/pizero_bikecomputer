@@ -7,7 +7,7 @@ import math
 import time
 from typing import Protocol
 
-from modules.sensor.cycling_sensor import (
+from modules.utils.cycling_sensor import (
     MAX_CADENCE_RPM,
     MAX_SPEED_MPS,
     REVOLUTION_SPIKE_THRESHOLD,

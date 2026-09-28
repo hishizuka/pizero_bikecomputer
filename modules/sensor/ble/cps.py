@@ -7,7 +7,7 @@ import math
 import time
 from typing import Protocol
 
-from modules.sensor.cycling_sensor import (
+from modules.utils.cycling_sensor import (
     MAX_POWER_WATTS,
     POWER_SPIKE_THRESHOLD,
     MetricReading,

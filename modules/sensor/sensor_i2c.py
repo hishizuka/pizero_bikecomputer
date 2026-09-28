@@ -13,7 +13,7 @@ from modules.helper.network.http_client import get_json
 from modules.utils.altitude import TOTAL_ASCENT_THRESHOLD, update_altitude_reference
 from modules.utils.geo import get_dist_on_earth
 from .sensor import Sensor
-from .i2c_utils import i2c_addr_present as _i2c_addr_present
+from .i2c.detection import i2c_addr_present as _i2c_addr_present
 
 # I2C
 _SENSOR_I2C = False

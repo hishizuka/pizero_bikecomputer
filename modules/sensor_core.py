@@ -7,7 +7,7 @@ import numpy as np
 import psutil
 
 from modules.app_logger import app_logger
-from modules.sensor.performance_metrics import (
+from modules.utils.performance_metrics import (
     NP_WINDOW_SIZE_DEFAULT,
     calc_form_metrics as perf_calc_form_metrics,
     calc_w_prime_balance as perf_calc_w_prime_balance,
@@ -25,13 +25,13 @@ from modules.utils.wind import (
     get_wind_impact,
 )
 from .sensor.gps import get_sensor_gps_class
-from .sensor.gps_position_quality import (
+from .sensor.gps.position_quality import (
     DistanceSource,
     GPSPositionQuality,
     GPSPositionQualityReason,
     GPSPositionQualityState,
 )
-from .sensor.heading_fusion import HeadingFusion
+from .utils.heading_fusion import HeadingFusion
 from .sensor.sensor_ant import SensorANT
 from .sensor.sensor_ble import SensorBLE
 from .sensor.sensor_gpio import SensorGPIO

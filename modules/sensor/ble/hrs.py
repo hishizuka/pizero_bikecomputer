@@ -7,7 +7,7 @@ import math
 import time
 from typing import Protocol
 
-from modules.sensor.cycling_sensor import MetricReading, SensorConnectionStatus
+from modules.utils.cycling_sensor import MetricReading, SensorConnectionStatus
 
 from .health import BleMeasurementProcessor, BleSessionHealth
 

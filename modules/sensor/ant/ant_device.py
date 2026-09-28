@@ -2,7 +2,7 @@ import struct
 from datetime import datetime
 
 from modules.app_logger import app_logger
-from modules.sensor.cycling_sensor import (
+from modules.utils.cycling_sensor import (
     MAX_CADENCE_RPM,
     POWER_SPIKE_THRESHOLD,
     SPEED_SPIKE_THRESHOLD,
