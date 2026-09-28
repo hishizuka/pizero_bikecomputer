@@ -24,8 +24,9 @@
 #define BHI360_META_EVENT_INTERNAL_STATUS 20U
 #define BHI3_SENSOR_PRIMARY_RATE_HZ 50.0f
 #define BHI3_SENSOR_FALLBACK_RATE_HZ 50.0f
+#define BHI3_PRESSURE_PRIMARY_RATE_HZ 45.0f
+#define BHI3_PRESSURE_FALLBACK_RATE_HZ 40.0f
 #define BHI3_WINDOW_NS UINT64_C(1000000000)
-#define PRESSURE_EMA_ALPHA_50HZ 0.02f /* tau=0.88s at 50Hz */
 #define HEADING_EMA_ALPHA_50HZ 0.0487705755f /* tau=0.4s at 50Hz */
 #define TILT_EMA_ALPHA_50HZ 0.0487705755f /* tau=0.4s at 50Hz */
 #define BHI3_MAG_RANGE_UT 2000.0f
@@ -143,7 +144,9 @@ static int8_t bhi3_s_save_param_to_file(uint16_t param_id, const char *path, con
 static void bhi3_s_restore_calibration_profiles(void);
 static void bhi3_s_try_save_calibration_profile(uint8_t phys_sensor_id, uint8_t accuracy);
 static int8_t bhi3_s_set_sensor_rate_with_fallback(uint8_t sensor_id,
-                                                   struct bhi360_virtual_sensor_conf_param_conf *sensor_conf);
+                                                   struct bhi360_virtual_sensor_conf_param_conf *sensor_conf,
+                                                   float primary_rate,
+                                                   float fallback_rate);
 
 typedef struct bhi3_s_acc_window_state
 {
@@ -182,8 +185,6 @@ static float last_roll = 0.0f;
 static bool roll_ema_initialized = false;
 static float roll_ema_sin = 0.0f;
 static float roll_ema_cos = 0.0f;
-static bool pressure_ema_initialized = false;
-static float pressure_ema_hpa = 0.0f;
 static bhi3_s_acc_window_state acc_window = { 0 };
 static bhi3_s_gyro_window_state gyro_window = { 0 };
 static uint8_t orientation_accuracy_state = 0U;
@@ -517,6 +518,7 @@ static int8_t bhi3_s_device_bootstrap(void)
     struct bhi360_virtual_sensor_conf_param_conf sensor_conf_temperature = { 0 };
     struct bhi360_virtual_sensor_conf_param_conf sensor_conf_pressure = { 0 };
     struct bhi360_virtual_sensor_conf_param_conf sensor_conf_humidity = { 0 };
+    bhi360_phy_sensor_ctrl_param_baro_type_2 baro_config = { 0 };
 
 #ifdef BHI3_USE_I2C
     intf = BHI360_I2C_INTERFACE;
@@ -775,14 +777,16 @@ static int8_t bhi3_s_device_bootstrap(void)
     }
     bhi3_s_log_info("Enable magnetic distortion events (wake-up and non-wake-up).\r\n");
 
-    rslt = bhi3_s_set_sensor_rate_with_fallback(BHI360_SENSOR_ID_ORI, &sensor_conf_euler);
+    rslt = bhi3_s_set_sensor_rate_with_fallback(BHI360_SENSOR_ID_ORI, &sensor_conf_euler,
+                                                BHI3_SENSOR_PRIMARY_RATE_HZ, BHI3_SENSOR_FALLBACK_RATE_HZ);
     if (rslt != BHI360_OK)
     {
         close_interfaces(intf);
         return rslt;
     }
 
-    rslt = bhi3_s_set_sensor_rate_with_fallback(BHI360_SENSOR_ID_ACC, &sensor_conf_acc);
+    rslt = bhi3_s_set_sensor_rate_with_fallback(BHI360_SENSOR_ID_ACC, &sensor_conf_acc,
+                                                BHI3_SENSOR_PRIMARY_RATE_HZ, BHI3_SENSOR_FALLBACK_RATE_HZ);
     if (rslt != BHI360_OK)
     {
         close_interfaces(intf);
@@ -796,21 +800,24 @@ static int8_t bhi3_s_device_bootstrap(void)
         return rslt;
     }
 
-    rslt = bhi3_s_set_sensor_rate_with_fallback(BHI360_SENSOR_ID_GRA, &sensor_conf_gravity);
+    rslt = bhi3_s_set_sensor_rate_with_fallback(BHI360_SENSOR_ID_GRA, &sensor_conf_gravity,
+                                                BHI3_SENSOR_PRIMARY_RATE_HZ, BHI3_SENSOR_FALLBACK_RATE_HZ);
     if (rslt != BHI360_OK)
     {
         close_interfaces(intf);
         return rslt;
     }
 
-    rslt = bhi3_s_set_sensor_rate_with_fallback(BHI360_SENSOR_ID_LACC, &sensor_conf_linear_acc);
+    rslt = bhi3_s_set_sensor_rate_with_fallback(BHI360_SENSOR_ID_LACC, &sensor_conf_linear_acc,
+                                                BHI3_SENSOR_PRIMARY_RATE_HZ, BHI3_SENSOR_FALLBACK_RATE_HZ);
     if (rslt != BHI360_OK)
     {
         close_interfaces(intf);
         return rslt;
     }
 
-    rslt = bhi3_s_set_sensor_rate_with_fallback(BHI360_SENSOR_ID_GYRO, &sensor_conf_gyro);
+    rslt = bhi3_s_set_sensor_rate_with_fallback(BHI360_SENSOR_ID_GYRO, &sensor_conf_gyro,
+                                                BHI3_SENSOR_PRIMARY_RATE_HZ, BHI3_SENSOR_FALLBACK_RATE_HZ);
     if (rslt != BHI360_OK)
     {
         close_interfaces(intf);
@@ -835,7 +842,21 @@ static int8_t bhi3_s_device_bootstrap(void)
     }
     bhi3_s_log_info("Enable %s at %.2fHz.\r\n", get_sensor_name(BHI360_SENSOR_ID_MAG), sensor_conf_mag.sample_rate);
 
-    rslt = bhi3_s_set_sensor_rate_with_fallback(BHI3_SENSOR_ID_PRESSURE, &sensor_conf_pressure);
+    baro_config.osr_p = 5;
+    baro_config.osr_t = 1;
+    baro_config.iir_filter_p = 6;
+    baro_config.iir_filter_t = 1;
+    baro_config.dsp_config = 0x2B; /* Compensated, IIR-filtered data registers. */
+    rslt = bhi360_phy_sensor_ctrl_param_baro_set_press_type_2_cfg(&baro_config, &bhy);
+    if (rslt != BHI360_OK)
+    {
+        bhi3_s_report_api_error(rslt, &bhy);
+        close_interfaces(intf);
+        return rslt;
+    }
+
+    rslt = bhi3_s_set_sensor_rate_with_fallback(BHI3_SENSOR_ID_PRESSURE, &sensor_conf_pressure,
+                                                BHI3_PRESSURE_PRIMARY_RATE_HZ, BHI3_PRESSURE_FALLBACK_RATE_HZ);
     if (rslt != BHI360_OK)
     {
         close_interfaces(intf);
@@ -1809,7 +1830,9 @@ static void bhi3_s_try_save_calibration_profile(uint8_t phys_sensor_id, uint8_t 
 }
 
 static int8_t bhi3_s_set_sensor_rate_with_fallback(uint8_t sensor_id,
-                                                   struct bhi360_virtual_sensor_conf_param_conf *sensor_conf)
+                                                   struct bhi360_virtual_sensor_conf_param_conf *sensor_conf,
+                                                   float primary_rate,
+                                                   float fallback_rate)
 {
     int8_t rslt;
 
@@ -1819,7 +1842,7 @@ static int8_t bhi3_s_set_sensor_rate_with_fallback(uint8_t sensor_id,
     }
 
     sensor_conf->latency = 0;
-    sensor_conf->sample_rate = BHI3_SENSOR_PRIMARY_RATE_HZ;
+    sensor_conf->sample_rate = primary_rate;
     rslt = bhi360_virtual_sensor_conf_param_set_cfg(sensor_id, sensor_conf, &bhy);
     if (rslt == BHI360_OK)
     {
@@ -1831,10 +1854,10 @@ static int8_t bhi3_s_set_sensor_rate_with_fallback(uint8_t sensor_id,
     bhi3_s_log_warning(
         "[BHI3] Failed to set %s at %.2fHz. Retrying %.2fHz.\n",
         get_sensor_name(sensor_id),
-        (double)BHI3_SENSOR_PRIMARY_RATE_HZ,
-        (double)BHI3_SENSOR_FALLBACK_RATE_HZ);
+        (double)primary_rate,
+        (double)fallback_rate);
 
-    sensor_conf->sample_rate = BHI3_SENSOR_FALLBACK_RATE_HZ;
+    sensor_conf->sample_rate = fallback_rate;
     rslt = bhi360_virtual_sensor_conf_param_set_cfg(sensor_id, sensor_conf, &bhy);
     if (rslt == BHI360_OK)
     {
@@ -1869,8 +1892,6 @@ static void bhi3_s_reset_local_data(void)
     memset(&bhi3_s_datas, 0, sizeof(bhi3_s_datas));
     bhi3_s_datas.pressure_raw = NAN;
     bhi3_s_datas.pressure = NAN;
-    pressure_ema_initialized = false;
-    pressure_ema_hpa = 0.0f;
     memset(&acc_window, 0, sizeof(acc_window));
     memset(&gyro_window, 0, sizeof(gyro_window));
     heading_filter_reset();
@@ -2194,18 +2215,7 @@ static void parse_pressure(const struct bhi360_fifo_parse_data_info *callback_in
     }
 
     bhi3_s_datas.pressure_raw = pressure_hpa;
-
-    if (!pressure_ema_initialized)
-    {
-        pressure_ema_hpa = pressure_hpa;
-        pressure_ema_initialized = true;
-    }
-    else
-    {
-        pressure_ema_hpa += PRESSURE_EMA_ALPHA_50HZ * (pressure_hpa - pressure_ema_hpa);
-    }
-
-    bhi3_s_datas.pressure = pressure_ema_hpa;
+    bhi3_s_datas.pressure = pressure_hpa;
     ts_baro_sensor_ns = bhi3_s_sensor_timestamp(callback_info);
     bhi3_s_raw_log_write_row();
 }

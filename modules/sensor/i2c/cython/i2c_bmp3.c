@@ -40,10 +40,12 @@ int8_t i2c_bmp3_init() {
 
     settings.press_en = BMP3_ENABLE;
     settings.temp_en = BMP3_ENABLE;
-    settings.odr_filter.press_os = BMP3_OVERSAMPLING_2X;
+    settings.odr_filter.press_os = BMP3_OVERSAMPLING_32X;
     settings.odr_filter.temp_os = BMP3_OVERSAMPLING_2X;
-    settings.odr_filter.odr = BMP3_ODR_100_HZ;
-    settings_sel = BMP3_SEL_PRESS_EN | BMP3_SEL_TEMP_EN | BMP3_SEL_PRESS_OS | BMP3_SEL_TEMP_OS | BMP3_SEL_ODR;
+    settings.odr_filter.odr = BMP3_ODR_12_5_HZ;
+    settings.odr_filter.iir_filter = BMP3_IIR_FILTER_COEFF_15;
+    settings_sel = BMP3_SEL_PRESS_EN | BMP3_SEL_TEMP_EN | BMP3_SEL_PRESS_OS | BMP3_SEL_TEMP_OS |
+                   BMP3_SEL_ODR | BMP3_SEL_IIR_FILTER;
 
     rslt = bmp3_set_sensor_settings(settings_sel, &settings, &dev);
     printf("bmp3_set_sensor_settings [%d]\n", rslt);

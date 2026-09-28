@@ -21,27 +21,27 @@ OSRS_T = 1  # x2 oversampling
 # OSRS_P = 0 # no oversampling
 # OSRS_P = 1 # x2 oversampling
 # OSRS_P = 2 # x4 oversampling
-OSRS_P = 3  # x8 oversampling
+# OSRS_P = 3 # x8 oversampling
 # OSRS_P = 4 # x16 oversampling
-# OSRS_P = 5 # x32 oversampling
+OSRS_P = 5  # x32 oversampling
 
 # filter settings
-# value = (value_n-1 * (FILTER - 1) + raw_data) / FILTER
+# IIR coefficient = 2**FILTER - 1
 # FILTER = 0 # OFF
-# FILTER = 1 # 2
-FILTER = 2  # 4
-# FILTER = 3 # 8
-# FILTER = 4 # 16
+# FILTER = 1 # coefficient 1
+# FILTER = 2 # coefficient 3
+# FILTER = 3 # coefficient 7
+FILTER = 4  # coefficient 15
 
-# standby settings
+# output data rate
 # ODR = 0 # 200Hz, 5ms
 # ODR = 1 # 100Hz, 10ms
 # ODR = 2 # 50Hz, 20ms
-ODR = 3  # 25Hz, 80ms
-# ODR = 4 # 25/2Hz, 160ms
-# ODR = 5 # 25/4Hz, 320ms
-# ODR = 6 # 25/8Hz, 640ms
-# ODR = 7 # 25/16Hz, 1.280s
+# ODR = 3 # 25Hz, 40ms
+ODR = 4  # 12.5Hz, 80ms
+# ODR = 5 # 6.25Hz, 160ms
+# ODR = 6 # 3.125Hz, 320ms
+# ODR = 7 # 1.5625Hz, 640ms
 
 CONFIG_OSR = (OSRS_T << 3) + OSRS_P
 
@@ -93,12 +93,6 @@ class BMP3XX(i2c.i2c):
         self.P10 = b[12] / 2**48.0
         self.P11 = b[13] / 2**65.0
 
-        # BMP3XX address, 0x77
-        # Normal mode(2bit), none(2bit), enable temperature(1bit), enable pressure(1bit)
-        # self.bus.write_byte_data(self.SENSOR_ADDRESS, 0x1B, 0b010011)
-        # self.bus.write_byte_data(self.SENSOR_ADDRESS, 0x1B, 0b110011)
-        # time.sleep(0.01)
-
         self.bus.write_byte_data(self.SENSOR_ADDRESS, 0x1C, CONFIG_OSR)
         time.sleep(0.01)
 
@@ -108,13 +102,10 @@ class BMP3XX(i2c.i2c):
         self.bus.write_byte_data(self.SENSOR_ADDRESS, 0x1F, FILTER << 1)
         time.sleep(0.01)
 
-        self.bus.write_byte_data(self.SENSOR_ADDRESS, 0x1B, 0b010011)
+        self.bus.write_byte_data(self.SENSOR_ADDRESS, 0x1B, 0x33)
         time.sleep(0.01)
 
     def read(self):
-        self.bus.write_byte_data(self.SENSOR_ADDRESS, 0x1B, 0b010011)
-        time.sleep(0.01)
-
         data = self.bus.read_i2c_block_data(
             self.SENSOR_ADDRESS, self.VALUE_ADDRESS, self.VALUE_BYTES
         )

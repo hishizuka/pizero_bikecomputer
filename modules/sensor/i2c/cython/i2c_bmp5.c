@@ -50,16 +50,16 @@ static int8_t i2c_bmp5_init_at(uint8_t addr) {
     rslt = bmp5_get_osr_odr_press_config(&osr_odr_press_cfg, &dev);
     //printf("bmp5_set_performance [%d]\n", rslt);
 
-    osr_odr_press_cfg.odr = BMP5_ODR_50_HZ;
+    osr_odr_press_cfg.odr = BMP5_ODR_45_HZ;
     osr_odr_press_cfg.press_en = BMP5_ENABLE;
-    osr_odr_press_cfg.osr_t = BMP5_OVERSAMPLING_64X;
-    osr_odr_press_cfg.osr_p = BMP5_OVERSAMPLING_4X;
+    osr_odr_press_cfg.osr_t = BMP5_OVERSAMPLING_2X;
+    osr_odr_press_cfg.osr_p = BMP5_OVERSAMPLING_32X;
 
     rslt = bmp5_set_osr_odr_press_config(&osr_odr_press_cfg, &dev);
     //printf("bmp5_set_osr_odr_press_config [%d]\n", rslt);
 
     set_iir_cfg.set_iir_t = BMP5_IIR_FILTER_COEFF_1;
-    set_iir_cfg.set_iir_p = BMP5_IIR_FILTER_COEFF_1;
+    set_iir_cfg.set_iir_p = BMP5_IIR_FILTER_COEFF_63;
     set_iir_cfg.shdw_set_iir_t = BMP5_ENABLE;
     set_iir_cfg.shdw_set_iir_p = BMP5_ENABLE;
 

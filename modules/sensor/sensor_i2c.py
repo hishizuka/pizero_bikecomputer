@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from importlib import import_module
 import math
 import asyncio
 import os
@@ -1578,63 +1579,63 @@ class SensorI2C(Sensor):
             self.graph_values[g][:, -1] = self.values['acc_graph']
 
     def read_baro_temp(self):
-        if not self.available_sensors["PRESSURE"]:
+        if not any(self.available_sensors["PRESSURE"].values()):
             return
 
         sp = self.available_sensors["PRESSURE"]
-
-        def get_temperature():
-            self.values["temperature"] = round(
-                self.sensor["i2c_baro_temp"].temperature, 1
-            )
+        baro = self.sensor["i2c_baro_temp"]
 
         def get_discomfort_index():
             if not any(np.isnan([self.values["humidity"], self.values["temperature"]])):
-                self.values["discomfort_index"] = 0.81*self.values["temperature"] + 0.01*self.values["humidity"]*(0.99*self.values["temperature"]-14.3) + 46.3
-
+                temperature = self.values["temperature"]
+                self.values["discomfort_index"] = (
+                    0.81 * temperature
+                    + 0.01 * self.values["humidity"] * (0.99 * temperature - 14.3)
+                    + 46.3
+                )
 
         if sp.get("BHI3_S"):
-            get_temperature()
-            self.values["pressure"] = self.sensor["i2c_baro_temp"].pressure
+            self.values["temperature"] = round(baro.temperature, 1)
+            self.values["pressure"] = baro.pressure
+            self.values["pressure_raw"] = self.values["pressure"]
             # Keep compatibility for downstream users that read pressure_mod.
             self.values["pressure_mod"] = self.values["pressure"]
-            self.values["humidity"] = self.sensor["i2c_baro_temp"].humidity
+            self.values["humidity"] = baro.humidity
             get_discomfort_index()
             return
 
         try:
-            baro = self.sensor["i2c_baro_temp"]
-            if sp.get("BMP581") and not hasattr(baro, "read"):
-                # BMP5_C refreshes both values when pressure is accessed.
-                pressure = baro.pressure
-                temperature = baro.temperature
-            else:
-                if (
-                    sp.get("LPS3XHW_ORIG")
-                    or sp.get("BMP280_ORIG")
-                    or sp.get("BME280")
-                    or sp.get("BMP3XX")
-                    or sp.get("MS5637")
-                    or sp.get("BMP581")
-                ):
-                    baro.read()
-                pressure = baro.pressure
-                temperature = baro.temperature
+            if not (sp.get("BMP581") and not hasattr(baro, "read")) and any(
+                sp.get(name)
+                for name in (
+                    "LPS3XHW_ORIG",
+                    "BMP280_ORIG",
+                    "BME280",
+                    "BMP3XX",
+                    "MS5637",
+                    "BMP581",
+                )
+            ):
+                baro.read()
+            # BMP5_C refreshes both values when pressure is accessed.
+            pressure = baro.pressure
+            temperature = baro.temperature
             self.values["temperature"] = round(temperature, 1)
             self.values["pressure_raw"] = pressure
             if sp.get("BME280"):
-                self.values["humidity"] = self.sensor["i2c_baro_temp"].relative_humidity
+                self.values["humidity"] = baro.relative_humidity
                 get_discomfort_index()
         except:
             return
 
         self.values["pressure_mod"] = self.values["pressure_raw"]
 
-        # spike detection
-        self.median_filter("pressure_mod")
-        # outlier(spike) detection
-        # sigma is not 3 but 10 for detecting pressure diff 0.3hPa around 1000hPa
-        self.hampel_filter("pressure_mod", sigma=10, diff_min=0.02)
+        if not (sp.get("BMP3XX") or sp.get("BMP581")):
+            # spike detection
+            self.median_filter("pressure_mod")
+            # outlier(spike) detection
+            # sigma is not 3 but 10 for detecting pressure diff 0.3hPa around 1000hPa
+            self.hampel_filter("pressure_mod", sigma=10, diff_min=0.02)
 
         # finalize
         self.values["pressure"] = self.values["pressure_mod"]
@@ -1649,7 +1650,10 @@ class SensorI2C(Sensor):
             * (1 - pow(self.values["pressure"] / self.sealevel_pa, 1.0 / 5.257))
         )
 
-        if self.available_sensors["PRESSURE"].get("BHI3_S"):
+        if any(
+            self.available_sensors["PRESSURE"].get(sensor)
+            for sensor in ("BHI3_S", "BMP3XX", "BMP581")
+        ):
             self.values["altitude"] = round(altitude_raw, 1)
         else:
             # average filter
@@ -1679,12 +1683,11 @@ class SensorI2C(Sensor):
                 self.timestamp_array[0] is not None
                 and self.timestamp_array[-1] is not None
             ):
-                i = 0
                 time_delta = (
-                    self.timestamp_array[-1] - self.timestamp_array[i]
+                    self.timestamp_array[-1] - self.timestamp_array[0]
                 ).total_seconds()
                 if time_delta > 0:
-                    altitude_delta = self.vspeed_array[-1] - self.vspeed_array[i]
+                    altitude_delta = self.vspeed_array[-1] - self.vspeed_array[0]
                     self.values["vertical_speed"] = altitude_delta / time_delta
 
     async def update_sealevel_pa(self, alt, force=False):
@@ -1968,23 +1971,30 @@ class SensorI2C(Sensor):
             return False
     
     def detect_pressure_bmp581_c(self):
-        if not any(_i2c_addr_present(addr) for addr in BMP5_I2C_ADDRS):
+        return self._detect_i2c_helper("sensor_bmp581", "BMP5_C", BMP5_I2C_ADDRS)
+
+    def _detect_i2c_helper(self, sensor_attr, helper_name, addresses):
+        if not any(_i2c_addr_present(addr) for addr in addresses):
             return False
         try:
             # Prefer a prebuilt Cython extension if available.
             try:
-                from .i2c.cython.i2c_helper import BMP5_C
+                constructor = getattr(
+                    import_module(".i2c.cython.i2c_helper", __package__), helper_name
+                )
             except Exception:
                 import pyximport
                 pyximport.install(inplace=True, language_level=3)
-                from .i2c.cython.i2c_helper import BMP5_C
+                constructor = getattr(
+                    import_module(".i2c.cython.i2c_helper", __package__), helper_name
+                )
 
-            self.sensor_bmp581 = BMP5_C(1)
-            if self.sensor_bmp581.status:
+            sensor = constructor(1)
+            setattr(self, sensor_attr, sensor)
+            if sensor.status:
                 return True
-            else:
-                del(self.sensor_bmp581)
-                return False
+            delattr(self, sensor_attr)
+            return False
         except:
             return False
 
@@ -2119,20 +2129,6 @@ class SensorI2C(Sensor):
         except:
             return False
 
-    def detect_motion_icm20948(self):
-        try:
-            import board
-            import busio
-            import adafruit_icm20x
-
-            # for Waveshare Environment Sensor HAT
-            self.sensor_icm20948 = adafruit_icm20x.ICM20948(
-                busio.I2C(board.SCL, board.SDA), address=0x68
-            )
-            return True
-        except:
-            return False
-
     def detect_motion_bmi270(self):
         if self.detect_motion_bmi270_c():
             return True
@@ -2149,25 +2145,7 @@ class SensorI2C(Sensor):
             return False
 
     def detect_motion_bmi270_c(self):
-        if not any(_i2c_addr_present(addr) for addr in BMI270_I2C_ADDRS):
-            return False
-        try:
-            # Prefer a prebuilt Cython extension if available.
-            try:
-                from .i2c.cython.i2c_helper import BMI270_C
-            except Exception:
-                import pyximport
-                pyximport.install(inplace=True, language_level=3)
-                from .i2c.cython.i2c_helper import BMI270_C
-
-            self.sensor_bmi270 = BMI270_C(1)
-            if self.sensor_bmi270.status:
-                return True
-            else:
-                del(self.sensor_bmi270)
-                return False
-        except:
-            return False
+        return self._detect_i2c_helper("sensor_bmi270", "BMI270_C", BMI270_I2C_ADDRS)
 
     def detect_motion_icm20948(self):
         try:
@@ -2200,46 +2178,10 @@ class SensorI2C(Sensor):
             return False
 
     def detect_motion_bmm150_c(self):
-        if not any(_i2c_addr_present(addr) for addr in BMM150_I2C_ADDRS):
-            return False
-        try:
-            # Prefer a prebuilt Cython extension if available.
-            try:
-                from .i2c.cython.i2c_helper import BMM150_C
-            except Exception:
-                import pyximport
-                pyximport.install(inplace=True, language_level=3)
-                from .i2c.cython.i2c_helper import BMM150_C
-
-            self.sensor_bmm150 = BMM150_C(1)
-            if self.sensor_bmm150.status:
-                return True
-            else:
-                del(self.sensor_bmm150)
-                return False
-        except:
-            return False
+        return self._detect_i2c_helper("sensor_bmm150", "BMM150_C", BMM150_I2C_ADDRS)
 
     def detect_motion_bmm350(self):
-        if not _i2c_addr_present(BMM350_I2C_ADDR):
-            return False
-        try:
-            # Prefer a prebuilt Cython extension if available.
-            try:
-                from .i2c.cython.i2c_helper import BMM350_C
-            except Exception:
-                import pyximport
-                pyximport.install(inplace=True, language_level=3)
-                from .i2c.cython.i2c_helper import BMM350_C
-
-            self.sensor_bmm350 = BMM350_C(1)
-            if self.sensor_bmm350.status:
-                return True
-            else:
-                del(self.sensor_bmm350)
-                return False
-        except:
-            return False
+        return self._detect_i2c_helper("sensor_bmm350", "BMM350_C", (BMM350_I2C_ADDR,))
 
     def detect_light_tcs3472(self):
         try:

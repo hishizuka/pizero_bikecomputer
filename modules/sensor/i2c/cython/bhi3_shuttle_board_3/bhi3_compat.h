@@ -42,6 +42,7 @@
 #define bhi360_event_data_orientation            bhi385_event_data_orientation
 #define bhi360_bsx_algo_param_state_exg          bhi385_bsx_algo_param_state_exg
 #define bhi360_bsx_algo_param_version           bhi385_bsx_algo_param_version
+#define bhi360_phy_sensor_ctrl_param_baro_type_2 bhi385_phy_sensor_ctrl_param_baro_type_2
 #define bhi360_system_param_multi_meta_event_ctrl_t bhi385_system_param_multi_meta_event_ctrl_t
 #define bhi360_float                             bhi385_float
 
@@ -74,6 +75,7 @@
 #define bhi360_flush_fifo                        bhi385_flush_fifo
 #define bhi360_system_param_get_meta_event_control bhi385_system_param_get_meta_event_control
 #define bhi360_system_param_set_meta_event_control bhi385_system_param_set_meta_event_control
+#define bhi360_phy_sensor_ctrl_param_baro_set_press_type_2_cfg bhi385_phy_sensor_ctrl_param_baro_set_press_type_2_cfg
 
 /* Firmware blob symbol exposed by Bosch firmware header */
 #define bhi360_firmware_image                    bhi385_firmware_image
