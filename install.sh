@@ -179,8 +179,10 @@ elif [[ "$enable_i2c" == "true" ]]; then
     prompt_and_store "Configure I2C at 400kHz?" use_i2c_400khz
 fi
 prompt_and_store "Enable SPI?" enable_spi
+use_bryton_rider_s800_display=false
 use_pwm_backlight=false
 if [[ "$enable_spi" == "true" ]]; then
+    prompt_and_store "Use Bryton Rider S800 display?" use_bryton_rider_s800_display
     prompt_and_store "Use PWM0 (GPIO18) for the backlight?" use_pwm_backlight
 fi
 prompt_and_store "Use PWM1 (GPIO13) for the buzzer?" use_pwm_buzzer
@@ -376,7 +378,6 @@ fi
 # disable raspberry pi specific hardware
 #############################################################
 
-
 pwm_overlay=""
 if [[ "$use_pwm_backlight" == "true" && "$use_pwm_buzzer" == "true" ]]; then
     pwm_overlay="dtoverlay=pwm-2chan,pin=18,func=2,pin2=13,func2=4"
@@ -386,6 +387,29 @@ elif [[ "$use_pwm_buzzer" == "true" ]]; then
     pwm_overlay="dtoverlay=pwm,pin=13,func=4"
 fi
 configure_pwm_overlay "$pwm_overlay"
+
+# Enable Bryton Rider S800 touchscreen
+if [[ "$use_bryton_rider_s800_display" == "true" ]]; then
+    SITRONIX_TOUCH_OVERLAY="dtoverlay=sitronix-touch"
+    echo "🔧 Enabling Sitronix touchscreen..."
+    if [ -f "$BOOT_CONFIG_FILE" ]; then
+        if grep -Eq "^[[:space:]]*$SITRONIX_TOUCH_OVERLAY[[:space:]]*$" "$BOOT_CONFIG_FILE"; then
+            echo "ℹ️ Sitronix touchscreen overlay is already enabled."
+        elif grep -Eq "^[[:space:]]*#[[:space:]]*$SITRONIX_TOUCH_OVERLAY[[:space:]]*$" "$BOOT_CONFIG_FILE"; then
+            sudo sed -i -E \
+                "s|^[[:space:]]*#[[:space:]]*$SITRONIX_TOUCH_OVERLAY[[:space:]]*$|$SITRONIX_TOUCH_OVERLAY|" \
+                "$BOOT_CONFIG_FILE"
+        else
+            echo "$SITRONIX_TOUCH_OVERLAY" | sudo tee -a "$BOOT_CONFIG_FILE" >/dev/null
+        fi
+    else
+        echo "❌ $BOOT_CONFIG_FILE was not found."
+        exit 1
+    fi
+    sudo usermod -aG input "$TARGET_USER"
+    sudo install -m 644 scripts/install/etc/udev/rules.d/99-sitronix-touch.rules /etc/udev/rules.d/
+    echo "✅ Sitronix touchscreen enabled successfully in $BOOT_CONFIG_FILE."
+fi
 
 # Disable audio on Raspberry Pi
 if [ -f "$BOOT_CONFIG_FILE" ]; then
@@ -540,6 +564,9 @@ if [[ "$install_services" == "true" ]]; then
             ;;
     esac
 
+    if [[ "$use_bryton_rider_s800_display" == "true" ]]; then
+        service_envs+=('Environment="QT_QPA_EVDEV_TOUCHSCREEN_PARAMETERS=/dev/input/touchscreen"')
+    fi
     printf -v envs '%s\n' "${service_envs[@]}"
     envs="${envs%$'\n'}"
 

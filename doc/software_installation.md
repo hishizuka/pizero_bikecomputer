@@ -637,6 +637,20 @@ Rerunning the installer replaces an earlier overlay from this table instead of
 adding a conflicting one. A custom PWM overlay must be resolved manually before
 selecting either output. Reboot to apply changes to `config.txt`.
 
+When the Bryton Rider S800 display is selected, the installer enables its Sitronix
+touch panel, adds a udev rule for the stable `/dev/input/touchscreen` name, and
+uses that name in the same service file. This option is shown only when SPI is enabled.
+
+The `linuxfb` output platform and `USE_DRM` display backend do not imply touch input.
+At display initialization, the application checks whether `/dev/input/touchscreen`
+is a readable character device (existing PiTFT touch support is retained).
+The main-screen software button bar is shown only when touch or desktop mouse
+input is available and no physical buttons were initialized. Physical-button
+availability combines GPIO buttons with detected MCP230XX and Button SHIM devices.
+Touch plus usable physical buttons hides this bar without hiding the map controls.
+The `offscreen` platform does not imply mouse input. Desktop mouse controls
+remain available independently of touchscreen detection. The startup log reports
+the Qt platform, display class, touch/mouse/button capabilities, and button-bar decision.
 
 The application log is written to `log/debug.log`.
 
