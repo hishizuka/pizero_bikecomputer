@@ -229,6 +229,12 @@ sudo usermod -aG i2c,gpio "$USER"
 ```
 
 `./install.sh` installs the same PyPI package when Sony CXD56xx is selected.
+The pip package does not modify `config.txt`.
+The installer automatically enables I2C at 400kHz without asking
+`Configure I2C at 400kHz?`, reusing an existing baudrate setting without adding
+another one. Reboot after installation. For manual setup, follow the steps below.
+The installer keeps enable and baudrate settings on separate lines because
+`raspi-config` replaces the entire `dtparam=i2c_arm=...` line.
 
 Enable I2C at **400kHz** in `/boot/firmware/config.txt`. Back up the file first:
 
@@ -365,6 +371,21 @@ Follow [official setup guide](https://wiki.dfrobot.com/Raspberry_Pi_e-ink_Displa
 ### I2C sensors
 
 Assume I2C interface is on in raspi-config.
+
+BHI360/BHI385 Shuttle Board 3.0 and Sony CXD56xx GNSS require I2C at
+**400kHz**. Back up `/boot/firmware/config.txt`, then update the existing I2C
+settings to the following lines near the top, before conditional sections or
+`dtoverlay` directives. Avoid duplicate settings and reboot after editing:
+
+```ini
+dtparam=i2c_arm=on
+dtparam=i2c_arm_baudrate=400000
+```
+
+When I2C is enabled without selecting Sony CXD56xx, `install.sh` asks
+`Configure I2C at 400kHz?`. Answer `y` to apply the setting above, or `n` to
+preserve the existing baudrate. Sony CXD56xx automatically enables I2C at
+400kHz and skips this question. Reboot after changing the settings.
 
 Next, install `smbus2` if not installed.
 

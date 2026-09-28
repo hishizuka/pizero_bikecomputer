@@ -77,7 +77,20 @@ enable_i2c_interface() {
         return 0
     fi
     if [[ "${has_raspi_config:-false}" == "true" ]]; then
+        # raspi-config replaces the entire i2c_arm line; preserve its baudrate.
+        sudo sed -i -E \
+            '/^[[:space:]]*dtparam=i2c_arm=/s/,i2c_arm_baudrate=([^,#[:space:]]+)/\ndtparam=i2c_arm_baudrate=\1/' \
+            "$BOOT_CONFIG_FILE"
         sudo raspi-config nonint do_i2c 0
+        if [[ "$use_i2c_400khz" == "true" ]]; then
+            if grep -Eq '^[[:space:]]*dtparam=i2c_arm_baudrate=' "$BOOT_CONFIG_FILE"; then
+                sudo sed -i -E \
+                    's/^([[:space:]]*dtparam=i2c_arm_baudrate=)[^,#[:space:]]*/\1400000/' \
+                    "$BOOT_CONFIG_FILE"
+            else
+                sudo sed -i '/^dtparam=i2c_arm=on$/a dtparam=i2c_arm_baudrate=400000' "$BOOT_CONFIG_FILE"
+            fi
+        fi
     fi
     ENABLE_I2C_DONE=true
 }
@@ -129,6 +142,14 @@ while true; do
 done
 prompt_and_store "Install Bluetooth packages?" install_bluetooth
 prompt_and_store "Enable I2C?" enable_i2c
+use_i2c_400khz=false
+if [[ "$gps_backend" == "cxd56xx" ]]; then
+    echo "ℹ️ Sony CXD56xx requires I2C at 400kHz; configuring it automatically."
+    use_i2c_400khz=true
+elif [[ "$enable_i2c" == "true" ]]; then
+    echo "ℹ️ BHI360/BHI385 require I2C at 400kHz."
+    prompt_and_store "Configure I2C at 400kHz?" use_i2c_400khz
+fi
 prompt_and_store "Enable SPI?" enable_spi
 prompt_and_store "Install services?" install_services
 install_services_use_x=false
@@ -145,6 +166,7 @@ if [[ "$install_services" == "true" ]]; then
 fi
 set -e
 TARGET_USER="${SUDO_USER:-${LOGNAME:-$USER}}"
+BOOT_CONFIG_FILE="/boot/firmware/config.txt"
 
 #############################################################
 # install packages
@@ -249,7 +271,7 @@ if [[ "$gps_backend" != "none" ]]; then
         sudo usermod -aG i2c,gpio "$TARGET_USER"
         enable_i2c_interface
         echo "✅ Sony CXD56xx GNSS packages installed successfully."
-        echo "ℹ️ Configure I2C at 400kHz and check the GPIO settings before starting the application."
+        echo "ℹ️ Check the GPIO settings before starting the application."
         echo "   See the Sony CXD56xx section in doc/software_installation.md, then reboot."
     fi
 
@@ -315,7 +337,6 @@ fi
 # disable raspberry pi specific hardware
 #############################################################
 
-BOOT_CONFIG_FILE="/boot/firmware/config.txt"
 
 # Disable audio on Raspberry Pi
 if [ -f "$BOOT_CONFIG_FILE" ]; then
