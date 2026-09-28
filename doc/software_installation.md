@@ -1154,7 +1154,7 @@ map.yaml entry
 - Additional setting is not necessary because the settings are written when pairing ANT+ sensors.
 - If there are some settings, the program will connect at startup.
 
-#### Power section
+#### PROFILE section
 
 Set `cp` as CP and `w_prime` as W prime balance when a power meter is available.
 `cda` sets the rider and bicycle drag area used for the wind impact metrics. The

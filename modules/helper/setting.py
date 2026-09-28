@@ -112,8 +112,8 @@ class Setting:
             if "DEM_MAP" in c:
                 self.config.G_DEM_MAP = c["DEM_MAP"]
 
-        if "POWER" in self.config_parser:
-            c = self.config_parser["POWER"]
+        if "PROFILE" in self.config_parser:
+            c = self.config_parser["PROFILE"]
             if "CP" in c:
                 self.config.G_POWER_CP = int(c["CP"])
             if "W_PRIME" in c:
@@ -418,9 +418,9 @@ class Setting:
         c["USE_DEM_TILE"] = str(self.config.G_USE_DEM_TILE)
         c["DEM_MAP"] = self.config.G_DEM_MAP
 
-        self.config_parser["POWER"] = {}
+        self.config_parser["PROFILE"] = {}
         self.config_parser["RAIN_ALERT"] = {"enabled": str(self.config.G_RAIN_ALERT)}
-        c = self.config_parser["POWER"]
+        c = self.config_parser["PROFILE"]
         c["CP"] = str(int(self.config.G_POWER_CP))
         c["W_PRIME"] = str(int(self.config.G_POWER_W_PRIME))
         c["CDA"] = str(self.config.G_POWER_CDA)
