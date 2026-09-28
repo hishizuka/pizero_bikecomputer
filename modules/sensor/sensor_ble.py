@@ -517,7 +517,7 @@ class SensorBLE(Sensor):
                 on_name=lambda name, sensor_id=identifier: self._set_cycling_sensor_name(
                     sensor_id, name
                 ),
-                should_accumulate=lambda: self.config.G_MANUAL_STATUS == "START",
+                should_accumulate=lambda: self.config.G_STOPWATCH_STATUS == "START",
                 log=lambda message: app_logger.info(f"[BLE-CYCLING] {message}"),
                 debug_log=lambda message: app_logger.debug(f"[BLE-CYCLING] {message}"),
             )

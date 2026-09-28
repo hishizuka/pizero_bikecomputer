@@ -122,8 +122,10 @@ def calc_form_metrics(sensor, pwr):
 
     TSS (Training Stress Score):
         Incremental approximation: (P/CP)^2 * dt/3600 * 100 per second.
-        Uses CP as a proxy for FTP.
+    Uses CP as a proxy for FTP.
     """
+    if sensor.config.G_STOPWATCH_STATUS != "START":
+        return
     if not np.isnan(pwr) and pwr > 0:
         cp = sensor.config.G_POWER_CP
         dt = sensor.config.G_SENSOR_INTERVAL

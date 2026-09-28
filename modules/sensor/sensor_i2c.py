@@ -1691,6 +1691,9 @@ class SensorI2C(Sensor):
                 if time_delta > 0:
                     altitude_delta = self.vspeed_array[-1] - self.vspeed_array[0]
                     self.values["vertical_speed"] = altitude_delta / time_delta
+        else:
+            # Keep the reference current so resume excludes paused altitude changes.
+            self.values["pre_altitude"] = self.values["altitude"]
 
     async def update_sealevel_pa(self, alt, force=False):
         if (

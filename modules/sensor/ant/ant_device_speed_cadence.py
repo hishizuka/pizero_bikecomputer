@@ -97,7 +97,7 @@ class ANT_Device_Speed_Cadence(ant_device.ANT_Device):
                 self.values["last_event_interval_spd"] = self.delta[2] / (
                     1024 * self.delta[3]
                 )
-                if self.config.G_MANUAL_STATUS == "START":
+                if self.config.G_STOPWATCH_STATUS == "START":
                     # unit: m
                     self.values["distance"] += (
                         self.config.G_WHEEL_CIRCUMFERENCE * self.delta[3]
@@ -294,7 +294,7 @@ class ANT_Device_Speed(ANT_Device_Cadence):
             app_logger.info(f"### resume spd {int(self.values['distance'])} [m] ###")
 
     def accumulateValue(self):
-        if self.config.G_MANUAL_STATUS == "START":
+        if self.config.G_STOPWATCH_STATUS == "START":
             # unit: m
             self.values["distance"] += self.config.G_WHEEL_CIRCUMFERENCE * self.delta[1]
         # store raw speed

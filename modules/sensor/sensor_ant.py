@@ -200,7 +200,7 @@ class SensorANT(Sensor):
         self._touch_dummy_timestamp(self.values[ac["SPD"]], timestamp)
         self._touch_dummy_timestamp(self.values[ac["PWR"]][0x10], timestamp)
         # DISTANCE, TOTAL_WORK
-        if self.config.G_MANUAL_STATUS == "START":
+        if self.config.G_STOPWATCH_STATUS == "START":
             # DISTANCE: unit: m
             if not np.isnan(self.values[ac["SPD"]]["speed"]):
                 self.values[ac["SPD"]]["distance"] += (

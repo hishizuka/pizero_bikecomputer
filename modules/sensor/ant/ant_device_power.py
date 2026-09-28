@@ -194,7 +194,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
                 if cadence != 0xFF:
                     values["cadence"] = cadence
                 if (
-                    self.config.G_MANUAL_STATUS == "START"
+                    self.config.G_STOPWATCH_STATUS == "START"
                     and values["on_data_timestamp"] is not None
                 ):
                     # unit: J
@@ -297,7 +297,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
                 pwr - values["power"] < self.spike_threshold["power"]
             ):
                 values["power"] = pwr
-                if self.config.G_MANUAL_STATUS == "START":
+                if self.config.G_STOPWATCH_STATUS == "START":
                     # unit: J
                     # delta[0] uses 1/2048s period ticks.
                     values["accumulated_power"] += (
@@ -318,7 +318,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
                 spd - values["speed"] < self.spike_threshold["speed"]
             ):
                 values["speed"] = spd
-                if self.config.G_MANUAL_STATUS == "START":
+                if self.config.G_STOPWATCH_STATUS == "START":
                     values["distance"] += self.config.G_WHEEL_CIRCUMFERENCE * delta[3]
                 # refresh timestamp called from sensor_core
                 values["timestamp"] = t
@@ -425,7 +425,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
                     values["cadence"] = cad
                 elif cadence != 0xFF:
                     values["cadence"] = cadence
-                if self.config.G_MANUAL_STATUS == "START":
+                if self.config.G_STOPWATCH_STATUS == "START":
                     # unit: J
                     # delta[0] uses 1/2048s period ticks.
                     values["accumulated_power"] += (
