@@ -74,7 +74,7 @@ class MapOverlayMenuWidget(MenuWidget):
             elif overlay_type == "Wind map":
                 self.config.G_USE_WIND_OVERLAY_MAP = not status
             status = not status
-            if self.config.display.has_touch:
+            if self.config.uses_pointer_navigation:
                 self.config.gui.map_widget.enable_overlay_button()
 
         self.buttons[overlay_type].change_toggle(status)

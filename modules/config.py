@@ -484,6 +484,7 @@ class Config:
     gui_config = None
     buzzer = None
     boot_time = 0
+    qt_platform = None
 
     def __init__(self):
         self.G_SENSORS = copy.deepcopy(type(self).G_SENSORS)
@@ -752,10 +753,40 @@ class Config:
         return self._loop
 
     @property
+    def has_mouse(self):
+        return self.qt_platform in (
+            "cocoa",
+            "windows",
+            "xcb",
+            "wayland",
+            "wayland-egl",
+        )
+
+    @property
+    def has_buttons(self):
+        return (
+            self.logger is not None
+            and self.logger.sensor is not None
+            and self.logger.sensor.has_buttons
+        )
+
+    @property
+    def uses_pointer_navigation(self):
+        return self.display is not None and (
+            self.display.has_touch or (self.has_mouse and not self.display.send)
+        )
+
+    @property
+    def show_button_box(self):
+        return self.uses_pointer_navigation and not self.has_buttons
+
+    @property
     def uses_keyboard_navigation(self):
         if self.G_HEADLESS:
             return True
-        return self.display is not None and not self.display.has_touch
+        if self.display is None:
+            return False
+        return not self.uses_pointer_navigation or self.has_buttons
 
     async def start_coroutine(self):
         self._loop = asyncio.get_running_loop()

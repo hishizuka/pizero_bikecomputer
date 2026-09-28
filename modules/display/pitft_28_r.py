@@ -14,6 +14,7 @@ class PiTFT28r(Display):
     minimum_brightness = 10
 
     has_backlight = True
+    has_touch = True
     allow_auto_backlight = False
     use_auto_backlight = False
 

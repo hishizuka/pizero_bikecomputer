@@ -52,7 +52,7 @@ class MapOverlayMixin:
         return group, layout
 
     def _setup_touch_overlay_controls(self):
-        if not self.config.display.has_touch:
+        if not self.config.uses_pointer_navigation:
             return
 
         align_top_left = (
@@ -230,7 +230,7 @@ class MapOverlayMixin:
             self.overlay_time[overlay_type]["prev_subdomain"] = p_sd
             self.overlay_time[overlay_type]["next_subdomain"] = n_sd
 
-        if self.config.display.has_touch:
+        if self.config.uses_pointer_navigation:
             for key in ("prev_time", "next_time"):
                 self.buttons[key].setEnabled(
                     self.overlay_time[overlay_type][key] is not None
@@ -387,7 +387,7 @@ class MapOverlayMixin:
                 )
 
         enabled = self._is_time_series_overlay(overlay_type)
-        if self.config.display.has_touch:
+        if self.config.uses_pointer_navigation:
             self.buttons["prev_time"].setVisible(enabled)
             self.buttons["next_time"].setVisible(enabled)
             self.time_button_group.setVisible(enabled)

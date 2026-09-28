@@ -145,6 +145,12 @@ class SensorCore:
         self.config = config
         self.gps_position_quality = GPSPositionQuality()
         self.heading_fusion = HeadingFusion(config.G_GPS_SPEED_CUTOFF)
+    @property
+    def has_buttons(self):
+        return self.sensor_gpio.has_buttons or any(
+            self.sensor_i2c.available_sensors["BUTTON"].values()
+        )
+
         self.values["GPS"] = {}
         self.values["ANT+"] = {}
         self.values["BLE"] = {}

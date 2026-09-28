@@ -35,7 +35,7 @@ class CourseProfileGraphWidget(BaseMapWidget):
         self.layout.addWidget(self.plot, 0, 0, -1, -1)
 
         button_group_offset = None
-        if self.config.display.has_touch:
+        if self.config.uses_pointer_navigation:
             align_top_left = (
                 QtCore.Qt.AlignmentFlag.AlignTop | QtCore.Qt.AlignmentFlag.AlignLeft
             )

@@ -263,6 +263,66 @@ class RideInfoMenuWidget(MenuWidget):
         self.change_page("QZSS DC Report", preprocess=True)
 
 
+class TouchListView(QtWidgets.QListWidget):
+    def __init__(self, touch_enabled):
+        super().__init__()
+        self.touch_enabled = touch_enabled
+        self.scroller_dragged = False
+        self._press_position = None
+        self._pressed_item = None
+
+    def mousePressEvent(self, event):
+        if not self.touch_enabled or event.button() != QtCore.Qt.MouseButton.LeftButton:
+            return super().mousePressEvent(event)
+        if (
+            QtWidgets.QScroller.scroller(self.viewport()).state()
+            == QtWidgets.QScroller.State.Inactive
+        ):
+            self.scroller_dragged = False
+        self._press_position = event.globalPosition()
+        self._pressed_item = self.itemAt(event.position().toPoint())
+        event.accept()
+
+    def mouseMoveEvent(self, event):
+        if self._press_position is None:
+            return super().mouseMoveEvent(event)
+        delta = event.globalPosition() - self._press_position
+        if delta.manhattanLength() >= 12:
+            self.scroller_dragged = True
+        event.accept()
+
+    def mouseReleaseEvent(self, event):
+        if not self.touch_enabled or event.button() != QtCore.Qt.MouseButton.LeftButton:
+            return super().mouseReleaseEvent(event)
+        start = self._press_position
+        pressed_item = self._pressed_item
+        self._press_position = None
+        self._pressed_item = None
+        if start is not None:
+            delta = event.globalPosition() - start
+            if not self.scroller_dragged and delta.manhattanLength() < 12:
+                if pressed_item is not None and pressed_item is self.itemAt(
+                    event.position().toPoint()
+                ):
+                    self.itemClicked.emit(pressed_item)
+        event.accept()
+
+    def mouseDoubleClickEvent(self, event):
+        if self.touch_enabled:
+            event.accept()
+        else:
+            super().mouseDoubleClickEvent(event)
+
+    def on_scroller_state_changed(self, state):
+        if state == QtWidgets.QScroller.State.Pressed:
+            self.scroller_dragged = False
+        elif state in (
+            QtWidgets.QScroller.State.Dragging,
+            QtWidgets.QScroller.State.Scrolling,
+        ):
+            self.scroller_dragged = True
+
+
 class ListWidget(MenuWidget):
     STYLES = """
       background-color: transparent;
@@ -279,11 +339,22 @@ class ListWidget(MenuWidget):
     def setup_menu(self):
         self.make_menu_layout(QtWidgets.QVBoxLayout)
 
-        self.list = QtWidgets.QListWidget()
+        self.list = TouchListView(self.config.display.has_touch)
         self.list.setHorizontalScrollBarPolicy(QT_SCROLLBAR_ALWAYSOFF)
         self.list.setVerticalScrollBarPolicy(QT_SCROLLBAR_ALWAYSOFF)
         self.list.setFocusPolicy(QT_NO_FOCUS)
         self.list.setStyleSheet(self.STYLES)
+        if self.config.display.has_touch:
+            self.list.setVerticalScrollMode(
+                QtWidgets.QAbstractItemView.ScrollMode.ScrollPerPixel
+            )
+            QtWidgets.QScroller.grabGesture(
+                self.list.viewport(),
+                QtWidgets.QScroller.ScrollerGestureType.TouchGesture,
+            )
+            QtWidgets.QScroller.scroller(self.list.viewport()).stateChanged.connect(
+                self.list.on_scroller_state_changed
+            )
         self.menu_layout.addWidget(self.list)
         self.update_list()
 
@@ -315,17 +386,23 @@ class ListWidget(MenuWidget):
         self.list.itemClicked.connect(self.clicked_item)
 
     def clicked_item(self, list_item):
+        if self.list.scroller_dragged:
+            return
         widget = self.list.itemWidget(list_item)
-        enter_signal = getattr(widget, "enter_signal", None)
-        if widget is None or not widget.isEnabled() or enter_signal is None:
+        if widget is None or not widget.isEnabled():
             selected_item = self.selected_item
             self.list.clearSelection()
             if selected_item is not None:
                 selected_item.clearFocus()
             self.selected_item = None
             return
+        if self.config.display.has_touch:
+            self.list.setCurrentItem(
+                list_item,
+                QtCore.QItemSelectionModel.SelectionFlag.ClearAndSelect,
+            )
         self.selected_item = widget
-        enter_signal.emit()
+        widget.enter_signal.emit()
 
     @qasync.asyncSlot()
     async def button_func(self):
@@ -359,6 +436,7 @@ class ListWidget(MenuWidget):
         self.list_type = kwargs.get("list_type")
         reset = kwargs.get("reset", False)
         if reset:
+            self.list.scroller_dragged = False
             self.selected_item = None
             self.list.clear()
             self.list.verticalScrollBar().setValue(0)
@@ -422,11 +500,14 @@ class ListItemWidget(QtWidgets.QWidget):
 
     def setup_ui(self):
         self.setContentsMargins(0, 0, 0, 0)
-        focus_policy = (
-            QT_STRONG_FOCUS
-            if self.parentWidget().config.uses_keyboard_navigation
-            else QT_NO_FOCUS
-        )
+        config = self.parentWidget().config
+        focus_policy = QT_NO_FOCUS
+        if config.uses_keyboard_navigation:
+            focus_policy = (
+                QtCore.Qt.FocusPolicy.TabFocus
+                if config.display.has_touch
+                else QT_STRONG_FOCUS
+            )
         self.setFocusPolicy(focus_policy)
 
         inner_layout = QtWidgets.QVBoxLayout()

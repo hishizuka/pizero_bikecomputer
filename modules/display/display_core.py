@@ -1,9 +1,11 @@
 import os
+import stat
 
 from modules.app_logger import app_logger
 
 DEFAULT_RESOLUTION = (400, 240) #(544, 451) #(400, 240) #(272, 451) #(400, 240)
 DEFAULT_COLOR = 8
+TOUCHSCREEN_INPUT_DEVICE = "/dev/input/touchscreen"
 
 SUPPORTED_DISPLAYS = {
     # display name, resolution, colors if different from its class default
@@ -34,7 +36,6 @@ MIP_DISPLAY_PARAMS = {
     name: {
         "size": params[0],
         "color": params[1],
-        "has_touch": False,
         "has_color": params[1] != 2,
     }
     for name, params in SUPPORTED_DISPLAYS.items()
@@ -42,7 +43,7 @@ MIP_DISPLAY_PARAMS = {
 }
 
 
-# default display (X window)
+# Default Qt display; input capabilities are independent of the output backend.
 class Display:
     # Device capabilities; override in display subclasses.
     size = DEFAULT_RESOLUTION
@@ -51,7 +52,7 @@ class Display:
     # Auto backlight mode availability (device + user setting).
     allow_auto_backlight = False
     has_color = True
-    has_touch = True
+    has_touch = False
     send = False
 
     # Backlight control state (auto backlight is used by MIP displays).
@@ -171,7 +172,7 @@ class Display:
         self._apply_manual_brightness(self._get_manual_brightness())
 
     def _get_manual_brightness(self):
-        brightness = getattr(self.config, "G_MANUAL_BACKLIGHT_BRIGHTNESS", None)
+        brightness = self.config.G_MANUAL_BACKLIGHT_BRIGHTNESS
         if brightness in self.brightness_table:
             return brightness
         if self.brightness in self.brightness_table:
@@ -221,7 +222,6 @@ def _init_mip_drm_display(config):
         display.size = params["size"]
         display.color = params["color"]
         display.has_color = params["has_color"]
-        display.has_touch = params["has_touch"]
         display.init_minimum_brightness()
         if detected_name:
             app_logger.info(
@@ -297,7 +297,6 @@ def _build_mip_params_from_fb_info(fb_info):
         "size": fb_info["resolution"],
         "color": fb_info["colors"],
         "has_color": False if fb_info["colors"] == 2 else True,
-        "has_touch": False,
     }
 
 
@@ -360,6 +359,24 @@ def detect_display(config):
     return None
 
 
+def _has_readable_touchscreen():
+    try:
+        fd = os.open(TOUCHSCREEN_INPUT_DEVICE, os.O_RDONLY | os.O_NONBLOCK)
+    except FileNotFoundError:
+        return False
+    except OSError as error:
+        app_logger.warning(f"Touchscreen unavailable: {error}")
+        return False
+
+    try:
+        is_device = stat.S_ISCHR(os.fstat(fd).st_mode)
+    finally:
+        os.close(fd)
+    if not is_device:
+        app_logger.warning(f"Touchscreen is not a device: {TOUCHSCREEN_INPUT_DEVICE}")
+    return is_device
+
+
 def init_display(config):
     # default dummy display
     display = Display(config)
@@ -418,4 +435,6 @@ def init_display(config):
 
         if detect_sharp_drm():
             display = _init_mip_drm_display(config)
+    if not display.has_touch:
+        display.has_touch = _has_readable_touchscreen()
     return display

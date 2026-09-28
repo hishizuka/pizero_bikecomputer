@@ -108,7 +108,7 @@ class BaseMapWidget(ScreenWidget):
 
     def setup_ui_extra(self):
         # main graph from pyqtgraph
-        if self.config.display.has_touch:
+        if self.config.uses_pointer_navigation:
             self.plot = CustomPlotWidget()
             self.plot.signal_drag_started.connect(self.on_drag_started)
             self.plot.signal_drag_ended.connect(self.on_drag_ended)

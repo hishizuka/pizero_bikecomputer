@@ -60,6 +60,34 @@ class SystemMenuWidget(MenuWidget):
         self.change_page("Debug", preprocess=True)
 
 
+class QuickActionsMenuWidget(MenuWidget):
+    TOUCH_BUTTON = "Touch"
+    return_index = 1
+
+    def setup_menu(self):
+        buttons = [("Power Off", "dialog", self.confirm_power_off)]
+        if self.config.display.has_touch:
+            buttons.append((self.TOUCH_BUTTON, None, self.toggle_touch))
+        self.add_buttons(buttons)
+
+    def preprocess(self):
+        if self.config.display.has_touch:
+            state = "Off" if self.config.gui.touch_enabled else "On"
+            self.buttons[self.TOUCH_BUTTON].setText(f"Touch {state}")
+
+    def back(self):
+        self.config.gui.change_menu_page(self.return_index)
+
+    def confirm_power_off(self):
+        self.back()
+        self.config.gui.show_dialog(self.config.gui.power_off, "Power Off?")
+
+    def toggle_touch(self):
+        gui = self.config.gui
+        gui.set_touch_enabled(not gui.touch_enabled)
+        self.back()
+
+
 class DisplayMenuWidget(MenuWidget):
     AUTO_BRIGHTNESS_BUTTON = "Auto Brightness"
     BRIGHTNESS_BUTTON = "Brightness"
@@ -94,7 +122,7 @@ class DisplayMenuWidget(MenuWidget):
     def update_button_status(self):
         display = self.config.display
         has_brightness = display.has_backlight and bool(display.brightness_table)
-        light_sensors = self.sensor_i2c.available_sensors.get("LIGHT", {})
+        light_sensors = self.sensor_i2c.available_sensors["LIGHT"]
         self.buttons[self.AUTO_BRIGHTNESS_BUTTON].onoff_button(
             display.allow_auto_backlight and any(light_sensors.values())
         )

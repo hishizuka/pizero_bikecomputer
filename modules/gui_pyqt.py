@@ -176,6 +176,9 @@ class GUI_PyQt(GUI_Qt_Base):
 
     def init_window(self):
         self.app = qasync.QApplication(sys.argv)
+        self.config.qt_platform = self.app.platformName()
+        self.touch_enabled = True
+        self._touch_input_filter = None
 
         self.main_window = MainWindow(
             self.config.G_PRODUCT, self.config.display.resolution
@@ -309,6 +312,7 @@ class GUI_PyQt(GUI_Qt_Base):
             )
             from modules.pyqt.menu.pyqt_system_menu_widget import (
                 SystemMenuWidget,
+                QuickActionsMenuWidget,
                 NetworkMenuWidget,
                 BluetoothPairingListWidget,
                 BluetoothPairedDeviceListWidget,
@@ -418,6 +422,7 @@ class GUI_PyQt(GUI_Qt_Base):
                 ("Brightness", BrightnessListWidget),
                 ("Display", DisplayMenuWidget),
                 ("System", SystemMenuWidget),
+                ("Quick Actions", QuickActionsMenuWidget),
                 ("CP", AdjustCPWidget),
                 ("W Prime Balance", AdjustWPrimeBalanceWidget),
                 ("Profile", ProfileWidget),
@@ -566,11 +571,19 @@ class GUI_PyQt(GUI_Qt_Base):
             # integrate main_layout
             if not self.dual_mode:
                 main_layout.addWidget(self.main_page)
-            if self.config.display.has_touch:
+            if self.config.show_button_box:
                 from modules.pyqt.pyqt_button_box_widget import ButtonBoxWidget
 
                 self.button_box_widget = ButtonBoxWidget(main_widget, self.config)
                 main_layout.addWidget(self.button_box_widget)
+
+            app_logger.info(
+                f"Input capabilities: platform={self.app.platformName()}, "
+                f"display={type(self.config.display).__name__}, "
+                f"touch={self.config.display.has_touch}, "
+                f"mouse={self.config.has_mouse}, buttons={self.config.has_buttons}, "
+                f"button_box={self.config.show_button_box}"
+            )
 
             # fullscreen
             if self.config.G_FULLSCREEN:
@@ -584,6 +597,12 @@ class GUI_PyQt(GUI_Qt_Base):
             self._dialog.add_to_stack()
             if qzss_dcr_supported:
                 start_qzss_dcr_popup_monitor(self)
+
+            if self.config.display.has_touch:
+                from modules.pyqt.pyqt_touch_input import TouchInputFilter
+
+                self._touch_input_filter = TouchInputFilter(self)
+                self.app.installEventFilter(self._touch_input_filter)
 
         app_logger.info("Drawing components:")
         log_timers(timers, text_total="  total : {0:.3f} sec")
@@ -691,6 +710,23 @@ class GUI_PyQt(GUI_Qt_Base):
         elif i >= 2:
             # back
             self.back_menu()
+
+    def open_quick_actions(self):
+        if self.dialog_exists():
+            self.delete_popup()
+        index = self.gui_config.G_GUI_INDEX["Quick Actions"]
+        menu = self.stack_widget.widget(index)
+        if self.stack_widget.currentIndex() == index:
+            menu.back()
+            return
+        menu.return_index = self.stack_widget.currentIndex()
+        menu.preprocess()
+        self.change_menu_page(index)
+
+    def set_touch_enabled(self, enabled):
+        self.touch_enabled = bool(enabled)
+        if self._touch_input_filter is not None:
+            self._touch_input_filter.reset_swipe()
 
     def back_menu(self):
         self.signal_menu_back_button.emit()

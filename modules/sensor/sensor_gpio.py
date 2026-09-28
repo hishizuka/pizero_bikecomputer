@@ -36,6 +36,10 @@ class SensorGPIO(Sensor):
     _button_profile = None
     _pin_to_button = {}
 
+    @property
+    def has_buttons(self):
+        return self._line_request is not None
+
     # Button profiles that require internal pull-up resistors.
     _PULLUP_BUTTON_PROFILES = [
         "PiTFT",
