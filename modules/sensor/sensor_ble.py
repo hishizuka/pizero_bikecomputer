@@ -5,6 +5,7 @@ import re
 import signal
 import sys
 import threading
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Optional
 
@@ -73,6 +74,7 @@ class SensorBLE(Sensor):
     CLICK_INPUT_WAITING = "waiting"
     CLICK_INPUT_OPERATIONAL = "operational"
     CLICK_INPUT_INACTIVE = "inactive"
+    CLICK_RECOVERY_INPUT_TIMEOUT_SECONDS = 30.0
 
     def __init__(self, config, values):
         super().__init__(config, values)
@@ -124,6 +126,7 @@ class SensorBLE(Sensor):
         self._zwift_click_v2_auth_status = self.CLICK_AUTH_UNKNOWN
         self._zwift_click_v2_input_status = self.CLICK_INPUT_UNKNOWN
         self._zwift_click_v2_recovery_pending = False
+        self._zwift_click_v2_recovery_timer: Optional[threading.Timer] = None
 
     def reset(self):
         if self._csc_speed_processor is not None:
@@ -146,6 +149,7 @@ class SensorBLE(Sensor):
         self._fake_trainer_session_active = False
         self._cycling_paused_for_fake_trainer = False
         self._zwift_click_v2_paused_for_fake_trainer = False
+        self._cancel_zwift_click_v2_recovery_timeout()
         self.stop_fake_trainer()
         self.disconnect_cycling_sensors()
         self.disconnect_zwift_click_v2()
@@ -647,6 +651,22 @@ class SensorBLE(Sensor):
         except RuntimeError:
             pass
 
+    @asynccontextmanager
+    async def paused_zwift_click_v2(self):
+        thread = self._zwift_click_v2_thread
+        running = thread is not None and thread.is_alive()
+        restart = running and not self._zwift_click_v2_stop_requested.is_set()
+        if running:
+            self.disconnect_zwift_click_v2()
+            await asyncio.to_thread(thread.join, 5)
+            if thread.is_alive():
+                raise TimeoutError("Zwift Click V2 listener did not stop")
+        try:
+            yield
+        finally:
+            if restart:
+                self.connect_zwift_click_v2()
+
     def _is_zwift_click_v2_enabled(self) -> bool:
         return bool(
             _HAS_ZWIFT_CLICK_V2
@@ -732,15 +752,17 @@ class SensorBLE(Sensor):
             self._zwift_click_v2_connection_status = "connected"
             self._zwift_click_v2_auth_status = self.CLICK_AUTH_UNKNOWN
             self._zwift_click_v2_input_status = self.CLICK_INPUT_WAITING
+            self._start_zwift_click_v2_recovery_timeout()
 
         def on_disconnected(_side: str, _address: str) -> None:
+            self._cancel_zwift_click_v2_recovery_timeout()
             if self._zwift_click_v2_stop_requested.is_set():
                 return
             self._zwift_click_v2_connection_status = "connecting"
             self._zwift_click_v2_input_status = self.CLICK_INPUT_UNKNOWN
 
+        adapter = None
         try:
-            adapter = None
             if sys.platform.startswith("linux"):
                 adapter = self._resolve_sensor_adapter()
                 if adapter is None:
@@ -766,6 +788,9 @@ class SensorBLE(Sensor):
         except Exception as exc:  # noqa: BLE errors are runtime
             log(f"listener crashed: {exc}")
         finally:
+            from .ble.discovery import shutdown_ble_discovery
+
+            await shutdown_ble_discovery(adapter)
             self._zwift_click_v2_task = None
             self._zwift_click_v2_stop_event = None
             self._zwift_click_v2_loop = None
@@ -801,6 +826,7 @@ class SensorBLE(Sensor):
             app_logger.info(f"[ZwiftClickV2] [{side}] input status=operational")
         if not self._zwift_click_v2_recovery_pending:
             return
+        self._cancel_zwift_click_v2_recovery_timeout()
         self._zwift_click_v2_recovery_pending = False
         self._notify_zwift_click_v2_recovered()
 
@@ -812,8 +838,38 @@ class SensorBLE(Sensor):
         self._zwift_click_v2_auth_status = self.CLICK_LOCKED
         self._zwift_click_v2_input_status = self.CLICK_INPUT_INACTIVE
         recovery_failed = self._zwift_click_v2_recovery_pending
+        self._cancel_zwift_click_v2_recovery_timeout()
         self._zwift_click_v2_recovery_pending = False
         self._notify_zwift_click_v2_stopped(recovery_failed=recovery_failed)
+
+    def _start_zwift_click_v2_recovery_timeout(self) -> None:
+        self._cancel_zwift_click_v2_recovery_timeout()
+        if not self._zwift_click_v2_recovery_pending:
+            return
+        timer = threading.Timer(
+            self.CLICK_RECOVERY_INPUT_TIMEOUT_SECONDS,
+            self._handle_zwift_click_v2_recovery_timeout,
+        )
+        timer.daemon = True
+        self._zwift_click_v2_recovery_timer = timer
+        timer.start()
+
+    def _cancel_zwift_click_v2_recovery_timeout(self) -> None:
+        timer = self._zwift_click_v2_recovery_timer
+        self._zwift_click_v2_recovery_timer = None
+        if timer is not None:
+            timer.cancel()
+
+    def _handle_zwift_click_v2_recovery_timeout(self) -> None:
+        self._zwift_click_v2_recovery_timer = None
+        if not self._zwift_click_v2_recovery_pending:
+            return
+        if self._zwift_click_v2_input_status == self.CLICK_INPUT_OPERATIONAL:
+            return
+        self._zwift_click_v2_recovery_pending = False
+        self._zwift_click_v2_input_status = self.CLICK_INPUT_INACTIVE
+        app_logger.info("[ZwiftClickV2] recovery timed out waiting for button input")
+        self._notify_zwift_click_v2_no_input()
 
     def _notify_zwift_click_v2_stopped(self, *, recovery_failed=False) -> None:
         gui = self.config.gui
@@ -841,6 +897,19 @@ class SensorBLE(Sensor):
             gui.show_dialog_ok_only(
                 None,
                 "Click V2 recovered. Button input is active.",
+            )
+
+        self.config.loop.call_soon_threadsafe(show)
+
+    def _notify_zwift_click_v2_no_input(self) -> None:
+        gui = self.config.gui
+        if gui is None:
+            return
+
+        def show() -> None:
+            gui.show_dialog(
+                gui.toggle_fake_trainer,
+                "No button input. Disconnect Click for 60 seconds, then retry?",
             )
 
         self.config.loop.call_soon_threadsafe(show)
@@ -904,6 +973,7 @@ class SensorBLE(Sensor):
         if not self.start_fake_trainer():
             return False
 
+        self._cancel_zwift_click_v2_recovery_timeout()
         self._zwift_click_v2_recovery_pending = False
         self._fake_trainer_session_active = True
         self._pause_ble_sensors_for_fake_trainer()
@@ -932,6 +1002,7 @@ class SensorBLE(Sensor):
             )
             self._resume_ble_sensors_after_fake_trainer()
         else:
+            self._cancel_zwift_click_v2_recovery_timeout()
             self._zwift_click_v2_recovery_pending = False
             self._fake_trainer_session_active = False
             started = self.start_fake_trainer()

@@ -1,9 +1,11 @@
 import asyncio
+from contextlib import AsyncExitStack
 from datetime import datetime
 from pathlib import Path
 
-from modules.app_logger import app_logger
-from modules.utils.time import set_time
+from bluez_peripheral.advert import Advertisement
+from bluez_peripheral.agent import NoIoAgent
+from bluez_peripheral.util import Adapter, get_message_bus
 
 from gadgetbridge_rpi_link import (
     F_BYTE_MARKER,
@@ -28,6 +30,10 @@ from gadgetbridge_rpi_link import (
     UnknownRawEvent,
 )
 from gadgetbridge_rpi_link.bluez import BluezGadgetbridgeUartServer
+
+from modules.app_logger import app_logger
+from modules.sensor.ble.discovery import get_ble_discovery_coordinator
+from modules.utils.time import set_time
 
 
 class GadgetbridgeService:
@@ -60,11 +66,15 @@ class GadgetbridgeService:
         sensor,
         gui,
         init_statuses=False,
+        adapter_name=None,
+        ble_sensor=None,
     ):
         init_statuses = init_statuses or []
         self.product = product
         self.sensor = sensor
         self.gui = gui
+        self.adapter_name = adapter_name
+        self.ble_sensor = ble_sensor
         self.status = False
         self.gps_status = False
         self.auto_connect_gps = False
@@ -247,15 +257,45 @@ class GadgetbridgeService:
                 on_event=self._handle_event,
                 protocol=self.protocol,
             )
-            await self.server.start()
+            async with AsyncExitStack() as stack:
+                if self.ble_sensor is not None and self.adapter_name is not None:
+                    await stack.enter_async_context(
+                        self.ble_sensor.paused_zwift_click_v2()
+                    )
+                await stack.enter_async_context(
+                    get_ble_discovery_coordinator(self.adapter_name).paused()
+                )
+                await self._start_server()
             self.bus = self.server.bus
         except Exception:
             self.status = False
+            if self.server is not None:
+                await self.server.stop()
             self.server = None
             self.bus = None
             raise
         self.logger.info("[GB] Gadgetbridge UART service started")
         return self.status
+
+    async def _start_server(self):
+        if self.adapter_name is None:
+            await self.server.start()
+            return
+
+        bus = await get_message_bus()
+        self.server.bus = bus
+        path = f"/org/bluez/{self.adapter_name}"
+        adapter = Adapter(
+            bus.get_proxy_object(
+                "org.bluez", path, await bus.introspect("org.bluez", path)
+            )
+        )
+        await self.server.service.register(bus, adapter=adapter)
+        agent = NoIoAgent()
+        await agent.register(bus)
+        name = getattr(self.server, "advertised_name", self.product)
+        self.server.advert = Advertisement(name, [SERVICE_UUID], 0, 0)
+        await self.server.advert.register(bus, adapter)
 
     async def _stop_server(self):
         if self.server is not None:

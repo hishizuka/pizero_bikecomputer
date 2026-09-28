@@ -4,6 +4,7 @@ import asyncio
 import sys
 import time
 import weakref
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -36,6 +37,7 @@ class BleDiscoveryCoordinator:
 
     IDLE_STOP_DELAY = 2.5
     RECENT_ADVERTISEMENT_MAX_AGE = 5.0
+    SCANNER_OPERATION_TIMEOUT = 10.0
 
     def __init__(self, adapter: str | None):
         self.adapter = adapter
@@ -47,6 +49,7 @@ class BleDiscoveryCoordinator:
         ] = {}
         self._lock = asyncio.Lock()
         self._idle_stop_task: asyncio.Task | None = None
+        self._pause_depth = 0
 
     async def discover(
         self,
@@ -56,27 +59,67 @@ class BleDiscoveryCoordinator:
         stop_when: BleAdvertisementPredicate | None = None,
     ) -> list[BleAdvertisement]:
         request = _DiscoveryRequest(predicate, stop_when)
-        await self._subscribe(request)
+        subscribed = False
         try:
             try:
-                await asyncio.wait_for(request.completed.wait(), timeout=timeout)
+                async with asyncio.timeout(timeout):
+                    await self._subscribe(request)
+                    subscribed = True
+                    await request.completed.wait()
             except asyncio.TimeoutError:
                 pass
             return list(request.results.values())
         finally:
-            await self._unsubscribe(request)
+            if subscribed:
+                await self._unsubscribe(request)
 
     async def shutdown(self) -> None:
+        await self._cancel_idle_stop()
+        async with self._lock:
+            await self._stop_scanner()
+
+    async def _cancel_idle_stop(self) -> None:
         idle_stop_task = self._idle_stop_task
         self._idle_stop_task = None
         if idle_stop_task is not None:
             idle_stop_task.cancel()
             await asyncio.gather(idle_stop_task, return_exceptions=True)
-        async with self._lock:
-            scanner = self._scanner
-            self._scanner = None
-            if scanner is not None:
-                await scanner.stop()
+
+    async def _stop_scanner(self) -> None:
+        scanner = self._scanner
+        self._scanner = None
+        if scanner is not None:
+            await asyncio.wait_for(
+                scanner.stop(), timeout=self.SCANNER_OPERATION_TIMEOUT
+            )
+
+    @asynccontextmanager
+    async def paused(self):
+        await self._cancel_idle_stop()
+        entered = False
+        try:
+            async with self._lock:
+                self._pause_depth += 1
+                entered = True
+                await self._stop_scanner()
+            yield
+        finally:
+            if entered:
+                async with self._lock:
+                    self._pause_depth -= 1
+                    if self._pause_depth == 0 and self._requests:
+                        await self._start_scanner()
+
+    async def _start_scanner(self) -> None:
+        self._recent_advertisements.clear()
+        scanner = BleakScanner(
+            detection_callback=self._on_advertisement,
+            **_scanner_kwargs(self.adapter),
+        )
+        await asyncio.wait_for(
+            scanner.start(), timeout=self.SCANNER_OPERATION_TIMEOUT
+        )
+        self._scanner = scanner
 
     async def _subscribe(self, request: _DiscoveryRequest) -> None:
         async with self._lock:
@@ -84,20 +127,16 @@ class BleDiscoveryCoordinator:
                 self._idle_stop_task.cancel()
                 self._idle_stop_task = None
             self._requests.add(request)
+            if self._pause_depth:
+                return
             if self._scanner is not None:
                 self._deliver_recent_advertisements(request)
                 return
-            self._recent_advertisements.clear()
-            scanner = BleakScanner(
-                detection_callback=self._on_advertisement,
-                **_scanner_kwargs(self.adapter),
-            )
             try:
-                await scanner.start()
+                await self._start_scanner()
             except BaseException:
                 self._requests.remove(request)
                 raise
-            self._scanner = scanner
 
     async def _unsubscribe(self, request: _DiscoveryRequest) -> None:
         async with self._lock:
@@ -113,9 +152,7 @@ class BleDiscoveryCoordinator:
             async with self._lock:
                 if self._requests or self._scanner is None:
                     return
-                scanner = self._scanner
-                self._scanner = None
-                await scanner.stop()
+                await self._stop_scanner()
         except asyncio.CancelledError:
             return
         finally:

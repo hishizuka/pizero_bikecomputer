@@ -865,6 +865,12 @@ class Config:
                         self.G_GADGETBRIDGE["STATUS"],
                         self.G_GADGETBRIDGE["USE_GPS"],
                     ),
+                    adapter_name=(
+                        self.logger.sensor.sensor_ble._resolve_sensor_adapter()
+                        if self.G_BLE["USE_EXTERNAL"] != self.G_BLE["USE_INTERNAL"]
+                        else None
+                    ),
+                    ble_sensor=self.logger.sensor.sensor_ble,
                 )
             else:
                 app_logger.info(

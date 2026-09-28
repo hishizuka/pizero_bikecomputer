@@ -899,8 +899,8 @@ class GUI_PyQt(GUI_Qt_Base):
         self.show_dialog_ok_only(
             fn=self.finish_fake_trainer_session,
             title=(
-                "Connect Click V2 in Zwift and wait 60 seconds. "
-                "Close Zwift, then press OK. Zwift controls may stay inactive."
+                "Connect Click V2 in Zwift. Wait 60 seconds, "
+                "then close Zwift and press OK."
             ),
         )
 

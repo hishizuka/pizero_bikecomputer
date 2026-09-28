@@ -1028,6 +1028,11 @@ If ANT+ powermeter is available, set both parameters are used in W'balance (%). 
 - Install [GadgetBridge](https://gadgetbridge.org) on Android and enable the `Connectivity` menu items.
 - The `gadgetbridge-rpi-link` package installed in
   [Bluetooth and Cloud](#bluetooth-and-cloud) is required.
+- When only one `[SENSOR_BLE]` adapter is enabled, Gadgetbridge uses that same
+  BlueZ adapter. On a board without usable built-in Bluetooth, set
+  `use_internal = False` and `use_external = True`. BLE sensor and Zwift Click
+  discovery briefly pause while the Gadgetbridge advertisement is registered,
+  then resume.
 - GadgetBridge app settings
   - Enable all permissions. Most Android app permissions are enabled by default when the app is installed.
   - `Settings` > `Discovery and Pairing options` > `Discover unsupported devices`: On.
