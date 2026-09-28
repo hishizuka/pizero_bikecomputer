@@ -758,8 +758,7 @@ class SensorI2C(Sensor):
 
         if len(dop) != 3:
             return False
-        cutoff = getattr(gps_sensor, "valid_cutoff_dof", (99.0, 99.0, 99.0))
-        for value, value_cutoff in zip(dop, cutoff):
+        for value, value_cutoff in zip(dop, gps_sensor.valid_cutoff_dof):
             if not self._is_valid_number(value) or float(value) >= value_cutoff:
                 return False
 
@@ -768,10 +767,7 @@ class SensorI2C(Sensor):
         except (TypeError, ValueError):
             return False
 
-        status_ok = False
-        if gps_sensor is not None and hasattr(gps_sensor, "check_3DGPS_FIX_status"):
-            status_ok = gps_sensor.check_3DGPS_FIX_status(status)
-        if not status_ok and used_sats <= 3:
+        if not gps_sensor.check_3DGPS_FIX_status(status) and used_sats <= 3:
             return False
 
         return True
@@ -889,11 +885,16 @@ class SensorI2C(Sensor):
         app_logger.info("mag declination fetch started")
 
         try:
-            declination = await self._fetch_mag_declination_from_bgs(
-                lat,
-                lon,
-                gps_time,
-            )
+            async with self.config.network.bt_tethering_session(
+                self._update_mag_declination_async.__name__
+            ) as connected:
+                if not connected:
+                    raise RuntimeError("network unavailable")
+                declination = await self._fetch_mag_declination_from_bgs(
+                    lat,
+                    lon,
+                    gps_time,
+                )
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -1481,7 +1482,7 @@ class SensorI2C(Sensor):
             app_logger.info("fixed_pitch: %.1f deg", math.degrees(pitch))
             app_logger.info("fixed_roll: %.1f deg", math.degrees(roll))
             app_logger.info("[PITCH_ROLL] calibration stopped")
-            gui = getattr(self.config, "gui", None)
+            gui = self.config.gui
             calibration_completed = getattr(
                 gui, "pitch_roll_calibration_completed", None
             )

@@ -730,9 +730,6 @@ class MapTileWithValues():
             # check lock
             if self.get_scw_lock:
                 return
-            # Skip if there is no connectivity path available.
-            if not self.network.check_network_with_bt_tethering():
-                return
 
             if wait:
                 await self.update_jpn_scw_timeline(map_settings)
@@ -821,7 +818,6 @@ class MapTileWithValues():
             map_settings["timeline_update_date"] == current_time
             or self._rainviewer_timeline_lock.locked()
             or monotonic() < self._rainviewer_retry_at
-            or not self.network.check_network_with_bt_tethering()
         ):
             return
 
@@ -852,9 +848,6 @@ class MapTileWithValues():
             current_time = map_settings["current_time"]
             previous_timeline = map_settings["timeline"] or []
             if map_settings["timeline_update_date"] == current_time and previous_timeline:
-                return
-
-            if not self.network.check_network_with_bt_tethering():
                 return
 
             f_name = self.update_jpn_jma_bousai_timeline.__name__

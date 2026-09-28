@@ -692,21 +692,27 @@ class UploadActivityMenuWidget(MenuWidget):
 
     @qasync.asyncSlot()
     async def strava_upload(self):
-        await self.buttons[self.MANUAL_UPLOAD_BUTTONS["STRAVA"]].run(
-            self.config.api.strava_upload
-        )
+        await self._manual_upload("STRAVA", self.config.api.strava_upload)
 
     @qasync.asyncSlot()
     async def garmin_upload(self):
-        await self.buttons[self.MANUAL_UPLOAD_BUTTONS["GARMIN"]].run(
-            self.config.api.garmin_upload
-        )
+        await self._manual_upload("GARMIN", self.config.api.garmin_upload)
 
     @qasync.asyncSlot()
     async def rwgps_upload(self):
-        await self.buttons[self.MANUAL_UPLOAD_BUTTONS["RWGPS"]].run(
-            self.config.api.rwgps_upload
-        )
+        await self._manual_upload("RWGPS", self.config.api.rwgps_upload)
+
+    async def _manual_upload(self, service, upload):
+        async def run():
+            caller_name = f"manual_{service.lower()}_upload"
+            async with self.config.network.bt_tethering_session(
+                caller_name
+            ) as connected:
+                if not connected:
+                    return False
+                return await upload()
+
+        await self.buttons[self.MANUAL_UPLOAD_BUTTONS[service]].run(run)
 
 
 class LiveTrackMenuWidget(MenuWidget):
@@ -869,11 +875,11 @@ class ConnectivityMenuWidget(MenuWidget):
     def update_livetrack_button(self):
         thingsboard = self.config.G_THINGSBOARD_API
         thingsboard_available = bool(
-            thingsboard.get("HAVE_API_TOKEN")
-            and thingsboard.get("TOKEN", "").strip()
-            and thingsboard.get("SERVER", "").strip()
+            thingsboard["HAVE_API_TOKEN"]
+            and thingsboard["TOKEN"].strip()
+            and thingsboard["SERVER"].strip()
         )
-        api_helper = getattr(self.config, "api", None)
+        api_helper = self.config.api
         garmin_reason = (
             api_helper.garmin_livetrack_configuration_reason()
             if api_helper is not None
@@ -881,7 +887,7 @@ class ConnectivityMenuWidget(MenuWidget):
         )
         garmin_available = garmin_reason is None
         active = (
-            thingsboard.get("STATUS")
+            thingsboard["STATUS"]
             or self.config.G_GARMINCONNECT_API["LIVETRACK_STATUS"]
             or self.config.G_GARMINCONNECT_API["LIVETRACK_MESSAGES"]
         )

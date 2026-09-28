@@ -8,7 +8,6 @@ import json
 
 import numpy as np
 
-from modules.utils.network import detect_network, detect_network_async
 from modules.helper.network import (
     get_bytes,
     get_json,
@@ -107,6 +106,12 @@ class api:
             return None
         return ble_uart
 
+    async def _request_with_bt_tethering(self, caller_name, request, url, **kwargs):
+        async with self.network.bt_tethering_session(caller_name) as connected:
+            if not connected:
+                return None
+            return await request(url, **kwargs)
+
     def _check_livetrack_startup_config(self):
         client = self.thingsboard_livetrack_client
         if not client.enabled():
@@ -163,10 +168,7 @@ class api:
         return True
 
     async def get_google_routes(self, x1, y1, x2, y2):
-        if (
-            not await detect_network_async()
-            or self.config.G_GOOGLE_ROUTES_API["TOKEN"] == ""
-        ):
+        if self.config.G_GOOGLE_ROUTES_API["TOKEN"] == "":
             return None
         if np.any(np.isnan([x1, y1, x2, y2])):
             return None
@@ -196,7 +198,9 @@ class api:
             "Google Routes API request: "
             f"{payload['travelMode']} {y1},{x1} -> {y2},{x2}"
         )
-        response = await post(
+        response = await self._request_with_bt_tethering(
+            self.get_google_routes.__name__,
+            post,
             routes_api["URL"],
             headers=headers,
             json_data=payload,
@@ -206,7 +210,9 @@ class api:
         return response
 
     async def get_google_route_from_mapstogpx(self, url):
-        response = await get_json(
+        return await self._request_with_bt_tethering(
+            self.get_google_route_from_mapstogpx.__name__,
+            get_json,
             self.config.G_MAPSTOGPX["URL"]
             + "&lang={}&dtstr={}&gdata={}".format(
                 self.config.G_LANG.lower(),
@@ -216,8 +222,6 @@ class api:
             headers=self.config.G_MAPSTOGPX["HEADER"],
             timeout=self.config.G_MAPSTOGPX["TIMEOUT"],
         )
-
-        return response
 
     async def get_ublox_assistnow_chipcode(
         self,
@@ -251,9 +255,6 @@ class api:
 
     @asynccontextmanager
     async def ublox_assistnow_session(self):
-        if not self.network.check_network_with_bt_tethering():
-            raise RuntimeError("AssistNow network is not available")
-
         caller_name = self.ublox_assistnow_session.__name__
         bt_open_result = await self.network.open_bt_tethering(caller_name)
         if not bt_open_result.is_success():
@@ -311,8 +312,6 @@ class api:
         return data
 
     async def get_openmeteo_temperature_data(self, x, y):
-        if not await detect_network_async():
-            return None
         if np.any(np.isnan([x, y])):
             return None
 
@@ -320,9 +319,10 @@ class api:
         url = "{}?latitude={}&longitude={}&current={}".format(
             self.config.G_OPENMETEO_API["URL"], y, x, vars_str
         )
-        response = await get_json(url)
         # response["elevation"], response["current"][{vars}]
-        return response
+        return await self._request_with_bt_tethering(
+            self.get_openmeteo_temperature_data.__name__, get_json, url
+        )
 
     async def get_openmeteo_current_wind_data(self, pos, forcast_time=None):
 
@@ -334,10 +334,6 @@ class api:
         if forcast_time is None and not self.check_time_interval(
             "OPENMETEO_WIND", self.config.G_OPENMETEO_API["INTERVAL_SEC"], False
         ):
-            return self.pre_value["OPENMETEO_WIND"]
-
-        # Skip if there is no connectivity path available.
-        if not self.network.check_network_with_bt_tethering():
             return self.pre_value["OPENMETEO_WIND"]
 
         return await self.get_openmeteo_current_wind_data_internal(pos, forcast_time)
@@ -372,26 +368,23 @@ class api:
         return [wind_speeds[0], wind_directions[0]]
 
     async def get_openmeteo_data_internal(self, pos, variables, forecast_time=None):
-        caller_name = self.get_openmeteo_data_internal.__name__
-        async with self.network.bt_tethering_session(caller_name) as connected:
-            if not connected:
-                return None
-
-            time_key = "current" if forecast_time is None else "hourly"
-            params = {
-                "latitude": pos[1],
-                "longitude": pos[0],
-                "wind_speed_unit": "ms",
-                time_key: ",".join(variables),
-            }
-            if forecast_time is not None:
-                hour = forecast_time.strftime("%Y-%m-%dT%H:%M")
-                params["start_hour"] = hour
-                params["end_hour"] = hour
-            url = "{}?{}".format(
-                self.config.G_OPENMETEO_API["URL"], urllib.parse.urlencode(params)
-            )
-            response = await get_json(url)
+        time_key = "current" if forecast_time is None else "hourly"
+        params = {
+            "latitude": pos[1],
+            "longitude": pos[0],
+            "wind_speed_unit": "ms",
+            time_key: ",".join(variables),
+        }
+        if forecast_time is not None:
+            hour = forecast_time.strftime("%Y-%m-%dT%H:%M")
+            params["start_hour"] = hour
+            params["end_hour"] = hour
+        url = "{}?{}".format(
+            self.config.G_OPENMETEO_API["URL"], urllib.parse.urlencode(params)
+        )
+        response = await self._request_with_bt_tethering(
+            self.get_openmeteo_data_internal.__name__, get_json, url
+        )
 
         if not isinstance(response, dict):
             return None
@@ -400,8 +393,6 @@ class api:
 
     async def get_openmeteo_course_weather_data(self, pos, forecast_time):
         if np.any(np.isnan(pos)):
-            return None
-        if not self.network.check_network_with_bt_tethering():
             return None
 
         variables = (
@@ -431,8 +422,7 @@ class api:
 
     async def get_ridewithgps_route(self, add=False, reset=False):
         if (
-            not await detect_network_async()
-            or self.config.G_RIDEWITHGPS_API["APIKEY"] == ""
+            self.config.G_RIDEWITHGPS_API["APIKEY"] == ""
             or self.config.G_RIDEWITHGPS_API["TOKEN"] == ""
         ):
             return None
@@ -520,11 +510,6 @@ class api:
         return True
 
     def upload_check(self, blank_check, blank_msg, file_check=True):
-        # network check
-        if not detect_network(cache=False):
-            app_logger.warning("No Internet connection")
-            return False
-
         # blank check
         for b in blank_check:
             if b == "":
@@ -733,10 +718,6 @@ class api:
             and self._check_livetrack_startup_config()
             and self.thingsboard_livetrack_client.has_path()
         )
-        garmin_ready = garmin_ready and (
-            self.gadgetbridge_service is not None
-            or self.network.check_network_with_bt_tethering()
-        )
         return thingsboard_ready or garmin_ready
 
     def _create_livetrack_coordinator(self):
@@ -852,12 +833,6 @@ class api:
                 app_logger.warning(
                     f"{log_prefix}[GB] request failed; falling back to direct HTTP"
                 )
-        if await detect_network_async(cache=False):
-            return await operation(None)
-        if not self.network.check_network_with_bt_tethering():
-            app_logger.debug(f"{log_prefix} skipped: network unavailable")
-            return "network_unavailable"
-
         status, value = await run_with_bt_tethering(
             self.network,
             caller_name,

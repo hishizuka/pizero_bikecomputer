@@ -25,8 +25,7 @@ class DownloadManager:
 
     async def shutdown(self):
         await self._download_queue.put(None)
-        if self._worker_task:
-            await self._worker_task
+        await self._worker_task
 
     def get_file_download_status(self, filename):
         return self.file_download_status.get(filename)
@@ -49,15 +48,10 @@ class DownloadManager:
                 future.set_result(None)
 
     async def download_maptiles(self, map_config, map_name, z, tiles, additional_download=False):
-        # Skip queueing if there is no connectivity path available.
-        if not self.config.network.check_network_with_bt_tethering():
-            return False
         if self._is_download_queue_blocked():
             return False
 
         map_settings = map_config[map_name]
-        urls = []
-        save_paths = []
         request_header = {}
         additional_var = {}
         download_options = {}
@@ -70,7 +64,7 @@ class DownloadManager:
             additional_var["key_pair_id"] = self.config.G_STRAVA_COOKIE["KEY_PAIR_ID"]
             additional_var["policy"] = self.config.G_STRAVA_COOKIE["POLICY"]
             additional_var["signature"] = self.config.G_STRAVA_COOKIE["SIGNATURE"]
-            idcf = self.config.G_STRAVA_COOKIE.get("IDCF")
+            idcf = self.config.G_STRAVA_COOKIE["IDCF"]
             if idcf:
                 request_header["Cookie"] = f"_strava_idcf={idcf}"
             download_options["log_suppressed_statuses"] = (404,)
@@ -95,32 +89,34 @@ class DownloadManager:
 
         basetime = additional_var.get("basetime")
         validtime = additional_var.get("validtime")
+        created_tile_dirs = set()
 
-        for tile in tiles:
-            self.make_maptile_dir(map_name, z, tile[0], basetime, validtime)
-            url = map_settings["url"].format(z=z, x=tile[0], y=tile[1], **additional_var)
-            save_path = get_maptile_filename(
-                map_name, z, *tile, map_settings
+        def tile_request(zoom, x, y):
+            if (zoom, x) not in created_tile_dirs:
+                self.make_maptile_dir(map_name, zoom, x, basetime, validtime)
+                created_tile_dirs.add((zoom, x))
+            return (
+                map_settings["url"].format(z=zoom, x=x, y=y, **additional_var),
+                get_maptile_filename(map_name, zoom, x, y, map_settings),
             )
-            urls.append(url)
-            save_paths.append(save_path)
 
-        enqueued = await self._maybe_enqueue_download_item(
-            {
-                "urls": urls,
-                "headers": request_header,
-                "save_paths": save_paths,
-                **download_options,
-            }
-        )
-        if not enqueued:
+        async def enqueue(requests):
+            return await self._maybe_enqueue_download_item(
+                {
+                    "urls": [url for url, _ in requests],
+                    "headers": request_header,
+                    "save_paths": [path for _, path in requests],
+                    **download_options,
+                }
+            )
+
+        if not await enqueue([tile_request(z, *tile) for tile in tiles]):
             return False
 
         if not additional_download or map_name == "rainviewer":
             return True
 
-        additional_urls = []
-        additional_save_paths = []
+        additional_requests = []
         z_plus_1 = z + 1
         z_minus_1 = z - 1
         native_zoom_levels = map_settings.get("native_zoom_levels")
@@ -136,42 +132,19 @@ class DownloadManager:
 
         for tile in tiles:
             if max_zoom_cond:
-                for i in range(2):
-                    x_val = 2 * tile[0] + i
-                    self.make_maptile_dir(map_name, z_plus_1, x_val, basetime, validtime)
-                    for j in range(2):
-                        y_val = 2 * tile[1] + j
-                        url = map_settings["url"].format(z=z_plus_1, x=x_val, y=y_val, **additional_var)
-                        save_path = get_maptile_filename(
-                            map_name, z_plus_1, x_val, y_val, map_settings
-                        )
-                        additional_urls.append(url)
-                        additional_save_paths.append(save_path)
+                additional_requests.extend(
+                    tile_request(z_plus_1, 2 * tile[0] + i, 2 * tile[1] + j)
+                    for i in range(2)
+                    for j in range(2)
+                )
 
-            if z_minus_1 <= 0:
-                continue
+            if z_minus_1 > 0 and min_zoom_cond:
+                request = tile_request(z_minus_1, int(tile[0] / 2), int(tile[1] / 2))
+                if not any(url == request[0] for url, _ in additional_requests):
+                    additional_requests.append(request)
 
-            if min_zoom_cond:
-                x_val = int(tile[0] / 2)
-                y_val = int(tile[1] / 2)
-                self.make_maptile_dir(map_name, z_minus_1, x_val, basetime, validtime)
-                url = map_settings["url"].format(z=z_minus_1, x=x_val, y=y_val, **additional_var)
-                if url not in additional_urls:
-                    save_path = get_maptile_filename(
-                        map_name, z_minus_1, x_val, y_val, map_settings
-                    )
-                    additional_urls.append(url)
-                    additional_save_paths.append(save_path)
-
-        if additional_urls:
-            await self._maybe_enqueue_download_item(
-                {
-                    "urls": additional_urls,
-                    "headers": request_header,
-                    "save_paths": additional_save_paths,
-                    **download_options,
-                }
-            )
+        if additional_requests:
+            await enqueue(additional_requests)
 
         return True
 
@@ -198,63 +171,70 @@ class DownloadManager:
     async def _download_worker(self):
         caller_name = self._download_worker.__name__
 
-        while True:
-            if self._download_queue.qsize() == 0:
-                await self.bluetooth.close_bt_tethering(caller_name)
-            queue_item = await self._download_queue.get()
-            if queue_item is None:
-                self._download_queue.task_done()
-                break
-
-            retry_count = queue_item.get("retry_count", 0)
-            original_paths = tuple(queue_item["save_paths"])
-
-            # download files with retry
+        try:
             while True:
-                try:
-                    results = await self._download_worker_handle_task(queue_item, caller_name)
-                except asyncio.CancelledError:
-                    self._finish_files(original_paths)
+                if self._download_queue.qsize() == 0:
+                    await self.bluetooth.close_bt_tethering(caller_name)
+                queue_item = await self._download_queue.get()
+                if queue_item is None:
                     self._download_queue.task_done()
-                    return
-
-                if results is None:
                     break
 
-                retry_urls = []
-                retry_save_paths = []
+                retry_count = queue_item.get("retry_count", 0)
+                original_paths = tuple(queue_item["save_paths"])
 
-                for url, save_path, status in zip(queue_item["urls"], queue_item["save_paths"], results):
-                    if status == -1:  # DNS error
-                        retry_urls.append(url)
-                        retry_save_paths.append(save_path)
+                # download files with retry
+                while True:
+                    try:
+                        results = await self._download_worker_handle_task(
+                            queue_item, caller_name
+                        )
+                    except asyncio.CancelledError:
+                        self._finish_files(original_paths)
+                        self._download_queue.task_done()
+                        return
 
-                if not retry_urls:
-                    break
+                    if results is None:
+                        break
 
-                if retry_count >= self._dns_retry_max_attempts:
-                    await self._cleanup_failed_downloads(retry_save_paths, caller_name)
-                    break
+                    retry_pairs = [
+                        (url, path)
+                        for url, path, status in zip(
+                            queue_item["urls"], queue_item["save_paths"], results
+                        )
+                        if status == -1  # DNS error
+                    ]
+                    if not retry_pairs:
+                        break
+                    retry_urls, retry_save_paths = map(list, zip(*retry_pairs))
 
-                await self.bluetooth.close_bt_tethering(caller_name)
-                delay = self._calculate_retry_delay(retry_count)
-                self._start_download_queue_block(duration=delay)
-                self.bluetooth.start_bt_open_block(duration=delay)
-                app_logger.info(
-                    "Download DNS failure detected, retrying in %ss (attempt %s/%s)",
-                    delay,
-                    retry_count + 1,
-                    self._dns_retry_max_attempts,
-                )
-                await asyncio.sleep(delay)
-                queue_item["urls"] = retry_urls
-                queue_item["save_paths"] = retry_save_paths
-                queue_item["retry_count"] = retry_count + 1
-                retry_count += 1
-                continue
+                    if retry_count >= self._dns_retry_max_attempts:
+                        await self._cleanup_failed_downloads(
+                            retry_save_paths, caller_name
+                        )
+                        break
 
-            self._finish_files(original_paths)
-            self._download_queue.task_done()
+                    await self.bluetooth.close_bt_tethering(caller_name)
+                    delay = self._calculate_retry_delay(retry_count)
+                    self._start_download_queue_block(duration=delay)
+                    self.bluetooth.start_bt_open_block(duration=delay)
+                    app_logger.info(
+                        "Download DNS failure detected, retrying in %ss "
+                        "(attempt %s/%s)",
+                        delay,
+                        retry_count + 1,
+                        self._dns_retry_max_attempts,
+                    )
+                    await asyncio.sleep(delay)
+                    queue_item["urls"] = retry_urls
+                    queue_item["save_paths"] = retry_save_paths
+                    queue_item["retry_count"] = retry_count + 1
+                    retry_count += 1
+
+                self._finish_files(original_paths)
+                self._download_queue.task_done()
+        finally:
+            await self.bluetooth.close_bt_tethering(caller_name)
 
     async def put(self, queue_item):
         """Public queue-like interface used by other modules."""
@@ -317,7 +297,7 @@ class DownloadManager:
             if pending_item is None:
                 shutdown_requested = True
             else:
-                drained_save_paths.extend(pending_item.get("save_paths", []))
+                drained_save_paths.extend(pending_item["save_paths"])
             self._download_queue.task_done()
 
         if shutdown_requested:

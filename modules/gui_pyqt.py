@@ -636,7 +636,6 @@ class GUI_PyQt(GUI_Qt_Base):
             res
             and self.config.G_AUTO_UPLOAD
             and any(self.config.G_AUTO_UPLOAD_SERVICE.values())
-            and self.config.network.check_network_with_bt_tethering()
         ):
             self.show_dialog(self.upload_activity, "Upload Activity?")
 
@@ -649,22 +648,17 @@ class GUI_PyQt(GUI_Qt_Base):
             "GARMIN": self.config.api.garmin_upload,
         }
 
-        # BT tethering on
-        bt_open_result = await self.config.network.open_bt_tethering(f_name)
-        if not bt_open_result.is_success():
-            self.show_dialog_ok_only(None, "No network.")
-            return
-
         res_status = False
-        for k, v in self.config.G_AUTO_UPLOAD_SERVICE.items():
-            if v:
-                self.show_forced_message(f"Upload to {k}...")
-                await asyncio.sleep(1.0)
-                # need to select service with loading images
-                res_status |= await upload_func[k]()
-
-        # BT tethering off
-        await self.config.network.close_bt_tethering(f_name)
+        async with self.config.network.bt_tethering_session(f_name) as connected:
+            if not connected:
+                self.show_dialog_ok_only(None, "No network.")
+                return
+            for k, v in self.config.G_AUTO_UPLOAD_SERVICE.items():
+                if v:
+                    self.show_forced_message(f"Upload to {k}...")
+                    await asyncio.sleep(1.0)
+                    # need to select service with loading images
+                    res_status |= await upload_func[k]()
 
         self.delete_popup()
         if res_status:

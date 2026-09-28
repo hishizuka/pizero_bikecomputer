@@ -30,7 +30,7 @@ async def run_with_bt_tethering(
 ):
     """Run one operation while Bluetooth tethering is open."""
     app_logger.debug(f"{log_prefix} opening BT tethering for {purpose}")
-    open_result = await network.open_bt_tethering(caller_name)
+    open_result = await network.open_bt_tethering(caller_name, wait_lock=True)
     if not open_result.is_success():
         app_logger.debug(f"{log_prefix} failed to open BT tethering for {purpose}")
         return "open_error", None

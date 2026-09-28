@@ -22,7 +22,6 @@ from modules.pyqt.components.static_map import (
     StaticMapScene,
 )
 from modules.pyqt.pyqt_item import Item
-from modules.utils.network import detect_network_async
 from .pyqt_menu_widget import (
     ListItemWidget,
     ListWidget,
@@ -163,17 +162,12 @@ class CoursesMenuWidget(MenuWidget):
     async def load_file(self, filename):
         # HTML from GoogleMap App
         if filename == self.config.G_RECEIVE_COURSE_FILE:
-            if not await detect_network_async():
-                self.config.gui.change_dialog(
-                    title="Requires network connection.", button_label="Return"
+            await self.load_html_route(
+                os.path.join(
+                    self.config.G_COURSE_DIR, self.config.G_RECEIVE_COURSE_FILE
                 )
-            else:
-                await self.load_html_route(
-                    os.path.join(
-                        self.config.G_COURSE_DIR, self.config.G_RECEIVE_COURSE_FILE
-                    )
-                )
-                self.onoff_course_cancel_button()
+            )
+            self.onoff_course_cancel_button()
         # course file
         elif any(extension in filename.lower() for extension in (".tcx", ".fit")):
             await self.load_course_route(filename)
@@ -190,10 +184,11 @@ class CoursesMenuWidget(MenuWidget):
             msg = "Loading succeeded!"
         except asyncio.TimeoutError:
             msg = "Loading failed."
-        except:
+        except Exception:
             import traceback
 
             traceback.print_exc()
+            msg = "Loading failed."
         finally:
             self.config.gui.show_forced_message(msg)
 
@@ -271,7 +266,12 @@ class CourseListWidget(ListWidget):
             self.add_list_item(course_item)
 
     async def list_ride_with_gps(self, add=False, reset=False):
-        courses = await self.config.api.get_ridewithgps_route(add, reset)
+        async with self.config.network.bt_tethering_session(
+            self.list_ride_with_gps.__name__
+        ) as connected:
+            if not connected:
+                return
+            courses = await self.config.api.get_ridewithgps_route(add, reset)
 
         for c in reversed(courses or []):
             course_item = CourseListItemWidget(self, self.list_type, c)

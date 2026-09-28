@@ -37,11 +37,11 @@ class ThingsBoardLiveTrackClient:
         self.course_send_revision = 0
 
         settings = config.G_THINGSBOARD_API
-        server = settings.get("SERVER", "").strip()
+        server = settings["SERVER"].strip()
         if server and not server.startswith(("http://", "https://")):
             server = f"https://{server}"
         server = server.rstrip("/")
-        token = settings.get("TOKEN", "").strip()
+        token = settings["TOKEN"].strip()
 
         if token and server:
             access_token = urllib.parse.quote(token, safe="")
@@ -54,24 +54,22 @@ class ThingsBoardLiveTrackClient:
             )
 
     def enabled(self):
-        return bool(self.config.G_THINGSBOARD_API.get("STATUS", False))
+        return bool(self.config.G_THINGSBOARD_API["STATUS"])
 
     def configuration_reason(self):
         settings = self.config.G_THINGSBOARD_API
         if not self.enabled():
             return None
-        if not settings.get("TOKEN", "").strip():
+        if not settings["TOKEN"].strip():
             return "LiveTrack is disabled because ThingsBoard TOKEN is not configured."
-        if not settings.get("SERVER", "").strip():
+        if not settings["SERVER"].strip():
             return "LiveTrack is disabled because ThingsBoard server is not configured."
         return None
 
     def has_path(self):
-        if self._gadgetbridge_service_getter() is not None:
-            return True
         return (
-            _IMPORT_THINGSBOARD
-            and self.config.network.check_network_with_bt_tethering()
+            self._gadgetbridge_service_getter() is not None
+            or self.mqtt_client is not None
         )
 
     async def _send_via_gadgetbridge(self, url, data, timeout=15):

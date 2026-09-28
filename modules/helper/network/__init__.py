@@ -4,7 +4,6 @@ from ..bluetooth.bluetooth_manager import BluetoothManager, BtOpenResult
 from .download_manager import DownloadManager
 from .http_client import get_bytes, get_json, post
 from .wifi_manager import WifiManager
-from modules.utils.network import detect_network
 
 
 class Network:
@@ -63,20 +62,6 @@ class Network:
 
     async def download_maptiles(self, *args, **kwargs):
         return await self._downloads.download_maptiles(*args, **kwargs)
-
-    def check_network_with_bt_tethering(self):
-        if not self.config.G_AUTO_BT_TETHERING:
-            return detect_network(cache=False)
-
-        bt_pan = self.config.bt_pan
-        if bt_pan is None:
-            return False
-
-        has_required_device = (
-            self.config.G_BT_PAN_DEVICE
-            and bt_pan.get_bt_pan_devices()
-        )
-        return has_required_device
 
     async def bluetooth_tethering(self, disconnect=False):
         return await self.bluetooth.bluetooth_tethering(disconnect=disconnect)

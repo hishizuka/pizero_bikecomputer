@@ -168,8 +168,6 @@ class RainTiles:
 
     async def refresh(self, source, pos):
         network = self.config.network
-        if not network.check_network_with_bt_tethering():
-            return None, None
         async with network.bt_tethering_session(
             "rain_alert", wait_lock=True
         ) as connected:
