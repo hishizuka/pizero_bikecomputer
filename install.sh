@@ -106,6 +106,37 @@ enable_uart_interface() {
     ENABLE_UART_DONE=true
 }
 
+configure_pwm_overlay() {
+    local overlay="$1"
+    local active='^[[:space:]]*dtoverlay=pwm(-2chan)?([,[:space:]]|$)'
+    local known='^[[:space:]]*dtoverlay=(pwm,pin=18,func=2|pwm,pin=13,func=4|pwm-2chan,pin=18,func=2,pin2=13,func2=4)[[:space:]]*(#.*)?$'
+
+    if [[ ! -f "$BOOT_CONFIG_FILE" ]]; then
+        echo "❌ $BOOT_CONFIG_FILE was not found."
+        return 1
+    fi
+    if [[ -n "$overlay" ]] && grep -E "$active" "$BOOT_CONFIG_FILE" | grep -Ev "$known" >/dev/null; then
+        echo "❌ Existing custom PWM overlay in $BOOT_CONFIG_FILE; resolve it before installing."
+        return 1
+    fi
+    if [[ -n "$overlay" ]] && [[ "$(grep -Ec "$active" "$BOOT_CONFIG_FILE")" == 1 ]] &&
+        grep -Fxq "$overlay" "$BOOT_CONFIG_FILE"; then
+        echo "ℹ️ PWM overlay is already configured."
+        return 0
+    fi
+
+    if grep -Eq "$known" "$BOOT_CONFIG_FILE"; then
+        sudo sed -i -E "/$known/d" "$BOOT_CONFIG_FILE"
+    fi
+    if [[ -n "$overlay" ]]; then
+        if [[ "$(awk '/^\[/{section=$0} END{print section}' "$BOOT_CONFIG_FILE")" != '[all]' ]]; then
+            printf '\n[all]\n' | sudo tee -a "$BOOT_CONFIG_FILE" >/dev/null
+        fi
+        printf '\n%s\n' "$overlay" | sudo tee -a "$BOOT_CONFIG_FILE" >/dev/null
+        echo "✅ PWM overlay configured: $overlay"
+    fi
+}
+
 #############################################################
 # get user input
 #############################################################
@@ -151,6 +182,11 @@ elif [[ "$enable_i2c" == "true" ]]; then
     prompt_and_store "Configure I2C at 400kHz?" use_i2c_400khz
 fi
 prompt_and_store "Enable SPI?" enable_spi
+use_pwm_backlight=false
+if [[ "$enable_spi" == "true" ]]; then
+    prompt_and_store "Use PWM0 (GPIO18) for the backlight?" use_pwm_backlight
+fi
+prompt_and_store "Use PWM1 (GPIO13) for the buzzer?" use_pwm_buzzer
 prompt_and_store "Install services?" install_services
 install_services_use_x=false
 install_services_use_sharp_drm=false
@@ -337,6 +373,16 @@ fi
 # disable raspberry pi specific hardware
 #############################################################
 
+
+pwm_overlay=""
+if [[ "$use_pwm_backlight" == "true" && "$use_pwm_buzzer" == "true" ]]; then
+    pwm_overlay="dtoverlay=pwm-2chan,pin=18,func=2,pin2=13,func2=4"
+elif [[ "$use_pwm_backlight" == "true" ]]; then
+    pwm_overlay="dtoverlay=pwm,pin=18,func=2"
+elif [[ "$use_pwm_buzzer" == "true" ]]; then
+    pwm_overlay="dtoverlay=pwm,pin=13,func=4"
+fi
+configure_pwm_overlay "$pwm_overlay"
 
 # Disable audio on Raspberry Pi
 if [ -f "$BOOT_CONFIG_FILE" ]; then

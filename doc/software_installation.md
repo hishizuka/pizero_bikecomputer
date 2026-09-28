@@ -603,6 +603,22 @@ and the recommended way is to run `install.sh` and answer `Install services? -> 
 `install.sh` fills the placeholders in the template, installs `rotate_debug_log.sh`,
 and enables `pizero_bikecomputer.service` automatically.
 
+When SPI is enabled, the installer asks whether PWM0 (GPIO18) drives the backlight.
+It asks whether PWM1 (GPIO13) drives the buzzer regardless of SPI. It updates
+`/boot/firmware/config.txt` as follows:
+
+| Backlight | Buzzer | Overlay |
+|:-|:-|:-|
+| Yes | Yes | `dtoverlay=pwm-2chan,pin=18,func=2,pin2=13,func2=4` |
+| Yes | No | `dtoverlay=pwm,pin=18,func=2` |
+| No | Yes | `dtoverlay=pwm,pin=13,func=4` |
+| No | No | No PWM overlay for these outputs |
+
+Rerunning the installer replaces an earlier overlay from this table instead of
+adding a conflicting one. A custom PWM overlay must be resolved manually before
+selecting either output. Reboot to apply changes to `config.txt`.
+
+
 The application log is written to `log/debug.log`.
 
 If you want to manage the service manually, use `scripts/install/etc/systemd/system/pizero_bikecomputer.service`
