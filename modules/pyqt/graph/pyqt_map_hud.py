@@ -94,6 +94,9 @@ class MapHudMixin:
 
     def _setup_hud_items(self):
         self.track_history_plot = self.plot.plot(pen=self.track_pen)
+        self.track_history_plot.curve.setCacheMode(
+            QtWidgets.QGraphicsItem.CacheMode.DeviceCoordinateCache
+        )
         self.track_tail_plot = self.plot.plot(pen=self.track_pen)
         # Keep compatibility for existing call sites while migrating to dual track layers.
         self.track_plot = self.track_tail_plot
@@ -137,7 +140,7 @@ class MapHudMixin:
         self.fixed_attribution_label = self._create_fixed_hud_label(
             self._fixed_hud_overlay,
             QtCore.Qt.TextFormat.RichText,
-            QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignBottom
+            QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignBottom,
         )
         self.fixed_attribution_label.hide()
 
@@ -181,7 +184,7 @@ class MapHudMixin:
         self.fixed_scale_text_label = self._create_fixed_hud_label(
             self.fixed_scale_widget,
             QtCore.Qt.TextFormat.PlainText,
-            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignBottom
+            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignBottom,
         )
         self.fixed_scale_bar_widget = _FixedScaleBar(self.fixed_scale_widget)
 
@@ -296,14 +299,10 @@ class MapHudMixin:
             label.setText(attribution_html)
             label.adjustSize()
             self._last_fixed_attribution_html = attribution_html
-            self._invalidate_fixed_hud_layout(
-                include_legend=True, include_scale=False
-            )
+            self._invalidate_fixed_hud_layout(include_legend=True, include_scale=False)
 
         if self._set_fixed_widget_visible(label, visible):
-            self._invalidate_fixed_hud_layout(
-                include_legend=True, include_scale=False
-            )
+            self._invalidate_fixed_hud_layout(include_legend=True, include_scale=False)
         self._ensure_fixed_hud_layout(include_legend=True)
         if visible:
             self._schedule_fixed_hud_overlay_layout()
@@ -421,7 +420,10 @@ class MapHudMixin:
         legend_height = max(image_height, left_height, right_height)
 
         attribution_height = 0
-        if self.fixed_attribution_label is not None and self.fixed_attribution_label.isVisible():
+        if (
+            self.fixed_attribution_label is not None
+            and self.fixed_attribution_label.isVisible()
+        ):
             attribution_height = self.fixed_attribution_label.height()
 
         x_pos = overlay.width() - self.hud_padding_px - right_edge_gap - legend_width
@@ -452,7 +454,9 @@ class MapHudMixin:
         if geom_key == self._fixed_legend_geom_cache:
             self._fixed_legend_layout_dirty = False
             return
-        widget.setGeometry(int(x_pos), int(y_pos), int(legend_width), int(legend_height))
+        widget.setGeometry(
+            int(x_pos), int(y_pos), int(legend_width), int(legend_height)
+        )
 
         left_label.move(0, left_y)
         image_label.move(left_width + gap, image_y)

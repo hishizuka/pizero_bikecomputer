@@ -381,18 +381,8 @@ class MapStateMixin:
         draw_params = self.init_draw_map(map_config, map_name, z, p0, p1, tile_size)
         if draw_params is None:
             return False
-        z_draw, z_conv_factor, tile_x, tile_y = draw_params
-        tiles = self.get_tiles_for_drawing(tile_x, tile_y, z_conv_factor)
-
-        # Cache the result
-        self._cached_tiles[map_name] = {
-            "z": z,
-            "z_draw": z_draw,
-            "tiles": tiles,
-            "tile_x": tile_x,
-            "tile_y": tile_y,
-            "z_conv_factor": z_conv_factor,
-        }
+        z_draw = draw_params[0]
+        tiles = self._get_tiles_for_view(map_name, z, draw_params)
 
         # Check for pending downloads
         existing_tiles = self.maptile_with_values.existing_tiles

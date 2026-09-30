@@ -41,6 +41,7 @@ class WindVaneItem(GraphicsObject):
     def __init__(self, angle, color, size):
         super().__init__()
         self.setFlag(self.GraphicsItemFlag.ItemIgnoresTransformations)
+        self.setCacheMode(self.CacheMode.DeviceCoordinateCache)
         self._picture = build_wind_vane_picture(angle, color, size)
         self._bounding = QtCore.QRectF(self._picture.boundingRect())
 

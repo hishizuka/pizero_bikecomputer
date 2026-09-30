@@ -41,6 +41,7 @@ class MapWidget(
 
     def setup_ui_extra(self):
         super().setup_ui_extra()
+        self._init_tile_runtime_state()
 
         self._setup_hud_items()
         self._setup_map_state_items()

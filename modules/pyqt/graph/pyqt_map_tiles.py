@@ -1,9 +1,10 @@
 import io
-from collections import OrderedDict
+import os
 import shutil
 import sqlite3
 import tempfile
 import time
+from collections import OrderedDict
 
 import numpy as np
 from PIL import Image, ImageEnhance
@@ -21,14 +22,8 @@ from modules.utils.map import (
 
 
 class MapTileMixin:
-    pre_zoomlevel = {}
-    drawn_tile = {}
-    _cached_tiles = {}
-    _tile_view_signature = {}
-    _tile_items = {}
-    _tile_draw_pending = {}
-    _tile_item_lru = OrderedDict()
     tile_item_lru_max = 384
+    tile_parent_cache_max = 4
     tile_batch_size_main = 3
     tile_batch_size_overlay = 2
     tile_modify_mode = 0
@@ -36,7 +31,7 @@ class MapTileMixin:
         2: "000000 FFFFFF",
         8: None,
         64: None,
-        #64: "000000 FF0000 00FF00 0000FF 00FFFF FF00FF FFFF00 FFFFFF",
+        # 64: "000000 FF0000 00FF00 0000FF 00FFFF FF00FF FFFF00 FFFFFF",
     }
 
     def get_geo_area(self, x, y):
@@ -52,7 +47,9 @@ class MapTileMixin:
             tile_size,
         )
         pos_x0, pos_y0 = get_lon_lat_from_tile_xy(self.zoomlevel, tile_x, tile_y)
-        pos_x1, pos_y1 = get_lon_lat_from_tile_xy(self.zoomlevel, tile_x + 1, tile_y + 1)
+        pos_x1, pos_y1 = get_lon_lat_from_tile_xy(
+            self.zoomlevel, tile_x + 1, tile_y + 1
+        )
         return (
             abs(pos_x1 - pos_x0) / tile_size * self.width(),
             abs(pos_y1 - pos_y0) / tile_size * self.height(),
@@ -60,56 +57,51 @@ class MapTileMixin:
 
     @staticmethod
     def _palette_rgb_multilevel(levels=2):
-        if levels < 2:
-            return None
-
         vals = [round(i * 255 / (levels - 1)) for i in range(levels)]
-
-        def hex2(v: int) -> str:
-            return f"{v:02X}"
-
-        colors = []
-        for r in vals:
-            for g in vals:
-                for b in vals:
-                    colors.append(f"{hex2(r)}{hex2(g)}{hex2(b)}")
-
-        return " ".join(colors)
+        return " ".join(
+            f"{r:02X}{g:02X}{b:02X}" for r in vals for g in vals for b in vals
+        )
 
     def _setup_tile_dither_palette(self):
         if not shutil.which("didder"):
             return
 
-        palette8 = self._palette_rgb_multilevel(2)
-        palette64 = self._palette_rgb_multilevel(4)
-        if palette8:
-            self.tile_didder_pallete[8] = palette8
-        if palette64:
-            self.tile_didder_pallete[64] = palette64
+        for colors, levels in ((8, 2), (64, 4)):
+            self.tile_didder_pallete[colors] = self._palette_rgb_multilevel(levels)
+
+    def _load_tile_image(self, image_file, map_name, expanded):
+        if not expanded or not isinstance(image_file, str):
+            with Image.open(image_file) as image:
+                return image.copy()
+        stat = os.stat(image_file)
+        key = (map_name, image_file, stat.st_mtime_ns, stat.st_size)
+        image = self._tile_parent_cache.pop(key, None)
+        if image is None:
+            with Image.open(image_file) as source:
+                image = source.copy()
+        self._tile_parent_cache[key] = image
+        while len(self._tile_parent_cache) > self.tile_parent_cache_max:
+            self._tile_parent_cache.popitem(last=False)
+        return image
 
     def _init_tile_runtime_state(self):
-        if not isinstance(self._tile_view_signature, dict):
-            self._tile_view_signature = {}
-        if not isinstance(self._tile_items, dict):
-            self._tile_items = {}
-        if not isinstance(self._tile_draw_pending, dict):
-            self._tile_draw_pending = {}
-        if not isinstance(self._tile_item_lru, OrderedDict):
-            self._tile_item_lru = OrderedDict()
+        self.pre_zoomlevel = {}
+        self.drawn_tile = {}
+        self._cached_tiles = {}
+        self._tile_view_signature = {}
+        self._tile_items = {}
+        self._tile_draw_pending = {}
+        self._tile_item_lru = OrderedDict()
+        self._tile_parent_cache = OrderedDict()
 
     def _get_map_tile_items(self, map_name):
-        items = self._tile_items.get(map_name)
-        if items is None:
-            items = {}
-            self._tile_items[map_name] = items
-        return items
+        return self._tile_items.setdefault(map_name, {})
 
-    def _get_tile_pending_state(self, map_name):
-        self._init_tile_runtime_state()
+    def _get_tile_pending_state(self, map_name, signature):
         state = self._tile_draw_pending.get(map_name)
-        if state is None:
+        if state is None or state["signature"] != signature:
             state = {
-                "signature": None,
+                "signature": signature,
                 "queue": [],
                 "key_set": set(),
                 "expand_keys": {},
@@ -117,32 +109,13 @@ class MapTileMixin:
             self._tile_draw_pending[map_name] = state
         return state
 
-    def _reset_tile_pending_state(self, map_name, signature=None):
-        self._tile_draw_pending[map_name] = {
-            "signature": signature,
-            "queue": [],
-            "key_set": set(),
-            "expand_keys": {},
-        }
-
-    def _clear_tile_pending_state(self, map_name=None):
-        self._init_tile_runtime_state()
-        if map_name is None:
-            self._tile_draw_pending = {}
-            return
-        self._tile_draw_pending.pop(map_name, None)
-
     def _has_tile_batch_pending(self):
-        self._init_tile_runtime_state()
-        for state in self._tile_draw_pending.values():
-            if state.get("queue"):
-                return True
-        return False
+        return any(state["queue"] for state in self._tile_draw_pending.values())
 
     def _mark_tile_drawn(self, map_name, z, x, y):
-        self.drawn_tile.setdefault(map_name, {})
-        self.drawn_tile[map_name].setdefault(z, {})
-        self.drawn_tile[map_name][z][self._drawn_tile_key(x, y)] = True
+        self.drawn_tile.setdefault(map_name, {}).setdefault(z, {})[
+            self._drawn_tile_key(x, y)
+        ] = True
 
     @staticmethod
     def _build_tile_view_signature(
@@ -176,12 +149,6 @@ class MapTileMixin:
     def _drawn_tile_key(x, y):
         return f"{x}-{y}"
 
-    def _remove_plot_item_safely(self, item):
-        try:
-            self.plot.removeItem(item)
-        except Exception:
-            pass
-
     def _is_visible_tile_drawn(self, map_name, z, tile_x, tile_y):
         map_drawn = self.drawn_tile.get(map_name, {}).get(z, {})
         if not map_drawn:
@@ -192,7 +159,6 @@ class MapTileMixin:
         return True
 
     def _sync_visible_tile_items(self, map_name, z, tile_x, tile_y):
-        self._init_tile_runtime_state()
         visible_keys = {
             (map_name, z, i, j)
             for i, j in self._iter_visible_tile_coords(tile_x, tile_y)
@@ -203,9 +169,9 @@ class MapTileMixin:
             item_key = (map_name, item_z, item_x, item_y)
             if item_key in visible_keys:
                 continue
-            self._remove_plot_item_safely(item)
+            self.plot.removeItem(item)
             del map_items[(item_z, item_x, item_y)]
-            self._tile_item_lru.pop(item_key, None)
+            del self._tile_item_lru[item_key]
 
         map_drawn = {}
         for item_z, item_x, item_y in map_items.keys():
@@ -243,18 +209,13 @@ class MapTileMixin:
             if evict_key is None:
                 break
 
-            self._tile_item_lru.pop(evict_key, None)
+            del self._tile_item_lru[evict_key]
             map_name, z, x, y = evict_key
-            map_items = self._tile_items.get(map_name, {})
-            item = map_items.pop((z, x, y), None)
-            if item is not None:
-                self._remove_plot_item_safely(item)
-            map_drawn = self.drawn_tile.get(map_name, {}).get(z)
-            if map_drawn is not None:
-                map_drawn.pop(self._drawn_tile_key(x, y), None)
+            item = self._tile_items[map_name].pop((z, x, y))
+            self.plot.removeItem(item)
+            del self.drawn_tile[map_name][z][self._drawn_tile_key(x, y)]
 
     def _cleanup_tile_runtime_cache(self, active_map_names):
-        self._init_tile_runtime_state()
         active = set(active_map_names)
 
         for map_name in list(self._tile_items.keys()):
@@ -270,31 +231,35 @@ class MapTileMixin:
                 del self._tile_draw_pending[map_name]
 
     def _clear_tile_items(self, map_name=None):
-        self._init_tile_runtime_state()
-
         if map_name is None:
             map_names = list(self._tile_items.keys())
         else:
             map_names = [map_name]
 
+        self._tile_parent_cache = OrderedDict(
+            (key, image)
+            for key, image in self._tile_parent_cache.items()
+            if map_name is not None and key[0] != map_name
+        )
+
         for target_map in map_names:
             map_items = self._tile_items.get(target_map, {})
-            for item in list(map_items.values()):
-                self._remove_plot_item_safely(item)
+            for item in map_items.values():
+                self.plot.removeItem(item)
             if target_map in self._tile_items:
                 self._tile_items[target_map] = {}
             self._tile_view_signature.pop(target_map, None)
-            self._clear_tile_pending_state(target_map)
+            self._tile_draw_pending.pop(target_map, None)
             if target_map in self.drawn_tile:
                 self.drawn_tile[target_map] = {}
 
         if map_name is None:
             self._tile_item_lru.clear()
-            self._clear_tile_pending_state()
+            self._tile_draw_pending.clear()
         else:
             for item_key in list(self._tile_item_lru.keys()):
                 if item_key[0] == map_name:
-                    self._tile_item_lru.pop(item_key, None)
+                    del self._tile_item_lru[item_key]
 
     async def draw_map_tile_by_overlay(
         self,
@@ -326,7 +291,6 @@ class MapTileMixin:
             return False
         z_draw, z_conv_factor, tile_x, tile_y = draw_params
         expand = z_conv_factor > 1
-        self._init_tile_runtime_state()
 
         tile_modify_mode = (
             self.tile_modify_mode if map_config == self.config.G_MAP_CONFIG else 0
@@ -342,10 +306,7 @@ class MapTileMixin:
         )
         visible_item_keys = self._sync_visible_tile_items(map_name, z, tile_x, tile_y)
         previous_signature = self._tile_view_signature.get(map_name)
-        pending_state = self._get_tile_pending_state(map_name)
-        if pending_state["signature"] != view_signature:
-            self._reset_tile_pending_state(map_name, signature=view_signature)
-            pending_state = self._get_tile_pending_state(map_name)
+        pending_state = self._get_tile_pending_state(map_name, view_signature)
         if (
             previous_signature == view_signature
             and self._is_visible_tile_drawn(map_name, z, tile_x, tile_y)
@@ -355,27 +316,7 @@ class MapTileMixin:
             self._evict_tile_items_by_lru(protected_keys=visible_item_keys)
             return False
 
-        # Use cached tile info only when the viewport signature exactly matches.
-        cached = self._cached_tiles.get(map_name)
-        if (
-            cached is not None
-            and cached["z"] == z
-            and cached["z_draw"] == z_draw
-            and cached["z_conv_factor"] == z_conv_factor
-            and tuple(cached["tile_x"]) == tuple(tile_x)
-            and tuple(cached["tile_y"]) == tuple(tile_y)
-        ):
-            tiles = cached["tiles"]
-        else:
-            tiles = self.get_tiles_for_drawing(tile_x, tile_y, z_conv_factor)
-            self._cached_tiles[map_name] = {
-                "z": z,
-                "z_draw": z_draw,
-                "tiles": tiles,
-                "tile_x": list(tile_x),
-                "tile_y": list(tile_y),
-                "z_conv_factor": z_conv_factor,
-            }
+        tiles = self._get_tiles_for_view(map_name, z, draw_params)
 
         if not use_mbtiles:
             download_start = time.perf_counter()
@@ -424,7 +365,6 @@ class MapTileMixin:
             batch_size = (
                 self.tile_batch_size_overlay if overlay else self.tile_batch_size_main
             )
-            batch_size = max(1, int(batch_size))
             draw_keys = pending_state["queue"][:batch_size]
             pending_state["queue"] = pending_state["queue"][batch_size:]
             for key in draw_keys:
@@ -449,19 +389,16 @@ class MapTileMixin:
                     )
 
                     io_start = time.perf_counter()
-                    if not expand:
-                        img_pil = Image.open(img_file).convert("RGBA")
-                    else:
+                    img_pil = self._load_tile_image(img_file, map_name, expand)
+                    if expand:
                         expand_val = pending_state["expand_keys"][keys]
-                        img_pil = (
-                            Image.open(img_file)
-                            .crop(
-                                self.get_tile_crop_box(
-                                    tile_size, z_conv_factor, *expand_val[2:]
-                                )
+                        img_pil = img_pil.crop(
+                            self.get_tile_crop_box(
+                                tile_size, z_conv_factor, *expand_val[2:]
                             )
-                            .convert("RGBA")
                         )
+                    if not map_name.startswith(("jpn_scw", "jpn_jma_bousai")):
+                        img_pil = img_pil.convert("RGBA")
                     tile_io_elapsed_ms += (time.perf_counter() - io_start) * 1000.0
 
                     if (
@@ -495,7 +432,7 @@ class MapTileMixin:
 
                     plot_start = time.perf_counter()
                     self.plot.addItem(imgitem)
-                    imgitem.setZValue(-100)
+                    imgitem.setZValue(-90 if overlay else -100)
                     imgitem.setRect(
                         pg.QtCore.QRectF(
                             imgarray_min_x,
@@ -512,7 +449,7 @@ class MapTileMixin:
                     pending_state["expand_keys"].pop(keys, None)
                     tile_drawn_count += 1
                     drawn_any = True
-                except Exception:
+                except (OSError, ValueError):
                     # Retry the tile later instead of marking it as drawn.
                     pending_state["queue"].append(keys)
                     pending_state["key_set"].add(keys)
@@ -524,20 +461,18 @@ class MapTileMixin:
             self._evict_tile_items_by_lru(protected_keys=visible_item_keys)
             return drawn_any
         finally:
-            record_tile_perf = getattr(self, "_record_perf_map_tile_breakdown", None)
-            if callable(record_tile_perf):
-                record_tile_perf(
-                    download_ms=tile_download_elapsed_ms,
-                    download_calls=tile_download_calls,
-                    check_ms=tile_check_elapsed_ms,
-                    io_ms=tile_io_elapsed_ms,
-                    conv_ms=tile_conv_elapsed_ms,
-                    imgitem_ms=tile_imgitem_elapsed_ms,
-                    plot_ms=tile_plot_elapsed_ms,
-                    drawn_count=tile_drawn_count,
-                    reused_count=tile_reused_count,
-                    retry_count=tile_retry_count,
-                )
+            self._record_perf_map_tile_breakdown(
+                download_ms=tile_download_elapsed_ms,
+                download_calls=tile_download_calls,
+                check_ms=tile_check_elapsed_ms,
+                io_ms=tile_io_elapsed_ms,
+                conv_ms=tile_conv_elapsed_ms,
+                imgitem_ms=tile_imgitem_elapsed_ms,
+                plot_ms=tile_plot_elapsed_ms,
+                drawn_count=tile_drawn_count,
+                reused_count=tile_reused_count,
+                retry_count=tile_retry_count,
+            )
             if use_mbtiles:
                 self.cur.close()
                 self.con.close()
@@ -566,13 +501,42 @@ class MapTileMixin:
     @staticmethod
     def get_tiles_for_drawing(tile_x, tile_y, z_conv_factor):
         tiles = list(MapTileMixin._iter_visible_tile_coords(tile_x, tile_y))
-        tiles += [(i, j) for i in (tile_x[0] - 1, tile_x[1] + 1) for j in range(tile_y[0] - 1, tile_y[1] + 2)]
-        tiles += [(i, j) for i in range(tile_x[0], tile_x[1] + 1) for j in (tile_y[0] - 1, tile_y[1] + 1)]
+        tiles += [
+            (i, j)
+            for i in (tile_x[0] - 1, tile_x[1] + 1)
+            for j in range(tile_y[0] - 1, tile_y[1] + 2)
+        ]
+        tiles += [
+            (i, j)
+            for i in range(tile_x[0], tile_x[1] + 1)
+            for j in (tile_y[0] - 1, tile_y[1] + 1)
+        ]
 
         if z_conv_factor > 1:
             tiles = list({(i // z_conv_factor, j // z_conv_factor) for i, j in tiles})
 
         return tiles
+
+    def _get_tiles_for_view(self, map_name, z, draw_params):
+        z_draw, z_conv_factor, tile_x, tile_y = draw_params
+        cached = self._cached_tiles.get(map_name)
+        if cached is None or (
+            cached["z"],
+            cached["z_draw"],
+            cached["z_conv_factor"],
+            cached["tile_x"],
+            cached["tile_y"],
+        ) != (z, z_draw, z_conv_factor, tile_x, tile_y):
+            cached = {
+                "z": z,
+                "z_draw": z_draw,
+                "z_conv_factor": z_conv_factor,
+                "tile_x": tile_x,
+                "tile_y": tile_y,
+                "tiles": self.get_tiles_for_drawing(tile_x, tile_y, z_conv_factor),
+            }
+            self._cached_tiles[map_name] = cached
+        return cached["tiles"]
 
     def check_drawn_tile(
         self,

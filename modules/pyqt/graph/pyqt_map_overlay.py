@@ -344,18 +344,12 @@ class MapOverlayMixin:
         self._update_display_retrigger = True
 
     def reset_overlay(self, map_name):
-        self._clear_tile_items(self.config.G_MAP)
         self._clear_tile_items(map_name)
-        self.drawn_tile[self.config.G_MAP] = {}
         self.drawn_tile[map_name] = {}
         self.pre_zoomlevel[map_name] = np.nan
         self.set_attribution()
 
     async def overlay_map(self, main_view_changed, p0, p1, map_config, map_name):
-        if main_view_changed:
-            self._clear_tile_items(map_name)
-            self.drawn_tile[map_name] = {}
-
         z = (
             self.zoomlevel
             + int(

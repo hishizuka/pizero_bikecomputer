@@ -428,30 +428,28 @@ def get_temperature_with_tile_xy(image, x_in_tile, y_in_tile):
 
 def conv_image_internal(image, orig_colors, conv_colors):
 
-    wing_speed_mod = []
-    wing_speed_index = []
-    colors = image.getcolors(image.size[0]*image.size[1])
-    for c in colors:
-        if c[1][0] == c[1][1] == c[1][2]:
-            continue
-        min_index = _get_nearest_palette_index(c[1], orig_colors)
-        if min_index is not None:
-            wing_speed_mod.append(c[1])
-            wing_speed_index.append(min_index)
+    if image.mode == "P":
+        palette = np.asarray(image.getpalette("RGB"), dtype=np.int16).reshape(-1, 3)
+        distance = np.linalg.norm(
+            palette[:, None, :] - orig_colors.astype(np.int16)[None, :, :], axis=2
+        )
+        nearest = np.argmin(distance, axis=1)
+        gray = (palette[:, 0] == palette[:, 1]) & (palette[:, 1] == palette[:, 2])
+        hit = (distance[np.arange(len(palette)), nearest] < 10) & ~gray
+        table = np.zeros((256, 4), dtype=np.uint8)
+        table[: len(palette)][hit] = conv_colors[nearest[hit]]
+        return table[np.asarray(image)]
+    image = image.convert("RGBA")
 
-    # mask and convert
     im_array = np.array(image)
-    mask = np.zeros(im_array.shape[0:2], dtype='bool')
-    for w in wing_speed_mod:
-        mask = np.ma.mask_or(mask, np.all(im_array == w, axis=2))
-    im_array[~mask,3] = 0 # delete background
-
-    # conv color
     res_array = im_array.copy()
-    if wing_speed_mod:
-        for w, i in zip(wing_speed_mod, wing_speed_index):
-            res_array[np.all(im_array == w, axis=2)] = conv_colors[i]
-
+    res_array[..., 3] = 0
+    for _, color in image.getcolors(image.width * image.height):
+        if color[0] == color[1] == color[2]:
+            continue
+        min_index = _get_nearest_palette_index(color, orig_colors)
+        if min_index is not None:
+            res_array[np.all(im_array == color, axis=2)] = conv_colors[min_index]
     return res_array
 
 

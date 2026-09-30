@@ -45,19 +45,6 @@ def _to_pixels(x_values, y_values, pixel_scale):
     return (points - origin) / scale, origin, scale
 
 
-def _direction_arrow_polygon(tip, tangent, width):
-    half_width = width / 2
-    length = _ARROW_LENGTH_RATIO * width
-    slope_length = _ARROW_SLOPE_RATIO * width
-    normal = half_width * np.array((-tangent[1], tangent[0]))
-    shoulder = tip - slope_length * tangent
-    tail = tip - length * tangent
-    notch = tail + slope_length * tangent
-    return np.array(
-        (tip, shoulder + normal, tail + normal, notch, tail - normal, shoulder - normal)
-    )
-
-
 def _turn_arc(center, normal_start, normal_end, radius, side):
     dot = np.dot(normal_start, normal_end)
     cross = _cross_2d(normal_start, normal_end)
@@ -194,9 +181,17 @@ def direction_arrow_polygons(
     width_pixels,
 ):
     """Build closed travel-direction chevrons at fixed pixel intervals."""
-    pixel_points, origin, scale = _to_pixels(x_values, y_values, pixel_scale)
+    finite = np.isfinite(x_values) & np.isfinite(y_values)
+    indices = np.flatnonzero(finite)
+    if len(indices) < 2:
+        return []
+    first = indices[0]
+    pixel_points, origin, scale = _to_pixels(
+        x_values[first:], y_values[first:], pixel_scale
+    )
     deltas = np.diff(pixel_points, axis=0)
     lengths = np.linalg.norm(deltas, axis=1)
+    lengths[~(finite[first:-1] & finite[first + 1 :])] = 0
     cumulative = np.cumsum(lengths)
     distances = np.arange(spacing_pixels / 2, cumulative[-1], spacing_pixels)
     segment_indices = np.searchsorted(cumulative, distances, side="right")
@@ -206,7 +201,22 @@ def direction_arrow_polygons(
         pixel_points[segment_indices]
         + (distances - segment_starts)[:, np.newaxis] * tangents
     )
-    return [
-        _direction_arrow_polygon(tip, tangent, width_pixels) * scale + origin
-        for tip, tangent in zip(tips, tangents)
-    ]
+    normal = width_pixels / 2 * np.column_stack((-tangents[:, 1], tangents[:, 0]))
+    shoulder = tips - (_ARROW_SLOPE_RATIO * width_pixels) * tangents
+    tail = tips - (_ARROW_LENGTH_RATIO * width_pixels) * tangents
+    notch = tail + (_ARROW_SLOPE_RATIO * width_pixels) * tangents
+    return (
+        np.stack(
+            (
+                tips,
+                shoulder + normal,
+                tail + normal,
+                notch,
+                tail - normal,
+                shoulder - normal,
+            ),
+            axis=1,
+        )
+        * scale
+        + origin
+    )

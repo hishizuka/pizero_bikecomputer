@@ -146,13 +146,16 @@ class MapCourseMixin:
             self._get_course_offset_pixels(),
             *self._get_view_data_per_px(),
             self.config.G_COURSE_TRAFFIC_SIDE,
+            self.zoomlevel >= self.course_offset_min_zoomlevel,
+            id(self.course.longitude),
         )
 
     def _update_course_plot(self):
         self._remove_plot_item(self.course_plot)
 
+        self.course_plot = None
         if not len(self.course.latitude):
-            self.course_plot_key = None
+            self.course_plot_key = self._get_course_plot_key()
             return False
 
         pixel_scale = self._get_view_data_per_px()
@@ -209,12 +212,24 @@ class MapCourseMixin:
         return True
 
     def _refresh_course_plot(self):
-        plot_changed = self.course_plot_key != self._get_course_plot_key()
+        key = self._get_course_plot_key()
+        previous = self.course_plot_key
+        plot_changed = (
+            previous is None
+            or previous[0] != key[0]
+            or previous[3:] != key[3:]
+            or any(
+                abs(old - new) > abs(old) * 1e-3
+                for old, new in zip(previous[1:3], key[1:3])
+            )
+        )
         if plot_changed:
             self._update_course_plot()
             self._update_course_point_marker_positions()
-        if plot_changed or self.course_weather_revision != self.course.weather_revision:
+        if self.course_weather_revision != self.course.weather_revision:
             self.add_course_wind()
+        elif plot_changed:
+            self._update_course_wind_positions()
 
     def _get_course_point_segment_indices(self):
         point_count = len(self.course_points.longitude)
@@ -462,7 +477,22 @@ class MapCourseMixin:
         if not self.course.has_weather:
             return
 
-        course_indices = np.asarray(self.course.wind_course_indices)
+        for wd, ws in zip(self.course.wind_direction, self.course.wind_speed):
+            if not np.isfinite([ws, wd]).all():
+                continue
+            vane = WindVaneItem(wd, get_wind_color(ws), self.course_wind_marker_size)
+            vane.setZValue(35)
+            self.course_winds.append(vane)
+            self.plot.addItem(vane)
+        self._update_course_wind_positions()
+
+    def _update_course_wind_positions(self):
+        if not self.course_winds:
+            return
+        valid = np.isfinite(self.course.wind_direction) & np.isfinite(
+            self.course.wind_speed
+        )
+        course_indices = np.asarray(self.course.wind_course_indices)[valid]
         side = -1 if self.config.G_COURSE_TRAFFIC_SIDE == "RIGHT" else 1
         wind_x, wind_y = offset_points_by_segment(
             self.course.longitude,
@@ -473,25 +503,12 @@ class MapCourseMixin:
             self._get_view_data_per_px(),
             self._get_marker_offset_pixels(self.course_wind_marker_size, side),
         )
-        for x_value, y_value, wd, ws in zip(
-            wind_x,
-            wind_y,
-            self.course.wind_direction,
-            self.course.wind_speed,
-        ):
-            if np.isnan(ws) or np.isnan(wd):
-                continue
-            vane = WindVaneItem(wd, get_wind_color(ws), self.course_wind_marker_size)
+        for vane, x_value, y_value in zip(self.course_winds, wind_x, wind_y):
             vane.setPos(x_value, y_value)
-            vane.setZValue(35)
-            self.course_winds.append(vane)
-            self.plot.addItem(vane)
 
     def get_track(self):
         track_updated = False
-        (self.track_timestamp, lon, lat) = self.logger.update_track(
-            self.track_timestamp
-        )
+        self.track_timestamp, lon, lat = self.logger.update_track(self.track_timestamp)
         if len(lon) and len(lat):
             lon_new = np.asarray(lon, dtype=np.float32)
             lat_new = np.asarray(lat, dtype=np.float32)
@@ -743,9 +760,8 @@ class MapCourseMixin:
         return "", None
 
     def _has_external_instruction(self):
-        return (
-            self.external_instruction_distance is not None
-            and bool(str(self.external_instruction_name).strip())
+        return self.external_instruction_distance is not None and bool(
+            str(self.external_instruction_name).strip()
         )
 
     def _get_instruction_data(self):
