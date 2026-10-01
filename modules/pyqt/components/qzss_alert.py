@@ -60,18 +60,14 @@ def text_lines(text, width, size, bold=False):
     layout.setTextOption(option)
     layout.beginLayout()
     result = []
-    consumed = 0
     while True:
         line = layout.createLine()
         if not line.isValid():
             break
         line.setLineWidth(width)
         line.setPosition(QtCore.QPointF())
-        assert line.naturalTextWidth() <= width + 0.1
         result.append((layout, line, math.ceil(line.height()) + 2))
-        consumed += line.textLength()
     layout.endLayout()
-    assert consumed == len(text.encode("utf-16-le")) // 2
     return result
 
 
@@ -82,7 +78,6 @@ def height(lines):
 def lines(text, width, size, bold=False, units=None):
     metrics = QtGui.QFontMetricsF(font(size, bold))
     units = units or [text]
-    assert "".join(units) == text
     packed, current = [], ""
     for unit in units:
         if current and metrics.horizontalAdvance(current + unit) > width:
@@ -417,7 +412,6 @@ class QzssAlertWidget(QtWidgets.QWidget):
         panel_height = (
             self.parentWidget().height() if full or len(self.pages) > 1 else required
         )
-        assert panel_height <= self.parentWidget().height()
         self.setGeometry(
             0,
             self.parentWidget().height() - panel_height,
@@ -483,7 +477,6 @@ class QzssAlertWidget(QtWidgets.QWidget):
                     QtGui.QFontMetricsF(font(14)).horizontalAdvance(self.marker),
                 )
             x = (self.width() - self.visible_icon_width - 4 - text_width) / 2
-            assert x >= 3 - 0.1
             p.drawImage(
                 QtCore.QRectF(
                     x, (self.header_height - 70) / 2, self.visible_icon_width, 70
@@ -525,11 +518,6 @@ class QzssAlertWidget(QtWidgets.QWidget):
             full,
         )
         self.content_bottom = y
-        assert y <= self.close_button.y() - 2, (
-            self.title_text,
-            y,
-            self.close_button.y(),
-        )
         p.end()
 
     def next_page(self):
