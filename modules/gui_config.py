@@ -43,416 +43,591 @@ class GUI_Config:
 
     G_ITEM_DEF = {
         # integrated
-        "Power": (G_UNIT["Power"], "self.sensor.values['integrated']['power']"),
-        "NP": (G_UNIT["Power"], "self.sensor.values['integrated']['normalized_power']"),
-        "Speed": (G_UNIT["Speed"], "self.sensor.values['integrated']['speed']"),
-        "Dist.": (G_UNIT["Distance"], "self.sensor.values['integrated']['distance']"),
+        "Power": (
+            G_UNIT["Power"],
+            lambda self: self.sensor.values["integrated"]["power"],
+        ),
+        "NP": (
+            G_UNIT["Power"],
+            lambda self: self.sensor.values["integrated"]["normalized_power"],
+        ),
+        "Speed": (
+            G_UNIT["Speed"],
+            lambda self: self.sensor.values["integrated"]["speed"],
+        ),
+        "Dist.": (
+            G_UNIT["Distance"],
+            lambda self: self.sensor.values["integrated"]["distance"],
+        ),
         "Distance": (
             G_UNIT["Distance"],
-            "self.sensor.values['integrated']['distance']",
+            lambda self: self.sensor.values["integrated"]["distance"],
         ),
-        "Cad.": (G_UNIT["Cadence"], "self.sensor.values['integrated']['cadence']"),
-        "HR": (G_UNIT["HeartRate"], "self.sensor.values['integrated']['heart_rate']"),
+        "Cad.": (
+            G_UNIT["Cadence"],
+            lambda self: self.sensor.values["integrated"]["cadence"],
+        ),
+        "HR": (
+            G_UNIT["HeartRate"],
+            lambda self: self.sensor.values["integrated"]["heart_rate"],
+        ),
         "Work": (
             G_UNIT["Work"],
-            "self.sensor.values['integrated']['accumulated_power']",
+            lambda self: self.sensor.values["integrated"]["accumulated_power"],
         ),
         "W'bal": (
             G_UNIT["Work"],
-            "self.sensor.values['integrated']['w_prime_balance']",
+            lambda self: self.sensor.values["integrated"]["w_prime_balance"],
         ),
         "W'bal(Norm)": (
             G_UNIT["Percent"],
-            "self.sensor.values['integrated']['w_prime_balance_normalized']",
+            lambda self: self.sensor.values["integrated"]["w_prime_balance_normalized"],
         ),
-        "TSS": ((".0f", ""), "self.sensor.values['integrated']['tss']"),
-        "Grade": (G_UNIT["Percent"], "self.sensor.values['integrated']['grade']"),
+        "TSS": ((".0f", ""), lambda self: self.sensor.values["integrated"]["tss"]),
+        "Grade": (
+            G_UNIT["Percent"],
+            lambda self: self.sensor.values["integrated"]["grade"],
+        ),
         "Grade(spd)": (
             G_UNIT["Percent"],
-            "self.sensor.values['integrated']['grade_spd']",
+            lambda self: self.sensor.values["integrated"]["grade_spd"],
         ),
         "GlideRatio": (
             G_UNIT["Altitude"],
-            "self.sensor.values['integrated']['glide_ratio']",
+            lambda self: self.sensor.values["integrated"]["glide_ratio"],
         ),
-        "Temp": (G_UNIT["Temp"], "self.sensor.values['integrated']['temperature']"),
+        "Temp": (
+            G_UNIT["Temp"],
+            lambda self: self.sensor.values["integrated"]["temperature"],
+        ),
         # average_values
         "Power(3s)": (
             G_UNIT["Power"],
-            "self.sensor.values['integrated']['ave_power_3s']",
+            lambda self: self.sensor.values["integrated"]["ave_power_3s"],
         ),
         "Power (3S / NP)": (
             ((G_UNIT["Power"], G_UNIT["Power"]), ""),
-            "(self.sensor.values['integrated']['ave_power_3s'], "
-            "self.sensor.values['integrated']['normalized_power'])",
+            lambda self: (
+                self.sensor.values["integrated"]["ave_power_3s"],
+                self.sensor.values["integrated"]["normalized_power"],
+            ),
         ),
         "Power(30s)": (
             G_UNIT["Power"],
-            "self.sensor.values['integrated']['ave_power_30s']",
+            lambda self: self.sensor.values["integrated"]["ave_power_30s"],
         ),
         "Power(60s)": (
             G_UNIT["Power"],
-            "self.sensor.values['integrated']['ave_power_60s']",
+            lambda self: self.sensor.values["integrated"]["ave_power_60s"],
         ),
         "Wind": (
             (((".0f", "°"), G_UNIT["Wind"]), ""),
-            "(self.sensor.values['integrated']['wind_direction'], "
-            "self.sensor.values['integrated']['wind_speed'])",
+            lambda self: (
+                self.sensor.values["integrated"]["wind_direction"],
+                self.sensor.values["integrated"]["wind_speed"],
+            ),
         ),
         "HeadWind": (
             G_UNIT["Wind"],
-            "self.sensor.values['integrated']['headwind']",
+            lambda self: self.sensor.values["integrated"]["headwind"],
         ),
         "Wind Pwr. (C/T)": (
             ((("+.0f", ""), ("+.0f", "")), "W"),
-            "(self.sensor.values['integrated']['wind_cost_power'], "
-            "self.sensor.values['integrated']['wind_power_delta'])",
+            lambda self: (
+                self.sensor.values["integrated"]["wind_cost_power"],
+                self.sensor.values["integrated"]["wind_power_delta"],
+            ),
         ),
         "Wind Grade (C/T)": (
             ((("+.1f", ""), ("+.1f", "")), "%"),
-            "(self.sensor.values['integrated']['wind_cost_grade'], "
-            "self.sensor.values['integrated']['wind_grade'])",
+            lambda self: (
+                self.sensor.values["integrated"]["wind_cost_grade"],
+                self.sensor.values["integrated"]["wind_grade"],
+            ),
         ),
         "Wind Work (C/T)": (
             ((("+.0f", ""), ("+.0f", "")), "kJ"),
-            "(self.sensor.values['integrated']['wind_cost_work'] "
-            "if self.sensor.values['integrated']['wind_cost_available'] "
-            "else float('nan'), self.sensor.values['integrated']['wind_work'])",
+            lambda self: (
+                (
+                    self.sensor.values["integrated"]["wind_cost_work"]
+                    if self.sensor.values["integrated"]["wind_cost_available"]
+                    else float("nan")
+                ),
+                self.sensor.values["integrated"]["wind_work"],
+            ),
         ),
         "Wind Asc. (C/T)": (
             ((("+.0f", ""), ("+.0f", "")), "m"),
-            "(self.sensor.values['integrated']['wind_cost_elevation'] "
-            "if self.sensor.values['integrated']['wind_cost_available'] "
-            "else float('nan'), "
-            "self.sensor.values['integrated']['wind_elevation'])",
+            lambda self: (
+                (
+                    self.sensor.values["integrated"]["wind_cost_elevation"]
+                    if self.sensor.values["integrated"]["wind_cost_available"]
+                    else float("nan")
+                ),
+                self.sensor.values["integrated"]["wind_elevation"],
+            ),
         ),
         "Wind Diff": (
             ("+.1f", "km/h"),
-            "self.sensor.values['integrated']['speed_impact']",
+            lambda self: self.sensor.values["integrated"]["speed_impact"],
         ),
         "Wind Time": (
             ("signed_timer", ""),
-            "self.sensor.values['integrated']['wind_time']",
+            lambda self: self.sensor.values["integrated"]["wind_time"],
         ),
         # GPS raw
-        "Latitude": (G_UNIT["Position"], "self.sensor.values['GPS']['lat']"),
-        "Longitude": (G_UNIT["Position"], "self.sensor.values['GPS']['lon']"),
-        "Alt.(GPS)": (G_UNIT["Altitude"], "self.sensor.values['GPS']['alt']"),
-        "Speed(GPS)": (G_UNIT["Speed"], "self.sensor.values['GPS']['speed']"),
-        "Dist.(GPS)": (G_UNIT["Distance"], "self.sensor.values['GPS']['distance']"),
+        "Latitude": (G_UNIT["Position"], lambda self: self.sensor.values["GPS"]["lat"]),
+        "Longitude": (
+            G_UNIT["Position"],
+            lambda self: self.sensor.values["GPS"]["lon"],
+        ),
+        "Alt.(GPS)": (
+            G_UNIT["Altitude"],
+            lambda self: self.sensor.values["GPS"]["alt"],
+        ),
+        "Speed(GPS)": (
+            G_UNIT["Speed"],
+            lambda self: self.sensor.values["GPS"]["speed"],
+        ),
+        "Dist.(GPS)": (
+            G_UNIT["Distance"],
+            lambda self: self.sensor.values["GPS"]["distance"],
+        ),
         "Heading_RAW(GPS)": (
             G_UNIT["Int"],
-            "self.sensor.values['GPS']['heading_gps_deg']",
+            lambda self: self.sensor.values["GPS"]["heading_gps_deg"],
         ),
         "Heading(GPS)": (
             G_UNIT["Heading"],
-            "self.sensor.values['GPS']['heading_gps_deg']",
+            lambda self: self.sensor.values["GPS"]["heading_gps_deg"],
         ),
-        "Satellites": (G_UNIT["String"], "self.sensor.values['GPS']['used_sats_str']"),
-        "Error(x)": (G_UNIT["GPS_error"], "self.sensor.values['GPS']['epx']"),
-        "Error(y)": (G_UNIT["GPS_error"], "self.sensor.values['GPS']['epy']"),
-        "Error(alt)": (G_UNIT["GPS_error"], "self.sensor.values['GPS']['epv']"),
-        "PDOP": (G_UNIT["GPS_DOP"], "self.sensor.values['GPS']['pdop']"),
-        "HDOP": (G_UNIT["GPS_DOP"], "self.sensor.values['GPS']['hdop']"),
-        "VDOP": (G_UNIT["GPS_DOP"], "self.sensor.values['GPS']['vdop']"),
-        "GPSTime": (G_UNIT["String"], "self.sensor.values['GPS']['utctime']"),
-        "GPS Fix": (("d", ""), "self.sensor.values['GPS']['mode']"),
+        "Satellites": (
+            G_UNIT["String"],
+            lambda self: self.sensor.values["GPS"]["used_sats_str"],
+        ),
+        "Error(x)": (
+            G_UNIT["GPS_error"],
+            lambda self: self.sensor.values["GPS"]["epx"],
+        ),
+        "Error(y)": (
+            G_UNIT["GPS_error"],
+            lambda self: self.sensor.values["GPS"]["epy"],
+        ),
+        "Error(alt)": (
+            G_UNIT["GPS_error"],
+            lambda self: self.sensor.values["GPS"]["epv"],
+        ),
+        "PDOP": (G_UNIT["GPS_DOP"], lambda self: self.sensor.values["GPS"]["pdop"]),
+        "HDOP": (G_UNIT["GPS_DOP"], lambda self: self.sensor.values["GPS"]["hdop"]),
+        "VDOP": (G_UNIT["GPS_DOP"], lambda self: self.sensor.values["GPS"]["vdop"]),
+        "GPSTime": (
+            G_UNIT["String"],
+            lambda self: self.sensor.values["GPS"]["utctime"],
+        ),
+        "GPS Fix": (("d", ""), lambda self: self.sensor.values["GPS"]["mode"]),
         "Course Dist.": (
             G_UNIT["Distance"],
-            "self.course.index.distance",
+            lambda self: self.course.index.distance,
         ),
         # ANT+ raw
         "HR(ANT+)": (
             G_UNIT["HeartRate"],
-            "self.sensor.values['ANT+'][self.config.get_ant_id_type('HR')]['heart_rate']",
+            lambda self: self.sensor.values["ANT+"][self.config.get_ant_id_type("HR")][
+                "heart_rate"
+            ],
         ),
         "Speed(ANT+)": (
             G_UNIT["Speed"],
-            "self.sensor.values['ANT+'][self.config.get_ant_id_type('SPD')]['speed']",
+            lambda self: self.sensor.values["ANT+"][self.config.get_ant_id_type("SPD")][
+                "speed"
+            ],
         ),
         "Dist.(ANT+)": (
             G_UNIT["Distance"],
-            "self.sensor.values['ANT+'][self.config.get_ant_id_type('SPD')]['distance']",
+            lambda self: self.sensor.values["ANT+"][self.config.get_ant_id_type("SPD")][
+                "distance"
+            ],
         ),
         "Cad.(ANT+)": (
             G_UNIT["Cadence"],
-            "self.sensor.values['ANT+'][self.config.get_ant_id_type('CDC')]['cadence']",
+            lambda self: self.sensor.values["ANT+"][self.config.get_ant_id_type("CDC")][
+                "cadence"
+            ],
         ),
         # get from sensor as powermeter pairing
         # (cannot get from other pairing not including power sensor pairing)
         "Power16(ANT+)": (
             G_UNIT["Power"],
-            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x10]['power']",
+            lambda self: self.sensor.values["ANT+"][self.config.get_ant_id_type("PWR")][
+                0x10
+            ]["power"],
         ),
         "Power16s(ANT+)": (
             G_UNIT["Power"],
-            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x10]['power_16_simple']",
+            lambda self: self.sensor.values["ANT+"][self.config.get_ant_id_type("PWR")][
+                0x10
+            ]["power_16_simple"],
         ),
         "Cad.16(ANT+)": (
             G_UNIT["Cadence"],
-            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x10]['cadence']",
+            lambda self: self.sensor.values["ANT+"][self.config.get_ant_id_type("PWR")][
+                0x10
+            ]["cadence"],
         ),
         "Work16(ANT+)": (
             G_UNIT["Work"],
-            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x10]['accumulated_power']",
+            lambda self: self.sensor.values["ANT+"][self.config.get_ant_id_type("PWR")][
+                0x10
+            ]["accumulated_power"],
         ),
         "NP16(ANT+)": (
             G_UNIT["Power"],
-            "self.sensor.values['integrated']['normalized_power']",
+            lambda self: self.sensor.values["integrated"]["normalized_power"],
         ),
         "Power R(ANT+)": (
             G_UNIT["Power"],
-            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x10]['power_r']",
+            lambda self: self.sensor.values["ANT+"][self.config.get_ant_id_type("PWR")][
+                0x10
+            ]["power_r"],
         ),
         "Power L(ANT+)": (
             G_UNIT["Power"],
-            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x10]['power_l']",
+            lambda self: self.sensor.values["ANT+"][self.config.get_ant_id_type("PWR")][
+                0x10
+            ]["power_l"],
         ),
         "Balance(ANT+)": (
             G_UNIT["String"],
-            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x10]['lr_balance']",
+            lambda self: self.sensor.values["ANT+"][self.config.get_ant_id_type("PWR")][
+                0x10
+            ]["lr_balance"],
         ),
         "Power17(ANT+)": (
             G_UNIT["Power"],
-            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x11]['power']",
+            lambda self: self.sensor.values["ANT+"][self.config.get_ant_id_type("PWR")][
+                0x11
+            ]["power"],
         ),
         "Speed17(ANT+)": (
             G_UNIT["Speed"],
-            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x11]['speed']",
+            lambda self: self.sensor.values["ANT+"][self.config.get_ant_id_type("PWR")][
+                0x11
+            ]["speed"],
         ),
         "Dist.17(ANT+)": (
             G_UNIT["Distance"],
-            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x11]['distance']",
+            lambda self: self.sensor.values["ANT+"][self.config.get_ant_id_type("PWR")][
+                0x11
+            ]["distance"],
         ),
         "Work17(ANT+)": (
             G_UNIT["Work"],
-            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x11]['accumulated_power']",
+            lambda self: self.sensor.values["ANT+"][self.config.get_ant_id_type("PWR")][
+                0x11
+            ]["accumulated_power"],
         ),
         "NP17(ANT+)": (
             G_UNIT["Power"],
-            "self.sensor.values['integrated']['normalized_power']",
+            lambda self: self.sensor.values["integrated"]["normalized_power"],
         ),
         "Power18(ANT+)": (
             G_UNIT["Power"],
-            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x12]['power']",
+            lambda self: self.sensor.values["ANT+"][self.config.get_ant_id_type("PWR")][
+                0x12
+            ]["power"],
         ),
         "Cad.18(ANT+)": (
             G_UNIT["Cadence"],
-            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x12]['cadence']",
+            lambda self: self.sensor.values["ANT+"][self.config.get_ant_id_type("PWR")][
+                0x12
+            ]["cadence"],
         ),
         "Work18(ANT+)": (
             G_UNIT["Work"],
-            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x12]['accumulated_power']",
+            lambda self: self.sensor.values["ANT+"][self.config.get_ant_id_type("PWR")][
+                0x12
+            ]["accumulated_power"],
         ),
         "NP18(ANT+)": (
             G_UNIT["Power"],
-            "self.sensor.values['integrated']['normalized_power']",
+            lambda self: self.sensor.values["integrated"]["normalized_power"],
         ),
         "Torque Ef.(ANT+)": (
             G_UNIT["String"],
-            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x13]['torque_eff']",
+            lambda self: self.sensor.values["ANT+"][self.config.get_ant_id_type("PWR")][
+                0x13
+            ]["torque_eff"],
         ),
         "Pedal Sm.(ANT+)": (
             G_UNIT["String"],
-            "self.sensor.values['ANT+'][self.config.get_ant_id_type('PWR')][0x13]['pedal_sm']",
+            lambda self: self.sensor.values["ANT+"][self.config.get_ant_id_type("PWR")][
+                0x13
+            ]["pedal_sm"],
         ),
         "Light(ANT+)": (
             G_UNIT["String"],
-            "self.sensor.values['ANT+'][self.config.get_ant_id_type('LGT')]['light_mode']",
+            lambda self: self.sensor.values["ANT+"][self.config.get_ant_id_type("LGT")][
+                "light_mode"
+            ],
         ),
         # ANT+ multi
-        "PWR1": (G_UNIT["Power"], "None"),
-        "PWR2": (G_UNIT["Power"], "None"),
-        "PWR3": (G_UNIT["Power"], "None"),
-        "HR1": (G_UNIT["HeartRate"], "None"),
-        "HR2": (G_UNIT["HeartRate"], "None"),
-        "HR3": (G_UNIT["HeartRate"], "None"),
+        "PWR1": (G_UNIT["Power"], lambda self: None),
+        "PWR2": (G_UNIT["Power"], lambda self: None),
+        "PWR3": (G_UNIT["Power"], lambda self: None),
+        "HR1": (G_UNIT["HeartRate"], lambda self: None),
+        "HR2": (G_UNIT["HeartRate"], lambda self: None),
+        "HR3": (G_UNIT["HeartRate"], lambda self: None),
         # Sensor raw
-        "Temp_RAW(I2C)": (G_UNIT["Temp"], "self.sensor.values['I2C']['temperature']"),
-        "Pressure": (("4.0f", "hPa"), "self.sensor.values['I2C']['pressure']"),
-        "Altitude": (G_UNIT["Altitude"], "self.sensor.values['I2C']['altitude']"),
-        "Humidity": (G_UNIT["Percent"], "self.sensor.values['I2C']['humidity']"),
-        "D_INDEX": (G_UNIT["Int"], "self.sensor.values['I2C']['discomfort_index']"),
+        "Temp_RAW(I2C)": (
+            G_UNIT["Temp"],
+            lambda self: self.sensor.values["I2C"]["temperature"],
+        ),
+        "Pressure": (
+            ("4.0f", "hPa"),
+            lambda self: self.sensor.values["I2C"]["pressure"],
+        ),
+        "Altitude": (
+            G_UNIT["Altitude"],
+            lambda self: self.sensor.values["I2C"]["altitude"],
+        ),
+        "Humidity": (
+            G_UNIT["Percent"],
+            lambda self: self.sensor.values["I2C"]["humidity"],
+        ),
+        "D_INDEX": (
+            G_UNIT["Int"],
+            lambda self: self.sensor.values["I2C"]["discomfort_index"],
+        ),
         "Accum.Alt.": (
             G_UNIT["Altitude"],
-            "self.sensor.values['I2C']['accumulated_altitude']",
+            lambda self: self.sensor.values["I2C"]["accumulated_altitude"],
         ),
-        "Vert.Spd": (("3.1f", "m/s"), "self.sensor.values['I2C']['vertical_speed']"),
-        "Ascent": (G_UNIT["Altitude"], "self.sensor.values['I2C']['total_ascent']"),
-        "Descent": (G_UNIT["Altitude"], "self.sensor.values['I2C']['total_descent']"),
+        "Vert.Spd": (
+            ("3.1f", "m/s"),
+            lambda self: self.sensor.values["I2C"]["vertical_speed"],
+        ),
+        "Ascent": (
+            G_UNIT["Altitude"],
+            lambda self: self.sensor.values["I2C"]["total_ascent"],
+        ),
+        "Descent": (
+            G_UNIT["Altitude"],
+            lambda self: self.sensor.values["I2C"]["total_descent"],
+        ),
         "Asc. / Dsc.": (
             (((G_UNIT["Altitude"][0], ""), G_UNIT["Altitude"]), ""),
-            "(self.sensor.values['I2C']['total_ascent'], "
-            "self.sensor.values['I2C']['total_descent'])",
+            lambda self: (
+                self.sensor.values["I2C"]["total_ascent"],
+                self.sensor.values["I2C"]["total_descent"],
+            ),
         ),
-        "Light": (G_UNIT["Int"], "self.sensor.values['I2C']['light']"),
-        "Infrared": (G_UNIT["Int"], "self.sensor.values['I2C']['infrared']"),
-        "UVI": (G_UNIT["Int"], "self.sensor.values['I2C']['uvi']"),
-        "VOC_Index": (G_UNIT["Int"], "self.sensor.values['I2C']['voc_index']"),
-        "Raw_Gas": (G_UNIT["Int"], "self.sensor.values['I2C']['raw_gas']"),
+        "Light": (G_UNIT["Int"], lambda self: self.sensor.values["I2C"]["light"]),
+        "Infrared": (G_UNIT["Int"], lambda self: self.sensor.values["I2C"]["infrared"]),
+        "UVI": (G_UNIT["Int"], lambda self: self.sensor.values["I2C"]["uvi"]),
+        "VOC_Index": (
+            G_UNIT["Int"],
+            lambda self: self.sensor.values["I2C"]["voc_index"],
+        ),
+        "Raw_Gas": (G_UNIT["Int"], lambda self: self.sensor.values["I2C"]["raw_gas"]),
         "Battery": (
             G_UNIT["Percent"],
-            "self.sensor.values['I2C']['battery_percentage']",
+            lambda self: self.sensor.values["I2C"]["battery_percentage"],
         ),
-        "Motion": (("1.1f", ""), "self.sensor.values['I2C']['motion']"),
-        "M_Stat": (("1.1f", ""), "self.sensor.values['I2C']['m_stat']"),
-        "ACC_X": (("1.1f", ""), "self.sensor.values['I2C']['acc'][0]"),
-        "ACC_Y": (("1.1f", ""), "self.sensor.values['I2C']['acc'][1]"),
-        "ACC_Z": (("1.1f", ""), "self.sensor.values['I2C']['acc'][2]"),
-        "MAG_X": (("1.1f", ""), "self.sensor.values['I2C']['mag'][0]"),
-        "MAG_Y": (("1.1f", ""), "self.sensor.values['I2C']['mag'][1]"),
-        "MAG_Z": (("1.1f", ""), "self.sensor.values['I2C']['mag'][2]"),
+        "Motion": (("1.1f", ""), lambda self: self.sensor.values["I2C"]["motion"]),
+        "M_Stat": (("1.1f", ""), lambda self: self.sensor.values["I2C"]["m_stat"]),
+        "ACC_X": (("1.1f", ""), lambda self: self.sensor.values["I2C"]["acc"][0]),
+        "ACC_Y": (("1.1f", ""), lambda self: self.sensor.values["I2C"]["acc"][1]),
+        "ACC_Z": (("1.1f", ""), lambda self: self.sensor.values["I2C"]["acc"][2]),
+        "MAG_X": (("1.1f", ""), lambda self: self.sensor.values["I2C"]["mag"][0]),
+        "MAG_Y": (("1.1f", ""), lambda self: self.sensor.values["I2C"]["mag"][1]),
+        "MAG_Z": (("1.1f", ""), lambda self: self.sensor.values["I2C"]["mag"][2]),
         "Heading": (
             G_UNIT["Heading"],
-            "self.sensor.values['I2C']['heading_magnetic_deg']",
+            lambda self: self.sensor.values["I2C"]["heading_magnetic_deg"],
         ),
         "Heading_Raw(I2C)": (
             G_UNIT["Int"],
-            "self.sensor.values['I2C']['heading_magnetic_raw_deg']",
+            lambda self: self.sensor.values["I2C"]["heading_magnetic_raw_deg"],
         ),
         "Heading_Tilt": (
             G_UNIT["Int"],
-            "self.sensor.values['I2C']['heading_magnetic_deg']",
+            lambda self: self.sensor.values["I2C"]["heading_magnetic_deg"],
         ),
-        "Pitch": (G_UNIT["Int"], "self.sensor.values['I2C']['grade_pitch']"),
+        "Pitch": (G_UNIT["Int"], lambda self: self.sensor.values["I2C"]["grade_pitch"]),
         "Pitch_Fixed": (
             G_UNIT["Int"],
-            "int(180/3.1415*self.sensor.values['I2C']['fixed_pitch'])",
+            lambda self: int(180 / 3.1415 * self.sensor.values["I2C"]["fixed_pitch"]),
         ),
         "Roll_Fixed": (
             G_UNIT["Int"],
-            "int(180/3.1415*self.sensor.values['I2C']['fixed_roll'])",
+            lambda self: int(180 / 3.1415 * self.sensor.values["I2C"]["fixed_roll"]),
         ),
         "Pitch_Raw": (
             G_UNIT["Int"],
-            "int(180/3.1415*self.sensor.values['I2C']['pitch'])",
+            lambda self: int(180 / 3.1415 * self.sensor.values["I2C"]["pitch"]),
         ),
         "Roll_Raw": (
             G_UNIT["Int"],
-            "int(180/3.1415*self.sensor.values['I2C']['roll'])",
+            lambda self: int(180 / 3.1415 * self.sensor.values["I2C"]["roll"]),
         ),
-        "Grade(pitch)": (G_UNIT["Percent"], "self.sensor.values['I2C']['grade_pitch']"),
+        "Grade(pitch)": (
+            G_UNIT["Percent"],
+            lambda self: self.sensor.values["I2C"]["grade_pitch"],
+        ),
         # General
-        "Timer": (("timer", ""), "self.logger.values['count']"),
-        "LapTime": (("timer", ""), "self.logger.values['count_lap']"),
-        "Lap": (("d", ""), "self.logger.values['lap']"),
-        "Time": (("time", ""), "0"),
-        "ElapsedTime": (("timer", ""), "self.logger.values['elapsed_time']"),
-        "GrossAveSPD": (G_UNIT["Speed"], "self.logger.values['gross_ave_spd']"),
-        "GrossDiffTime": (G_UNIT["String"], "self.logger.values['gross_diff_time']"),
-        "CPU_MEM": (G_UNIT["String"], "self.sensor.values['integrated']['CPU_MEM']"),
+        "Timer": (("timer", ""), lambda self: self.logger.values["count"]),
+        "LapTime": (("timer", ""), lambda self: self.logger.values["count_lap"]),
+        "Lap": (("d", ""), lambda self: self.logger.values["lap"]),
+        "Time": (("time", ""), lambda self: 0),
+        "ElapsedTime": (("timer", ""), lambda self: self.logger.values["elapsed_time"]),
+        "GrossAveSPD": (
+            G_UNIT["Speed"],
+            lambda self: self.logger.values["gross_ave_spd"],
+        ),
+        "GrossDiffTime": (
+            G_UNIT["String"],
+            lambda self: self.logger.values["gross_diff_time"],
+        ),
+        "CPU_MEM": (
+            G_UNIT["String"],
+            lambda self: self.sensor.values["integrated"]["CPU_MEM"],
+        ),
         "Send Time": (
             G_UNIT["String"],
-            "self.sensor.values['integrated']['send_time']",
+            lambda self: self.sensor.values["integrated"]["send_time"],
         ),
         # Statistics
         # Pre Lap Average or total
         "PLap HR": (
             G_UNIT["HeartRate"],
-            "self.logger.record_stats['pre_lap_avg']['heart_rate']",
+            lambda self: self.logger.record_stats["pre_lap_avg"]["heart_rate"],
         ),
         "PLap CAD": (
             G_UNIT["Cadence"],
-            "self.logger.record_stats['pre_lap_avg']['cadence']",
+            lambda self: self.logger.record_stats["pre_lap_avg"]["cadence"],
         ),
         "PLap DIST": (
             G_UNIT["Distance"],
-            "self.logger.record_stats['pre_lap_avg']['distance']",
+            lambda self: self.logger.record_stats["pre_lap_avg"]["distance"],
         ),
         "PLap SPD": (
             G_UNIT["Speed"],
-            "self.logger.record_stats['pre_lap_avg']['speed']",
+            lambda self: self.logger.record_stats["pre_lap_avg"]["speed"],
         ),
         "PLap PWR": (
             G_UNIT["Power"],
-            "self.logger.record_stats['pre_lap_avg']['power']",
+            lambda self: self.logger.record_stats["pre_lap_avg"]["power"],
         ),
         "PLap WRK": (
             G_UNIT["Work"],
-            "self.logger.record_stats['pre_lap_avg']['accumulated_power']",
+            lambda self: self.logger.record_stats["pre_lap_avg"]["accumulated_power"],
         ),
         "PLap ASC": (
             G_UNIT["Altitude"],
-            "self.logger.record_stats['pre_lap_avg']['total_ascent']",
+            lambda self: self.logger.record_stats["pre_lap_avg"]["total_ascent"],
         ),
         "PLap DSC": (
             G_UNIT["Altitude"],
-            "self.logger.record_stats['pre_lap_avg']['total_descent']",
+            lambda self: self.logger.record_stats["pre_lap_avg"]["total_descent"],
         ),
         # Lap Average or total
         "Lap HR": (
             G_UNIT["HeartRate"],
-            "self.logger.record_stats['lap_avg']['heart_rate']",
+            lambda self: self.logger.record_stats["lap_avg"]["heart_rate"],
         ),
         "Lap CAD": (
             G_UNIT["Cadence"],
-            "self.logger.record_stats['lap_avg']['cadence']",
+            lambda self: self.logger.record_stats["lap_avg"]["cadence"],
         ),
         "Lap DIST": (
             G_UNIT["Distance"],
-            "self.logger.record_stats['lap_avg']['distance']",
+            lambda self: self.logger.record_stats["lap_avg"]["distance"],
         ),
-        "Lap SPD": (G_UNIT["Speed"], "self.logger.record_stats['lap_avg']['speed']"),
-        "Lap PWR": (G_UNIT["Power"], "self.logger.record_stats['lap_avg']['power']"),
+        "Lap SPD": (
+            G_UNIT["Speed"],
+            lambda self: self.logger.record_stats["lap_avg"]["speed"],
+        ),
+        "Lap PWR": (
+            G_UNIT["Power"],
+            lambda self: self.logger.record_stats["lap_avg"]["power"],
+        ),
         "Lap WRK": (
             G_UNIT["Work"],
-            "self.logger.record_stats['lap_avg']['accumulated_power']",
+            lambda self: self.logger.record_stats["lap_avg"]["accumulated_power"],
         ),
         "Lap ASC": (
             G_UNIT["Altitude"],
-            "self.logger.record_stats['lap_avg']['total_ascent']",
+            lambda self: self.logger.record_stats["lap_avg"]["total_ascent"],
         ),
         "Lap DSC": (
             G_UNIT["Altitude"],
-            "self.logger.record_stats['lap_avg']['total_descent']",
+            lambda self: self.logger.record_stats["lap_avg"]["total_descent"],
         ),
         # Entire Average
         "Ave HR": (
             G_UNIT["HeartRate"],
-            "self.logger.record_stats['entire_avg']['heart_rate']",
+            lambda self: self.logger.record_stats["entire_avg"]["heart_rate"],
         ),
         "Ave CAD": (
             G_UNIT["Cadence"],
-            "self.logger.record_stats['entire_avg']['cadence']",
+            lambda self: self.logger.record_stats["entire_avg"]["cadence"],
         ),
-        "Ave SPD": (G_UNIT["Speed"], "self.logger.record_stats['entire_avg']['speed']"),
-        "Ave PWR": (G_UNIT["Power"], "self.logger.record_stats['entire_avg']['power']"),
+        "Ave SPD": (
+            G_UNIT["Speed"],
+            lambda self: self.logger.record_stats["entire_avg"]["speed"],
+        ),
+        "Ave PWR": (
+            G_UNIT["Power"],
+            lambda self: self.logger.record_stats["entire_avg"]["power"],
+        ),
         # Max
         "Max HR": (
             G_UNIT["HeartRate"],
-            "self.logger.record_stats['entire_max']['heart_rate']",
+            lambda self: self.logger.record_stats["entire_max"]["heart_rate"],
         ),
         "Max CAD": (
             G_UNIT["Cadence"],
-            "self.logger.record_stats['entire_max']['cadence']",
+            lambda self: self.logger.record_stats["entire_max"]["cadence"],
         ),
-        "Max SPD": (G_UNIT["Speed"], "self.logger.record_stats['entire_max']['speed']"),
-        "Max PWR": (G_UNIT["Power"], "self.logger.record_stats['entire_max']['power']"),
+        "Max SPD": (
+            G_UNIT["Speed"],
+            lambda self: self.logger.record_stats["entire_max"]["speed"],
+        ),
+        "Max PWR": (
+            G_UNIT["Power"],
+            lambda self: self.logger.record_stats["entire_max"]["power"],
+        ),
         "LMax HR": (
             G_UNIT["HeartRate"],
-            "self.logger.record_stats['lap_max']['heart_rate']",
+            lambda self: self.logger.record_stats["lap_max"]["heart_rate"],
         ),
         "LMax CAD": (
             G_UNIT["Cadence"],
-            "self.logger.record_stats['lap_max']['cadence']",
+            lambda self: self.logger.record_stats["lap_max"]["cadence"],
         ),
-        "LMax SPD": (G_UNIT["Speed"], "self.logger.record_stats['lap_max']['speed']"),
-        "LMax PWR": (G_UNIT["Power"], "self.logger.record_stats['lap_max']['power']"),
+        "LMax SPD": (
+            G_UNIT["Speed"],
+            lambda self: self.logger.record_stats["lap_max"]["speed"],
+        ),
+        "LMax PWR": (
+            G_UNIT["Power"],
+            lambda self: self.logger.record_stats["lap_max"]["power"],
+        ),
         "PLMax HR": (
             G_UNIT["HeartRate"],
-            "self.logger.record_stats['pre_lap_max']['heart_rate']",
+            lambda self: self.logger.record_stats["pre_lap_max"]["heart_rate"],
         ),
         "PLMax CAD": (
             G_UNIT["Cadence"],
-            "self.logger.record_stats['pre_lap_max']['cadence']",
+            lambda self: self.logger.record_stats["pre_lap_max"]["cadence"],
         ),
         "PLMax SPD": (
             G_UNIT["Speed"],
-            "self.logger.record_stats['pre_lap_max']['speed']",
+            lambda self: self.logger.record_stats["pre_lap_max"]["speed"],
         ),
         "PLMax PWR": (
             G_UNIT["Power"],
-            "self.logger.record_stats['pre_lap_max']['power']",
+            lambda self: self.logger.record_stats["pre_lap_max"]["power"],
         ),
     }
 

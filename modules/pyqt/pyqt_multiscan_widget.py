@@ -116,9 +116,7 @@ class MultiScanWidget(ScreenWidget):
 
         for item in self.items:
             if item.name in ["Power(3s)", "HR", "Speed"]:
-                item.update_value(
-                    eval(self.config.gui.gui_config.G_ITEM_DEF[item.name][1])
-                )
+                item.update_value(item.value_getter())
                 continue
 
             item.label.setText(item.name)

@@ -103,12 +103,6 @@ class ScreenWidget(QtWidgets.QWidget):
         for i in range(self.max_height + 1):
             self.layout.setRowStretch(i, 1)
 
-    def _build_value_getter(self, expr):
-        """Create a plain callable without per-frame eval/exec."""
-        local_ns = {}
-        exec(f"def _getter(self):\n    return {expr}\n", {}, local_ns)
-        return partial(local_ns["_getter"], self)
-
     def add_items(self):
         if self.item_layout:
             # set borders
@@ -139,7 +133,7 @@ class ScreenWidget(QtWidgets.QWidget):
                 if key.endswith("GraphWidget"):
                     continue
 
-                expr = self.config.gui.gui_config.G_ITEM_DEF[key][1]
+                getter = self.config.gui.gui_config.G_ITEM_DEF[key][1]
                 item_class = {
                     "Asc. / Dsc.": AscDescItem,
                     "Wind": WindItem,
@@ -151,8 +145,7 @@ class ScreenWidget(QtWidgets.QWidget):
                     bottom_flag=bottom_flag,
                     right_flag=right_flag,
                 )
-                item.value_expr = expr
-                item.value_getter = self._build_value_getter(expr)
+                item.value_getter = partial(getter, self)
 
                 self.items.append(item)
 
@@ -181,7 +174,6 @@ class ScreenWidget(QtWidgets.QWidget):
                 value = float("nan")
             except Exception:  # noqa
                 app_logger.exception(f"not found in items: {item.name}")
-                app_logger.exception(f"    {item.value_expr}")
                 continue
 
             item.update_value(value)
