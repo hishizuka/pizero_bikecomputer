@@ -867,9 +867,7 @@ class ANTListWidget(SensorPairingListWidget):
     def setup_menu(self):
         super().setup_menu()
         self.list.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
-        self.search_indicator = ConnectionStatusIndicator(
-            STATUS_CONNECTING, parent=self
-        )
+        self.search_indicator = ConnectionStatusIndicator(parent=self)
         self.right_button_layout.addWidget(self.search_indicator)
         self.timer = QtCore.QTimer(parent=self)
         self.timer.timeout.connect(self.update_display)
@@ -883,34 +881,65 @@ class ANTListWidget(SensorPairingListWidget):
         app_logger.info(f"connect {self.list_type}: {self.selected_item.id}")
 
         ant_id = int(self.selected_item.id)
-        if self.config.sensor_uses(self.list_type, self.config.SENSOR_PROTOCOL_BLE):
-            self.sensor_ble.remove_ble_sensor(self.list_type)
-        self.sensor_ant.connect_ant_sensor(
+        previous_sensor = self.config.G_SENSORS[self.list_type].copy()
+        connected = self.sensor_ant.connect_ant_sensor(
             self.list_type,  # sensor type
             ant_id,  # ID
             self.ant_sensor_types[ant_id][0],  # id_type
             self.ant_sensor_types[ant_id][1],  # connection status
         )
+        if not connected or not self.sensor_ant.is_transport_available():
+            self.config.G_SENSORS[self.list_type].update(previous_sensor)
+            self.stop_search()
+            if self.sensor_ant.is_transport_available():
+                self.config.gui.show_dialog_ok_only(
+                    None, "ANT+ sensor connection failed."
+                )
+            return
+        if previous_sensor["PROTOCOL"] == self.config.SENSOR_PROTOCOL_BLE:
+            self.sensor_ble.remove_ble_sensor(self.list_type)
         self.sensor_ble.connect_cycling_sensors()
         self.config.setting.write_config()
         if self.paired_return_page is not None:
             self.back_index_key = self.paired_return_page
 
     def on_back_menu(self):
-        self.timer.stop()
-        if self.sensor_ant.is_transport_available():
-            self.sensor_ant.searcher.stop_search()
+        self.stop_search()
         super().on_back_menu()
 
+    def stop_search(self):
+        self.timer.stop()
+        self.search_indicator.set_status(None)
+        self.selected_item = None
+        self.ant_sensor_types.clear()
+        self.list.clear()
+        self.sensor_ant.searcher.stop_search(
+            transport_available=self.sensor_ant.is_transport_available()
+        )
+
     def preprocess_extra(self):
+        self.search_indicator.set_status(None)
         if not self.sensor_ant.is_transport_available():
+            self.stop_search()
             return
         self.ant_sensor_types.clear()
-        self.sensor_ant.searcher.search(self.list_type)
-        self.timer.start(self.config.G_DRAW_INTERVAL)
+        if (
+            self.sensor_ant.searcher.search(self.list_type)
+            and self.sensor_ant.is_transport_available()
+        ):
+            self.search_indicator.set_status(STATUS_CONNECTING)
+            self.timer.start(self.config.G_DRAW_INTERVAL)
+        else:
+            self.stop_search()
+            if self.sensor_ant.is_transport_available():
+                self.config.gui.show_dialog_ok_only(None, "ANT+ search failed.")
 
     def update_display(self):
-        if not self.sensor_ant.is_transport_available():
+        if (
+            not self.sensor_ant.is_transport_available()
+            or not self.sensor_ant.searcher.searchState
+        ):
+            self.stop_search()
             return
         detected_sensors = self.sensor_ant.searcher.getSearchList()
 

@@ -59,7 +59,7 @@ class ANT_Device:
     stop_margin_periods = 2
     stop_missing_events = 1
 
-    def __init__(self, node=None, config=None, values=None, name=""):
+    def __init__(self, node=None, config=None, values=None, name="", auto_connect=True):
         self.node = node
         self.config = config
         self.name = name
@@ -75,9 +75,18 @@ class ANT_Device:
         if node is None:
             return  # for dummy device
         self.make_channel(self.ant_config["channel_type"])
-        self.init_extra()
-        self.ready_connect()
-        self.connect(isCheck=True, isChange=False)  # USE: True -> True
+        try:
+            self.init_extra()
+            self.ready_connect()
+            if auto_connect:
+                self.connect(isCheck=True, isChange=False)
+        except Exception:
+            if self.is_transport_available():
+                try:
+                    self.delete()
+                except Exception as exc:
+                    app_logger.warning("ANT+ channel cleanup failed: %s", exc)
+            raise
 
     def on_data(self):
         pass
@@ -186,39 +195,49 @@ class ANT_Device:
         pass
 
     def connect(self, isCheck=True, isChange=False):
-        if not self.config.G_ANT["STATUS"]:
-            return
+        if not self.is_transport_available():
+            return False
         if isCheck:
             if not self.config.sensor_uses(self.name, self.config.SENSOR_PROTOCOL_ANT):
-                return
+                return False
         if self.state_check("OPEN"):
-            return
+            return self.is_transport_available()
+        if not self.is_transport_available():
+            return False
         try:
             self.channel.open()
-        except:
-            pass
+            return self.is_transport_available()
+        except Exception as exc:
+            app_logger.warning("ANT+ %s channel open failed: %s", self.name, exc)
+            return False
+
+    def is_transport_available(self):
+        return (
+            self.config.G_ANT["STATUS"]
+            and self.node is not None
+            and not getattr(self.node, "transport_disconnected", False)
+        )
 
     def init_after_connect(self):
         pass
 
     def disconnect(self, isCheck=True, isChange=False):
-        if not self.config.G_ANT["STATUS"]:
+        if not self.is_transport_available():
             return
         if isCheck:
             if not self.config.sensor_uses(self.name, self.config.SENSOR_PROTOCOL_ANT):
                 return
         if self.state_check("CLOSE"):
             return
+        if not self.is_transport_available():
+            return
         try:
             self.close_extra()
             self.channel.close()
-            self.channel.wait_for_event(
-                [
-                    0x07,
-                ]
-            )  # EVENT_CHANNEL_CLOSED
-        except:
-            pass
+            if self.is_transport_available():
+                self.channel.wait_for_event([0x07])  # EVENT_CHANNEL_CLOSED
+        except Exception as exc:
+            app_logger.warning("ANT+ %s channel close failed: %s", self.name, exc)
 
     def delete(self):
         if self.channel is None:
@@ -229,7 +248,7 @@ class ANT_Device:
     def state_check(self, mode):
         channel_state = self.get_channel_state()
         state = False
-        if mode == "OPEN" and channel_state is not None and channel_state != 1:
+        if mode == "OPEN" and channel_state in (2, 3):
             state = True
         elif mode == "CLOSE" and channel_state in (0, 1):
             state = True

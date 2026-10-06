@@ -48,6 +48,7 @@ class SensorANT(Sensor):
     NETWORK_KEY = [0xB9, 0xA5, 0x21, 0xFB, 0xBD, 0x72, 0xC3, 0x45]
     NETWORK_NUM = 0x00
     scanner = None
+    searcher = None
     device = {}
 
     def _init_runtime_state(self):
@@ -280,8 +281,12 @@ class SensorANT(Sensor):
     def is_sensor_available(self, ant_name):
         if self.config.G_DUMMY_OUTPUT and not self.config.G_ANT["STATUS"]:
             return self.config.sensor_uses(ant_name, self.config.SENSOR_PROTOCOL_ANT)
-        return self.is_transport_available() and self.config.is_sensor_configured(
-            ant_name, self.config.SENSOR_PROTOCOL_ANT
+        return (
+            self.is_transport_available()
+            and self.config.is_sensor_configured(
+                ant_name, self.config.SENSOR_PROTOCOL_ANT
+            )
+            and self.config.get_ant_id_type(ant_name) in self.device
         )
 
     def is_sensor_paired(self, ant_name):
@@ -454,67 +459,71 @@ class SensorANT(Sensor):
 
     def connect_ant_sensor(self, antName, antID, antType, connectStatus):
         if not self.is_transport_available():
-            return
-        new_ant_id_type = struct.pack("<HB", antID, antType)
+            return False
+        antIDType = struct.pack("<HB", antID, antType)
         previous_ant_id_type = self.config.get_ant_id_type(antName)
-        if previous_ant_id_type and previous_ant_id_type != new_ant_id_type:
-            self._release_replaced_sensor(antName, previous_ant_id_type)
+        previous_sensor = self.config.G_SENSORS[antName].copy()
+        created = antIDType not in self.device
+        try:
+            self.searcher.stop_search(resetWait=False)
+            self.searcher.set_wait_normal_mode()
+            if not self.is_transport_available():
+                return False
+            self.config.set_sensor(
+                antName, self.config.SENSOR_PROTOCOL_ANT, antID, antType
+            )
+            if not connectStatus or created:
+                self._connect_ant_device(antName, antIDType, antType)
+            if previous_ant_id_type and previous_ant_id_type != antIDType:
+                self._release_replaced_sensor(antName, previous_ant_id_type)
+            if not self.is_transport_available():
+                raise RuntimeError("Transport disconnected during pairing")
+            return True
+        except Exception as exc:
+            self.config.G_SENSORS[antName].update(previous_sensor)
+            if created:
+                self._discard_pairing_device(antIDType)
+            app_logger.warning("ANT+ %s pairing failed: %s", antName, exc)
+            return False
 
-        self.config.set_sensor(antName, self.config.SENSOR_PROTOCOL_ANT, antID, antType)
-        antIDType = new_ant_id_type
-        self.searcher.stop_search(resetWait=False)
+    def _connect_ant_device(self, ant_name, ant_id_type, ant_type):
+        if ant_id_type not in self.device:
+            device_class = {
+                0x78: ant_device_heartrate.ANT_Device_HeartRate,
+                0x79: ant_device_speed_cadence.ANT_Device_Speed_Cadence,
+                0x7A: ant_device_speed_cadence.ANT_Device_Cadence,
+                0x7B: ant_device_speed_cadence.ANT_Device_Speed,
+                0x0B: ant_device_power.ANT_Device_Power,
+                0x23: ant_device_light.ANT_Device_Light,
+                0x10: ant_device_ctrl.ANT_Device_CTRL,
+                0x19: ant_device_temperature.ANT_Device_Temperature,
+            }[ant_type]
+            self.values[ant_id_type] = {}
+            self.device[ant_id_type] = device_class(
+                self.node,
+                self.config,
+                self.values[ant_id_type],
+                ant_name,
+                auto_connect=False,
+            )
+        device = self.device[ant_id_type]
+        if not device.connect(isCheck=False, isChange=False):
+            raise RuntimeError("Sensor channel did not open")
+        device.ant_state = "connect_ant_sensor"
+        device.init_after_connect()
 
-        self.searcher.set_wait_normal_mode()
-
-        # existing connection
-        if connectStatus:
+    def _discard_pairing_device(self, ant_id_type):
+        device = self.device.pop(ant_id_type, None)
+        self.values.pop(ant_id_type, None)
+        if device is None:
             return
-
-        # reconnect
-        if antIDType in self.device:
-            self.device[antIDType].connect(
-                isCheck=False, isChange=False
-            )  # USE: True -> True)
-            self.device[antIDType].ant_state = "connect_ant_sensor"
-            self.device[antIDType].init_after_connect()
-            return
-
-        # newly connect
-        self.values[antIDType] = {}
-        if antType == 0x78:
-            self.device[antIDType] = ant_device_heartrate.ANT_Device_HeartRate(
-                self.node, self.config, self.values[antIDType], antName
-            )
-        elif antType == 0x79:
-            self.device[antIDType] = ant_device_speed_cadence.ANT_Device_Speed_Cadence(
-                self.node, self.config, self.values[antIDType], antName
-            )
-        elif antType == 0x7A:
-            self.device[antIDType] = ant_device_speed_cadence.ANT_Device_Cadence(
-                self.node, self.config, self.values[antIDType], antName
-            )
-        elif antType == 0x7B:
-            self.device[antIDType] = ant_device_speed_cadence.ANT_Device_Speed(
-                self.node, self.config, self.values[antIDType], antName
-            )
-        elif antType == 0x0B:
-            self.device[antIDType] = ant_device_power.ANT_Device_Power(
-                self.node, self.config, self.values[antIDType], antName
-            )
-        elif antType == 0x23:
-            self.device[antIDType] = ant_device_light.ANT_Device_Light(
-                self.node, self.config, self.values[antIDType], antName
-            )
-        elif antType == 0x10:
-            self.device[antIDType] = ant_device_ctrl.ANT_Device_CTRL(
-                self.node, self.config, self.values[antIDType], antName
-            )
-        elif antType == 0x19:
-            self.device[antIDType] = ant_device_temperature.ANT_Device_Temperature(
-                self.node, self.config, self.values[antIDType], antName
-            )
-        self.device[antIDType].ant_state = "connect_ant_sensor"
-        self.device[antIDType].init_after_connect()
+        if isinstance(device, ant_device_light.ANT_Device_Light):
+            device.send_queue.put_nowait(None)
+        if self.is_transport_available():
+            try:
+                device.delete()
+            except Exception as exc:
+                app_logger.warning("ANT+ channel cleanup failed: %s", exc)
 
     def _configured_id_type(self, ant_name):
         return self.config.get_ant_id_type(ant_name)
@@ -532,6 +541,8 @@ class SensorANT(Sensor):
 
     def _release_replaced_sensor(self, ant_name, ant_id_type):
         """Release an old channel when a role is paired with another sensor."""
+        if not self.is_transport_available():
+            return
         shared_names = self._active_roles_for_id_type(ant_id_type, exclude=ant_name)
         if shared_names:
             device = self.device.get(ant_id_type)
@@ -543,8 +554,10 @@ class SensorANT(Sensor):
         if device is not None:
             try:
                 device.ant_state = "replace_ant_sensor"
-                device.disconnect(isCheck=False, isChange=False)
-                device.delete()
+                if self.is_transport_available():
+                    device.disconnect(isCheck=False, isChange=False)
+                if self.is_transport_available():
+                    device.delete()
             except Exception:
                 pass
         self.device.pop(ant_id_type, None)
@@ -607,11 +620,9 @@ class SensorANT(Sensor):
             antIDType = self.config.get_ant_id_type(k)
             if antIDType and antIDType not in antIDTypes:
                 antIDTypes.add(antIDType)
-                self.device[antIDType].connect(
-                    isCheck=True, isChange=False
-                )  # USE: True -> True
-                self.device[antIDType].ant_state = "connect_ant_sensor"
-                self.device[antIDType].init_after_connect()
+                if self.device[antIDType].connect(isCheck=True, isChange=False):
+                    self.device[antIDType].ant_state = "connect_ant_sensor"
+                    self.device[antIDType].init_after_connect()
         self.scanner.set_wait_normal_mode()
         app_logger.info("STOP ANT+ multiscan")
 
@@ -638,6 +649,8 @@ class SensorANT(Sensor):
         notify_user = self.config.G_ANT["STATUS"]
         self.transport_disconnected = True
         self.transport_error = error
+        if self.searcher is not None:
+            self.searcher.stop_search(transport_available=False)
         self.invalidate_sensor_values()
         if not self._transport_disconnect_logged:
             app_logger.warning(f"ANT+ transport disconnected: {error!r}")
@@ -679,5 +692,5 @@ class SensorANT(Sensor):
         self._transport_disconnect_popup_pending = False
         self._transport_disconnect_popup_shown = True
 
-        show_dialog(None, "ANT+ USB dongle disconnected.")
+        show_dialog(None, "ANT+ connection lost.")
         return True
