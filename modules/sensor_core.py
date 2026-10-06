@@ -37,6 +37,7 @@ from .sensor.sensor_ant import SensorANT
 from .sensor.sensor_ble import SensorBLE
 from .sensor.sensor_gpio import SensorGPIO
 from .sensor.sensor_i2c import SensorI2C
+from .sensor.sensor_keyboard import SensorKeyboard
 from .sensor.control_uart import ControlUART
 from .sensor.sensor_uart_bridge import SensorUARTBridge
 
@@ -147,8 +148,10 @@ class SensorCore:
 
     @property
     def has_buttons(self):
-        return self.sensor_gpio.has_buttons or any(
-            self.sensor_i2c.available_sensors["BUTTON"].values()
+        return (
+            self.sensor_gpio.has_buttons
+            or self.sensor_keyboard.has_buttons
+            or any(self.sensor_i2c.available_sensors["BUTTON"].values())
         )
 
     def __init__(self, config):
@@ -248,6 +251,7 @@ class SensorCore:
 
         self.sensor_gpio = SensorGPIO(config, None)
         self.sensor_gpio.update()
+        self.sensor_keyboard = SensorKeyboard(config, None)
 
         app_logger.info("[sensor] Initialize:")
         log_timers(timers)
@@ -378,6 +382,7 @@ class SensorCore:
         self.sensor_ble.start_coroutine()
         self.sensor_gps.start_coroutine()
         self.sensor_i2c.start_coroutine()
+        self.sensor_keyboard.start_coroutine()
 
     def _schedule_bridge_recovery(self, reconfigured):
         if self._bridge_recovery_task is not None:
@@ -424,6 +429,7 @@ class SensorCore:
         self.sensor_ble.quit()
         await self.sensor_gps.quit()
         await self.sensor_gpio.quit()
+        await self.sensor_keyboard.quit()
 
     # reset accumulated values
     def reset(self):

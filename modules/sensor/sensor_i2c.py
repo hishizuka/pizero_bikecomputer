@@ -316,6 +316,7 @@ class SensorI2C(Sensor):
             I2CDevice.BMP581: self._enable_bmp581,
             I2CDevice.BMI270: self._enable_bmi270,
             I2CDevice.BMM150: self._enable_bmm150,
+            I2CDevice.LSM6DS3TRC: self._enable_lsm6ds3trc,
         }
 
         for choice in self.config.board_preset.i2c_sensors:
@@ -364,6 +365,14 @@ class SensorI2C(Sensor):
         if detected:
             self.motion_sensor["MAG"] = True
             self.sensor_label["MAG"] = "BMM150"
+        return detected
+
+    def _enable_lsm6ds3trc(self):
+        detected = self.detect_motion_lsm6ds3trc()
+        self.available_sensors["MOTION"]["LSM6DS3TRC"] = detected
+        if detected:
+            self.motion_sensor["ACC"] = True
+            self.motion_sensor["GYRO"] = True
         return detected
 
     def detect_sensors(self):
@@ -533,6 +542,8 @@ class SensorI2C(Sensor):
         # acc + gyro
         if self.available_sensors["MOTION"].get("BMI270"):
             self.sensor["i2c_imu"] = self.sensor_bmi270
+        elif self.available_sensors["MOTION"].get("LSM6DS3TRC"):
+            self.sensor["i2c_imu"] = self.sensor_lsm6ds3trc
         elif self.available_sensors["MOTION"].get("LSM6DS"):
             self.sensor["i2c_imu"] = self.sensor_lsm6ds
         # acc + mag
@@ -662,6 +673,11 @@ class SensorI2C(Sensor):
             self._mag_declination_task.cancel()
         if self.available_sensors["BUTTON"].get("MCP23008", False):
             self.sensor_mcp23008.quit()
+        if self.available_sensors["MOTION"].get("LSM6DS3TRC"):
+            try:
+                self.sensor_lsm6ds3trc.close()
+            except OSError as error:
+                app_logger.warning("Failed to stop LSM6DS3TR-C: %s", error)
 
     @staticmethod
     def _parse_datetime_value(value):
@@ -1143,7 +1159,9 @@ class SensorI2C(Sensor):
                 self.values["acc_raw"] = np.array(
                     self.sensor["i2c_imu"].values["acc"]
                 )
-            elif self.available_sensors["MOTION"].get("BMI270"):
+            elif self.available_sensors["MOTION"].get("BMI270") or self.available_sensors[
+                "MOTION"
+            ].get("LSM6DS3TRC"):
                 self.values["acc_raw"] = np.array(
                     self.sensor["i2c_imu"].acceleration
                 )
@@ -1184,6 +1202,7 @@ class SensorI2C(Sensor):
                 self.values["gyro_raw"] = np.array(self.sensor["i2c_imu"].gyro)
             elif (
                 self.available_sensors["MOTION"].get("LSM6DS") # rad/sec
+                or self.available_sensors["MOTION"].get("LSM6DS3TRC")
                 or self.available_sensors["MOTION"].get("ISM330DHCX") # rad/sec
                 or self.available_sensors["MOTION"].get("BMX160") # deg/sec
                 or self.available_sensors["MOTION"].get("ICM20948") # deg/sec
@@ -2001,6 +2020,16 @@ class SensorI2C(Sensor):
             delattr(self, sensor_attr)
             return False
         except:
+            return False
+
+    def detect_motion_lsm6ds3trc(self):
+        try:
+            from .i2c.LSM6DS3TRC import LSM6DS3TRC
+
+            self.sensor_lsm6ds3trc = LSM6DS3TRC(bus=1, address=0x6A)
+            return True
+        except (ImportError, OSError, ValueError) as error:
+            app_logger.info("LSM6DS3TR-C unavailable: %s", error)
             return False
 
     def detect_motion_lsm6ds(self):

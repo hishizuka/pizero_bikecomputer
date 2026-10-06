@@ -11,6 +11,7 @@
     - [ANT+ USB dongle](#ant-usb-dongle)
     - [Display](#display)
     - [I2C sensors](#i2c-sensors)
+    - [CardputerZero (beta)](#cardputerzero-beta)
 - [Quick Start](#quick-start)
   - [Run on Wayland / X Window](#run-on-wayland--x-window)
   - [Run in console](#run-in-console)
@@ -512,6 +513,7 @@ $ pip install adafruit-circuitpython-bmp280
 | | [waveshare Environment Sensor HAT](https://www.waveshare.com/environment-sensor-hat.htm) | | adafruit-circuitpython-bme280 adafruit-circuitpython-icm20x adafruit-circuitpython-tsl2591 adafruit-circuitpython-ltr390 adafruit-circuitpython-sgp40 |
 | (Obsolete) Bosch BMX160+BMP388 | [DFRobot](https://www.dfrobot.com/product-1928.html) | | BMX160(*3) | 
 | (Obsolete) [STMicroelectronics LPS33HW](https://www.st.com/resource/en/product_presentation/Sensors2018_Water_resistant_Pressure_Sensor_LPS33HW.pdf) | [Adafruit](https://www.adafruit.com/product/4414), [Strawberry Linux](https://strawberry-linux.com/catalog/items?code=12133)| | None |
+| STMicroelectronics LSM6DS3TR-C (CardputerZero beta) | | | bundled smbus2 driver |
 | (Obsolete) STMicroelectronics LSM6DS33 | [Adafruit](https://www.adafruit.com/product/4485) | | adafruit-circuitpython-lsm6ds |
 | (Obsolete) [STMicroelectronics LSM9DS1](https://www.st.com/ja/mems-and-sensors/lsm9ds1.html) | [Adafruit](https://www.adafruit.com/product/4634) | | adafruit-circuitpython-lsm9ds1 | 
 | | (Obsolete) [Pimoroni Enviro pHAT](https://learn.pimoroni.com/article/getting-started-with-enviro-phat) | | None |
@@ -636,6 +638,81 @@ Follow [official setup guide](https://github.com/PiSupply/PiJuice/tree/master/So
 
 No additional Python package is required by this repository.
 
+### CardputerZero (beta)
+
+This support is work in progress (W.I.P.). In particular, the built-in keyboard
+has no key assignments yet and cannot control the application.
+
+Verified on `cz1`: Raspberry Pi Compute Module 0, Raspberry Pi OS Trixie
+(Debian 13.7), kernel `6.18.39+rpt-rpi-v8`, Python 3.13.5, Qt 6.8.2.
+The existing M5Stack kernel drivers provide the 320x170 ST7789 LCD through
+`/dev/fb_lcd` and the M5IOE1 backlight through
+`/sys/class/backlight/backlight/brightness`. Keep the supplied display and
+keyboard overlays. This preset uses Qt linuxfb and sysfs backlight control.
+
+Complete [Common](#common), then install the direct I2C dependency:
+
+```bash
+sudo apt install python3-smbus2
+```
+
+With a virtual environment created without `--system-site-packages`, install
+`smbus2` using that environment's `pip` instead. Adafruit packages and `evdev`
+are not required for this preset.
+
+Set the following in `setting.conf`:
+
+```ini
+[GENERAL]
+board = cardputerzero
+
+[DISPLAY_PARAM]
+use_auto_backlight = False
+manual_backlight_brightness = 75
+```
+
+The board preset selects `display = CardputerZero`, enables manual backlight
+control, and leaves GPIO buttons and the buzzer disabled. The keyboard adapter
+is a placeholder: it does not open or grab `/dev/input/cardputer-zero-internal`
+and has no board-specific key assignments. SSH stdin controls remain available
+with `--headless`; Qt input is left enabled.
+
+On the M5Stack image, stop the launcher before testing and restore it afterward:
+
+```bash
+systemctl --user stop APPLaunch.service
+QT_QPA_PLATFORM=linuxfb:fb=/dev/fb_lcd QT_QPA_FB_HIDECURSOR=1 \
+  <venv>/bin/python3 pizero_bikecomputer.py --headless --demo --fullscreen \
+  --layout layouts/layout-cardputerzero.yaml --debug
+systemctl --user start APPLaunch.service
+```
+
+Replace `<venv>` with the configured virtual environment path. If the framebuffer
+alias is absent, use the LCD's actual framebuffer device. In `--headless` mode,
+send `n`/`p` to change pages, `m` to open the menu, `b` to go back, `S` to save a
+screenshot, and `q` to exit, each followed by Enter. The compact layout contains
+six values and a SIMPLE_MAP page. Backlight levels are selected in the System
+menu and saved; automatic brightness is unavailable without a light sensor.
+For SSH stdin control, use `ssh -T pi@cz1.local '<launch command>'` without a
+remote pseudo-terminal; Qt linuxfb can otherwise take over terminal input.
+After `q`, close stdin (Ctrl-D in an interactive local terminal) to release any
+pending input thread. An input pipe closes automatically when its producer exits.
+
+This beta has an ST IMU at I2C1 address `0x6A`, with `WHO_AM_I = 0x6A`, consistent
+with LSM6DS3TR-C. The bundled `smbus2` driver configures 12.5 Hz, +/-2 g and
++/-125 dps and supplies acceleration in g and angular velocity in rad/s. An
+absent or incompatible IMU leaves the application usable. Magnetometer,
+barometer, light sensor and battery acquisition are not enabled by this preset;
+mounting-axis orientation remains to be measured. The
+[current M5Stack product documentation](https://docs.m5stack.com/en/CardputerZero)
+lists Bosch BMI270/BMM150, so this beta preset does not claim support for that
+production sensor arrangement. Use either a kernel IIO driver or this direct
+I2C driver for the ST IMU, rather than both simultaneously.
+
+The interactive installer does not yet provide a CardputerZero service option;
+use the manual steps above without enabling the JDI/Sharp display or GPIO PWM
+overlays.
+
 
 # Quick Start
 
@@ -697,7 +774,7 @@ once during installation, and its environment variables are written directly to
 
 When SPI is enabled, the installer asks whether PWM0 (GPIO18) drives the backlight.
 It asks whether PWM1 (GPIO13) drives the buzzer regardless of SPI. It updates
-`/boot/firmware/config.txt` as follows:
+`/boot/firmware/config.txt` as follows for legacy SPI display backends:
 
 | Backlight | Buzzer | Overlay |
 |:-|:-|:-|
@@ -1209,6 +1286,7 @@ Set the value before starting the program. If the value is set during running, i
   - Select the board preset, including I2C sensors, GPIO buttons, buzzer, and display mode.
   - `auto`: detect all supported I2C sensors and do not enable custom GPIO buttons.
   - `pizero_bikecomputer`: use the Pi Zero Bikecomputer PCB preset.
+  - `cardputerzero`: use the CardputerZero beta LCD and optional ST IMU preset; keyboard assignments are pending.
   - `bryton_rider_s800`: use the Bryton Rider S800 board preset.
   - `bryton_rider_s800_bridge`: use the nRF52840 bridge board, GPIO4/23/20/21 buttons, and UART sensor stream.
 - `display`
@@ -1225,6 +1303,7 @@ Set the value before starting the program. If the value is set during running, i
   - `Pirate_Audio`, `Pirate_Audio_old`: Pirate Audio ("old" assigns the Y button to GPIO 20.)
   - `Display_HAT_Mini`: Display HAT Mini
   - `ST7789_Breakout`: generic ST7789 breakout
+  - `CardputerZero`: kernel framebuffer LCD, 320x170, with sysfs backlight control (selected by its board preset).
   - `PiTFT`: PiTFT2.4 (or a PiTFT2.8 with the same resolution)
 - `autostop_status`
   - Enable or disable automatic stopwatch start/stop.

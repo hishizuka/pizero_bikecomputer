@@ -30,6 +30,7 @@ SUPPORTED_DISPLAYS = {
     "Pirate_Audio_old": None,
     "Display_HAT_Mini": (320, 240),
     "ST7789_Breakout": None,
+    "CardputerZero": ((320, 170), 65536),
 }
 
 MIP_DISPLAY_PARAMS = {
@@ -390,7 +391,11 @@ def init_display(config):
     if auto_detect is not None:
         config.G_DISPLAY = auto_detect
 
-    if config.G_DISPLAY == "PiTFT":
+    if config.G_DISPLAY == "CardputerZero":
+        from .cardputerzero_display import CardputerZeroDisplay
+
+        display = CardputerZeroDisplay(config)
+    elif config.G_DISPLAY == "PiTFT":
         from .pitft_28_r import _SENSOR_DISPLAY, PiTFT28r
 
         if _SENSOR_DISPLAY:

@@ -6,6 +6,7 @@ from typing import Mapping, Sequence
 class BoardType(StrEnum):
     AUTO = "auto"
     PIZERO_BIKECOMPUTER = "pizero_bikecomputer"
+    CARDPUTERZERO = "cardputerzero"
     BRYTON_RIDER_S800 = "bryton_rider_s800"
     BRYTON_RIDER_S800_BRIDGE = "bryton_rider_s800_bridge"
 
@@ -24,6 +25,7 @@ class I2CDevice(StrEnum):
     BMP581 = "bmp581"
     BMI270 = "bmi270"
     BMM150 = "bmm150"
+    LSM6DS3TRC = "lsm6ds3trc"
 
 
 @dataclass(frozen=True)
@@ -54,6 +56,7 @@ class IMUAxisPreset:
 class DisplayPreset:
     use_backlight: bool = False
     auto_backlight_cutoff: int = 10
+    name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -69,6 +72,7 @@ class BoardPreset:
     control_uart_rtscts: bool = False
     nrf_reset_gpio: int | None = None
     nrf_reset_gpiochip: str = "/dev/gpiochip4"
+    keyboard_device: str | None = None
 
 
 _S800_IMU_AXIS = IMUAxisPreset(
@@ -81,6 +85,11 @@ _BACKLIT_DISPLAY = DisplayPreset(use_backlight=True, auto_backlight_cutoff=2)
 
 BOARD_PRESETS: dict[BoardType, BoardPreset] = {
     BoardType.AUTO: BoardPreset(i2c_sensors=None),
+    BoardType.CARDPUTERZERO: BoardPreset(
+        i2c_sensors=(I2CSensorChoice((I2CDevice.LSM6DS3TRC,)),),
+        keyboard_device="/dev/input/cardputer-zero-internal",
+        display=DisplayPreset(use_backlight=True, name="CardputerZero"),
+    ),
     BoardType.PIZERO_BIKECOMPUTER: BoardPreset(
         i2c_sensors=(
             I2CSensorChoice((I2CDevice.BHI3,), required=True),

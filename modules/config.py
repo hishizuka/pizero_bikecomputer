@@ -748,6 +748,8 @@ class Config:
             }
 
         if preset.display is not None:
+            if preset.display.name is not None:
+                self.G_DISPLAY = preset.display.name
             self.G_DISPLAY_PARAM = self.G_DISPLAY_PARAM.copy()
             self.G_DISPLAY_PARAM["USE_BACKLIGHT"] = preset.display.use_backlight
             self.G_AUTO_BACKLIGHT_CUTOFF = preset.display.auto_backlight_cutoff

@@ -1,0 +1,12 @@
+MAIN:
+  STATUS: true
+  LAYOUT:
+    Speed: [0, 0]
+    HR: [0, 1]
+    Power(3s): [1, 0]
+    Cad.: [1, 1]
+    Dist.: [2, 0]
+    Timer: [2, 1]
+
+SIMPLE_MAP:
+  STATUS: true
