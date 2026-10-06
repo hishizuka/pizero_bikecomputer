@@ -14,7 +14,6 @@
 !/scripts/install/
 !/scripts/install/**
 /.idea/
-/.serena/
 /.claude/
 *.iml
 /.vscode/
