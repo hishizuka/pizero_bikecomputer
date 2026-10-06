@@ -229,6 +229,10 @@ class Setting:
             c = self.config_parser["DISPLAY_PARAM"]
             if "SPI_CLOCK" in c:
                 self.config.G_DISPLAY_PARAM["SPI_CLOCK"] = int(c["SPI_CLOCK"])
+            if "USE_QML_OPENGL_RENDERER" in c:
+                self.config.G_USE_QML_OPENGL_RENDERER = c.getboolean(
+                    "USE_QML_OPENGL_RENDERER"
+                )
             if "USE_AUTO_BACKLIGHT" in c:
                 self.config.G_USE_AUTO_BACKLIGHT = c.getboolean("USE_AUTO_BACKLIGHT")
             if "MANUAL_BACKLIGHT_BRIGHTNESS" in c:
@@ -431,6 +435,7 @@ class Setting:
         c = self.config_parser["DISPLAY_PARAM"]
         display = board_preset.display
         c["SPI_CLOCK"] = str(int(self.config.G_DISPLAY_PARAM["SPI_CLOCK"]))
+        c["USE_QML_OPENGL_RENDERER"] = str(self.config.G_USE_QML_OPENGL_RENDERER)
         c["USE_AUTO_BACKLIGHT"] = str(self.config.G_USE_AUTO_BACKLIGHT)
         manual_brightness = self.config.G_MANUAL_BACKLIGHT_BRIGHTNESS
         if manual_brightness is not None:

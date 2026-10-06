@@ -134,6 +134,51 @@ configure_pwm_overlay() {
     fi
 }
 
+install_memory_lcd_support() {
+    local driver_dir="$HOME/memory-lcd-drm"
+    sudo apt install -y build-essential
+    if [[ "$install_memory_lcd_drm" == "true" ]]; then
+        local kernel_release kernel_flavour
+        kernel_release="$(uname -r)"
+        case "$kernel_release" in
+            *-rpi-2712) kernel_flavour=2712 ;;
+            *-rpi-v8) kernel_flavour=v8 ;;
+            *-rpi-v6) kernel_flavour=v6 ;;
+            *-rpi-v7) kernel_flavour=v7 ;;
+            *-rpi-v7l) kernel_flavour=v7l ;;
+            *) echo "❌ Unsupported kernel: $kernel_release. See memory-lcd-drm's installation guide."; return 1 ;;
+        esac
+        sudo apt install -y device-tree-compiler dkms \
+            "linux-image-rpi-$kernel_flavour" "linux-headers-rpi-$kernel_flavour"
+        if [[ ! -f "/lib/modules/$kernel_release/build/Makefile" ]]; then
+            echo "❌ Headers for $kernel_release are missing. Reboot into the updated kernel and rerun the installer."
+            return 1
+        fi
+    fi
+
+    if [[ ! -d "$driver_dir" ]]; then
+        git clone https://github.com/hishizuka/memory-lcd-drm.git "$driver_dir"
+    fi
+    if [[ "$install_memory_lcd_drm" == "true" ]]; then
+        sudo make -C "$driver_dir" install_dkms
+        sudo usermod -aG video "$TARGET_USER"
+        echo "✅ memory-lcd-drm installed (module and overlay: sharp-drm)."
+        echo "   Select your panel's dtoverlay=sharp-drm settings before rebooting:"
+        echo "   https://github.com/hishizuka/memory-lcd-drm#panel-configuration-examples"
+    fi
+    if [[ "$install_dmabuf_presenter" == "true" ]]; then
+        sudo apt install -y python3-pyside6.qtquick python3-pyside6.qtwidgets \
+            qml6-module-qtquick-controls qml6-module-qtquick-layouts \
+            qml6-module-qtqml-workerscript \
+            pkg-config libdrm-dev libgbm-dev libegl-dev libgles-dev
+        make -C "$driver_dir" presenter
+        sudo make -C "$driver_dir" install_presenter
+        sudo usermod -aG video,render "$TARGET_USER"
+        echo "✅ memory-lcd-drm DMA-BUF presenter installed; GUI selection unchanged."
+        echo "   Enable VC4 KMS before using the presenter."
+    fi
+}
+
 #############################################################
 # get user input
 #############################################################
@@ -181,7 +226,13 @@ fi
 prompt_and_store "Enable SPI?" enable_spi
 use_bryton_rider_s800_display=false
 use_pwm_backlight=false
+install_memory_lcd_drm=false
+install_dmabuf_presenter=false
 if [[ "$enable_spi" == "true" ]]; then
+    prompt_and_store "Install memory-lcd-drm for a JDI/Sharp/AUO MIP display (DKMS)?" install_memory_lcd_drm
+    if [[ "$install_pyqt6" == "true" ]]; then
+        prompt_and_store "Install optional memory-lcd-drm DMA-BUF presenter (experimental; GUI unchanged)?" install_dmabuf_presenter
+    fi
     prompt_and_store "Use Bryton Rider S800 display?" use_bryton_rider_s800_display
     prompt_and_store "Use PWM0 (GPIO18) for the backlight?" use_pwm_backlight
 fi
@@ -374,6 +425,10 @@ sudo apt install -y libgpiod3 libgpiod-dev python3-libgpiod
     echo "✅ SPI enabled successfully"
 fi
 
+if [[ "$install_memory_lcd_drm" == "true" || "$install_dmabuf_presenter" == "true" ]]; then
+    install_memory_lcd_support
+fi
+
 #############################################################
 # disable raspberry pi specific hardware
 #############################################################
@@ -381,7 +436,7 @@ fi
 pwm_overlay=""
 if [[ "$use_pwm_backlight" == "true" && "$use_pwm_buzzer" == "true" ]]; then
     pwm_overlay="dtoverlay=pwm-2chan,pin=18,func=2,pin2=13,func2=4"
-elif [[ "$use_pwm_backlight" == "true" ]]; then
+elif [[ "$use_pwm_backlight" == "true" && "$install_memory_lcd_drm" == "false" ]]; then
     pwm_overlay="dtoverlay=pwm,pin=18,func=2"
 elif [[ "$use_pwm_buzzer" == "true" ]]; then
     pwm_overlay="dtoverlay=pwm,pin=13,func=4"
@@ -597,5 +652,9 @@ if [[ "$install_services" == "true" ]]; then
 
 fi
 
+if [[ "$install_memory_lcd_drm" == "true" || "$install_dmabuf_presenter" == "true" ]]; then
+    echo "ℹ️ Before rebooting, complete the panel, backlight, and boot display settings:"
+    echo "   https://github.com/hishizuka/pizero_bikecomputer/blob/master/doc/software_installation.md#jdi--sharp-mip-display"
+fi
 echo "✅ pizero_bikecomputer initial setup completed successfully! Please reboot."  # or "Now rebooting"
 #sudo reboot

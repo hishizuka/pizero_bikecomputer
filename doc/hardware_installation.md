@@ -302,6 +302,11 @@ see [hardware_installation_pitft.md](./hardware_installation_pitft.md) as PiTFT(
 
 It's quite difficult, but the hardware configuration is better than PiTFT.
 
+The recommended kernel driver is [Memory LCD DRM Driver](https://github.com/hishizuka/memory-lcd-drm).
+Its module and device tree overlay retain the name `sharp-drm`. See its
+[pin assignments and panel settings](https://github.com/hishizuka/memory-lcd-drm#connections-and-pin-assignment)
+and the [software installation guide](software_installation.md#jdi--sharp-mip-display).
+
 ### Adafruit SHARP Memory Display
 
 <img src="https://user-images.githubusercontent.com/12926652/91796767-f6803d80-ec5b-11ea-9bde-19940a951588.png" width=360 />

@@ -319,11 +319,83 @@ Assume SPI interface is on in raspi-config.
 
 For `MIP_*` displays there are currently three practical paths:
 
+- [Memory LCD DRM Driver](https://github.com/hishizuka/memory-lcd-drm), the recommended
+  kernel driver (`QT_QPA_PLATFORM=linuxfb:fb=/dev/fb0`)
 - legacy pigpio backend
 - legacy spidev + libgpiod backend
-- the newer `sharp-drm` framebuffer driver (`QT_QPA_PLATFORM=linuxfb:fb=/dev/fb0`)
 
-`install.sh` enables SPI and installs libgpiod packages, but it does not install pigpio automatically.
+The public repository is named `memory-lcd-drm`; the kernel module and device tree
+overlay still use `sharp-drm`, and sysfs uses `/sys/module/sharp_drm/`. Existing
+display detection and `dtoverlay=sharp-drm` settings remain compatible.
+
+When SPI is enabled, `install.sh` offers to install `memory-lcd-drm` with DKMS.
+It clones the source into `~/memory-lcd-drm`, installs the matching kernel image
+and headers metapackages, then runs `sudo make install_dkms`. An existing source
+directory is reused; update it yourself when installing a newer driver version.
+If the running kernel's headers are missing after a kernel update, reboot and
+rerun the installer. DKMS rebuilds the module on later kernel updates when matching
+headers are installed.
+
+The installer installs the module, device tree overlay, and udev rules. Select
+your panel's dimensions, color mode, and optional backlight in
+`/boot/firmware/config.txt` before rebooting. It does not select panel settings,
+force HDMI, or change the framebuffer/console boot settings automatically.
+
+The separate DMA-BUF presenter option builds `libsharp_presenter.so` from the
+same checkout and installs the Qt Quick packages. It does not change the GUI
+or service selection; PyQt remains the default.
+
+For manual installation:
+
+```sh
+sudo apt install git build-essential device-tree-compiler dkms
+cd ~
+git clone https://github.com/hishizuka/memory-lcd-drm.git
+cd ~/memory-lcd-drm
+uname -r
+```
+
+Install the packages matching the running kernel:
+
+| Running kernel suffix | Kernel image and headers |
+|:-|:-|
+| `rpt-rpi-2712` | `sudo apt install linux-image-rpi-2712 linux-headers-rpi-2712` |
+| `rpt-rpi-v8` | `sudo apt install linux-image-rpi-v8 linux-headers-rpi-v8` |
+| `rpt-rpi-v6` | `sudo apt install linux-image-rpi-v6 linux-headers-rpi-v6` |
+| `rpt-rpi-v7` | `sudo apt install linux-image-rpi-v7 linux-headers-rpi-v7` |
+| `rpt-rpi-v7l` | `sudo apt install linux-image-rpi-v7l linux-headers-rpi-v7l` |
+
+If installing these packages updates the kernel, reboot and verify its headers
+before continuing:
+
+```sh
+cd ~/memory-lcd-drm
+ls /lib/modules/$(uname -r)/build/Makefile
+sudo make install_dkms
+sudo usermod -aG video "$USER"
+```
+
+See the driver's
+[installation guide](https://github.com/hishizuka/memory-lcd-drm#quick-installation)
+for supported kernels and validation details.
+
+For example, an AUO U340QBN01 (272x451, 64 colors) uses:
+
+```ini
+[all]
+dtparam=spi=on
+dtoverlay=sharp-drm,width=272,height=451,colors=64
+```
+
+Choose the appropriate line from the driver's
+[panel configuration examples](https://github.com/hishizuka/memory-lcd-drm#panel-configuration-examples).
+For driver-controlled backlight, add `backlight_pwm` to the `sharp-drm` line.
+PWM0 alone needs no separate `pwm` overlay. When also using a PWM1 buzzer, place
+`dtoverlay=pwm-2chan,pin=18,func=2,pin2=13,func2=4` after the `sharp-drm` line,
+as described in the driver's
+[backlight guide](https://github.com/hishizuka/memory-lcd-drm#backlight-pwm).
+
+`install.sh` also enables SPI and installs libgpiod packages, but it does not install pigpio automatically.
 If you want to keep using the legacy pigpio backend on Raspberry Pi OS Trixie, install pigpio manually:
 
 ```
@@ -338,7 +410,7 @@ $ sudo systemctl enable pigpiod
 $ sudo systemctl start pigpiod
 ```
 
-If you use the newer `sharp-drm` driver, pigpio is not needed.
+If you use `memory-lcd-drm`, pigpio is not needed.
 The recommended PyQt/linuxfb setup uses one MIP framebuffer, `/dev/fb0`.
 Set `max_framebuffers=0` in `/boot/firmware/config.txt` to omit the firmware
 framebuffer, and keep `enable_uart=1` when UART hardware is used. In the single-line
@@ -348,9 +420,10 @@ that selects the GPS or nRF52840 UART, such as `console=serial0,115200`.
 Run the application with
 `QT_QPA_PLATFORM=linuxfb:fb=/dev/fb0`.
 
-`install.sh` selects `/dev/fb0` for linuxfb services. It does not install
-`sharp-drm` or configure these framebuffer boot settings; complete the
-[MIP boot display setup](../scripts/boot/splashasm/SETUP.md) before rebooting.
+`install.sh` selects `/dev/fb0` for linuxfb services. After installing the driver,
+apply the panel and framebuffer boot settings above before rebooting. The optional
+[MIP boot display setup](../scripts/boot/splashasm/SETUP.md) adds an early splash
+image and documents a tested boot configuration.
 Leave HDMI detection automatic and do not add `video=HDMI-A-1:640x480@60D` for
 this software rendering setup. The boot image script activates `/dev/fb0` directly
 with `FBIOBLANK`; no extra framebuffer, udev alias, or `con2fbmap` is needed.

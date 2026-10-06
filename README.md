@@ -7,6 +7,7 @@ https://github.com/hishizuka/pizero_bikecomputer
 
 # News
 
+- 2026/10/2 [Memory LCD DRM Driver](https://github.com/hishizuka/memory-lcd-drm) is now public. `install.sh` can install the MIP driver and the optional QML OpenGL/DMA-BUF presenter. See the [display setup guide](doc/software_installation.md#jdi--sharp-mip-display).
 - 2026/5/9 Official hardware is being designed and prototyped for Pi Zero Bikecomputer. The official hardware design files will be released under CERN-OHL-S-2.0.
   - <img width="400" alt="Official hardware prototype" src="https://github.com/user-attachments/assets/a7d9a2b8-5380-4f70-9cb2-84002e546b45" />
 - 2026/1/30 Support for a groundbreaking dual-screen display is in progress.

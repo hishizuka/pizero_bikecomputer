@@ -291,6 +291,7 @@ class Config:
     G_GUI_MODE = "PyQt"
     # G_GUI_MODE = "QML"
     # G_GUI_MODE = "Kivy"
+    G_USE_QML_OPENGL_RENDERER = True
 
     # PerformanceGraph:
     # 1st: POWER
