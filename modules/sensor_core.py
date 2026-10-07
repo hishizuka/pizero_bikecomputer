@@ -37,7 +37,7 @@ from .sensor.sensor_ant import SensorANT
 from .sensor.sensor_ble import SensorBLE
 from .sensor.sensor_gpio import SensorGPIO
 from .sensor.sensor_i2c import SensorI2C
-from .sensor.sensor_keyboard import SensorKeyboard
+from .sensor.sensor_cardputerzero_keyboard import SensorCardputerZeroKeyboard
 from .sensor.control_uart import ControlUART
 from .sensor.sensor_uart_bridge import SensorUARTBridge
 
@@ -251,7 +251,7 @@ class SensorCore:
 
         self.sensor_gpio = SensorGPIO(config, None)
         self.sensor_gpio.update()
-        self.sensor_keyboard = SensorKeyboard(config, None)
+        self.sensor_keyboard = SensorCardputerZeroKeyboard(config, None)
 
         app_logger.info("[sensor] Initialize:")
         log_timers(timers)
