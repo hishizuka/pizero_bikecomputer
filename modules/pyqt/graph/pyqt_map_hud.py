@@ -1,7 +1,7 @@
-from modules._qt_qtwidgets import QtCore, QtWidgets, pg
+from modules.qt._qt_qtwidgets import QtCore, QtWidgets, pg
 from modules.map.content import scale_content
 from modules.map.style import MAP_LAYER_ORDER, TRACK_COLOR, TRACK_WIDTH
-from modules.qt_map_hud import (
+from modules.qt.qt_map_hud import (
     attribution_image,
     hud_position,
     legend_image,

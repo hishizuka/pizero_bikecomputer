@@ -2,7 +2,7 @@ import math
 import time
 from datetime import datetime
 
-from modules._qt_qtwidgets import (
+from modules.qt._qt_qtwidgets import (
     QT_ALIGN_CENTER,
     QT_ALIGN_V_CENTER,
     QT_EXPANDING,

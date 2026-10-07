@@ -1,5 +1,5 @@
 from modules.app_logger import app_logger
-from modules._qt_qtwidgets import (
+from modules.qt._qt_qtwidgets import (
     QT_ALIGN_CENTER,
     QT_ALIGN_RIGHT,
     QT_NO_FOCUS,

@@ -1,4 +1,4 @@
-from modules._qt_qtwidgets import QtWidgets, QtCore
+from modules.qt._qt_qtwidgets import QtWidgets, QtCore
 from modules.map.style import MAP_CONTROLS_STYLE
 from modules.pyqt.components.icons import (
     ZoomInIcon,

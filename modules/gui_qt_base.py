@@ -6,7 +6,7 @@ import numpy as np
 
 from modules.app_logger import app_logger
 from modules.gui_config import GUI_Config
-from modules._qt_ver import (
+from modules.qt._qt_ver import (
     QtMode,
     USE_PYSIDE6,
     QT_PACKAGE,
@@ -16,7 +16,7 @@ import importlib
 if QtMode == "QML":
     _qt_import = importlib.import_module("modules.qml.backend.qt")
 else:
-    _qt_import = importlib.import_module(f"modules._qt_{QtMode.lower()}")
+    _qt_import = importlib.import_module(f"modules.qt._qt_{QtMode.lower()}")
 QT_ALIGN_BOTTOM = _qt_import.QT_ALIGN_BOTTOM
 QT_ALIGN_LEFT = _qt_import.QT_ALIGN_LEFT
 QT_FORMAT_MONO = _qt_import.QT_FORMAT_MONO

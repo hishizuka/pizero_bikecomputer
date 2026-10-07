@@ -1,6 +1,6 @@
 import numpy as np
 
-from modules._qt_qtwidgets import qasync
+from modules.qt._qt_qtwidgets import qasync
 from modules.utils.map import get_zoom_delta_from_tile_size
 from modules.map.policy import clamp_zoom
 from modules.map.overlays import MapOverlays

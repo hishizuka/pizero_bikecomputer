@@ -6,12 +6,12 @@ from contextlib import contextmanager
 
 import numpy as np
 
-from modules._qt_qtwidgets import QtCore, Signal, USE_PYQT6
+from modules.qt._qt_qtwidgets import QtCore, Signal, USE_PYQT6
 from modules.display.sharp_presenter import SharpPresenter, presenter_paths
 from modules.map.gl import GL, RenderTarget, gl
 from modules.map.gl_api import compile_program, gl_check
 from modules.map.renderer import MapRenderer2D
-from modules.qt_map_assets import position_marker_images
+from modules.qt.qt_map_assets import position_marker_images
 
 
 class GbmContext:

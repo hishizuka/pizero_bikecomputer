@@ -1,7 +1,7 @@
 import asyncio
 
 from modules.app_logger import app_logger
-from modules._qt_qtwidgets import QtCore, QtWidgets, QtGui, qasync
+from modules.qt._qt_qtwidgets import QtCore, QtWidgets, QtGui, qasync
 from modules.pyqt.components import SECONDARY_BACKGROUND_COLOR, icons
 from modules.sensor.ble.identity import format_ble_identity
 from .pyqt_menu_widget import MenuWidget, ListWidget, ListItemWidget

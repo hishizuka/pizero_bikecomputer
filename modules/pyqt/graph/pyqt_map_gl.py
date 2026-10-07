@@ -1,9 +1,9 @@
 """Small QWidget page for the shared GPU map, with CPU image composition."""
 
 from modules.display.sharp_presenter import presenter_paths
-from modules._qt_qtwidgets import QtCore, QtGui, QtWidgets
+from modules.qt._qt_qtwidgets import QtCore, QtGui, QtWidgets
 from modules.app_logger import app_logger
-from modules.qt_map import MapController, MapImage
+from modules.qt.qt_map import MapController, MapImage
 from modules.pyqt.components.map_hud_label import MapHudLabel
 from .pyqt_map_button import (
     LockButton,

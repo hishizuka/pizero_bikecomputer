@@ -1,6 +1,6 @@
 """Circular monochrome icon button with stylesheet-driven interaction states."""
 
-from modules._qt_qtwidgets import QtCore, QtGui, QtWidgets
+from modules.qt._qt_qtwidgets import QtCore, QtGui, QtWidgets
 
 
 class ButtonWidget(QtWidgets.QPushButton):

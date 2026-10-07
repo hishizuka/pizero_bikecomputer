@@ -1,7 +1,7 @@
 import math
 from pathlib import Path
 
-from modules._qt_qtwidgets import (
+from modules.qt._qt_qtwidgets import (
     QT_NO_FOCUS,
     QT_SCROLLBAR_ALWAYSOFF,
     QT_STRONG_FOCUS,

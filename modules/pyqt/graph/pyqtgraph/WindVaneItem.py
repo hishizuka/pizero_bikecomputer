@@ -1,6 +1,6 @@
 from pyqtgraph.Qt import QtCore
 from pyqtgraph.graphicsItems.GraphicsObject import GraphicsObject
-from modules.qt_map_assets import build_wind_vane_picture
+from modules.qt.qt_map_assets import build_wind_vane_picture
 
 
 class WindVaneItem(GraphicsObject):

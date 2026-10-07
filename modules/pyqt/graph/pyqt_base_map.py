@@ -1,6 +1,6 @@
 import numpy as np
 
-from modules._qt_qtwidgets import pg, qasync, Signal, QT_MOUSEBUTTON_LEFTBUTTON
+from modules.qt._qt_qtwidgets import pg, qasync, Signal, QT_MOUSEBUTTON_LEFTBUTTON
 from modules.pyqt.pyqt_screen_widget import ScreenWidget
 from modules.map.style import POSITION_MARKER_BORDER, POSITION_MARKER_COLORS
 from .pyqt_map_button import (

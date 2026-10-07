@@ -1,4 +1,4 @@
-from modules._qt_qtwidgets import QtWidgets
+from modules.qt._qt_qtwidgets import QtWidgets
 
 
 class NaviButton(QtWidgets.QPushButton):

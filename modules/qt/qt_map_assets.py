@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
-from modules._qt_ver import QtCore, QtGui, USE_PYSIDE6
+from modules.qt._qt_ver import QtCore, QtGui, USE_PYSIDE6
 from modules.map.geometry import wind_vane_paths
 from modules.map.style import (
     COURSE_POINT_MARKER_SIZE,
@@ -51,7 +51,7 @@ def build_wind_vane_picture(angle, color, size=COURSE_WIND_MARKER_SIZE):
 @lru_cache(maxsize=4)
 def position_marker_images(pixel_ratio=1.0):
     reader = QtGui.QImageReader(
-        str(Path(__file__).resolve().parents[1] / "img/near_me.svg")
+        str(Path(__file__).resolve().parents[2] / "img/near_me.svg")
     )
     # Compensate for the SVG's padding to match the legacy marker's visible size.
     icon_size = POSITION_MARKER_SIZE + 2
@@ -118,7 +118,7 @@ def position_marker_images(pixel_ratio=1.0):
 
 @lru_cache(maxsize=64)
 def instruction_icon_image(icon_path, pixel_ratio):
-    reader = QtGui.QImageReader(str(Path(__file__).resolve().parents[1] / icon_path))
+    reader = QtGui.QImageReader(str(Path(__file__).resolve().parents[2] / icon_path))
     reader.setScaledSize(QtCore.QSize(36, 36) * pixel_ratio)
     source = reader.read().convertToFormat(QtGui.QImage.Format.Format_RGBA8888)
     if source.isNull():
@@ -166,7 +166,7 @@ def build_course_point_marker_pixmap(
 
     path = Path(icon_path)
     if not path.is_absolute():
-        path = Path(__file__).resolve().parents[1] / path
+        path = Path(__file__).resolve().parents[2] / path
     icon = QtGui.QIcon(str(path))
     offset = int(round((marker_size - icon_size) / 2))
     icon.paint(painter, QtCore.QRect(offset, offset, icon_size, icon_size))

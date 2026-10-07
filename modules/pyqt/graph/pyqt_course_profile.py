@@ -1,6 +1,6 @@
 import numpy as np
 
-from modules._qt_qtwidgets import QtCore, QtWidgets, pg, qasync
+from modules.qt._qt_qtwidgets import QtCore, QtWidgets, pg, qasync
 from modules.pyqt.graph.pyqtgraph.CourseProfileGraphItem import (
     CourseProfileGraphItem,
     configure_course_profile_axes,

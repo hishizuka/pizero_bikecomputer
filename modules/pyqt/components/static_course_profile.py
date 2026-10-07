@@ -2,7 +2,7 @@ import math
 
 import numpy as np
 
-from modules._qt_qtwidgets import QtCore, QtGui, pg
+from modules.qt._qt_qtwidgets import QtCore, QtGui, pg
 from modules.pyqt.graph.pyqtgraph.CourseProfileGraphItem import (
     CourseProfileAxisItem,
     CourseProfileGraphItem,

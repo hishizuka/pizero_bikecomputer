@@ -1,4 +1,4 @@
-from modules._qt_qtwidgets import QtCore, QtWidgets, QtGui, qasync
+from modules.qt._qt_qtwidgets import QtCore, QtWidgets, QtGui, qasync
 
 from .pyqt_screen_widget import ScreenWidget
 

@@ -1,5 +1,5 @@
 from modules.app_logger import app_logger
-from modules._qt_qtwidgets import QtWidgets
+from modules.qt._qt_qtwidgets import QtWidgets
 from modules.pyqt.components import SECONDARY_BACKGROUND_COLOR, box_buttons, icons
 
 

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
-from modules._qt_qtwidgets import QtCore, QtGui, QtWidgets
+from modules.qt._qt_qtwidgets import QtCore, QtGui, QtWidgets
 from modules.app_logger import app_logger
 from modules.helper.qzss_popup_layout import (
     message_units,

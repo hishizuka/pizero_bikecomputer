@@ -5,7 +5,7 @@ from collections import OrderedDict
 import numpy as np
 from PIL import Image
 
-from modules._qt_qtwidgets import QT_COMPOSITION_MODE_DARKEN, pg
+from modules.qt._qt_qtwidgets import QT_COMPOSITION_MODE_DARKEN, pg
 from modules.helper.maptile import conv_image
 from modules.map.style import MAP_LAYER_ORDER
 from modules.utils.geo import get_mod_lat

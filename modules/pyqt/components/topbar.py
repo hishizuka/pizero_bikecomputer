@@ -1,4 +1,4 @@
-from modules._qt_qtwidgets import QT_ALIGN_CENTER, QT_EXPANDING, QT_PREFERRED, QtCore, QtWidgets
+from modules.qt._qt_qtwidgets import QT_ALIGN_CENTER, QT_EXPANDING, QT_PREFERRED, QtCore, QtWidgets
 
 from .icons import BackIcon, ForwardIcon
 from .navi_button import NaviButton

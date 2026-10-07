@@ -5,7 +5,7 @@ import time
 import numpy as np
 
 from modules.app_logger import app_logger
-from modules._qt_qtwidgets import QtCore, Signal, qasync, pg
+from modules.qt._qt_qtwidgets import QtCore, Signal, qasync, pg
 from modules.map.style import TRACK_COLOR, TRACK_WIDTH
 from modules.map.policy import clamp_zoom
 from modules.utils.geo import get_mod_lat_np

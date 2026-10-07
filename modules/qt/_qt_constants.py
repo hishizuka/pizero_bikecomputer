@@ -1,4 +1,4 @@
-from modules._qt_ver import (
+from modules.qt._qt_ver import (
     USE_PYQT6,
     USE_PYSIDE6,
     QtCore,

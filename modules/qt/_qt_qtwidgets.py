@@ -22,14 +22,14 @@ except (ImportError, ModuleNotFoundError):
     except (ImportError, ModuleNotFoundError) as exc:
         raise ImportError("Requires PyQt6 or PySide6.") from exc
 
-import modules._qt_ver as _qt_ver
+import modules.qt._qt_ver as _qt_ver
 _qt_ver.USE_PYQT6 = USE_PYQT6
 _qt_ver.USE_PYSIDE6 = USE_PYSIDE6
 _qt_ver.QT_PACKAGE = QT_PACKAGE
 _qt_ver.QtCore = QtCore
 _qt_ver.QtGui = QtGui
 
-from modules._qt_constants import *
+from modules.qt._qt_constants import *
 
 # pyqtgraph will check/try to import PyQT6 on load and might fail if some packages were imported
 # (if pyQt6 is halfway installed): so we force the version here

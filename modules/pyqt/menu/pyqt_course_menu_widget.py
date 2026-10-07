@@ -4,7 +4,7 @@ import shutil
 
 import numpy as np
 
-from modules._qt_qtwidgets import (
+from modules.qt._qt_qtwidgets import (
     QT_ALIGN_CENTER,
     QtCore,
     QtGui,

@@ -1,6 +1,6 @@
 import numpy as np
 
-from modules._qt_qtwidgets import QT_ALIGN_CENTER, QtCore, QtGui, QtWidgets
+from modules.qt._qt_qtwidgets import QT_ALIGN_CENTER, QtCore, QtGui, QtWidgets
 from modules.helper.maptile import get_wind_color
 from modules.pyqt.graph.pyqtgraph.WindVaneItem import build_wind_vane_picture
 from modules.utils import round_half_away_from_zero

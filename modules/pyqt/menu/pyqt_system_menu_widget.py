@@ -3,7 +3,7 @@ import logging
 from functools import partial
 
 from modules.app_logger import app_logger
-from modules._qt_qtwidgets import (
+from modules.qt._qt_qtwidgets import (
     QT_TEXTEDIT_NOWRAP,
     QT_SCROLLBAR_ALWAYSOFF,
     QtWidgets,

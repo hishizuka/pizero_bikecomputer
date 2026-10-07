@@ -3,7 +3,7 @@
 from functools import lru_cache
 import math
 
-from modules._qt_ver import QtCore, QtGui
+from modules.qt._qt_ver import QtCore, QtGui
 from modules.map.content import (
     DEFAULT_INSTRUCTION_ICON,
     INSTRUCTION_ICONS,
@@ -15,7 +15,7 @@ from modules.map.style import (
     COURSE_POINT_MARKER_SIZE,
     MAP_CONTROLS_STYLE,
 )
-from modules.qt_map_assets import (
+from modules.qt.qt_map_assets import (
     build_course_point_marker_pixmap,
     instruction_icon_image,
 )

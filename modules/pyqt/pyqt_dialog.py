@@ -6,7 +6,7 @@ definitions and widget creation on each dialog display.
 
 import asyncio
 
-from modules._qt_qtwidgets import (
+from modules.qt._qt_qtwidgets import (
     QT_ALIGN_BOTTOM,
     QT_ALIGN_CENTER,
     QT_ALIGN_LEFT,

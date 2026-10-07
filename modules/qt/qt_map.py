@@ -2,13 +2,13 @@
 
 import asyncio
 
-from modules._qt_ver import QtCore, QtGui, USE_PYSIDE6
+from modules.qt._qt_ver import QtCore, QtGui, USE_PYSIDE6
 from modules.app_logger import app_logger
 from modules.map.session import MapSession
 from modules.map.policy import clamp_zoom
 from modules.map.style import MAP_CONTROLS_STYLE, MAP_LAYER_ORDER
-from modules.qt_map_assets import position_marker_images
-from modules.qt_map_hud import HudImage, map_controls_rects
+from modules.qt.qt_map_assets import position_marker_images
+from modules.qt.qt_map_hud import HudImage, map_controls_rects
 from modules.utils.map import get_zoom_delta_from_tile_size
 
 Signal = QtCore.Signal if USE_PYSIDE6 else QtCore.pyqtSignal

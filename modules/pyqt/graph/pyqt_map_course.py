@@ -1,10 +1,10 @@
 import numpy as np
 
 from modules.app_logger import app_logger
-from modules._qt_qtwidgets import QtCore, QtWidgets, pg, qasync
-from modules.qt_map_hud import instruction_image, instruction_position
+from modules.qt._qt_qtwidgets import QtCore, QtWidgets, pg, qasync
+from modules.qt.qt_map_hud import instruction_image, instruction_position
 from modules.pyqt.components.map_hud_label import MapHudLabel
-from modules.qt_map_assets import build_course_point_marker_pixmap
+from modules.qt.qt_map_assets import build_course_point_marker_pixmap
 from modules.map.geometry import offset_polyline
 from modules.map.content import (
     INSTRUCTION_ICONS,

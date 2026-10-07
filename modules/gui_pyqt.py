@@ -5,11 +5,11 @@ from datetime import datetime
 import asyncio
 
 from modules.app_logger import app_logger
-import modules._qt_ver as _qt_ver
+import modules.qt._qt_ver as _qt_ver
 
 _qt_ver.QtMode = "QtWidgets"
 
-from modules._qt_qtwidgets import (
+from modules.qt._qt_qtwidgets import (
     QT_ALIGN_CENTER,
     QT_PE_WIDGET,
     QT_KEY_RELEASE,

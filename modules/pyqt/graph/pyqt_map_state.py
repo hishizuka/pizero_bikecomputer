@@ -1,6 +1,6 @@
 import numpy as np
 
-from modules._qt_qtwidgets import pg
+from modules.qt._qt_qtwidgets import pg
 from modules.map.style import POSITION_MARKER_SIZE, MAP_LAYER_ORDER
 from modules.map.follow import CourseFocus
 from modules.utils.geo import calc_y_mod, get_mod_lat

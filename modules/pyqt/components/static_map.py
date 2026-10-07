@@ -1,8 +1,8 @@
 import math
 from dataclasses import dataclass
 
-from modules._qt_qtwidgets import QtCore, QtGui
-from modules.qt_map_assets import build_course_point_marker_pixmap
+from modules.qt._qt_qtwidgets import QtCore, QtGui
+from modules.qt.qt_map_assets import build_course_point_marker_pixmap
 from modules.utils.map import get_native_tile_zoom
 
 
