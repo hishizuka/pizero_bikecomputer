@@ -336,8 +336,8 @@ if [[ "$gps_backend" != "none" ]]; then
     if [[ "$gps_backend" == "ublox" ]]; then
         echo "🔧 Installing u-blox direct UBX GPS packages..."
         # pyserial is required for UART; smbus2 keeps MAX-M10S I2C usable.
-        sudo apt install -y python3-smbus2
-        pip install pyubx2 pyserial azarashi
+        sudo apt install -y python3-smbus2 python3-serial
+        pip install pyubx2 azarashi
         enable_uart_interface
         enable_i2c_interface
         echo "✅ u-blox direct UBX GPS packages installed successfully."

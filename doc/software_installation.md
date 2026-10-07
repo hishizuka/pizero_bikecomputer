@@ -160,9 +160,13 @@ Enable UART if the receiver is connected by UART, and enable I2C if the
 receiver is connected by I2C.
 
 ```
-$ sudo apt install python3-smbus2
-$ pip install pyubx2 pyserial azarashi
+$ sudo apt install python3-smbus2 python3-serial
+$ pip install pyubx2 azarashi
 ```
+
+On Raspberry Pi OS, install pySerial through `python3-serial` for both ANT+
+and u-blox. The virtual environment from [Common](#common) uses
+`--system-site-packages` to access it.
 
 For u-blox AssistNow Live/Predictive Orbits, add the ZTP token to
 `setting.conf`. If `assistnow_token` is empty, AssistNow is skipped.

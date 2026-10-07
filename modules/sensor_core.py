@@ -38,8 +38,6 @@ from .sensor.sensor_ble import SensorBLE
 from .sensor.sensor_gpio import SensorGPIO
 from .sensor.sensor_i2c import SensorI2C
 from .sensor.sensor_cardputerzero_keyboard import SensorCardputerZeroKeyboard
-from .sensor.control_uart import ControlUART
-from .sensor.sensor_uart_bridge import SensorUARTBridge
 
 
 class SensorCore:
@@ -233,6 +231,9 @@ class SensorCore:
 
         with timers[2]:
             if bridge:
+                from .sensor.control_uart import ControlUART
+                from .sensor.sensor_uart_bridge import SensorUARTBridge
+
                 self.control_uart = ControlUART(
                     period_ms=int(config.G_I2C_INTERVAL * 1000),
                     expected_profile=config.board_preset.control_profile,
