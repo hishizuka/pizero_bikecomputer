@@ -21,7 +21,7 @@ class GbmContext:
         self.gbm = C.CDLL("libgbm.so.1")
         self.egl = C.CDLL("libEGL.so.1")
         self.fd = os.open(presenter_paths()["render_node"], os.O_RDWR)
-        self.device = self.display = self.context = self.surface = None
+        self.device = self.display = self.context = None
         self.gbm.gbm_create_device.argtypes = [C.c_int]
         self.gbm.gbm_create_device.restype = C.c_void_p
         self.gbm.gbm_device_destroy.argtypes = [C.c_void_p]
@@ -41,13 +41,11 @@ class GbmContext:
                 C.c_uint,
             ),
             ("eglCreateContext", [C.c_void_p] * 4, C.c_void_p),
-            ("eglCreatePbufferSurface", [C.c_void_p] * 3, C.c_void_p),
             ("eglMakeCurrent", [C.c_void_p] * 4, C.c_uint),
             ("eglGetCurrentContext", [], C.c_void_p),
             ("eglGetCurrentDisplay", [], C.c_void_p),
             ("eglGetCurrentSurface", [C.c_uint], C.c_void_p),
             ("eglQueryAPI", [], C.c_uint),
-            ("eglDestroySurface", [C.c_void_p] * 2, C.c_uint),
             ("eglDestroyContext", [C.c_void_p] * 2, C.c_uint),
             ("eglTerminate", [C.c_void_p], C.c_uint),
         ):
@@ -67,7 +65,8 @@ class GbmContext:
             if not self.egl.eglBindAPI(0x30A0):
                 raise RuntimeError("OpenGL ES API selection failed")
             try:
-                attributes = (C.c_int * 5)(0x3033, 1, 0x3040, 4, 0x3038)
+                # GBM may expose only window configs; rendering uses DMA-BUF FBOs.
+                attributes = (C.c_int * 5)(0x3033, 0, 0x3040, 4, 0x3038)
                 config, count = C.c_void_p(), C.c_int()
                 if (
                     not self.egl.eglChooseConfig(
@@ -75,16 +74,12 @@ class GbmContext:
                     )
                     or not count.value
                 ):
-                    raise RuntimeError("VC4 EGL pbuffer config is unavailable")
+                    raise RuntimeError("VC4 EGL OpenGL ES 2 config is unavailable")
                 context_attributes = (C.c_int * 3)(0x3098, 2, 0x3038)
                 self.context = self.egl.eglCreateContext(
                     self.display, config, None, context_attributes
                 )
-                surface_attributes = (C.c_int * 5)(0x3057, 1, 0x3056, 1, 0x3038)
-                self.surface = self.egl.eglCreatePbufferSurface(
-                    self.display, config, surface_attributes
-                )
-                if not self.context or not self.surface:
+                if not self.context:
                     raise RuntimeError("VC4 EGL context creation failed")
             finally:
                 if previous_api:
@@ -103,9 +98,7 @@ class GbmContext:
         )
         previous_api = self.egl.eglQueryAPI()
         self.egl.eglBindAPI(0x30A0)
-        if not self.egl.eglMakeCurrent(
-            self.display, self.surface, self.surface, self.context
-        ):
+        if not self.egl.eglMakeCurrent(self.display, None, None, self.context):
             self.egl.eglBindAPI(previous_api)
             raise RuntimeError("VC4 EGL makeCurrent failed")
         try:
@@ -119,8 +112,6 @@ class GbmContext:
 
     def close(self):
         if self.display:
-            if self.surface:
-                self.egl.eglDestroySurface(self.display, self.surface)
             if self.context:
                 self.egl.eglDestroyContext(self.display, self.context)
             self.egl.eglTerminate(self.display)
@@ -217,6 +208,7 @@ void main() { gl_FragColor = texture2D(u_image, v_uv); }""",
         if USE_PYQT6:
             bits.setsize(image.sizeInBytes())
         pixels = np.frombuffer(bits, dtype=np.uint8)
+        gl.glViewport(0, 0, self.width, self.height)
         gl.glDisable(GL.DEPTH_TEST)
         gl.glEnable(GL.BLEND)
         gl.glBlendFunc(GL.SRC_ALPHA, GL.ONE_MINUS_SRC_ALPHA)
@@ -274,7 +266,7 @@ void main() { gl_FragColor = texture2D(u_image, v_uv); }""",
             gl.glDisableVertexAttribArray(index)
         gl_check("PyQt presenter overlay")
 
-    def render(self, frame, overlay):
+    def render(self, frame, overlay, offset=(0, 0)):
         with self.context.current():
             acquired = self.output.acquire()
             if acquired is None:
@@ -291,7 +283,14 @@ void main() { gl_FragColor = texture2D(u_image, v_uv); }""",
                 frame.snapshot.view.pixel_ratio
             )
             self.renderer.render_frame(
-                frame, RenderTarget(self.framebuffer, self.width, self.height)
+                frame,
+                RenderTarget(
+                    self.framebuffer,
+                    frame.snapshot.view.width,
+                    frame.snapshot.view.height,
+                    x=offset[0],
+                    y=offset[1],
+                ),
             )
             self._draw_overlay(overlay)
             self.output.submit(buffer_index)

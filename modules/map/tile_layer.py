@@ -41,11 +41,13 @@ precision highp float;
 uniform sampler2D u_tex;
 uniform sampler2D u_scene;
 uniform vec2 u_viewport;
+uniform vec2 u_viewport_origin;
 varying vec2 v_uv;
 varying vec4 v_rect;
 void main() {
     vec4 over = texture2D(u_tex, clamp(v_uv, v_rect.xy, v_rect.zw));
-    vec3 under = texture2D(u_scene, gl_FragCoord.xy / u_viewport).rgb;
+    vec3 under = texture2D(u_scene,
+        (gl_FragCoord.xy - u_viewport_origin) / u_viewport).rgb;
     gl_FragColor = vec4(mix(under, min(under, over.rgb), over.a), 1.0);
 }
 """
@@ -173,13 +175,14 @@ class TileLayer:
                     None,
                 )
             gl.glCopyTexSubImage2D(
-                GL.TEXTURE_2D, 0, 0, 0, 0, 0, target.width, target.height
+                GL.TEXTURE_2D, 0, 0, 0, target.x, target.y, target.width, target.height
             )
             scene.bind(1)
         self.texture.bind()
         program = self.program.use()
         if self.scene is not None:
             program.set("u_scene", 1)
+            program.set("u_viewport_origin", target.x, target.y)
         program.set_transform(transform, target.viewport, target.flip)
         program.set("u_tex", 0)
         calls = quads.draw(self.vbo, program)

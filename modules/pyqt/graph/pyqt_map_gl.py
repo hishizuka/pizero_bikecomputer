@@ -22,6 +22,7 @@ class GpuMapWidget(QtWidgets.QWidget):
         self.image = QtGui.QImage()
         self.presenter = None
         self.presenter_failed = False
+        self.render_pending = False
         self.capturing_overlay = False
         self.use_presenter = (
             config.G_USE_PYQT_GPU_MAP_PRESENTER
@@ -62,6 +63,8 @@ class GpuMapWidget(QtWidgets.QWidget):
         self.controller.errorChanged.connect(self.update)
         self._update_lock()
         config.map.register(self.controller)
+        if self.use_presenter and config.gui.status_bar is not None:
+            config.gui.status_bar.changed.connect(self._render)
 
     @property
     def lock_status(self):
@@ -77,23 +80,11 @@ class GpuMapWidget(QtWidgets.QWidget):
         self.controller.pan(dx * ratio, dy * ratio)
 
     def start(self):
-        if self.use_presenter and not self.presenter_failed and self.presenter is None:
-            ratio = self.devicePixelRatioF()
-            try:
-                from .pyqt_map_presenter import PresentedMap
-
-                self.presenter = PresentedMap(
-                    round(self.width() * ratio), round(self.height() * ratio), self
-                )
-                self.presenter.buffer_available.connect(self._render)
-                app_logger.info("PyQt GPU map Sharp presenter enabled")
-            except Exception:
-                self.presenter_failed = True
-                app_logger.exception("PyQt GPU map presenter unavailable; using QImage")
         self.controller.setActive(True)
 
     def stop(self):
         self._drag = None
+        self.render_pending = False
         self.controller.setActive(False)
         if self.presenter is not None:
             self.presenter.close()
@@ -145,10 +136,46 @@ class GpuMapWidget(QtWidgets.QWidget):
             self._resize_map()
         return result
 
-    def _render(self):
+    def _render(self, retry=False):
+        if retry and not self.render_pending:
+            return
+        self.render_pending = False
         try:
-            if self.controller.frame is None:
+            if self.controller.frame is None or not self.isVisible():
                 return
+            view = self.controller.frame.snapshot.view
+            ratio = self.devicePixelRatioF()
+            if (view.width, view.height) != (
+                round(self.width() * ratio),
+                round(self.height() * ratio),
+            ):
+                return
+            # Hidden stacked pages still have provisional sizes when start() runs.
+            if (
+                self.use_presenter
+                and not self.presenter_failed
+                and self.presenter is None
+            ):
+                try:
+                    from .pyqt_map_presenter import PresentedMap
+
+                    root = self.controller.session.config.gui.root_widget
+                    self.presenter = PresentedMap(
+                        round(root.width() * ratio),
+                        round(root.height() * ratio),
+                        self,
+                    )
+                    self.presenter.buffer_available.connect(lambda: self._render(True))
+                    app_logger.info(
+                        "PyQt GPU map Sharp presenter enabled: %dx%d",
+                        self.presenter.width,
+                        self.presenter.height,
+                    )
+                except Exception:
+                    self.presenter_failed = True
+                    app_logger.exception(
+                        "PyQt GPU map presenter unavailable; using QImage"
+                    )
             for button, enabled in zip(
                 self.time_buttons,
                 (self.controller.hasPreviousTime, self.controller.hasNextTime),
@@ -170,9 +197,14 @@ class GpuMapWidget(QtWidgets.QWidget):
             self.hud_overlay.raise_()
             self.hud_overlay.show()
             if self.presenter is not None:
+                root = self.controller.session.config.gui.root_widget
+                position = self.mapTo(root, QtCore.QPoint())
                 if not self.presenter.render(
-                    self.controller.frame, self._overlay_image()
+                    self.controller.frame,
+                    self._overlay_image(),
+                    (round(position.x() * ratio), round(position.y() * ratio)),
                 ):
+                    self.render_pending = True
                     return
             else:
                 self.image = self.output.render(self.controller.frame)
@@ -191,18 +223,27 @@ class GpuMapWidget(QtWidgets.QWidget):
 
     def _overlay_image(self):
         ratio = self.devicePixelRatioF()
+        root = self
+        status_bar = None
+        if self.presenter is not None:
+            gui = self.controller.session.config.gui
+            root, status_bar = gui.root_widget, gui.status_bar
         image = QtGui.QImage(
-            round(self.width() * ratio),
-            round(self.height() * ratio),
+            round(root.width() * ratio),
+            round(root.height() * ratio),
             QtGui.QImage.Format.Format_RGBA8888,
         )
         image.setDevicePixelRatio(ratio)
         image.fill(QtCore.Qt.GlobalColor.transparent)
+        painter = QtGui.QPainter(image)
         self.capturing_overlay = True
         try:
-            self.render(image)
+            self.render(painter, self.mapTo(root, QtCore.QPoint()))
+            if status_bar is not None:
+                status_bar.render(painter, status_bar.mapTo(root, QtCore.QPoint()))
         finally:
             self.capturing_overlay = False
+            painter.end()
         return image
 
     def paintEvent(self, event):

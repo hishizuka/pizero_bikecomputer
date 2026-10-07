@@ -342,7 +342,8 @@ class RenderTarget:
     """Caller-owned full-map FBO with a depth attachment (at least 16 bits).
 
     flip=-1 writes top-to-bottom rows for readback/panel scanout; flip=+1
-    uses normal GL texture orientation. Width and height are physical pixels.
+    uses normal GL texture orientation. Width, height and viewport origin x/y
+    are physical pixels; the FBO can contain the map and additional host UI.
     The host must restore graphics state before its own subsequent drawing.
     """
 
@@ -350,6 +351,8 @@ class RenderTarget:
     width: int
     height: int
     flip: float = -1.0
+    x: int = 0
+    y: int = 0
 
     @property
     def viewport(self):
@@ -357,7 +360,7 @@ class RenderTarget:
 
     def begin(self):
         gl.glBindFramebuffer(GL.FRAMEBUFFER, self.framebuffer)
-        gl.glViewport(0, 0, self.width, self.height)
+        gl.glViewport(self.x, self.y, self.width, self.height)
         for state in (GL.SCISSOR_TEST, GL.DEPTH_TEST, GL.BLEND, 0x0B44, 0x0B90):
             gl.glDisable(state)  # cull and stencil state can be left by the host
         gl.glColorMask(1, 1, 1, 1)

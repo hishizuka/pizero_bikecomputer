@@ -11,6 +11,7 @@ from modules.qt._qt_qtwidgets import (
     QtCore,
     QtGui,
     QtWidgets,
+    Signal,
 )
 from modules.helper.bluetooth.bluetooth_manager import check_bnep0
 from modules.pyqt.components import icons
@@ -76,6 +77,7 @@ class RecIndicator(QtWidgets.QWidget):
 
 
 class StatusBarWidget(QtWidgets.QWidget):
+    changed = Signal()
     BASE_BG_COLOR = "#000000"
     FLASH_YELLOW = "#ffd166"
 
@@ -178,6 +180,7 @@ class StatusBarWidget(QtWidgets.QWidget):
             return
         self._current_bg_color = color
         self.setStyleSheet(f"background-color: {color};")
+        self.changed.emit()
 
     def resizeEvent(self, event):
         for label in (self.temperature_label, self.time_label):
@@ -194,10 +197,13 @@ class StatusBarWidget(QtWidgets.QWidget):
         self._update_light()
         self._update_temperature()
         self._update_time()
+        self.changed.emit()
 
     def _update_rain(self):
         alert = self.config.rain_alert
-        result = alert.result if alert is not None and self.config.G_RAIN_ALERT else None
+        result = (
+            alert.result if alert is not None and self.config.G_RAIN_ALERT else None
+        )
         key = (result.size, result.color) if result is not None else None
         if key == self._rain_cached:
             return
