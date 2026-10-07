@@ -342,8 +342,8 @@ your panel's dimensions, color mode, and optional backlight in
 force HDMI, or change the framebuffer/console boot settings automatically.
 
 The separate DMA-BUF presenter option builds `libsharp_presenter.so` from the
-same checkout and installs the Qt Quick packages. It does not change the GUI
-or service selection; PyQt remains the default.
+same checkout. It does not change the GUI or service selection; PyQt remains
+the default. See the [PyQt GPU map guide](gpu_map_presenter.md).
 
 For manual installation:
 

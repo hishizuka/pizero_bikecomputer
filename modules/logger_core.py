@@ -6,6 +6,7 @@ import time
 import asyncio
 import traceback
 from datetime import datetime, timedelta, timezone
+from threading import RLock
 
 import numpy as np
 
@@ -71,7 +72,6 @@ class LoggerCore:
     short_log_timestamp = []
     short_log_limit = 120
     short_log_available = True
-    short_log_lock = False
 
     # for debug
     position_log = np.array([])
@@ -84,6 +84,8 @@ class LoggerCore:
     def __init__(self, config):
         super().__init__()
         self.config = config
+        self.short_log_lock = RLock()
+        self.clear_short_log()
         self.sql_queue = None
         self._sql_worker_task = None
         self._reset_sql_batch_state()
@@ -1223,38 +1225,32 @@ class LoggerCore:
             self.position_log = np.array(self.cur.fetchall())
 
     def store_short_log_for_update_track(self, dist, lat, lon, timestamp):
-        if not self.short_log_available:
-            return
         if np.isnan(lat) or np.isnan(lon):
             return
-        if len(self.short_log_dist) and self.short_log_dist[-1] == dist:
-            return
-        if (len(self.short_log_lat) and self.short_log_lat[-1] == lat) and (
-            len(self.short_log_lon) and self.short_log_lon[-1] == lon
-        ):
-            return
-        if len(self.short_log_lat) > self.short_log_limit:
-            self.clear_short_log()
-            self.short_log_available = False
-            return
-
-        self.short_log_lock = True
-        self.short_log_dist.append(dist)
-        self.short_log_lat.append(lat)
-        self.short_log_lon.append(lon)
-        self.short_log_timestamp.append(timestamp)
-        self.short_log_lock = False
-        self.short_log_available = True
-        # print("append", len(self.short_log_dist), len(self.short_log_lat), len(self.short_log_lon))
+        with self.short_log_lock:
+            if not self.short_log_available:
+                return
+            if len(self.short_log_dist) and self.short_log_dist[-1] == dist:
+                return
+            if (len(self.short_log_lat) and self.short_log_lat[-1] == lat) and (
+                len(self.short_log_lon) and self.short_log_lon[-1] == lon
+            ):
+                return
+            if len(self.short_log_lat) > self.short_log_limit:
+                self.clear_short_log()
+                self.short_log_available = False
+                return
+            self.short_log_dist.append(dist)
+            self.short_log_lat.append(lat)
+            self.short_log_lon.append(lon)
+            self.short_log_timestamp.append(timestamp)
 
     def clear_short_log(self):
-        while self.short_log_lock:
-            app_logger.info("locked: clear_short_log")
-            time.sleep(0.02)
-        self.short_log_dist = []
-        self.short_log_lat = []
-        self.short_log_lon = []
-        self.short_log_timestamp = []
+        with self.short_log_lock:
+            self.short_log_dist = []
+            self.short_log_lat = []
+            self.short_log_lon = []
+            self.short_log_timestamp = []
 
     def update_track(self, timestamp):
         lon = np.array([])
@@ -1273,16 +1269,14 @@ class LoggerCore:
 
         # get values from short_log to db in logging
         if timestamp_delta is not None and self.short_log_available:
-            while self.short_log_lock:
-                app_logger.info("locked: get values")
-                time.sleep(0.02)
-            lat_raw = np.array(self.short_log_lat)
-            lon_raw = np.array(self.short_log_lon)
-            dist_raw = np.array(self.short_log_dist)
-            if len(self.short_log_lon):
-                timestamp_new = self.short_log_timestamp[-1]
-            self.clear_short_log()
-            self.short_log_available = True
+            with self.short_log_lock:
+                lat_raw = np.array(self.short_log_lat)
+                lon_raw = np.array(self.short_log_lon)
+                dist_raw = np.array(self.short_log_dist)
+                if len(self.short_log_lon):
+                    timestamp_new = self.short_log_timestamp[-1]
+                self.clear_short_log()
+                self.short_log_available = True
         # get values from copied db when initial execution or migration from short_log to db in logging
         else:
             db_file = self.config.G_LOG_DB + ".tmp"

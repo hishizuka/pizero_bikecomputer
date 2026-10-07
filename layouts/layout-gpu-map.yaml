@@ -1,0 +1,13 @@
+MAIN:
+  STATUS: true
+  LAYOUT:
+    Speed: [0, 0]
+    HR: [0, 1]
+    Power: [1, 0]
+    Dist.: [1, 1]
+
+SIMPLE_MAP:
+  STATUS: true
+
+GPU_MAP:
+  STATUS: true

@@ -1,4 +1,5 @@
 import os
+import io
 from datetime import datetime, timedelta, timezone  #datetime is necessary for map_config["current_time_func"]()
 from random import random
 from time import monotonic
@@ -1046,12 +1047,13 @@ class MapTileWithValues():
         )
         layer_settings = layer_map_config[layer_map_name]
         tile = (tile_x, tile_y)
-        await self.download_maptiles([tile], layer_map_config, layer_map_name, z)
-        filename = get_maptile_filename(layer_map_name, z, *tile, layer_settings)
-        if not self.check_existing_tiles(filename):
+        await self.config.map.tiles.request(layer_map_config, layer_map_name, z, [tile])
+        key = (z, *tile)
+        raw = await self.config.map.tiles.load(layer_map_name, layer_settings, [key])
+        if key not in raw:
             return None
 
-        with Image.open(filename) as image:
+        with Image.open(io.BytesIO(raw[key])) as image:
             return extractor(image.convert("RGB"), x_in_tile, y_in_tile)
 
     async def get_precipitation_cloud(self, pos, forecast_time, map_name):
@@ -1155,14 +1157,13 @@ class MapTileWithValues():
                 return np.nan, np.nan
             _map_settings = _map_config[map_name]
 
-        await self.download_maptiles(tiles, _map_config, map_name, z)
+        await self.config.map.tiles.request(_map_config, map_name, z, tiles)
 
-        tile_files = [
-            get_maptile_filename(map_name, z, *tile, _map_settings) for tile in tiles
-        ]
+        keys = [(z, *tile) for tile in tiles]
+        raw = await self.config.map.tiles.load(map_name, _map_settings, keys)
 
-        # download in progress
-        if not all(self.check_existing_tiles(filename) for filename in tile_files):
+        # Download in progress.
+        if len(raw) != len(keys):
             if is_current:
                 self.wind_image = None
                 self.wind_arrow_mask = None
@@ -1181,7 +1182,7 @@ class MapTileWithValues():
             wind_image,
             wind_arrow_mask,
         ) = get_wind_with_tile_xy(
-            tile_files,
+            [io.BytesIO(raw[key]) for key in keys],
             x_in_tile,
             y_in_tile,
             tilesize,
@@ -1257,16 +1258,19 @@ class MapTileWithValues():
                 zoom, *pos, map_settings["tile_size"]
             )
             tiles = [(tile_x, tile_y), ]
-            await self.download_maptiles(tiles, map_config_for_zoom, map_name, zoom)
+            await self.config.map.tiles.request(map_config_for_zoom, map_name, zoom, tiles)
 
             filename = get_maptile_filename(map_name, zoom, tile_x, tile_y, map_config_for_zoom[map_name])
-            if not self.check_existing_tiles(filename):
+            key = (zoom, tile_x, tile_y)
+            raw = await self.config.map.tiles.load(map_name, map_config_for_zoom[map_name], [key])
+            if key not in raw:
                 if self.network.get_file_download_status(filename) == 404:
                     continue
                 return np.nan
 
             # get altitude
-            self.dem_array = np.asarray(Image.open(filename))
+            with Image.open(io.BytesIO(raw[key])) as image:
+                self.dem_array = np.asarray(image)
             altitude = self._decode_dem_altitude(
                 self.dem_array[y_in_tile, x_in_tile],
                 map_name,

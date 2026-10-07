@@ -167,10 +167,7 @@ install_memory_lcd_support() {
         echo "   https://github.com/hishizuka/memory-lcd-drm#panel-configuration-examples"
     fi
     if [[ "$install_dmabuf_presenter" == "true" ]]; then
-        sudo apt install -y python3-pyside6.qtquick python3-pyside6.qtwidgets \
-            qml6-module-qtquick-controls qml6-module-qtquick-layouts \
-            qml6-module-qtqml-workerscript \
-            pkg-config libdrm-dev libgbm-dev libegl-dev libgles-dev
+        sudo apt install -y pkg-config libdrm-dev libgbm-dev libegl-dev libgles-dev
         make -C "$driver_dir" presenter
         sudo make -C "$driver_dir" install_presenter
         sudo usermod -aG video,render "$TARGET_USER"
@@ -240,7 +237,7 @@ prompt_and_store "Use PWM1 (GPIO13) for the buzzer?" use_pwm_buzzer
 prompt_and_store "Install services?" install_services
 if [[ "$install_services" == "true" ]]; then
     echo "Select service display:"
-    echo "  0) linuxfb (/dev/fb0; sharp-drm-driver or PiTFT)"
+    echo "  0) linuxfb (/dev/fb0; memory-lcd-drm or PiTFT)"
     echo "  1) Offscreen"
     echo "  2) X Window (xcb)"
     echo "  q) Quit installer"
@@ -436,7 +433,7 @@ fi
 pwm_overlay=""
 if [[ "$use_pwm_backlight" == "true" && "$use_pwm_buzzer" == "true" ]]; then
     pwm_overlay="dtoverlay=pwm-2chan,pin=18,func=2,pin2=13,func2=4"
-elif [[ "$use_pwm_backlight" == "true" && "$install_memory_lcd_drm" == "false" ]]; then
+elif [[ "$use_pwm_backlight" == "true" && "$install_memory_lcd_drm" == "false" && "$install_dmabuf_presenter" == "false" ]]; then
     pwm_overlay="dtoverlay=pwm,pin=18,func=2"
 elif [[ "$use_pwm_buzzer" == "true" ]]; then
     pwm_overlay="dtoverlay=pwm,pin=13,func=4"

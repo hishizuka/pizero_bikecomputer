@@ -81,9 +81,8 @@ class TouchInputFilter(QtCore.QObject):
         if self.gui.stack_widget.currentIndex() != 1:
             return False
         page = self.gui.main_page.currentWidget()
-        if page in (self.gui.map_widget, self.gui.course_profile_graph_widget):
-            if not page.lock_status:
-                return False
+        if not getattr(page, "lock_status", True):
+            return False
 
         widget = obj
         if not isinstance(widget, QtWidgets.QWidget):
@@ -106,9 +105,8 @@ class TouchInputFilter(QtCore.QObject):
             return
         if page is not self.gui.main_page.currentWidget():
             return
-        if page in (self.gui.map_widget, self.gui.course_profile_graph_widget):
-            if not page.lock_status:
-                return
+        if not getattr(page, "lock_status", True):
+            return
 
         delta = position - start
         if abs(delta.x()) < max(40, page.width() * 0.12):

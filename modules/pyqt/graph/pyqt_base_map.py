@@ -2,6 +2,7 @@ import numpy as np
 
 from modules._qt_qtwidgets import pg, qasync, Signal, QT_MOUSEBUTTON_LEFTBUTTON
 from modules.pyqt.pyqt_screen_widget import ScreenWidget
+from modules.map.style import POSITION_MARKER_BORDER, POSITION_MARKER_COLORS
 from .pyqt_map_button import (
     ZoomInButton,
     ZoomOutButton,
@@ -60,6 +61,7 @@ class CustomPlotWidget(pg.PlotWidget):
         self.signal_wheel_scroll.emit(delta)
         event.accept()
 
+
 class BaseMapWidget(ScreenWidget):
     max_height = 1
     max_width = 3
@@ -88,10 +90,7 @@ class BaseMapWidget(ScreenWidget):
     move_factor = 1.0
 
     point_color = {
-        # 'fix':pg.mkBrush(color=(0,0,160,128)),
-        "fix": pg.mkBrush(color=(0, 0, 255)),
-        # 'lost':pg.mkBrush(color=(96,96,96,128))
-        "lost": pg.mkBrush(color=(170, 170, 170)),
+        name: pg.mkBrush(color=color) for name, color in POSITION_MARKER_COLORS.items()
     }
 
     def __init__(self, parent, config):
@@ -124,11 +123,9 @@ class BaseMapWidget(ScreenWidget):
         self.point = {
             "pos": [np.nan, np.nan],
             "size": 20,
-            "pen": {"color": "w", "width": 2},
+            "pen": {"color": "w", "width": POSITION_MARKER_BORDER},
             "brush": self.point_color["lost"],
         }
-
-        # self.plot.setMouseEnabled(x=False, y=False)
 
         # make buttons
         self.buttons["lock"] = LockButton()
@@ -142,13 +139,16 @@ class BaseMapWidget(ScreenWidget):
 
     def apply_lock_interaction_state(self):
         mouse_enabled = not self.lock_status
+        if "go" in self.buttons:
+            self.buttons["go"].setEnabled(
+                self.config.map.can_search_route(self.lock_status)
+            )
         self.plot.setMouseEnabled(x=mouse_enabled, y=mouse_enabled)
 
         view_box = self.plot.getViewBox()
-        if view_box is not None:
-            view_box.setMenuEnabled(mouse_enabled)
+        view_box.setMenuEnabled(mouse_enabled)
 
-        if hasattr(self.plot, "set_mouse_interaction_enabled"):
+        if self.config.uses_pointer_navigation:
             self.plot.set_mouse_interaction_enabled(mouse_enabled)
 
     # override disable
@@ -213,14 +213,15 @@ class BaseMapWidget(ScreenWidget):
 
     @qasync.asyncSlot()
     async def zoom_plus(self):
-        self.zoom /= 2
-        self.zoomlevel += 1
-        await self.update_display()
+        await self._change_zoom(1)
 
     @qasync.asyncSlot()
     async def zoom_minus(self):
-        self.zoom *= 2
-        self.zoomlevel -= 1
+        await self._change_zoom(-1)
+
+    async def _change_zoom(self, delta):
+        self.zoom /= 2**delta
+        self.zoomlevel += delta
         await self.update_display()
 
     @qasync.asyncSlot()
@@ -238,5 +239,5 @@ class BaseMapWidget(ScreenWidget):
             return
         if delta > 0:
             self.zoom_plus()
-        else:
+        elif delta < 0:
             self.zoom_minus()

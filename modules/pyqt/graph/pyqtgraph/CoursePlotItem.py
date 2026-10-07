@@ -2,7 +2,8 @@ import numpy as np
 from pyqtgraph import functions as fn
 from pyqtgraph.Qt import QtCore, QtGui
 
-from modules.pyqt.graph.course_offset import direction_arrow_polygons
+from modules.map.geometry import direction_arrow_polygons
+from modules.map.style import COURSE_ARROW_OUTLINE_WIDTH
 
 from .colored_segments import _as_array, _build_segment_points
 from .CourseGraphItem import CourseGraphItem
@@ -10,7 +11,7 @@ from .CourseGraphItem import _points_to_polygon as _points_to_polyline
 
 __all__ = ["CoursePlotItem"]
 
-_ARROW_OUTLINE_WIDTH = 3
+_ARROW_OUTLINE_WIDTH = COURSE_ARROW_OUTLINE_WIDTH
 
 
 def _points_to_path(points, close=False):
@@ -25,6 +26,15 @@ def _points_to_path(points, close=False):
 
 
 class CoursePlotItem(CourseGraphItem):
+    pixel_ratio = 1.0
+
+    def paint(self, painter, *args):
+        ratio = painter.device().devicePixelRatioF()
+        if ratio != self.pixel_ratio:
+            self.pixel_ratio = ratio
+            self.picture = None
+        super().paint(painter, *args)
+
     def __init__(self, **opts):
         """
         Valid keyword options are:
@@ -68,7 +78,9 @@ class CoursePlotItem(CourseGraphItem):
         # Pass 1: draw dark outline for contrast
         outline_pen = None
         if outline_width is not None:
-            outline_pen = fn.mkPen(color=outline_color, width=outline_width)
+            outline_pen = fn.mkPen(
+                color=outline_color, width=outline_width * self.pixel_ratio
+            )
             outline_pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
             outline_pen.setJoinStyle(QtCore.Qt.PenJoinStyle.RoundJoin)
 
@@ -82,9 +94,9 @@ class CoursePlotItem(CourseGraphItem):
                 p.drawPolyline(seg_lines)
 
             if seg_color is None:
-                pen = fn.mkPen(width=width)
+                pen = fn.mkPen(width=width * self.pixel_ratio)
             else:
-                pen = fn.mkPen(color=seg_color, width=width)
+                pen = fn.mkPen(color=seg_color, width=width * self.pixel_ratio)
             pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
             pen.setJoinStyle(QtCore.Qt.PenJoinStyle.RoundJoin)
             p.setPen(pen)
@@ -98,7 +110,9 @@ class CoursePlotItem(CourseGraphItem):
                 vertices.extend(arrow)
                 arrow_path.addPath(_points_to_path(arrow, close=True))
 
-            arrow_outline_pen = fn.mkPen(color=(0, 0, 0), width=_ARROW_OUTLINE_WIDTH)
+            arrow_outline_pen = fn.mkPen(
+                color=(0, 0, 0), width=_ARROW_OUTLINE_WIDTH * self.pixel_ratio
+            )
             arrow_outline_pen.setJoinStyle(QtCore.Qt.PenJoinStyle.MiterJoin)
             p.setPen(arrow_outline_pen)
             p.setBrush(fn.mkBrush(color=(255, 255, 255)))

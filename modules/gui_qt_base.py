@@ -12,6 +12,7 @@ from modules._qt_ver import (
     QT_PACKAGE,
 )
 import importlib
+
 if QtMode == "QML":
     _qt_import = importlib.import_module("modules.qml.backend.qt")
 else:
@@ -71,6 +72,90 @@ class GUI_Qt_Base(QtCore.QObject):
         """Return a button profile page, or None for backend-specific resolution."""
         return None
 
+    course_profile_graph_widget = None
+
+    @property
+    def current_navigation_page(self):
+        return None
+
+    @property
+    def current_map_page(self):
+        return None
+
+    def reset_count_internal(self):
+        result = self.logger.reset_count()
+        if result:
+            self.config.map.reset_track()
+        return result
+
+    def reset_map(self):
+        self.config.map.reset_map()
+
+    def refresh_map(self):
+        self.config.map.notify("refresh_map")
+
+    def reset_course(self):
+        self.config.map.notify("reset_course")
+        if self.course_profile_graph_widget is not None:
+            self.course_profile_graph_widget.reset_course()
+
+    def init_course(self):
+        self.config.map.notify("init_course")
+        if self.course_profile_graph_widget is not None:
+            self.course_profile_graph_widget.init_course()
+
+    def set_external_instruction(self, instruction_name, instruction_distance):
+        self.config.map.set_external_instruction(instruction_name, instruction_distance)
+
+    def clear_external_instruction(self):
+        self.config.map.clear_external_instruction()
+
+    def call_map(self, method, *args):
+        handler = getattr(self.current_map_page, method, None)
+        if callable(handler):
+            handler(*args)
+
+    def map_method(self, mode):
+        page = self.current_navigation_page
+        if page is not self.course_profile_graph_widget:
+            page = self.current_map_page
+        signal = getattr(page, f"signal_{mode}", None)
+        if signal is not None:
+            signal.emit()
+
+    def map_move_x_plus(self):
+        self.map_method("move_x_plus")
+
+    def map_move_x_minus(self):
+        self.map_method("move_x_minus")
+
+    def map_move_y_plus(self):
+        self.map_method("move_y_plus")
+
+    def map_move_y_minus(self):
+        self.map_method("move_y_minus")
+
+    def map_change_move(self):
+        self.map_method("change_move")
+
+    def map_zoom_plus(self):
+        self.map_method("zoom_plus")
+
+    def map_zoom_minus(self):
+        self.map_method("zoom_minus")
+
+    def map_search_route(self):
+        self.map_method("search_route")
+
+    def change_map_overlays(self):
+        self.call_map("change_map_overlays")
+
+    def map_overlay_prev_time(self):
+        self.call_map("update_overlay_time", False)
+
+    def map_overlay_next_time(self):
+        self.call_map("update_overlay_time", True)
+
     def __init__(self, config):
         super().__init__()
         app_logger.info(f"Qt version: {QtCore.QT_VERSION_STR} ({QT_PACKAGE})")
@@ -90,6 +175,7 @@ class GUI_Qt_Base(QtCore.QObject):
     async def delay_init(self):
         loop = asyncio.get_running_loop()
         try:
+
             def _request_quit():
                 if self._quit_requested:
                     return
@@ -122,13 +208,18 @@ class GUI_Qt_Base(QtCore.QObject):
             await asyncio.sleep(0.1)
 
     async def quit(self):
+        self._quit_requested = True
+        await self.config.quit()
+
+    async def quit_internal(self):
+        self._quit_requested = True
+        self.config.map.notify("stop")
+        await self.config.map.track.close()
         self.msg_event.set()
         await self.msg_queue.put(None)
-        await self.config.quit()
 
     def exec(self):
         asyncio.run(self.config.start_coroutine(), loop_factory=qasync.QEventLoop)
-
 
     def _grab_in_target_format(self):
         """Grab current frame and convert only if format differs."""
@@ -373,12 +464,6 @@ class GUI_Qt_Base(QtCore.QObject):
         )
 
     def show_forced_message(self, msg):
-        pass
-
-    def set_external_instruction(self, instruction_name, instruction_distance):
-        pass
-
-    def clear_external_instruction(self):
         pass
 
     def show_dialog(self, fn, title):

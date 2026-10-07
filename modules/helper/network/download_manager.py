@@ -56,11 +56,7 @@ class DownloadManager:
         additional_var = {}
         download_options = {}
 
-        is_strava_heatmap = (
-            map_config == self.config.G_HEATMAP_OVERLAY_MAP_CONFIG
-            and "strava_heatmap" in map_name
-        )
-        if is_strava_heatmap:
+        if "strava_heatmap" in map_name:
             additional_var["key_pair_id"] = self.config.G_STRAVA_COOKIE["KEY_PAIR_ID"]
             additional_var["policy"] = self.config.G_STRAVA_COOKIE["POLICY"]
             additional_var["signature"] = self.config.G_STRAVA_COOKIE["SIGNATURE"]

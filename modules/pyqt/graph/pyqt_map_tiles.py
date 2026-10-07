@@ -1,23 +1,19 @@
 import io
-import os
-import shutil
-import sqlite3
-import tempfile
 import time
 from collections import OrderedDict
 
 import numpy as np
-from PIL import Image, ImageEnhance
+from PIL import Image
 
 from modules._qt_qtwidgets import QT_COMPOSITION_MODE_DARKEN, pg
 from modules.helper.maptile import conv_image
-from modules.utils.cmd import exec_cmd
+from modules.map.style import MAP_LAYER_ORDER
 from modules.utils.geo import get_mod_lat
 from modules.utils.map import (
     get_lon_lat_from_tile_xy,
-    get_maptile_filename,
-    get_native_tile_zoom,
-    get_tilexy_and_xy_in_tile,
+    get_map_geo_area,
+    get_map_tile_plan,
+    get_map_tile_coordinates,
 )
 
 
@@ -26,62 +22,32 @@ class MapTileMixin:
     tile_parent_cache_max = 4
     tile_batch_size_main = 3
     tile_batch_size_overlay = 2
-    tile_modify_mode = 0
-    tile_didder_pallete = {
-        2: "000000 FFFFFF",
-        8: None,
-        64: None,
-        # 64: "000000 FF0000 00FF00 0000FF 00FFFF FF00FF FFFF00 FFFFFF",
-    }
 
     def get_geo_area(self, x, y):
         if np.isnan(x) or np.isnan(y):
             return np.nan, np.nan
 
-        tile_size = self.config.G_MAP_CONFIG[self.config.G_MAP]["tile_size"]
-
-        tile_x, tile_y, _, _ = get_tilexy_and_xy_in_tile(
+        return get_map_geo_area(
             self.zoomlevel,
             x,
             y,
-            tile_size,
-        )
-        pos_x0, pos_y0 = get_lon_lat_from_tile_xy(self.zoomlevel, tile_x, tile_y)
-        pos_x1, pos_y1 = get_lon_lat_from_tile_xy(
-            self.zoomlevel, tile_x + 1, tile_y + 1
-        )
-        return (
-            abs(pos_x1 - pos_x0) / tile_size * self.width(),
-            abs(pos_y1 - pos_y0) / tile_size * self.height(),
+            self.width(),
+            self.height(),
+            self.config.G_MAP_CONFIG[self.config.G_MAP]["tile_size"],
         )
 
-    @staticmethod
-    def _palette_rgb_multilevel(levels=2):
-        vals = [round(i * 255 / (levels - 1)) for i in range(levels)]
-        return " ".join(
-            f"{r:02X}{g:02X}{b:02X}" for r in vals for g in vals for b in vals
-        )
-
-    def _setup_tile_dither_palette(self):
-        if not shutil.which("didder"):
-            return
-
-        for colors, levels in ((8, 2), (64, 4)):
-            self.tile_didder_pallete[colors] = self._palette_rgb_multilevel(levels)
-
-    def _load_tile_image(self, image_file, map_name, expanded):
-        if not expanded or not isinstance(image_file, str):
-            with Image.open(image_file) as image:
-                return image.copy()
-        stat = os.stat(image_file)
-        key = (map_name, image_file, stat.st_mtime_ns, stat.st_size)
-        image = self._tile_parent_cache.pop(key, None)
-        if image is None:
-            with Image.open(image_file) as source:
+    def _load_tile_image(self, data, key, map_name, expanded):
+        cache_key = (map_name, *key)
+        cached = self._tile_parent_cache.pop(cache_key, None) if expanded else None
+        if cached is not None and cached[0] is data:
+            image = cached[1]
+        else:
+            with Image.open(io.BytesIO(data)) as source:
                 image = source.copy()
-        self._tile_parent_cache[key] = image
-        while len(self._tile_parent_cache) > self.tile_parent_cache_max:
-            self._tile_parent_cache.popitem(last=False)
+        if expanded:
+            self._tile_parent_cache[cache_key] = (data, image)
+            while len(self._tile_parent_cache) > self.tile_parent_cache_max:
+                self._tile_parent_cache.popitem(last=False)
         return image
 
     def _init_tile_runtime_state(self):
@@ -124,7 +90,6 @@ class MapTileMixin:
         z_conv_factor,
         tile_x,
         tile_y,
-        tile_modify_mode,
         use_mbtiles,
     ):
         return (
@@ -135,7 +100,6 @@ class MapTileMixin:
             tile_x[1],
             tile_y[0],
             tile_y[1],
-            tile_modify_mode,
             bool(use_mbtiles),
         )
 
@@ -179,11 +143,7 @@ class MapTileMixin:
                 continue
             map_drawn[self._drawn_tile_key(item_x, item_y)] = True
 
-        self.drawn_tile.setdefault(map_name, {})
-        for map_zoom in list(self.drawn_tile[map_name].keys()):
-            if map_zoom != z:
-                del self.drawn_tile[map_name][map_zoom]
-        self.drawn_tile[map_name][z] = map_drawn
+        self.drawn_tile[map_name] = {z: map_drawn}
         return visible_keys
 
     def _touch_tile_item_lru(self, item_key):
@@ -292,16 +252,12 @@ class MapTileMixin:
         z_draw, z_conv_factor, tile_x, tile_y = draw_params
         expand = z_conv_factor > 1
 
-        tile_modify_mode = (
-            self.tile_modify_mode if map_config == self.config.G_MAP_CONFIG else 0
-        )
         view_signature = self._build_tile_view_signature(
             z,
             z_draw,
             z_conv_factor,
             tile_x,
             tile_y,
-            tile_modify_mode,
             use_mbtiles,
         )
         visible_item_keys = self._sync_visible_tile_items(map_name, z, tile_x, tile_y)
@@ -318,35 +274,33 @@ class MapTileMixin:
 
         tiles = self._get_tiles_for_view(map_name, z, draw_params)
 
-        if not use_mbtiles:
-            download_start = time.perf_counter()
-            await self.maptile_with_values.download_maptiles(
-                tiles,
-                map_config,
-                map_name,
-                z_draw,
-                additional_download=True,
-            )
-            tile_download_elapsed_ms += (time.perf_counter() - download_start) * 1000.0
-            tile_download_calls += 1
+        repository = self.config.map.tiles
+        map_settings = dict(map_config[map_name])
+        download_start = time.perf_counter()
+        await repository.request(
+            map_config, map_name, z_draw, tiles, additional_download=True
+        )
+        tile_download_elapsed_ms += (time.perf_counter() - download_start) * 1000.0
+        tile_download_calls += int(not use_mbtiles)
 
-        if use_mbtiles:
-            self.con = sqlite3.connect(
-                f"file:./maptile/{map_name}.mbtiles?mode=ro", uri=True
-            )
-            self.cur = self.con.cursor()
+        source_keys = [
+            (z_draw, i // z_conv_factor, j // z_conv_factor)
+            for i, j in self._iter_visible_tile_coords(tile_x, tile_y)
+        ]
+        io_start = time.perf_counter()
+        raw_tiles = await repository.load(map_name, map_settings, source_keys)
+        tile_io_elapsed_ms += (time.perf_counter() - io_start) * 1000.0
 
         try:
             check_start = time.perf_counter()
             add_keys, expand_keys = self.check_drawn_tile(
-                use_mbtiles,
-                map_config,
                 map_name,
                 z,
                 z_draw,
                 z_conv_factor,
                 tile_x,
                 tile_y,
+                raw_tiles,
                 skip_keys=pending_state["key_set"],
             )
             tile_check_elapsed_ms += (time.perf_counter() - check_start) * 1000.0
@@ -384,12 +338,12 @@ class MapTileMixin:
                 )
 
                 try:
-                    img_file = self.get_image_file(
-                        use_mbtiles, map_config, map_name, z_draw, x, y
-                    )
-
                     io_start = time.perf_counter()
-                    img_pil = self._load_tile_image(img_file, map_name, expand)
+                    source_key = (z_draw, x, y)
+                    data = raw_tiles.get(source_key)
+                    if data is None:
+                        raise FileNotFoundError(source_key)
+                    img_pil = self._load_tile_image(data, source_key, map_name, expand)
                     if expand:
                         expand_val = pending_state["expand_keys"][keys]
                         img_pil = img_pil.crop(
@@ -400,12 +354,6 @@ class MapTileMixin:
                     if not map_name.startswith(("jpn_scw", "jpn_jma_bousai")):
                         img_pil = img_pil.convert("RGBA")
                     tile_io_elapsed_ms += (time.perf_counter() - io_start) * 1000.0
-
-                    if (
-                        map_config == self.config.G_MAP_CONFIG
-                        and self.tile_modify_mode != 0
-                    ):
-                        img_pil = self.enhance_image(img_pil)
 
                     conv_start = time.perf_counter()
                     if map_name.startswith(("jpn_scw", "jpn_jma_bousai")):
@@ -432,7 +380,7 @@ class MapTileMixin:
 
                     plot_start = time.perf_counter()
                     self.plot.addItem(imgitem)
-                    imgitem.setZValue(-90 if overlay else -100)
+                    imgitem.setZValue(MAP_LAYER_ORDER["overlay" if overlay else "base"])
                     imgitem.setRect(
                         pg.QtCore.QRectF(
                             imgarray_min_x,
@@ -450,6 +398,8 @@ class MapTileMixin:
                     tile_drawn_count += 1
                     drawn_any = True
                 except (OSError, ValueError):
+                    repository.discard(map_name, map_settings, (z_draw, x, y))
+                    self._tile_parent_cache.pop((map_name, z_draw, x, y), None)
                     # Retry the tile later instead of marking it as drawn.
                     pending_state["queue"].append(keys)
                     pending_state["key_set"].add(keys)
@@ -473,9 +423,6 @@ class MapTileMixin:
                 reused_count=tile_reused_count,
                 retry_count=tile_retry_count,
             )
-            if use_mbtiles:
-                self.cur.close()
-                self.con.close()
 
     @staticmethod
     def get_tile_crop_box(tile_size, z_conv_factor, offset_x, offset_y):
@@ -487,35 +434,11 @@ class MapTileMixin:
 
     @staticmethod
     def init_draw_map(map_config, map_name, z, p0, p1, tile_size):
-        z_draw = get_native_tile_zoom(map_config[map_name], z)
-        if z_draw is None:
-            return None
-        z_conv_factor = 2 ** (z - z_draw)
+        return get_map_tile_plan(
+            map_config[map_name], z, (p0["x"], p1["x"], p0["y"], p1["y"])
+        )
 
-        t0 = get_tilexy_and_xy_in_tile(z, p0["x"], p0["y"], tile_size)
-        t1 = get_tilexy_and_xy_in_tile(z, p1["x"], p1["y"], tile_size)
-        tile_x = sorted([t0[0], t1[0]])
-        tile_y = sorted([t0[1], t1[1]])
-        return z_draw, z_conv_factor, tile_x, tile_y
-
-    @staticmethod
-    def get_tiles_for_drawing(tile_x, tile_y, z_conv_factor):
-        tiles = list(MapTileMixin._iter_visible_tile_coords(tile_x, tile_y))
-        tiles += [
-            (i, j)
-            for i in (tile_x[0] - 1, tile_x[1] + 1)
-            for j in range(tile_y[0] - 1, tile_y[1] + 2)
-        ]
-        tiles += [
-            (i, j)
-            for i in range(tile_x[0], tile_x[1] + 1)
-            for j in (tile_y[0] - 1, tile_y[1] + 1)
-        ]
-
-        if z_conv_factor > 1:
-            tiles = list({(i // z_conv_factor, j // z_conv_factor) for i, j in tiles})
-
-        return tiles
+    get_tiles_for_drawing = staticmethod(get_map_tile_coordinates)
 
     def _get_tiles_for_view(self, map_name, z, draw_params):
         z_draw, z_conv_factor, tile_x, tile_y = draw_params
@@ -540,21 +463,19 @@ class MapTileMixin:
 
     def check_drawn_tile(
         self,
-        use_mbtiles,
-        map_config,
         map_name,
         z,
         z_draw,
         z_conv_factor,
         tile_x,
         tile_y,
+        available,
         skip_keys=None,
     ):
         if skip_keys is None:
             skip_keys = set()
         add_keys = []
         expand_keys = {}
-        map_settings = map_config[map_name]
         drawn_tiles = self.drawn_tile.get(map_name, {}).get(z, {})
         expand = z_conv_factor > 1
 
@@ -572,13 +493,7 @@ class MapTileMixin:
                 pixel_y, y_start = divmod(j, z_conv_factor)
                 exist_tile_key = (pixel_x, pixel_y)
 
-            if not self.check_tile(
-                use_mbtiles,
-                map_name,
-                z_draw,
-                exist_tile_key,
-                map_settings,
-            ):
+            if (z_draw, *exist_tile_key) not in available:
                 continue
 
             add_keys.append((i, j))
@@ -586,67 +501,3 @@ class MapTileMixin:
                 expand_keys[(i, j)] = (pixel_x, pixel_y, x_start, y_start)
 
         return add_keys, expand_keys
-
-    def check_tile(self, use_mbtiles, map_name, z_draw, key, map_settings):
-        if not use_mbtiles:
-            filename = get_maptile_filename(map_name, z_draw, *key, map_settings)
-            return self.maptile_with_values.check_existing_tiles(filename)
-        sql = (
-            "select count(*) from tiles where "
-            f"zoom_level={z_draw} and tile_column={key[0]} "
-            f"and tile_row={2**z_draw - 1 - key[1]}"
-        )
-        return (self.cur.execute(sql).fetchone())[0] == 1
-
-    def get_image_file(self, use_mbtiles, map_config, map_name, z_draw, x, y):
-        if not use_mbtiles:
-            map_settings = map_config[map_name]
-            return get_maptile_filename(map_name, z_draw, x, y, map_settings)
-        sql = (
-            "select tile_data from tiles where "
-            f"zoom_level={z_draw} and tile_column={x} and tile_row={2**z_draw - 1 - y}"
-        )
-        return io.BytesIO((self.cur.execute(sql).fetchone())[0])
-
-    def enhance_image(self, img_pil):
-        # 0: None
-        # 1: pil
-        # 2: didder
-        # 3: pil + didder
-
-        if self.tile_modify_mode in [1, 3]:
-            img_pil = ImageEnhance.Contrast(img_pil).enhance(2.0)
-
-        with tempfile.NamedTemporaryFile(suffix=".png") as tmp_file:
-            filename = tmp_file.name
-
-            if self.tile_modify_mode in [2, 3] and shutil.which("didder"):
-                img_pil.save(filename)
-                exec_cmd(
-                    [
-                        "didder",
-                        "-i",
-                        filename,
-                        "-o",
-                        filename,
-                        "--strength",
-                        "0.8",
-                        "--palette",
-                        self.tile_didder_pallete[self.config.display.color],
-                        "edm",
-                        "--serpentine",
-                        "FloydSteinberg",
-                    ],
-                    cmd_print=False,
-                )
-                img_pil = Image.open(filename).convert("RGBA")
-
-        return img_pil
-
-    def modify_map_tile(self):
-        if self.tile_modify_mode == 3:
-            self.tile_modify_mode = 0
-        else:
-            self.tile_modify_mode += 1
-        self.config.display.screen_flash_short()
-        self.reset_map()

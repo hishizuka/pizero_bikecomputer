@@ -292,6 +292,7 @@ class Config:
     # G_GUI_MODE = "QML"
     # G_GUI_MODE = "Kivy"
     G_USE_QML_OPENGL_RENDERER = True
+    G_USE_PYQT_GPU_MAP_PRESENTER = True
 
     # PerformanceGraph:
     # 1st: POWER
@@ -488,6 +489,9 @@ class Config:
     qt_platform = None
 
     def __init__(self):
+        self._quit_task = None
+        self._quit_waiters = set()
+        self._main_task = None
         self.G_SENSORS = copy.deepcopy(type(self).G_SENSORS)
         self.G_ANT = copy.deepcopy(type(self).G_ANT)
         self.G_BLE = copy.deepcopy(type(self).G_BLE)
@@ -627,6 +631,10 @@ class Config:
             post_add_test_config(self)
         except:
             pass
+
+        from modules.map.application import MapApplication
+
+        self.map = MapApplication(self)
 
     def sensor_uses(self, role, protocol):
         return self.G_SENSORS[role]["PROTOCOL"] == protocol
@@ -791,6 +799,7 @@ class Config:
 
     async def start_coroutine(self):
         self._loop = asyncio.get_running_loop()
+        self._main_task = asyncio.current_task()
         self.app_close_event = asyncio.Event()
         self.logger.start_coroutine()
         self.display.start_coroutine()
@@ -798,6 +807,7 @@ class Config:
         # delay init start
         asyncio.create_task(self.delay_init())
         await self.app_close_event.wait()
+        await asyncio.shield(self._quit_task)
 
     async def delay_init(self):
         await asyncio.sleep(0.01)
@@ -912,13 +922,15 @@ class Config:
                 elif key == "l":
                     self.logger.count_laps()
                 elif key == "r":
-                    self.logger.reset_count()
+                    reset = getattr(self.gui, "reset_count", self.logger.reset_count)
+                    reset()
                 elif key == "n" and self.gui:
                     self.gui.scroll_next()
                 elif key == "p" and self.gui:
                     self.gui.scroll_prev()
                 elif key == "q" and self.gui:
-                    await self.quit()
+                    await self.gui.quit()
+                    break
                 if key == "S":
                     self.gui.get_screenshot()
                 elif key == "m" and self.gui:
@@ -932,8 +944,7 @@ class Config:
                 elif key == "b" and self.gui:
                     self.gui.back_menu()
                 ##### temporary #####
-                elif key == "i" and self.gui and self.gui.map_widget:
-                    # self.gui.map_widget.modify_map_tile()
+                elif key == "i" and self.gui:
                     self.gui.change_map_overlays()
                 elif key == "@" and self.gui:
                     self.gui.show_dialog_ok_only(fn=None, title="test")
@@ -1016,11 +1027,17 @@ class Config:
         tasks = asyncio.all_tasks()
         current_task = asyncio.current_task()
         for task in tasks:
-            if self.G_GUI_MODE in ["PyQt", "QML"]:
-                if task == current_task or task.get_coro().__name__ in [
-                    "update_display"
-                ]:
-                    continue
+            if task in self._quit_waiters or task in (
+                current_task,
+                self._main_task,
+                self._quit_task,
+            ):
+                continue
+            if (
+                self.G_GUI_MODE in ["PyQt", "QML"]
+                and task.get_coro().__name__ == "update_display"
+            ):
+                continue
             task.cancel()
             try:
                 await task
@@ -1030,33 +1047,44 @@ class Config:
                 pass
 
     async def quit(self):
+        if self._quit_task is None:
+            self._quit_task = asyncio.create_task(self._quit())
+        waiter = asyncio.current_task()
+        self._quit_waiters.add(waiter)
+        try:
+            await asyncio.shield(self._quit_task)
+        finally:
+            self._quit_waiters.discard(waiter)
+
+    async def _quit(self):
         app_logger.info("########## QUIT START ##########")
-        if self.rain_alert is not None:
-            await self.rain_alert.stop()
-        if self.ble_uart is not None:
-            await self.ble_uart.quit()
-        await self.network.quit()
-        self.delete_weather_overlay_tiles()
-        app_logger.info(" 1: network")
+        try:
+            if self.G_GUI_MODE in ["PyQt", "QML"]:
+                await self.gui.quit_internal()
+            if self.rain_alert is not None:
+                await self.rain_alert.stop()
+            if self.ble_uart is not None:
+                await self.ble_uart.quit()
+            await self.network.quit()
+            self.delete_weather_overlay_tiles()
+            app_logger.info(" 1: network")
 
-        if self.G_MANUAL_STATUS == "START":
-            self.logger.start_and_stop_manual()
-        self.logger.remove_handler()
-        await self.logger.quit()
-        if self.buzzer is not None:
-            await self.buzzer.stop()
-        self.setting.write_config()
-        self.state.delete()
-        app_logger.info(" 2: logger & state")
+            if self.G_MANUAL_STATUS == "START":
+                self.logger.start_and_stop_manual()
+            self.logger.remove_handler()
+            await self.logger.quit()
+            if self.buzzer is not None:
+                await self.buzzer.stop()
+            self.setting.write_config()
+            self.state.delete()
+            app_logger.info(" 2: logger & state")
 
-        self.display.quit()
-        app_logger.info(" 3: display")
-
-        self.app_close_event.set()
-        await asyncio.sleep(0.5)
-        await self.kill_tasks()
-
-        app_logger.info("########## QUIT END   ##########")
+            self.display.quit()
+            app_logger.info(" 3: display")
+            await self.kill_tasks()
+            app_logger.info("########## QUIT END   ##########")
+        finally:
+            self.app_close_event.set()
 
     async def power_off(self):
         service_state = is_running_as_service() if self.G_IS_RASPI else False

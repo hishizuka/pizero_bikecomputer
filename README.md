@@ -7,7 +7,7 @@ https://github.com/hishizuka/pizero_bikecomputer
 
 # News
 
-- 2026/10/2 [Memory LCD DRM Driver](https://github.com/hishizuka/memory-lcd-drm) is now public. `install.sh` can install the MIP driver and the optional QML OpenGL/DMA-BUF presenter. See the [display setup guide](doc/software_installation.md#jdi--sharp-mip-display).
+- 2026/10/2 [Memory LCD DRM Driver](https://github.com/hishizuka/memory-lcd-drm) is now public. `install.sh` can install the MIP driver and the optional DMA-BUF presenter for PyQt GPU maps. See the [display setup guide](doc/software_installation.md#jdi--sharp-mip-display) and [GPU map presenter guide](doc/gpu_map_presenter.md).
 - 2026/5/9 Official hardware is being designed and prototyped for Pi Zero Bikecomputer. The official hardware design files will be released under CERN-OHL-S-2.0.
   - <img width="400" alt="Official hardware prototype" src="https://github.com/user-attachments/assets/a7d9a2b8-5380-4f70-9cb2-84002e546b45" />
 - 2026/1/30 Support for a groundbreaking dual-screen display is in progress.
@@ -95,7 +95,7 @@ Some functions depend on your parts.
 | Sensors | Yes | ANT+ sensors and I2C sensors. See below. |
 | Maps and navigations | Yes | A GPS module or the Android app [GadgetBridge](https://gadgetbridge.org) is required. See below. |
 | Displays, controls and power | Yes | Multiple displays, hardware buttons, remote controls, and battery modules are supported. See below. |
-| GUI | Yes | PyQt is the primary GUI. QML, Kivy, and headless modes are also available. |
+| GUI | Yes | PyQt is the primary GUI. Kivy and headless modes are also available. |
 | Wifi & Bluetooth | Yes | Using built-in modules.|
 | Smartphone connections | Yes | Android only. GadgetBridge integration and route sharing from Google Maps via Bluetooth. |
 | Battery life(Reference) | 18h | with 3100mAh mobile battery([Garmin Charge Power Pack](https://buy.garmin.com/en-US/US/p/571552)) and MIP Reflective color LCD. |

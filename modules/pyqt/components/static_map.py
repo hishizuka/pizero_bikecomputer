@@ -1,11 +1,9 @@
 import math
-import os
-import sqlite3
 from dataclasses import dataclass
 
 from modules._qt_qtwidgets import QtCore, QtGui
-from modules.pyqt.components.course_point_marker import build_course_point_marker_pixmap
-from modules.utils.map import get_maptile_filename
+from modules.qt_map_assets import build_course_point_marker_pixmap
+from modules.utils.map import get_native_tile_zoom
 
 
 @dataclass(frozen=True)
@@ -168,7 +166,8 @@ class StaticMapRenderer:
             min(maximum_zoom, self.zoom),
         )
         zoom = self._fit_zoom(points, settings, target_size, initial_zoom)
-        return map_name, settings, zoom
+        native_zoom = get_native_tile_zoom(settings, zoom)
+        return map_name, settings, native_zoom if native_zoom is not None else zoom
 
     @staticmethod
     def _tiles(viewport):
@@ -177,40 +176,6 @@ class StaticMapRenderer:
             for x in range(viewport.tile_x_min, viewport.tile_x_max + 1)
             for y in range(viewport.tile_y_min, viewport.tile_y_max + 1)
         ]
-
-    async def _request_tiles(self, tiles, map_name, settings, zoom):
-        if settings["use_mbtiles"] or self.config.api is None:
-            return
-        tile_service = self.config.api.maptile_with_values
-        wrapped = [[x % (2**zoom), y] for x, y in tiles]
-        await tile_service.download_maptiles(
-            wrapped,
-            self.config.G_MAP_CONFIG,
-            map_name,
-            zoom,
-        )
-
-    def _read_tile(self, map_name, settings, zoom, x, y, connection):
-        wrapped_x = x % (2**zoom)
-        if settings["use_mbtiles"]:
-            row = connection.execute(
-                "select tile_data from tiles where zoom_level=? and "
-                "tile_column=? and tile_row=?",
-                (zoom, wrapped_x, 2**zoom - 1 - y),
-            ).fetchone()
-            return QtGui.QImage.fromData(row[0]) if row else None
-
-        filename = get_maptile_filename(
-            map_name,
-            zoom,
-            wrapped_x,
-            y,
-            settings,
-        )
-        if not os.path.exists(filename) or os.path.getsize(filename) == 0:
-            return None
-        image = QtGui.QImage(filename)
-        return image if not image.isNull() else None
 
     @staticmethod
     def _target_point(point, viewport, zoom, tile_size, target_size, reference_x):
@@ -330,22 +295,23 @@ class StaticMapRenderer:
         tiles = self._tiles(viewport)
         if len(tiles) > self.MAX_TILES:
             tiles = []
-        await self._request_tiles(tiles, map_name, settings, zoom)
-
-        mbtiles = os.path.join("maptile", f"{map_name}.mbtiles")
-        connection = (
-            sqlite3.connect(f"file:{mbtiles}?mode=ro", uri=True)
-            if settings["use_mbtiles"]
-            else None
-        )
+        repository = self.config.map.tiles
+        await repository.request(self.config.G_MAP_CONFIG, map_name, zoom, tiles)
+        keys = [(zoom, x, y) for x, y in tiles]
+        raw = await repository.load(map_name, settings, keys)
 
         complete = bool(tiles)
         painter = QtGui.QPainter(image)
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
         try:
             for x, y in tiles:
-                tile = self._read_tile(map_name, settings, zoom, x, y, connection)
-                if tile is None:
+                key = (zoom, x, y)
+                data = raw.get(key)
+                tile = (
+                    QtGui.QImage.fromData(data) if data is not None else QtGui.QImage()
+                )
+                if tile.isNull():
+                    repository.discard(map_name, settings, key)
                     complete = False
                     continue
                 target_rect = QtCore.QRectF(
@@ -380,8 +346,6 @@ class StaticMapRenderer:
                 )
         finally:
             painter.end()
-            if connection is not None:
-                connection.close()
 
         return StaticMapRender(
             image=image,

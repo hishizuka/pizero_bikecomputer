@@ -65,7 +65,7 @@ class Button_Config:
                 "B": ("map_zoom_minus", "map_overlay_prev_time"),
                 "C": ("change_map_overlays", "change_mode"),
                 "D": ("map_zoom_plus", "map_overlay_next_time"),
-                "E": ("scroll_next", "modify_map_tile"),
+                "E": ("scroll_next", ""),
             },
             "MAP_1": {
                 "A": ("map_move_x_minus", "get_screenshot"),
@@ -444,6 +444,7 @@ class Button_Config:
     def __init__(self, config):
         self.config = config
         self._dual_map_mode_active = False
+        self.button_mode_index = dict(type(self).button_mode_index)
         self.button_def = copy.deepcopy(type(self).button_def)
         self.custom_gpio_button_template = getattr(
             config,
@@ -536,13 +537,6 @@ class Button_Config:
         if getattr(gui, "stack_widget", None) is None:
             return
         stack_index = gui.stack_widget.currentIndex()
-        main_page_index = -1
-        if gui.main_page is not None:
-            try:
-                main_page_index = gui.main_page.currentIndex()
-            except Exception:
-                main_page_index = -1
-
         dialog_active = gui.dialog_exists()
 
         if dialog_active:
@@ -556,23 +550,18 @@ class Button_Config:
         else:
             w_index = stack_index
             if w_index == 1:
-                current_widget = gui.main_page.widget(gui.main_page.currentIndex())
-                if self.config.G_DUAL_DISPLAY_MODE:
-                    if current_widget == gui.course_profile_graph_widget:
-                        mode_key = "COURSE_PROFILE"
-                    elif self._dual_map_mode_active:
-                        mode_key = "MAP"
-                    elif current_widget == gui.map_widget:
-                        mode_key = "MAP"
-                    else:
-                        mode_key = "MAIN"
+                current_widget = gui.current_navigation_page
+                if (
+                    current_widget is not None
+                    and current_widget == gui.course_profile_graph_widget
+                ):
+                    mode_key = "COURSE_PROFILE"
+                elif current_widget in self.config.map.pages or (
+                    self.config.G_DUAL_DISPLAY_MODE and self._dual_map_mode_active
+                ):
+                    mode_key = "MAP"
                 else:
-                    if current_widget == gui.map_widget:
-                        mode_key = "MAP"
-                    elif current_widget == gui.course_profile_graph_widget:
-                        mode_key = "COURSE_PROFILE"
-                    else:
-                        mode_key = "MAIN"
+                    mode_key = "MAIN"
 
                 pages = self.button_mode_pages[mode_key]
                 if pages:
@@ -587,7 +576,7 @@ class Button_Config:
                     self.page_mode = "MAIN"
                     if self.config.G_DUAL_DISPLAY_MODE and mode_key == "MAP":
                         self._dual_map_mode_active = False
-                        map_widget = gui.map_widget
+                        map_widget = gui.current_map_page
                         if map_widget is not None:
                             map_widget.lock_on()
             elif w_index >= 2:
@@ -658,11 +647,11 @@ class Button_Config:
 
     def change_mode(self):
         # check MAP
-        w = self.config.gui.main_page.widget(self.config.gui.main_page.currentIndex())
-        map_widget = self.config.gui.map_widget
+        w = self.config.gui.current_navigation_page
+        map_widget = self.config.gui.current_map_page
 
         if self.config.G_DUAL_DISPLAY_MODE:
-            if w == self.config.gui.course_profile_graph_widget:
+            if w is not None and w == self.config.gui.course_profile_graph_widget:
                 self.change_mode_index("COURSE_PROFILE")
                 if not self.button_mode_is_change:
                     w.lock_on()
@@ -694,23 +683,18 @@ class Button_Config:
                 map_widget.lock_off()
             return
 
-        if "MAIN" in self.page_mode:
+        if w in self.config.map.pages:
+            mode = "MAP"
+        elif w is not None and w == self.config.gui.course_profile_graph_widget:
+            mode = "COURSE_PROFILE"
+        else:
             self.change_mode_index("MAIN")
-        # if display is MAP: change MAP_1 -> MAP_2 -> MAP -> ...
-        elif w == self.config.gui.map_widget:
-            self.change_mode_index("MAP")
-            # additional: lock current position when normal page
-            if not self.button_mode_is_change:
-                w.lock_on()
-            else:
-                w.lock_off()
-        elif w == self.config.gui.course_profile_graph_widget:
-            self.change_mode_index("COURSE_PROFILE")
-            # additional: lock current position when normal page
-            if not self.button_mode_is_change:
-                w.lock_on()
-            else:
-                w.lock_off()
+            return
+        self.change_mode_index(mode)
+        if self.button_mode_is_change:
+            w.lock_off()
+        else:
+            w.lock_on()
 
     def change_mode_index(self, mode):
         self.button_mode_index[mode] = self.button_mode_index[mode] + 1

@@ -12,8 +12,8 @@ from modules._qt_qtwidgets import (
     qasync,
 )
 from modules.course import Course
+from modules.map.style import DEFAULT_COURSE_POINT_ICON_PATH
 from modules.pyqt.components import icons, topbar
-from modules.pyqt.components.course_point_marker import DEFAULT_COURSE_POINT_ICON_PATH
 from modules.pyqt.components.static_course_profile import StaticCourseProfileRenderer
 from modules.pyqt.components.static_map import (
     GeoPoint,
@@ -223,7 +223,7 @@ class CourseTrafficSideListWidget(ListWidget):
     async def button_func_extra(self):
         self.config.G_COURSE_TRAFFIC_SIDE = self.settings[self.selected_item.title]
         self.config.setting.write_config()
-        await self.config.gui.map_widget.update_display()
+        self.config.gui.refresh_map()
 
 
 class CourseListWidget(ListWidget):

@@ -483,18 +483,10 @@ class InternalSensorMenuWidget(MenuWidget):
         self.change_page("Adjust Altitude")
 
     def onoff_map_heading(self, change=True):
-        map_widget = self.config.gui.map_widget
-        if map_widget is None:
-            self.buttons[self.MAP_HEADING_BUTTON].change_toggle(False)
-            return
-
+        maps = self.config.map
         if change:
-            map_widget.set_map_heading_source(
-                not map_widget.use_magnetic_heading_for_map
-            )
-        self.buttons[self.MAP_HEADING_BUTTON].change_toggle(
-            map_widget.use_magnetic_heading_for_map
-        )
+            maps.set_heading_source(not maps.use_magnetic_heading)
+        self.buttons[self.MAP_HEADING_BUTTON].change_toggle(maps.use_magnetic_heading)
 
     def calib_mag(self):
         self.config.gui.calib_mag()

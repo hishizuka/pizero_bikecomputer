@@ -134,6 +134,7 @@ class GUI_PyQt(GUI_Qt_Base):
     performance_graph_widget = None
     course_profile_graph_widget = None
     map_widget = None
+    gpu_map_widget = None
     cuesheet_widget = None
     multi_scan_widget = None
     dual_mode = False
@@ -157,7 +158,6 @@ class GUI_PyQt(GUI_Qt_Base):
     signal_change_overlay = Signal()
     signal_overlay_prev_time = Signal()
     signal_overlay_next_time = Signal()
-    signal_modify_map_tile = Signal()
     signal_turn_on_off_light = Signal()
     signal_tb_message = Signal(str, str, bool)
 
@@ -280,7 +280,6 @@ class GUI_PyQt(GUI_Qt_Base):
             self.signal_change_overlay.connect(self.change_map_overlays_internal)
             self.signal_overlay_prev_time.connect(self.map_overlay_prev_time_internal)
             self.signal_overlay_next_time.connect(self.map_overlay_next_time_internal)
-            self.signal_modify_map_tile.connect(self.modify_map_tile_internal)
 
             self.signal_turn_on_off_light.connect(self.turn_on_off_light_internal)
             self.signal_tb_message.connect(self.popup_tb_message_internal)
@@ -556,6 +555,11 @@ class GUI_PyQt(GUI_Qt_Base):
                                 self.main_page, self.config
                             )
                             self.main_page.addWidget(self.map_widget)
+                    elif k == "GPU_MAP":
+                        from modules.pyqt.graph.pyqt_map_gl import GpuMapWidget
+
+                        self.gpu_map_widget = GpuMapWidget(self.main_page, self.config)
+                        self.main_page.addWidget(self.gpu_map_widget)
                     elif k == "CUESHEET":
                         self.cuesheet_widget = CueSheetWidget(
                             self.main_page, self.config
@@ -613,6 +617,11 @@ class GUI_PyQt(GUI_Qt_Base):
         self.main_page.widget(index).start()
         self.main_page_index = index
 
+    async def quit_internal(self):
+        if self.gpu_map_widget is not None:
+            await self.gpu_map_widget.close_map()
+        await super().quit_internal()
+
     def start_and_stop_manual(self):
         self.signal_start_and_stop_manual.emit()
 
@@ -629,9 +638,7 @@ class GUI_PyQt(GUI_Qt_Base):
         self.signal_reset_count.emit()
 
     def reset_count_internal(self):
-        res = self.logger.reset_count()
-        if res and self.map_widget is not None:
-            self.map_widget.reset_track()
+        res = super().reset_count_internal()
         if (
             res
             and self.config.G_AUTO_UPLOAD
@@ -731,102 +738,39 @@ class GUI_PyQt(GUI_Qt_Base):
             return
         self.config.button_config.change_mode()
 
+    @property
+    def current_navigation_page(self):
+        if self.main_page is None:
+            return None
+        page = self.main_page.currentWidget()
+        return page.controller if page is self.gpu_map_widget else page
+
+    @property
+    def current_map_page(self):
+        if self.dual_mode:
+            return self.map_widget
+        page = self.current_navigation_page
+        if page in self.config.map.pages:
+            return page
+        return None
+
     def change_map_overlays(self):
-        if self.map_widget is not None:
-            self.signal_change_overlay.emit()
+        self.signal_change_overlay.emit()
 
     def change_map_overlays_internal(self):
-        self.map_widget.change_map_overlays()
-
-    def modify_map_tile(self):
-        if self.map_widget is not None:
-            self.signal_modify_map_tile.emit()
-
-    def modify_map_tile_internal(self):
-        self.map_widget.modify_map_tile()
+        self.call_map("change_map_overlays")
 
     def map_overlay_prev_time(self):
-        if self.map_widget is not None:
-            self.signal_overlay_prev_time.emit()
+        self.signal_overlay_prev_time.emit()
 
     def map_overlay_prev_time_internal(self):
-        self.map_widget.update_overlay_time(False)
+        self.call_map("update_overlay_time", False)
 
     def map_overlay_next_time(self):
-        if self.map_widget is not None:
-            self.signal_overlay_next_time.emit()
+        self.signal_overlay_next_time.emit()
 
     def map_overlay_next_time_internal(self):
-        self.map_widget.update_overlay_time(True)
-
-    def map_move_x_plus(self):
-        self.map_method("move_x_plus")
-
-    def map_move_x_minus(self):
-        self.map_method("move_x_minus")
-
-    def map_move_y_plus(self):
-        self.map_method("move_y_plus")
-
-    def map_move_y_minus(self):
-        self.map_method("move_y_minus")
-
-    def map_change_move(self):
-        self.map_method("change_move")
-
-    def map_zoom_plus(self):
-        self.map_method("zoom_plus")
-
-    def map_zoom_minus(self):
-        self.map_method("zoom_minus")
-
-    def map_search_route(self):
-        self.map_method("search_route")
-
-    def map_method(self, mode):
-        signal_name = f"signal_{mode}"
-        current_widget = None
-        if self.main_page is not None:
-            try:
-                current_widget = self.main_page.widget(self.main_page.currentIndex())
-            except Exception:
-                current_widget = None
-
-        if self.dual_mode and current_widget == self.course_profile_graph_widget:
-            signal = getattr(self.course_profile_graph_widget, signal_name, None)
-            if signal:
-                signal.emit()
-            return
-
-        if self.dual_mode and self.map_widget is not None:
-            signal = getattr(self.map_widget, signal_name, None)
-            if signal:
-                signal.emit()
-            return
-
-        signal = getattr(current_widget, signal_name, None)
-        if signal:
-            signal.emit()
-
-    def reset_course(self):
-        self.map_widget.reset_course()
-        if self.course_profile_graph_widget is not None:
-            self.course_profile_graph_widget.reset_course()
-
-    def init_course(self):
-        self.map_widget.init_course()
-        if self.course_profile_graph_widget is not None:
-            self.course_profile_graph_widget.init_course()
-
-    def set_external_instruction(self, instruction_name, instruction_distance):
-        if self.map_widget is not None:
-            self.map_widget.set_external_instruction(
-                instruction_name, instruction_distance
-            )
-
-    def clear_external_instruction(self):
-        if self.map_widget is not None:
-            self.map_widget.clear_external_instruction()
+        self.call_map("update_overlay_time", True)
 
     def scroll(self, delta):
         n = self.main_page.count()

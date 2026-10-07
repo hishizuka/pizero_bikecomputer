@@ -1,20 +1,14 @@
-from datetime import timedelta
-
 import numpy as np
 
-from modules.app_logger import app_logger
 from modules._qt_qtwidgets import pg
-from modules.utils.geo import calc_y_mod, get_mod_lat, get_width_distance
-from modules.utils.map import get_maptile_filename, get_rain_time
+from modules.map.style import POSITION_MARKER_SIZE, MAP_LAYER_ORDER
+from modules.map.follow import CourseFocus
+from modules.utils.geo import calc_y_mod, get_mod_lat
+from modules.map.overlays import MapOverlays
+from modules.map.policy import axis_range_changed, map_position, tile_zoom
 
 
 class MapStateMixin:
-    _OVERLAY_ATTRS = {
-        "WIND": ("G_WIND_OVERLAY_MAP_CONFIG", "G_WIND_OVERLAY_MAP"),
-        "RAIN": ("G_RAIN_OVERLAY_MAP_CONFIG", "G_RAIN_OVERLAY_MAP"),
-        "HEATMAP": ("G_HEATMAP_OVERLAY_MAP_CONFIG", "G_HEATMAP_OVERLAY_MAP"),
-    }
-
     # map position
     map_area = {
         "w": np.nan,
@@ -33,87 +27,22 @@ class MapStateMixin:
     arrow_direction_angle_unit_half = arrow_direction_angle_unit / 2
     y_mod = 1.22  # 31/25 at Tokyo(N35)
     view_range_update_epsilon_px = 20
-    course_focus_offset_ratio = 0.25
-    course_focus_enter_ratio = 0.30
-    course_focus_exit_ratio = 0.20
-    course_focus_release_frames = 3
-    _overlay_refresh_time_cache = None
-
-    @staticmethod
-    def _get_interval_aligned_time(map_settings):
-        current_time = map_settings["current_time_func"]()
-        delta_minutes = current_time.minute % map_settings["time_interval"]
-        if delta_minutes > map_settings["time_interval"] / 2:
-            delta_minutes -= map_settings["time_interval"]
-        current_time += timedelta(minutes=-delta_minutes)
-        return current_time.replace(second=0, microsecond=0)
-
-    def _get_overlay_refresh_time_key(self, overlay_type, map_settings):
-        # refresh_time_mode is shared by any time-series overlay.
-        # fallback keeps existing behavior when mode is not set in map config.
-        refresh_mode = map_settings.get("refresh_time_mode")
-        if refresh_mode is None:
-            refresh_mode = "cutoff" if overlay_type == "RAIN" else "aligned"
-
-        if refresh_mode == "cutoff":
-            return get_rain_time(map_settings)
-        return self._get_interval_aligned_time(map_settings)
-
-    def _cache_overlay_refresh_time_key(self, overlay_type, overlay_map, time_key):
-        if not isinstance(self._overlay_refresh_time_cache, dict):
-            self._overlay_refresh_time_cache = {}
-        self._overlay_refresh_time_cache[overlay_type] = {
-            "map_name": overlay_map,
-            "time_key": time_key,
-        }
-
-    def _get_overlay_map_config_and_name(self, overlay_type):
-        attr_names = self._OVERLAY_ATTRS.get(overlay_type)
-        if attr_names is None:
-            return None, None
-        config_name_attr, map_name_attr = attr_names
-        return (
-            getattr(self.config, config_name_attr),
-            getattr(self.config, map_name_attr),
-        )
 
     def _setup_map_state_items(self):
         self.map_pos["x"] = self.config.G_DUMMY_POS_X
         self.map_pos["y"] = self.config.G_DUMMY_POS_Y
-        self.set_map_heading_source(self.config.G_DEBUG)
-        self._overlay_refresh_time_cache = {}
-        self._course_focus_active = False
-        self._course_focus_off_frames = 0
-        self._course_focus_x_direction = 0
-        self._course_focus_y_direction = 0
+        self.course_focus = CourseFocus()
         self._last_applied_x_range = None
         self._last_applied_y_range = None
         self._last_applied_x_bounds = None
         self._last_applied_y_bounds = None
 
-        self.point["size"] = 29
+        self.point["size"] = POSITION_MARKER_SIZE
         self._init_direction_arrows()
         self._init_center_point()
 
-    def set_map_heading_source(self, use_magnetic_heading):
-        self.use_magnetic_heading_for_map = bool(use_magnetic_heading)
-        if self.use_magnetic_heading_for_map:
-            self._map_heading_value_getter = self._get_magnetic_heading_value
-        else:
-            self._map_heading_value_getter = self._get_gps_heading_value
-
-    def _get_gps_heading_value(self):
-        return self.gps_values["heading_gps_deg"]
-
-    def _get_magnetic_heading_value(self):
-        heading = self.sensor.values["I2C"]["heading_magnetic_deg"]
-        if heading is not None and not self._is_nan_value(heading):
-            return heading
-        return self._get_gps_heading_value()
-
     def _get_map_heading_value(self):
-        return self._map_heading_value_getter()
-
+        return self.config.map.heading(self.sensor.values)
 
     def _get_viewport_px_size(self):
         view_box = self.plot.getViewBox()
@@ -126,25 +55,9 @@ class MapStateMixin:
         return max(1.0, view_width), max(1.0, view_height)
 
     def _should_apply_axis_range(self, start, end, view_px, previous_state):
-        if previous_state is None:
-            return True
-
-        prev_start, prev_end, prev_view_px = previous_state
-        if abs(prev_view_px - view_px) >= 0.5:
-            return True
-
-        span = abs(end - start)
-        prev_span = abs(prev_end - prev_start)
-        if span <= 0 or prev_span <= 0:
-            return True
-
-        data_per_px = max(span, prev_span) / view_px
-        if data_per_px <= 0:
-            return True
-
-        move_px = max(abs(start - prev_start), abs(end - prev_end)) / data_per_px
-        span_delta_px = abs(span - prev_span) / data_per_px
-        return max(move_px, span_delta_px) >= self.view_range_update_epsilon_px
+        return axis_range_changed(
+            start, end, view_px, previous_state, self.view_range_update_epsilon_px
+        )
 
     def _init_direction_arrows(self):
         self.direction_arrows = []
@@ -175,89 +88,9 @@ class MapStateMixin:
                 )
             )
 
-    def _update_course_focus_active(self, raw_on_course):
-        if raw_on_course:
-            self._course_focus_active = True
-            self._course_focus_off_frames = 0
-            return True
-
-        if not self._course_focus_active:
-            return False
-
-        self._course_focus_off_frames += 1
-        if self._course_focus_off_frames < self.course_focus_release_frames:
-            return True
-
-        self._course_focus_active = False
-        self._course_focus_off_frames = 0
-        self._course_focus_x_direction = 0
-        self._course_focus_y_direction = 0
-        return False
-
-    def _resolve_course_focus_axis_direction(self, delta, span, previous_direction):
-        if span <= 0:
-            return 0
-
-        enter_threshold = self.course_focus_enter_ratio * span
-        exit_threshold = self.course_focus_exit_ratio * span
-
-        if previous_direction == 0:
-            if delta > enter_threshold:
-                return 1
-            if delta < -enter_threshold:
-                return -1
-            return 0
-
-        if previous_direction > 0:
-            if delta < -enter_threshold:
-                return -1
-            if abs(delta) <= exit_threshold:
-                return 0
-            return 1
-
-        if delta > enter_threshold:
-            return 1
-        if abs(delta) <= exit_threshold:
-            return 0
-        return -1
-
-    def _get_course_focus_target(self, start_index, lookahead_index):
-        if not len(self.course.longitude):
-            return None
-
-        max_index = len(self.course.longitude) - 1
-        start_index = int(max(0, min(start_index, max_index)))
-        lookahead_index = int(max(0, min(lookahead_index, max_index)))
-
-        if lookahead_index <= start_index:
-            return (
-                float(self.course.longitude[lookahead_index]),
-                float(self.course.latitude[lookahead_index]),
-            )
-
-        index_span = lookahead_index - start_index
-        sample_step = max(1, index_span // 8)
-        sample_indices = np.arange(
-            start_index,
-            lookahead_index + 1,
-            sample_step,
-            dtype=np.int32,
-        )
-        if sample_indices[-1] != lookahead_index:
-            sample_indices = np.append(sample_indices, lookahead_index)
-
-        lon_values = self.course.longitude[sample_indices]
-        lat_values = self.course.latitude[sample_indices]
-
-        # Bias the centroid toward farther points to keep the look-ahead behavior.
-        weights = np.linspace(1.0, 2.0, num=len(sample_indices), dtype=np.float64)
-        target_lon = float(np.average(lon_values, weights=weights))
-        target_lat = float(np.average(lat_values, weights=weights))
-        return target_lon, target_lat
-
     def _init_center_point(self):
         self.center_point = pg.ScatterPlotItem(pxMode=True, symbol="+")
-        self.center_point.setZValue(50)
+        self.center_point.setZValue(MAP_LAYER_ORDER["center"])
         self.center_point_data = {
             "pos": [np.nan, np.nan],
             "size": 15,
@@ -268,64 +101,24 @@ class MapStateMixin:
 
     @staticmethod
     def _normalize_display_value(value):
-        try:
-            if np.isnan(value):
-                return None
-        except Exception:
-            pass
-        return value
-
-    @staticmethod
-    def _is_nan_value(value):
-        try:
-            return np.isnan(value)
-        except Exception:
-            return False
+        return None if np.isnan(value) else value
 
     def _get_overlay_display_state(self):
-        overlay_type = self.overlay_order[self.overlay_index]
-        overlay_map = None
-        overlay_time_key = None
-        overlay_basetime = None
-        overlay_validtime = None
-        overlay_subdomain = None
-        map_settings = None
-
-        _, overlay_map = self._get_overlay_map_config_and_name(overlay_type)
-        if overlay_type in ("RAIN", "WIND"):
-            map_config, _ = self._get_overlay_map_config_and_name(overlay_type)
-            if map_config:
-                map_settings = map_config.get(overlay_map)
-            if map_settings:
-                overlay_time_key = self._get_overlay_refresh_time_key(
-                    overlay_type, map_settings
-                )
-
-        if map_settings:
-            overlay_basetime = map_settings.get("basetime")
-            overlay_validtime = map_settings.get("validtime")
-            overlay_subdomain = map_settings.get("subdomain")
-            if overlay_type in ("RAIN", "WIND"):
-                self._cache_overlay_refresh_time_key(
-                    overlay_type, overlay_map, overlay_time_key
-                )
-
+        overlays = self.config.map.overlays
+        maps, name = overlays.source()
+        settings = maps[name] if overlays.has_times else {}
         return (
-            overlay_map,
-            overlay_time_key,
-            overlay_basetime,
-            overlay_validtime,
-            overlay_subdomain,
+            name,
+            MapOverlays.refresh_time(overlays.kind, settings) if settings else None,
+            settings.get("basetime"),
+            settings.get("validtime"),
+            settings.get("subdomain"),
         )
 
     def _get_active_map_names(self):
         """Return list of currently active map names (base + overlays)."""
-        names = [self.config.G_MAP]
-        overlay_type = self.overlay_order[self.overlay_index]
-        _, overlay_map = self._get_overlay_map_config_and_name(overlay_type)
-        if overlay_map:
-            names.append(overlay_map)
-        return names
+        _, name = self.config.map.overlays.source()
+        return [self.config.G_MAP] + ([name] if name is not None else [])
 
     def _cleanup_cached_tiles(self):
         """Remove cache entries for inactive maps."""
@@ -335,25 +128,12 @@ class MapStateMixin:
                 del self._cached_tiles[key]
         self._cleanup_tile_runtime_cache(active)
 
-    def _get_map_config_for_name(self, map_name):
-        """Return the map config dict for a given map_name."""
-        map_configs = {self.config.G_MAP: self.config.G_MAP_CONFIG}
-        for overlay_type in self._OVERLAY_ATTRS:
-            map_config, overlay_map = self._get_overlay_map_config_and_name(
-                overlay_type
-            )
-            if overlay_map:
-                map_configs[overlay_map] = map_config
-        return map_configs.get(map_name)
-
     def _get_zoom_for_map(self, map_name, map_config):
-        """Return the zoom level to use for a given map."""
-        if map_name == self.config.G_MAP:
-            return self.zoomlevel
-        # For overlay maps, adjust zoom based on tile size difference
-        base_tile_size = self.config.G_MAP_CONFIG[self.config.G_MAP]["tile_size"]
-        overlay_tile_size = map_config[map_name]["tile_size"]
-        return self.zoomlevel + int(base_tile_size / overlay_tile_size) - 1
+        return tile_zoom(
+            self.zoomlevel,
+            self.config.G_MAP_CONFIG[self.config.G_MAP]["tile_size"],
+            map_config[map_name]["tile_size"],
+        )
 
     def _has_pending_downloads(self):
         """Check if any tiles in current view are downloading for active maps."""
@@ -371,9 +151,11 @@ class MapStateMixin:
 
     def _has_pending_downloads_for_map(self, map_name, p0, p1):
         """Check and cache tiles for a specific map."""
-        map_config = self._get_map_config_for_name(map_name)
-        if map_config is None or map_name not in map_config:
-            return False
+        map_config = (
+            self.config.G_MAP_CONFIG
+            if map_name == self.config.G_MAP
+            else self.config.map.overlays.source()[0]
+        )
 
         map_settings = map_config[map_name]
         z = self._get_zoom_for_map(map_name, map_config)
@@ -384,13 +166,7 @@ class MapStateMixin:
         z_draw = draw_params[0]
         tiles = self._get_tiles_for_view(map_name, z, draw_params)
 
-        # Check for pending downloads
-        existing_tiles = self.maptile_with_values.existing_tiles
-        for tile in tiles:
-            filename = get_maptile_filename(map_name, z_draw, *tile, map_settings)
-            if existing_tiles.get(filename) is False:
-                return True
-        return False
+        return self.config.map.tiles.has_pending(map_settings, map_name, z_draw, tiles)
 
     def _build_display_key(self):
         gps_values = self.gps_values
@@ -421,11 +197,15 @@ class MapStateMixin:
             overlay_basetime,
             overlay_validtime,
             overlay_subdomain,
-            self.tile_modify_mode,
             self.plot.width(),
             self.plot.height(),
             self.course.index.value,
             self.course.index.on_course_status,
+            (
+                gps_values.get("timestamp")
+                if self.course_focus.active and not self.course.index.on_course_status
+                else None
+            ),
             self.course.weather_revision,
             self.course_points.is_set,
         )
@@ -441,12 +221,11 @@ class MapStateMixin:
             reasons.append("move_x")
         if self.move_pos["y"] != 0:
             reasons.append("move_y")
-        if self.track_timestamp is None:
-            reasons.append("track_init")
-        if not self.logger.short_log_available:
-            reasons.append("short_log_unavailable")
-        if len(self.logger.short_log_lat):
-            reasons.append("short_log_pending")
+        reasons.extend(
+            self.track.redraw_reasons(
+                self.logger, self._track_history, self._track_tail
+            )
+        )
         if self.pre_zoomlevel.get(self.config.G_MAP) != self.zoomlevel:
             reasons.append("zoom_changed")
         if not main_drawn:
@@ -465,30 +244,7 @@ class MapStateMixin:
         self.center_point_location.clear()
 
     def _update_point_state(self):
-        self.point["pos"] = [self.gps_values["lon"], self.gps_values["lat"]]
-        if np.isnan(self.gps_values["lon"]) or np.isnan(self.gps_values["lat"]):
-            if (
-                self.track_last_lon_pos is not None
-                and self.track_last_lat_pos is not None
-            ):
-                self.point["pos"] = [self.track_last_lon_pos, self.track_last_lat_pos]
-            elif len(self.track_tail_lon) and len(self.track_tail_lat):
-                self.point["pos"] = [self.track_tail_lon[-1], self.track_tail_lat[-1]]
-            elif len(self.track_history_lon) and len(self.track_history_lat):
-                self.point["pos"] = [
-                    self.track_history_lon[-1],
-                    self.track_history_lat[-1],
-                ]
-            elif self.course.is_set:
-                self.point["pos"] = [
-                    self.course.longitude[0],
-                    self.course.latitude[0],
-                ]
-            else:
-                self.point["pos"] = [
-                    self.config.G_DUMMY_POS_X,
-                    self.config.G_DUMMY_POS_Y,
-                ]
+        self.point["pos"] = list(map_position(self.config, self.gps_values))
 
         self.y_mod = calc_y_mod(self.point["pos"][1])
         if self.gps_values["mode"] == 3:
@@ -505,67 +261,28 @@ class MapStateMixin:
             self.map_pos["x"],
             self.map_pos["y"],
         )
-        x_move = y_move = 0
-        course_focus_requested = (
-            self.lock_status
-            and len(self.course.distance)
-            and self.course.index.on_course_status
-        )
-        course_focus_active = self._update_course_focus_active(course_focus_requested)
-        if (
-            self.lock_status
-            and len(self.course.distance)
-            and course_focus_active
-        ):
-            start_index = self.course.index.value
-            index = self.course.get_index_with_distance_cutoff(
-                start_index,
-                get_width_distance(self.map_pos["y"], self.map_area["w"]) / 1000,
-            )
-            target = self._get_course_focus_target(start_index, index)
-            if target is None:
-                x2 = self.course.longitude[index]
-                y2 = self.course.latitude[index]
-            else:
-                x2, y2 = target
-            x_delta = x2 - self.map_pos["x"]
-            y_delta = y2 - self.map_pos["y"]
-            x_move = self.course_focus_offset_ratio * self.map_area["w"]
-            y_move = self.course_focus_offset_ratio * self.map_area["h"]
-            self._course_focus_x_direction = self._resolve_course_focus_axis_direction(
-                x_delta,
+        if self.lock_status:
+            self.map_pos["x"], self.map_pos["y"] = self.course_focus.center(
+                self.course,
+                self.map_pos["x"],
+                self.map_pos["y"],
                 self.map_area["w"],
-                self._course_focus_x_direction,
-            )
-            self._course_focus_y_direction = self._resolve_course_focus_axis_direction(
-                y_delta,
                 self.map_area["h"],
-                self._course_focus_y_direction,
+                True,
+                self.gps_values.get("timestamp"),
             )
-            if self._course_focus_x_direction > 0:
-                self.map_pos["x"] += x_move
-            elif self._course_focus_x_direction < 0:
-                self.map_pos["x"] -= x_move
-            if self._course_focus_y_direction > 0:
-                self.map_pos["y"] += y_move
-            elif self._course_focus_y_direction < 0:
-                self.map_pos["y"] -= y_move
         else:
-            self._course_focus_x_direction = 0
-            self._course_focus_y_direction = 0
-            if not self.lock_status:
-                self._course_focus_active = False
-                self._course_focus_off_frames = 0
-                if self.move_pos["x"] > 0:
-                    x_move = self.map_area["w"] / 2
-                elif self.move_pos["x"] < 0:
-                    x_move = -self.map_area["w"] / 2
-                if self.move_pos["y"] > 0:
-                    y_move = self.map_area["h"] / 2
-                elif self.move_pos["y"] < 0:
-                    y_move = -self.map_area["h"] / 2
-                self.map_pos["x"] += x_move / self.move_factor
-                self.map_pos["y"] += y_move / self.move_factor
+            self.course_focus.reset()
+            self.map_pos["x"] += (
+                np.sign(self.move_pos["x"])
+                * self.map_area["w"]
+                / (2 * self.move_factor)
+            )
+            self.map_pos["y"] += (
+                np.sign(self.move_pos["y"])
+                * self.map_area["h"]
+                / (2 * self.move_factor)
+            )
         self.move_pos["x"] = self.move_pos["y"] = 0
 
         self.map_area["w"], self.map_area["h"] = self.get_geo_area(
@@ -578,11 +295,9 @@ class MapStateMixin:
         self.location.append(self.point)
 
         heading_value = self._get_map_heading_value()
-        if not self._is_nan_value(heading_value):
+        if np.isfinite(heading_value):
             self.current_point.setSymbol(
-                self.direction_arrows[
-                    self.get_arrow_angle_index(heading_value)
-                ]
+                self.direction_arrows[self.get_arrow_angle_index(heading_value)]
             )
         self.current_point.setData(self.location)
 
@@ -604,48 +319,30 @@ class MapStateMixin:
 
     def _apply_view_ranges(self, x_start, x_end, y_start, y_end):
         view_width, view_height = self._get_viewport_px_size()
-        force_apply = getattr(self, "_last_display_key", None) is None
-
-        x_applied = False
-        y_applied = False
+        force_apply = self._last_display_key is None
 
         if not np.isnan(x_start) and not np.isnan(x_end):
-            x_state = (x_start, x_end, view_width)
             if force_apply or self._should_apply_axis_range(
                 x_start, x_end, view_width, self._last_applied_x_range
             ):
                 self.plot.setXRange(x_start, x_end, padding=0)
-                self._last_applied_x_range = x_state
+                self._last_applied_x_range = (x_start, x_end, view_width)
                 self._last_applied_x_bounds = (x_start, x_end)
-                x_applied = True
 
         if not np.isnan(y_start) and not np.isnan(y_end):
             y_start_mod = get_mod_lat(y_start)
             y_end_mod = get_mod_lat(y_end)
-            y_state = (y_start_mod, y_end_mod, view_height)
             if force_apply or self._should_apply_axis_range(
                 y_start_mod, y_end_mod, view_height, self._last_applied_y_range
             ):
                 self.plot.setYRange(y_start_mod, y_end_mod, padding=0)
-                self._last_applied_y_range = y_state
+                self._last_applied_y_range = (y_start_mod, y_end_mod, view_height)
                 self._last_applied_y_bounds = (y_start, y_end)
-                y_applied = True
-
-        if x_applied:
-            applied_x_start, applied_x_end = x_start, x_end
-        elif self._last_applied_x_bounds is not None:
-            applied_x_start, applied_x_end = self._last_applied_x_bounds
-        else:
-            applied_x_start, applied_x_end = x_start, x_end
-
-        if y_applied:
-            applied_y_start, applied_y_end = y_start, y_end
-        elif self._last_applied_y_bounds is not None:
-            applied_y_start, applied_y_end = self._last_applied_y_bounds
-        else:
-            applied_y_start, applied_y_end = y_start, y_end
 
         # Return the effective bounds currently shown on screen.
         # When range updates are skipped by px-threshold, downstream drawing should
         # reuse the last applied bounds to keep tile/HUD coordinates consistent.
-        return applied_x_start, applied_x_end, applied_y_start, applied_y_end
+        return (
+            *(self._last_applied_x_bounds or (x_start, x_end)),
+            *(self._last_applied_y_bounds or (y_start, y_end)),
+        )

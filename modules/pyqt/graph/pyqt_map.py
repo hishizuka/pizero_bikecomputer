@@ -1,11 +1,13 @@
+import asyncio
 from collections import Counter
-from datetime import datetime, timezone
 import time
 
 import numpy as np
 
 from modules.app_logger import app_logger
-from modules._qt_qtwidgets import QtCore, Signal, pg, qasync
+from modules._qt_qtwidgets import QtCore, Signal, qasync, pg
+from modules.map.style import TRACK_COLOR, TRACK_WIDTH
+from modules.map.policy import clamp_zoom
 from modules.utils.geo import get_mod_lat_np
 from .pyqt_base_map import BaseMapWidget
 from .pyqt_map_course import MapCourseMixin
@@ -27,13 +29,30 @@ class MapWidget(
     signal_search_route = Signal()
     _PERF_MAP_WINDOW = 30
 
-    map_attribution = pg.TextItem(
-        anchor=(1, 1),
-        angle=0,
-        border=(255, 255, 255, 255),
-        fill=(255, 255, 255, 255),
-        color=(0, 0, 0),
-    )
+    def __init__(self, parent, config):
+        super().__init__(parent, config)
+        config.map.register(self)
+
+    def refresh_map(self):
+        self._last_display_key = None
+        if self._map_active:
+            self.update_display()
+
+    async def _change_zoom(self, delta):
+        delta = clamp_zoom(self.zoomlevel + delta) - self.zoomlevel
+        if delta:
+            await super()._change_zoom(delta)
+
+    def start(self):
+        self._map_active = True
+        super().start()
+        self.refresh_map()
+
+    def stop(self):
+        self._map_active = False
+        super().stop()
+        if self._update_display_task is not None:
+            self._update_display_task.cancel()
 
     @property
     def maptile_with_values(self):
@@ -50,19 +69,14 @@ class MapWidget(
 
         self.reset_map()
 
-        t = datetime.now(timezone.utc)
-        self.get_track()  # heavy when resume
-        if len(self.track_history_lon) or len(self.track_tail_lon):
-            app_logger.info(
-                f"resume_track(init): {(datetime.now(timezone.utc) - t).total_seconds():.3f} sec"
-            )
+        self.track = self.config.map.track
+        self._track_history = self._track_tail = None
 
         self.layout.addWidget(self.plot, 0, 0, -1, -1)
 
         self._setup_touch_overlay_controls()
         self._setup_course_widgets()
         self._setup_layout_grid()
-        self._setup_tile_dither_palette()
         self._init_perf_map_metrics()
         self._init_update_display_runtime()
 
@@ -94,6 +108,8 @@ class MapWidget(
         self._perf_map_redraw_reason_counts = Counter()
 
     def _init_update_display_runtime(self):
+        self._map_active = False
+        self._update_display_task = None
         self._update_display_running = False
         self._update_display_retrigger = False
         self._tile_batch_followup_scheduled = False
@@ -167,9 +183,7 @@ class MapWidget(
         if self._perf_map_exec > 0:
             draw_avg_ms = self._perf_map_draw_ms_sum / self._perf_map_exec
             track_avg_ms = self._perf_map_track_ms_sum / self._perf_map_exec
-            track_fetch_avg_ms = (
-                self._perf_map_track_fetch_ms_sum / self._perf_map_exec
-            )
+            track_fetch_avg_ms = self._perf_map_track_fetch_ms_sum / self._perf_map_exec
             track_render_avg_ms = (
                 self._perf_map_track_render_ms_sum / self._perf_map_exec
             )
@@ -186,9 +200,7 @@ class MapWidget(
 
         if self._perf_map_exec > 0:
             prepare_avg_ms = self._perf_map_prepare_ms_sum / self._perf_map_exec
-            instruction_avg_ms = (
-                self._perf_map_instruction_ms_sum / self._perf_map_exec
-            )
+            instruction_avg_ms = self._perf_map_instruction_ms_sum / self._perf_map_exec
             hud_avg_ms = self._perf_map_hud_ms_sum / self._perf_map_exec
             load_course_avg_ms = self._perf_map_load_course_ms_sum / self._perf_map_exec
             tile_download_avg_ms = (
@@ -325,7 +337,18 @@ class MapWidget(
     def resizeEvent(self, event):
         self.plot.setFixedSize(self.width(), self.height())
         self._layout_fixed_hud_overlay()
-        self._relayout_fixed_instruction(force=True)
+        self._relayout_fixed_instruction()
+
+    def event(self, event):
+        result = super().event(event)
+        if event.type() == QtCore.QEvent.Type.DevicePixelRatioChange:
+            self.track_pen = pg.mkPen(
+                color=TRACK_COLOR, width=TRACK_WIDTH * self.devicePixelRatioF()
+            )
+            self.track_history_plot.setPen(self.track_pen)
+            self.track_tail_plot.setPen(self.track_pen)
+            self.refresh_map()
+        return result
 
     @qasync.asyncSlot(int, int)
     async def on_drag_ended(self, dx, dy):
@@ -355,11 +378,14 @@ class MapWidget(
 
     @qasync.asyncSlot()
     async def update_display(self):
+        if not self._map_active:
+            return
         if self._update_display_running:
             self._update_display_retrigger = True
             return
 
         self._update_display_running = True
+        self._update_display_task = asyncio.current_task()
         try:
             self._perf_map_calls += 1
             display_key, overlay_map = self._build_display_key()
@@ -401,69 +427,49 @@ class MapWidget(
                 await self.draw_map_tile(x_start, x_end, y_start, y_end)
                 draw_elapsed_ms = (time.perf_counter() - draw_start) * 1000.0
 
+            self.enable_overlay_time_and_button()
+            self.set_attribution()
+            self.update_legend_content()
+
             load_course_elapsed_ms = 0.0
             if not self.course_loaded:
                 load_course_start = time.perf_counter()
                 self.load_course()
                 load_course_elapsed_ms = (
-                    (time.perf_counter() - load_course_start) * 1000.0
-                )
+                    time.perf_counter() - load_course_start
+                ) * 1000.0
                 self.course_loaded = True
             else:
                 self._refresh_course_plot()
             self._update_course_points_visibility(x_start, x_end, y_start, y_end)
 
             instruction_start = time.perf_counter()
-            await self.update_instruction(
-                x_start, x_end, y_start, y_end, auto_zoom=True
-            )
+            self.update_instruction(auto_zoom=True)
             instruction_elapsed_ms = (time.perf_counter() - instruction_start) * 1000.0
 
             # draw track
             track_fetch_start = time.perf_counter()
-            track_updated = self.get_track()
-            track_fetch_elapsed_ms = (
-                (time.perf_counter() - track_fetch_start) * 1000.0
-            )
+            await self.track.update(self.logger)
+            track_fetch_elapsed_ms = (time.perf_counter() - track_fetch_start) * 1000.0
             track_render_start = time.perf_counter()
-            if self.track_history_needs_redraw:
-                history_lon = self.track_history_lon
-                history_lat = (
-                    get_mod_lat_np(np.asarray(self.track_history_lat, dtype=np.float32))
-                    if len(history_lon)
-                    else []
-                )
-                self.track_history_plot.setData(history_lon, history_lat)
-                self.track_history_needs_redraw = False
-            if track_updated or self.track_tail_needs_redraw:
-                tail_lon = self.track_tail_lon
-                if len(tail_lon):
-                    tail_lat_values = self.track_tail_lat
-                    # Visually connect history and tail by reusing the latest history point.
-                    if len(self.track_history_lon) and len(self.track_history_lat):
-                        tail_lon = [self.track_history_lon[-1], *tail_lon]
-                        tail_lat_values = [self.track_history_lat[-1], *tail_lat_values]
-                    tail_lat = get_mod_lat_np(
-                        np.asarray(tail_lat_values, dtype=np.float32)
-                    )
-                else:
-                    tail_lat = []
-                self.track_tail_plot.setData(tail_lon, tail_lat)
-                self.track_tail_needs_redraw = False
+            track = self.track.snapshot
+            for segment, previous, plot in (
+                (track.history, self._track_history, self.track_history_plot),
+                (track.tail, self._track_tail, self.track_tail_plot),
+            ):
+                if segment is not previous:
+                    plot.setData(segment.longitude, get_mod_lat_np(segment.latitude))
+            self._track_history, self._track_tail = track.history, track.tail
             track_render_elapsed_ms = (
-                (time.perf_counter() - track_render_start) * 1000.0
-            )
+                time.perf_counter() - track_render_start
+            ) * 1000.0
             track_elapsed_ms = track_fetch_elapsed_ms + track_render_elapsed_ms
 
             hud_elapsed_ms = 0.0
             if not np.any(np.isnan([x_start, y_start])):
                 hud_start = time.perf_counter()
-                # draw scale
-                scale_geom = self.draw_scale(x_start, y_start)
-                # draw legend
-                self.draw_legend(x_start, y_start, scale_geom)
-                # draw map attribution
-                self.draw_map_attribution(x_start, y_start)
+                self.draw_scale(y_start)
+                self.draw_legend()
                 hud_elapsed_ms = (time.perf_counter() - hud_start) * 1000.0
 
             self._last_display_key = display_key
@@ -481,11 +487,12 @@ class MapWidget(
             self._perf_map_load_course_ms_sum += load_course_elapsed_ms
             self._maybe_log_perf_map_window()
         finally:
+            self._update_display_task = None
             self._update_display_running = False
-            if self._update_display_retrigger:
+            if self._map_active and self._update_display_retrigger:
                 self._update_display_retrigger = False
                 QtCore.QTimer.singleShot(0, self.update_display)
-            elif self._has_tile_batch_pending():
+            elif self._map_active and self._has_tile_batch_pending():
                 self._schedule_tile_batch_followup()
 
     def get_arrow_angle_index(self, angle):

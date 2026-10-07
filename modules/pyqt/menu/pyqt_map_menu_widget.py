@@ -16,7 +16,7 @@ class MapMenuWidget(MenuWidget):
 
     def map_overlay(self):
         self.change_page("Map Overlay")
-    
+
     def external_data_sources(self):
         self.change_page("External Data Sources")
 
@@ -34,7 +34,7 @@ class MapListWidget(ListWidget):
         self.config.G_MAP = self.selected_item.title
         # reset map
         self.config.check_map_dir()
-        self.config.gui.map_widget.reset_map()
+        self.config.gui.reset_map()
 
 
 class MapOverlayMenuWidget(MenuWidget):
@@ -75,20 +75,18 @@ class MapOverlayMenuWidget(MenuWidget):
                 self.config.G_USE_WIND_OVERLAY_MAP = not status
             status = not status
             if self.config.uses_pointer_navigation:
-                self.config.gui.map_widget.enable_overlay_button()
+                self.config.map.notify("enable_overlay_button")
 
         self.buttons[overlay_type].change_toggle(status)
 
         # toggle list
         self.buttons[list_key].onoff_button(status)
 
-        if (
-            not self.config.G_USE_HEATMAP_OVERLAY_MAP
-            and not self.config.G_USE_RAIN_OVERLAY_MAP
-            and not self.config.G_USE_WIND_OVERLAY_MAP
-            and self.config.gui.map_widget is not None
+        overlays = self.config.map.overlays
+        if not overlays.enabled(overlays.kind) or not any(
+            overlays.enabled(kind) for kind in overlays.enabled_attributes
         ):
-            self.config.gui.map_widget.remove_overlay()
+            self.config.map.notify("remove_overlay")
 
     def select_heatmap(self):
         self.change_page("Heatmap List", preprocess=True)
@@ -113,7 +111,7 @@ class HeatmapListWidget(ListWidget):
         self.config.G_HEATMAP_OVERLAY_MAP = self.selected_item.title
         # reset map
         self.config.check_map_dir()
-        self.config.gui.map_widget.reset_map()
+        self.config.gui.reset_map()
 
 
 class RainmapListWidget(ListWidget):
@@ -129,7 +127,7 @@ class RainmapListWidget(ListWidget):
         self.config.G_RAIN_OVERLAY_MAP = self.selected_item.title
         # reset map
         self.config.check_map_dir()
-        self.config.gui.map_widget.reset_map()
+        self.config.gui.reset_map()
 
 
 class WindmapListWidget(ListWidget):
@@ -145,7 +143,7 @@ class WindmapListWidget(ListWidget):
         self.config.G_WIND_OVERLAY_MAP = self.selected_item.title
         # reset map
         self.config.check_map_dir()
-        self.config.gui.map_widget.reset_map()
+        self.config.gui.reset_map()
 
 
 class ExternalDataSourceMenuWidget(MenuWidget):
@@ -176,21 +174,19 @@ class ExternalDataSourceMenuWidget(MenuWidget):
 
     def select_wind_source(self):
         self.change_page("Wind Source", preprocess=True)
-        
+
     def select_dem_tile(self):
         self.change_page("DEM Tile source", preprocess=True)
-        
+
 
 class WindSourceListWidget(ListWidget):
     def __init__(self, parent, page_name, config):
         # keys are used for item label
-        self.settings = {
-            "openmeteo": None
-        }
+        self.settings = {"openmeteo": None}
         for k in config.G_WIND_OVERLAY_MAP_CONFIG:
             if k.startswith("jpn_scw"):
                 self.settings[k] = config.G_WIND_OVERLAY_MAP_CONFIG[k]
-            
+
         super().__init__(parent=parent, page_name=page_name, config=config)
 
     def get_default_value(self):
