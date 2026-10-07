@@ -54,11 +54,8 @@ class TileRepository:
 
     @staticmethod
     async def _read_file(key):
-        import aiofiles
-
         try:
-            async with aiofiles.open(key[0], "rb") as stream:
-                return await stream.read()
+            return await asyncio.to_thread(Path(key[0]).read_bytes)
         except FileNotFoundError:
             return None
 
