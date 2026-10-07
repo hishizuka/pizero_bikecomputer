@@ -190,6 +190,7 @@ class StatusBarWidget(QtWidgets.QWidget):
             label.setFont(font)
 
     def update_status(self):
+        previous = self._display_state()
         self._update_rain()
         self._update_rec()
         self._update_gps()
@@ -197,7 +198,27 @@ class StatusBarWidget(QtWidgets.QWidget):
         self._update_light()
         self._update_temperature()
         self._update_time()
-        self.changed.emit()
+        if self._display_state() != previous:
+            self.changed.emit()
+
+    def _display_state(self):
+        state = [self.rec_indicator._state]
+        for label in (
+            self.rain_label,
+            self.bt_label,
+            self.light_label,
+            self.gps_label,
+            self.temperature_label,
+            self.time_label,
+        ):
+            if label.isHidden():
+                state.append(None)
+                continue
+            pixmap = label.pixmap()
+            state.append(
+                (label.text(), pixmap.cacheKey() if pixmap is not None else None)
+            )
+        return tuple(state)
 
     def _update_rain(self):
         alert = self.config.rain_alert
