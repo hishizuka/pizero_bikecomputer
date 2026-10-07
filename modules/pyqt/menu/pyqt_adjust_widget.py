@@ -3,9 +3,13 @@ from modules.qt._qt_qtwidgets import (
     QT_ALIGN_CENTER,
     QT_ALIGN_RIGHT,
     QT_NO_FOCUS,
+    QT_STRONG_FOCUS,
+    QtCore,
     QtWidgets,
     qasync,
 )
+from modules.pyqt.components.icons import ClearIcon, ConfirmIcon
+
 from .pyqt_menu_widget import MenuWidget
 
 ##################################
@@ -16,8 +20,9 @@ from .pyqt_menu_widget import MenuWidget
 class UnitLabel(QtWidgets.QLabel):
     STYLES = """
       QLabel {
-        font-size: 25px;
-        padding: 5px;
+        color: black;
+        background-color: transparent;
+        padding: 0;
       }
     """
 
@@ -30,34 +35,61 @@ class UnitLabel(QtWidgets.QLabel):
 class AdjustButton(QtWidgets.QPushButton):
     STYLES = """
       QPushButton{
-        font-size: 15px;
-        padding: 2px;
-        margin: 1px;
-        border: 1px solid #AAAAAA;
-        border-radius: 5%;
+        color: black;
+        background-color: white;
+        font-weight: bold;
+        padding: 0;
+        border: 1px solid black;
+        border-radius: 4px;
+        outline: 0;
       }
 
-      QPushButton:pressed{
-        background-color: black;
+      QPushButton[confirm="true"] {
+        background-color: #00AA00;
+        border-color: #00AA00;
       }
 
-      QPushButton:focus {
+      QPushButton:pressed, QPushButton:focus {
         background-color: black;
+        border-color: black;
         color: white;
       }
     """
 
-    def __init__(self, *__args):
-        super().__init__(*__args)
-        self.setFixedSize(50, 30)
+    def __init__(self, text="", icon=None, confirm=False):
+        super().__init__(text)
+        self.icon_class = icon
+        self.confirm = confirm
+        self.setProperty("confirm", confirm)
         self.setStyleSheet(self.STYLES)
+        if icon is not None:
+            self.normal_icon = icon(color="black")
+            self.active_icon = icon(color="white")
+            self.pressed.connect(self.update_icon)
+            self.released.connect(self.update_icon)
+            self.update_icon()
+
+    def update_icon(self):
+        if self.icon_class is not None:
+            active = self.confirm or self.isDown() or self.hasFocus()
+            self.setIcon(self.active_icon if active else self.normal_icon)
+
+    def focusInEvent(self, event):
+        super().focusInEvent(event)
+        self.update_icon()
+
+    def focusOutEvent(self, event):
+        super().focusOutEvent(event)
+        self.update_icon()
 
 
 class AdjustEdit(QtWidgets.QLineEdit):
     STYLES = """
       QLineEdit {
-        font-size: 35px;
-        padding: 5px;
+        color: black;
+        background-color: transparent;
+        font-weight: bold;
+        padding: 0;
         border: none;
       }
     """
@@ -75,47 +107,115 @@ class AdjustWidget(MenuWidget):
     unit = ""
 
     def setup_menu(self):
-        self.make_menu_layout(QtWidgets.QGridLayout)
-
-        max_width = 5 if self.config.gui.horizontal else 2
-
+        self.make_menu_layout(QtWidgets.QVBoxLayout)
+        self.menu.setStyleSheet("background-color: white;")
+        self.value = QtWidgets.QWidget()
+        self.value_layout = QtWidgets.QHBoxLayout(self.value)
+        self.value_layout.setContentsMargins(0, 0, 0, 0)
         self.display = AdjustEdit("")
-        self.menu_layout.addWidget(self.display, 0, 0, 1, max_width)
+        self.display.setAccessibleName("Value")
+        self.unit_label = UnitLabel(self.unit)
+        self.unit_label.setVisible(bool(self.unit))
+        self.value_layout.addWidget(self.display)
+        self.value_layout.addWidget(self.unit_label)
+        self.display.textChanged.connect(self.update_value_width)
+        self.menu_layout.addWidget(self.value, alignment=QT_ALIGN_CENTER)
+        self.menu_layout.addStretch(1)
 
-        unit_label = UnitLabel(self.unit)
-        self.menu_layout.addWidget(unit_label, 0, max_width)
-
-        num_buttons = {}
-        cols = 5 if self.config.gui.horizontal else 3
-        grid_position = []
+        self.keypad = QtWidgets.QWidget()
+        self.keypad_layout = QtWidgets.QGridLayout(self.keypad)
+        self.keypad_layout.setContentsMargins(0, 0, 0, 0)
+        self.num_buttons = {}
         for i in range(1, 10):
-            grid_position.append((1 + (i - 1) // cols, (i - 1) % cols))
-        if self.config.gui.horizontal:
-            grid_position.append((2, 4)) # 0
-            grid_position.append((1, 5)) # clear button
-            grid_position.append((2, 5)) # set button
-        else:
-            grid_position.append((4, 1)) # 0
-            grid_position.append((4, 0)) # clear button
-            grid_position.append((4, 2)) # set button
+            button = AdjustButton(str(i))
+            button.clicked.connect(self.digit_clicked)
+            self.num_buttons[i] = button
+            self.keypad_layout.addWidget(button, (i - 1) // 3, (i - 1) % 3)
 
-        for i in [1, 2, 3, 4, 5, 6, 7, 8, 9, 0]:
-            num_buttons[i] = AdjustButton(str(i))
-            num_buttons[i].clicked.connect(self.digit_clicked)
-            self.menu_layout.addWidget(num_buttons[i], *grid_position.pop(0))
+        self.clear_button = AdjustButton(icon=ClearIcon)
+        self.clear_button.setAccessibleName("Clear value")
+        self.clear_button.clicked.connect(self.clear)
+        self.keypad_layout.addWidget(self.clear_button, 3, 0)
 
-        clear_button = AdjustButton("x")
-        clear_button.clicked.connect(self.clear)
-        self.menu_layout.addWidget(clear_button, *grid_position[0])
+        self.num_buttons[0] = AdjustButton("0")
+        self.num_buttons[0].clicked.connect(self.digit_clicked)
+        self.keypad_layout.addWidget(self.num_buttons[0], 3, 1)
 
-        set_button = AdjustButton("Set")
-        set_button.clicked.connect(self.set_value)
-        self.menu_layout.addWidget(set_button, *grid_position[1])
+        self.set_button = AdjustButton(icon=ConfirmIcon, confirm=True)
+        self.set_button.setAccessibleName("Set value")
+        self.set_button.clicked.connect(self.set_value)
+        self.keypad_layout.addWidget(self.set_button, 3, 2)
+        self.menu_layout.addWidget(self.keypad, alignment=QT_ALIGN_CENTER)
+        self.menu_layout.addStretch(1)
+
+        for button in self.keypad.findChildren(AdjustButton):
+            button.setFocusPolicy(
+                QT_STRONG_FOCUS if self.config.uses_keyboard_navigation else QT_NO_FOCUS
+            )
 
         if self.config.uses_keyboard_navigation:
-            self.focus_widget = num_buttons[1]
+            self.focus_widget = self.num_buttons[1]
 
         self.init_extra()
+        self.resize(self.parent().size())
+        # Size the header before the stack derives its minimum height.
+        rows = 9 if self.height() > self.width() else 5
+        self.top_bar.setFixedHeight(self.height() // rows)
+        self.update_layout()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.update_layout()
+
+    def update_layout(self):
+        width, height = self.width(), self.height()
+        portrait = height > width
+        content_height = height - self.top_bar.height()
+        button_height = max(16, int(min(width * 0.24 / 1.65, content_height * 0.15)))
+        button_width = int(button_height * 1.65)
+        column_gap = max(4, button_height // 2)
+        row_gap = max(3, int(button_height * 0.15))
+        self.keypad_layout.setHorizontalSpacing(column_gap)
+        self.keypad_layout.setVerticalSpacing(row_gap)
+        self.keypad.setFixedSize(
+            3 * button_width + 2 * column_gap, 4 * button_height + 3 * row_gap
+        )
+        for button in self.keypad.findChildren(AdjustButton):
+            button.setFixedSize(button_width, button_height)
+            font = button.font()
+            font.setPixelSize(max(12, int(button_height * 0.68)))
+            button.setFont(font)
+            icon_size = max(12, int(button_height * 0.7))
+            button.setIconSize(QtCore.QSize(icon_size, icon_size))
+
+        font = self.display.font()
+        font.setPixelSize(max(18, int(min(width * 0.19, content_height * 0.19))))
+        self.display.setFont(font)
+        self.display.setFixedHeight(self.display.fontMetrics().height() + 2)
+        font = self.unit_label.font()
+        font.setPixelSize(max(12, self.display.font().pixelSize() // 2))
+        self.unit_label.setFont(font)
+        self.value.setFixedHeight(self.display.height())
+        self.value_layout.setSpacing(max(4, button_height // 5))
+        self.update_value_width()
+        # Include the line edit's descent when balancing the visible whitespace.
+        self.menu_layout.setContentsMargins(
+            0,
+            int(content_height * 0.15) if portrait else 0,
+            0,
+            self.display.fontMetrics().descent(),
+        )
+
+    def update_value_width(self):
+        self.display.setFixedWidth(
+            self.display.fontMetrics().horizontalAdvance(self.display.text() or "0") + 6
+        )
+        unit_width = (
+            self.unit_label.sizeHint().width() + self.value_layout.spacing()
+            if self.unit
+            else 0
+        )
+        self.value.setFixedWidth(self.display.width() + unit_width)
 
     def init_extra(self):
         pass

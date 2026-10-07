@@ -42,6 +42,14 @@ class ForwardLineIcon(_QIconWithPath):
     path = "img/forward_line.svg"
 
 
+class ClearIcon(_QIconWithPath):
+    path = "img/button_clear.svg"
+
+
+class ConfirmIcon(_QIconWithPath):
+    path = "img/button_check.svg"
+
+
 class LapIcon(_QIconWithPath):
     path = "img/lap_white.png"
 
