@@ -9,8 +9,10 @@ or build `libsharp_presenter.so` from the driver repository. Use the normal
 `QT_QPA_PLATFORM=linuxfb:fb=/dev/fb0` startup. The installer does not switch
 the service to QML.
 
-Add `GPU_MAP: {STATUS: true}` to `layout.yaml`, or launch with
-`--layout layouts/layout-gpu-map.yaml`. In `setting.conf`, the default
+The cycling and paragliding layouts include `GPU_MAP: {STATUS: false}`. Set its
+`STATUS` to `true` in the layout you use (`layout.yaml` by default) to enable the page.
+While disabled, the PyQt GUI does not import the GPU map widget.
+In `setting.conf`, the default
 `[DISPLAY_PARAM]` option `use_pyqt_gpu_map_presenter = True` enables direct
 presentation when Raspberry Pi, sharp-drm, the VC4 render node, and the
 presenter library are available. Set it to `False` to force the QImage path.
