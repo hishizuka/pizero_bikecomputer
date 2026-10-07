@@ -166,7 +166,7 @@ class GpuMapWidget(QtWidgets.QWidget):
                         self,
                     )
                     self.presenter.buffer_available.connect(lambda: self._render(True))
-                    app_logger.info(
+                    app_logger.debug(
                         "PyQt GPU map Sharp presenter enabled: %dx%d",
                         self.presenter.width,
                         self.presenter.height,
