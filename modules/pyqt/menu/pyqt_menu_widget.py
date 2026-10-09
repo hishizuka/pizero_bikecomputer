@@ -1,3 +1,5 @@
+import asyncio
+
 from modules.qt._qt_qtwidgets import (
     QT_ALIGN_LEFT,
     QT_KEY_SPACE,
@@ -846,6 +848,7 @@ class ConnectivityMenuWidget(MenuWidget):
             ("Live Track", "submenu", self.live_track_menu),
             ("Gadgetbridge", "toggle", self.onoff_ble_uart_service),
             ("Get Location", "toggle", self.onoff_gadgetbridge_gps),
+            ("BLE Tunnel", "submenu", self.pilink_menu),
         )
         self.add_buttons(button_conf)
 
@@ -863,6 +866,9 @@ class ConnectivityMenuWidget(MenuWidget):
 
         # initialize toggle button status
         self.bt_auto_tethering(change=False)
+        self.pilink = self.config.network.bluetooth.pilink
+        self.pilink.subscribe(self.update_pilink_button)
+        self.update_pilink_button()
 
     def preprocess(self):
         if self.config.ble_uart:
@@ -871,6 +877,16 @@ class ConnectivityMenuWidget(MenuWidget):
             self.buttons["Get Location"].change_toggle(self.config.ble_uart.gps_status)
             self.buttons["Get Location"].onoff_button(status)
         self.update_livetrack_button()
+
+        self.update_pilink_button()
+        asyncio.create_task(self.pilink.refresh())
+
+    def update_pilink_button(self):
+        self.buttons["BLE Tunnel"].onoff_button(self.pilink.available)
+
+    def pilink_menu(self):
+        if self.pilink.available:
+            self.change_page("BLE Tunnel", preprocess=True)
 
     def update_livetrack_button(self):
         thingsboard = self.config.G_THINGSBOARD_API
@@ -918,3 +934,58 @@ class ConnectivityMenuWidget(MenuWidget):
         status = self.config.ble_uart.on_off_gadgetbridge_gps()
         self.config.G_GADGETBRIDGE["USE_GPS"] = status
         self.buttons["Get Location"].change_toggle(status)
+
+
+class PiLinkMenuWidget(MenuWidget):
+    def setup_menu(self):
+        self.pilink = self.config.network.bluetooth.pilink
+        self.add_buttons(
+            (
+                ("Enabled", "toggle", self.toggle_enabled),
+                ("Prefer Secondary BLE", "toggle", self.toggle_secondary),
+                ("Retry", "background_task", self.retry),
+            )
+        )
+        # Keep the standard empty rows and replace only the fourth row.
+        empty_row = self.menu_layout.itemAt(3).widget()
+        self.information = QtWidgets.QLabel()
+        self.information.setSizePolicy(empty_row.sizePolicy())
+        self.information.setWordWrap(True)
+        self.information.setStyleSheet("font-size: 12px; padding: 1px 4px;")
+        self.menu_layout.replaceWidget(empty_row, self.information)
+        empty_row.deleteLater()
+        self.pilink.subscribe(self.update_status)
+        self.update_status()
+
+    def preprocess(self):
+        self.update_status()
+        asyncio.create_task(self.pilink.refresh())
+
+    def update_status(self):
+        valid = self.config.setting.pilink_error is None
+        for name in ("Enabled", "Prefer Secondary BLE", "Retry"):
+            self.buttons[name].onoff_button(self.pilink.can_control)
+        self.buttons["Enabled"].change_toggle(self.config.G_PILINK["ENABLED"])
+        self.buttons["Enabled"].setText("Enabled" if valid else "Enabled (invalid)")
+        self.buttons["Prefer Secondary BLE"].change_toggle(
+            self.config.G_PILINK["USE_SECONDARY"]
+        )
+        self.information.setText(
+            f"Status: {self.pilink.status_label}\nAdapter: {self.pilink.adapter_label}\n"
+            "OFF / adapter changes close BLE SSH."
+        )
+
+    @qasync.asyncSlot()
+    async def toggle_enabled(self):
+        await self.pilink.set_setting("ENABLED", not self.config.G_PILINK["ENABLED"])
+
+    @qasync.asyncSlot()
+    async def toggle_secondary(self):
+        await self.pilink.set_setting(
+            "USE_SECONDARY", not self.config.G_PILINK["USE_SECONDARY"]
+        )
+
+    @qasync.asyncSlot()
+    async def retry(self):
+        if self.pilink.can_control:
+            await self.buttons["Retry"].run(self.pilink.apply)

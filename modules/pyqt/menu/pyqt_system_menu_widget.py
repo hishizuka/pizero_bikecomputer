@@ -206,11 +206,16 @@ class NetworkMenuWidget(MenuWidget):
             self.onoff_auto_wifi_off(change=False)
             self.onoff_wifi_bt(change=False, key="Bluetooth")
 
-    def onoff_wifi_bt(self, change=True, key=None):
+    @qasync.asyncSlot()
+    async def onoff_wifi_bt(self, change=True, key=None):
         if change:
-            self.config.network.onoff_wifi_bt(key)
+            self.buttons[key].onoff_button(False)
+            try:
+                await self.config.network.onoff_wifi_bt(key)
+            finally:
+                self.buttons[key].onoff_button(True)
         status = {}
-        status["Wifi"], status["Bluetooth"] = get_wifi_bt_status()
+        status["Wifi"], status["Bluetooth"] = await asyncio.to_thread(get_wifi_bt_status)
         self.buttons[key].change_toggle(status[key])
 
     def onoff_auto_wifi_off(self, change=True):
