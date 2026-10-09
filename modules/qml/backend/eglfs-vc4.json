@@ -1,0 +1,13 @@
+{
+  "device": "/dev/dri/by-path/platform-soc:gpu-card",
+  "headless": false,
+  "hwcursor": false,
+  "pbuffers": true,
+  "outputs": [
+    {
+      "name": "HDMI1",
+      "mode": "640x480",
+      "primary": true
+    }
+  ]
+}

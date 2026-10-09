@@ -14,6 +14,8 @@ _DRM_BACKLIGHT_BRIGHTNESS_PATH = os.path.join(_DRM_BACKLIGHT_PATH, "brightness")
 _DRM_BACKLIGHT_MAX_BRIGHTNESS_PATH = os.path.join(_DRM_BACKLIGHT_PATH, "max_brightness")
 _DRM_BACKLIGHT_POWER_PATH = os.path.join(_DRM_BACKLIGHT_PATH, "bl_power")
 _QT_QPA_PLATFORM_ENV = "QT_QPA_PLATFORM"
+_QML_FB_DEVICE_ENV = "PIZERO_QML_FB_DEVICE"
+_FB_SYSFS_ROOT = "/sys/class/graphics"
 
 
 def _read_sysfs_value(path):
@@ -95,15 +97,28 @@ def _get_fb_sysfs_path(suffix):
 
 def _get_linuxfb_device():
     value = os.environ.get(_QT_QPA_PLATFORM_ENV, "")
-    if not value:
+    if value:
+        parts = value.split(":")
+        if parts and parts[0] == "linuxfb":
+            for part in parts[1:]:
+                if part.startswith("fb="):
+                    fb_path = part.split("=", 1)[1]
+                    return fb_path if fb_path else None
+
+    fb_path = os.environ.get(_QML_FB_DEVICE_ENV)
+    if fb_path:
+        return fb_path
+
+    try:
+        fb_names = sorted(os.listdir(_FB_SYSFS_ROOT))
+    except OSError:
         return None
-    parts = value.split(":")
-    if not parts or parts[0] != "linuxfb":
-        return None
-    for part in parts[1:]:
-        if part.startswith("fb="):
-            fb_path = part.split("=", 1)[1]
-            return fb_path if fb_path else None
+    for fb_name in fb_names:
+        if not fb_name.startswith("fb"):
+            continue
+        name = _read_sysfs_value(os.path.join(_FB_SYSFS_ROOT, fb_name, "name"))
+        if name and "sharp" in name.lower():
+            return os.path.join("/dev", fb_name)
     return None
 
 
