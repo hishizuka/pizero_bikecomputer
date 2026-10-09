@@ -159,7 +159,8 @@ class DownloadManager:
             await self._cleanup_failed_downloads(queue_item["save_paths"], caller_name)
             return None
 
-        results = await download_files(**queue_item, limit=self.bluetooth.get_bt_limit())
+        limit = await asyncio.to_thread(self.bluetooth.get_bt_limit)
+        results = await download_files(**queue_item, limit=limit)
         for status, save_path in zip(results, queue_item["save_paths"]):
             self.file_download_status[save_path] = status
         return results

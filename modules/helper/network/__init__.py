@@ -1,9 +1,10 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from ..bluetooth.bluetooth_manager import BluetoothManager, BtOpenResult
 from .download_manager import DownloadManager
 from .http_client import get_bytes, get_json, post
-from .wifi_manager import WifiManager
+from .wifi_manager import WifiManager, get_wifi_bt_status
 
 
 class Network:
@@ -19,6 +20,7 @@ class Network:
             self.bt_open_block_duration_sec,
         )
         self.wifi = WifiManager(config)
+        self._bluetooth_power_lock = asyncio.Lock()
 
     def set_bt_open_block_duration(self, seconds):
         self.bt_open_block_duration_sec = seconds
@@ -33,8 +35,15 @@ class Network:
         await self._downloads.shutdown()
         await self.bluetooth.shutdown()
 
-    def reset_bluetooth(self):
-        self.bluetooth.reset_bluetooth()
+    async def reset_bluetooth(self):
+        async with self._bluetooth_power_lock:
+            await self.bluetooth.pilink.stop()
+            result = await asyncio.to_thread(self.bluetooth.reset_bluetooth)
+            if result == 0 and self.config.G_PILINK["ENABLED"]:
+                await self.bluetooth.pilink.apply()
+            else:
+                await self.bluetooth.pilink.refresh()
+            return result
 
     async def start_bt_pairing(self):
         await self.bluetooth.start_bt_pairing()
@@ -86,8 +95,19 @@ class Network:
         finally:
             await self.close_bt_tethering(caller_name)
 
-    def onoff_wifi_bt(self, key=None):
-        return self.wifi.onoff_wifi_bt(key)
+    async def onoff_wifi_bt(self, key=None):
+        if key != "Bluetooth":
+            return await asyncio.to_thread(self.wifi.onoff_wifi_bt, key)
+        async with self._bluetooth_power_lock:
+            _, was_on = await asyncio.to_thread(get_wifi_bt_status)
+            if was_on:
+                await self.bluetooth.pilink.stop()
+            result = await asyncio.to_thread(self.wifi.onoff_wifi_bt, key)
+            if result == 0 and not was_on and self.config.G_PILINK["ENABLED"]:
+                await self.bluetooth.pilink.apply()
+            else:
+                await self.bluetooth.pilink.refresh()
+            return result
 
     def set_wifi_enabled(self, enabled):
         return self.wifi.set_wifi_enabled(enabled)

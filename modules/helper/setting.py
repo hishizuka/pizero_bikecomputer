@@ -1,6 +1,8 @@
 import configparser
 import json
 import os
+import tempfile
+import threading
 
 import numpy as np
 
@@ -18,12 +20,28 @@ class Setting:
     def __init__(self, config):
         self.config = config
         self.config_parser = configparser.ConfigParser()
+        self._write_lock = threading.Lock()
+        self.pilink_error = None
+        self._pilink_invalid = {}
 
         if os.path.exists(self.config_file):
             self.read()
 
     def read(self):
         self.config_parser.read(self.config_file)
+
+        if "PILINK" in self.config_parser:
+            section = self.config_parser["PILINK"]
+            for key in self.config.G_PILINK:
+                if key not in section:
+                    continue
+                raw = section[key]
+                if raw.lower() not in ("true", "false"):
+                    self._pilink_invalid[key] = raw
+                    self.pilink_error = f"Invalid PiLink setting: {key}={raw}"
+                    app_logger.error(self.pilink_error)
+                else:
+                    self.config.G_PILINK[key] = raw.lower() == "true"
 
         if "RAIN_ALERT" in self.config_parser:
             self.config.G_RAIN_ALERT = self.config_parser["RAIN_ALERT"].getboolean(
@@ -321,6 +339,10 @@ class Setting:
                     self.config.G_AUTO_UPLOAD_SERVICE[service] = c.getboolean(service)
 
     def write_config(self):
+        with self._write_lock:
+            self._write_config()
+
+    def _write_config(self):
         # Rebuild from the supported schema so obsolete settings are dropped.
         self.config_parser = configparser.ConfigParser()
 
@@ -409,6 +431,11 @@ class Setting:
         c["GADGETBRIDGE_STATUS"] = str(self.config.G_GADGETBRIDGE["STATUS"])
         c["GADGETBRIDGE_USE_GPS"] = str(self.config.G_GADGETBRIDGE["USE_GPS"])
 
+        self.config_parser["PILINK"] = {
+            key: self._pilink_invalid.get(key, str(value))
+            for key, value in self.config.G_PILINK.items()
+        }
+
         self.config_parser["MAP_AND_DATA"] = {}
         c = self.config_parser["MAP_AND_DATA"]
         c["MAP"] = self.config.G_MAP
@@ -495,5 +522,18 @@ class Setting:
         for service, status in self.config.G_AUTO_UPLOAD_SERVICE.items():
             c[service] = str(status)
 
-        with open(self.config_file, "w") as file:
-            self.config_parser.write(file)
+        path = os.path.abspath(self.config_file)
+        existing = os.stat(path) if os.path.exists(path) else None
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="w", dir=os.path.dirname(path), delete=False) as file:
+                temporary = file.name
+                if existing is not None:
+                    os.chmod(temporary, existing.st_mode & 0o777)
+                    if hasattr(os, "fchown"):
+                        os.fchown(file.fileno(), existing.st_uid, existing.st_gid)
+                self.config_parser.write(file)
+            os.replace(temporary, path)
+        finally:
+            if temporary is not None and os.path.exists(temporary):
+                os.unlink(temporary)

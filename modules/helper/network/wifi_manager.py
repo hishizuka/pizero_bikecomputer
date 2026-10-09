@@ -20,7 +20,7 @@ def get_wifi_bt_status():
             "sudo",
             "rfkill",
             "--json",
-        ], cmd_print=False)
+        ], cmd_print=False, timeout=5)
         json_status = json.loads(raw_status)
         _parse_wifi_bt_json(json_status, status, ["", "rfkilldevices"])
     except Exception as exc:
@@ -65,7 +65,7 @@ class WifiManager:
         }
         status = {}
         status["Wifi"], status["Bluetooth"] = get_wifi_bt_status()
-        exec_cmd(onoff_cmd[key][status[key]])
+        return exec_cmd(onoff_cmd[key][status[key]], timeout=10)
 
     def set_wifi_enabled(self, enabled):
         if shutil.which("rfkill") is None:

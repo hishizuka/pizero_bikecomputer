@@ -19,6 +19,10 @@ class BleAdapterResolutionError(RuntimeError):
     pass
 
 
+class BleAdapterNotFoundError(BleAdapterResolutionError):
+    pass
+
+
 @dataclass(frozen=True, slots=True)
 class BluezAdapter:
     name: str
@@ -151,7 +155,7 @@ class BleAdapterResolver:
         if len(adapters) == 1:
             return adapters[0].name
         if not adapters:
-            raise BleAdapterResolutionError(
+            raise BleAdapterNotFoundError(
                 f"No BlueZ adapter matches policy {resolved_policy.value}"
             )
         names = ", ".join(adapter.name for adapter in adapters)
