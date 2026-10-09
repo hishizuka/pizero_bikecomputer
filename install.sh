@@ -38,8 +38,9 @@ ask_user() {
 prompt_and_store() {
     local prompt="$1"
     local var_name="$2"
-    ask_user "$prompt"
-    case $? in
+    local task_prompt_result=0
+    ask_user "$prompt" || task_prompt_result=$?
+    case "$task_prompt_result" in
         0) eval "$var_name=true" ;;
         1) eval "$var_name=false" ;;
         2) echo "👋 Quitting...bye!"; exit 0 ;;
@@ -211,6 +212,7 @@ while true; do
     esac
 done
 prompt_and_store "Install Bluetooth packages?" install_bluetooth
+prompt_and_store "Install PiLink BLE tunnel integration?" install_pilink
 prompt_and_store "Enable I2C?" enable_i2c
 use_i2c_400khz=false
 if [[ "$gps_backend" == "cxd56xx" ]]; then
@@ -504,6 +506,10 @@ if [ ! -d "$pgm_dir" ]; then
 fi
 
 cd "$pgm_dir"
+
+if [[ "$install_pilink" == "true" ]]; then
+    bash scripts/install/install-pilink.sh
+fi
 
 if [[ "$install_ant_plus" == "true" ]] && \
     { [[ ! -f img/logos/ant_plus_icon_standard.png ]] || \
