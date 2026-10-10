@@ -24,4 +24,6 @@ jobs:
       - run: pytest . || true
       - run: pytest --doctest-modules . || true
       - run: shopt -s globstar && pyupgrade --py37-plus **/*.py || true
-      - run: safety check
+      # Safety uses NLTK for edit distance, not the affected model file APIs.
+      # Remove this exception when an NLTK release fixes CVE-2026-81726.
+      - run: safety check --ignore SFTY-20260902-58666
