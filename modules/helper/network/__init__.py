@@ -37,12 +37,12 @@ class Network:
 
     async def reset_bluetooth(self):
         async with self._bluetooth_power_lock:
-            await self.bluetooth.pilink.stop()
+            await self.bluetooth.rpi_ble_tunnel.stop()
             result = await asyncio.to_thread(self.bluetooth.reset_bluetooth)
-            if result == 0 and self.config.G_PILINK["ENABLED"]:
-                await self.bluetooth.pilink.apply()
+            if result == 0 and self.config.G_RPI_BLE_TUNNEL["ENABLED"]:
+                await self.bluetooth.rpi_ble_tunnel.apply()
             else:
-                await self.bluetooth.pilink.refresh()
+                await self.bluetooth.rpi_ble_tunnel.refresh()
             return result
 
     async def start_bt_pairing(self):
@@ -101,12 +101,12 @@ class Network:
         async with self._bluetooth_power_lock:
             _, was_on = await asyncio.to_thread(get_wifi_bt_status)
             if was_on:
-                await self.bluetooth.pilink.stop()
+                await self.bluetooth.rpi_ble_tunnel.stop()
             result = await asyncio.to_thread(self.wifi.onoff_wifi_bt, key)
-            if result == 0 and not was_on and self.config.G_PILINK["ENABLED"]:
-                await self.bluetooth.pilink.apply()
+            if result == 0 and not was_on and self.config.G_RPI_BLE_TUNNEL["ENABLED"]:
+                await self.bluetooth.rpi_ble_tunnel.apply()
             else:
-                await self.bluetooth.pilink.refresh()
+                await self.bluetooth.rpi_ble_tunnel.refresh()
             return result
 
     def set_wifi_enabled(self, enabled):

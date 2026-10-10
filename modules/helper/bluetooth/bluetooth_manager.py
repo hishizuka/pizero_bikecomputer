@@ -14,8 +14,7 @@ from modules.utils.cmd import (
     exec_cmd_return_value_async,
 )
 from modules.utils.network import detect_network_async
-from .pilink_service import PiLinkService
-
+from .rpi_ble_tunnel_service import RpiBleTunnelService
 
 BT_TETHERING_TIMEOUT_SEC = 15
 
@@ -58,7 +57,7 @@ class BluetoothManager:
         self.bt_pairing_proc = None
         self.bt_pairing_obexd_proc = None
         self.bt_paired_devices = {}
-        self.pilink = PiLinkService(config)
+        self.rpi_ble_tunnel = RpiBleTunnelService(config)
 
     @property
     def bt_pan(self):
@@ -248,8 +247,10 @@ class BluetoothManager:
     def get_bt_limit(self):
         if not self.config.G_IS_RASPI:
             return False
-        # PiLink installs its preferred default route even with Wi-Fi connected.
-        return self.pilink.is_network_active() or (check_bnep0() and not check_wlan0())
+        # rpi-ble-tunnel installs its preferred default route even with Wi-Fi connected.
+        return self.rpi_ble_tunnel.is_network_active() or (
+            check_bnep0() and not check_wlan0()
+        )
 
     async def bluetooth_tethering(self, disconnect=False):
         if (
@@ -392,7 +393,7 @@ class BluetoothManager:
         else:
             if not self.config.G_BT_PAN_DEVICE or not self.bt_pan.get_bt_pan_devices():
                 return True
-        
+
         async with self._bt_tethering_lock:
             return await self._close_bt_tethering_impl(caller_name)
 

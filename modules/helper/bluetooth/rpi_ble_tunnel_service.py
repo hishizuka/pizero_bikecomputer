@@ -1,4 +1,4 @@
-"""PiLink settings and asynchronous service control shared by both GUIs."""
+"""rpi-ble-tunnel settings and asynchronous service control shared by both GUIs."""
 
 import asyncio
 from contextlib import asynccontextmanager
@@ -14,7 +14,7 @@ from modules.sensor.ble.adapter import (
 )
 
 
-class PiLinkService:
+class RpiBleTunnelService:
     def __init__(self, config):
         self.config = config
         self.resolver = BleAdapterResolver()
@@ -42,13 +42,13 @@ class PiLinkService:
         return (
             self.available
             and not self.busy
-            and self.config.setting.pilink_error is None
+            and self.config.setting.rpi_ble_tunnel_error is None
         )
 
     @property
     def status_label(self):
-        if self.config.setting.pilink_error:
-            return self.config.setting.pilink_error
+        if self.config.setting.rpi_ble_tunnel_error:
+            return self.config.setting.rpi_ble_tunnel_error
         if not self.installed:
             return "Not installed"
         if not self.bluetooth_on:
@@ -71,7 +71,7 @@ class PiLinkService:
 
     def is_network_active(self):
         try:
-            with open(self.config.G_PILINK_NETWORK_STATUS_FILE) as stream:
+            with open(self.config.G_RPI_BLE_TUNNEL_NETWORK_STATUS_FILE) as stream:
                 status = json.load(stream)
         except (OSError, ValueError):
             return False
@@ -91,7 +91,7 @@ class PiLinkService:
             self._notify()
 
     async def _command(self, *args):
-        command = [self.config.G_PILINK_CONTROL_CMD, *args]
+        command = [self.config.G_RPI_BLE_TUNNEL_CONTROL_CMD, *args]
         if os.geteuid() != 0:
             command = ["sudo", "-n", *command]
         process = None
@@ -101,11 +101,13 @@ class PiLinkService:
             )
             output, error = await asyncio.wait_for(process.communicate(), timeout=120)
             if process.returncode and not output:
-                raise ValueError(error.decode().strip() or "PiLink operation failed")
+                raise ValueError(
+                    error.decode().strip() or "rpi-ble-tunnel operation failed"
+                )
             result = json.loads(output)
             if args[0] != "status":
                 app_logger.info(
-                    "[PiLink] %s: ok=%s state=%s adapter=%s reason=%s message=%s",
+                    "[rpi-ble-tunnel] %s: ok=%s state=%s adapter=%s reason=%s message=%s",
                     " ".join(args),
                     result["ok"],
                     result["state"],
@@ -118,7 +120,7 @@ class PiLinkService:
             return {
                 "ok": False,
                 "reason": "command_failed",
-                "message": str(error) or "PiLink operation timed out",
+                "message": str(error) or "rpi-ble-tunnel operation timed out",
                 "installed": self.installed,
                 "state": self.state,
                 "adapter": self.adapter,
@@ -135,7 +137,7 @@ class PiLinkService:
         self.adapter = result["adapter"]
         if previous != (self.installed, self.state, self.adapter):
             app_logger.info(
-                "[PiLink] status: installed=%s state=%s adapter=%s",
+                "[rpi-ble-tunnel] status: installed=%s state=%s adapter=%s",
                 self.installed,
                 self.state,
                 self.adapter,
@@ -157,7 +159,7 @@ class PiLinkService:
             }.get(self.state, "Unknown")
         if not result["ok"]:
             self.error = result["message"]
-            app_logger.warning("[PiLink] %s", self.error)
+            app_logger.warning("[rpi-ble-tunnel] %s", self.error)
 
     async def _refresh(self):
         from modules.helper.network.wifi_manager import get_wifi_bt_status
@@ -167,7 +169,7 @@ class PiLinkService:
             self.bluetooth_on = False
             return
         self.wifi_on, self.bluetooth_on = await asyncio.to_thread(get_wifi_bt_status)
-        if not os.path.isfile(self.config.G_PILINK_CONTROL_CMD):
+        if not os.path.isfile(self.config.G_RPI_BLE_TUNNEL_CONTROL_CMD):
             self.installed = False
             return
         await self._record(await self._command("status"))
@@ -180,24 +182,24 @@ class PiLinkService:
 
     async def _apply(self):
         await self._refresh()
-        if not self.installed or self.config.setting.pilink_error:
+        if not self.installed or self.config.setting.rpi_ble_tunnel_error:
             return False
         self.error = None
         self.note = ""
         app_logger.info(
-            "[PiLink] applying settings: enabled=%s use_secondary=%s bluetooth_on=%s",
-            self.config.G_PILINK["ENABLED"],
-            self.config.G_PILINK["USE_SECONDARY"],
+            "[rpi-ble-tunnel] applying settings: enabled=%s use_secondary=%s bluetooth_on=%s",
+            self.config.G_RPI_BLE_TUNNEL["ENABLED"],
+            self.config.G_RPI_BLE_TUNNEL["USE_SECONDARY"],
             self.bluetooth_on,
         )
-        if not self.config.G_PILINK["ENABLED"]:
+        if not self.config.G_RPI_BLE_TUNNEL["ENABLED"]:
             result = await self._command("disable")
             await self._record(result)
             return result["ok"]
         if not self.bluetooth_on:
             return False
         policies = [BleAdapterPolicy.BUILTIN]
-        if self.config.G_PILINK["USE_SECONDARY"]:
+        if self.config.G_RPI_BLE_TUNNEL["USE_SECONDARY"]:
             policies.insert(0, BleAdapterPolicy.NRF52840_BRIDGE)
         for policy in policies:
             try:
@@ -207,11 +209,13 @@ class PiLinkService:
                     error, BleAdapterNotFoundError
                 ):
                     self.error = str(error)
-                    app_logger.warning("[PiLink] %s", error)
+                    app_logger.warning("[rpi-ble-tunnel] %s", error)
                     return False
                 fallback_reason = str(error)
             else:
-                app_logger.info("[PiLink] selected %s / %s", policy.value, adapter)
+                app_logger.info(
+                    "[rpi-ble-tunnel] selected %s / %s", policy.value, adapter
+                )
                 result = await self._command("apply", "--adapter", adapter)
                 if (
                     policy != BleAdapterPolicy.NRF52840_BRIDGE
@@ -222,7 +226,7 @@ class PiLinkService:
                     return result["ok"]
                 fallback_reason = result["message"]
             self.note = "External unavailable; using internal"
-            app_logger.info("[PiLink] %s: %s", self.note, fallback_reason)
+            app_logger.info("[rpi-ble-tunnel] %s: %s", self.note, fallback_reason)
 
     async def apply(self):
         async with self._operation():
@@ -234,17 +238,17 @@ class PiLinkService:
             return False
         async with self._operation():
             self._notify()
-            previous = self.config.G_PILINK[key]
-            self.config.G_PILINK[key] = value
+            previous = self.config.G_RPI_BLE_TUNNEL[key]
+            self.config.G_RPI_BLE_TUNNEL[key] = value
             try:
                 await asyncio.to_thread(self.config.setting.write_config)
             except OSError as error:
-                self.config.G_PILINK[key] = previous
+                self.config.G_RPI_BLE_TUNNEL[key] = previous
                 self.error = f"Could not save settings: {error}"
-                app_logger.warning("[PiLink] %s", self.error)
+                app_logger.warning("[rpi-ble-tunnel] %s", self.error)
                 return False
             self._notify()
-            if key == "USE_SECONDARY" and not self.config.G_PILINK["ENABLED"]:
+            if key == "USE_SECONDARY" and not self.config.G_RPI_BLE_TUNNEL["ENABLED"]:
                 return True
             return await self._apply()
 

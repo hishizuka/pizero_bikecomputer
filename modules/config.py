@@ -467,9 +467,9 @@ class Config:
     # Bluetooth tethering
     G_BT_PAN_DEVICE = ""
     G_AUTO_BT_TETHERING = False
-    G_PILINK = {"ENABLED": False, "USE_SECONDARY": False}
-    G_PILINK_CONTROL_CMD = "/usr/local/libexec/pilink-service-control"
-    G_PILINK_NETWORK_STATUS_FILE = "/run/pilink-network/status.json"
+    G_RPI_BLE_TUNNEL = {"ENABLED": False, "USE_SECONDARY": False}
+    G_RPI_BLE_TUNNEL_CONTROL_CMD = "/usr/local/libexec/rpi-ble-tunnel-service-control"
+    G_RPI_BLE_TUNNEL_NETWORK_STATUS_FILE = "/run/rpi-ble-tunnel-network/status.json"
     # Wi-Fi auto power saving
     G_AUTO_WIFI_OFF = False
 
@@ -498,7 +498,7 @@ class Config:
         self.G_SENSORS = copy.deepcopy(type(self).G_SENSORS)
         self.G_ANT = copy.deepcopy(type(self).G_ANT)
         self.G_BLE = copy.deepcopy(type(self).G_BLE)
-        self.G_PILINK = type(self).G_PILINK.copy()
+        self.G_RPI_BLE_TUNNEL = type(self).G_RPI_BLE_TUNNEL.copy()
         self.G_AUTO_LIGHT = type(self).G_AUTO_LIGHT
 
         # Raspbian OS detection
@@ -858,7 +858,7 @@ class Config:
 
         self.api = api(self)
         self.network = Network(self)
-        asyncio.create_task(self.network.bluetooth.pilink.apply())
+        asyncio.create_task(self.network.bluetooth.rpi_ble_tunnel.apply())
 
         # logger, sensor
         await self.gui.set_boot_status("initialize sensor...")

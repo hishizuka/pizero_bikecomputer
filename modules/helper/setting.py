@@ -21,8 +21,8 @@ class Setting:
         self.config = config
         self.config_parser = configparser.ConfigParser()
         self._write_lock = threading.Lock()
-        self.pilink_error = None
-        self._pilink_invalid = {}
+        self.rpi_ble_tunnel_error = None
+        self._rpi_ble_tunnel_invalid = {}
 
         if os.path.exists(self.config_file):
             self.read()
@@ -30,18 +30,20 @@ class Setting:
     def read(self):
         self.config_parser.read(self.config_file)
 
-        if "PILINK" in self.config_parser:
-            section = self.config_parser["PILINK"]
-            for key in self.config.G_PILINK:
+        if "RPI_BLE_TUNNEL" in self.config_parser:
+            section = self.config_parser["RPI_BLE_TUNNEL"]
+            for key in self.config.G_RPI_BLE_TUNNEL:
                 if key not in section:
                     continue
                 raw = section[key]
                 if raw.lower() not in ("true", "false"):
-                    self._pilink_invalid[key] = raw
-                    self.pilink_error = f"Invalid PiLink setting: {key}={raw}"
-                    app_logger.error(self.pilink_error)
+                    self._rpi_ble_tunnel_invalid[key] = raw
+                    self.rpi_ble_tunnel_error = (
+                        f"Invalid rpi-ble-tunnel setting: {key}={raw}"
+                    )
+                    app_logger.error(self.rpi_ble_tunnel_error)
                 else:
-                    self.config.G_PILINK[key] = raw.lower() == "true"
+                    self.config.G_RPI_BLE_TUNNEL[key] = raw.lower() == "true"
 
         if "RAIN_ALERT" in self.config_parser:
             self.config.G_RAIN_ALERT = self.config_parser["RAIN_ALERT"].getboolean(
@@ -431,9 +433,9 @@ class Setting:
         c["GADGETBRIDGE_STATUS"] = str(self.config.G_GADGETBRIDGE["STATUS"])
         c["GADGETBRIDGE_USE_GPS"] = str(self.config.G_GADGETBRIDGE["USE_GPS"])
 
-        self.config_parser["PILINK"] = {
-            key: self._pilink_invalid.get(key, str(value))
-            for key, value in self.config.G_PILINK.items()
+        self.config_parser["RPI_BLE_TUNNEL"] = {
+            key: self._rpi_ble_tunnel_invalid.get(key, str(value))
+            for key, value in self.config.G_RPI_BLE_TUNNEL.items()
         }
 
         self.config_parser["MAP_AND_DATA"] = {}

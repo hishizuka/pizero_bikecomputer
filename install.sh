@@ -212,7 +212,7 @@ while true; do
     esac
 done
 prompt_and_store "Install Bluetooth packages?" install_bluetooth
-prompt_and_store "Install PiLink BLE tunnel integration?" install_pilink
+prompt_and_store "Install rpi-ble-tunnel integration?" install_rpi_ble_tunnel
 prompt_and_store "Enable I2C?" enable_i2c
 use_i2c_400khz=false
 if [[ "$gps_backend" == "cxd56xx" ]]; then
@@ -507,8 +507,8 @@ fi
 
 cd "$pgm_dir"
 
-if [[ "$install_pilink" == "true" ]]; then
-    bash scripts/install/install-pilink.sh
+if [[ "$install_rpi_ble_tunnel" == "true" ]]; then
+    bash scripts/install/install-rpi-ble-tunnel.sh
 fi
 
 if [[ "$install_ant_plus" == "true" ]] && \

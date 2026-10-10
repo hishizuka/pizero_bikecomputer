@@ -308,7 +308,7 @@ class GUI_PyQt(GUI_Qt_Base):
                 LiveTrackMenuWidget,
                 RideInfoMenuWidget,
                 UploadActivityMenuWidget,
-                PiLinkMenuWidget,
+                RpiBleTunnelMenuWidget,
             )
             from modules.pyqt.menu.pyqt_system_menu_widget import (
                 SystemMenuWidget,
@@ -427,7 +427,7 @@ class GUI_PyQt(GUI_Qt_Base):
                 ("W Prime Balance", AdjustWPrimeBalanceWidget),
                 ("Profile", ProfileWidget),
                 ("Live Track", LiveTrackMenuWidget),
-                ("BLE Tunnel", PiLinkMenuWidget),
+                ("BLE Tunnel", RpiBleTunnelMenuWidget),
                 ("Connectivity", ConnectivityMenuWidget),
                 ("Upload Activity", UploadActivityMenuWidget),
                 ("DEM Tile source", DEMTileListWidget),

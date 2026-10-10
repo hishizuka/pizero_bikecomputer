@@ -263,13 +263,13 @@ See [hardware_installation.md](/doc/hardware_installation.md) for supported disp
 
 # Software Installation
 
-## PiLink BLE tunnel
+## rpi-ble-tunnel
 
-PiLink integration is optional in `install.sh`. For an existing setup, run `bash scripts/install/install-pilink.sh /path/to/rpi-ble-tunnel` on the Pi using a checkout that includes caller-managed mode. Omitting the path clones it into `tmp/ref/rpi-ble-tunnel`. The service runs from system-installed files and does not depend on either checkout at runtime.
+rpi-ble-tunnel integration is optional in `install.sh`. For an existing setup, run `bash scripts/install/install-rpi-ble-tunnel.sh /path/to/rpi-ble-tunnel` on the Pi using a checkout that includes caller-managed mode. Omitting the path clones it into `tmp/ref/rpi-ble-tunnel`. The service runs from system-installed files and does not depend on either checkout at runtime.
 
-Open `Menu → Connectivity → BLE Tunnel` to enable the tunnel or prefer an external nRF52840 adapter. The entry is disabled when PiLink integration is not installed or Bluetooth is off. Bluetooth power remains under `Menu → System → Network → Bluetooth`. Settings are saved in `[PILINK]` (`enabled` and `use_secondary`, both defaulting to False). Exiting the application keeps the tunnel running; disabling it or changing adapters disconnects BLE SSH. See the [PiLink operation guide](https://github.com/hishizuka/rpi-ble-tunnel/blob/main/docs/operations.md) for standalone service operations.
+Open `Menu → Connectivity → BLE Tunnel` to enable the tunnel or prefer an external nRF52840 adapter. The entry is disabled when rpi-ble-tunnel integration is not installed or Bluetooth is off. Bluetooth power remains under `Menu → System → Network → Bluetooth`. Settings are saved in `[RPI_BLE_TUNNEL]` (`enabled` and `use_secondary`, both defaulting to False). Exiting the application keeps the tunnel running; disabling it or changing adapters disconnects BLE SSH. See the [rpi-ble-tunnel operation guide](https://github.com/hishizuka/rpi-ble-tunnel/blob/main/docs/operations.md) for standalone service operations.
 
-While the PiLink Internet connection is active, queued downloads use the same single-download limit as Bluetooth tethering, including when Wi-Fi remains connected.
+While the rpi-ble-tunnel Internet connection is active, queued downloads use the same single-download limit as Bluetooth tethering, including when Wi-Fi remains connected.
 
 See [software_installation.md](/doc/software_installation.md).
 
