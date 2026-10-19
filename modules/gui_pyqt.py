@@ -699,6 +699,19 @@ class GUI_PyQt(GUI_Qt_Base):
     def press_space(self):
         self.press_key(QT_KEY_SPACE)
 
+    # numeric entry pages (button mode ADJUST)
+    def input_digit(self, digit):
+        self.stack_widget.currentWidget().input_digit(int(digit))
+
+    def delete_digit(self):
+        self.stack_widget.currentWidget().delete_digit()
+
+    def clear_digits(self):
+        self.stack_widget.currentWidget().clear()
+
+    def set_adjust_value(self):
+        self.stack_widget.currentWidget().set_value()
+
     def scroll_next(self):
         self.signal_next_button.emit(1)
 

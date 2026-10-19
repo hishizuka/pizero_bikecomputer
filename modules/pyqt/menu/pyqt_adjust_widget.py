@@ -104,6 +104,7 @@ class AdjustEdit(QtWidgets.QLineEdit):
 
 
 class AdjustWidget(MenuWidget):
+    button_mode = "ADJUST"
     unit = ""
 
     def setup_menu(self):
@@ -221,13 +222,17 @@ class AdjustWidget(MenuWidget):
         pass
 
     def digit_clicked(self):
-        clicked_button = self.sender()
-        digit_value = int(clicked_button.text())
+        self.input_digit(int(self.sender().text()))
+
+    def input_digit(self, digit_value):
         if self.display.text() == "0" and digit_value == 0:
             return
         elif self.display.text() == "0" and digit_value != 0:
             self.display.setText("")
         self.display.setText(self.display.text() + str(digit_value))
+
+    def delete_digit(self):
+        self.display.setText(self.display.text()[:-1])
 
     @qasync.asyncSlot()
     async def set_value(self):

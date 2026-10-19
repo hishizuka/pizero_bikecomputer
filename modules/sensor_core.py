@@ -8,6 +8,7 @@ import numpy as np
 import psutil
 
 from modules.app_logger import app_logger
+from modules.board_config import BoardType
 from modules.utils.geo import get_heading_str
 from modules.utils.performance_metrics import (
     NP_WINDOW_SIZE_DEFAULT,
@@ -38,7 +39,6 @@ from .sensor.sensor_ant import SensorANT
 from .sensor.sensor_ble import SensorBLE
 from .sensor.sensor_gpio import SensorGPIO
 from .sensor.sensor_i2c import SensorI2C
-from .sensor.sensor_cardputerzero_keyboard import SensorCardputerZeroKeyboard
 
 
 class SensorCore:
@@ -52,6 +52,7 @@ class SensorCore:
     sensor_i2c = None
     control_uart = None
     sensor_gpio = None
+    sensor_cardputerzero = None
     values = {}
     integrated_value_keys = [
         "heart_rate",
@@ -149,7 +150,10 @@ class SensorCore:
     def has_buttons(self):
         return (
             self.sensor_gpio.has_buttons
-            or self.sensor_keyboard.has_buttons
+            or (
+                self.sensor_cardputerzero is not None
+                and self.sensor_cardputerzero.has_buttons
+            )
             or any(self.sensor_i2c.available_sensors["BUTTON"].values())
         )
 
@@ -255,7 +259,10 @@ class SensorCore:
 
         self.sensor_gpio = SensorGPIO(config, None)
         self.sensor_gpio.update()
-        self.sensor_keyboard = SensorCardputerZeroKeyboard(config, None)
+        if config.G_BOARD_TYPE == BoardType.CARDPUTERZERO:
+            from .sensor.sensor_cardputerzero import SensorCardputerZero
+
+            self.sensor_cardputerzero = SensorCardputerZero(config, None)
 
         app_logger.info("[sensor] Initialize:")
         log_timers(timers)
@@ -386,7 +393,8 @@ class SensorCore:
         self.sensor_ble.start_coroutine()
         self.sensor_gps.start_coroutine()
         self.sensor_i2c.start_coroutine()
-        self.sensor_keyboard.start_coroutine()
+        if self.sensor_cardputerzero is not None:
+            self.sensor_cardputerzero.start_coroutine()
 
     def _schedule_bridge_recovery(self, reconfigured):
         if self._bridge_recovery_task is not None:
@@ -436,7 +444,8 @@ class SensorCore:
         self.sensor_ble.quit()
         await self.sensor_gps.quit()
         await self.sensor_gpio.quit()
-        await self.sensor_keyboard.quit()
+        if self.sensor_cardputerzero is not None:
+            await self.sensor_cardputerzero.quit()
 
     # reset accumulated values
     def reset(self):

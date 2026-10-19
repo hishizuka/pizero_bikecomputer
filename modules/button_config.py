@@ -22,6 +22,33 @@ def _expand_button_template(button_template, button_map, pages=None):
     return button_def
 
 
+def _build_key_profile(keys, pages):
+    """Expand space-separated key aliases and keep unassigned keys as no-ops."""
+    profile = {}
+    for page_name, assignments in pages.items():
+        page = dict.fromkeys(keys, ("", ""))
+        for page_keys, actions in assignments.items():
+            for key in page_keys.split():
+                page[key] = actions
+        profile[page_name] = page
+    return profile
+
+
+# CardputerZero built-in keyboard keys, named by their physical position.
+CARDPUTERZERO_DIGIT_KEYS = tuple("1234567890")
+CARDPUTERZERO_KEYS = (
+    "ESC",
+    *CARDPUTERZERO_DIGIT_KEYS,
+    "BACKSPACE",
+    "F",
+    "Z",
+    "X",
+    "C",
+    "ENTER",
+    "SPACE",
+)
+
+
 def _build_button_profiles(button_templates, profile_defs):
     button_profiles = {}
     for profile_name, profile_def in profile_defs.items():
@@ -408,6 +435,75 @@ class Button_Config:
                 "Z": ("change_map_overlays", ""),
             },
         },
+        # CardputerZero built-in keyboard (sensor_cardputerzero)
+        # 4-8 sit below the display: 4 back, 5/7 previous/next, 6 select, 8 menu.
+        "CardputerZero_Keyboard": _build_key_profile(
+            CARDPUTERZERO_KEYS,
+            {
+                "MAIN": {
+                    "4": ("count_laps", "reset_count"),
+                    "5 Z": ("scroll_prev", "get_screenshot"),
+                    "6 ENTER SPACE": ("start_and_stop_manual", ""),
+                    "7 C": ("scroll_next", ""),
+                    "8": ("enter_menu", "open_quick_actions"),
+                },
+                "MENU": {
+                    "4 ESC": ("back_menu", ""),
+                    "5 Z F": ("press_shift_tab", ""),
+                    "6 ENTER SPACE": ("press_space", ""),
+                    "7 C X": ("press_tab", ""),
+                    "8": ("back_menu", ""),
+                },
+                "DIALOG": {
+                    "4 ESC": ("delete_popup", ""),
+                    "5 Z F": ("press_shift_tab", ""),
+                    "6 ENTER SPACE": ("press_space", ""),
+                    "7 C X": ("press_tab", ""),
+                },
+                # numeric entry pages (AdjustWidget)
+                "ADJUST": {
+                    **{
+                        digit: (f"input_digit:{digit}", "")
+                        for digit in CARDPUTERZERO_DIGIT_KEYS
+                    },
+                    "BACKSPACE": ("delete_digit", "clear_digits"),
+                    "ENTER SPACE": ("set_adjust_value", ""),
+                    "ESC": ("back_menu", ""),
+                    "F Z": ("press_shift_tab", ""),
+                    "X C": ("press_tab", ""),
+                },
+                "MAP": {
+                    "4": ("map_zoom_minus", "map_overlay_prev_time"),
+                    "5 Z": ("scroll_prev", "get_screenshot"),
+                    "6 ENTER SPACE": ("change_mode", "change_map_overlays"),
+                    "7 C": ("scroll_next", ""),
+                    "8": ("map_zoom_plus", "enter_menu"),
+                },
+                "MAP_1": {
+                    "F": ("map_move_y_plus", ""),
+                    "X": ("map_move_y_minus", ""),
+                    "5 Z": ("map_move_x_minus", ""),
+                    "7 C": ("map_move_x_plus", ""),
+                    "4": ("map_zoom_minus", ""),
+                    "8": ("map_zoom_plus", "map_search_route"),
+                    "6 ENTER SPACE ESC": ("change_mode", ""),
+                },
+                "COURSE_PROFILE": {
+                    "4": ("map_zoom_minus", ""),
+                    "5 Z": ("scroll_prev", "get_screenshot"),
+                    "6 ENTER SPACE": ("change_mode", ""),
+                    "7 C": ("scroll_next", ""),
+                    "8": ("map_zoom_plus", "enter_menu"),
+                },
+                "COURSE_PROFILE_1": {
+                    "4": ("map_zoom_minus", ""),
+                    "5 Z": ("map_move_x_minus", ""),
+                    "6 ENTER SPACE ESC": ("change_mode", ""),
+                    "7 C": ("map_move_x_plus", ""),
+                    "8": ("map_zoom_plus", ""),
+                },
+            },
+        ),
     })
 
     # Build dedicated profile for dual display + Zwift Click V2.
@@ -580,7 +676,11 @@ class Button_Config:
                         if map_widget is not None:
                             map_widget.lock_on()
             elif w_index >= 2:
-                self.page_mode = "MENU"
+                # Menu pages can request their own mode, e.g. ADJUST.
+                menu_mode = gui.stack_widget.currentWidget().button_mode
+                self.page_mode = (
+                    menu_mode if menu_mode in self.button_def[profile] else "MENU"
+                )
 
         self._dispatch_button_action(
             gui,
@@ -636,14 +736,19 @@ class Button_Config:
         #     f"key={press_button}, index={index}, action={func_str}"
         # )
 
-        handler = getattr(gui, func_str, None)
+        # "action:arg" passes one string argument, e.g. "input_digit:4".
+        func_name, _, arg = func_str.partition(":")
+        handler = getattr(gui, func_name, None)
         if not callable(handler):
             app_logger.warning(
-                f"GUI action {func_str!r} is not available for "
+                f"GUI action {func_name!r} is not available for "
                 f"{type(gui).__name__}"
             )
             return
-        handler()
+        if arg:
+            handler(arg)
+        else:
+            handler()
 
     def change_mode(self):
         # check MAP

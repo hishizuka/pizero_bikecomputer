@@ -645,7 +645,7 @@ No additional Python package is required by this repository.
 ### CardputerZero (beta)
 
 This support is work in progress (W.I.P.). In particular, the built-in keyboard
-has no key assignments yet and cannot control the application.
+assignments below have not yet been confirmed by pressing every key on the device.
 
 Verified on `cz1`: Raspberry Pi Compute Module 0, Raspberry Pi OS Trixie
 (Debian 13.7), kernel `6.18.39+rpt-rpi-v8`, Python 3.13.5, Qt 6.8.2.
@@ -676,16 +676,42 @@ manual_backlight_brightness = 75
 ```
 
 The board preset selects `display = CardputerZero`, enables manual backlight
-control, and leaves GPIO buttons and the buzzer disabled. The keyboard adapter
-is a placeholder: it does not open or grab `/dev/input/cardputer-zero-internal`
-and has no board-specific key assignments. SSH stdin controls remain available
-with `--headless`; Qt input is left enabled.
+control, and leaves GPIO buttons and the buzzer disabled. The application reads
+`/dev/input/cardputer-zero-internal` directly and grabs it while running, so the
+launcher, the console and SysRq do not receive key presses. If the grab fails,
+the keyboard is disabled. Keys are identified by their physical position, so a
+latched Fn layer does not change the controls. While Sym is latched, F/Z/X/C
+send no key events because the M5Stack keymap reserves them in that layer.
+Long presses use the common 1-second threshold. Set `QT_QPA_FB_DISABLE_INPUT=1`
+so that Qt does not read the same keyboard. SSH stdin controls remain available
+with `--headless`.
+
+Keys 4 to 8 sit directly below the display and cover riding use. The other keys
+are aliases for desk use. The assignments target the PyQt GUI.
+
+| Key | Main | Menu / dialog | Map |
+|:-|:-|:-|:-|
+| 4 | Lap / long: reset | Back (dialog: close) | Zoom out / long: previous overlay time |
+| 5, Z | Previous page / long: screenshot | Previous item | Previous page / long: screenshot |
+| 6, Enter, Space | Start/stop | Select | Map move mode / long: change overlay |
+| 7, C | Next page | Next item | Next page |
+| 8 | Menu / long: quick actions | Back (dialog: none) | Zoom in / long: menu |
+| Esc | None | Back (dialog: close) | None |
+| F, X | None | Previous / next item | None |
+
+In map move mode, F/Z/X/C (or 5/7) move the map, 4/8 zoom, a long press of 8
+searches a route, and 6, Enter, Space or Esc leave the mode. Course profile
+pages follow the map: 5/7 change pages (or move in move mode), 4/8 zoom and 6
+switches the mode. On numeric entry pages such as altitude, wheel size and CP,
+0-9 enter digits, Backspace deletes a digit (long press: clear), Enter or Space
+sets the value and Esc goes back.
 
 On the M5Stack image, stop the launcher before testing and restore it afterward:
 
 ```bash
 systemctl --user stop APPLaunch.service
 QT_QPA_PLATFORM=linuxfb:fb=/dev/fb_lcd QT_QPA_FB_HIDECURSOR=1 \
+  QT_QPA_FB_DISABLE_INPUT=1 \
   <venv>/bin/python3 pizero_bikecomputer.py --headless --demo --fullscreen \
   --layout layouts/layout-cardputerzero.yaml --debug
 systemctl --user start APPLaunch.service
@@ -1296,7 +1322,7 @@ Set the value before starting the program. If the value is set during running, i
   - Select the board preset, including I2C sensors, GPIO buttons, buzzer, and display mode.
   - `auto`: detect all supported I2C sensors and do not enable custom GPIO buttons.
   - `pizero_bikecomputer`: use the Pi Zero Bikecomputer PCB preset.
-  - `cardputerzero`: use the CardputerZero beta LCD and optional ST IMU preset; keyboard assignments are pending.
+  - `cardputerzero`: use the CardputerZero beta LCD, built-in keyboard and optional ST IMU preset.
   - `bryton_rider_s800`: use the Bryton Rider S800 board preset.
   - `bryton_rider_s800_bridge`: use the nRF52840 bridge board, GPIO4/23/20/21 buttons, and UART sensor stream.
 - `display`

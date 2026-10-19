@@ -23,6 +23,8 @@ from .pyqt_menu_button import MenuButton
 
 class MenuWidget(QtWidgets.QWidget):
     config = None
+    # Button_Config page mode while this page is shown.
+    button_mode = "MENU"
 
     icon_x = 40
     icon_y = 32
