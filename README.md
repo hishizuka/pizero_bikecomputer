@@ -6,7 +6,8 @@ An open-source bike computer with GPS and ANT+ capabilities, based on the Raspbe
 https://github.com/hishizuka/pizero_bikecomputer
 
 # News
-
+- 2026/10/20 Bryton Rider S800 and Wahoo ELEMNT ACE compatibility is currently in progress. For the former, a custom PCB was created and installed; for the latter, successful operation on Android has been achieved.
+<img src="https://pbs.twimg.com/media/HVBw1QDbkAACbF_?format=jpg" width=480 />
 - 2026/10/2 [Memory LCD DRM Driver](https://github.com/hishizuka/memory-lcd-drm) is now public. `install.sh` can install the MIP driver and the optional DMA-BUF presenter for PyQt GPU maps. See the [display setup guide](doc/software_installation.md#jdi--sharp-mip-display) and [GPU map presenter guide](doc/gpu_map_presenter.md).
 - 2026/5/9 Official hardware is being designed and prototyped for Pi Zero Bikecomputer. The official hardware design files will be released under CERN-OHL-S-2.0.
   - <img width="400" alt="Official hardware prototype" src="https://github.com/user-attachments/assets/a7d9a2b8-5380-4f70-9cb2-84002e546b45" />

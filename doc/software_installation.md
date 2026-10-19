@@ -787,6 +787,12 @@ It asks whether PWM1 (GPIO13) drives the buzzer regardless of SPI. It updates
 | No | Yes | `dtoverlay=pwm,pin=13,func=4` |
 | No | No | No PWM overlay for these outputs |
 
+When the Memory LCD DRM or DMA-BUF presenter option is selected, PWM0-only backlight
+uses the driver's `backlight_pwm` setting instead of a separate `pwm` overlay.
+Add this option to the panel's `sharp-drm` line manually. With a PWM1 buzzer,
+the installer still configures the corresponding PWM overlay from the table;
+keep the `sharp-drm` line before `pwm-2chan` when both channels are used.
+
 Rerunning the installer replaces an earlier overlay from this table instead of
 adding a conflicting one. A custom PWM overlay must be resolved manually before
 selecting either output. Reboot to apply changes to `config.txt`.
@@ -1433,6 +1439,12 @@ With `board = auto`, axis values are read from this section. For a specific boar
 runtime values are defined by its preset in `modules/board_config.py`, and values
 manually entered in `setting.conf` are ignored.
 
+The S800 presets keep the IMU conversion `[1, 1, -1]` and magnetic conversion
+`[1, -1, 1]`. Stationary acceleration points toward negative Z after conversion;
+the preset accounts for this when calculating tilt. Pitch is positive when the
+front is lowered, and roll is positive when the left side is raised, with level
+roll at 0 degrees. Acceleration leveling uses the same tilt convention.
+
 X, Y, and Z printed on the board are set to the following orientations by default.
 
 - X: Forward. Positive value for upward rotation with accelerometer.
@@ -1564,13 +1576,26 @@ the normal 180-second interval, four samples at about 45, 90, 135, and 180
 seconds are sent together. Each attempted upload closes that window; failed
 points are not accumulated into the next interval.
 
+LiveTrack samples are queued only while GPS reports a valid position. Retained
+coordinates during loss of GPS fix are not queued. An interval with no valid
+samples skips telemetry transmission; explicit Garmin STOP/reset requests still
+run without position samples.
+
 Garmin session creation and closure use direct HTTP so that their result can be
-confirmed. On recording start, an existing local session is resumed only when
-it belongs to the same activity and is less than six hours old. A session from
-another activity is closed before a new session is created; expired or invalid
-local state is discarded. Normal track points may still use Gadgetbridge. Its
-legacy HTTP bridge does not return an HTTP status, so track-point failures do
-not trigger automatic 404/410 session recreation.
+confirmed. The first upload after startup also uses direct HTTP for an existing
+session. If that request returns 404/410, the publisher's session list is checked.
+The session is recreated only when that response confirms it is missing or its
+server-reported end time has passed. Unconfirmed or shortened responses preserve
+the local session. Normal track points may still use Gadgetbridge; its legacy
+HTTP bridge does not return an HTTP status and does not trigger session recovery.
+A session from another activity is closed before a new session is created.
+
+Sessions are not discarded based on their age. New sessions request a 24-hour
+duration, and their end time is extended by 24 hours when less than one hour
+remains, preserving the session ID and URL. Connection failures and timeouts
+preserve the session and allow the next regular upload instead of disabling
+LiveTrack. Authentication failures continue to use the existing token refresh
+and notification handling.
 
 Before a reset closes a Garmin session, the pending STOP and its attempt count
 are saved in `tokenstore/livetrack_state.json`. A transient failure is retried
