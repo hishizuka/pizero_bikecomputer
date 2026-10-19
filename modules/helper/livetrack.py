@@ -74,19 +74,24 @@ class LiveTrackCoordinator:
         self._executor = executor
         self._last_send_at = int(time.time())
         self._interval_samples = []
+        self._last_sample_number = 0
         self._locked = False
         self._pending = None
 
     def submit(self, request, *, quick_send=False):
         if self._locked:
             if quick_send:
+                sample = self._sample_getter()
+                samples = [sample] if sample.has_position() else []
+                if not samples and request.garmin_action == "update":
+                    return False
                 if self._pending is None:
-                    self._pending = (request, [self._sample_getter()])
+                    self._pending = (request, samples)
                 else:
                     pending_request, _pending_samples = self._pending
                     self._pending = (
                         pending_request.merge(request),
-                        [self._sample_getter()],
+                        samples,
                     )
             return False
 
@@ -95,19 +100,28 @@ class LiveTrackCoordinator:
         if not quick_send:
             elapsed = now - self._last_send_at
             if elapsed < interval:
-                next_sample_number = len(self._interval_samples) + 1
+                next_sample_number = self._last_sample_number + 1
                 if (
                     next_sample_number < LIVETRACK_SAMPLE_COUNT
                     and elapsed * LIVETRACK_SAMPLE_COUNT
                     >= interval * next_sample_number
                 ):
-                    self._interval_samples.append(self._sample_getter())
+                    self._last_sample_number = next_sample_number
+                    sample = self._sample_getter()
+                    if sample.has_position():
+                        self._interval_samples.append(sample)
                 return False
 
         samples = self._interval_samples
-        samples.append(self._sample_getter())
+        sample = self._sample_getter()
+        if sample.has_position():
+            samples.append(sample)
         self._interval_samples = []
+        self._last_sample_number = 0
         self._last_send_at = now
+
+        if not samples and request.garmin_action == "update":
+            return False
 
         self._locked = True
         asyncio.create_task(self._run_locked(request, samples))
@@ -265,11 +279,13 @@ def build_livetrack_sample(config):
     if epx is not None or epy is not None:
         accuracy = int(max(value for value in (epx, epy) if value is not None))
 
+    position_valid = _finite_number(gps["position_basic_valid"]) == 1
+
     return LiveTrackSample(
         timestamp=timestamp,
         display_timestamp=display_timestamp,
-        latitude=_finite_number(gps.get("lat")),
-        longitude=_finite_number(gps.get("lon")),
+        latitude=_finite_number(gps["lat"]) if position_valid else None,
+        longitude=_finite_number(gps["lon"]) if position_valid else None,
         gps_altitude_m=_finite_number(gps.get("alt")),
         altitude_m=_finite_number(i2c.get("altitude")),
         speed_mps=_finite_number(integrated.get("speed")),

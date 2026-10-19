@@ -19,6 +19,7 @@ from modules.app_logger import app_logger
 from modules.helper.garmin_livetrack import (
     GarminLiveTrackApiError,
     GarminLiveTrackClient,
+    GarminLiveTrackConnectionError,
     GarminLiveTrackConfigurationError,
     GarminLiveTrackError,
     GarminLiveTrackMessageHttpError,
@@ -935,6 +936,9 @@ class api:
             self._persist_garmin_credentials_if_cleared()
 
     def _handle_garmin_livetrack_error(self, error):
+        if isinstance(error, GarminLiveTrackConnectionError):
+            app_logger.warning(f"[Garmin] LiveTrack retry on next send: {error}")
+            return "error"
         self.garmin_livetrack_unavailable_reason = str(error)
         self._notify_livetrack_unavailable(
             "garmin_livetrack_unavailable_notified",
@@ -945,6 +949,8 @@ class api:
     async def _send_garmin_livetrack_samples(
         self, samples, caller_name, create_session=True
     ):
+        if not samples:
+            return "no_position"
         client = self.garmin_livetrack_client
 
         if create_session:
@@ -964,16 +970,25 @@ class api:
                 create_session=create_session,
             )
 
-        session_active = client.active_session(client.load_state()) is not None
+        state = client.load_state()
+        session_active = client.active_session(state) is not None
 
-        # Creating a session needs a confirmed response. Existing-session points
-        # may use the legacy Gadgetbridge bridge, whose HTTP status is unavailable.
+        # Creation, startup validation, and extension need confirmed HTTP results.
+        # Other points may use the legacy Gadgetbridge bridge without HTTP status.
         result = await self._run_garmin_livetrack_operation(
             caller_name,
             operation,
-            use_gadgetbridge=session_active,
+            use_gadgetbridge=(
+                session_active
+                and not client.startup_check_pending
+                and not client.session_extension_due(state)
+            ),
         )
-        if result == "success" and not session_active:
+        if result == "success" and (
+            not session_active
+            or client.active_session(client.load_state())["sessionId"]
+            != state["activeSession"]["sessionId"]
+        ):
             client.course_send_status = (
                 "LOAD" if self.config.logger.course.is_set else "RESET"
             )
@@ -996,7 +1011,7 @@ class api:
             return True
         if status == "current":
             return True
-        if status in ("expired", "invalid"):
+        if status == "invalid":
             app_logger.warning(
                 f"[Garmin] discarded {status} local LiveTrack session state"
             )

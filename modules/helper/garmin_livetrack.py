@@ -5,10 +5,11 @@ import math
 import struct
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote
 
+from modules.app_logger import app_logger
 from modules.helper.livetrack import (
     LiveTrackSample,
     load_private_json,
@@ -24,8 +25,9 @@ IT_TOKEN_FILENAME = "livetrack_it_token.json"
 BTF_CREDENTIALS_FILENAME = "livetrack_btf_credentials.json"
 STATE_FILENAME = "livetrack_state.json"
 PUBLISHER_TYPE = "WEARABLE"
-DEFAULT_DURATION = "PT6H"
-DEFAULT_DURATION_SEC = 6 * 60 * 60
+G_SESSION_DURATION = "PT24H"
+G_SESSION_EXTENSION_HOURS = 24
+G_SESSION_EXTENSION_MARGIN_HOURS = 1
 DEFAULT_VIEWABLE = "PT24H"
 DEFAULT_ALTITUDE_METERS = 3.5
 COURSE_PATH = "/tracker/livetrack/api/v1/course"
@@ -55,6 +57,10 @@ class GarminLiveTrackApiError(GarminLiveTrackError):
     def __init__(self, message, status_code=None):
         super().__init__(message)
         self.status_code = status_code
+
+
+class GarminLiveTrackConnectionError(GarminLiveTrackApiError):
+    """Raised when a request cannot complete because of a connection failure."""
 
 
 class GarminLiveTrackMessageHttpError(GarminLiveTrackApiError):
@@ -302,6 +308,7 @@ class GarminLiveTrackClient:
         self._garmin = None
         self._credentials_cleared = False
         self._displayed_message_ids = set()
+        self.startup_check_pending = True
         self.course_send_status = "RESET"
         self.course_send_revision = 0
 
@@ -477,6 +484,24 @@ class GarminLiveTrackClient:
         try:
             garmin.login(str(self.tokenstore_path))
         except Exception as exc:
+            from requests import ConnectionError as RequestConnectionError
+            from requests import Timeout as RequestTimeout
+
+            cause = exc
+            while cause is not None:
+                if isinstance(
+                    cause,
+                    (
+                        ConnectionError,
+                        TimeoutError,
+                        RequestConnectionError,
+                        RequestTimeout,
+                    ),
+                ):
+                    raise GarminLiveTrackConnectionError(
+                        "Garmin login connection failed."
+                    ) from exc
+                cause = cause.__cause__ or cause.__context__
             raise GarminLiveTrackConfigurationError(
                 "Garmin authentication failed. Run an initial garminconnect login "
                 "with email/password and MFA if required."
@@ -548,7 +573,7 @@ class GarminLiveTrackClient:
                 timeout=20,
             )
         except requests.RequestException as exc:
-            raise GarminLiveTrackApiError(
+            raise GarminLiveTrackConnectionError(
                 "Garmin IT token exchange connection failed."
             ) from exc
         if not response.ok:
@@ -634,7 +659,9 @@ class GarminLiveTrackClient:
                     timeout=timeout,
                 )
             except requests.RequestException as exc:
-                raise GarminLiveTrackApiError("Garmin GCS connection failed.") from exc
+                raise GarminLiveTrackConnectionError(
+                    "Garmin GCS connection failed."
+                ) from exc
             if response.status_code != 401 or attempt == 1:
                 break
 
@@ -727,6 +754,10 @@ class GarminLiveTrackClient:
                     body=payload,
                     timeout=20,
                 )
+        except (TimeoutError, ConnectionError) as exc:
+            raise GarminLiveTrackConnectionError(
+                "Garmin GCS request via Gadgetbridge failed."
+            ) from exc
         except Exception as exc:
             raise GarminLiveTrackApiError(
                 "Garmin GCS request via Gadgetbridge failed."
@@ -953,9 +984,6 @@ class GarminLiveTrackClient:
         )
         if created_at is None or created_at > now:
             return "invalid"
-        if (now - created_at).total_seconds() >= DEFAULT_DURATION_SEC:
-            return "expired"
-
         if pending_matches:
             return "pending_stop"
 
@@ -1039,7 +1067,7 @@ class GarminLiveTrackClient:
     def create_session_payload(self, sample, publisher):
         return {
             "defaultName": True,
-            "duration": DEFAULT_DURATION,
+            "duration": G_SESSION_DURATION,
             "locale": "ja-JP",
             "name": "Pi Zero Bikecomputer",
             "position": {
@@ -1089,6 +1117,7 @@ class GarminLiveTrackClient:
             "url": session.get("url"),
             "createdAt": server_start,
             "activityCreatedAt": activity_start,
+            "expiresAt": session.get("end") or response.get("end"),
             "viewable": payload["viewable"],
             "pointCount": 0,
         }
@@ -1170,6 +1199,7 @@ class GarminLiveTrackClient:
             return "no_position"
 
         state = self.load_state()
+        create_status = None
         if create_session:
             create_status = await self.create_session(
                 samples[0],
@@ -1188,12 +1218,37 @@ class GarminLiveTrackClient:
             )
         publisher = self.publisher(state)
         payload = self.point_payload(samples, publisher, session)
-        await self.request(
-            "POST",
-            "/tracker/livetrack/api/v1/trackpoints",
-            payload=payload,
-            gadgetbridge_service=gadgetbridge_service,
-        )
+        try:
+            await self.extend_session(state)
+            await self.request(
+                "POST",
+                "/tracker/livetrack/api/v1/trackpoints",
+                payload=payload,
+                gadgetbridge_service=gadgetbridge_service,
+            )
+        except GarminLiveTrackApiError as exc:
+            if not (
+                self.startup_check_pending
+                and create_status == "already_active"
+                and exc.status_code in (404, 410)
+            ):
+                raise
+            response = await asyncio.to_thread(
+                self.request_direct,
+                "GET",
+                COURSE_SESSION_PATH,
+                params=publisher,
+            )
+            if not self.session_missing_or_ended(response, session["sessionId"]):
+                app_logger.warning(
+                    "[Garmin] initial trackpoint rejected; session state retained"
+                )
+                return "deferred"
+            self.startup_check_pending = False
+            self.clear_session(state)
+            app_logger.warning("[Garmin] remote session unavailable; recreating")
+            return await self.post_points(samples)
+        self.startup_check_pending = False
         session["pointCount"] = int(session.get("pointCount", 0)) + len(
             payload["trackPoints"]
         )
@@ -1201,6 +1256,48 @@ class GarminLiveTrackClient:
         state["activeSession"] = session
         self.save_state(state)
         return "success"
+
+    async def extend_session(self, state):
+        if not self.session_extension_due(state):
+            return
+        session = state["activeSession"]
+        end = _parse_utc_datetime(session.get("expiresAt"))
+        now = datetime.now(timezone.utc)
+        new_end = max(end or now, now) + timedelta(hours=G_SESSION_EXTENSION_HOURS)
+        new_end_text = new_end.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        await self.request(
+            "PATCH",
+            "/tracker/livetrack/api/v1/sessions/",
+            payload={"end": new_end_text, "publisher": self.publisher(state)},
+        )
+        session["expiresAt"] = new_end_text
+        self.save_state(state)
+        app_logger.info("[Garmin] LiveTrack session extended")
+
+    def session_extension_due(self, state):
+        session = self.active_session(state)
+        if session is None:
+            return False
+        end = _parse_utc_datetime(session.get("expiresAt"))
+        return end is None or end <= datetime.now(timezone.utc) + timedelta(
+            hours=G_SESSION_EXTENSION_MARGIN_HOURS
+        )
+
+    @staticmethod
+    def session_missing_or_ended(response, session_id):
+        if not isinstance(response, dict):
+            return False
+        sessions = response.get("sessions")
+        if not isinstance(sessions, list) or any(
+            not isinstance(session, dict) or not session.get("sessionId")
+            for session in sessions
+        ):
+            return False
+        for session in sessions:
+            if str(session["sessionId"]) == str(session_id):
+                end = _parse_utc_datetime(session.get("end"))
+                return end is not None and end <= datetime.now(timezone.utc)
+        return response.get("shortened", False) is False
 
     @staticmethod
     def stop_payload(publisher):
