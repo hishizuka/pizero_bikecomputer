@@ -50,6 +50,7 @@ class IMUAxisPreset:
     mag_axis_swap_xy_status: bool = False
     mag_axis_conversion_status: bool = False
     mag_axis_conversion_coef: tuple[float, float, float] = (1.0, 1.0, 1.0)
+    acc_rest_z_sign: int = 1
 
 
 @dataclass(frozen=True)
@@ -80,6 +81,7 @@ _S800_IMU_AXIS = IMUAxisPreset(
     axis_conversion_coef=(1.0, 1.0, -1.0),
     mag_axis_conversion_status=True,
     mag_axis_conversion_coef=(1.0, -1.0, 1.0),
+    acc_rest_z_sign=-1,
 )
 _BACKLIT_DISPLAY = DisplayPreset(use_backlight=True, auto_backlight_cutoff=2)
 

@@ -247,6 +247,8 @@ class SensorI2C(Sensor):
     quit_status = False
 
     def sensor_init(self):
+        imu_axis = self.config.board_preset.imu_axis
+        self._acc_rest_z_sign = imu_axis.acc_rest_z_sign if imu_axis is not None else 1
         self.sensor = {}
         self.available_sensors = {
             "PRESSURE": {},
@@ -1245,11 +1247,8 @@ class SensorI2C(Sensor):
 
         # finalize gyro
         # angle from fixed_roll and fixed_pitch
-        acc_angle = np.zeros(3)
         ratio = 0.9
-        if not np.isnan(self.values["pitch"]) and not np.isnan(self.values["roll"]):
-            acc_angle[0] = self.values["roll"] - self.values["fixed_roll"]
-            acc_angle[1] = self.values["pitch"] - self.values["fixed_pitch"]
+        acc_angle = self._get_tilt_difference()
         self.values["gyro"] = (
             ratio
             * (
@@ -1402,7 +1401,7 @@ class SensorI2C(Sensor):
             return
 
         self.values["pitch"], self.values["roll"] = self.get_pitch_roll(
-            self.values["acc_mod"]
+            self.values["acc_mod"], acc_rest_z_sign=self._acc_rest_z_sign
         )
         self.values["yaw"] = self.get_yaw(
             self.values["mag"], self.values["pitch"], self.values["roll"]
@@ -1440,10 +1439,20 @@ class SensorI2C(Sensor):
         self.values["heading_magnetic_timestamp"] = datetime.now()
 
     @staticmethod
-    def get_pitch_roll(acc):
+    def get_pitch_roll(acc, *, acc_rest_z_sign=1):
         pitch = math.atan2(-acc[X], (math.sqrt(acc[Y] ** 2 + acc[Z] ** 2)))
-        roll = math.atan2(acc[Y], acc[Z])
+        roll = math.atan2(acc[Y], acc[Z] * acc_rest_z_sign)
         return pitch, roll
+
+    def _get_tilt_difference(self):
+        angles = np.zeros(3)
+        if not np.isnan(self.values["pitch"]) and not np.isnan(self.values["roll"]):
+            angles[:2] = (
+                self.values["roll"] - self.values["fixed_roll"],
+                self.values["pitch"] - self.values["fixed_pitch"],
+            )
+            angles[:2] = (angles[:2] + math.pi) % (2 * math.pi) - math.pi
+        return angles
 
     @staticmethod
     def get_yaw(mag, pitch, roll):
@@ -1485,7 +1494,8 @@ class SensorI2C(Sensor):
                     np.average(self.acc_raw_hist[0]),
                     np.average(self.acc_raw_hist[1]),
                     np.average(self.acc_raw_hist[2]),
-                ]
+                ],
+                acc_rest_z_sign=self._acc_rest_z_sign,
             )
         elif self.motion_sensor["QUATERNION"]:
             pitch = np.average(self.euler_array[0])
@@ -1531,41 +1541,32 @@ class SensorI2C(Sensor):
             self.moving_threshold_min = o
             self.moving_threshold = pow(10, 0.57 * o)
 
-    def modified_acc(self):
-        # require acc
-        if not self.motion_sensor["ACC"]:
-            return
-        # convert absolute coordinates
-        cos_p = math.cos(self.values["pitch"])
-        sin_p = math.sin(self.values["pitch"])
-        cos_r = math.cos(self.values["roll"])
-        sin_r = math.sin(self.values["roll"])
-        # cos_y = math.cos(self.values['yaw'])
-        # sin_y = math.sin(self.values['yaw'])
+    def _rotate_acc(self, pitch, roll):
+        cos_p = math.cos(pitch)
+        sin_p = math.sin(pitch)
+        cos_r = math.cos(roll)
+        sin_r = math.sin(roll)
         m_pitch = np.array([[cos_p, 0, sin_p], [0, 1, 0], [-sin_p, 0, cos_p]])
         m_roll = np.array([[1, 0, 0], [0, cos_r, -sin_r], [0, sin_r, cos_r]])
-        # m_yaw   = np.array([[cos_y,-sin_y,0],[sin_y,cos_y,0],[0,0,1]])
-        # m_acc   = np.array([[ax],[ay],[az]])
-        m_acc = np.array(self.values["acc_mod"]).reshape(3, 1)
+        acc = self.values["acc_mod"].copy()
+        if self._acc_rest_z_sign == -1:
+            # Level S800's downward-Z input using zero-based roll, then pitch.
+            acc[Z] *= -1
+            return m_pitch @ m_roll @ acc
+        return m_roll @ m_pitch @ acc
 
-        m_acc_mod = m_roll @ m_pitch @ m_acc
-        # m_acc_mod = m_yaw@m_roll@m_pitch@m_acc
-
-        # finalize acc
-        self.values["acc"] = m_acc_mod.reshape(3)
+    def modified_acc(self):
+        if not self.motion_sensor["ACC"]:
+            return
+        self.values["acc"] = self._rotate_acc(
+            self.values["pitch"], self.values["roll"]
+        )
         # remove gravity (converted acceleration - gravity)
         self.values["acc"][Z] -= 1.0
 
-        # test
-        cos_p = math.cos(self.values["fixed_pitch"])
-        sin_p = math.sin(self.values["fixed_pitch"])
-        cos_r = math.cos(self.values["fixed_roll"])
-        sin_r = math.sin(self.values["fixed_roll"])
-        m_pitch = np.array([[cos_p, 0, sin_p], [0, 1, 0], [-sin_p, 0, cos_p]])
-        m_roll = np.array([[1, 0, 0], [0, cos_r, -sin_r], [0, sin_r, cos_r]])
-        m_acc = np.array(self.values["acc_mod"]).reshape(3, 1)
-        m_acc_mod = m_roll @ m_pitch @ m_acc
-        self.values["acc_graph"] = m_acc_mod.reshape(3)
+        self.values["acc_graph"] = self._rotate_acc(
+            self.values["fixed_pitch"], self.values["fixed_roll"]
+        )
         if self.available_sensors["MOTION"].get("BHI3_S"):
             self.values["acc_graph"][Z] += 1.0
         self.lp_filter("acc_graph", 3)
