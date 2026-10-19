@@ -250,7 +250,7 @@ it displays three of the people around you in the order in which you caught sens
 
 - ![2023_TOJ_compare](https://github.com/hishizuka/pizero_bikecomputer/assets/12926652/9fa9a34f-b153-44a6-a718-30c61be84b41)
 
-| Items | Edge830 | Pi Zero Bikecomputer |
+| Items | Edge Explore 2 | Pi Zero Bikecomputer |
 |:-:|:-:|:-:|
 | Distance | 313.7 km  | 314.3 km  |
 | Work |  3,889 kJ | 3,926 kJ  |
