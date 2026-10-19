@@ -1,4 +1,7 @@
+import array
+import asyncio
 import struct
+import threading
 from datetime import datetime
 
 from modules.app_logger import app_logger
@@ -35,6 +38,10 @@ class ANT_Device:
         "serial_num",
         "battery_status",
         "battery_voltage",
+        "battery_percentage",
+        "operating_time",
+        "sw_ver_main",
+        "sw_ver_supplemental",
     )
     battery_status = {
         0: "None",
@@ -58,12 +65,16 @@ class ANT_Device:
     ant_time_base = 32768
     stop_margin_periods = 2
     stop_missing_events = 1
+    metadata_pages = ()
+    battery_page = None
+    ack_retry_max = 3
+    ack_retry_backoff = (1.0, 2.0)
 
     def __init__(self, node=None, config=None, values=None, name="", auto_connect=True):
         self.node = node
         self.config = config
         self.name = name
-        self.last_data_timestamp = None
+        self.init_runtime_state()
         if values is None:
             self.values = {}
         else:
@@ -88,6 +99,15 @@ class ANT_Device:
                     app_logger.warning("ANT+ channel cleanup failed: %s", exc)
             raise
 
+    def init_runtime_state(self):
+        self.structPattern = self.structPattern.copy()
+        self.send_lock = threading.RLock()
+        self._closing = False
+        self._metadata_requested = False
+        self._metadata_task = None
+        self._battery_task = None
+        self.last_data_timestamp = None
+
     def on_data(self):
         pass
 
@@ -109,13 +129,31 @@ class ANT_Device:
     def init_common_page_status(self):
         for element in self.common_page_elements:
             self.values[element] = self.config.G_SENSOR_NULLVALUE
-        self.values["stored_page"] = {}
-        for key in (0x50, 0x51):
-            self.values["stored_page"][key] = False
+        self.values["stored_page"] = dict.fromkeys(
+            (*self.metadata_pages, 0x50, 0x51, 0x52), False
+        )
+        self.values["batteries"] = {}
 
     # reset total value with reset button
     def reset_value(self):
-        pass
+        if (
+            self.battery_page is not None
+            and self.channel is not None
+            and not self._closing
+            and self.is_transport_available()
+        ):
+            self.config.loop.call_soon_threadsafe(self._start_battery_request)
+
+    def _start_battery_request(self):
+        if self._closing or self.channel is None or not self.is_transport_available():
+            return
+        if self._battery_task is None or self._battery_task.done():
+            self._battery_task = asyncio.create_task(self.request_battery_status())
+
+    async def request_battery_status(self):
+        if self.battery_page is None:
+            return False
+        return await self.send_acknowledged(self.build_page_request(self.battery_page))
 
     def set_message_interval(self):
         self.interval = (
@@ -163,8 +201,54 @@ class ANT_Device:
 
     def _on_data(self, data):
         """Record reception before dispatching a packet to the device parser."""
+        if len(data) < 8:
+            return
         self.last_data_timestamp = datetime.now()
         self.on_data(data)
+        if self.metadata_pages and not self._metadata_requested and not self._closing:
+            self._metadata_requested = True
+            self.config.loop.call_soon_threadsafe(self._start_metadata_request)
+
+    def _start_metadata_request(self):
+        if not self._closing:
+            self._metadata_task = asyncio.create_task(self.request_device_information())
+
+    @staticmethod
+    def build_page_request(page, descriptor1=0xFF, descriptor2=0xFF):
+        # Request two broadcast responses; never request sensor-to-display ACKs.
+        return array.array(
+            "B", [0x46, 0xFF, 0xFF, descriptor1, descriptor2, 2, page, 1]
+        )
+
+    def _send_acknowledged(self, payload):
+        with self.send_lock:
+            if self._closing or not self.is_transport_available():
+                return False
+            # Own the retry budget here instead of multiplying openant's retries.
+            return self.channel.send_acknowledged_data_with_retry(payload, retry_max=1)
+
+    async def send_acknowledged(self, payload):
+        for attempt in range(self.ack_retry_max):
+            if self._closing or not self.is_transport_available():
+                return False
+            try:
+                if await asyncio.to_thread(self._send_acknowledged, payload):
+                    return True
+            except Exception as exc:
+                app_logger.warning("ANT+ %s send failed: %s", self.name, exc)
+            if attempt + 1 < self.ack_retry_max:
+                await asyncio.sleep(self.ack_retry_backoff[attempt])
+        return False
+
+    async def request_device_information(self):
+        if not self.metadata_pages:
+            return False
+        for page in self.metadata_pages:
+            if page not in (4, 7, 0x52) and self.values["stored_page"][page]:
+                continue
+            if not await self.send_acknowledged(self.build_page_request(page)):
+                return False
+        return True
 
     def channel_set_id(self):  # for slave
         self.channel.set_id(
@@ -206,6 +290,8 @@ class ANT_Device:
             return False
         try:
             self.channel.open()
+            self._closing = False
+            self._metadata_requested = False
             return self.is_transport_available()
         except Exception as exc:
             app_logger.warning("ANT+ %s channel open failed: %s", self.name, exc)
@@ -222,28 +308,37 @@ class ANT_Device:
         pass
 
     def disconnect(self, isCheck=True, isChange=False):
-        if not self.is_transport_available():
-            return
         if isCheck:
             if not self.config.sensor_uses(self.name, self.config.SENSOR_PROTOCOL_ANT):
                 return
+        self._closing = True
+        for task in (self._metadata_task, self._battery_task):
+            if task is not None:
+                self.config.loop.call_soon_threadsafe(task.cancel)
+        if not self.is_transport_available():
+            return
         if self.state_check("CLOSE"):
             return
         if not self.is_transport_available():
             return
         try:
-            self.close_extra()
-            self.channel.close()
+            with self.send_lock:
+                try:
+                    self.close_extra()
+                finally:
+                    self.channel.close()
             if self.is_transport_available():
                 self.channel.wait_for_event([0x07])  # EVENT_CHANNEL_CLOSED
         except Exception as exc:
             app_logger.warning("ANT+ %s channel close failed: %s", self.name, exc)
 
     def delete(self):
+        self._closing = True
         if self.channel is None:
             return
-        self.node.delete_channel(self.channel)
-        self.channel = None
+        with self.send_lock:
+            self.node.delete_channel(self.channel)
+            self.channel = None
 
     def state_check(self, mode):
         channel_state = self.get_channel_state()
@@ -269,7 +364,7 @@ class ANT_Device:
         pass
 
     def stop(self):
-        self.disconnect(self, isCheck=True, isChange=False)
+        self.disconnect(isCheck=True, isChange=False)
 
     ##############
     # ANT+ pages #
@@ -278,22 +373,68 @@ class ANT_Device:
         values["hw_ver"], values["manu_id"], values["model_num"] = self.structPattern[
             0x50
         ].unpack(data[0:8])
-        if values["manu_id"] in ant_code.AntCode.MANUFACTURER:
-            values["manu_name"] = ant_code.AntCode.MANUFACTURER[values["manu_id"]]
+        self.set_manufacturer_name(values)
         values["stored_page"][0x50] = True
 
     def setCommonPage81(self, data, values):
         sw1, sw2, values["serial_num"] = self.structPattern[0x51].unpack(data[0:8])
+        values["sw_ver_main"] = sw2
+        values["sw_ver_supplemental"] = (
+            sw1 if sw1 != 0xFF else self.config.G_SENSOR_NULLVALUE
+        )
         if sw1 != 0xFF:
             values["sw_ver"] = float((sw2 * 100 + sw1) / 1000)
         else:
-            values["sw_ver"] = float(sw2 / 10)
+            values["sw_ver"] = sw2
+        if values["serial_num"] == 0xFFFFFFFF:
+            values["serial_num"] = self.config.G_SENSOR_NULLVALUE
         values["stored_page"][0x51] = True
 
     # data is 2byte only (trim from common page 82 and page 4 of speed or cadence only sensor)
     def setCommonPage82(self, data, values):
         values["battery_status"] = self.battery_status[(data[1] >> 4) & 0b111]
-        values["battery_voltage"] = round(float(data[1] & 0b1111) + data[0] / 256, 2)
+        coarse = data[1] & 0x0F
+        values["battery_voltage"] = (
+            round(coarse + data[0] / 256, 2)
+            if coarse != 0x0F
+            else self.config.G_SENSOR_NULLVALUE
+        )
+
+    def set_battery_page(self, data, values):
+        self.setCommonPage82(data[6:8], values)
+        values["operating_time"] = int.from_bytes(data[3:6], "little") * (
+            2 if data[7] & 0x80 else 16
+        )
+        if data[2] != 0xFF:
+            values["batteries"][data[2] >> 4] = {
+                "battery_status": values["battery_status"],
+                "battery_voltage": values["battery_voltage"],
+                "operating_time": values["operating_time"],
+                "battery_count": data[2] & 0x0F,
+            }
+        values["stored_page"][0x52] = True
+
+    def set_manufacturer_name(self, values):
+        values["manu_name"] = ant_code.AntCode.MANUFACTURER.get(
+            values["manu_id"], self.config.G_SENSOR_NULLVALUE
+        )
+
+    def set_profile_background_page(self, data):
+        page = data[0] & 0x7F
+        if page == 1:
+            self.values["operating_time"] = int.from_bytes(data[1:4], "little") * 2
+        elif page == 2:
+            self.values["manu_id"] = data[1]
+            self.set_manufacturer_name(self.values)
+            self.values["serial_num"] = (
+                int.from_bytes(data[2:4], "little") << 16
+            ) | self.config.G_SENSORS[self.name]["ID"]
+        elif page == 3:
+            self.values["hw_ver"] = data[1]
+            self.values["sw_ver"] = self.values["sw_ver_main"] = data[2]
+            self.values["model_num"] = data[3]
+        if page in self.metadata_pages:
+            self.values["stored_page"][page] = True
 
     @staticmethod
     def print_spike(device_str, val, pre_val, delta, delta_t):

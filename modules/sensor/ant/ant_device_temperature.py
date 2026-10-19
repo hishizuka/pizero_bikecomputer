@@ -12,6 +12,7 @@ class ANT_Device_Temperature(ant_device.ANT_Device):
         "channel_type": 0x00,  # Channel.Type.BIDIRECTIONAL_RECEIVE,
     }
     elements = ("temperature",)
+    battery_page = 0x52
     pickle_key = "ant+_temperature_values"
 
     def add_struct_pattern(self):
@@ -26,4 +27,4 @@ class ANT_Device_Temperature(ant_device.ANT_Device):
             self.values["timestamp"] = datetime.now()
         # Common Data Page 82 (0x52): Battery Status
         elif data[0] == 0x52:
-            self.setCommonPage82(data[6:8], self.values)
+            self.set_battery_page(data, self.values)

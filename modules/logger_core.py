@@ -294,8 +294,6 @@ class LoggerCore:
         self.logger_csv = logger_csv.LoggerCsv(self.config)
         self.logger_fit = logger_fit.LoggerFit(self.config)
 
-        self.sensor.start_coroutine()
-
         self.course.load()
 
         for k in self.lap_keys:
@@ -318,6 +316,7 @@ class LoggerCore:
         else:
             self.resume()
             self.resume_status = True
+        self.sensor.start_coroutine()
 
     async def resume_start_stop(self):
         if not self.resume_status:
@@ -1208,12 +1207,15 @@ class LoggerCore:
         if self.config.is_sensor_configured("PWR"):
             self._restore_np_state_from_log_db(window_size=self.sensor.np_window_size)
 
-        # start_time
-        self.cur.execute("SELECT MIN(timestamp) FROM BIKECOMPUTER_LOG")
+        # Restore manual START, including time spent waiting or paused.
+        self.cur.execute(
+            "SELECT timestamp, elapsed_time FROM BIKECOMPUTER_LOG "
+            "ORDER BY timestamp LIMIT 1"
+        )
         first_row = self.cur.fetchone()
         if first_row[0] is not None:
             self.values["start_time"] = int(
-                datetime_myparser(first_row[0]).timestamp() - 1
+                datetime_myparser(first_row[0]).timestamp() - first_row[1]
             )
 
         # if not self.config.G_IS_RASPI and self.config.G_DUMMY_OUTPUT:

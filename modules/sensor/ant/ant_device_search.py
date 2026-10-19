@@ -22,6 +22,7 @@ class ANT_Device_Search(ant_device.ANT_Device):
     _ctrl_searcher_owned = False
 
     def __init__(self, node, config, values=None):
+        self.init_runtime_state()
         self.node = node
         self.config = config
         self.antName = None

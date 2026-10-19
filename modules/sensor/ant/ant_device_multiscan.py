@@ -21,6 +21,7 @@ class ANT_Device_MultiScan(ant_device.ANT_Device):
     pre_power_meter_delta = {}
 
     def __init__(self, node, config):
+        self.init_runtime_state()
         self.node = node
         self.config = config
         self.reset_value()
@@ -95,7 +96,7 @@ class ANT_Device_MultiScan(ant_device.ANT_Device):
         # HR
         if antType in self.config.G_ANT_SENSOR_TYPES["HR"]:
             if antIDType == self.config.get_ant_id_type("HR"):
-                self.mainAntDevice[antIDType].on_data(data)
+                self.mainAntDevice[antIDType]._on_data(data)
             else:
                 if antIDType not in self.values:
                     self.values[antIDType] = {}
@@ -104,21 +105,21 @@ class ANT_Device_MultiScan(ant_device.ANT_Device):
         # Power
         elif antType in self.config.G_ANT_SENSOR_TYPES["PWR"]:
             if antIDType == self.config.get_ant_id_type("PWR"):
-                self.mainAntDevice[antIDType].on_data(data)
+                self.mainAntDevice[antIDType]._on_data(data)
             else:
                 self.on_data_power_scan(antIDType, data)
         # Speed
         elif antType in self.config.G_ANT_SENSOR_TYPES["SPD"]:
             if antIDType == self.config.get_ant_id_type("SPD"):
-                self.mainAntDevice[antIDType].on_data(data)
+                self.mainAntDevice[antIDType]._on_data(data)
         # Cadence
         elif antType in self.config.G_ANT_SENSOR_TYPES["CDC"]:
             if antIDType == self.config.get_ant_id_type("CDC"):
-                self.mainAntDevice[antIDType].on_data(data)
+                self.mainAntDevice[antIDType]._on_data(data)
         # Temperature
         elif antType in self.config.G_ANT_SENSOR_TYPES["TEMP"]:
             if antIDType == self.config.get_ant_id_type("TEMP"):
-                self.mainAntDevice[antIDType].on_data(data)
+                self.mainAntDevice[antIDType]._on_data(data)
 
     def on_data_power_scan(self, antIDType, data):
 

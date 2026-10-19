@@ -11,7 +11,6 @@ from modules.utils.cycling_sensor import (
 )
 
 from . import ant_device
-from . import ant_code
 
 
 class ANT_Device_Speed_Cadence(ant_device.ANT_Device):
@@ -44,6 +43,7 @@ class ANT_Device_Speed_Cadence(ant_device.ANT_Device):
         self.values["last_event_timestamp_cdc"] = None
         self.values["last_event_interval_spd"] = None
         self.values["last_event_interval_cdc"] = None
+        super().reset_value()
 
     def on_data(self, data):
         self.sc_values = self.structPattern[self.name].unpack(data[0:8])
@@ -69,7 +69,8 @@ class ANT_Device_Speed_Cadence(ant_device.ANT_Device):
                     f"### resume spd {self.pre_values[3]} {pre_speed_value} {diff} ###"
                 )
                 app_logger.info(
-                    f"### resume spd {int(self.values['distance'])} {int(self.config.G_WHEEL_CIRCUMFERENCE * diff)} [m] ###"
+                    f"### resume spd {int(self.values['distance'])} "
+                    f"{int(self.config.G_WHEEL_CIRCUMFERENCE * diff)} [m] ###"
                 )
 
             return
@@ -158,6 +159,8 @@ class ANT_Device_Cadence(ant_device.ANT_Device):
     delta = []
     pre_delta = []
     elements = ("cadence",)
+    metadata_pages = (2, 3, 4)
+    battery_page = 4
     const = 60
     fit_max = MAX_CADENCE_RPM
     stop_missing_events = 2
@@ -177,6 +180,7 @@ class ANT_Device_Cadence(ant_device.ANT_Device):
         self.values["last_event_timestamp"] = None
         self.values["last_event_interval"] = None
         self.resetExtra()
+        super().reset_value()
 
     def resetExtra(self):
         pass
@@ -185,6 +189,9 @@ class ANT_Device_Cadence(ant_device.ANT_Device):
         self.sc_values = self.structPattern[self.name].unpack(data[0:8])
         t = datetime.now()
         page = data[0] & 0b01111111  # Bit7 is toggle, bits 0-6 are page number
+        self.set_profile_background_page(data)
+        if page == 4:
+            self.setCommonPage82(data[2:4], self.values)
 
         if self.pre_values[0] == -1:
             self.pre_values = list(self.sc_values)
@@ -237,23 +244,6 @@ class ANT_Device_Cadence(ant_device.ANT_Device):
         # on_data timestamp
         self.values["on_data_timestamp"] = t
         self.pre_delta = self.delta[:]
-
-        # Data Page 2: Manufacturer ID
-        if page == 2:
-            self.values["manu_id"] = data[1]
-            if self.values["manu_id"] in ant_code.AntCode.MANUFACTURER:
-                self.values["manu_name"] = ant_code.AntCode.MANUFACTURER[
-                    self.values["manu_id"]
-                ]
-            self.values["serial_num"] = data[3] * 256 + data[2]
-        # Data Page 3: Product ID
-        elif page == 3:
-            self.values["hw_ver"] = data[1]
-            self.values["sw_ver"] = data[2]
-            self.values["model_num"] = data[3]
-        # Data Page 4: Battery Status
-        elif page == 4:
-            self.setCommonPage82(data[2:4], self.values)
 
     def resumeAccumulatedValue(self):
         pass

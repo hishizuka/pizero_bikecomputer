@@ -518,7 +518,7 @@ class SensorANT(Sensor):
         if device is None:
             return
         if isinstance(device, ant_device_light.ANT_Device_Light):
-            device.send_queue.put_nowait(None)
+            device._stop_workers()
         if self.is_transport_available():
             try:
                 device.delete()
@@ -630,6 +630,25 @@ class SensorANT(Sensor):
         if not self.is_sensor_available("LGT"):
             return
         self.device[self.config.get_ant_id_type("LGT")].send_light_mode(mode, auto)
+
+    async def calibrate_power_meter(self, timeout=30.0):
+        if (
+            not self.is_transport_available()
+            or not self.is_sensor_available("PWR")
+            or self.scanner.isUse
+        ):
+            return False
+        return await self.device[self.config.get_ant_id_type("PWR")].calibrate(timeout)
+
+    async def request_device_information(self, role):
+        if (
+            not self.is_transport_available()
+            or not self.is_sensor_available(role)
+            or self.scanner.isUse
+        ):
+            return False
+        device = self.device[self.config.get_ant_id_type(role)]
+        return await device.request_device_information()
 
     def set_auto_light_enabled(self, enabled):
         if not self.is_sensor_available("LGT"):

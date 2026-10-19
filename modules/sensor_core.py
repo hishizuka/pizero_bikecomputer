@@ -1028,9 +1028,8 @@ class SensorCore:
             integrated["speed"] = spd
             integrated["cadence"] = cdc
             integrated["power"] = pwr
-            if self.config.G_STOPWATCH_STATUS == "START":
-                integrated["distance"] += dst_diff["USE"]
-                integrated["accumulated_power"] += ttlwork_diff
+            integrated["distance"] += dst_diff["USE"]
+            integrated["accumulated_power"] += ttlwork_diff
             integrated["grade"] = grade
             integrated["grade_spd"] = grade_spd
             integrated["glide_ratio"] = glide

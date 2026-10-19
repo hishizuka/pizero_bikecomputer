@@ -1,3 +1,5 @@
+import array
+import asyncio
 import struct
 from datetime import datetime
 import math
@@ -41,6 +43,12 @@ class ANT_Device_Power(ant_device.ANT_Device):
     page_value_lengths = {0x10: 2, 0x11: 5, 0x12: 5, 0x13: 4}
 
     pickle_key = "ant+_pwr_values"
+    metadata_pages = (0x50, 0x51, 0x52)
+    battery_page = 0x52
+
+    def init_value(self):
+        self._calibration_waiter = None
+        super().init_value()
 
     def add_struct_pattern(self):
         self.structPattern[self.name] = {
@@ -61,6 +69,9 @@ class ANT_Device_Power(ant_device.ANT_Device):
             for element in self.elements[page]:
                 self.values[page][element] = self.config.G_SENSOR_NULLVALUE
         self.init_common_page_status()
+        self.values["calibration_status"] = "idle"
+        self.values["calibration_data"] = self.config.G_SENSOR_NULLVALUE
+        self.values["auto_zero_status"] = self.config.G_SENSOR_NULLVALUE
 
     def reset_value(self):
         self.set_message_interval()
@@ -68,7 +79,10 @@ class ANT_Device_Power(ant_device.ANT_Device):
         self.values[0x11]["distance"] = 0.0
         self.values[0x11]["accumulated_power"] = 0.0
         self.values[0x12]["accumulated_power"] = 0.0
-        for page in self.pre_values:
+        self.pre_values = {}
+        self.pre_delta = {}
+        self.power_values = {}
+        for page in self.page_value_lengths:
             value_length = self.page_value_lengths[page]
             self.pre_values[page] = [-1] * value_length
             self.pre_delta[page] = [-1] * value_length
@@ -76,6 +90,53 @@ class ANT_Device_Power(ant_device.ANT_Device):
             self.values[page]["on_data_timestamp"] = None
             self.values[page]["last_event_timestamp"] = None
             self.values[page]["last_event_interval"] = None
+        super().reset_value()
+
+    async def calibrate(self, timeout=30.0):
+        if self._calibration_waiter is not None:
+            raise RuntimeError("ANT+ power calibration is already in progress")
+        if not self.is_transport_available() or self._closing:
+            self.values["calibration_status"] = "unavailable"
+            return False
+        loop = asyncio.get_running_loop()
+        waiter = self._calibration_waiter = loop.create_future()
+        self.values["calibration_status"] = "pending"
+        self.values["calibration_data"] = self.config.G_SENSOR_NULLVALUE
+        try:
+            async with asyncio.timeout(timeout):
+                # ACK only confirms delivery; the result is a separate page 1.
+                sent = await self.send_acknowledged(
+                    array.array("B", [1, 0xAA, *([0xFF] * 6)])
+                )
+                if waiter.done():
+                    return waiter.result()
+                if not sent:
+                    self.values["calibration_status"] = "send_failed"
+                    return False
+                return await waiter
+        except TimeoutError:
+            self.values["calibration_status"] = "timeout"
+            return False
+        except asyncio.CancelledError:
+            self.values["calibration_status"] = "cancelled"
+            raise
+        finally:
+            if not waiter.done():
+                waiter.cancel()
+            self._calibration_waiter = None
+
+    def _finish_calibration(self, waiter, success, status):
+        if self._calibration_waiter is waiter and not waiter.done():
+            self.values["calibration_status"] = status
+            waiter.set_result(success)
+
+    def close_extra(self):
+        self.values["calibration_status"] = "disconnected"
+        waiter = self._calibration_waiter
+        if waiter is not None:
+            waiter.get_loop().call_soon_threadsafe(
+                self._finish_calibration, waiter, False, "disconnected"
+            )
 
     def prepare_page_state(self, page, power_values, pre_values, pre_delta, values):
         value_length = self.page_value_lengths[page]
@@ -103,8 +164,25 @@ class ANT_Device_Power(ant_device.ANT_Device):
         values["timestamp"] = t
 
     def on_data(self, data):
+        if data[0] == 1:
+            if data[1] in (0xAC, 0xAF):
+                self.values["auto_zero_status"] = (
+                    bool(data[2])
+                    if data[2] in (0, 1)
+                    else self.config.G_SENSOR_NULLVALUE
+                )
+                self.values["calibration_data"] = struct.unpack("<h", data[6:8])[0]
+                waiter = self._calibration_waiter
+                if waiter is not None:
+                    success = data[1] == 0xAC
+                    waiter.get_loop().call_soon_threadsafe(
+                        self._finish_calibration,
+                        waiter,
+                        success,
+                        "success" if success else "failed",
+                    )
         # standard power-only main data page (0x10)
-        if data[0] == 0x10:
+        elif data[0] == 0x10:
             self.on_data_power_0x10(
                 data,
                 self.power_values[0x10],
@@ -154,7 +232,7 @@ class ANT_Device_Power(ant_device.ANT_Device):
             self.setCommonPage81(data, self.values)
         # Common Data Page 82 (0x52): Battery Status
         elif data[0] == 0x52:
-            self.setCommonPage82(data[6:8], self.values)
+            self.set_battery_page(data, self.values)
 
     def on_data_power_0x10(self, data, power_values, pre_values, pre_delta, values):
         self.prepare_page_state(0x10, power_values, pre_values, pre_delta, values)

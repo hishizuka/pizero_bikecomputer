@@ -1,10 +1,8 @@
-import struct
 from datetime import datetime
 import array
 import asyncio
 import threading
 from enum import StrEnum
-from time import monotonic
 
 from modules.app_logger import app_logger
 from . import ant_device
@@ -17,6 +15,7 @@ class LightState(StrEnum):
 
 
 class ANT_Device_Light(ant_device.ANT_Device):
+    # Control a paired light directly (Bike Lights 5.6), without a shared network.
     ant_config = {
         "interval": (4084, 8168, 16336),  # 4084 for 8.02Hz / 8168 / 16336 / 32672
         "type": 0x23,
@@ -24,15 +23,15 @@ class ANT_Device_Light(ant_device.ANT_Device):
         "channel_type": 0x00,  # Channel.Type.BIDIRECTIONAL_RECEIVE,
     }
     elements = ()
+    metadata_pages = (0x50, 0x51, 0x13)
+    battery_page = 0x13
     page_34_count = 0
     # Bike Lights profile Rev 2.0 (section 5.4.1) suggests retrying a command
     # (using the same sequence number) if the sequence number in Data Page 1
     # does not match the sequence number that was sent.
     light_retry_timeout = 1.0  # [s]
-    light_retry_max = 3
     auto_light_min_duration = 5  # [s]
-    ack_retry_max = 3
-    ack_retry_backoff = (1.0, 2.0, 6.0)
+    controller_id = 0x5A
 
     light_modes = {
         "bontrager_flare_rt": {
@@ -58,49 +57,41 @@ class ANT_Device_Light(ant_device.ANT_Device):
         0x07: "Invalid",
     }
 
-    state_lock = None
-    _pending_light_setting = None
-
-    def _ensure_lock(self):
-        if self.state_lock is None:
-            self.state_lock = threading.RLock()
-        return self.state_lock
-
     pickle_key = "ant+_lgt_values"
 
-    def set_timeout(self):
-        self.channel.set_search_timeout(self.timeout)
+    def init_value(self):
+        self.state_lock = threading.RLock()
+        self._pending_light_setting = None
+        self.page_34_count = 0
+        self._light_index = 0
+        self._send_task = None
+        self._workers_stopping = False
+        super().init_value()
 
     def setup_channel_extra(self):
-        # Protect shared state across ANT callback thread and UI/auto threads.
-        self.state_lock = self._ensure_lock()
-
         # All light control messages go through a single queue/loop to keep
         # ordering and sequence numbers consistent.
         self.send_queue = asyncio.Queue()
-        asyncio.create_task(self.send_worker())
+        self._send_task = asyncio.create_task(self.send_worker())
 
     def _queue_send(self, payload, pending=None):
         """Enqueue payload on the configured event loop in a thread-safe way."""
-        try:
-            loop = self.config.loop
-        except RuntimeError:
-            loop = None
-        if loop is not None and loop.is_running():
-            asyncio.run_coroutine_threadsafe(self.send_queue.put((payload, pending)), loop)
-        else:
-            asyncio.create_task(self.send_queue.put((payload, pending)))
+        self.config.loop.call_soon_threadsafe(
+            self.send_queue.put_nowait, (payload, pending)
+        )
 
-    @staticmethod
-    def format_list(l):
-        return "[" + " ".join(map(lambda a: str.format("{0:02x}", a), l)) + "]"
-
-    def _send_queued(self, data, pending):
+    def _send_queued(self, pending):
         # Check in the executor too: a command can become obsolete while waiting.
-        with self._ensure_lock():
-            if pending is not None and self._pending_light_setting is not pending:
-                return True
-        return self.channel.send_acknowledged_data_with_retry(data)
+        with self.send_lock:
+            with self.state_lock:
+                if self._pending_light_setting is not pending:
+                    return
+                # Another controller may have formed a network since queuing.
+                data = self._build_light_setting_payload(
+                    pending["mode"], pending["seq_no"]
+                )
+                pending["light_index"] = data[1]
+            return self._send_acknowledged(data)
 
     async def send_worker(self):
         while True:
@@ -109,72 +100,108 @@ class ANT_Device_Light(ant_device.ANT_Device):
                 self.send_queue.task_done()
                 break
             data, pending = item
-            send_ok = False
-            for attempt in range(self.ack_retry_max):
-                try:
-                    # openant's acknowledged send can block; run it in a worker thread
-                    # to keep the main asyncio loop responsive (e.g., MCP230xx buttons).
-                    loop = asyncio.get_running_loop()
-                    send_ok = await loop.run_in_executor(
-                        None, self._send_queued, data, pending
-                    )
-                except Exception as e:
-                    app_logger.error(f"{e}")
-                    send_ok = False
+            try:
+                if pending is None:
+                    sent = await self.send_acknowledged(data)
+                    if not sent and not self._closing and self.is_transport_available():
+                        app_logger.error(
+                            "ANT+ light acknowledged_data retry exhausted: [%s]",
+                            bytes(data).hex(" "),
+                        )
+                    continue
+                with self.state_lock:
+                    if self._pending_light_setting is not pending:
+                        continue
+                    pending["response"] = asyncio.Event()
+                for attempt in range(self.ack_retry_max):
+                    try:
+                        # openant waits for a radio event; keep it off the UI loop.
+                        await asyncio.to_thread(self._send_queued, pending)
+                    except Exception as exc:
+                        app_logger.warning("ANT+ light send failed: %s", exc)
 
-                if send_ok:
-                    break
+                    with self.state_lock:
+                        if self._pending_light_setting is not pending:
+                            break
+                    # ACK loss and missing state share one total send budget.
+                    try:
+                        await asyncio.wait_for(
+                            pending["response"].wait(), self.light_retry_timeout
+                        )
+                    except TimeoutError:
+                        pass
+                    with self.state_lock:
+                        if self._pending_light_setting is not pending:
+                            break
+                        if attempt + 1 == self.ack_retry_max:
+                            self._finish_pending_setting("failed")
+                            app_logger.error(
+                                "ANT+ light command retry exhausted: %s",
+                                pending["mode"],
+                            )
+                        else:
+                            app_logger.warning(
+                                "ANT+ light command unconfirmed (attempt %s/%s): %s",
+                                attempt + 1,
+                                self.ack_retry_max,
+                                pending["mode"],
+                            )
+            finally:
+                self.send_queue.task_done()
 
-                backoff = self.ack_retry_backoff[min(attempt, len(self.ack_retry_backoff) - 1)]
-                app_logger.error(
-                    f"ANT+ light ack failed (attempt {attempt + 1}/{self.ack_retry_max}), backoff {backoff}s: {self.format_list(data)}"
-                )
-                await asyncio.sleep(backoff)
-
-            if not send_ok:
-                app_logger.error(
-                    f"ANT+ light acknowledged_data retry exhausted: {self.format_list(data)}"
-                )
-            with self._ensure_lock():
-                if pending is not None and self._pending_light_setting is pending:
-                    # Start the state-response timeout after ACK attempts finish.
-                    pending["last_sent"] = monotonic()
-            self.send_queue.task_done()
+    def _finish_pending_setting(self, status):
+        with self.state_lock:
+            pending = self._pending_light_setting
+            self._pending_light_setting = None
+            self.values["command_status"] = status
+            if pending is not None and pending["response"] is not None:
+                self.config.loop.call_soon_threadsafe(pending["response"].set)
 
     def reset_value(self):
-        lock = self._ensure_lock()
-        with lock:
+        with self.state_lock:
             self.values["pre_light_mode"] = None
             self.values["light_mode"] = None
-            self.values["light_state"] = self._default_light_state()
+            self.values["light_state"] = (
+                LightState.AUTO if self.config.G_AUTO_LIGHT else LightState.OFF
+            )
             self.values["button_state"] = False
             self.values["auto_state"] = self.values["light_state"] == LightState.AUTO
             self.values["changed_timestamp"] = None
             self.values["auto_on_timestamp"] = None
-            self._pending_light_setting = None
+            self._finish_pending_setting("idle")
+            self.values["actual_light_mode"] = None
             self._auto_requested_on = False
-            self._auto_last_on = None
             self._manual_on_mode = self.default_on_mode
             self._auto_on_mode = self.default_on_mode
-
-    def _default_light_state(self):
-        if self.config.G_AUTO_LIGHT:
-            return LightState.AUTO
-        return LightState.OFF
+        super().reset_value()
 
     def close_extra(self):
-        self.send_disconnect_light()
-        if self.ant_state == "quit":
-            asyncio.create_task(self.send_queue.put(None))
-        self.reset_value()
+        self._finish_pending_setting("idle")
+        try:
+            if self.values["pre_light_mode"] not in (None, "OFF"):
+                # Turn off our beam without dismantling another controller's network.
+                self.page_34_count = (self.page_34_count + 1) % 256
+                self.channel.send_acknowledged_data_with_retry(
+                    self._build_light_setting_payload("OFF", self.page_34_count),
+                    retry_max=self.ack_retry_max,
+                )
+        finally:
+            if self.ant_state == "quit":
+                self._stop_workers()
+            self.reset_value()
 
-    def init_after_connect(self):
-        if (
-            self.values["pre_light_mode"] is None
-            and self.values["light_mode"] is None
-            and self.ant_state in ["connect_ant_sensor"]
-        ):
-            self.send_connect_light()
+    def _stop_workers(self):
+        if self._workers_stopping:
+            return
+        self._workers_stopping = True
+        self._finish_pending_setting("idle")
+        if self._send_task is not None and not self._send_task.done():
+            self.config.loop.call_soon_threadsafe(self.send_queue.put_nowait, None)
+
+    def delete(self):
+        self._closing = True
+        self._stop_workers()
+        super().delete()
 
     def get_light_mode(self, m):
         for k, v in self.light_modes[self.light_name].items():
@@ -182,49 +209,41 @@ class ANT_Device_Light(ant_device.ANT_Device):
                 return k
 
     def on_data(self, data):
-        resend_setting = None
         if data[0] == 0x01:
+            if data[1] not in (0, 1):
+                return
             mode = self.get_light_mode(data[6] >> 2)
             seq_no = data[4]
-            lock = self._ensure_lock()
-            with lock:
-                self.values["battery_status"] = self.battery_levels[(data[2] >> 5) & 0b111]
+            with self.state_lock:
+                self._light_index = data[1]
+                self.values["actual_light_mode"] = mode
+                self.values["battery_status"] = self.battery_levels[
+                    (data[2] >> 5) & 0b111
+                ]
                 # Data Page 1 (Table 7-3): Light Type is 3 bits (2:4)
                 self.light_type = (data[2] >> 2) & 0b00111
 
                 pending = self._pending_light_setting
-                if pending is not None:
-                    if seq_no == pending["seq_no"]:
-                        # The command was received by the light. If the mode still
-                        # doesn't match, avoid repeatedly forcing a state; the spec
-                        # warns about conflicting controllers (section 5.4.1).
-                        if mode != pending["mode"]:
-                            app_logger.warning(
-                                "ANT+ light command observed but state mismatch: "
-                                f"requested={pending['mode']}, actual={mode}, "
-                                f"seq_no={seq_no}"
-                            )
-                        self._pending_light_setting = None
-                    elif pending["last_sent"] is not None:
-                        time_delta = monotonic() - pending["last_sent"]
-                        if time_delta > self.light_retry_timeout:
-                            if pending["retry_count"] >= self.light_retry_max:
-                                app_logger.error(
-                                    "ANT+ light command retry exhausted: "
-                                    f"requested={pending['mode']}, "
-                                    f"rx_seq_no={seq_no}, tx_seq_no={pending['seq_no']}"
-                                )
-                                self._pending_light_setting = None
-                            else:
-                                app_logger.info(
-                                    "Retry ANT+ light command due to seq mismatch: "
-                                    f"requested={pending['mode']}, actual={mode}, "
-                                    f"rx_seq_no={seq_no}, tx_seq_no={pending['seq_no']}, "
-                                    f"time_delta={round(time_delta, 2)}s"
-                                )
-                                resend_setting = pending
-        elif data[0] == 0x02:
-            pass
+                if (
+                    pending is not None
+                    and data[1] == pending["light_index"]
+                    and seq_no == pending["seq_no"]
+                ):
+                    # A matching sequence confirms receipt, even if another
+                    # controller changed the mode (Bike Lights 5.4.1).
+                    if mode != pending["mode"]:
+                        app_logger.warning(
+                            "ANT+ light command observed but state mismatch: "
+                            f"requested={pending['mode']}, actual={mode}, "
+                            f"seq_no={seq_no}"
+                        )
+                    self._finish_pending_setting(
+                        "success" if mode == pending["mode"] else "state_mismatch"
+                    )
+        elif data[0] == 0x13 and data[1] == self._light_index and data[2] & 0x07 == 0:
+            self.values["battery_percentage"] = (
+                data[7] if data[7] <= 100 else self.config.G_SENSOR_NULLVALUE
+            )
         # Common Data Page 80 (0x50): Manufacturer’s Information
         elif data[0] == 0x50 and not self.values["stored_page"][0x50]:
             self.setCommonPage80(data, self.values)
@@ -232,201 +251,125 @@ class ANT_Device_Light(ant_device.ANT_Device):
         elif data[0] == 0x51 and not self.values["stored_page"][0x51]:
             self.setCommonPage81(data, self.values)
 
-        if resend_setting is not None:
-            self.send_light_setting_on_data(resend_setting)
-
     def _build_light_setting_payload(self, mode, seq_no):
         light_code = self.light_modes[self.light_name][mode][1]
         return array.array(
             "B",
             [
                 0x22,
-                0x01,
+                self._light_index,
                 0x28,
                 seq_no,
-                0x5A,
+                self.controller_id,
                 0x10,
                 light_code,
                 0xFF,  # No beam adjustment (Table 7-39)
             ],
         )
 
-    def send_connect_light(self):
-        self._queue_send(
-            array.array(
-                "B",
-                struct.pack(
-                    "<BBBBBHB",
-                    0x21,
-                    0x01,
-                    0xFF,
-                    0x5A,
-                    0b01001000,
-                    self.config.G_SENSORS[self.name]["ID"],
-                    0x00,
-                ),
-            )
-        )
-        # 5th field:
-        #  ON:  0b01010000 (0x50): steady
-        #       0b01011000 (0x58): steady
-        #  OFF: 0b01001000 (0x48): off
-        self.values["pre_light_mode"] = "OFF"
-        self.values["light_mode"] = "OFF"
+    def build_page_request(self, page, descriptor1=0xFF, descriptor2=0xFF):
+        request = super().build_page_request(page, descriptor1, descriptor2)
+        # Common pages have no light index (Bike Lights 7.22.3.1).
+        if page == self.battery_page:
+            request[1] = self._light_index
+        return request
 
-    def send_disconnect_light(self):
-        self.channel.send_acknowledged_data_with_retry(
-            array.array("B", [0x20, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-        )
+    async def request_battery_status(self):
+        if self._closing or not self.is_transport_available():
+            return False
+        self._queue_send(self.build_page_request(self.battery_page))
+        return True
+
+    async def request_device_information(self):
+        if self._closing or not self.is_transport_available():
+            return False
+        for page in self.metadata_pages:
+            self._queue_send(self.build_page_request(page))
+        return True
 
     def send_light_setting(self, mode):
-        lock = self._ensure_lock()
-        with lock:
+        with self.state_lock:
+            self._finish_pending_setting("idle")
             self.page_34_count = (self.page_34_count + 1) % 256
             seq_no = self.page_34_count
-            now = datetime.now()
-            self.values["changed_timestamp"] = now
+            self.values["changed_timestamp"] = datetime.now()
             pending = self._pending_light_setting = {
                 "mode": mode,
                 "seq_no": seq_no,
-                "retry_count": 0,
-                "last_sent": None,  # Queued or waiting for ACK; no state retry yet.
+                "light_index": self._light_index,
+                "response": None,
             }
+            self.values["command_status"] = "pending"
 
         payload = self._build_light_setting_payload(mode, seq_no)
         self._queue_send(payload, pending)
 
-    def send_light_setting_on_data(self, pending):
-        lock = self._ensure_lock()
-        with lock:
-            if self._pending_light_setting is not pending or pending["last_sent"] is None:
-                # Drop stale callbacks and retries already queued or in progress.
-                return
-            pending["retry_count"] += 1
-            pending["last_sent"] = None
-            seq_no = pending["seq_no"]
-
-        payload = self._build_light_setting_payload(pending["mode"], seq_no)
-        self._queue_send(payload, pending)
-
     def send_light_mode(self, mode, auto=False):
         if auto:
-            self._handle_auto_command(mode)
-        else:
-            self._handle_manual_command(mode)
-
-    def _handle_manual_command(self, mode):
-        if mode == "ON_OFF_FLASH_LOW":
-            lock = self._ensure_lock()
-            with lock:
+            with self.state_lock:
+                self._auto_requested_on = mode != "OFF"
+                if self._auto_requested_on:
+                    self.values["auto_on_timestamp"] = datetime.now()
+                    if mode in self.light_modes[self.light_name]:
+                        self._auto_on_mode = mode
+            self._apply_light_state()
+        elif mode == "ON_OFF_FLASH_LOW":
+            with self.state_lock:
                 current = self.values["light_state"]
             if current == LightState.OFF:
                 self._manual_on_mode = self.default_on_mode
                 next_state = LightState.ON
-            elif current == LightState.ON:
-                if self.config.G_AUTO_LIGHT:
-                    next_state = LightState.AUTO
-                else:
-                    next_state = LightState.OFF
+            elif current == LightState.ON and self.config.G_AUTO_LIGHT:
+                next_state = LightState.AUTO
             else:
                 next_state = LightState.OFF
             self.set_light_state(next_state)
-            lock = self._ensure_lock()
-            with lock:
-                state = self.values["light_state"]
-            # app_logger.info(f"ANT+ light manual button state: {state}")
-            return
-
-        if mode == "OFF":
+        elif mode == "OFF":
             self.set_light_state(LightState.OFF)
-            return
-
-        if mode in self.light_modes[self.light_name]:
-            self._manual_on_mode = mode
         else:
-            self._manual_on_mode = self.default_on_mode
-        self.set_light_state(LightState.ON)
-
-    def _handle_auto_command(self, mode):
-        auto_on = mode != "OFF"
-        lock = self._ensure_lock()
-        with lock:
-            self._auto_requested_on = auto_on
-            if auto_on:
-                self._auto_last_on = datetime.now()
-                self.values["auto_on_timestamp"] = self._auto_last_on
-                if mode in self.light_modes[self.light_name]:
-                    self._auto_on_mode = mode
-        self._apply_light_state()
+            self._manual_on_mode = (
+                mode
+                if mode in self.light_modes[self.light_name]
+                else self.default_on_mode
+            )
+            self.set_light_state(LightState.ON)
 
     def set_light_state(self, state):
-        normalized = self._normalize_state(state)
-        if normalized is None:
+        try:
+            state = LightState(state)
+        except (ValueError, TypeError):
             return
-        lock = self._ensure_lock()
-        with lock:
-            if self.values["light_state"] == normalized:
+        with self.state_lock:
+            if self.values["light_state"] == state:
                 return
-            self.values["light_state"] = normalized
-            self.values["auto_state"] = normalized == LightState.AUTO
-            self.values["button_state"] = normalized == LightState.ON
+            self.values["light_state"] = state
+            self.values["auto_state"] = state == LightState.AUTO
+            self.values["button_state"] = state == LightState.ON
         self._apply_light_state()
 
-    def _normalize_state(self, state):
-        if state is None:
-            return None
-        try:
-            return LightState(state)
-        except (ValueError, TypeError):
-            return None
-
-    def _auto_should_on(self):
-        lock = self._ensure_lock()
-        with lock:
-            requested_on = self._auto_requested_on
-            last_on = self._auto_last_on
-        if requested_on:
-            return True
-        if last_on is None:
-            return False
-        elapsed = (datetime.now() - last_on).total_seconds()
-        return elapsed < self.auto_light_min_duration
-
-    def _resolve_desired_mode(self):
-        lock = self._ensure_lock()
-        with lock:
-            state = self.values["light_state"]
-            manual_on_mode = self._manual_on_mode
-            auto_on_mode = self._auto_on_mode
-        if state == LightState.OFF:
-            return "OFF"
-        if state == LightState.ON:
-            return manual_on_mode
-        if state == LightState.AUTO:
-            if not self.config.G_AUTO_LIGHT:
-                return "OFF"
-            return auto_on_mode if self._auto_should_on() else "OFF"
-        return "OFF"
-
     def _apply_light_state(self):
-        desired_mode = self._resolve_desired_mode()
-        if desired_mode not in self.light_modes[self.light_name]:
+        with self.state_lock:
+            state = self.values["light_state"]
             desired_mode = "OFF"
-        lock = self._ensure_lock()
-        with lock:
+            if state == LightState.ON:
+                desired_mode = self._manual_on_mode
+            elif state == LightState.AUTO and self.config.G_AUTO_LIGHT:
+                last_on = self.values["auto_on_timestamp"]
+                if self._auto_requested_on or (
+                    last_on is not None
+                    and (datetime.now() - last_on).total_seconds()
+                    < self.auto_light_min_duration
+                ):
+                    desired_mode = self._auto_on_mode
+            if desired_mode not in self.light_modes[self.light_name]:
+                desired_mode = "OFF"
             self.values["light_mode"] = desired_mode
         self.change_light_mode()
 
     def change_light_mode(self):
-        lock = self._ensure_lock()
-        with lock:
-            if (
-                self.values["light_mode"] is not None
-                and self.values["light_mode"] != self.values["pre_light_mode"]
-            ):
-                self.values["pre_light_mode"] = self.values["light_mode"]
-                mode = self.values["light_mode"]
-            else:
+        with self.state_lock:
+            mode = self.values["light_mode"]
+            if mode is None or mode == self.values["pre_light_mode"]:
                 return
-
+            self.values["pre_light_mode"] = mode
         self.send_light_setting(mode)
