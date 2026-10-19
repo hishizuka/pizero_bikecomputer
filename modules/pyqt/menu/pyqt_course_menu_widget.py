@@ -266,6 +266,11 @@ class CourseListWidget(ListWidget):
             self.add_list_item(course_item)
 
     async def list_ride_with_gps(self, add=False, reset=False):
+        if (
+            self.config.G_RIDEWITHGPS_API["APIKEY"] == ""
+            or self.config.G_RIDEWITHGPS_API["TOKEN"] == ""
+        ):
+            return
         async with self.config.network.bt_tethering_session(
             self.list_ride_with_gps.__name__
         ) as connected:

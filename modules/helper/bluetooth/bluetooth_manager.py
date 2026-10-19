@@ -53,6 +53,7 @@ class BluetoothManager:
         self.bt_tethering_status = {}
         self._bt_tethering_lock = asyncio.Lock()
         self._bt_open_block_until = 0
+        self._delayed_close_task = None
 
         self.bt_pairing_proc = None
         self.bt_pairing_obexd_proc = None
@@ -280,22 +281,27 @@ class BluetoothManager:
 
     def _start_bt_open_block(self, duration=None):
         duration = duration or self.bt_open_block_duration_sec
-        self._bt_open_block_until = max(self._bt_open_block_until, time.time() + duration)
+        self._bt_open_block_until = max(
+            self._bt_open_block_until, time.monotonic() + duration
+        )
+        return self._bt_open_block_until
 
     def start_bt_open_block(self, duration=None):
-        self._start_bt_open_block(duration)
+        if self._is_bt_open_block_active():
+            return self._bt_open_block_until
+        return self._start_bt_open_block(duration)
+
+    def bt_open_block_remaining(self):
+        return max(0.0, self._bt_open_block_until - time.monotonic())
 
     def _is_bt_open_block_active(self):
-        return time.time() < self._bt_open_block_until
+        return self.bt_open_block_remaining() > 0
 
     async def open_bt_tethering(self, caller_name, wait_lock=False) -> BtOpenResult:
-        if not self.config.G_IS_RASPI:
+        if not self.config.G_IS_RASPI or not self.config.G_AUTO_BT_TETHERING:
             return BtOpenResult.SUCCESS
-        if not self.config.G_AUTO_BT_TETHERING:
-            return BtOpenResult.SUCCESS
-        else:
-            if not self.config.G_BT_PAN_DEVICE or not self.bt_pan.get_bt_pan_devices():
-                return BtOpenResult.FAILED
+        if not self.config.G_BT_PAN_DEVICE or not self.bt_pan.get_bt_pan_devices():
+            return BtOpenResult.FAILED
 
         # Locked
         if not wait_lock and self._bt_tethering_lock.locked():
@@ -311,28 +317,33 @@ class BluetoothManager:
             self._bt_tethering_lock.release()
 
     async def _open_bt_tethering_impl(self, caller_name) -> BtOpenResult:
-        if await detect_network_async(cache=False):
-            # Todo: disable when using wifi
-            app_logger.debug(
-                f"[BT] skip bt open(detected network), {caller_name=} {self.bt_tethering_status}"
-            )
-            self.bt_tethering_status[caller_name] = True
-            return BtOpenResult.SUCCESS
-
         # Blocked (DNS error, etc.)
         if self._is_bt_open_block_active():
-            remaining = max(0, int(self._bt_open_block_until - time.time()))
+            if await detect_network_async(cache=True):
+                self.bt_tethering_status[caller_name] = True
+                return BtOpenResult.SUCCESS
+            remaining = int(self.bt_open_block_remaining())
             app_logger.debug(
                 f"[BT] skip bt open(block active {remaining}s), {caller_name=} {self.bt_tethering_status}"
             )
             return BtOpenResult.BLOCKED
 
-        if any(self.bt_tethering_status.values()):
+        if await detect_network_async(cache=False):
+            # Todo: disable when using wifi
             app_logger.debug(
-                f"[BT] skip bt open(other func), {caller_name=} {self.bt_tethering_status}"
+                "[BT] skip bt open(detected network), "
+                f"{caller_name=} {self.bt_tethering_status}"
             )
             self.bt_tethering_status[caller_name] = True
             return BtOpenResult.SUCCESS
+
+        if any(self.bt_tethering_status.values()) and check_bnep0():
+            app_logger.debug(
+                "[BT] block bt open(unreachable shared connection), "
+                f"{caller_name=} {self.bt_tethering_status}"
+            )
+            self._start_bt_open_block(duration=15)
+            return BtOpenResult.BLOCKED
 
         bt_pan_error = await self.bluetooth_tethering()
         if bt_pan_error:
@@ -385,19 +396,16 @@ class BluetoothManager:
         app_logger.debug(f"[BT] connected, {caller_name=}")
         return BtOpenResult.SUCCESS
 
-    async def close_bt_tethering(self, caller_name):
-        if not self.config.G_IS_RASPI:
+    async def close_bt_tethering(self, caller_name, delay=0):
+        if not self.config.G_IS_RASPI or not self.config.G_AUTO_BT_TETHERING:
             return True
-        elif not self.config.G_AUTO_BT_TETHERING:
+        if not self.config.G_BT_PAN_DEVICE or not self.bt_pan.get_bt_pan_devices():
             return True
-        else:
-            if not self.config.G_BT_PAN_DEVICE or not self.bt_pan.get_bt_pan_devices():
-                return True
 
         async with self._bt_tethering_lock:
-            return await self._close_bt_tethering_impl(caller_name)
+            return await self._close_bt_tethering_impl(caller_name, delay)
 
-    async def _close_bt_tethering_impl(self, caller_name):
+    async def _close_bt_tethering_impl(self, caller_name, delay):
 
         self.bt_tethering_status[caller_name] = False
 
@@ -414,19 +422,45 @@ class BluetoothManager:
             )
             return True
 
+        task = self._delayed_close_task
+        if task is not None and not task.done():
+            task.cancel()
+        if delay:
+            self._delayed_close_task = asyncio.create_task(
+                self._close_bt_after_grace(delay)
+            )
+            return True
+        return await self._disconnect_idle_bt()
+
+    async def _close_bt_after_grace(self, delay):
+        try:
+            await asyncio.sleep(delay)
+            async with self._bt_tethering_lock:
+                if any(self.bt_tethering_status.values()) or not check_bnep0():
+                    return
+                await self._disconnect_idle_bt()
+        except Exception as exc:
+            app_logger.error(f"[BT] delayed disconnect error: {exc}")
+        finally:
+            if self._delayed_close_task is asyncio.current_task():
+                self._delayed_close_task = None
+
+    async def _disconnect_idle_bt(self):
         bt_pan_error = await self.bluetooth_tethering(disconnect=True)
         if bt_pan_error:
-            app_logger.error(
-                f"[BT] disconnect error: {bt_pan_error}, caller_name: {caller_name}"
-            )
+            app_logger.error(f"[BT] disconnect error: {bt_pan_error}")
 
         await asyncio.sleep(3)
         status = check_bnep0()
         await detect_network_async(cache=False)
-        app_logger.debug(f"[BT] disconnect, {caller_name=}")
+        app_logger.debug("[BT] disconnect after idle grace")
         return not status
 
     async def shutdown(self):
+        task = self._delayed_close_task
+        if task is not None and not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
         await self.stop_bt_pairing()
         if self.config.G_IS_RASPI and check_bnep0():
             await self.bluetooth_tethering(disconnect=True)

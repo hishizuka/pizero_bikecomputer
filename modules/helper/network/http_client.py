@@ -53,8 +53,6 @@ async def get_response(
                 if response_type == "bytes":
                     return await res.read()
                 raise ValueError(f"unknown response_type: {response_type}")
-    except asyncio.CancelledError:
-        return None
     except Exception as exc:
         app_logger.error(f"get_response error: {exc}\n{url}")
         return None
@@ -99,8 +97,6 @@ async def post(url, headers=None, params=None, data=None, json_data=None, timeou
                     return None
                 data = await res.json()
                 return data
-    except asyncio.CancelledError:
-        return None
     except Exception as exc:
         app_logger.error(f"post error: {exc}\n{url}")
         return None
@@ -137,8 +133,6 @@ async def _get_http_request(
 
                 data = await dl_file.read()
                 await asyncio.to_thread(_write_binary_file, save_path, data)
-        except asyncio.CancelledError:
-            pass
         except Exception as exc:
             request_target = url if log_url else save_path
             app_logger.error(

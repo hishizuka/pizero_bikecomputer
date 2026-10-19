@@ -173,39 +173,43 @@ class api:
         if np.any(np.isnan([x1, y1, x2, y2])):
             return None
 
-        routes_api = self.config.G_GOOGLE_ROUTES_API
-        mode = routes_api["API_MODE"][routes_api["API_MODE_SETTING"]]
-        payload = {
-            "origin": {
-                "location": {"latLng": {"latitude": y1, "longitude": x1}},
-            },
-            "destination": {
-                "location": {"latLng": {"latitude": y2, "longitude": x2}},
-            },
-            "travelMode": mode["travelMode"],
-            "languageCode": self.config.G_LANG.lower(),
-            "units": "METRIC",
-        }
-        if "routeModifiers" in mode:
-            payload["routeModifiers"] = mode["routeModifiers"]
+        async with self.network.bt_tethering_session(
+            self.get_google_routes.__name__
+        ) as connected:
+            if not connected:
+                return None
 
-        headers = {
-            "Content-Type": "application/json",
-            "X-Goog-Api-Key": routes_api["TOKEN"],
-            "X-Goog-FieldMask": routes_api["FIELD_MASK"],
-        }
-        app_logger.debug(
-            "Google Routes API request: "
-            f"{payload['travelMode']} {y1},{x1} -> {y2},{x2}"
-        )
-        response = await self._request_with_bt_tethering(
-            self.get_google_routes.__name__,
-            post,
-            routes_api["URL"],
-            headers=headers,
-            json_data=payload,
-            timeout=routes_api["TIMEOUT"],
-        )
+            routes_api = self.config.G_GOOGLE_ROUTES_API
+            mode = routes_api["API_MODE"][routes_api["API_MODE_SETTING"]]
+            payload = {
+                "origin": {
+                    "location": {"latLng": {"latitude": y1, "longitude": x1}},
+                },
+                "destination": {
+                    "location": {"latLng": {"latitude": y2, "longitude": x2}},
+                },
+                "travelMode": mode["travelMode"],
+                "languageCode": self.config.G_LANG.lower(),
+                "units": "METRIC",
+            }
+            if "routeModifiers" in mode:
+                payload["routeModifiers"] = mode["routeModifiers"]
+
+            headers = {
+                "Content-Type": "application/json",
+                "X-Goog-Api-Key": routes_api["TOKEN"],
+                "X-Goog-FieldMask": routes_api["FIELD_MASK"],
+            }
+            app_logger.debug(
+                "Google Routes API request: "
+                f"{payload['travelMode']} {y1},{x1} -> {y2},{x2}"
+            )
+            response = await post(
+                routes_api["URL"],
+                headers=headers,
+                json_data=payload,
+                timeout=routes_api["TIMEOUT"],
+            )
         app_logger.debug(response)
         return response
 

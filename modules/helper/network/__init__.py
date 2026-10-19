@@ -81,11 +81,11 @@ class Network:
             wait_lock=wait_lock,
         )
 
-    async def close_bt_tethering(self, caller_name):
-        return await self.bluetooth.close_bt_tethering(caller_name)
+    async def close_bt_tethering(self, caller_name, delay=0):
+        return await self.bluetooth.close_bt_tethering(caller_name, delay=delay)
 
     @asynccontextmanager
-    async def bt_tethering_session(self, caller_name, wait_lock=False):
+    async def bt_tethering_session(self, caller_name, wait_lock=False, close_delay=0):
         result = await self.open_bt_tethering(caller_name, wait_lock=wait_lock)
         if not result.is_success():
             yield False
@@ -93,7 +93,7 @@ class Network:
         try:
             yield True
         finally:
-            await self.close_bt_tethering(caller_name)
+            await self.close_bt_tethering(caller_name, delay=close_delay)
 
     async def onoff_wifi_bt(self, key=None):
         if key != "Bluetooth":

@@ -638,8 +638,10 @@ class MapTileWithValues():
         self._rain_metadata_lock = asyncio.Lock()
         self._rain_metadata = {}
         self._jma_timeline_lock = asyncio.Lock()
+        self._jma_retry_at = 0.0
         self._rainviewer_timeline_lock = asyncio.Lock()
         self._rainviewer_retry_at = 0.0
+        self._scw_retry_at = 0.0
         self.wind_tile_cache_key = None
         self.wind_position_cache_key = None
         self.wind_result = (np.nan, np.nan)
@@ -729,6 +731,12 @@ class MapTileWithValues():
             # check lock
             if self.get_scw_lock:
                 return
+            self.update_overlay_wind_basetime(map_settings)
+            if (
+                map_settings["timeline_update_date"] == map_settings["current_time"]
+                or monotonic() < self._scw_retry_at
+            ):
+                return
 
             if wait:
                 await self.update_jpn_scw_timeline(map_settings)
@@ -746,14 +754,22 @@ class MapTileWithValues():
         map_settings["validtime"] = map_settings["basetime"]
 
     async def update_jpn_scw_timeline(self, map_settings):
+        if self.get_scw_lock:
+            return
         self.update_overlay_wind_basetime(map_settings)
-        if map_settings["timeline_update_date"] == map_settings["current_time"]:
+        if (
+            map_settings["timeline_update_date"] == map_settings["current_time"]
+            or monotonic() < self._scw_retry_at
+        ):
             return
 
         self.get_scw_lock = True
+        self._scw_retry_at = monotonic() + 15
         try:
             f_name = self.update_jpn_scw_timeline.__name__
-            async with self.network.bt_tethering_session(f_name) as connected:
+            async with self.network.bt_tethering_session(
+                f_name, close_delay=10
+            ) as connected:
                 if not connected:
                     return
 
@@ -767,6 +783,7 @@ class MapTileWithValues():
                 url = map_settings["fl"].format(basetime=basetime, rand=random())
                 timeline = await get_scw_list(url, map_settings["referer"])
         finally:
+            self._scw_retry_at = monotonic() + 15
             self.get_scw_lock = False
 
         if timeline is None:
@@ -782,8 +799,11 @@ class MapTileWithValues():
                 map_settings["validtime"] = tl["it"]
                 map_settings["subdomain"] = tl["sd"]
                 map_settings["timeline_update_date"] = map_settings["current_time"]
+                self._scw_retry_at = 0.0
                 # app_logger.info(f"get_scw_list Success: {basetime} {tl['it']}]")
                 return
+        self._scw_retry_at = monotonic() + 90
+        app_logger.warning(f"SCW timeline has no frame for {time_str}")
 
     @staticmethod
     def set_rainviewer_validtime(map_settings, validtime):
@@ -842,21 +862,31 @@ class MapTileWithValues():
             self.set_rainviewer_validtime(map_settings, selected)
 
     async def update_jpn_jma_bousai_timeline(self, map_settings):
+        if monotonic() < self._jma_retry_at:
+            return
         async with self._jma_timeline_lock:
             self.update_overlay_rain_basetime(map_settings)
             current_time = map_settings["current_time"]
             previous_timeline = map_settings["timeline"] or []
             if map_settings["timeline_update_date"] == current_time and previous_timeline:
                 return
+            if monotonic() < self._jma_retry_at:
+                return
 
+            self._jma_retry_at = monotonic() + 15
             f_name = self.update_jpn_jma_bousai_timeline.__name__
-            async with self.network.bt_tethering_session(f_name) as connected:
-                if not connected:
-                    return
-                _, past = await self.get_rain_timeline(map_settings, "past_time_list")
-                _, forecast = await self.get_rain_timeline(
-                    map_settings, "forcast_time_list"
-                )
+            try:
+                async with self.network.bt_tethering_session(f_name) as connected:
+                    if not connected:
+                        return
+                    _, past = await self.get_rain_timeline(
+                        map_settings, "past_time_list"
+                    )
+                    _, forecast = await self.get_rain_timeline(
+                        map_settings, "forcast_time_list"
+                    )
+            finally:
+                self._jma_retry_at = monotonic() + 15
 
             # Prefer observations when past and forecast valid times overlap.
             frames = {frame["validtime"]: frame for frame in forecast + past}
@@ -878,6 +908,7 @@ class MapTileWithValues():
 
             map_settings["timeline"] = timeline
             map_settings["timeline_update_date"] = current_time
+            self._jma_retry_at = 0.0
             selected = None
             if not follow_latest:
                 selected = next(

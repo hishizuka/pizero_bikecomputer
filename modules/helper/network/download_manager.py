@@ -1,5 +1,6 @@
 import asyncio
 import os
+import time
 
 from modules.app_logger import app_logger
 from modules.utils.map import get_maptile_filename
@@ -156,7 +157,14 @@ class DownloadManager:
         bt_open_result = await self.bluetooth.open_bt_tethering(caller_name, wait_lock=True)
 
         if bt_open_result is not BtOpenResult.SUCCESS:
-            await self._cleanup_failed_downloads(queue_item["save_paths"], caller_name)
+            block_duration = (
+                self.bluetooth.bt_open_block_remaining()
+                if bt_open_result is BtOpenResult.BLOCKED
+                else None
+            )
+            await self._cleanup_failed_downloads(
+                queue_item["save_paths"], caller_name, block_duration
+            )
             return None
 
         limit = await asyncio.to_thread(self.bluetooth.get_bt_limit)
@@ -213,8 +221,10 @@ class DownloadManager:
 
                     await self.bluetooth.close_bt_tethering(caller_name)
                     delay = self._calculate_retry_delay(retry_count)
-                    self._start_download_queue_block(duration=delay)
-                    self.bluetooth.start_bt_open_block(duration=delay)
+                    deadline = self.bluetooth.start_bt_open_block(duration=delay)
+                    self._download_queue_block_until = max(
+                        self._download_queue_block_until, deadline
+                    )
                     app_logger.info(
                         "Download DNS failure detected, retrying in %ss "
                         "(attempt %s/%s)",
@@ -222,7 +232,8 @@ class DownloadManager:
                         retry_count + 1,
                         self._dns_retry_max_attempts,
                     )
-                    await asyncio.sleep(delay)
+                    while remaining := self.bluetooth.bt_open_block_remaining():
+                        await asyncio.sleep(remaining)
                     queue_item["urls"] = retry_urls
                     queue_item["save_paths"] = retry_save_paths
                     queue_item["retry_count"] = retry_count + 1
@@ -252,16 +263,15 @@ class DownloadManager:
         return True
 
     def _start_download_queue_block(self, duration=None):
-        loop = asyncio.get_running_loop()
-        duration = duration or self._queue_block_duration_sec
+        if duration is None:
+            duration = self._queue_block_duration_sec
         self._download_queue_block_until = max(
             self._download_queue_block_until,
-            loop.time() + duration,
+            time.monotonic() + duration,
         )
 
     def _is_download_queue_blocked(self):
-        loop = asyncio.get_running_loop()
-        return loop.time() < self._download_queue_block_until
+        return time.monotonic() < self._download_queue_block_until
 
     def _calculate_retry_delay(self, retry_count):
         delay = self._dns_retry_base_delay_sec * (2 ** retry_count)
@@ -270,9 +280,13 @@ class DownloadManager:
     def update_queue_block_duration(self, seconds):
         self._queue_block_duration_sec = seconds
 
-    async def _cleanup_failed_downloads(self, initial_paths, caller_name):
-        drained_save_paths = await self._drain_queue_and_collect_save_paths()
-        combined = list(dict.fromkeys(list(initial_paths) + drained_save_paths))
+    async def _cleanup_failed_downloads(
+        self, initial_paths, caller_name, block_duration=None
+    ):
+        drained_save_paths = await self._drain_queue_and_collect_save_paths(
+            block_duration
+        )
+        combined = list(dict.fromkeys((*initial_paths, *drained_save_paths)))
         if combined:
             self.config.api.maptile_with_values.delete_existing_tiles(combined)
             for save_path in combined:
@@ -280,9 +294,9 @@ class DownloadManager:
             self._finish_files(combined)
         await self.bluetooth.close_bt_tethering(caller_name)
 
-    async def _drain_queue_and_collect_save_paths(self):
+    async def _drain_queue_and_collect_save_paths(self, block_duration=None):
         """Remove remaining queued items and return their save paths."""
-        self._start_download_queue_block()
+        self._start_download_queue_block(block_duration)
         drained_save_paths = []
         shutdown_requested = False
         while True:
