@@ -54,6 +54,13 @@ class BleSensorCandidate:
     profiles: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True, slots=True)
+class _CyclingSessionSpec:
+    roles: tuple[str, ...]
+    cadence_profile: str | None
+    adapter: str | None
+
+
 class SensorBLE(Sensor):
     CYCLING_ROLES = ("HR", "SPD", "CDC", "PWR")
     CONTROL_ROLE = "CTRL"
@@ -99,6 +106,10 @@ class SensorBLE(Sensor):
         self._cycling_stop_events = {}
         self._cycling_tasks = {}
         self._cycling_session_roles = {}
+        self._cycling_session_specs = {}
+        self._cycling_desired_specs = {}
+        self._cycling_reconcile_revision = 0
+        self._cycling_reconcile_task = None
         self.click = ZwiftClickV2Session(self.config, self._resolve_sensor_adapter)
 
     def reset(self):
@@ -120,12 +131,16 @@ class SensorBLE(Sensor):
         self.stop_fake_trainer()
         self.disconnect_cycling_sensors()
         self.disconnect_zwift_click_v2()
-        self.click.join()
         for role, health_record in self._cycling_health.items():
-            health = health_record.snapshot().as_dict()
-            app_logger.debug(f"[BLE_HEALTH] cycling_{role.lower()}={health}")
-        health = self.click.health.snapshot().as_dict()
-        app_logger.debug(f"[BLE_HEALTH] zwift_click_v2={health}")
+            snapshot = health_record.snapshot()
+            if snapshot.connect_attempt_count == 0:
+                continue
+            app_logger.debug(
+                f"[BLE_HEALTH] cycling_{role.lower()}={snapshot.as_dict()}"
+            )
+        snapshot = self.click.health.snapshot()
+        if snapshot.connect_attempt_count > 0:
+            app_logger.debug(f"[BLE_HEALTH] zwift_click_v2={snapshot.as_dict()}")
 
     def update(self) -> None:
         for processor in self._cycling_processors.values():
@@ -358,7 +373,6 @@ class SensorBLE(Sensor):
         if not identifier:
             raise ValueError("identifier must not be empty")
         profile = self._select_pairing_profile(role, identifier, profile)
-        self.disconnect_cycling_sensors()
         self.config.set_sensor(
             role,
             self.config.SENSOR_PROTOCOL_BLE,
@@ -382,7 +396,6 @@ class SensorBLE(Sensor):
         if role != self.CONTROL_ROLE:
             raise ValueError(f"Unsupported BLE sensor role: {role}")
         self.disconnect_zwift_click_v2()
-        self.click.join()
         self.config.set_sensor(
             role,
             self.config.SENSOR_PROTOCOL_BLE,
@@ -425,7 +438,6 @@ class SensorBLE(Sensor):
     def remove_cycling_sensor(self, role: str) -> None:
         if role not in self.CYCLING_ROLES:
             return
-        self.disconnect_cycling_sensors()
         if self.config.sensor_uses(role, self.config.SENSOR_PROTOCOL_BLE):
             self.config.clear_sensor(role)
         self.config.setting.write_config()
@@ -454,43 +466,138 @@ class SensorBLE(Sensor):
     def connect_cycling_sensors(self) -> bool:
         roles_by_identifier = self._configured_cycling_roles()
         if not roles_by_identifier or self._fake_trainer_session_active:
+            self._schedule_cycling_reconcile({})
             return False
         adapter = self._resolve_sensor_adapter()
         if sys.platform.startswith("linux") and adapter is None:
+            self._schedule_cycling_reconcile({})
             return False
-        started = False
+        desired_specs = {}
         for identifier, roles in roles_by_identifier.items():
-            if self._is_cycling_session_running(identifier):
-                continue
-            stop_event = asyncio.Event()
-            session = BleCyclingSession(
-                identifier,
-                heart_rate_processor=(
-                    self._hrs_heart_rate_processor if "HR" in roles else None
-                ),
-                speed_processor=(self._csc_speed_processor if "SPD" in roles else None),
-                cadence_processor=(
-                    self._csc_cadence_processor if "CDC" in roles else None
-                ),
-                power_processor=(self._cps_power_processor if "PWR" in roles else None),
+            desired_specs[identifier] = _CyclingSessionSpec(
+                roles=tuple(roles),
                 cadence_profile=self._configured_cadence_profile(identifier, roles),
                 adapter=adapter,
-                initial_device=self._cycling_discovered_devices.pop(identifier, None),
-                name=self._configured_cycling_name(roles),
-                on_name=lambda name, sensor_id=identifier: self._set_cycling_sensor_name(
-                    sensor_id, name
-                ),
-                should_accumulate=lambda: self.config.G_STOPWATCH_STATUS == "START",
-                log=lambda message: app_logger.info(f"[BLE-CYCLING] {message}"),
-                debug_log=lambda message: app_logger.debug(f"[BLE-CYCLING] {message}"),
             )
-            self._cycling_stop_events[identifier] = stop_event
-            self._cycling_session_roles[identifier] = tuple(roles)
-            self._cycling_tasks[identifier] = asyncio.create_task(
-                session.run(stop_event)
+        self._schedule_cycling_reconcile(desired_specs)
+        return True
+
+    def _schedule_cycling_reconcile(
+        self,
+        desired_specs: dict[str, _CyclingSessionSpec],
+    ) -> None:
+        self._cycling_desired_specs = desired_specs
+        self._cycling_reconcile_revision += 1
+        task = self._cycling_reconcile_task
+        if task is not None and not task.done():
+            return
+        self._cycling_reconcile_task = None
+
+        requires_cleanup = any(
+            task.done()
+            or desired_specs.get(identifier) != self._cycling_session_specs[identifier]
+            for identifier, task in self._cycling_tasks.items()
+        )
+        if requires_cleanup:
+            self._cycling_reconcile_task = asyncio.create_task(
+                self._reconcile_cycling_sessions()
             )
-            started = True
-        return started or bool(self._cycling_tasks)
+            return
+
+        for identifier, spec in desired_specs.items():
+            if not self._is_cycling_session_running(identifier):
+                self._start_cycling_session(identifier, spec)
+
+    async def _reconcile_cycling_sessions(self) -> None:
+        current_task = asyncio.current_task()
+        try:
+            while True:
+                revision = self._cycling_reconcile_revision
+                desired_specs = self._cycling_desired_specs.copy()
+                await self._reconcile_cycling_sessions_once(
+                    desired_specs,
+                    revision,
+                )
+                if revision == self._cycling_reconcile_revision:
+                    return
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            app_logger.error(f"BLE cycling session reconciliation failed: {exc}")
+        finally:
+            if self._cycling_reconcile_task is current_task:
+                self._cycling_reconcile_task = None
+
+    async def _reconcile_cycling_sessions_once(
+        self,
+        desired_specs: dict[str, _CyclingSessionSpec],
+        revision: int,
+    ) -> None:
+        stopping = []
+        stopped_roles = set()
+        for identifier, task in tuple(self._cycling_tasks.items()):
+            current_spec = self._cycling_session_specs[identifier]
+            if not task.done() and desired_specs.get(identifier) == current_spec:
+                continue
+            self._cycling_stop_events[identifier].set()
+            task.cancel()
+            stopping.append((identifier, task))
+            stopped_roles.update(self._cycling_session_roles[identifier])
+
+        if stopping:
+            await asyncio.gather(
+                *(task for _identifier, task in stopping),
+                return_exceptions=True,
+            )
+            for identifier, task in stopping:
+                if self._cycling_tasks.get(identifier) is not task:
+                    continue
+                self._cycling_tasks.pop(identifier)
+                self._cycling_stop_events.pop(identifier)
+                self._cycling_session_roles.pop(identifier)
+                self._cycling_session_specs.pop(identifier)
+            for role in stopped_roles:
+                self._cycling_processors[role].set_suspended()
+            self._publish_cycling_values()
+
+        if revision != self._cycling_reconcile_revision:
+            return
+
+        for identifier, spec in desired_specs.items():
+            if self._is_cycling_session_running(identifier):
+                continue
+            self._start_cycling_session(identifier, spec)
+
+    def _start_cycling_session(
+        self,
+        identifier: str,
+        spec: _CyclingSessionSpec,
+    ) -> None:
+        roles = spec.roles
+        stop_event = asyncio.Event()
+        session = BleCyclingSession(
+            identifier,
+            heart_rate_processor=(
+                self._hrs_heart_rate_processor if "HR" in roles else None
+            ),
+            speed_processor=(self._csc_speed_processor if "SPD" in roles else None),
+            cadence_processor=(self._csc_cadence_processor if "CDC" in roles else None),
+            power_processor=(self._cps_power_processor if "PWR" in roles else None),
+            cadence_profile=spec.cadence_profile,
+            adapter=spec.adapter,
+            initial_device=self._cycling_discovered_devices.pop(identifier, None),
+            name=self._configured_cycling_name(roles),
+            on_name=lambda name, sensor_id=identifier: self._set_cycling_sensor_name(
+                sensor_id, name
+            ),
+            should_accumulate=lambda: self.config.G_STOPWATCH_STATUS == "START",
+            log=lambda message: app_logger.info(f"[BLE-CYCLING] {message}"),
+            debug_log=lambda message: app_logger.debug(f"[BLE-CYCLING] {message}"),
+        )
+        self._cycling_stop_events[identifier] = stop_event
+        self._cycling_session_roles[identifier] = roles
+        self._cycling_session_specs[identifier] = spec
+        self._cycling_tasks[identifier] = asyncio.create_task(session.run(stop_event))
 
     def _configured_cadence_profile(
         self,
@@ -509,13 +616,7 @@ class SensorBLE(Sensor):
         return None
 
     def disconnect_cycling_sensors(self) -> None:
-        for stop_event in self._cycling_stop_events.values():
-            stop_event.set()
-        for task in self._cycling_tasks.values():
-            task.cancel()
-        self._cycling_stop_events.clear()
-        self._cycling_tasks.clear()
-        self._cycling_session_roles.clear()
+        self._schedule_cycling_reconcile({})
         for processor in self._cycling_processors.values():
             if processor is not None:
                 processor.set_suspended()
@@ -601,7 +702,6 @@ class SensorBLE(Sensor):
         if not self._zwift_click_v2_paused_for_fake_trainer:
             return
         self._zwift_click_v2_paused_for_fake_trainer = False
-        self.click.join()
         self.connect_zwift_click_v2()
 
     def _pause_cycling_sensors_for_fake_trainer(self) -> None:
