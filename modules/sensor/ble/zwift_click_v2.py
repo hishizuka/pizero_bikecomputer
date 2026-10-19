@@ -19,7 +19,6 @@ import asyncio
 import re
 import signal
 import sys
-import threading
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -40,9 +39,9 @@ try:
     from bleak.backends.scanner import AdvertisementData
 
     if __package__:
-        from .discovery import discover_ble_devices, shutdown_ble_discovery
+        from .discovery import discover_ble_devices
     else:
-        from discovery import discover_ble_devices, shutdown_ble_discovery
+        from discovery import discover_ble_devices
 except ImportError:
     BleakClient = None
     discover_ble_devices = None
@@ -755,8 +754,6 @@ async def listen(
                     preferred_address=preferred_address,
                     adapter=adapter,
                 )
-            except asyncio.CancelledError:
-                raise
             except Exception as exc:  # noqa: BlueZ discovery errors are runtime
                 log(f"scan failed: {exc}")
                 if not scan_forever:
@@ -914,70 +911,59 @@ class ZwiftClickV2Session:
         self.config = config
         self.resolve_adapter = resolve_adapter
         self.health = BleSessionHealth()
-        self._reset_runtime()
-        self.thread: Optional[threading.Thread] = None
+        self._task: asyncio.Task | None = None
+        self._stop_event: asyncio.Event | None = None
+        self._desired_running = False
         self.connection_status = "inactive"
         self.auth_status = self.CLICK_AUTH_UNKNOWN
         self.input_status = self.CLICK_INPUT_UNKNOWN
         self.recovery_pending = False
-        self._recovery_timer: Optional[threading.Timer] = None
-
-    def _reset_runtime(self) -> None:
-        self._loop = None
-        self._stop_event = None
-        self._task = None
-        self._stop_requested = threading.Event()
+        self._recovery_timer: asyncio.TimerHandle | None = None
 
     def connect(self) -> bool:
         """Start Zwift Click V2 listener if it is enabled and available."""
         if not self.is_enabled():
+            self._desired_running = False
             self.connection_status = self._control_idle_status()
             return False
+        self._desired_running = True
         if self.is_running():
             return True
-        thread = self.thread
-        if thread is not None and thread.is_alive():
-            return False
+        task = self._task
+        if task is not None and not task.done():
+            return True
 
-        self._reset_runtime()
         self.connection_status = "connecting"
-        self.thread = threading.Thread(
-            target=self._run_thread,
+        stop_event = asyncio.Event()
+        task = asyncio.create_task(
+            self._run_listener(stop_event),
             name="zwift-click-v2",
-            daemon=True,
         )
-        self.thread.start()
+        self._stop_event = stop_event
+        self._task = task
+        task.add_done_callback(
+            lambda completed, event=stop_event: self._listener_done(completed, event)
+        )
         return True
 
     def disconnect(self) -> None:
         """Stop Zwift Click V2 listener if running."""
+        self._desired_running = False
         self.connection_status = self._control_idle_status()
-        self._stop_requested.set()
-        loop = self._loop
-        if loop is None or not loop.is_running():
-            return
-
-        def stop_listener() -> None:
-            if self._stop_event is not None:
-                self._stop_event.set()
-            if self._task is not None:
-                self._task.cancel()
-
-        try:
-            loop.call_soon_threadsafe(stop_listener)
-        except RuntimeError:
-            pass
+        stop_event = self._stop_event
+        if stop_event is not None:
+            stop_event.set()
+        task = self._task
+        if task is not None and not task.done():
+            task.cancel()
 
     @asynccontextmanager
     async def paused(self):
-        thread = self.thread
-        running = thread is not None and thread.is_alive()
-        restart = running and not self._stop_requested.is_set()
-        if running:
+        task = self._task
+        restart = self.is_running()
+        if restart:
             self.disconnect()
-            await asyncio.to_thread(thread.join, 5)
-            if thread.is_alive():
-                raise TimeoutError("Zwift Click V2 listener did not stop")
+            await asyncio.gather(task, return_exceptions=True)
         try:
             yield
         finally:
@@ -1005,23 +991,26 @@ class ZwiftClickV2Session:
             return "disconnected"
         return "inactive"
 
-    def join(self) -> None:
-        thread = self.thread
-        if thread is not None and thread is not threading.current_thread():
-            thread.join(timeout=5)
-
-    def _run_thread(self) -> None:
+    def _listener_done(
+        self,
+        task: asyncio.Task,
+        stop_event: asyncio.Event,
+    ) -> None:
+        if self._task is not task:
+            return
+        stopped_for_restart = stop_event.is_set() and self._desired_running
+        self._task = None
+        self._stop_event = None
         try:
-            asyncio.run(self._run_listener())
+            task.result()
+        except asyncio.CancelledError:
+            pass
         except Exception as exc:  # noqa: BLE errors are runtime
             app_logger.info(f"[ZwiftClickV2] listener crashed: {exc}")
+        if stopped_for_restart:
+            self.connect()
 
-    async def _run_listener(self) -> None:
-        self._loop = asyncio.get_running_loop()
-        self._stop_event = asyncio.Event()
-        self._task = asyncio.current_task()
-        if self._stop_requested.is_set():
-            self._stop_event.set()
+    async def _run_listener(self, stop_event: asyncio.Event) -> None:
         preferred_address = str(self.config.G_SENSORS[self.CONTROL_ROLE]["ID"]).strip()
 
         def log(msg: str) -> None:
@@ -1039,7 +1028,7 @@ class ZwiftClickV2Session:
                 debug_log(f"using BlueZ adapter {adapter}")
             await listen(
                 on_classified=self._on_classified,
-                stop_event=self._stop_event,
+                stop_event=stop_event,
                 scan_forever=True,
                 preferred_address=preferred_address,
                 on_connected=self._on_connected,
@@ -1057,10 +1046,6 @@ class ZwiftClickV2Session:
         except Exception as exc:  # noqa: BLE errors are runtime
             log(f"listener crashed: {exc}")
         finally:
-            await shutdown_ble_discovery(adapter)
-            self._task = None
-            self._stop_event = None
-            self._loop = None
             self.connection_status = self._control_idle_status()
 
     def _on_classified(
@@ -1088,7 +1073,7 @@ class ZwiftClickV2Session:
 
     def _on_disconnected(self, _side: str, _address: str) -> None:
         self.cancel_recovery_timeout()
-        if self._stop_requested.is_set():
+        if not self._desired_running:
             return
         self.connection_status = "connecting"
         self.input_status = self.CLICK_INPUT_UNKNOWN
@@ -1141,13 +1126,10 @@ class ZwiftClickV2Session:
         self.cancel_recovery_timeout()
         if not self.recovery_pending:
             return
-        timer = threading.Timer(
+        self._recovery_timer = asyncio.get_running_loop().call_later(
             self.CLICK_RECOVERY_INPUT_TIMEOUT_SECONDS,
             self._handle_recovery_timeout,
         )
-        timer.daemon = True
-        self._recovery_timer = timer
-        timer.start()
 
     def cancel_recovery_timeout(self) -> None:
         timer = self._recovery_timer
@@ -1199,11 +1181,14 @@ class ZwiftClickV2Session:
         self.config.loop.call_soon_threadsafe(show)
 
     def is_running(self) -> bool:
-        thread = self.thread
+        task = self._task
+        stop_event = self._stop_event
         return bool(
-            thread is not None
-            and thread.is_alive()
-            and not self._stop_requested.is_set()
+            self._desired_running
+            and task is not None
+            and not task.done()
+            and stop_event is not None
+            and not stop_event.is_set()
         )
 
 
