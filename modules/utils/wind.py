@@ -138,6 +138,9 @@ def get_speed_impact(
     aero_factor = 0.5 * air_density * cda
     linear_force = total_weight * STANDARD_GRAVITY * (crr + grade_percent / 100)
     model_power = (aero_factor * speed**2 + linear_force + force_delta) * speed
+    # Negative modelled power requires braking, outside the steady riding model.
+    if model_power < 0:
+        return _NO_SPEED_IMPACT
     still_air_speed = _solve_still_air_speed(
         model_power,
         aero_factor,

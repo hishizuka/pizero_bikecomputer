@@ -8,6 +8,7 @@ import numpy as np
 import psutil
 
 from modules.app_logger import app_logger
+from modules.utils.geo import get_heading_str
 from modules.utils.performance_metrics import (
     NP_WINDOW_SIZE_DEFAULT,
     calc_form_metrics as perf_calc_form_metrics,
@@ -155,6 +156,8 @@ class SensorCore:
     def __init__(self, config):
         self.status_quit = False
         self._bridge_recovery_task = None
+        self._openmeteo_wind_task = None
+        self._openmeteo_wind_result = (np.nan, np.nan, None)
         self.config = config
         self.gps_position_quality = GPSPositionQuality()
         self.heading_fusion = HeadingFusion(config.G_GPS_SPEED_CUTOFF)
@@ -420,6 +423,9 @@ class SensorCore:
 
     async def quit(self):
         self.status_quit = True
+        if self._openmeteo_wind_task is not None:
+            self._openmeteo_wind_task.cancel()
+            await asyncio.gather(self._openmeteo_wind_task, return_exceptions=True)
         if self._bridge_recovery_task is not None:
             self._bridge_recovery_task.cancel()
             await asyncio.gather(self._bridge_recovery_task, return_exceptions=True)
@@ -548,6 +554,35 @@ class SensorCore:
 
     def _update_cadence_brake_hint(self, cadence):
         return self._update_zero_window_brake_hint(self.brakelight_cad, cadence)
+
+    def _get_openmeteo_wind_without_waiting(self, pos):
+        if np.any(np.isnan(pos)):
+            return np.nan, np.nan, None
+
+        task = self._openmeteo_wind_task
+        if task is not None and task.done():
+            self._openmeteo_wind_task = None
+            try:
+                speed, direction = task.result()
+                self._openmeteo_wind_result = (
+                    speed, direction, get_heading_str(direction)
+                )
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                app_logger.exception("Open-Meteo wind refresh failed")
+
+        api = self.config.api
+        if (
+            self._openmeteo_wind_task is None
+            and int(time.time()) - api.send_time["OPENMETEO_WIND"]
+            >= self.config.G_OPENMETEO_API["INTERVAL_SEC"]
+        ):
+            self._openmeteo_wind_task = asyncio.create_task(
+                api.get_openmeteo_current_wind_data(pos)
+            )
+
+        return self._openmeteo_wind_result
 
     def _update_power_brake_hint(self, power):
         return self._update_zero_window_brake_hint(self.brakelight_power, power)
@@ -883,11 +918,16 @@ class SensorCore:
             # wind
             if self.config.G_USE_WIND_DATA_SOURCE:
                 api_wind_start = time.perf_counter()
+                wind_pos = [v["GPS"]["lon"], v["GPS"]["lat"]]
+                if self.config.G_WIND_DATA_SOURCE.startswith("jpn_scw"):
+                    wind = await self.config.api.get_wind(wind_pos)
+                else:
+                    wind = self._get_openmeteo_wind_without_waiting(wind_pos)
                 (
                     integrated["wind_speed"],
                     integrated["wind_direction"],
                     integrated["wind_direction_str"],
-                ) = await self.config.api.get_wind([v["GPS"]["lon"], v["GPS"]["lat"]])
+                ) = wind
                 (
                     integrated["headwind"],
                     wind_force_delta,
