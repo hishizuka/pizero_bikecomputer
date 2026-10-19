@@ -66,6 +66,7 @@ try:
             sfrbx_to_qzqsm,
         )
         from ublox_support.qzss_dcr_store import QzssDcrStore
+        from ublox_support.reader import UBloxReader
         from ublox_support.transport import (
             I2CStream,
             I2C_ADDRESS as _I2C_ADDRESS,
@@ -96,6 +97,7 @@ try:
             sfrbx_to_qzqsm,
         )
         from .ublox_support.qzss_dcr_store import QzssDcrStore
+        from .ublox_support.reader import UBloxReader
         from .ublox_support.transport import (
             I2CStream,
             I2C_ADDRESS as _I2C_ADDRESS,
@@ -238,7 +240,7 @@ class UBlox(AbstractSensorGPS):
                 self.transport = I2CStream(_I2C_BUS, _I2C_ADDRESS, _READ_TIMEOUT)
                 self.transport_type = "i2c"
             self.receiver_info["transport"] = self._transport_name()
-            self._reader = UBXReader(
+            self._reader = UBloxReader(
                 self.transport,
                 protfilter=UBX_PROTOCOL,
                 quitonerror=ERR_IGNORE,
@@ -441,9 +443,10 @@ class UBlox(AbstractSensorGPS):
         if self.transport_type != "uart":
             return
 
-        # Keep UART output quiet until MON-VER and SEC-UNIQID are read.
+        # Disable unused NMEA and pause periodic UBX until receiver identification.
         port = "UART1"
         quiet_cfg_data = [
+            ("CFG_UART1OUTPROT_NMEA", 0),
             (f"CFG_MSGOUT_UBX_NAV_PVT_{port}", 0),
             (f"CFG_MSGOUT_UBX_NAV_DOP_{port}", 0),
             (f"CFG_MSGOUT_UBX_NAV_SAT_{port}", 0),
@@ -984,10 +987,8 @@ class UBlox(AbstractSensorGPS):
         self._dop = (parsed.pDOP, parsed.hDOP, parsed.vDOP)
 
     def _handle_nav_sat(self, parsed):
-        num_svs = parsed.numSvs
-        used = sum(getattr(parsed, f"svUsed_{i:02d}", 0) for i in range(1, num_svs + 1))
-        self._total_sats = num_svs
-        self._used_sats = used or self._used_sats
+        self._total_sats = parsed.num_svs
+        self._used_sats = parsed.used_svs or self._used_sats
 
     @cached_property
     def qzss_dcr_store(self):
