@@ -6,7 +6,7 @@ from contextlib import contextmanager
 
 import numpy as np
 
-from modules.qt._qt_qtwidgets import QtCore, Signal, USE_PYQT6
+from modules.qt._qt_qtwidgets import QtCore, QtGui, Signal, USE_PYQT6
 from modules.display.sharp_presenter import SharpPresenter, presenter_paths
 from modules.map.gl import GL, RenderTarget, gl
 from modules.map.gl_api import compile_program, gl_check
@@ -295,6 +295,19 @@ void main() { gl_FragColor = texture2D(u_image, v_uv); }""",
             self._draw_overlay(overlay)
             self.output.submit(buffer_index)
             return True
+
+    def grab(self):
+        """Read the completed display buffer without a temporary disk file."""
+        with os.fdopen(os.memfd_create("pizero-map-screenshot"), "rb") as stream:
+            with self.context.current():
+                self.output.presenter.dump_active_ppm(
+                    f"/proc/self/fd/{stream.fileno()}"
+                )
+            stream.seek(0)
+            image = QtGui.QImage.fromData(stream.read(), "PPM")
+        if image.isNull():
+            raise RuntimeError("GPU map screenshot is invalid")
+        return image
 
     def close(self):
         if self.context is None:

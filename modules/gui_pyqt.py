@@ -907,12 +907,27 @@ class GUI_PyQt(GUI_Qt_Base):
     def get_screenshot(self):
         self.signal_get_screenshot.emit()
 
-    def screenshot(self):
-        date = datetime.now()
-        filename = date.strftime("%Y-%m-%d_%H-%M-%S.png")
+    @qasync.asyncSlot()
+    async def screenshot(self):
+        filename = datetime.now().strftime("%Y-%m-%d_%H-%M-%S.png")
         app_logger.info(f"screenshot: {filename}")
-        p = (self.root_widget or self.stack_widget).grab()
-        p.save(os.path.join(self.config.G_SCREENSHOT_DIR, filename), "png")
+        try:
+            gpu_map = self.gpu_map_widget
+            if (
+                gpu_map is not None
+                and gpu_map.isVisible()
+                and gpu_map.presenter is not None
+            ):
+                image = gpu_map.presenter.grab()
+            else:
+                image = (self.root_widget or self.stack_widget).grab().toImage()
+            if not await asyncio.to_thread(
+                image.save, os.path.join(self.config.G_SCREENSHOT_DIR, filename), "png"
+            ):
+                raise OSError("Could not save screenshot")
+        except Exception:
+            app_logger.exception("Screenshot failed")
+            return
         self.config.display.screen_flash_short()
 
     def change_start_stop_button(self, status):
