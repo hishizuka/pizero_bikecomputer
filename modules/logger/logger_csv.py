@@ -10,13 +10,9 @@ if __name__ == "__main__" and __package__ is None:
 
     sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-try:
-    from modules.utils.cmd import exec_cmd
-    from modules.logger.logger import Logger
-except ImportError:  # pragma: no cover
-    from modules.utils.cmd import exec_cmd
-    from .logger import Logger
-
+from modules.utils.cmd import exec_cmd
+from modules.logger import G_LEGACY_HEADING_COLUMNS, G_MAGNETIC_HEADING_COLUMNS
+from modules.logger.logger import Logger
 
 class LoggerCsv(Logger):
     def write_log(self, filename):
@@ -28,14 +24,12 @@ class LoggerCsv(Logger):
             "gps_position_distance_error,distance_source,gps_epx,gps_epy,gps_epv,"
             "gps_pdop,gps_hdop,gps_vdop,total_ascent,total_descent,pressure,temperature,humidity,"
             "heading_gps_deg,heading_gps_quality,heading_magnetic_deg,"
-            "heading_fused_deg,heading_fused_source,pitch,roll,"
+            "heading_deg,heading_source,pitch,roll,"
             "wind_speed,wind_direction,headwind,"
             "motion,acc_x,acc_y,acc_z,gyro_x,gyro_y,gyro_z,cpu_percent,system_cpu_percent,light"
         )
-        columns = r.split(",")
+        columns = r.split(",") + [name for name, _ in G_MAGNETIC_HEADING_COLUMNS]
 
-        # voltage_battery,current_battery,voltage_out,current_out,battery_percentage\
-        # "
         # if sqlite3 command exists, use this command (much faster)
         con = sqlite3.connect(
             self.config.G_LOG_DB,
@@ -47,17 +41,27 @@ class LoggerCsv(Logger):
             row[1]
             for row in cur.execute("PRAGMA table_info(BIKECOMPUTER_LOG)")
         ]
-        available = [col for col in columns if col in table_columns]
-        if not available:
+        legacy_columns = {
+            current: legacy for legacy, current in G_LEGACY_HEADING_COLUMNS.items()
+        }
+        selected = []
+        for column in columns:
+            source = column if column in table_columns else legacy_columns.get(column)
+            if source in table_columns:
+                selected.append((column, source))
+        if not selected:
             cur.close()
             con.close()
             return False
 
-        select_cols = ",".join(available)
-        header = select_cols
+        select_cols = ",".join(
+            source if source == column else f"{source} AS {column}"
+            for column, source in selected
+        )
+        header = ",".join(column for column, _ in selected)
         if shutil.which("sh") is not None and shutil.which("sqlite3"):
             sql_cmd = (
-                "sqlite3 -header -csv "
+                "sqlite3 -csv -header "
                 + shlex.quote(self.config.G_LOG_DB)
                 + " 'SELECT "
                 + select_cols

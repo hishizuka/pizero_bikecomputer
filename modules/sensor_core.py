@@ -35,6 +35,7 @@ from .sensor.gps.position_quality import (
     GPSPositionQualityState,
 )
 from .utils.heading_fusion import HeadingFusion
+from .utils.magnetic_heading_correction import MagneticHeadingCorrection
 from .sensor.sensor_ant import SensorANT
 from .sensor.sensor_ble import SensorBLE
 from .sensor.sensor_gpio import SensorGPIO
@@ -54,6 +55,21 @@ class SensorCore:
     sensor_gpio = None
     sensor_cardputerzero = None
     values = {}
+    heading_value_defaults = {
+        "heading_deg": np.nan,
+        "heading_source": "INVALID",
+        "heading_selection_reason": "INITIALIZING",
+        "heading_magnetic_state": "UNVERIFIED",
+        "heading_gyro_state": "UNAVAILABLE",
+        "heading_gyro_residual_deg": np.nan,
+        "heading_gyro_checked_ts_ms": np.nan,
+        "heading_gyro_pending_samples": 0,
+        "heading_magnetic_corrected_deg": np.nan,
+        "heading_magnetic_model_used": "NONE",
+        "heading_magnetic_model_samples": 0,
+        "heading_magnetic_current_bin_samples": 0,
+        "heading_magnetic_declination_deg": np.nan,
+    }
     integrated_value_keys = [
         "heart_rate",
         "speed",
@@ -97,8 +113,7 @@ class SensorCore:
         "heading_gps_deg",
         "heading_gps_quality",
         "heading_magnetic_deg",
-        "heading_fused_deg",
-        "heading_fused_source",
+        *heading_value_defaults,
         "cpu_percent",
         "system_cpu_percent",
         "send_time",
@@ -164,7 +179,13 @@ class SensorCore:
         self._openmeteo_wind_result = (np.nan, np.nan, None)
         self.config = config
         self.gps_position_quality = GPSPositionQuality()
-        self.heading_fusion = HeadingFusion(config.G_GPS_SPEED_CUTOFF)
+        self.heading_fusion = HeadingFusion(
+            config.G_GPS_SPEED_CUTOFF,
+            magnetic_primary=config.G_HEADING_MAGNETIC_PRIMARY,
+        )
+        self.magnetic_heading_correction = MagneticHeadingCorrection()
+        self._magnetic_saved_revision = -1
+        self._magnetic_calibration_epoch = 0
         self.values["GPS"] = {}
         self.values["ANT+"] = {}
         self.values["BLE"] = {}
@@ -182,7 +203,7 @@ class SensorCore:
             GPSPositionQualityReason.WINDOW_WARMUP
         )
         integrated["distance_source"] = int(DistanceSource.NONE)
-        integrated["heading_fused_source"] = "INVALID"
+        integrated.update(self.heading_value_defaults)
         self.reset_internal()
         wind_accumulated_values = self.config.state.get_value(
             self.WIND_ACCUMULATED_STATE_KEY, (0.0, 0.0)
@@ -454,6 +475,152 @@ class SensorCore:
         self.sensor_ble.reset()
         self.sensor_i2c.reset()
         self.reset_internal()
+        self.reset_magnetic_heading_correction("ride_reset")
+
+    def initialize_magnetic_heading_correction(self, *, resume, ride_start_time):
+        model = self.magnetic_heading_correction
+        saved = self.config.state.values.pop(model.G_STATE_KEY, None)
+        if (
+            resume
+            and ride_start_time is not None
+            and datetime.fromtimestamp(ride_start_time).date() == datetime.now().date()
+            and saved is not None
+            and model.restore(saved)
+        ):
+            self.config.state.values[model.G_STATE_KEY] = model.snapshot()
+        self._magnetic_saved_revision = -1
+
+    def reset_magnetic_heading_correction(self, reason, *, calibration=False):
+        self.magnetic_heading_correction.reset(reason, calibration=calibration)
+        self.heading_fusion.reset()
+        self.config.state.values.pop(MagneticHeadingCorrection.G_STATE_KEY, None)
+        self._magnetic_saved_revision = -1
+        integrated = self.values["integrated"]
+        integrated.update(self.heading_value_defaults)
+        integrated["heading_selection_reason"] = "RESET"
+        integrated["heading_gyro_state"] = "UNVERIFIED"
+
+    def _update_heading(
+        self,
+        now,
+        *,
+        wheel_speed=np.nan,
+        wheel_available=False,
+    ):
+        model = self.magnetic_heading_correction
+        epoch = self.sensor_i2c.magnetic_heading_calibration_epoch
+        if epoch != self._magnetic_calibration_epoch:
+            self.reset_magnetic_heading_correction("calibration", calibration=True)
+            self._magnetic_calibration_epoch = epoch
+        supports_gyro_intervals = self.sensor_i2c.supports_gyro_intervals
+        motion = (
+            self.sensor_i2c.update_heading_motion(
+                model.correct_heading_for_motion, model_ready=model.ready,
+            ) if supports_gyro_intervals else None
+        )
+        magnetic_allowed = motion.magnetic_allowed if motion is not None else None
+        integrated = self.values["integrated"]
+        if motion is not None:
+            if motion.recovered and motion.magnetic_allowed is not False:
+                self.heading_fusion.acknowledge_magnetic_recovery()
+            integrated["heading_gyro_state"] = motion.state
+            integrated["heading_gyro_residual_deg"] = motion.residual_deg
+            integrated["heading_gyro_checked_ts_ms"] = motion.checked_ts_ms
+            integrated["heading_gyro_pending_samples"] = motion.pending_observations
+        else:
+            integrated["heading_gyro_state"] = "UNAVAILABLE"
+            integrated["heading_gyro_residual_deg"] = np.nan
+            integrated["heading_gyro_checked_ts_ms"] = np.nan
+            integrated["heading_gyro_pending_samples"] = 0
+        active_ride = self.config.logger.values["start_time"] is not None
+        riding = active_ride and self.config.G_STOPWATCH_STATUS == "START"
+        physical_ready = (
+            not self.sensor_i2c.do_mag_calibration
+            and not self.sensor_i2c.do_pitch_roll_calibration
+        )
+        inputs = self._heading_inputs
+        learning_enabled = (
+            riding
+            and physical_ready
+            and magnetic_allowed is not False
+            and self.heading_fusion.learning_allowed(
+                wheel_speed=wheel_speed,
+                wheel_available=wheel_available,
+                gps_speed=inputs["gps_speed"],
+            )
+        )
+        result = model.update(
+            heading_gps_deg=inputs["heading_gps_deg"],
+            heading_gps_timestamp=inputs["heading_gps_timestamp"],
+            gps_speed=inputs["gps_speed"],
+            gps_mode=inputs["gps_mode"],
+            heading_gps_quality=inputs["heading_gps_quality"],
+            heading_magnetic_deg=inputs["heading_magnetic_deg"],
+            heading_magnetic_timestamp=inputs["heading_magnetic_timestamp"],
+            heading_magnetic_declination_deg=inputs["heading_magnetic_declination_deg"],
+            gps_position_quality_state=integrated["gps_position_quality_state"],
+            now=now,
+            learning_enabled=learning_enabled,
+        )
+        integrated["heading_magnetic_corrected_deg"] = result.heading_magnetic_corrected_deg
+        integrated["heading_magnetic_model_used"] = result.heading_magnetic_model_used
+        integrated["heading_magnetic_model_samples"] = result.heading_magnetic_model_samples
+        integrated["heading_magnetic_current_bin_samples"] = (
+            result.heading_magnetic_current_bin_samples
+        )
+        integrated["heading_magnetic_declination_deg"] = result.heading_magnetic_declination_deg
+        phase = motion.reanchor_phase_deg if motion is not None else np.nan
+        reanchor = self.heading_fusion.confirm_magnetic_reanchor(
+            eligible=(
+                model.ready and riding and physical_ready and math.isfinite(phase)
+            ),
+            inputs=inputs,
+            heading_deg=(
+                model.correct_heading_for_motion(phase)
+                if math.isfinite(phase)
+                else np.nan
+            ),
+            observation_id=(
+                (motion.checked_epoch, motion.checked_seq)
+                if motion is not None
+                else None
+            ),
+            wheel_speed=wheel_speed,
+            wheel_available=wheel_available,
+            position_state=integrated["gps_position_quality_state"],
+            now=now,
+        )
+        if reanchor and self.sensor_i2c.reanchor_heading_motion():
+            # Keep F1 coefficients but reacquire absolute admission after the fault.
+            self.heading_fusion.reset()
+            magnetic_allowed = None
+            integrated["heading_gyro_state"] = "REANCHORED_GPS"
+        heading = self.heading_fusion.update(
+            heading_gps_deg=inputs["heading_gps_deg"],
+            heading_gps_timestamp=inputs["heading_gps_timestamp"],
+            gps_speed=inputs["gps_speed"],
+            gps_mode=inputs["gps_mode"],
+            gps_epx=inputs["gps_epx"],
+            gps_epy=inputs["gps_epy"],
+            heading_magnetic_deg=result.heading_magnetic_corrected_deg,
+            heading_magnetic_timestamp=inputs["heading_magnetic_timestamp"],
+            now=now,
+            gps_position_quality_state=integrated["gps_position_quality_state"],
+            wheel_speed=wheel_speed, wheel_available=wheel_available,
+            magnetic_model_used=result.heading_magnetic_model_used,
+            magnetic_model_generation=model.generation,
+            magnetic_teachers=result.teachers,
+            physical_ready=physical_ready, magnetic_allowed=magnetic_allowed,
+        )
+        integrated["heading_deg"] = heading.heading_deg
+        integrated["heading_gps_quality"] = heading.heading_gps_quality
+        integrated["heading_source"] = heading.heading_source
+        integrated["heading_selection_reason"] = heading.heading_selection_reason
+        integrated["heading_magnetic_state"] = heading.heading_magnetic_state
+        if active_ride and model.revision != self._magnetic_saved_revision:
+            # Existing AppState writers persist this owned snapshot; no new loop I/O.
+            self.config.state.values[model.G_STATE_KEY] = model.snapshot()
+            self._magnetic_saved_revision = model.revision
 
     def reset_internal(self):
         integrated = self.values["integrated"]
@@ -487,28 +654,32 @@ class SensorCore:
         if not np.isnan(power):
             self.get_ave_values("power", power)
 
-    def _update_heading_fusion(self, now):
+    def _snapshot_heading_inputs(self):
         gps = self.values["GPS"]
         i2c = self.values["I2C"]
         heading_gps_deg = gps["heading_gps_deg"]
         heading_magnetic_deg = i2c["heading_magnetic_deg"]
-        result = self.heading_fusion.update(
-            heading_gps_deg=heading_gps_deg,
-            heading_gps_timestamp=gps["heading_gps_timestamp"],
-            gps_speed=gps["speed"],
-            gps_mode=gps["mode"],
-            gps_epx=gps["epx"],
-            gps_epy=gps["epy"],
-            heading_magnetic_deg=heading_magnetic_deg,
-            heading_magnetic_timestamp=i2c["heading_magnetic_timestamp"],
-            now=now,
+        self._heading_inputs = {
+            "heading_gps_deg": heading_gps_deg,
+            "heading_gps_timestamp": gps["heading_gps_timestamp"],
+            "gps_speed": gps["speed"],
+            "gps_mode": gps["mode"],
+            "gps_epx": gps["epx"],
+            "gps_epy": gps["epy"],
+            "heading_magnetic_deg": heading_magnetic_deg,
+            "heading_magnetic_timestamp": i2c["heading_magnetic_timestamp"],
+            "heading_magnetic_declination_deg": i2c["heading_magnetic_declination_deg"],
+        }
+        # Judge teacher quality at observation time; freshness has its own timestamp gate.
+        observation_time = gps["heading_gps_timestamp"]
+        self._heading_inputs["heading_gps_quality"] = self.heading_fusion.gps_quality(
+            heading_gps_deg, observation_time, gps["speed"], gps["mode"],
+            gps["epx"], gps["epy"],
+            observation_time,
         )
         integrated = self.values["integrated"]
         integrated["heading_gps_deg"] = heading_gps_deg
-        integrated["heading_gps_quality"] = result.heading_gps_quality
         integrated["heading_magnetic_deg"] = heading_magnetic_deg
-        integrated["heading_fused_deg"] = result.heading_fused_deg
-        integrated["heading_fused_source"] = result.heading_fused_source
 
     def _update_gps_position_quality(
         self,
@@ -657,7 +828,7 @@ class SensorCore:
             power_sensor_live = False
 
             now_time = datetime.now()
-            self._update_heading_fusion(now_time)
+            self._snapshot_heading_inputs()
             time_profile.append(now_time)
 
             ant_id_type = {
@@ -773,6 +944,8 @@ class SensorCore:
                     power_sensor_live = True
 
             # Speed: ANT+ or BLE CSCS > GPS
+            heading_wheel_speed = np.nan
+            heading_wheel_available = False
             ant_spd_packet_received_recently = False
             ble_spd_live = False
             if ant_use["SPD"]:
@@ -794,6 +967,14 @@ class SensorCore:
                 # Complement from GPS speed when I2C acc sensor is available (using moving status).
                 elif v["I2C"]["m_stat"] == 1 and v["GPS"]["speed"] > 0:
                     spd = v["GPS"]["speed"]
+                if ant_spd_packet_received_recently:
+                    heading_wheel_available = (
+                        spd_data["on_data_timestamp"] <= now_time
+                    )
+                    heading_wheel_speed = (
+                        spd_data["speed"]
+                        if delta["SPD"] < self.time_threshold["SPD"] else 0.0
+                    )
             elif ble_spd_configured:
                 ble_spd_data = self.values["BLE"]["SPD"]
                 ble_spd_live = self.sensor_ble.is_sensor_connected(
@@ -801,6 +982,13 @@ class SensorCore:
                 ) and not np.isnan(ble_spd_data["speed"])
                 if ble_spd_live:
                     spd = ble_spd_data["speed"]
+                    received_at = ble_spd_data["received_at"]
+                    heading_wheel_available = (
+                        received_at is not None
+                        and 0 <= time.monotonic() - received_at
+                        < self.time_threshold["SPD"]
+                    )
+                    heading_wheel_speed = ble_spd_data["speed"]
                 elif not np.isnan(v["GPS"]["speed"]):
                     spd = v["GPS"]["speed"]
             elif not np.isnan(v["GPS"]["speed"]):
@@ -865,6 +1053,10 @@ class SensorCore:
                 dst_diff["GPS"],
                 wheel_step_m,
                 distance_source,
+            )
+            self._update_heading(
+                now_time, wheel_speed=heading_wheel_speed,
+                wheel_available=heading_wheel_available,
             )
 
             # Total work: ANT+ or BLE

@@ -11,6 +11,7 @@ from threading import RLock
 import numpy as np
 
 from modules.app_logger import app_logger
+from modules.logger import G_LEGACY_HEADING_COLUMNS, G_MAGNETIC_HEADING_COLUMNS
 from modules.utils.crdp import rdp
 from modules.utils.cmd import exec_cmd
 from modules.utils.date import datetime_myparser
@@ -316,6 +317,9 @@ class LoggerCore:
         else:
             self.resume()
             self.resume_status = True
+        self.sensor.initialize_magnetic_heading_correction(
+            resume=first_row is not None, ride_start_time=self.values["start_time"]
+        )
         self.sensor.start_coroutine()
 
     async def resume_start_stop(self):
@@ -403,7 +407,10 @@ class LoggerCore:
             self._maybe_log_perf_sql_worker_window()
 
     def init_db(self):
-        self.create_table_sql = """CREATE TABLE BIKECOMPUTER_LOG(
+        heading_columns = ",\n      ".join(
+            f"{name} {sql_type}" for name, sql_type in G_MAGNETIC_HEADING_COLUMNS
+        )
+        self.create_table_sql = f"""CREATE TABLE BIKECOMPUTER_LOG(
       timestamp DATETIME,
       lap INTEGER,
       timer INTEGER,
@@ -449,8 +456,8 @@ class LoggerCore:
       wind_direction INT,
       headwind FLOAT,
       heading_magnetic_deg INTEGER,
-      heading_fused_deg FLOAT,
-      heading_fused_source TEXT,
+      heading_deg FLOAT,
+      heading_source TEXT,
       pitch FLOAT,
       roll FLOAT,
       motion INTEGER,
@@ -484,18 +491,49 @@ class LoggerCore:
       lap_power_count INTEGER,
       lap_power_sum INTEGER,
       avg_power_count INTEGER,
-      avg_power_sum INTEGER
+      avg_power_sum INTEGER,
+      {heading_columns}
     )"""
-        self.cur.execute(
-            "SELECT * FROM sqlite_master WHERE type='table' and name='BIKECOMPUTER_LOG'"
+        declarations = (
+            self.create_table_sql.split("(", 1)[1].rsplit(")", 1)[0].split(",")
         )
-        res = self.cur.fetchone()
-        replace_flg = False
-        if (
-            res is not None
-            and len(res) >= 5
-            and res[4].replace(" ", "") != self.create_table_sql.replace(" ", "")
-        ):
+        expected_columns = [
+            (parts[0], parts[1].upper())
+            for parts in (declaration.split() for declaration in declarations)
+        ]
+        current_columns = [
+            (row[1], row[2].upper())
+            for row in self.cur.execute("PRAGMA table_info(BIKECOMPUTER_LOG)")
+        ]
+        if current_columns == expected_columns:
+            return
+        base_columns = expected_columns[: -len(G_MAGNETIC_HEADING_COLUMNS)]
+        normalized_columns = [
+            (G_LEGACY_HEADING_COLUMNS.get(name, name), sql_type)
+            for name, sql_type in current_columns
+        ]
+        if normalized_columns in (expected_columns, base_columns):
+            # Rename and append heading fields atomically, preserving the current ride.
+            self.cur.execute("BEGIN")
+            try:
+                for name, _ in current_columns:
+                    if name in G_LEGACY_HEADING_COLUMNS:
+                        self.cur.execute(
+                            f"ALTER TABLE BIKECOMPUTER_LOG RENAME COLUMN {name} "
+                            f"TO {G_LEGACY_HEADING_COLUMNS[name]}"
+                        )
+                if normalized_columns == base_columns:
+                    for name, sql_type in G_MAGNETIC_HEADING_COLUMNS:
+                        self.cur.execute(
+                            f"ALTER TABLE BIKECOMPUTER_LOG ADD COLUMN {name} {sql_type}"
+                        )
+                self.con.commit()
+            except sqlite3.Error:
+                self.con.rollback()
+                raise
+            app_logger.info("Migrated heading columns in the current log DB")
+            return
+        if current_columns:
             log_db_moved = self.config.G_LOG_DB + datetime.now().strftime(
                 "-old_layout-%Y%m%d%H%M%S%f"
             )
@@ -509,17 +547,13 @@ class LoggerCore:
 
             self.con = sqlite3.connect(self.config.G_LOG_DB, check_same_thread=False)
             self.cur = self.con.cursor()
-            replace_flg = True
-        if res is None or replace_flg:
-            self.con.execute(self.create_table_sql)
-            self.cur.execute("CREATE INDEX lap_index ON BIKECOMPUTER_LOG(lap)")
-            self.cur.execute(
-                "CREATE INDEX total_timer_time_index ON BIKECOMPUTER_LOG(total_timer_time)"
-            )
-            self.cur.execute(
-                "CREATE INDEX timestamp_index ON BIKECOMPUTER_LOG(timestamp)"
-            )
-            self.con.commit()
+        self.con.execute(self.create_table_sql)
+        self.cur.execute("CREATE INDEX lap_index ON BIKECOMPUTER_LOG(lap)")
+        self.cur.execute(
+            "CREATE INDEX total_timer_time_index ON BIKECOMPUTER_LOG(total_timer_time)"
+        )
+        self.cur.execute("CREATE INDEX timestamp_index ON BIKECOMPUTER_LOG(timestamp)")
+        self.con.commit()
 
     def count_up(self):
         self.calc_gross()
@@ -926,96 +960,97 @@ class LoggerCore:
         sql_queue_start = time.perf_counter()
         now_time = datetime.now(timezone.utc)
         sql_values = (
-                now_time,
-                self.values["lap"],
-                self.values["count_lap"],
-                self.values["count"],
-                self.values["elapsed_time"],
-                ###
-                self.sensor.values["GPS"]["lat"],
-                self.sensor.values["GPS"]["lon"],
-                self.sensor.values["GPS"]["raw_lat"],
-                self.sensor.values["GPS"]["raw_lon"],
-                self.sensor.values["GPS"]["alt"],
-                self.sensor.values["GPS"]["raw_alt"],
-                self.sensor.values["GPS"]["speed"],
-                self.sensor.values["GPS"]["distance"],
-                self.sensor.values["GPS"]["mode"],
-                self.sensor.values["GPS"]["used_sats"],
-                self.sensor.values["GPS"]["total_sats"],
-                value["gps_position_quality_state"],
-                value["gps_position_quality_reason"],
-                value["gps_position_distance_ratio"],
-                value["gps_position_distance_error"],
-                value["distance_source"],
-                value["heading_gps_deg"],
-                value["heading_gps_quality"],
-                self.sensor.values["GPS"]["epx"],
-                self.sensor.values["GPS"]["epy"],
-                self.sensor.values["GPS"]["epv"],
-                self.sensor.values["GPS"]["pdop"],
-                self.sensor.values["GPS"]["hdop"],
-                self.sensor.values["GPS"]["vdop"],
-                ###
-                value["heart_rate"],
-                value["cadence"],
-                value["distance"],
-                value["speed"],
-                value["power"],
-                value["accumulated_power"],
-                ###
-                value["temperature"],
-                self.sensor.values["I2C"]["pressure"],
-                self.sensor.values["I2C"]["humidity"],
-                self.sensor.values["I2C"]["altitude"],
-                self.course.index.altitude,
-                value["dem_altitude"],
-                value["wind_speed"],
-                value["wind_direction"],
-                value["headwind"],
-                value["heading_magnetic_deg"],
-                value["heading_fused_deg"],
-                value["heading_fused_source"],
-                self.sensor.values["I2C"]["pitch"],
-                self.sensor.values["I2C"]["roll"],
-                self.sensor.values["I2C"]["m_stat"],
-                # self.sensor.values['I2C']['acc'][0],
-                # self.sensor.values['I2C']['acc'][1],
-                # self.sensor.values['I2C']['acc'][2],
-                self.sensor.values["I2C"]["acc_graph"][0],
-                self.sensor.values["I2C"]["acc_graph"][1],
-                self.sensor.values["I2C"]["acc_graph"][2],
-                self.sensor.values["I2C"]["gyro_mod"][0],
-                self.sensor.values["I2C"]["gyro_mod"][1],
-                self.sensor.values["I2C"]["gyro_mod"][2],
-                self.sensor.values["I2C"]["light"],
-                value["cpu_percent"],
-                value["system_cpu_percent"],
-                self.sensor.values["I2C"]["total_ascent"],
-                self.sensor.values["I2C"]["total_descent"],
-                ###
-                self.record_stats["lap_avg"]["heart_rate"],
-                self.record_stats["lap_avg"]["cadence"],
-                self.record_stats["lap_avg"]["distance"],
-                self.record_stats["lap_avg"]["speed"],
-                self.record_stats["lap_avg"]["power"],
-                self.record_stats["lap_avg"]["accumulated_power"],
-                self.record_stats["lap_avg"]["total_ascent"],
-                self.record_stats["lap_avg"]["total_descent"],
-                ###
-                self.record_stats["entire_avg"]["heart_rate"],
-                self.record_stats["entire_avg"]["cadence"],
-                self.record_stats["entire_avg"]["speed"],
-                self.record_stats["entire_avg"]["power"],
-                ###
-                self.average["lap"]["cadence"]["count"],
-                self.average["lap"]["cadence"]["sum"],
-                self.average["entire"]["cadence"]["count"],
-                self.average["entire"]["cadence"]["sum"],
-                self.average["lap"]["power"]["count"],
-                self.average["lap"]["power"]["sum"],
-                self.average["entire"]["power"]["count"],
-                self.average["entire"]["power"]["sum"],
+            now_time,
+            self.values["lap"],
+            self.values["count_lap"],
+            self.values["count"],
+            self.values["elapsed_time"],
+            ###
+            self.sensor.values["GPS"]["lat"],
+            self.sensor.values["GPS"]["lon"],
+            self.sensor.values["GPS"]["raw_lat"],
+            self.sensor.values["GPS"]["raw_lon"],
+            self.sensor.values["GPS"]["alt"],
+            self.sensor.values["GPS"]["raw_alt"],
+            self.sensor.values["GPS"]["speed"],
+            self.sensor.values["GPS"]["distance"],
+            self.sensor.values["GPS"]["mode"],
+            self.sensor.values["GPS"]["used_sats"],
+            self.sensor.values["GPS"]["total_sats"],
+            value["gps_position_quality_state"],
+            value["gps_position_quality_reason"],
+            value["gps_position_distance_ratio"],
+            value["gps_position_distance_error"],
+            value["distance_source"],
+            value["heading_gps_deg"],
+            value["heading_gps_quality"],
+            self.sensor.values["GPS"]["epx"],
+            self.sensor.values["GPS"]["epy"],
+            self.sensor.values["GPS"]["epv"],
+            self.sensor.values["GPS"]["pdop"],
+            self.sensor.values["GPS"]["hdop"],
+            self.sensor.values["GPS"]["vdop"],
+            ###
+            value["heart_rate"],
+            value["cadence"],
+            value["distance"],
+            value["speed"],
+            value["power"],
+            value["accumulated_power"],
+            ###
+            value["temperature"],
+            self.sensor.values["I2C"]["pressure"],
+            self.sensor.values["I2C"]["humidity"],
+            self.sensor.values["I2C"]["altitude"],
+            self.course.index.altitude,
+            value["dem_altitude"],
+            value["wind_speed"],
+            value["wind_direction"],
+            value["headwind"],
+            value["heading_magnetic_deg"],
+            value["heading_deg"],
+            value["heading_source"],
+            self.sensor.values["I2C"]["pitch"],
+            self.sensor.values["I2C"]["roll"],
+            self.sensor.values["I2C"]["m_stat"],
+            # self.sensor.values['I2C']['acc'][0],
+            # self.sensor.values['I2C']['acc'][1],
+            # self.sensor.values['I2C']['acc'][2],
+            self.sensor.values["I2C"]["acc_graph"][0],
+            self.sensor.values["I2C"]["acc_graph"][1],
+            self.sensor.values["I2C"]["acc_graph"][2],
+            self.sensor.values["I2C"]["gyro_mod"][0],
+            self.sensor.values["I2C"]["gyro_mod"][1],
+            self.sensor.values["I2C"]["gyro_mod"][2],
+            self.sensor.values["I2C"]["light"],
+            value["cpu_percent"],
+            value["system_cpu_percent"],
+            self.sensor.values["I2C"]["total_ascent"],
+            self.sensor.values["I2C"]["total_descent"],
+            ###
+            self.record_stats["lap_avg"]["heart_rate"],
+            self.record_stats["lap_avg"]["cadence"],
+            self.record_stats["lap_avg"]["distance"],
+            self.record_stats["lap_avg"]["speed"],
+            self.record_stats["lap_avg"]["power"],
+            self.record_stats["lap_avg"]["accumulated_power"],
+            self.record_stats["lap_avg"]["total_ascent"],
+            self.record_stats["lap_avg"]["total_descent"],
+            ###
+            self.record_stats["entire_avg"]["heart_rate"],
+            self.record_stats["entire_avg"]["cadence"],
+            self.record_stats["entire_avg"]["speed"],
+            self.record_stats["entire_avg"]["power"],
+            ###
+            self.average["lap"]["cadence"]["count"],
+            self.average["lap"]["cadence"]["sum"],
+            self.average["entire"]["cadence"]["count"],
+            self.average["entire"]["cadence"]["sum"],
+            self.average["lap"]["power"]["count"],
+            self.average["lap"]["power"]["sum"],
+            self.average["entire"]["power"]["count"],
+            self.average["entire"]["power"]["sum"],
+            *(value[name] for name, _ in G_MAGNETIC_HEADING_COLUMNS),
         )
         placeholders = ",".join(["?"] * len(sql_values))
         sql = (f"INSERT INTO BIKECOMPUTER_LOG VALUES({placeholders})", sql_values)

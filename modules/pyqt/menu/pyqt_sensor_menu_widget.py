@@ -446,7 +446,6 @@ class SensorMenuWidget(MenuWidget):
 
 
 class InternalSensorMenuWidget(MenuWidget):
-    MAP_HEADING_BUTTON = "Map Magnetic Heading"
     MAG_CALIBRATION_BUTTON = "Mag Calibration"
     PITCH_ROLL_CALIBRATION_BUTTON = "Pitch/Roll Calibration"
 
@@ -458,11 +457,6 @@ class InternalSensorMenuWidget(MenuWidget):
             # Name(page_name), button_attribute, connected functions, layout
             ("GPS", "submenu", gps_action),
             ("Adjust Altitude", "submenu", self.adjust_altitude),
-            (
-                self.MAP_HEADING_BUTTON,
-                "toggle",
-                lambda: self.onoff_map_heading(True),
-            ),
             (self.MAG_CALIBRATION_BUTTON, "dialog", self.calib_mag),
             (
                 self.PITCH_ROLL_CALIBRATION_BUTTON,
@@ -482,12 +476,6 @@ class InternalSensorMenuWidget(MenuWidget):
     def adjust_altitude(self):
         self.change_page("Adjust Altitude")
 
-    def onoff_map_heading(self, change=True):
-        maps = self.config.map
-        if change:
-            maps.set_heading_source(not maps.use_magnetic_heading)
-        self.buttons[self.MAP_HEADING_BUTTON].change_toggle(maps.use_magnetic_heading)
-
     def calib_mag(self):
         self.config.gui.calib_mag()
         self.update_button_status()
@@ -497,7 +485,6 @@ class InternalSensorMenuWidget(MenuWidget):
         self.update_button_status()
 
     def update_button_status(self):
-        self.onoff_map_heading(change=False)
         self.buttons[self.MAG_CALIBRATION_BUTTON].onoff_button(
             self.sensor_i2c.motion_sensor["MAG"]
         )

@@ -18,7 +18,6 @@ class MapApplication:
         self.navigation = Navigation()
         self.marker_layout = CourseMarkerLayout()
         self.overlays = MapOverlays(config)
-        self.use_magnetic_heading = config.G_DEBUG
         self.route_searching = False
         self._wind_key = None
         self._wind_markers = ()
@@ -104,13 +103,5 @@ class MapApplication:
         await self.overlays.shift_time(forward)
         self.notify("refresh_map")
 
-    def set_heading_source(self, use_magnetic):
-        self.use_magnetic_heading = bool(use_magnetic)
-        self.notify("refresh_map")
-
     def heading(self, values):
-        if self.use_magnetic_heading:
-            magnetic = values["I2C"]["heading_magnetic_deg"]
-            if magnetic is not None and math.isfinite(magnetic):
-                return magnetic
-        return values["GPS"]["heading_gps_deg"]
+        return values["integrated"]["heading_deg"]

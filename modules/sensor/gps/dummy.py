@@ -30,6 +30,7 @@ class Dummy_GPS(AbstractSensorGPS):
         self.values["position_basic_valid"] = not np.any(
             np.isnan([self.values["lat"], self.values["lon"]])
         )
+        self.values["mode"] = 3 if self.values["position_basic_valid"] else 1
 
         distance = self._to_float_or_nan(current_position[2])
         if np.isnan(distance):
@@ -41,6 +42,8 @@ class Dummy_GPS(AbstractSensorGPS):
             heading_gps_deg = self._to_float_or_nan(
                 self.values["pre_heading_gps_deg"]
             )
+        else:
+            self.values["heading_gps_timestamp"] = datetime.now()
         self.values["heading_gps_deg"] = heading_gps_deg
 
     def set_position_from_course(self, course, idx):
@@ -53,6 +56,7 @@ class Dummy_GPS(AbstractSensorGPS):
         self.values["raw_lat"] = self.values["lat"]
         self.values["raw_lon"] = self.values["lon"]
         self.values["position_basic_valid"] = True
+        self.values["mode"] = 3
         self.values["distance"] = dist[idx]
 
         if idx + 1 < len(lat):
@@ -69,6 +73,7 @@ class Dummy_GPS(AbstractSensorGPS):
                 )
             )[0]
         )
+        self.values["heading_gps_timestamp"] = datetime.now()
 
     async def update(self):
         if not self.config.G_DUMMY_OUTPUT:

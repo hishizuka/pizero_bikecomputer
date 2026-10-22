@@ -443,7 +443,7 @@ class GUI_Config:
         "MAG_Z": (("1.1f", ""), lambda self: self.sensor.values["I2C"]["mag"][2]),
         "Heading": (
             G_UNIT["Heading"],
-            lambda self: self.sensor.values["I2C"]["heading_magnetic_deg"],
+            lambda self: self.sensor.values["integrated"]["heading_deg"],
         ),
         "Heading_Raw(I2C)": (
             G_UNIT["Int"],

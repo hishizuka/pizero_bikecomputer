@@ -243,6 +243,8 @@ class Config:
 
     # GPS speed cutoff (the distance in 1 seconds at 0.36km/h is 10cm)
     G_GPS_SPEED_CUTOFF = G_AUTOSTOP_CUTOFF  # m/s
+    # Wheel-sensor magnetic priority with synchronized UART gyro supervision.
+    G_HEADING_MAGNETIC_PRIMARY = True
     G_GPS_UBLOX = {
         "ASSISTNOW": {
             "STATUS": False,
@@ -863,6 +865,8 @@ class Config:
         # logger, sensor
         await self.gui.set_boot_status("initialize sensor...")
         self.logger.delay_init()
+        # Persist discarded/validated correction state before recording can resume.
+        await asyncio.to_thread(self.state.write)
 
         from modules.helper.rain_alert import RainAlert
 
