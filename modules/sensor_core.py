@@ -35,6 +35,7 @@ from .sensor.gps.position_quality import (
     GPSPositionQualityState,
 )
 from .utils.heading_fusion import HeadingFusion
+from .utils.heading_diagnostics import HeadingEventLogger
 from .utils.magnetic_heading_correction import MagneticHeadingCorrection
 from .sensor.sensor_ant import SensorANT
 from .sensor.sensor_ble import SensorBLE
@@ -184,6 +185,12 @@ class SensorCore:
             magnetic_primary=config.G_HEADING_MAGNETIC_PRIMARY,
         )
         self.magnetic_heading_correction = MagneticHeadingCorrection()
+        self.heading_diagnostics = HeadingEventLogger()
+        app_logger.info(
+            "[HEADING-CONFIG] magnetic_primary=%s event_log=1 pre_s=10 post_s=8 "
+            "max_event_s=60 summary_s=60",
+            config.G_HEADING_MAGNETIC_PRIMARY,
+        )
         self._magnetic_saved_revision = -1
         self._magnetic_calibration_epoch = 0
         self.values["GPS"] = {}
@@ -452,6 +459,7 @@ class SensorCore:
 
     async def quit(self):
         self.status_quit = True
+        self.heading_diagnostics.flush()
         if self._openmeteo_wind_task is not None:
             self._openmeteo_wind_task.cancel()
             await asyncio.gather(self._openmeteo_wind_task, return_exceptions=True)
@@ -617,6 +625,34 @@ class SensorCore:
         integrated["heading_source"] = heading.heading_source
         integrated["heading_selection_reason"] = heading.heading_selection_reason
         integrated["heading_magnetic_state"] = heading.heading_magnetic_state
+        i2c = self.values["I2C"]
+        self.heading_diagnostics.record(
+            now=now,
+            inputs=inputs,
+            integrated=integrated,
+            motion=motion,
+            wheel_speed=wheel_speed,
+            wheel_available=wheel_available,
+            learning=learning_enabled,
+            recording=active_ride,
+            generation=model.generation,
+            supports_gyro_intervals=supports_gyro_intervals,
+            physical_ready=physical_ready,
+            transform_heading=model.correct_heading_for_motion,
+            attitude=(
+                [
+                    i2c["fixed_pitch"],
+                    i2c["fixed_roll"],
+                    i2c["pitch"],
+                    i2c["roll"],
+                    i2c["acc_mod"].tolist(),
+                    i2c["gyro_mod"].tolist(),
+                    i2c["mag"].tolist(),
+                ]
+                if motion is not None
+                else None
+            ),
+        )
         if active_ride and model.revision != self._magnetic_saved_revision:
             # Existing AppState writers persist this owned snapshot; no new loop I/O.
             self.config.state.values[model.G_STATE_KEY] = model.snapshot()
