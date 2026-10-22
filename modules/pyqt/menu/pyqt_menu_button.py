@@ -106,14 +106,14 @@ class MenuButton(QtWidgets.QPushButton):
 
     def focusInEvent(self, event):
         super().focusInEvent(event)
-        if self.button_type == "submenu" or (
+        if self.button_type in ["submenu", "cloud_upload", "background_task"] or (
             self.button_type == "toggle" and not self.status
         ):
             self.change_icon_with_hover(True)
 
     def focusOutEvent(self, event):
         super().focusOutEvent(event)
-        if self.button_type == "submenu" or (
+        if self.button_type in ["submenu", "cloud_upload", "background_task"] or (
             self.button_type == "toggle" and not self.status
         ):
             self.change_icon_with_hover(False)

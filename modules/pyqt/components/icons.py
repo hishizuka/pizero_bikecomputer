@@ -222,6 +222,23 @@ class BaseMenuIcon(QtWidgets.QLabel):
 class MenuBackgroundIcon(BaseMenuIcon):
     icon = QtGui.QIcon
 
+    def __init__(self, *args):
+        self._highlighted = False
+        super().__init__(*args)
+
+    def set_icon(self, icon):
+        self._current_icon = icon
+        pixmap = icon.pixmap(self.size)
+        if self._highlighted:
+            image = pixmap.toImage()
+            image.invertPixels()
+            pixmap = QtGui.QPixmap.fromImage(image)
+        self.setPixmap(pixmap)
+
+    def hover(self, hover):
+        self._highlighted = hover
+        self.set_icon(self._current_icon)
+
 
 class MenuRightIcon(BaseMenuIcon):
     icon = ForwardLineIcon
@@ -249,7 +266,7 @@ class MenuToggleIcon(BaseMenuIcon):
         self.set_icon(icon())
 
 
-class MenuCloudUploadIcon(BaseMenuIcon):
+class MenuCloudUploadIcon(MenuBackgroundIcon):
     icon = CloudIcon
 
 
