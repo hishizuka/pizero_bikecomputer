@@ -327,6 +327,5 @@ class MapRenderer2D:
                 transform,
                 TRACK_WIDTH * ratio,
                 color=TRACK_COLOR,
-                depth=0.25,
             )
         return calls
