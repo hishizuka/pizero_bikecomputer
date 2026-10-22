@@ -187,7 +187,7 @@ class GadgetbridgeService:
             await self.session.download_http_file(
                 url,
                 save_path,
-                headers={"User-Agent": self.product},
+                headers={"User-Agent": self.gui.config.G_USER_AGENT},
                 timeout=timeout,
                 binary=binary,
             )

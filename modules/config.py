@@ -466,6 +466,12 @@ class Config:
     G_IMU_MAG_AXIS_CONVERSION = {"STATUS": False, "COEF": np.ones(3)}  # X, Y, Z
     G_IMU_MAG_DECLINATION = 0.0
 
+    # HTTP user agent
+    G_USER_AGENT = (
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    )
+
     # Bluetooth tethering
     G_BT_PAN_DEVICE = ""
     G_AUTO_BT_TETHERING = False
