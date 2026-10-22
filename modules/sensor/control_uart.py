@@ -1,6 +1,7 @@
 import asyncio
 import math
 import time
+from collections import deque
 from dataclasses import dataclass
 
 import serial
@@ -13,6 +14,7 @@ SENSOR_FIELDS = {
     "bmp580": ("pressure_hpa", "temperature_c"),
     "ltr308als": ("lux", "raw"),
 }
+G_SENSOR_QUEUE_SIZE = 64
 
 
 @dataclass(frozen=True)
@@ -23,6 +25,8 @@ class SensorSample:
     values: dict[str, float]
     received_at: float
     epoch: int
+    proto: str = "sensors/1"
+    dt_us: int | None = None
 
 
 def parse_control_line(line):
@@ -38,24 +42,29 @@ def parse_control_line(line):
 
 
 def parse_sensor_sample(fields, received_at, epoch):
-    if fields["type"] != "SENSOR" or fields.get("proto") != "sensors/1":
+    proto = fields.get("proto")
+    if fields["type"] != "SENSOR" or proto not in {"sensors/1", "sensors/2"}:
         return None
     name = fields.get("sensor")
     if name not in SENSOR_FIELDS:
+        return None
+    if proto == "sensors/2" and name != "bmi270":
         return None
     try:
         seq = int(fields["seq"])
         ts_ms = int(fields["ts_ms"])
         values = {key: float(fields[key]) for key in SENSOR_FIELDS[name]}
+        dt_us = int(fields["dt_us"]) if proto == "sensors/2" else None
     except (KeyError, ValueError, OverflowError):
         return None
     if (
         not 0 <= seq < 2**32
         or ts_ms < 0
         or not all(map(math.isfinite, values.values()))
+        or (dt_us is not None and not 0 < dt_us <= min(2**32 - 1, (ts_ms + 1) * 1000))
     ):
         return None
-    return SensorSample(name, seq, ts_ms, values, received_at, epoch)
+    return SensorSample(name, seq, ts_ms, values, received_at, epoch, proto, dt_us)
 
 
 class ControlUART:
@@ -91,6 +100,15 @@ class ControlUART:
         self.system_status = {}
         self._hello_event = asyncio.Event()
         self._pending = None
+        self._request_lock = asyncio.Lock()
+        self._sample_queues = {
+            name: deque(maxlen=G_SENSOR_QUEUE_SIZE) for name in ("bmi270", "bmm150")
+        }
+        self.queue_drops = {name: 0 for name in self._sample_queues}
+        self.gyro_status = {}
+        self.sensor_protocol = None
+        self._gyro_calibration_event = asyncio.Event()
+        self._gyro_calibration_started = False
 
     def start_coroutine(self):
         self.task = asyncio.create_task(self.run())
@@ -108,6 +126,17 @@ class ControlUART:
         self.samples.clear()
         self.sensor_status.clear()
         self.system_status.clear()
+        for samples in self._sample_queues.values():
+            samples.clear()
+        self.gyro_status.clear()
+        self.sensor_protocol = None
+        self._gyro_calibration_event.set()
+
+    def drain(self, sensor):
+        samples = self._sample_queues[sensor]
+        result = list(samples) if self.connected else []
+        samples.clear()
+        return result
 
     def _handle_line(self, line):
         fields = parse_control_line(line)
@@ -138,6 +167,11 @@ class ControlUART:
             if step == 0 or step >= 2**31 or sample.ts_ms < previous.ts_ms:
                 return
         self.samples[sample.sensor] = sample
+        if sample.sensor in self._sample_queues:
+            samples = self._sample_queues[sample.sensor]
+            if len(samples) == samples.maxlen:
+                self.queue_drops[sample.sensor] += 1
+            samples.append(sample)
 
     @staticmethod
     def _warn_increased_counters(label, fields, previous, counters):
@@ -152,7 +186,20 @@ class ControlUART:
                 )
 
     def _handle_status(self, fields):
-        if fields.get("svc") == "sensor" and "sensor" in fields:
+        if fields.get("svc") == "imu":
+            app_logger.debug("control UART imu status: %s", fields)
+        elif fields.get("svc") == "gyro":
+            self.gyro_status = fields
+            if fields.get("state") == "running":
+                self._gyro_calibration_started = True
+            if self._gyro_calibration_started and fields.get("state") in {
+                "done",
+                "failed",
+            }:
+                self._gyro_calibration_event.set()
+        elif fields.get("svc") == "sensors":
+            self.sensor_protocol = fields.get("proto")
+        elif fields.get("svc") == "sensor" and "sensor" in fields:
             name = fields["sensor"]
             self._warn_increased_counters(
                 name,
@@ -202,16 +249,34 @@ class ControlUART:
                     )
 
     async def _request(self, command, kind, svc, op=None):
-        if self._pending is not None:
-            raise RuntimeError("control UART request already pending")
-        future = asyncio.get_running_loop().create_future()
-        self._pending = (kind, svc, op, future)
-        try:
-            await asyncio.to_thread(self.port.write, (command + "\n").encode("ascii"))
-            return await asyncio.wait_for(future, 3.0)
-        finally:
-            if self._pending is not None and self._pending[3] is future:
+        async with self._request_lock:
+            future = asyncio.get_running_loop().create_future()
+            self._pending = (kind, svc, op, future)
+            try:
+                await asyncio.to_thread(
+                    self.port.write, (command + "\n").encode("ascii")
+                )
+                return await asyncio.wait_for(future, 3.0)
+            finally:
                 self._pending = None
+
+    async def calibrate_gyro(self):
+        self._gyro_calibration_event.clear()
+        self._gyro_calibration_started = False
+        self.gyro_status.clear()
+        epoch = self.epoch
+        try:
+            await self._request("sensors gyro calibrate", "OK", "gyro", "calibrate")
+            await asyncio.wait_for(self._gyro_calibration_event.wait(), 35.0)
+            if self.epoch != epoch or self.gyro_status.get("state") != "done":
+                raise RuntimeError("gyro calibration did not complete")
+        except (asyncio.CancelledError, TimeoutError):
+            if self.connected and self.epoch == epoch:
+                try:
+                    await self._request("sensors gyro cancel", "OK", "gyro", "cancel")
+                except (TimeoutError, ConnectionError, RuntimeError):
+                    pass
+            raise
 
     async def _configure(self):
         self._hello_event.clear()

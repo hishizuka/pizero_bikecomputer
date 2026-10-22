@@ -119,5 +119,10 @@ def get_heading_str(heading_deg):
     return HEADING_STR[heading_index]
 
 
+def get_angle_difference(angle, reference):
+    """Return the signed shortest difference in degrees, in [-180, 180)."""
+    return (angle - reference + 180.0) % 360.0 - 180.0
+
+
 def get_width_distance(lat, w):
     return w * GEO_R1 * 1000 * 2 * np.pi * math.cos(lat / 180 * np.pi) / 360

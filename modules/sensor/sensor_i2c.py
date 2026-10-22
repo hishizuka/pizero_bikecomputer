@@ -132,6 +132,8 @@ def _prepare_bhi3_build_target():
 
 
 class SensorI2C(Sensor):
+    # An integral without timing/continuity metadata cannot drive the yaw gate.
+    supports_gyro_intervals = False
     sensor = {}
     available_sensors = {
         "PRESSURE": {},
@@ -174,6 +176,7 @@ class SensorI2C(Sensor):
         "heading_magnetic_raw_deg",
         "heading_magnetic_deg",
         "heading_magnetic_timestamp",
+        "heading_magnetic_declination_deg",
         "motion",
         "m_stat",
         "voltage_battery",
@@ -247,6 +250,7 @@ class SensorI2C(Sensor):
     quit_status = False
 
     def sensor_init(self):
+        self.magnetic_heading_calibration_epoch = 0
         imu_axis = self.config.board_preset.imu_axis
         self._acc_rest_z_sign = imu_axis.acc_rest_z_sign if imu_axis is not None else 1
         self.sensor = {}
@@ -590,7 +594,7 @@ class SensorI2C(Sensor):
         # gas sensor
         if self.available_sensors["GAS"].get("SGP40"):
             self.sensor["gas"] = self.sensor_sgp40
-        
+
         if self.available_sensors["MOTION"].get("BHI3_S"):
             self.sensor["i2c_imu"] = self.sensor_bhi3_s
         if self.available_sensors["PRESSURE"].get("BHI3_S"):
@@ -663,12 +667,19 @@ class SensorI2C(Sensor):
     def start_coroutine(self):
         asyncio.create_task(self.start())
 
+    def update_heading_motion(self, transform_heading, *, model_ready=False):
+        # Instantaneous I2C gyro readings do not establish interval yaw evidence.
+        return None
+
+    def reanchor_heading_motion(self):
+        return False
+
     async def start(self):
         while not self.quit_status:
             await self.sleep()
             await self.update()
             self.get_sleep_time(self.config.G_I2C_INTERVAL)
-    
+
     def quit(self):
         self.quit_status = True
         if self._mag_declination_task is not None:
@@ -976,7 +987,7 @@ class SensorI2C(Sensor):
                 imu.start_and_stop()
                 self._bhi3_raw_data_record_status = "STOP"
                 msg = "[BHI3] raw log stopped"
-        
+
         if msg is not None:
             if self.config.gui is not None:
                 self.config.gui.show_popup(msg, 5)
@@ -991,9 +1002,8 @@ class SensorI2C(Sensor):
                 self.config.G_I2C_INTERVAL = self._mag_calibration_prev_i2c_interval
                 self._mag_calibration_prev_i2c_interval = None
 
-            raw_mags = getattr(self, "raw_mags", None)
-            if raw_mags:
-                np.savetxt("log/raw_mags.csv", raw_mags, delimiter=",", fmt="%.6f")
+            if self.raw_mags:
+                np.savetxt("log/raw_mags.csv", self.raw_mags, delimiter=",", fmt="%.6f")
             if (
                 self.values_mod["mag_min"] is not None
                 and self.values_mod["mag_max"] is not None
@@ -1004,6 +1014,8 @@ class SensorI2C(Sensor):
             msg = "[MAG] calibration stopped"
         else:
             self.mag_calib_ready = False
+            self.magnetic_heading_calibration_epoch += 1
+            self.config.state.values.pop("magnetic_heading_correction", None)
             self.values_mod["mag_min"] = None
             self.values_mod["mag_max"] = None
             self.raw_mags = []
@@ -1024,6 +1036,8 @@ class SensorI2C(Sensor):
             msg = "[PITCH_ROLL] calibration canceled"
         else:
             self.do_pitch_roll_calibration = True
+            self.magnetic_heading_calibration_epoch += 1
+            self.config.state.values.pop("magnetic_heading_correction", None)
             msg = "[PITCH_ROLL] calibration started"
 
         if show_popup and self.config.gui is not None:
@@ -1038,10 +1052,12 @@ class SensorI2C(Sensor):
         if not imu.ready:
             return
 
+        declination = self.config.G_IMU_MAG_DECLINATION
+        self.values["heading_magnetic_declination_deg"] = declination
         self.values["heading_magnetic_raw_deg"] = (
             int(imu.heading)
             - self.bhi3_s_heading_corr
-            + self.config.G_IMU_MAG_DECLINATION
+            + declination
         ) % 360
         self.values["heading_magnetic_deg"] = self.values[
             "heading_magnetic_raw_deg"
@@ -1413,14 +1429,16 @@ class SensorI2C(Sensor):
 
     def calc_magnetic_heading(self, yaw):
         self._schedule_mag_declination_update()
+        declination = self.config.G_IMU_MAG_DECLINATION
 
         if np.isnan(yaw):
             if self.motion_sensor["MAG"]:
+                self.values["heading_magnetic_declination_deg"] = declination
                 self.values["heading_magnetic_raw_deg"] = int(
                     math.degrees(
                         math.atan2(self.values['mag'][1], self.values['mag'][0])
                     )
-                    + self.config.G_IMU_MAG_DECLINATION
+                    + declination
                 ) % 360        
                 self.values["heading_magnetic_deg"] = self.values[
                     "heading_magnetic_raw_deg"
@@ -1429,7 +1447,8 @@ class SensorI2C(Sensor):
             return
 
         # set heading with yaw
-        tilt_heading = yaw + math.radians(self.config.G_IMU_MAG_DECLINATION)
+        self.values["heading_magnetic_declination_deg"] = declination
+        tilt_heading = yaw + math.radians(declination)
         if tilt_heading < 0:
             tilt_heading += 2 * math.pi
         elif tilt_heading > 2 * math.pi:
@@ -1994,7 +2013,7 @@ class SensorI2C(Sensor):
             return True
         except:
             return False
-    
+
     def detect_pressure_bmp581_c(self):
         return self._detect_i2c_helper("sensor_bmp581", "BMP5_C", BMP5_I2C_ADDRS)
 
