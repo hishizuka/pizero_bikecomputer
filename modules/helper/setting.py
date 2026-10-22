@@ -45,11 +45,6 @@ class Setting:
                 else:
                     self.config.G_RPI_BLE_TUNNEL[key] = raw.lower() == "true"
 
-        if "RAIN_ALERT" in self.config_parser:
-            self.config.G_RAIN_ALERT = self.config_parser["RAIN_ALERT"].getboolean(
-                "enabled", fallback=False
-            )
-
         if "GENERAL" in self.config_parser:
             c = self.config_parser["GENERAL"]
             if "BOARD" in c:
@@ -109,6 +104,8 @@ class Setting:
                 )
             if "RAIN_OVERLAY_MAP" in c:
                 self.config.G_RAIN_OVERLAY_MAP = c["RAIN_OVERLAY_MAP"]
+            if "RAIN_ALERT" in c:
+                self.config.G_RAIN_ALERT = c.getboolean("RAIN_ALERT")
             if "USE_WIND_OVERLAY_MAP" in c:
                 self.config.G_USE_WIND_OVERLAY_MAP = c.getboolean(
                     "USE_WIND_OVERLAY_MAP"
@@ -446,6 +443,7 @@ class Setting:
         c["HEATMAP_OVERLAY_MAP"] = self.config.G_HEATMAP_OVERLAY_MAP
         c["USE_RAIN_OVERLAY_MAP"] = str(self.config.G_USE_RAIN_OVERLAY_MAP)
         c["RAIN_OVERLAY_MAP"] = self.config.G_RAIN_OVERLAY_MAP
+        c["RAIN_ALERT"] = str(self.config.G_RAIN_ALERT)
         c["USE_WIND_OVERLAY_MAP"] = str(self.config.G_USE_WIND_OVERLAY_MAP)
         c["WIND_OVERLAY_MAP"] = self.config.G_WIND_OVERLAY_MAP
         c["USE_WIND_DATA_SOURCE"] = str(self.config.G_USE_WIND_DATA_SOURCE)
@@ -456,7 +454,6 @@ class Setting:
         c["DEM_MAP"] = self.config.G_DEM_MAP
 
         self.config_parser["PROFILE"] = {}
-        self.config_parser["RAIN_ALERT"] = {"enabled": str(self.config.G_RAIN_ALERT)}
         c = self.config_parser["PROFILE"]
         c["CP"] = str(int(self.config.G_POWER_CP))
         c["W_PRIME"] = str(int(self.config.G_POWER_W_PRIME))
