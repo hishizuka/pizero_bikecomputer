@@ -11,6 +11,7 @@ from threading import RLock
 import numpy as np
 
 from modules.app_logger import app_logger
+from modules.i18n import tr
 from modules.logger import G_LEGACY_HEADING_COLUMNS, G_MAGNETIC_HEADING_COLUMNS
 from modules.utils.crdp import rdp
 from modules.utils.cmd import exec_cmd
@@ -587,7 +588,8 @@ class LoggerCore:
                         self.sensor.values["integrated"]["dem_altitude"]
                     )
                 )
-                popup_extra = "<br /><font size=small>altitude corrected: {}m</font>".format(
+                popup_extra = "<br /><font size=small>{}: {}m</font>".format(
+                    tr("altitude corrected"),
                     int(self.sensor.values["integrated"]["dem_altitude"])
                 )
 
@@ -601,7 +603,7 @@ class LoggerCore:
 
         # show message
         self.config.gui.show_popup(
-            self.config.G_MANUAL_STATUS + popup_extra,
+            tr(self.config.G_MANUAL_STATUS) + popup_extra,
             3,
             buzzer_sound=None,
         )
@@ -691,7 +693,7 @@ class LoggerCore:
         hour_sec = divmod(lap_time, 3600)
         min_sec = divmod(hour_sec[1], 60)
         lap_time_str = f"{hour_sec[0]}:{min_sec[0]:02}"
-        lap_message = f"LAP {self.values['lap']} {newline}({dist_str} km, {lap_time_str})"
+        lap_message = f"{tr('LAP')} {self.values['lap']} {newline}({dist_str} km, {lap_time_str})"
 
         u = self.config.gui.gui_config.G_UNIT
         value_message = f"{(pre_lap_avg['speed'] * 3.6):{u['Speed'][0]}} {u['Speed'][1]}"

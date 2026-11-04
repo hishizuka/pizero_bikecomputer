@@ -2,6 +2,7 @@ import numpy as np
 
 from modules.qt._qt_qtwidgets import QT_ALIGN_CENTER, QtCore, QtGui, QtWidgets
 from modules.helper.maptile import get_wind_color
+from modules.i18n import tr
 from modules.pyqt.graph.pyqtgraph.WindVaneItem import build_wind_vane_picture
 from modules.utils import round_half_away_from_zero
 
@@ -190,7 +191,7 @@ class Item(QtWidgets.QVBoxLayout):
         self.setContentsMargins(0, 0, 0, 0)
         self.setSpacing(0)
 
-        self.label = ItemLabel(right_flag, name)
+        self.label = ItemLabel(right_flag, tr(name))
         self.value = self.value_class(right_flag, bottom_flag)
         gui_config = self.config.gui.gui_config
         self.itemformat, self.unittext = gui_config.G_ITEM_DEF[name][0]

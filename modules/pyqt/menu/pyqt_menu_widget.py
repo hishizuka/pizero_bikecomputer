@@ -12,6 +12,7 @@ from modules.qt._qt_qtwidgets import (
     qasync,
     Signal,
 )
+from modules.i18n import tr
 from modules.pyqt.components import icons, topbar
 
 from .pyqt_menu_button import MenuButton
@@ -68,7 +69,7 @@ class MenuWidget(QtWidgets.QWidget):
         self.top_bar = topbar.TopBar()
 
         self.back_button = topbar.TopBarBackButton((self.icon_x, self.icon_y))
-        self.page_name_label = topbar.TopBarLabel(self.page_name)
+        self.page_name_label = topbar.TopBarLabel(tr(self.page_name))
         self.right_button_container = QtWidgets.QWidget()
         self.right_button_container.setFixedSize(self.icon_x, self.icon_y)
         self.right_button_layout = QtWidgets.QHBoxLayout(self.right_button_container)
@@ -522,7 +523,8 @@ class ListItemWidget(QtWidgets.QWidget):
         self.title_label.setMargin(0)
         self.title_label.setContentsMargins(0, 0, 0, 0)
         self.title_label.setStyleSheet(self.get_title_style())
-        self.title_label.setText(self.title)
+        # self.title stays untranslated: it is used as the key of settings
+        self.title_label.setText(tr(self.title))
         inner_layout.addWidget(self.title_label)
 
         if self.has_detail_row:
@@ -968,7 +970,7 @@ class RpiBleTunnelMenuWidget(MenuWidget):
         for name in ("Enabled", "Prefer Secondary BLE", "Retry"):
             self.buttons[name].onoff_button(self.rpi_ble_tunnel.can_control)
         self.buttons["Enabled"].change_toggle(self.config.G_RPI_BLE_TUNNEL["ENABLED"])
-        self.buttons["Enabled"].setText("Enabled" if valid else "Enabled (invalid)")
+        self.buttons["Enabled"].setText(tr("Enabled") if valid else tr("Enabled (invalid)"))
         self.buttons["Prefer Secondary BLE"].change_toggle(
             self.config.G_RPI_BLE_TUNNEL["USE_SECONDARY"]
         )

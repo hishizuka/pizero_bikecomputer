@@ -4,6 +4,7 @@ from modules.app_logger import app_logger
 from modules.qt._qt_qtwidgets import QtCore, QtWidgets, QtGui, qasync
 from modules.pyqt.components import SECONDARY_BACKGROUND_COLOR, icons
 from modules.sensor.ble.identity import format_ble_identity
+from modules.i18n import tr
 from .pyqt_menu_widget import MenuWidget, ListWidget, ListItemWidget
 
 STATUS_CONNECTED = "connected"
@@ -179,7 +180,7 @@ class SectionListItemWidget(QtWidgets.QWidget):
         super().__init__(parent=parent)
         layout = QtWidgets.QHBoxLayout(self)
         layout.setContentsMargins(12, 0, 0, 0)
-        self.label = QtWidgets.QLabel(title)
+        self.label = QtWidgets.QLabel(tr(title))
         self.label.setStyleSheet(
             "color: black; background-color: transparent; letter-spacing: 1px;"
         )
@@ -235,7 +236,7 @@ class SensorActionListItemWidget(FullWidthSeparatorListItemWidget):
 
     def setText(self, text):
         self.title = text
-        self.title_label.setText(text)
+        self.title_label.setText(tr(text))
 
     def text(self):
         return self.title_label.text()

@@ -17,6 +17,7 @@ from modules.map_config import add_map_config
 from modules.helper.setting import Setting
 from modules.button_config import Button_Config
 from modules.helper.state import AppState
+from modules.i18n import load_translations
 from modules.utils.buzzer import BuzzerController
 from modules.utils.cmd import (
     exec_cmd,
@@ -88,7 +89,7 @@ class Config:
     # layout def
     G_LAYOUT_FILE = "layout.yaml"
 
-    # Language defined by G_LANG in gui_config.py
+    # Language of displayed labels (EN or PT), translations in i18n/<lang>.yaml
     G_LANG = "EN"
     G_FONT_FILE = ""
 
@@ -553,6 +554,9 @@ class Config:
         # read setting.conf and state.pickle
         self.setting = Setting(self)
         self.state = AppState()
+
+        # translations of displayed labels (G_LANG from setting.conf)
+        load_translations(self.G_LANG)
 
         init_utc_offset()
 

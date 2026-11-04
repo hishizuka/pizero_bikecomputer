@@ -1,6 +1,7 @@
 from datetime import datetime
 import struct
 
+from modules.i18n import tr
 from .pyqt_screen_widget import ScreenWidget
 
 #################################
@@ -119,7 +120,7 @@ class MultiScanWidget(ScreenWidget):
                 item.update_value(item.value_getter())
                 continue
 
-            item.label.setText(item.name)
+            item.label.setText(tr(item.name))
 
             key = item.name[0:-1]
             i = int(item.name[-1:]) - 1

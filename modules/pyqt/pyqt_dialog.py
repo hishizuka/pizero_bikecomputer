@@ -6,6 +6,7 @@ definitions and widget creation on each dialog display.
 
 import asyncio
 
+from modules.i18n import tr
 from modules.qt._qt_qtwidgets import (
     QT_ALIGN_BOTTOM,
     QT_ALIGN_CENTER,
@@ -411,7 +412,7 @@ class CachedDialog:
         self._button_widget.show()
         for i, btn in enumerate(self._buttons):
             if i < button_num:
-                btn.setText(button_label[i] if i < len(button_label) else "")
+                btn.setText(tr(button_label[i]) if i < len(button_label) else "")
                 if i == 0:
                     btn.clicked.connect(self.trigger_ok)
                 else:
@@ -484,7 +485,7 @@ class CachedDialog:
             self._rain_widget.set_content(title, title_icon)
             self._rain_widget.show()
         else:
-            self._show_layout(title, title_icon, message, text_align)
+            self._show_layout(tr(title), title_icon, tr(message), text_align)
         self._configure_buttons(
             button_num,
             button_label,
@@ -546,6 +547,7 @@ class CachedDialog:
 
     def change_title(self, title):
         """Update visible title label."""
+        title = tr(title)
         if self._icon_widget.isVisible():
             self._icon_title_label.setText(title)
         elif self._message_widget.isVisible():
@@ -556,7 +558,7 @@ class CachedDialog:
     def change_button_label(self, label):
         """Update first button label."""
         if self._buttons and self._buttons[0].isVisible():
-            self._buttons[0].setText(label)
+            self._buttons[0].setText(tr(label))
 
     @property
     def background(self):

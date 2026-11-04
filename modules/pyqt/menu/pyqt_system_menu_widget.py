@@ -11,6 +11,7 @@ from modules.qt._qt_qtwidgets import (
     qasync,
 )
 from modules.helper.network.wifi_manager import get_wifi_bt_status
+from modules.i18n import LANGUAGES, tr
 from modules.utils.network import detect_network
 from .pyqt_menu_widget import MenuWidget, ListWidget
 
@@ -23,7 +24,7 @@ class SystemMenuWidget(MenuWidget):
             # Name(page_name), button_attribute, connected functions, layout
             ("Network", "submenu", self.network),
             (self.DISPLAY_BUTTON, "submenu", self.display_settings),
-            ("Language", None, None),
+            ("Language", "submenu", self.language),
             (
                 "Update",
                 "dialog",
@@ -56,8 +57,36 @@ class SystemMenuWidget(MenuWidget):
     def display_settings(self):
         self.change_page("Display", preprocess=True)
 
+    def language(self):
+        self.change_page("Language", preprocess=True)
+
     def debug(self):
         self.change_page("Debug", preprocess=True)
+
+
+class LanguageListWidget(ListWidget):
+    use_detail = True
+
+    def __init__(self, parent, page_name, config):
+        # keys (EN, PT) are used for item label, values for detail
+        self.settings = dict(LANGUAGES)
+        super().__init__(parent, page_name, config)
+
+    def get_default_value(self):
+        return self.config.G_LANG
+
+    async def button_func_extra(self):
+        if self.selected_item is None:
+            return
+        lang = self.selected_item.title
+        if lang == self.config.G_LANG:
+            return
+        self.config.G_LANG = lang
+        self.config.setting.write_config()
+        # labels are created at startup, so restart to apply
+        self.config.gui.show_dialog(
+            self.config.restart_application, "Restart to apply the language?"
+        )
 
 
 class QuickActionsMenuWidget(MenuWidget):
@@ -73,7 +102,7 @@ class QuickActionsMenuWidget(MenuWidget):
     def preprocess(self):
         if self.config.display.has_touch:
             state = "Off" if self.config.gui.touch_enabled else "On"
-            self.buttons[self.TOUCH_BUTTON].setText(f"Touch {state}")
+            self.buttons[self.TOUCH_BUTTON].setText(f"{tr('Touch')} {tr(state)}")
 
     def back(self):
         self.config.gui.change_menu_page(self.return_index)
@@ -433,4 +462,4 @@ class DebugLogViewerWidget(MenuWidget):
             with open(self.config.G_LOG_DEBUG_FILE) as f:
                 self.debug_log_screen.setText(f.read())
         except FileNotFoundError:
-            self.debug_log_screen.setText("No logs found")
+            self.debug_log_screen.setText(tr("No logs found"))

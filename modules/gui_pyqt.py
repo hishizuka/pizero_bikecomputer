@@ -5,6 +5,7 @@ from datetime import datetime
 import asyncio
 
 from modules.app_logger import app_logger
+from modules.i18n import tr
 import modules.qt._qt_ver as _qt_ver
 
 _qt_ver.QtMode = "QtWidgets"
@@ -321,6 +322,7 @@ class GUI_PyQt(GUI_Qt_Base):
                 BrightnessListWidget,
                 DebugMenuWidget,
                 DebugLogViewerWidget,
+                LanguageListWidget,
             )
             from modules.pyqt.menu.pyqt_profile_widget import ProfileWidget
             from modules.pyqt.menu.pyqt_sensor_menu_widget import (
@@ -419,6 +421,7 @@ class GUI_PyQt(GUI_Qt_Base):
                 ("Network", NetworkMenuWidget),
                 ("Debug Log", DebugLogViewerWidget),
                 ("Debug", DebugMenuWidget),
+                ("Language", LanguageListWidget),
                 ("Brightness", BrightnessListWidget),
                 ("Display", DisplayMenuWidget),
                 ("System", SystemMenuWidget),
@@ -664,7 +667,7 @@ class GUI_PyQt(GUI_Qt_Base):
                 return
             for k, v in self.config.G_AUTO_UPLOAD_SERVICE.items():
                 if v:
-                    self.show_forced_message(f"Upload to {k}...")
+                    self.show_forced_message(tr("Upload to {}...").format(k))
                     await asyncio.sleep(1.0)
                     # need to select service with loading images
                     res_status |= await upload_func[k]()

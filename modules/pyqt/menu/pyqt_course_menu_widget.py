@@ -13,6 +13,7 @@ from modules.qt._qt_qtwidgets import (
 )
 from modules.course import Course
 from modules.map.style import DEFAULT_COURSE_POINT_ICON_PATH
+from modules.i18n import tr
 from modules.pyqt.components import icons, topbar
 from modules.pyqt.components.static_course_profile import StaticCourseProfileRenderer
 from modules.pyqt.components.static_map import (
@@ -257,7 +258,7 @@ class CourseListWidget(ListWidget):
         await widget.load_course()
 
     def preprocess_extra(self):
-        self.page_name_label.setText(self.list_type)
+        self.page_name_label.setText(tr(self.list_type))
 
     async def list_local_courses(self):
         courses = self.config.get_courses()

@@ -1369,8 +1369,10 @@ Set the value before starting the program. If the value is set during running, i
   - The screen shows the actual gross average and the gained time from this gross average speed.
   - The default value is `15` [km/h].
 - `lang`
-  - The language setting of the label of items.
-  - The default is `EN`.
+  - The language setting of the label of items, menus and dialogs.
+  - The default is `EN`. `PT` (Brazilian Portuguese) is also available.
+  - It can also be set on the screen (System > Language). Restart to apply.
+  - Translations are in `i18n/<lang>.yaml` (e.g. `i18n/pt.yaml`), keyed by the English text. To add a language, add a yaml file and an entry to `LANGUAGES` in `modules/i18n.py`.
 - `font_file`
   - Set the full path of the font which you want to use.
   - Place the fonts in `fonts/` folder.
