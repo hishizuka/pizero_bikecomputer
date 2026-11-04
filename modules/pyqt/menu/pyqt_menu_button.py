@@ -6,6 +6,7 @@ from modules.qt._qt_qtwidgets import (
     QtGui,
     Slot,
 )
+from modules.i18n import tr
 from modules.pyqt.components import icons
 
 #################################
@@ -49,7 +50,7 @@ class MenuButton(QtWidgets.QPushButton):
 
     def __init__(self, button_type, text, config, icon=None):
         # if icon is passed, no text is used
-        super().__init__(text=text if not icon else "")
+        super().__init__(text=tr(text) if not icon else "")
 
         self.config = config
         self.button_type = button_type
