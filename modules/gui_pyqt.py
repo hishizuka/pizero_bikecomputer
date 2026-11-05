@@ -146,7 +146,6 @@ class GUI_PyQt(GUI_Qt_Base):
     signal_menu_back_button = Signal()
     signal_get_screenshot = Signal()
     signal_multiscan = Signal()
-    signal_fake_trainer = Signal()
     signal_bhi3_raw_log = Signal()
     signal_calib_mag = Signal()
     signal_calib_pitch_roll = Signal()
@@ -263,7 +262,6 @@ class GUI_PyQt(GUI_Qt_Base):
             # other
             self.signal_get_screenshot.connect(self.screenshot)
             self.signal_multiscan.connect(self.multiscan_internal)
-            self.signal_fake_trainer.connect(self.fake_trainer_internal)
             self.signal_bhi3_raw_log.connect(self.signal_bhi3_raw_log_internal)
             self.signal_calib_mag.connect(self.signal_calib_mag_internal)
             self.signal_calib_pitch_roll.connect(self.signal_calib_pitch_roll_internal)
@@ -845,28 +843,6 @@ class GUI_PyQt(GUI_Qt_Base):
         else:
             self.on_change_main_page(self.multiscan_back_index)
             self.main_page.setCurrentIndex(self.multiscan_back_index)
-
-    def toggle_fake_trainer(self):
-        self.signal_fake_trainer.emit()
-
-    def finish_fake_trainer_session(self):
-        self.sensor.sensor_ble.finish_fake_trainer_session()
-
-    def fake_trainer_internal(self):
-        started = self.sensor.sensor_ble.start_fake_trainer_session()
-        if not started:
-            self.show_dialog_ok_only(
-                None,
-                "Failed to start Fake Trainer session.",
-            )
-            return
-        self.show_dialog_ok_only(
-            fn=self.finish_fake_trainer_session,
-            title=(
-                "Connect Click V2 in Zwift. Wait 60 seconds, "
-                "then close Zwift and press OK."
-            ),
-        )
 
     def bhi3_raw_log(self):
         self.signal_bhi3_raw_log.emit()

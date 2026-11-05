@@ -599,9 +599,11 @@ async def connect_and_listen(
                     log=log,
                     on_rx=mark_rx,
                 )
-                if _is_button_notification_packet(packet):
-                    if on_button_notification is not None:
-                        on_button_notification(side, packet)
+                if (
+                    on_button_notification is not None
+                    and _is_button_notification_packet(packet)
+                ):
+                    on_button_notification(side, packet)
                 if not stopped or stopped_notice_sent:
                     return
                 stopped_notice_sent = True
@@ -700,12 +702,7 @@ def handle_notification(
             classifier.observe_pressed(side, "click", pressed)
         if released:
             classifier.observe_released(side, "click", released)
-    elif opcode in (0x19, 0x42, 0x2A, 0xFF, 0x15, 0x3C):
-        # Battery/log/empty/vendor noise; ignore for CLI output.
-        return False
-    else:
-        # Unknown/unhandled packet; ignore to avoid noisy logs in app mode.
-        return False
+    # Battery, vendor, and unknown packets do not change button state.
     return False
 
 
@@ -812,11 +809,9 @@ async def listen(
                 if stop_task in done:
                     return
             finally:
-                for t in tasks:
-                    t.cancel()
-                stop_task.cancel()
-                await asyncio.gather(*tasks, return_exceptions=True)
-                await asyncio.gather(stop_task, return_exceptions=True)
+                for task in (*tasks, stop_task):
+                    task.cancel()
+                await asyncio.gather(*tasks, stop_task, return_exceptions=True)
 
             if not scan_forever:
                 return
@@ -905,7 +900,6 @@ class ZwiftClickV2Session:
     CLICK_INPUT_WAITING = "waiting"
     CLICK_INPUT_OPERATIONAL = "operational"
     CLICK_INPUT_INACTIVE = "inactive"
-    CLICK_RECOVERY_INPUT_TIMEOUT_SECONDS = 30.0
 
     def __init__(self, config, resolve_adapter):
         self.config = config
@@ -917,8 +911,6 @@ class ZwiftClickV2Session:
         self.connection_status = "inactive"
         self.auth_status = self.CLICK_AUTH_UNKNOWN
         self.input_status = self.CLICK_INPUT_UNKNOWN
-        self.recovery_pending = False
-        self._recovery_timer: asyncio.TimerHandle | None = None
 
     def connect(self) -> bool:
         """Start Zwift Click V2 listener if it is enabled and available."""
@@ -927,8 +919,6 @@ class ZwiftClickV2Session:
             self.connection_status = self._control_idle_status()
             return False
         self._desired_running = True
-        if self.is_running():
-            return True
         task = self._task
         if task is not None and not task.done():
             return True
@@ -1069,10 +1059,8 @@ class ZwiftClickV2Session:
         self.connection_status = "connected"
         self.auth_status = self.CLICK_AUTH_UNKNOWN
         self.input_status = self.CLICK_INPUT_WAITING
-        self.start_recovery_timeout()
 
     def _on_disconnected(self, _side: str, _address: str) -> None:
-        self.cancel_recovery_timeout()
         if not self._desired_running:
             return
         self.connection_status = "connecting"
@@ -1104,11 +1092,6 @@ class ZwiftClickV2Session:
         self.input_status = self.CLICK_INPUT_OPERATIONAL
         if first_notification:
             app_logger.info(f"[ZwiftClickV2] [{side}] input status=operational")
-        if not self.recovery_pending:
-            return
-        self.cancel_recovery_timeout()
-        self.recovery_pending = False
-        self._notify_recovered()
 
     def _handle_stopped(
         self,
@@ -1117,68 +1100,6 @@ class ZwiftClickV2Session:
     ) -> None:
         self.auth_status = self.CLICK_LOCKED
         self.input_status = self.CLICK_INPUT_INACTIVE
-        recovery_failed = self.recovery_pending
-        self.cancel_recovery_timeout()
-        self.recovery_pending = False
-        self._notify_stopped(recovery_failed=recovery_failed)
-
-    def start_recovery_timeout(self) -> None:
-        self.cancel_recovery_timeout()
-        if not self.recovery_pending:
-            return
-        self._recovery_timer = asyncio.get_running_loop().call_later(
-            self.CLICK_RECOVERY_INPUT_TIMEOUT_SECONDS,
-            self._handle_recovery_timeout,
-        )
-
-    def cancel_recovery_timeout(self) -> None:
-        timer = self._recovery_timer
-        self._recovery_timer = None
-        if timer is not None:
-            timer.cancel()
-
-    def _handle_recovery_timeout(self) -> None:
-        self._recovery_timer = None
-        if not self.recovery_pending:
-            return
-        if self.input_status == self.CLICK_INPUT_OPERATIONAL:
-            return
-        self.recovery_pending = False
-        self.input_status = self.CLICK_INPUT_INACTIVE
-        app_logger.info("[ZwiftClickV2] recovery timed out waiting for button input")
-        self._notify_no_input()
-
-    def _notify_stopped(self, *, recovery_failed=False) -> None:
-        self._show_dialog(
-            (
-                "Click V2 unlock failed. Retry with Fake Trainer?"
-                if recovery_failed
-                else "Click V2 is locked. Start Fake Trainer to unlock?"
-            ),
-            retry=True,
-        )
-
-    def _notify_recovered(self) -> None:
-        self._show_dialog("Click V2 recovered. Button input is active.")
-
-    def _notify_no_input(self) -> None:
-        self._show_dialog(
-            "No button input. Disconnect Click for 60 seconds, then retry?",
-            retry=True,
-        )
-
-    def _show_dialog(self, title, retry=False) -> None:
-        gui = self.config.gui
-        if gui is None:
-            return
-
-        def show() -> None:
-            if retry:
-                gui.show_dialog(gui.toggle_fake_trainer, title)
-            else:
-                gui.show_dialog_ok_only(None, title)
-
-        self.config.loop.call_soon_threadsafe(show)
 
     def is_running(self) -> bool:
         task = self._task

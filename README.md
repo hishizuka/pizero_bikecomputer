@@ -150,7 +150,7 @@ USB dongle is required if using ANT+ sensors.
 | BLE Heart Rate sensor | Partial | Bluetooth HRS 8/16-bit heart rate and RR intervals are supported. |
 | BLE Speed / Cadence sensor | Partial | Bluetooth CSCS wheel and CSCS/CPS crank revolution data are supported. |
 | BLE Power sensor | Partial | Bluetooth CPS instantaneous power and recording work are supported. Calibration is not supported. |
-| BLE peripherals |  Partial | Zwift Click V2 remote and Fake Trainer for Zwift are supported. |
+| BLE peripherals |  Partial | Zwift Click V2 remote is supported. |
 | Barometric altimeter | Yes | I2C sensor(pressure, temperature) |
 | Accelerometer | Yes | I2C sensor |
 | Gyroscope | Yes | I2C sensor |

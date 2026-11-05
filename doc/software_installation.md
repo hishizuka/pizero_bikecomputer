@@ -1108,7 +1108,6 @@ When unlocked, you can drag the profile horizontally.
   - Auto Control automatically controls a paired ANT+ bike light from ambient light and braking hints while recording.
 - Control
   - Pair or disconnect an ANT+ remote or a BLE Zwift Click V2 remote.
-  - Fake Trainer for Zwift manually starts or stops the Zwift Click V2 compatibility helper.
 - Temperature
   - Pair or disconnect an ANT+ temperature sensor.
 - ANT+ pairing

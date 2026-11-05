@@ -1081,29 +1081,3 @@ class BLEListItemWidget(FullWidthSeparatorListItemWidget):
 
 class ControlMenuWidget(SensorConnectionMenuWidget):
     SENSOR_ROLE = "CTRL"
-    FAKE_TRAINER_BUTTON = "Fake Trainer for Zwift"
-
-    def extra_button_conf(self):
-        return [
-            (
-                self.FAKE_TRAINER_BUTTON,
-                "toggle",
-                lambda: self.onoff_fake_trainer(True),
-            )
-        ]
-
-    def preprocess(self):
-        super().preprocess()
-        self.onoff_fake_trainer(False)
-
-    def refresh_sensor_state(self):
-        super().refresh_sensor_state()
-        self.onoff_fake_trainer(False)
-
-    def onoff_fake_trainer(self, change=True):
-        sensor_ble = self.config.logger.sensor.sensor_ble
-        if change:
-            sensor_ble.toggle_fake_trainer()
-
-        fake_trainer_status = sensor_ble.is_fake_trainer_running()
-        self.buttons[self.FAKE_TRAINER_BUTTON].change_toggle(fake_trainer_status)

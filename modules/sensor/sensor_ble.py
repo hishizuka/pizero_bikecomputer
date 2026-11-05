@@ -1,12 +1,9 @@
 import asyncio
 import math
-import os
-import signal
 import sys
 from dataclasses import dataclass
 
 from modules.app_logger import app_logger
-from modules.utils.cmd import start_process
 
 from .ble.adapter import (
     BleAdapterPolicy,
@@ -68,11 +65,6 @@ class SensorBLE(Sensor):
 
     def __init__(self, config, values):
         super().__init__(config, values)
-        self._fake_trainer_proc = None
-        self._fake_trainer_check_handle = None
-        self._cycling_paused_for_fake_trainer = False
-        self._zwift_click_v2_paused_for_fake_trainer = False
-        self._fake_trainer_session_active = False
         self._cycling_health = {role: BleSessionHealth() for role in self.CYCLING_ROLES}
         self._cycling_discovered_devices = {}
         self._cycling_discovered_profiles = {}
@@ -124,11 +116,6 @@ class SensorBLE(Sensor):
         self.connect_zwift_click_v2()
 
     def quit(self):
-        self._fake_trainer_session_active = False
-        self._cycling_paused_for_fake_trainer = False
-        self._zwift_click_v2_paused_for_fake_trainer = False
-        self.click.cancel_recovery_timeout()
-        self.stop_fake_trainer()
         self.disconnect_cycling_sensors()
         self.disconnect_zwift_click_v2()
         for role, health_record in self._cycling_health.items():
@@ -275,7 +262,6 @@ class SensorBLE(Sensor):
             (role is None or role in self.CYCLING_ROLES)
             and _HAS_BLE_CYCLING
             and self.config.ble_sensor_enabled()
-            and not self.is_fake_trainer_running()
         )
 
     def can_scan_sensor(self, role: str) -> bool:
@@ -285,7 +271,6 @@ class SensorBLE(Sensor):
             role == self.CONTROL_ROLE
             and _HAS_ZWIFT_CLICK_V2
             and self.config.ble_sensor_enabled()
-            and not self.is_fake_trainer_running()
         )
 
     async def discover_sensors(
@@ -465,7 +450,7 @@ class SensorBLE(Sensor):
 
     def connect_cycling_sensors(self) -> bool:
         roles_by_identifier = self._configured_cycling_roles()
-        if not roles_by_identifier or self._fake_trainer_session_active:
+        if not roles_by_identifier:
             self._schedule_cycling_reconcile({})
             return False
         adapter = self._resolve_sensor_adapter()
@@ -684,187 +669,5 @@ class SensorBLE(Sensor):
     def paused_zwift_click_v2(self):
         return self.click.paused()
 
-    def is_fake_trainer_running(self) -> bool:
-        proc = self._fake_trainer_proc
-        return proc is not None and proc.poll() is None
-
     def is_zwift_click_v2_running(self) -> bool:
         return self.click.is_running()
-
-    def _pause_zwift_click_v2_for_fake_trainer(self) -> None:
-        if self.is_zwift_click_v2_running():
-            self.disconnect_zwift_click_v2()
-            self._zwift_click_v2_paused_for_fake_trainer = True
-        else:
-            self._zwift_click_v2_paused_for_fake_trainer = False
-
-    def _resume_zwift_click_v2_after_fake_trainer(self) -> None:
-        if not self._zwift_click_v2_paused_for_fake_trainer:
-            return
-        self._zwift_click_v2_paused_for_fake_trainer = False
-        self.connect_zwift_click_v2()
-
-    def _pause_cycling_sensors_for_fake_trainer(self) -> None:
-        if self.is_cycling_sensor_running():
-            self.disconnect_cycling_sensors()
-            self._cycling_paused_for_fake_trainer = True
-        else:
-            self._cycling_paused_for_fake_trainer = False
-
-    def _resume_cycling_sensors_after_fake_trainer(self) -> None:
-        if not self._cycling_paused_for_fake_trainer:
-            return
-        self._cycling_paused_for_fake_trainer = False
-        self.connect_cycling_sensors()
-
-    def _pause_ble_sensors_for_fake_trainer(self) -> None:
-        self._pause_cycling_sensors_for_fake_trainer()
-        self._pause_zwift_click_v2_for_fake_trainer()
-
-    def _resume_ble_sensors_after_fake_trainer(self) -> None:
-        self._resume_cycling_sensors_after_fake_trainer()
-        self._resume_zwift_click_v2_after_fake_trainer()
-
-    def start_fake_trainer_session(self) -> bool:
-        if self._fake_trainer_session_active and self.is_fake_trainer_running():
-            return True
-        if self.is_fake_trainer_running():
-            app_logger.warning(
-                "Fake trainer session start skipped: fake trainer already running"
-            )
-            return False
-
-        if not self.start_fake_trainer():
-            return False
-
-        self.click.cancel_recovery_timeout()
-        self.click.recovery_pending = False
-        self._fake_trainer_session_active = True
-        self._pause_ble_sensors_for_fake_trainer()
-        return True
-
-    def finish_fake_trainer_session(self) -> bool:
-        if not self._fake_trainer_session_active:
-            return False
-
-        self._fake_trainer_session_active = False
-        self.stop_fake_trainer()
-        self.click.recovery_pending = self._zwift_click_v2_paused_for_fake_trainer
-        self._resume_ble_sensors_after_fake_trainer()
-        return True
-
-    def toggle_fake_trainer(self) -> bool:
-        if self._fake_trainer_session_active:
-            self.finish_fake_trainer_session()
-            return self.is_fake_trainer_running()
-        if self.is_fake_trainer_running():
-            self.stop_fake_trainer()
-            self.click.recovery_pending = self._zwift_click_v2_paused_for_fake_trainer
-            self._resume_ble_sensors_after_fake_trainer()
-        else:
-            self.click.cancel_recovery_timeout()
-            self.click.recovery_pending = False
-            self._fake_trainer_session_active = False
-            started = self.start_fake_trainer()
-            if started:
-                self._pause_ble_sensors_for_fake_trainer()
-        return self.is_fake_trainer_running()
-
-    def start_fake_trainer(self) -> bool:
-        if self.is_fake_trainer_running():
-            return True
-
-        fake_trainer_path = os.path.abspath(
-            os.path.join(
-                os.path.dirname(__file__),
-                "ble",
-                "fake_trainer.py",
-            )
-        )
-        if not os.path.isfile(fake_trainer_path):
-            app_logger.warning(f"Fake trainer not found: {fake_trainer_path}")
-            return False
-
-        try:
-            self._fake_trainer_proc = start_process(
-                [sys.executable, fake_trainer_path],
-                cmd_print=False,
-            )
-        except Exception as exc:
-            app_logger.warning(f"Fake trainer start failed: {exc}")
-            self._fake_trainer_proc = None
-            return False
-
-        if self._fake_trainer_proc.poll() is not None:
-            app_logger.warning("Fake trainer start failed: process exited early")
-            self._fake_trainer_proc = None
-            return False
-
-        self._schedule_fake_trainer_check()
-        app_logger.info("Fake trainer started")
-        return True
-
-    def _schedule_fake_trainer_check(self) -> None:
-        try:
-            loop = self.config.loop
-        except Exception:
-            loop = None
-        if loop and loop.is_running():
-            try:
-                running_loop = asyncio.get_running_loop()
-            except RuntimeError:
-                running_loop = None
-            if running_loop is loop:
-                loop.call_later(0.2, self._check_fake_trainer_process)
-            else:
-                loop.call_soon_threadsafe(
-                    loop.call_later,
-                    0.2,
-                    self._check_fake_trainer_process,
-                )
-            return
-        try:
-            import threading
-        except Exception:
-            return
-        timer = threading.Timer(0.2, self._check_fake_trainer_process)
-        timer.daemon = True
-        self._fake_trainer_check_handle = timer
-        timer.start()
-
-    def _check_fake_trainer_process(self) -> None:
-        if self.is_fake_trainer_running():
-            return
-        self._fake_trainer_proc = None
-        app_logger.warning("Fake trainer stopped unexpectedly")
-
-    def stop_fake_trainer(self) -> None:
-        proc = self._fake_trainer_proc
-        if proc is None:
-            return
-        if proc.poll() is not None:
-            self._fake_trainer_proc = None
-            return
-
-        try:
-            proc.send_signal(signal.SIGINT)
-            proc.wait(timeout=1.0)
-        except Exception:
-            pass
-
-        if proc.poll() is None:
-            try:
-                proc.terminate()
-                proc.wait(timeout=1.0)
-            except Exception:
-                pass
-
-        if proc.poll() is None:
-            try:
-                proc.kill()
-                proc.wait(timeout=1.0)
-            except Exception:
-                pass
-
-        self._fake_trainer_proc = None
-        app_logger.info("Fake trainer stopped")
