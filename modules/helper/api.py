@@ -16,6 +16,7 @@ from modules.helper.network import (
 from modules.helper.maptile import MapTileWithValues
 from modules.utils.geo import get_heading_str
 from modules.app_logger import app_logger
+from modules.helper import garmin_http
 from modules.helper.garmin_livetrack import (
     GarminLiveTrackApiError,
     GarminLiveTrackClient,
@@ -606,6 +607,7 @@ class api:
                 email=self.config.G_GARMINCONNECT_API["EMAIL"] or None,
                 password=self.config.G_GARMINCONNECT_API["PASSWORD"] or None,
             )
+            garmin_http.configure_garmin_client(garmin_api, ipv6=False)
             garmin_api.login(self.config.G_GARMINCONNECT_API["TOKENSTORE"])
             if had_credentials:
                 self.config.G_GARMINCONNECT_API["EMAIL"] = ""

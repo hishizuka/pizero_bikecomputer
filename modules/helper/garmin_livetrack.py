@@ -9,9 +9,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote
 
+import requests
+
 from modules.app_logger import app_logger
+from modules.helper import garmin_http
 from modules.helper.livetrack import (
-    LiveTrackSample,
     load_private_json,
     save_private_json,
     utc_now,
@@ -481,12 +483,10 @@ class GarminLiveTrackClient:
             password,
             prompt_mfa=lambda: "",
         )
+        garmin_http.configure_garmin_client(garmin, ipv6=False)
         try:
             garmin.login(str(self.tokenstore_path))
         except Exception as exc:
-            from requests import ConnectionError as RequestConnectionError
-            from requests import Timeout as RequestTimeout
-
             cause = exc
             while cause is not None:
                 if isinstance(
@@ -494,8 +494,8 @@ class GarminLiveTrackClient:
                     (
                         ConnectionError,
                         TimeoutError,
-                        RequestConnectionError,
-                        RequestTimeout,
+                        requests.ConnectionError,
+                        requests.Timeout,
                     ),
                 ):
                     raise GarminLiveTrackConnectionError(
@@ -534,13 +534,6 @@ class GarminLiveTrackClient:
             if cached_token:
                 return cached_token
 
-        try:
-            import requests
-        except ImportError as exc:
-            raise GarminLiveTrackConfigurationError(
-                "Garmin LiveTrack requires the requests package."
-            ) from exc
-
         garmin = self.login()
         di_token = getattr(getattr(garmin, "client", None), "di_token", None)
         if not isinstance(di_token, str) or not di_token:
@@ -562,8 +555,10 @@ class GarminLiveTrackClient:
         headers["Content-Type"] = "application/x-www-form-urlencoded"
 
         try:
-            response = requests.post(
+            response = garmin_http.request(
+                "POST",
                 IT_TOKEN_URL,
+                ipv6=False,
                 params={"grant_type": "connect2_exchange"},
                 headers=headers,
                 data={
@@ -632,13 +627,6 @@ class GarminLiveTrackClient:
     def _request_direct_response(
         self, method, path, payload=None, params=None, files=None, timeout=20
     ):
-        try:
-            import requests
-        except ImportError as exc:
-            raise GarminLiveTrackConfigurationError(
-                "Garmin LiveTrack requires the requests package."
-            ) from exc
-
         response = None
         for attempt in range(2):
             headers = self.authenticated_headers(force_it_refresh=attempt == 1)
@@ -649,9 +637,10 @@ class GarminLiveTrackClient:
             if files is not None:
                 headers.pop("Content-Type", None)
             try:
-                response = requests.request(
+                response = garmin_http.request(
                     method,
                     API_BASE_URL + path,
+                    ipv6=False,
                     headers=headers,
                     json=payload,
                     params=params,
@@ -793,16 +782,10 @@ class GarminLiveTrackClient:
 
     def _request_btf_direct(self, method, path, payload=None):
         try:
-            import requests
-        except ImportError as exc:
-            raise GarminLiveTrackConfigurationError(
-                "Garmin Messages requires the requests package."
-            ) from exc
-
-        try:
-            response = requests.request(
+            response = garmin_http.request(
                 method,
                 API_BASE_URL + path,
+                ipv6=False,
                 headers=self.btf_headers(),
                 json=payload,
                 timeout=20,

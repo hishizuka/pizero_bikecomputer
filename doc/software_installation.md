@@ -52,17 +52,17 @@ $ brew install python pyqt
 $ python3 -m venv .venv
 $ source .venv/bin/activate
 $ pip install -U pip setuptools
-$ pip install PyQt6 numpy cython pillow pyqtgraph fitparse oyaml polyline aiohttp qasync psutil
+$ pip install PyQt6 numpy cython pillow pyqtgraph fitparse oyaml polyline aiohttp qasync psutil requests
 
 # or Linux (Debian/Ubuntu)
 $ python3 -m venv .venv
 $ source .venv/bin/activate
 $ pip install -U pip setuptools
-$ pip install PyQt6 numpy cython pillow pyqtgraph fitparse oyaml polyline aiohttp qasync psutil
+$ pip install PyQt6 numpy cython pillow pyqtgraph fitparse oyaml polyline aiohttp qasync psutil requests
 $ sudo apt install sqlite3 libsqlite3-dev
 
 # optional: cloud upload / live track
-$ pip install garminconnect requests tb-mqtt-client mmh3 timezonefinder
+$ pip install garminconnect tb-mqtt-client mmh3 timezonefinder
 
 $ git clone https://github.com/hishizuka/pizero_bikecomputer.git
 $ cd pizero_bikecomputer
@@ -109,7 +109,7 @@ $ python -m venv --system-site-packages ~/.venv
 $ source ~/.venv/bin/activate
 $ echo "source ~/.venv/bin/activate" >> ~/.bashrc
 
-$ pip install fitparse oyaml polyline qasync pyqtgraph
+$ pip install fitparse oyaml polyline qasync pyqtgraph requests
 
 $ git clone https://github.com/hishizuka/pizero_bikecomputer.git
 $ cd pizero_bikecomputer
@@ -1644,6 +1644,12 @@ activity is recording. The Messages toggle is selectable while Garmin LiveTrack
 is enabled. Its owner-only BTF credential is stored at
 `tokenstore/livetrack_btf_credentials.json`; the credential and its internal
 messaging device identifier are not `setting.conf` entries.
+
+Garmin API requests and token refreshes with a saved tokenstore use IPv4 to avoid
+long connection timeouts on Bluetooth PAN links with unreachable IPv6 routes.
+This requires no additional packages or NetworkManager changes and does not
+change other services' transports. First-time password/MFA authentication may
+create separate sessions inside the SDK.
 
 ThingsBoard and Garmin LiveTrack share the same position sampling window. At
 the normal 180-second interval, four samples at about 45, 90, 135, and 180
