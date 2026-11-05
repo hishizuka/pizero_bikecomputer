@@ -61,6 +61,8 @@ class Setting:
                 self.config.G_LANG = c["LANG"].upper()
             if "FONT_FILE" in c:
                 self.config.G_FONT_FILE = c["FONT_FILE"]
+            if "FONT_WEIGHT" in c:
+                self.config.G_FONT_WEIGHT = c.getint("FONT_WEIGHT")
             if "AUTO_WIFI_OFF" in c:
                 self.config.G_AUTO_WIFI_OFF = c.getboolean("AUTO_WIFI_OFF")
 
@@ -356,6 +358,8 @@ class Setting:
         c["DISPLAY"] = self.config.G_DISPLAY
         c["LANG"] = self.config.G_LANG
         c["FONT_FILE"] = self.config.G_FONT_FILE
+        if self.config.G_FONT_WEIGHT is not None:
+            c["FONT_WEIGHT"] = str(self.config.G_FONT_WEIGHT)
         c["AUTO_WIFI_OFF"] = str(self.config.G_AUTO_WIFI_OFF)
 
         if not self.config.G_DUMMY_OUTPUT:

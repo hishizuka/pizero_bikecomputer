@@ -223,8 +223,24 @@ class GUI_PyQt(GUI_Qt_Base):
             self.main_window.set_paint_delegate(lambda event: self.draw_display())
 
         self.stack_widget.currentChanged.connect(self.on_change_stack_widget)
+        self.app.fontChanged.connect(self._refresh_fonts)
 
-        self.exec()
+        try:
+            self.exec()
+        finally:
+            # Release widgets before QApplication tears down platform resources.
+            self.main_window.deleteLater()
+            QtCore.QCoreApplication.sendPostedEvents(
+                self.main_window, QtCore.QEvent.Type.DeferredDelete
+            )
+
+    def _refresh_fonts(self, _font):
+        # Re-resolve inherited font attributes cached by styled widgets.
+        for widget in [
+            self.main_window,
+            *self.main_window.findChildren(QtWidgets.QWidget),
+        ]:
+            widget.setFont(widget.font())
 
     def check_resolution(self):
         if self.main_window.width() >= self.main_window.height():
@@ -322,6 +338,7 @@ class GUI_PyQt(GUI_Qt_Base):
                 DebugLogViewerWidget,
             )
             from modules.pyqt.menu.pyqt_profile_widget import ProfileWidget
+            from modules.pyqt.menu.pyqt_font_menu import FontListWidget
             from modules.pyqt.menu.pyqt_sensor_menu_widget import (
                 SensorMenuWidget,
                 InternalSensorMenuWidget,
@@ -431,6 +448,8 @@ class GUI_PyQt(GUI_Qt_Base):
                 ("Debug", DebugMenuWidget),
                 ("Brightness", BrightnessListWidget),
                 (DisplayMenuWidget.DITHERING_BUTTON, DitheringListWidget),
+                ("Font Weight", FontListWidget),
+                ("Font", FontListWidget),
                 ("Display", DisplayMenuWidget),
                 ("System", SystemMenuWidget),
                 ("Quick Actions", QuickActionsMenuWidget),

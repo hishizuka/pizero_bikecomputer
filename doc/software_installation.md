@@ -1417,9 +1417,16 @@ Set the value before starting the program. If the value is set during running, i
   - The language setting of the label of items.
   - The default is `EN`.
 - `font_file`
-  - Set the full path of the font which you want to use.
-  - Place the fonts in `fonts/` folder.
+  - Place the font in `fonts/` and specify its filename, for example `InterVariable.ttf`.
   - QZSS alerts use Noto Sans CJK JP Black when available, independently of this font.
+- `font_weight`
+  - Optional numeric weight for `font_file`: for example, `400` (Regular), `600` (SemiBold), or `700` (Bold).
+  - Omit this option to keep the existing Qt font selection behavior.
+  - Available weights depend on the font file; `InterVariable.ttf` supports weights from `100` to `900`.
+  - In PyQt, open **System > Display > Font** to select a font file, then choose its weight on the next screen.
+  - Font files (`.ttf`, `.otf`, `.ttc`, `.otc`) are listed from `fonts/`, including subfolders. Changes take effect immediately and are saved to `setting.conf`.
+  - The font list is scanned in **Font** preprocessing, so files added while the application is running appear on the next visit. Selecting a file opens **Font Weight**, with choices generated from that font. Confirming a weight returns to **Display** in PyQt. Back without confirming returns to the font file list.
+  - **Default (unspecified)** removes `font_weight` from the saved settings. Switching to a font without the selected weight also resets it to unspecified. **Default** in the file list restores the system font.
 - `auto_wifi_off`
   - Turn Wifi off automatically while recording.
 

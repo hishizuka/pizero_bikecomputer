@@ -92,6 +92,7 @@ class DisplayMenuWidget(MenuWidget):
             ),
             (self.BRIGHTNESS_BUTTON, "submenu", self.brightness),
             (self.DITHERING_BUTTON, "submenu", self.dithering),
+            ("Font", "submenu", self.font_settings),
         )
         self.add_buttons(button_conf)
         self.update_button_status()
@@ -114,6 +115,9 @@ class DisplayMenuWidget(MenuWidget):
 
     def brightness(self):
         self.change_page("Brightness", preprocess=True)
+
+    def font_settings(self):
+        self.change_page("Font", preprocess=True, reset=True)
 
     @qasync.asyncSlot()
     async def dithering(self):

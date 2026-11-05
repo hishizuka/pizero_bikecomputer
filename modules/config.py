@@ -91,6 +91,7 @@ class Config:
     # Language defined by G_LANG in gui_config.py
     G_LANG = "EN"
     G_FONT_FILE = ""
+    G_FONT_WEIGHT = None
 
     # courses
     G_COURSE_DIR = "courses"

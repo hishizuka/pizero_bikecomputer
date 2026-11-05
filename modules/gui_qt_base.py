@@ -27,6 +27,8 @@ QtGui = _qt_import.QtGui
 qasync = _qt_import.qasync
 del _qt_import
 
+from modules.qt.fonts import FontManager
+
 
 class GUI_Qt_Base(QtCore.QObject):
 
@@ -322,17 +324,11 @@ class GUI_Qt_Base(QtCore.QObject):
         self.display_active = True
 
     def add_font(self):
-        # Additional font from setting.conf
-        if self.config.G_FONT_FILE:
-            # use full path as macOS is not allowing relative paths
-            res = QtGui.QFontDatabase.addApplicationFont(
-                os.path.join(os.getcwd(), "fonts", self.config.G_FONT_FILE)
-            )
-            if res != -1:
-                font_name = QtGui.QFontDatabase.applicationFontFamilies(res)[0]
-                font = QtGui.QFont(font_name)
-                self.app.setFont(font)
-                app_logger.info(f"add font: {font_name}")
+        self.font_manager = FontManager(self.config, self.app, self)
+        try:
+            self.font_manager.apply()
+        except ValueError as error:
+            app_logger.warning("%s", error)
 
     def draw_display(self, direct_update=False):
         self.check_resolution()
