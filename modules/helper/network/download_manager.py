@@ -82,7 +82,11 @@ class DownloadManager:
         if map_settings.get("referer"):
             request_header["Referer"] = map_settings["referer"]
         if map_settings.get("user_agent"):
-            request_header["User-Agent"] = self.config.G_USER_AGENT
+            request_header["User-Agent"] = (
+                self.config.G_PRODUCT
+                if map_name == "openstreetmap"
+                else self.config.G_USER_AGENT
+            )
 
         basetime = additional_var.get("basetime")
         validtime = additional_var.get("validtime")
