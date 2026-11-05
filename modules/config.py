@@ -245,6 +245,7 @@ class Config:
     G_GPS_SPEED_CUTOFF = G_AUTOSTOP_CUTOFF  # m/s
     # Wheel-sensor magnetic priority with synchronized UART gyro supervision.
     G_HEADING_MAGNETIC_PRIMARY = True
+    G_GPS_QZSS_DCR = {"STATUS": False, "POPUP_DISTANCE_KM": 100.0}
     G_GPS_UBLOX = {
         "ASSISTNOW": {
             "STATUS": False,
@@ -256,8 +257,6 @@ class Config:
             "TIMEOUT": 30,
         },
         "POWER_SAVE": False,
-        "QZSS_DCR": False,
-        "QZSS_DCR_POPUP_DISTANCE_KM": 100.0,
         "TX_READY": {
             "STATUS": True,
             "GPIOCHIP": "/dev/gpiochip4",
@@ -968,8 +967,10 @@ class Config:
                     # self.gui.show_popup(f"test", 3)
                 elif key in {"z", "x"} and self.gui:
                     sensor_gps = self.logger.sensor.sensor_gps
-                    if sensor_gps.__class__.__name__ != "UBlox":
-                        app_logger.warning("[QZSS DCR][TEST] UBlox is not active")
+                    if not getattr(sensor_gps, "supports_qzss_dcr", False):
+                        app_logger.warning(
+                            "[QZSS DCR][TEST] Receiver does not support QZSS DCR"
+                        )
                         continue
                     alert_level = "urgent" if key == "z" else "warning"
                     sensor_gps.inject_qzss_dcr_test_event(alert_level)

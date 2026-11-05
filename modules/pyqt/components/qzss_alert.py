@@ -13,8 +13,8 @@ from modules.helper.qzss_popup_layout import (
     region_groups,
 )
 from modules.pyqt.components.button_widget import CloseButton
-from modules.sensor.gps.ublox_support.qzss_dcr import Category, JMA_MESSAGE_TYPE
-from modules.sensor.gps.ublox_support.qzss_dcr_view import build_popup_content
+from modules.sensor.gps.qzss.dcr import Category, JMA_MESSAGE_TYPE
+from modules.sensor.gps.qzss.view import build_popup_content
 
 ROOT = Path(__file__).resolve().parents[3]
 YELLOW = "#FFFF00"

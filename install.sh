@@ -358,7 +358,7 @@ if [[ "$gps_backend" != "none" ]]; then
         echo "🔧 Installing Sony CXD56xx GNSS packages..."
         install_i2c_support_packages
         sudo apt install -y build-essential python3-dev gpiod
-        pip install --no-cache-dir rpi-cxd56xx-gnss
+        pip install --no-cache-dir rpi-cxd56xx-gnss azarashi
         sudo usermod -aG i2c,gpio "$TARGET_USER"
         enable_i2c_interface
         echo "✅ Sony CXD56xx GNSS packages installed successfully."

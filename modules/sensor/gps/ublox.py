@@ -5,7 +5,6 @@ import sys
 import threading
 import time
 from datetime import datetime, timezone
-from functools import cached_property
 from pathlib import Path
 
 if __name__ == "__main__" and __package__ is None:
@@ -13,6 +12,7 @@ if __name__ == "__main__" and __package__ is None:
     sys.path.append(str(Path(__file__).resolve().parents[3]))
 
 from modules.app_logger import app_logger
+from modules.sensor.gps.qzss.receiver import QzssDcrSupport
 
 if __name__ == "__main__" and __package__ is None:
     from base import (
@@ -39,6 +39,7 @@ try:
     from pyubx2 import (
         ERR_IGNORE,
         POLL,
+        POLL_LAYER_RAM,
         SET_LAYER_RAM,
         TXN_NONE,
         UBXMessage,
@@ -56,16 +57,13 @@ try:
             normalized_receiver_model,
         )
         from ublox_support.qzss_dcr import (
-            build_qzss_dcr_test_event,
-            parse_qzqsm_sentence,
             qzss_dcr_blocked_by_power_save,
             qzss_dcr_cfg_data,
             qzss_dcr_configure_status,
             qzss_dcr_enabled,
             qzss_dcr_output_status,
-            sfrbx_to_qzqsm,
+            sfrbx_to_packet,
         )
-        from ublox_support.qzss_dcr_store import QzssDcrStore
         from ublox_support.reader import UBloxReader
         from ublox_support.transport import (
             I2CStream,
@@ -87,16 +85,13 @@ try:
             normalized_receiver_model,
         )
         from .ublox_support.qzss_dcr import (
-            build_qzss_dcr_test_event,
-            parse_qzqsm_sentence,
             qzss_dcr_blocked_by_power_save,
             qzss_dcr_cfg_data,
             qzss_dcr_configure_status,
             qzss_dcr_enabled,
             qzss_dcr_output_status,
-            sfrbx_to_qzqsm,
+            sfrbx_to_packet,
         )
-        from .ublox_support.qzss_dcr_store import QzssDcrStore
         from .ublox_support.reader import UBloxReader
         from .ublox_support.transport import (
             I2CStream,
@@ -130,13 +125,19 @@ _I2C_CONFIG_MESSAGE_MAX_LENGTH = 32
 _I2C_CONFIG_CHUNK_DELAY = 0.02
 
 
-class UBlox(AbstractSensorGPS):
+class UBlox(QzssDcrSupport, AbstractSensorGPS):
     NULL_VALUE = None
+    _DCR_CONFIG_TIMEOUT = 2.0
     detected_uart_device = None
-    supports_qzss_dcr = True
+    supports_ublox_settings = True
 
     def sensor_init(self):
         super().sensor_init()
+        self.init_qzss_dcr()
+        self._configuration_reply = None
+        self._configuration_lock = threading.Lock()
+        self._dcr_startup_task = None
+        self._qzss_dcr_target = None
         if _UBLOX_IMPORT_ERROR is not None:
             raise RuntimeError(
                 "u-blox GPS optional dependency is not available: "
@@ -201,27 +202,53 @@ class UBlox(AbstractSensorGPS):
         await super().quit()
         if self._assistnow_task is not None:
             self._assistnow_task.cancel()
+        if self._dcr_startup_task is not None:
+            self._dcr_startup_task.cancel()
+            await asyncio.gather(self._dcr_startup_task, return_exceptions=True)
         self._close_transport()
+        await self.stop_qzss_dcr()
 
     async def update(self):
-        while not self.quit_status:
-            try:
-                if self._bridge_gps and self._bridge_needs_detect:
-                    self.uart_device = await asyncio.to_thread(
-                        detect_uart_ublox_device, True
+        try:
+            if self._qzss_dcr_enabled():
+                await self.start_qzss_dcr()
+            while not self.quit_status:
+                try:
+                    if self._bridge_gps and self._bridge_needs_detect:
+                        self.uart_device = await asyncio.to_thread(
+                            detect_uart_ublox_device, True
+                        )
+                        if self.uart_device is None:
+                            raise ConnectionError("GPS bridge is unavailable")
+                        self._bridge_needs_detect = False
+                    self._open_transport()
+                    self._configure_receiver()
+                    self._dcr_startup_task = asyncio.create_task(
+                        self.set_qzss_dcr_enabled(self._qzss_dcr_enabled())
                     )
-                    if self.uart_device is None:
-                        raise ConnectionError("GPS bridge is unavailable")
-                    self._bridge_needs_detect = False
-                self._open_transport()
-                self._configure_receiver()
-                await self._read_loop()
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                app_logger.error(f"[UBlox] {exc}")
-                self._close_transport()
-                await asyncio.sleep(1.0)
+                    await self._read_loop()
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    if self._qzss_dcr_decoder_available:
+                        from azarashi import AzarashiFixTheCall
+
+                        if isinstance(exc, AzarashiFixTheCall):
+                            raise
+                    app_logger.error(f"[UBlox] {exc}")
+                    self._close_transport()
+                    await asyncio.sleep(1.0)
+                finally:
+                    if self._dcr_startup_task is not None:
+                        self._dcr_startup_task.cancel()
+                        await asyncio.gather(
+                            self._dcr_startup_task, return_exceptions=True
+                        )
+                        self._dcr_startup_task = None
+
+        finally:
+            self._close_transport()
+            await self.stop_qzss_dcr()
 
     def _open_transport(self):
         if self.transport is not None:
@@ -254,6 +281,11 @@ class UBlox(AbstractSensorGPS):
             raise
 
     def _close_transport(self):
+        self._qzss_dcr_active = False
+        reply = self._configuration_reply
+        if reply is not None:
+            reply["error"] = ConnectionError("receiver transport closed")
+            reply["done"].set()
         if self.transport is None:
             return
         try:
@@ -640,7 +672,9 @@ class UBlox(AbstractSensorGPS):
         return bool(self.config.G_GPS_UBLOX["POWER_SAVE"])
 
     def _qzss_dcr_requested(self):
-        return bool(self.config.G_GPS_UBLOX["QZSS_DCR"])
+        if self._qzss_dcr_target is not None:
+            return self._qzss_dcr_target
+        return bool(self.config.G_GPS_QZSS_DCR["STATUS"])
 
     def _qzss_dcr_blocked_by_power_save(self):
         return qzss_dcr_blocked_by_power_save(
@@ -670,31 +704,122 @@ class UBlox(AbstractSensorGPS):
     def _qzss_dcr_cfg_data(self, enabled):
         return qzss_dcr_cfg_data(self.transport_type, enabled)
 
+    def _confirmed_configuration_exchange(
+        self, message, identity, values=None, verify=True
+    ):
+        reply = {
+            "done": threading.Event(),
+            "identity": identity,
+            "values": values,
+            "verify": verify,
+            "error": None,
+        }
+        self._configuration_reply = reply
+        try:
+            self._write_transport(message, wait=True)
+            if not reply["done"].wait(self._DCR_CONFIG_TIMEOUT):
+                raise TimeoutError(f"u-blox {identity} confirmation timed out")
+            if reply["error"] is not None:
+                raise reply["error"]
+            return reply["values"]
+        finally:
+            self._configuration_reply = None
+
+    def _read_dcr_config(self, enabled):
+        values = {}
+        for chunk in self._config_chunks_for_transport(
+            self._qzss_dcr_cfg_data(enabled)
+        ):
+            keys = [key for key, _ in chunk]
+            poll = UBXMessage.config_poll(POLL_LAYER_RAM, 0, keys)
+            values.update(
+                self._confirmed_configuration_exchange(
+                    poll.serialize(), "CFG-VALGET", dict.fromkeys(keys), verify=False
+                )
+            )
+        return values
+
+    def _write_confirmed_dcr_config(self, cfg_data):
+        for chunk in self._config_chunks_for_transport(cfg_data):
+            self._confirmed_configuration_exchange(
+                self._config_set_message(chunk), "ACK-ACK"
+            )
+            # Readback prevents an ACK from an earlier VALSET from confirming this change.
+            poll = UBXMessage.config_poll(POLL_LAYER_RAM, 0, [key for key, _ in chunk])
+            self._confirmed_configuration_exchange(
+                poll.serialize(), "CFG-VALGET", dict(chunk)
+            )
+
+    def _handle_configuration_reply(self, parsed):
+        reply = self._configuration_reply
+        if reply is None:
+            return
+        if parsed.identity in ("ACK-ACK", "ACK-NAK"):
+            expected_id = 0x8A if reply["identity"] == "ACK-ACK" else 0x8B
+            if parsed.clsID != 0x06 or parsed.msgID != expected_id:
+                return
+            if parsed.identity == "ACK-NAK":
+                reply["error"] = OSError("u-blox rejected DCR configuration")
+            elif reply["identity"] != "ACK-ACK":
+                return
+        elif parsed.identity == "CFG-VALGET" and reply["identity"] == "CFG-VALGET":
+            values = {key: getattr(parsed, key, None) for key in reply["values"]}
+            if any(value is None for value in values.values()):
+                return
+            if reply["verify"] and values != reply["values"]:
+                reply["error"] = OSError(
+                    "u-blox DCR readback does not match requested settings"
+                )
+            reply["values"] = values
+        else:
+            return
+        reply["done"].set()
+
     async def set_qzss_dcr_enabled(self, enabled):
-        return await asyncio.to_thread(self._set_qzss_dcr_enabled, enabled, "menu")
+        async with self._qzss_dcr_lock:
+            self.qzss_dcr_changing = True
+            self._qzss_dcr_target = bool(enabled)
+            try:
+                if enabled and not self._qzss_dcr_decoder_available:
+                    await self.start_qzss_dcr()
+                return await self.device_call(
+                    self._set_qzss_dcr_enabled, enabled, "menu"
+                )
+            except asyncio.CancelledError:
+                # Reopen using the saved setting if confirmation outlives its caller.
+                self._close_transport()
+                raise
+            finally:
+                self._qzss_dcr_target = None
+                self.qzss_dcr_changing = False
 
     def _set_qzss_dcr_enabled(self, enabled, reason):
-        if self.transport is None:
-            self.qzss_dcr_status["status"] = self._qzss_dcr_configure_status()
+        if self.transport is None or not self._read_loop_active:
+            self.qzss_dcr_status["status"] = "pending"
             return False
         if enabled and self._power_save_enabled():
             self.qzss_dcr_status["status"] = "disabled_power_save"
             self._log_qzss_dcr_power_save_skip()
             return False
-
-        cfg_data = self._qzss_dcr_cfg_data(enabled)
-        try:
-            self._write_config(cfg_data, wait=True)
-        except Exception as exc:
-            self.qzss_dcr_status["status"] = "error"
-            self.qzss_dcr_status["error"] = str(exc)
-            app_logger.warning(f"[UBlox] QZSS DC Report change failed: {exc}")
-            return False
-
-        self.qzss_dcr_status["status"] = self._qzss_dcr_output_status(enabled)
-        self.qzss_dcr_status["error"] = None
-        cfg_summary = ", ".join(f"{key}={value}" for key, value in cfg_data)
-        app_logger.info(f"[UBlox] QZSS DC Report output set ({cfg_summary}, {reason})")
+        with self._configuration_lock:
+            try:
+                previous = self._read_dcr_config(enabled)
+            except OSError as exc:
+                self.qzss_dcr_status.update(status="error", error=str(exc))
+                app_logger.warning(f"[UBlox] QZSS DCR readback failed: {exc}")
+                return False
+            try:
+                self._write_confirmed_dcr_config(self._qzss_dcr_cfg_data(enabled))
+            except OSError as exc:
+                try:
+                    self._write_confirmed_dcr_config(list(previous.items()))
+                except OSError:
+                    self._close_transport()
+                self.qzss_dcr_status.update(status="error", error=str(exc))
+                app_logger.warning(f"[UBlox] QZSS DCR change failed: {exc}")
+                return False
+        self.finish_qzss_dcr_change(enabled)
+        app_logger.info(f"[UBlox] QZSS DCR confirmed: {enabled} ({reason})")
         return True
 
     def _log_qzss_dcr_power_save_skip(self):
@@ -745,7 +870,7 @@ class UBlox(AbstractSensorGPS):
             "[UBlox] periodic output configured "
             f"({', '.join(f'{key}={value}' for key, value in cfg_data)})"
         )
-        self.qzss_dcr_status["status"] = self._qzss_dcr_output_status(qzss_dcr_enabled)
+        self.qzss_dcr_status["status"] = self._qzss_dcr_configure_status()
 
     def _normalized_receiver_model(self):
         return normalized_receiver_model(self._receiver_model)
@@ -911,7 +1036,9 @@ class UBlox(AbstractSensorGPS):
             self._read_loop_active = False
 
     async def _handle_reader_message(self, raw, parsed):
-        identity = getattr(parsed, "identity", "")
+        identity = parsed.identity
+        if identity in ("ACK-ACK", "ACK-NAK", "CFG-VALGET"):
+            self._handle_configuration_reply(parsed)
         if identity == "NAV-PVT":
             await self._handle_nav_pvt(parsed)
         elif identity == "NAV-DOP":
@@ -939,17 +1066,9 @@ class UBlox(AbstractSensorGPS):
         else:
             mode = NMEA_MODE_UNKNOWN
 
-        gps_time = None
-        if getattr(parsed, "validDate", 0) and getattr(parsed, "validTime", 0):
-            gps_time = datetime(
-                parsed.year,
-                parsed.month,
-                parsed.day,
-                parsed.hour,
-                parsed.min,
-                parsed.second,
-                tzinfo=timezone.utc,
-            ).isoformat()
+        gps_time = _nav_pvt_time(parsed)
+
+        self._qzss_dcr_clock.observe_gnss(gps_time)
 
         pdop = parsed.pDOP
         hdop, vdop = self._dop[1], self._dop[2]
@@ -966,7 +1085,7 @@ class UBlox(AbstractSensorGPS):
             max(parsed.gSpeed, 0) / 1000.0,
             parsed.headMot % 360,
             mode,
-            2 if getattr(parsed, "diffSoln", 0) else 1,
+            2 if parsed.diffSoln else 1,
             (
                 parsed.hAcc / 1000.0,
                 parsed.hAcc / 1000.0,
@@ -990,49 +1109,14 @@ class UBlox(AbstractSensorGPS):
         self._total_sats = parsed.num_svs
         self._used_sats = parsed.used_svs or self._used_sats
 
-    @cached_property
-    def qzss_dcr_store(self):
-        return QzssDcrStore(history_limit=100)
-
-    def inject_qzss_dcr_test_event(self, alert_level="urgent"):
-        dcr = build_qzss_dcr_test_event(time.time_ns(), alert_level=alert_level)
-        result = self.qzss_dcr_store.ingest(dcr, received_at=dcr["timestamp"])
-        dcr_event = result["event"]
-
-        app_logger.info(
-            "[QZSS DCR][TEST] injected "
-            f"id={dcr_event['id']}, "
-            f"category={dcr_event['category_no']}, "
-            f"priority={dcr_event['priority']}"
-        )
-        return dcr_event
-
     def _handle_rxm_sfrbx(self, parsed):
-        if not self._qzss_dcr_enabled():
+        packet = sfrbx_to_packet(parsed)
+        if packet is None:
             return
-
-        sentence = sfrbx_to_qzqsm(parsed)
-        if not sentence:
-            return
-
-        dcr = parse_qzqsm_sentence(sentence)
-        if dcr is None:
-            return
-
-        received_at = datetime.now().astimezone().isoformat()
-        dcr["timestamp"] = received_at
-        result = self.qzss_dcr_store.ingest(dcr, received_at=received_at)
-        if not result["is_new_content"]:
-            return
-
-        app_logger.info(f"[UBlox] QZSS DC Report: {sentence}")
-        if dcr.get("report_text"):
-            app_logger.info(f"[UBlox] QZSS DC Report text:\n{dcr['report_text']}")
-        elif dcr.get("report_decoder_error"):
-            app_logger.warning(
-                "[UBlox] QZSS DC Report decode failed: "
-                f"{dcr['report_decoder_error']}"
-            )
+        if self.qzss_dcr_ready():
+            self.ingest_qzss_dcr(packet, datetime.now(timezone.utc))
+        elif self._qzss_dcr_active and not self.qzss_dcr_changing:
+            self.qzss_dcr_counters["time_untrusted"] += 1
 
     def _handle_mon_ver(self, raw, parsed):
         if self._raw_mon_ver is not None:
@@ -1180,9 +1264,9 @@ def _nonnegative_diag_speed(value):
     return max(value, 0) / 1000.0
 
 
-def _diagnostic_gps_time(parsed):
-    if not getattr(parsed, "validDate", 0) or not getattr(parsed, "validTime", 0):
-        return "-"
+def _nav_pvt_time(parsed):
+    if not parsed.validDate or not parsed.validTime:
+        return None
     return datetime(
         parsed.year,
         parsed.month,
@@ -1227,7 +1311,7 @@ def _diagnostic_nav_pvt_line(parsed, dop, satellites):
     speed = _nonnegative_diag_speed(getattr(parsed, "gSpeed", None))
 
     return (
-        f"time={_diagnostic_gps_time(parsed)} "
+        f"time={_nav_pvt_time(parsed) or '-'} "
         f"lat={_format_diag_value(getattr(parsed, 'lat', None), 7)} "
         f"lon={_format_diag_value(getattr(parsed, 'lon', None), 7)} "
         f"alt={_format_diag_value(alt, 1)}m "
@@ -1291,7 +1375,7 @@ def _run_i2c_diagnostic(args):
             if parsed is None:
                 continue
 
-            identity = getattr(parsed, "identity", "")
+            identity = parsed.identity
             if identity == "MON-VER":
                 version = process_monver(parsed)
                 model = version["hwversion"] or version["swversion"]

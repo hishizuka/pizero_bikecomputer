@@ -367,13 +367,24 @@ class GUI_PyQt(GUI_Qt_Base):
             from modules.pyqt.pyqt_multiscan_widget import MultiScanWidget
 
             if qzss_dcr_supported:
-                from modules.pyqt.menu.pyqt_ublox_menu import (
-                    GPSMenuWidget,
+                from modules.pyqt.menu.pyqt_qzss_menu import (
+                    GPSMenuWidget as QzssGPSMenuWidget,
                     QzssDcrDetailWidget,
                     QzssDcrEventListWidget,
                     QzssDcrViewerWidget,
                     start_qzss_dcr_popup_monitor,
                 )
+
+                GPSMenuWidget = QzssGPSMenuWidget
+
+            if qzss_dcr_supported and getattr(
+                self.sensor.sensor_gps, "supports_ublox_settings", False
+            ):
+                from modules.pyqt.menu.pyqt_ublox_menu import (
+                    GPSMenuWidget as UbloxGPSMenuWidget,
+                )
+
+                GPSMenuWidget = UbloxGPSMenuWidget
 
         with timers[2]:
             # self.main_window

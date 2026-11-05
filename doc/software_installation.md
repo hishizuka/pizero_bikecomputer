@@ -175,11 +175,49 @@ For u-blox AssistNow Live/Predictive Orbits, add the ZTP token to
 [GPSD_UBLOX_PARAM]
 assistnow_token =
 use_power_save = False
-use_qzss_dcr = False
+
+[GPS_QZSS_DCR]
+status = False
+popup_distance_km = 100.0
 ```
 
-`use_qzss_dcr=True` is ignored when `use_power_save=True`; disable power save
-when collecting QZSS DC Report messages.
+QZSS DCR settings are shared by u-blox and CXD56xx receivers in
+`[GPS_QZSS_DCR]`. Set `status=True` to receive reports and use
+`popup_distance_km` for the notification area margin. With u-blox, disable
+`use_power_save` in `[GPSD_UBLOX_PARAM]` before enabling DCR. The GPS menu only
+saves a change after receiver confirmation; u-blox also verifies settings by
+readback.
+
+DCR decoding requires `azarashi>=0.17.1`. CXD56xx integration also requires a
+source build of `rpi-cxd56xx-gnss` providing `wait_ready`, `session_status`,
+`read_dcreports`, `DCReport.to_azarashi_packet`, and `CXD56xxSessionError`; the
+package version alone does not identify these APIs. Install that checkout into
+the application's virtual environment before starting the application. Receiver
+creation, configuration confirmation and close run outside the Qt event loop.
+
+The CXD56xx backend uses `DCReport.to_azarashi_packet(reconstruct_crc=True)` to
+prepare decoder input. The library reconstructs the CRC; the application passes
+the resulting packet directly to the shared decoder and store without keeping
+separate original and reconstructed copies. The u-blox input path is unchanged.
+
+Japanese report labels and bodies require Japanese fonts. On minimal Raspberry
+Pi OS installations, install them with `sudo apt install fonts-noto-cjk`.
+
+Only reports accepted by azarashi enter history and popups. Invalid messages are
+counted without per-message warnings or CRC notifications. Host UTC must be qualified
+by system NTP synchronization or agreement with valid GNSS UTC; a position fix
+is not required. Reports received before clock qualification or across a clock
+step are discarded, and alert lifetimes use a monotonic clock.
+
+The integration was tested without GNSS hardware on macOS 27.0.1 arm64 with
+Python 3.14, azarashi 0.17.1 and pyubx2 1.3.1. Automated tests use a mocked
+CXD56xx device and u-blox transport, including recorded library packets for marine,
+northwest Pacific tsunami and NULL messages. Raspberry Pi I2C/GPIO startup,
+DCR toggles and shutdown were verified on 2026-10-23. The updated application
+path using the packet adapter was verified on 2026-10-25 with a Raspberry Pi
+Zero 2 W, Debian 13.7 Trixie, Python 3.13.5 and CXD5610 v00.201. Live reception,
+Japanese body display through Qt LinuxFB, DCR toggles, continued 3D positioning,
+normal shutdown, shutdown during a setting change and reopening all passed.
 
 #### UART GPS through GPSD
 
@@ -1404,7 +1442,8 @@ Reconnect the nRF USB device, then verify `/dev/ttyANT` and `/dev/ttyGPS`.
 GPS is detected only on `/dev/ttyGPS`; the receiver is switched from its current
 38400 or 9600 bps setting to 115200 bps before the application enables UBX
 navigation and optional QZSS `RXM-SFRBX` output. To receive QZSS DC Reports,
-set `use_qzss_dcr = True` and `use_power_save = False` in `[GPSD_UBLOX_PARAM]`.
+set `status = True` in `[GPS_QZSS_DCR]` and `use_power_save = False` in
+`[GPSD_UBLOX_PARAM]`.
 
 #### AUTO_UPLOAD section
 

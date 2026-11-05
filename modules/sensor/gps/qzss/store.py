@@ -1,8 +1,9 @@
 import hashlib
 import json
+import time
 from datetime import datetime
 
-from .qzss_dcr import (
+from .dcr import (
     Category,
     DCX_MESSAGE_TYPE,
     JMA_MESSAGE_TYPE,
@@ -12,7 +13,7 @@ from .qzss_dcr import (
     _weather_region_pairs,
     build_qzss_dcr_event,
 )
-from .qzss_dcr_area import (
+from .area import (
     DEFAULT_POPUP_MARGIN_KM,
     LOCATION_FAR,
     QzssDcrAreaResolver,
@@ -90,7 +91,11 @@ class QzssDcrStore:
         stale_seconds=DEFAULT_STALE_SECONDS,
         fragment_settle_seconds=DEFAULT_FRAGMENT_SETTLE_SECONDS,
         area_resolver=None,
+        clock=None,
     ):
+        self._clock = time.monotonic if clock is None else clock
+        self._received_wall_ts = None
+        self._received_mono_ts = None
         self.history_limit = int(history_limit)
         self.active_grace_seconds = float(active_grace_seconds)
         self.stale_seconds = float(stale_seconds)
@@ -111,9 +116,11 @@ class QzssDcrStore:
 
         received_at = _datetime(received_at or dcr.get("timestamp"))
         received_iso = received_at.isoformat()
-        received_ts = received_at.timestamp()
+        received_ts = self._clock()
+        self._received_wall_ts = received_at.timestamp()
+        self._received_mono_ts = received_ts
         self._last_any_seen_ts = received_ts
-        self.refresh(received_at)
+        self.refresh()
 
         content_key = self._content_key(dcr)
         event = self._content_index.get(content_key)
@@ -301,8 +308,12 @@ class QzssDcrStore:
                     self._content_index.pop(key, None)
 
     def refresh(self, now=None):
-        now_value = _datetime(now)
-        now_ts = now_value.timestamp()
+        now_ts = self._clock()
+        if now is not None and self._received_wall_ts is not None:
+            # Explicit UTC is reserved for deterministic replay and diagnostic queries.
+            now_ts = self._received_mono_ts + (
+                _datetime(now).timestamp() - self._received_wall_ts
+            )
         for event in list(self.active.values()):
             age = now_ts - event["_last_seen_ts"]
             settled = now_ts - event["_updated_ts"] >= self.fragment_settle_seconds
@@ -345,6 +356,10 @@ class QzssDcrStore:
             key=lambda event: (event["_updated_ts"], event["id"]),
             reverse=True,
         )
+
+    def clear_pending_popups(self):
+        self._pending_popups.clear()
+        self._far_popup_judgments.clear()
 
     def mark_popup_handled(self, event, displayed=False):
         self._pending_popups.pop(event["id"], None)

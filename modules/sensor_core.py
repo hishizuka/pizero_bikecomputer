@@ -28,7 +28,7 @@ from modules.utils.wind import (
     get_wind_impact,
 )
 from .sensor.gps import get_sensor_gps_class
-from .sensor.gps.position_quality import (
+from .utils.gps_position_quality import (
     DistanceSource,
     GPSPositionQuality,
     GPSPositionQualityReason,

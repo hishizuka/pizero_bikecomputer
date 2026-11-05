@@ -7,9 +7,9 @@ def get_sensor_gps_class(dummy=False, bridge=False):
     if not dummy and bridge:
         sensor_gps, sensor_detail = _detect_ublox(bridge=True)
     elif not dummy:
-        from .i2c_cxd56xx import _SENSOR_GPS_CXD56XX, CXD56xx_GPS
+        from .cxd56xx import CXD56xx_GPS, detect_cxd56xx
 
-        if _SENSOR_GPS_CXD56XX:
+        if detect_cxd56xx() is not None:
             sensor_gps = CXD56xx_GPS
         else:
             sensor_gps, sensor_detail = _detect_ublox()

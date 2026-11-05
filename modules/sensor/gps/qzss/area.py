@@ -2,7 +2,7 @@ import csv
 import math
 from pathlib import Path
 
-from .qzss_dcr import DCX_MESSAGE_TYPE, JMA_MESSAGE_TYPE, _as_list
+from .dcr import DCX_MESSAGE_TYPE, JMA_MESSAGE_TYPE, _as_list
 
 DEFAULT_POPUP_MARGIN_KM = 100.0
 

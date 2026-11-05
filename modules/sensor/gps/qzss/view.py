@@ -3,7 +3,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from .qzss_dcr import (
+from .dcr import (
     Category,
     DCX_MESSAGE_TYPE,
     JMA_MESSAGE_TYPE,
@@ -12,7 +12,7 @@ from .qzss_dcr import (
     _marine_warning_states,
     _weather_region_pairs,
 )
-from .qzss_dcr_area import coordinate
+from .area import coordinate
 
 VOLCANO_ERUPTION_CODE = 52
 JST = timezone(timedelta(hours=9))
@@ -568,8 +568,7 @@ def build_popup_content(event, weather_pairs=None):
     regions, supplement, action = [], [], ""
     if event.get("message_type") == DCX_MESSAGE_TYPE:
         regions = _as_list(
-            fields.get("ex1_target_area_ja")
-            or fields.get("ex9_target_area_list_ja")
+            fields.get("ex1_target_area_ja") or fields.get("ex9_target_area_list_ja")
         )
         supplement = [fields.get("a5_severity")]
         action = (
