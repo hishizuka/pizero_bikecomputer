@@ -601,6 +601,7 @@ class SensorI2C(Sensor):
             self.sensor["i2c_baro_temp"] = self.sensor_bhi3_s
 
     def reset(self):
+        self.values["battery_charge_state"] = "unknown"
         for key in self.elements:
             self.values[key] = np.nan
         for key in self.elements_vec:
@@ -1109,28 +1110,50 @@ class SensorI2C(Sensor):
             return
 
     def read_battery(self):
+        for key in ("battery_percentage", "voltage_battery", "current_battery"):
+            self.values[key] = np.nan
+        self.values["battery_charge_state"] = "unknown"
         if not self.available_sensors["BATTERY"]:
             return
         try:
             if self.available_sensors["BATTERY"].get("PIJUICE"):
-                bv = self.sensor_pijuice.status.GetBatteryVoltage()
-                bc = self.sensor_pijuice.status.GetBatteryCurrent()
-                iv = self.sensor_pijuice.status.GetIoVoltage()
-                ic = self.sensor_pijuice.status.GetIoCurrent()
-                bl = self.sensor_pijuice.status.GetChargeLevel()
-                if bv["error"] == "NO_ERROR":
-                    self.values["voltage_battery"] = bv["data"] / 1000
-                if bc["error"] == "NO_ERROR":
-                    self.values["current_battery"] = bc["data"] / 1000
-                if iv["error"] == "NO_ERROR":
-                    self.values["voltage_out"] = iv["data"] / 1000
-                if ic["error"] == "NO_ERROR":
-                    self.values["current_out"] = ic["data"] / 1000
-                if bl["error"] == "NO_ERROR":
-                    self.values["battery_percentage"] = bl["data"]
+                status_api = self.sensor_pijuice.status
+                # PiJuice uses positive discharge; shared current uses positive charge.
+                readings = (
+                    ("voltage_battery", status_api.GetBatteryVoltage(), 1000),
+                    ("current_battery", status_api.GetBatteryCurrent(), -1000),
+                    ("voltage_out", status_api.GetIoVoltage(), 1000),
+                    ("current_out", status_api.GetIoCurrent(), 1000),
+                    ("battery_percentage", status_api.GetChargeLevel(), 1),
+                )
+                for key, reading, divisor in readings:
+                    if reading["error"] == "NO_ERROR":
+                        self.values[key] = reading["data"] / divisor
+                status = status_api.GetStatus()
+                if status["error"] == "NO_ERROR":
+                    data = status["data"]
+                    if data["battery"] == "NOT_PRESENT":
+                        self.values["battery_percentage"] = np.nan
+                    elif data["battery"] in (
+                        "CHARGING_FROM_IN",
+                        "CHARGING_FROM_5V_IO",
+                    ):
+                        self.values["battery_charge_state"] = "charging"
+                    elif data["battery"] == "NORMAL":
+                        powered = any(
+                            data[key] == "PRESENT"
+                            for key in ("powerInput", "powerInput5vIo")
+                        )
+                        self.values["battery_charge_state"] = (
+                            "full"
+                            if powered and self.values["battery_percentage"] == 100
+                            else "not_charging" if powered else "discharging"
+                        )
             elif self.available_sensors["BATTERY"].get("PISUGAR3"):
                 self.sensor_pisugar3.read()
                 self.values["battery_percentage"] = self.sensor_pisugar3.battery_level
+                self.values["voltage_battery"] = self.sensor_pisugar3.battery_voltage
+                self.values["battery_charge_state"] = self.sensor_pisugar3.charge_state
         except:
             pass
 

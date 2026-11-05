@@ -134,6 +134,14 @@ class BluetoothIcon(_QIconWithPath):
     path = "img/bluetooth.svg"
 
 
+class BatteryIcon(_QIconWithPath):
+    path = "img/battery.svg"
+
+
+class BatteryBoltIcon(_QIconWithPath):
+    path = "img/battery_bolt.svg"
+
+
 class UmbrellaIcon(QtGui.QIcon):
     path = "img/umbrella.png"
 

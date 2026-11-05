@@ -34,6 +34,7 @@ class GUI_Config:
     # Per-item font scale for value text in PyQt item widgets.
     G_ITEM_VALUE_FONT_SCALE = {
         "Asc. / Dsc.": 0.8,
+        "Battery": 0.6,
         "Wind Pwr. (C/T)": 0.8,
         "Wind Grade (C/T)": 0.8,
         "Wind Work (C/T)": 0.8,
@@ -430,8 +431,11 @@ class GUI_Config:
         ),
         "Raw_Gas": (G_UNIT["Int"], lambda self: self.sensor.values["I2C"]["raw_gas"]),
         "Battery": (
-            G_UNIT["Percent"],
-            lambda self: self.sensor.values["I2C"]["battery_percentage"],
+            (((".1f", "V"), ("z.0f", "mA")), ""),
+            lambda self: (
+                self.sensor.values["I2C"]["voltage_battery"],
+                -1000 * self.sensor.values["I2C"]["current_battery"],
+            ),
         ),
         "Motion": (("1.1f", ""), lambda self: self.sensor.values["I2C"]["motion"]),
         "M_Stat": (("1.1f", ""), lambda self: self.sensor.values["I2C"]["m_stat"]),

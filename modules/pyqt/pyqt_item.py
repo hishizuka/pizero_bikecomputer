@@ -6,6 +6,7 @@ from modules.pyqt.graph.pyqtgraph.WindVaneItem import build_wind_vane_picture
 from modules.utils import round_half_away_from_zero
 
 UNIT_FONT_SCALE = 0.7
+COMPACT_FONT_SCALE = 0.54
 WIND_ITEM_SIZE_SCALE = 0.75
 
 
@@ -192,6 +193,12 @@ class Item(QtWidgets.QVBoxLayout):
 
         self.label = ItemLabel(right_flag, name)
         self.value = self.value_class(right_flag, bottom_flag)
+        self.value.setMinimumWidth(0)
+        policy = self.value.sizePolicy()
+        policy.setHorizontalPolicy(QtWidgets.QSizePolicy.Policy.Ignored)
+        self.value.setSizePolicy(policy)
+        self._base_text = ""
+        self._unit_below = False
         gui_config = self.config.gui.gui_config
         self.itemformat, self.unittext = gui_config.G_ITEM_DEF[name][0]
         self.value_font_scale = gui_config.G_ITEM_VALUE_FONT_SCALE.get(name, 1.0)
@@ -208,7 +215,7 @@ class Item(QtWidgets.QVBoxLayout):
         self.update_value(empty_value)
 
     def update_value(self, value):
-        base_text = self.config.gui.gui_config.format_text(
+        self._base_text = self.config.gui.gui_config.format_text(
             self.name,
             value,
             self.config.G_STOPWATCH_STATUS,
@@ -216,7 +223,74 @@ class Item(QtWidgets.QVBoxLayout):
             unit_template=self._unit_template,
         )
 
-        new_text = base_text + self._unit_suffix
+        self._update_text()
+
+    def needs_unit_wrap(self):
+        if self.value_class is not ItemValue or not self.unittext:
+            return False
+        # Reserve three integer digits using the field's precision, not live data.
+        sample = (
+            (888,) * len(self.itemformat) if isinstance(self.itemformat, tuple) else 888
+        )
+        text = (
+            self.config.gui.gui_config.format_text(
+                self.name,
+                sample,
+                "START",
+                self.itemformat,
+                unit_template=self._unit_template,
+            )
+            + self._inline_unit_suffix
+        )
+        document = self._text_document(text)
+        return document.idealWidth() > self.value.contentsRect().width()
+
+    def _text_document(self, text):
+        document = QtGui.QTextDocument()
+        document.setDocumentMargin(0)
+        document.setDefaultFont(self.value.font())
+        document.setHtml(text)
+        return document
+
+    def set_unit_below(self, below):
+        if self.value_class is not ItemValue or self._unit_below == below:
+            return
+        self._unit_below = below
+        self._update_compact_fonts()
+        self._update_text()
+
+    def _update_compact_fonts(self):
+        value_font_size = self.value.font().pixelSize()
+        inline_size = int(value_font_size * UNIT_FONT_SCALE)
+        self._unit_template = (
+            f"<span style='font-size: {inline_size}px; font-weight: 400;'> {{}}</span>"
+        )
+        self._inline_unit_suffix = (
+            self._unit_template.format(self.unittext) if self.unittext else ""
+        )
+        scale = COMPACT_FONT_SCALE if self._unit_below else UNIT_FONT_SCALE
+        self.font_size_unit = int(value_font_size * scale)
+        label_font = self.label.font()
+        label_font.setPixelSize(
+            self.font_size_unit if self._unit_below else self._label_font_size
+        )
+        self.label.setFont(label_font)
+        self._unit_suffix = (
+            f"<span style='font-size: {self.font_size_unit}px; font-weight: 400;'> {self.unittext}</span>"
+            if self.unittext
+            else ""
+        )
+        if self.value_class is ItemValue:
+            self.value.setMinimumHeight(
+                int(self._text_document("0<br/>" + self._unit_suffix).size().height())
+                + 8
+                if self._unit_below and self.unittext
+                else 0
+            )
+
+    def _update_text(self):
+        separator = "<br/>" if self._unit_below and self.unittext else ""
+        new_text = self._base_text + separator + self._unit_suffix
 
         # Skip updates when text is unchanged to avoid needless repaints
         if new_text == self._last_value_text:
@@ -226,29 +300,32 @@ class Item(QtWidgets.QVBoxLayout):
         self.value.setText(new_text)
 
     def update_font_size(self, font_size):
-        label_font_size = int(font_size * 0.66)
+        self._label_font_size = int(font_size * 0.66)
         value_font_size = int(font_size * self.value_font_scale)
-        self.font_size_unit = int(value_font_size * UNIT_FONT_SCALE)
-        self._unit_template = (
-            f"<span style='font-size: {self.font_size_unit}px;'> {{}}</span>"
-        )
 
         for text, fsize in (
-            (self.label, label_font_size),
+            (self.label, self._label_font_size),
             (self.value, value_font_size),
         ):
             q = text.font()
             q.setPixelSize(fsize)
-            # q.setLetterSpacing(QtGui.QFont.SpacingType.PercentageSpacing, 95)
-            # q.setStyleStrategy(QtGui.QFont.NoSubpixelAntialias) # avoid subpixel antialiasing on the fonts if possible
-            # q.setStyleStrategy(QtGui.QFont.NoAntialias) # don't antialias the fonts
             text.setFont(q)
 
         # Refresh cached unit suffix for the new font size and force next repaint
-        self._unit_suffix = (
-            self._unit_template.format(self.unittext) if self.unittext else ""
-        )
+        self._update_compact_fonts()
         self._last_value_text = None
+
+
+class BatteryItem(Item):
+    def update_value(self, value):
+        self._base_text = "<br/>".join(
+            self.config.gui.gui_config.format_text(
+                self.name, number, self.config.G_STOPWATCH_STATUS, item_format
+            )
+            + self._unit_template.format(unit)
+            for number, (item_format, unit) in zip(value, self.itemformat)
+        )
+        self._update_text()
 
 
 class WindItem(Item):

@@ -4,7 +4,6 @@ from datetime import datetime
 
 from modules.qt._qt_qtwidgets import (
     QT_ALIGN_CENTER,
-    QT_ALIGN_V_CENTER,
     QT_EXPANDING,
     QT_FIXED,
     QT_WA_TRANSPARENT_FOR_MOUSE_EVENTS,
@@ -15,6 +14,7 @@ from modules.qt._qt_qtwidgets import (
 )
 from modules.helper.bluetooth.bluetooth_manager import check_bnep0
 from modules.pyqt.components import icons
+from modules.pyqt.components.battery_indicator import BatteryIndicator
 from modules.sensor.gps.base import NMEA_MODE_2D, NMEA_MODE_3D
 from modules.utils import round_half_away_from_zero
 
@@ -108,6 +108,7 @@ class StatusBarWidget(QtWidgets.QWidget):
         self.light_label = QtWidgets.QLabel(self)
         self.temperature_label = QtWidgets.QLabel(self)
         self.time_label = QtWidgets.QLabel(self)
+        self.battery_indicator = BatteryIndicator(self)
 
         self.gps_label.setFixedSize(self._gps_size, self._gps_size)
         self.bt_label.setFixedSize(self._bt_size, self._bt_size)
@@ -116,16 +117,17 @@ class StatusBarWidget(QtWidgets.QWidget):
         self.gps_label.setAlignment(QT_ALIGN_CENTER)
         self.bt_label.setAlignment(QT_ALIGN_CENTER)
         self.light_label.setAlignment(QT_ALIGN_CENTER)
-        self.temperature_label.setMinimumWidth(44)
         self.temperature_label.setAlignment(QT_ALIGN_CENTER)
-        self.time_label.setAlignment(QT_ALIGN_V_CENTER)
+        self.time_label.setAlignment(QT_ALIGN_CENTER)
         for label in (self.temperature_label, self.time_label):
             label.setStyleSheet("color: #f5f5f5;")
 
         layout = QtWidgets.QHBoxLayout(self)
-        layout.setContentsMargins(8, 0, 8, 0)
+        layout.setContentsMargins(2, 0, 8, 0)
         layout.setSpacing(8)
         layout.addWidget(self.rec_indicator)
+        layout.addWidget(self.time_label)
+        layout.addWidget(self.temperature_label)
         layout.addStretch(1)
         self.rain_label = QtWidgets.QLabel(self)
         self.rain_label.setFixedSize(20, 20)
@@ -136,8 +138,7 @@ class StatusBarWidget(QtWidgets.QWidget):
         layout.addWidget(self.bt_label)
         layout.addWidget(self.light_label)
         layout.addWidget(self.gps_label)
-        layout.addWidget(self.temperature_label)
-        layout.addWidget(self.time_label)
+        layout.addWidget(self.battery_indicator)
 
         self._timer = QtCore.QTimer(parent=self)
         self._timer.timeout.connect(self.update_status)
@@ -188,6 +189,14 @@ class StatusBarWidget(QtWidgets.QWidget):
             font.setPixelSize(max(10, int(self.height() * 0.7)))
             font.setBold(True)
             label.setFont(font)
+        self.time_label.setFixedWidth(
+            self.time_label.fontMetrics().horizontalAdvance("00:00")
+        )
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QtCore.QEvent.Type.FontChange:
+            QtCore.QTimer.singleShot(0, lambda: self.resizeEvent(None))
 
     def update_status(self):
         previous = self._display_state()
@@ -198,6 +207,7 @@ class StatusBarWidget(QtWidgets.QWidget):
         self._update_light()
         self._update_temperature()
         self._update_time()
+        self._update_battery()
         if self._display_state() != previous:
             self.changed.emit()
 
@@ -210,6 +220,7 @@ class StatusBarWidget(QtWidgets.QWidget):
             self.gps_label,
             self.temperature_label,
             self.time_label,
+            self.battery_indicator,
         ):
             if label.isHidden():
                 state.append(None)
@@ -327,3 +338,20 @@ class StatusBarWidget(QtWidgets.QWidget):
         if now_str != self._last_time:
             self._last_time = now_str
             self.time_label.setText(now_str)
+
+    def _update_battery(self):
+        sensor = self.config.logger.sensor
+        if sensor is None or not any(
+            sensor.sensor_i2c.available_sensors["BATTERY"].values()
+        ):
+            self.battery_indicator.hide()
+            return
+
+        values = sensor.values["I2C"]
+        percentage = values["battery_percentage"]
+        if not math.isfinite(percentage) or not 0 <= percentage <= 100:
+            self.battery_indicator.hide()
+            return
+        self.battery_indicator.set_level(
+            round_half_away_from_zero(percentage), values["battery_charge_state"]
+        )

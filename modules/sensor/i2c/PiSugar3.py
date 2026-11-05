@@ -24,6 +24,7 @@ class PiSugar3(i2c.i2c):
     BATTERY_LEVEL_ADDRESS = 0x2A
     BATTERY_VOLTAGE_ADDRESS = 0x22
     BATTERY_VOLTAGE_BYTES = 2
+    POWER_STATUS_ADDRESS = 0x02
 
     # for test
     TEST_ADDRESS = 0x00  # pisugar version
@@ -67,6 +68,17 @@ class PiSugar3(i2c.i2c):
 
         self.values["battery_level"] = int(round(np.nanmean(self.battery_level_array), 0))
         self.values["battery_voltage"] = self.battery_voltage
+        power_status = self.bus.read_byte_data(
+            self.SENSOR_ADDRESS, self.POWER_STATUS_ADDRESS
+        )
+        if not power_status & 0x80:
+            self.charge_state = "discharging"
+        elif self.battery_level >= 100:
+            self.charge_state = "full"
+        elif power_status & 0x40:
+            self.charge_state = "charging"
+        else:
+            self.charge_state = "not_charging"
 
     def get_battery_level_from_curve(self, v):
         if v >= self.battery_curve[0][0]:

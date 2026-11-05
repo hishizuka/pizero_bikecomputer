@@ -18,6 +18,10 @@ and attribution.
 The full text of the Apache License 2.0 is available at:
 third_party/apache/LICENSE.Apache2
 
+Some SVG icons in img/ are adapted from Google's Material Icons and
+Material Symbols (https://github.com/google/material-design-icons),
+licensed under the Apache License, Version 2.0.
+
 ---
 
 This project also includes code adapted from a GPL-3.0 licensed project.
