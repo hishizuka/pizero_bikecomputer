@@ -260,6 +260,10 @@ class Setting:
                 self.config.G_MANUAL_BACKLIGHT_BRIGHTNESS = int(
                     c["MANUAL_BACKLIGHT_BRIGHTNESS"]
                 )
+            for colors in (2, 8, 64):
+                key = f"DITHERING_{colors}"
+                if key in c:
+                    self.config.G_DISPLAY_DITHERING[colors] = c[key]
             if BoardType(self.config.G_BOARD_TYPE) == BoardType.AUTO:
                 if "USE_BACKLIGHT" in c:
                     self.config.G_DISPLAY_PARAM["USE_BACKLIGHT"] = c.getboolean(
@@ -472,6 +476,9 @@ class Setting:
         manual_brightness = self.config.G_MANUAL_BACKLIGHT_BRIGHTNESS
         if manual_brightness is not None:
             c["MANUAL_BACKLIGHT_BRIGHTNESS"] = str(int(manual_brightness))
+        for colors, mode in self.config.G_DISPLAY_DITHERING.items():
+            if mode is not None:
+                c[f"DITHERING_{colors}"] = mode
         if display is None:
             c["USE_BACKLIGHT"] = str(self.config.G_DISPLAY_PARAM["USE_BACKLIGHT"])
             c["AUTO_BACKLIGHT_CUTOFF"] = str(int(self.config.G_AUTO_BACKLIGHT_CUTOFF))

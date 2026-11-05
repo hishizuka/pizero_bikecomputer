@@ -61,6 +61,8 @@ class Display:
     brightness = 0
     brightness_index = 0
     brightness_table = []
+    dithering_modes = {}
+    dithering_mode = None
 
     def __init__(self, config):
         self.config = config

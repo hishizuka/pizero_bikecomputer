@@ -1,3 +1,4 @@
+import asyncio
 import os
 
 from modules.app_logger import app_logger
@@ -7,6 +8,8 @@ from .display_core import Display
 _DRM_MODULE_PATH = "/sys/module/sharp_drm"
 _DRM_COLORS_PATH = "/sys/module/sharp_drm/parameters/colors"
 _DRM_PANEL_TYPE_PATH = "/sys/module/sharp_drm/parameters/panel_type"
+_DRM_DITHER_ALGO_PATH = "/sys/module/sharp_drm/parameters/dither_algo"
+_DRM_BLUE_NOISE_PATH = "/sys/module/sharp_drm/parameters/blue_noise_2197"
 _DISPLAY_CLEAR_PATH = "/sys/module/sharp_drm/parameters/display_clear"
 _DISPLAY_INVERT_PATH = "/sys/module/sharp_drm/parameters/display_invert"
 _DRM_BACKLIGHT_PATH = "/sys/class/backlight/backlight"
@@ -155,6 +158,27 @@ def get_sharp_drm_panel_type():
 
 
 class MipDisplayDrm(Display):
+    # Labels map to persistent mode names and the driver's algorithm/noise pair.
+    DITHERING_MODES = {
+        2: {
+            "Off": ("off", 0, 0),
+            "Ordered": ("ordered", 1, 0),
+        },
+        8: {
+            "Off": ("off", 0, 0),
+            "Ordered (27)": ("ordered", 2, 0),
+            "Ordered (125)": ("ordered_high", 3, 0),
+            "Error Diffusion": ("error_diffusion", 6, 0),
+        },
+        64: {
+            "Off": ("off", 0, 0),
+            "Ordered (343)": ("ordered", 4, 0),
+            "Ordered (2197)": ("ordered_high", 5, 0),
+            "Blue Noise (2197)": ("blue_noise", 5, 1),
+            "Error Diffusion": ("error_diffusion", 6, 0),
+        },
+    }
+
     has_touch = False
     send = False
     brightness_table = [0, 1, 2, 3, 5, 7, 10, 25, 50, 100]
@@ -183,6 +207,59 @@ class MipDisplayDrm(Display):
         self.init_minimum_brightness()
         self.set_brightness(0)
         self.restore_backlight_state()
+        self._read_dithering_state()
+        if self.dithering_modes:
+            mode = config.G_DISPLAY_DITHERING[self._dithering_colors]
+            if mode is not None:
+                self._apply_dithering(self._dithering_colors, mode)
+                self._read_dithering_state()
+
+    def _read_dithering_state(self):
+        self._dithering_colors = get_sharp_drm_colors()
+        self.dithering_modes = {}
+        self.dithering_mode = None
+        modes = self.DITHERING_MODES.get(self._dithering_colors)
+        if modes is None:
+            return
+        algorithm = _read_sysfs_value(_DRM_DITHER_ALGO_PATH)
+        if algorithm is None:
+            return
+        blue_noise = "0"
+        if self._dithering_colors == 64:
+            blue_noise = _read_sysfs_value(_DRM_BLUE_NOISE_PATH)
+            if blue_noise is None:
+                return
+
+        for label, (mode, algo, noise) in modes.items():
+            self.dithering_modes[label] = mode
+            if algorithm == str(algo) and (algo != 5 or blue_noise == str(noise)):
+                self.dithering_mode = mode
+
+    async def refresh_dithering(self):
+        await asyncio.to_thread(self._read_dithering_state)
+
+    def _apply_dithering(self, colors, mode):
+        if colors not in self.DITHERING_MODES or get_sharp_drm_colors() != colors:
+            return False
+        for name, algorithm, blue_noise in self.DITHERING_MODES[colors].values():
+            if name != mode:
+                continue
+            if colors == 64 and not _write_sysfs_value(
+                _DRM_BLUE_NOISE_PATH, blue_noise
+            ):
+                return False
+            return _write_sysfs_value(_DRM_DITHER_ALGO_PATH, algorithm)
+        app_logger.warning("Invalid DRM dithering mode for %s colors: %s", colors, mode)
+        return False
+
+    async def set_dithering(self, mode):
+        colors = self._dithering_colors
+        applied = await asyncio.to_thread(self._apply_dithering, colors, mode)
+        await self.refresh_dithering()
+        if applied and self._dithering_colors == colors and self.dithering_mode == mode:
+            self.config.G_DISPLAY_DITHERING[colors] = mode
+            return True
+        return False
 
     def quit(self):
         self.clear()

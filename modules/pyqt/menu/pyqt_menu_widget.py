@@ -247,7 +247,7 @@ class TopMenuWidget(MenuWidget):
         self.change_page("Ride Info")
 
     def setting_menu(self):
-        self.change_page("System", preprocess=True)
+        self.change_page("System")
 
 
 class RideInfoMenuWidget(MenuWidget):
@@ -473,6 +473,9 @@ class ListWidget(MenuWidget):
             if widget is not None:
                 self.list.setCurrentRow(default_index)
                 widget.setFocus()
+
+    def setting_label(self, value):
+        return next((label for label, v in self.settings.items() if v == value), None)
 
     def get_default_value(self):
         return None

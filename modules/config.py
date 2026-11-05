@@ -282,6 +282,8 @@ class Config:
         "USE_DRM": False,
         "USE_DRM_FORCED": False,
     }
+    # None preserves the driver's setting until a mode is selected in the menu.
+    G_DISPLAY_DITHERING = {2: None, 8: None, 64: None}
 
     # auto backlight
     G_USE_AUTO_BACKLIGHT = True
@@ -507,6 +509,7 @@ class Config:
         self.G_BLE = copy.deepcopy(type(self).G_BLE)
         self.G_RPI_BLE_TUNNEL = type(self).G_RPI_BLE_TUNNEL.copy()
         self.G_AUTO_LIGHT = type(self).G_AUTO_LIGHT
+        self.G_DISPLAY_DITHERING = type(self).G_DISPLAY_DITHERING.copy()
 
         # Raspbian OS detection
         proc_model = "/proc/device-tree/model"

@@ -317,6 +317,7 @@ class GUI_PyQt(GUI_Qt_Base):
                 BluetoothTetheringListWidget,
                 DisplayMenuWidget,
                 BrightnessListWidget,
+                DitheringListWidget,
                 DebugMenuWidget,
                 DebugLogViewerWidget,
             )
@@ -429,6 +430,7 @@ class GUI_PyQt(GUI_Qt_Base):
                 ("Debug Log", DebugLogViewerWidget),
                 ("Debug", DebugMenuWidget),
                 ("Brightness", BrightnessListWidget),
+                (DisplayMenuWidget.DITHERING_BUTTON, DitheringListWidget),
                 ("Display", DisplayMenuWidget),
                 ("System", SystemMenuWidget),
                 ("Quick Actions", QuickActionsMenuWidget),

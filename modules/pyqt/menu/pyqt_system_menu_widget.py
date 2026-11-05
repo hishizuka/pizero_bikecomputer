@@ -39,16 +39,6 @@ class SystemMenuWidget(MenuWidget):
             ),
         )
         self.add_buttons(button_conf)
-        self.update_button_status()
-
-    def preprocess(self):
-        self.update_button_status()
-
-    def update_button_status(self):
-        display = self.config.display
-        self.buttons[self.DISPLAY_BUTTON].onoff_button(
-            display.has_backlight and bool(display.brightness_table)
-        )
 
     def network(self):
         self.change_page("Network", preprocess=True)
@@ -91,6 +81,7 @@ class QuickActionsMenuWidget(MenuWidget):
 class DisplayMenuWidget(MenuWidget):
     AUTO_BRIGHTNESS_BUTTON = "Auto Brightness"
     BRIGHTNESS_BUTTON = "Brightness"
+    DITHERING_BUTTON = "Dithering (MIP)"
 
     def setup_menu(self):
         button_conf = (
@@ -100,6 +91,7 @@ class DisplayMenuWidget(MenuWidget):
                 lambda: self.onoff_auto_brightness(True),
             ),
             (self.BRIGHTNESS_BUTTON, "submenu", self.brightness),
+            (self.DITHERING_BUTTON, "submenu", self.dithering),
         )
         self.add_buttons(button_conf)
         self.update_button_status()
@@ -123,6 +115,13 @@ class DisplayMenuWidget(MenuWidget):
     def brightness(self):
         self.change_page("Brightness", preprocess=True)
 
+    @qasync.asyncSlot()
+    async def dithering(self):
+        await self.config.display.refresh_dithering()
+        self.update_button_status()
+        if self.config.display.dithering_modes:
+            self.change_page(self.DITHERING_BUTTON, preprocess=True, reset=True)
+
     def update_button_status(self):
         display = self.config.display
         has_brightness = display.has_backlight and bool(display.brightness_table)
@@ -134,6 +133,41 @@ class DisplayMenuWidget(MenuWidget):
             display.use_auto_backlight
         )
         self.buttons[self.BRIGHTNESS_BUTTON].onoff_button(has_brightness)
+        self.buttons[self.DITHERING_BUTTON].onoff_button(bool(display.dithering_modes))
+
+
+class DitheringListWidget(ListWidget):
+    def __init__(self, parent, page_name, config):
+        self.settings = {}
+        self._changing = False
+        super().__init__(parent, page_name, config)
+
+    def preprocess_extra(self):
+        self.settings = self.config.display.dithering_modes
+        self.update_list()
+        super().preprocess_extra()
+
+    def get_default_value(self):
+        return self.setting_label(self.config.display.dithering_mode)
+
+    @qasync.asyncSlot()
+    async def button_func(self):
+        if self._changing or self.selected_item is None:
+            return
+        self._changing = True
+        self.list.setEnabled(False)
+        self.back_button.setEnabled(False)
+        try:
+            mode = self.settings[self.selected_item.title]
+            if await self.config.display.set_dithering(mode):
+                await asyncio.to_thread(self.config.setting.write_config)
+                self.back()
+            else:
+                self.config.gui.show_popup("Dithering change failed")
+        finally:
+            self.list.setEnabled(True)
+            self.back_button.setEnabled(True)
+            self._changing = False
 
 
 class BrightnessListWidget(ListWidget):

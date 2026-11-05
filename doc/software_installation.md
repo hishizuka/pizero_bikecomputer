@@ -1285,6 +1285,14 @@ If ANT+ powermeter is available, set both parameters are used in W'balance (%). 
   - Brightness
     - Select a fixed backlight level supported by the current display.
     - Selecting a fixed level disables Auto Brightness.
+  - Dithering (MIP)
+    - Shows memory-lcd-drm modes for the current color count: Off and ordered Bayer for
+      monochrome; Off, ordered 27/125 apparent colors and error diffusion for
+      8 colors; Off, ordered 343/2197 apparent colors, blue noise and error
+      diffusion for 64 colors. The active mode is selected when the list opens.
+    - Saves the selected mode separately for each color count in `setting.conf`
+      and restores it at application startup. Displays without a backlight can
+      also open this menu.
 - Language
   - Reserved menu item. Currently not configurable from this menu.
 - Update
