@@ -383,6 +383,16 @@ class ListWidget(MenuWidget):
         if self.size_hint:
             list_item.setSizeHint(self.size_hint)
         self.list.setItemWidget(list_item, item)
+        item.installEventFilter(self)
+
+    def eventFilter(self, watched, event):
+        if event.type() == QtCore.QEvent.Type.FocusIn:
+            for index in range(self.list.count()):
+                item = self.list.item(index)
+                if self.list.itemWidget(item) is watched:
+                    self.list.setCurrentItem(item)
+                    break
+        return super().eventFilter(watched, event)
 
     # override for custom list
     def connect_buttons(self):

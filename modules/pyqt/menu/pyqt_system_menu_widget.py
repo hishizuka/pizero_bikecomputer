@@ -107,6 +107,10 @@ class DisplayMenuWidget(MenuWidget):
     def preprocess(self):
         self.update_button_status()
 
+    def showEvent(self, event):
+        self.update_button_status()
+        super().showEvent(event)
+
     def onoff_auto_brightness(self, change=True):
         display = self.config.display
         if change:
@@ -134,6 +138,7 @@ class DisplayMenuWidget(MenuWidget):
 
 class BrightnessListWidget(ListWidget):
     def __init__(self, parent, page_name, config):
+        self._preview_brightness = None
         self.settings = {
             self._brightness_label(value): value
             for value in config.display.brightness_table
@@ -142,19 +147,41 @@ class BrightnessListWidget(ListWidget):
 
     @staticmethod
     def _brightness_label(value):
-        if value == 0:
-            return "Off (0%)"
-        return f"{value}%"
+        return "Off (0%)" if value == 0 else f"{value}%"
 
     def get_default_value(self):
         return self._brightness_label(self.config.display.manual_brightness)
 
-    async def button_func_extra(self):
-        if self.selected_item is None:
+    def preprocess_extra(self):
+        self._preview_brightness = None
+        super().preprocess_extra()
+
+    def eventFilter(self, watched, event):
+        if event.type() == QtCore.QEvent.Type.FocusIn:
+            self._apply_brightness(watched)
+        return super().eventFilter(watched, event)
+
+    def changed_item(self):
+        super().changed_item()
+        self._apply_brightness(self.selected_item)
+
+    def _apply_brightness(self, item):
+        if item is None:
             return
-        brightness = self.settings[self.selected_item.title]
+        brightness = self.settings[item.title]
+        if brightness == self._preview_brightness:
+            return
         if self.config.display.set_manual_brightness(brightness):
+            self._preview_brightness = brightness
+
+    async def button_func_extra(self):
+        self._apply_brightness(self.selected_item)
+
+    def on_back_menu(self):
+        if self._preview_brightness is not None:
+            # Keep focus navigation responsive and persist the final level once.
             self.config.setting.write_config()
+            self._preview_brightness = None
 
 
 class NetworkMenuWidget(MenuWidget):
