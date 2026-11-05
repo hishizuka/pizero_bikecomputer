@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 
 from modules.app_logger import app_logger
 from modules.qt._qt_qtwidgets import QtCore, QtWidgets, QtGui, qasync
@@ -163,20 +164,13 @@ class FullWidthSeparatorListItemWidget(ListItemWidget):
         y = self.height() - 0.5
         painter.drawLine(QtCore.QPointF(0.5, y), QtCore.QPointF(self.width() - 0.5, y))
 
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        title_size = max(16, min(22, int(self.height() * 0.4)))
-        self.resize_label(self.title_label, title_size)
-        if self.has_detail_row:
-            detail_size = max(14, min(18, int(self.height() * 0.34)))
-            self.resize_label(self.detail_label, detail_size)
-
 
 class SectionListItemWidget(QtWidgets.QWidget):
     BACKGROUND_COLOR = QtGui.QColor(SECONDARY_BACKGROUND_COLOR)
 
     def __init__(self, parent, title):
         super().__init__(parent=parent)
+        self.setEnabled(False)
         layout = QtWidgets.QHBoxLayout(self)
         layout.setContentsMargins(12, 0, 0, 0)
         self.label = QtWidgets.QLabel(title)
@@ -278,10 +272,7 @@ class SensorActionListItemWidget(FullWidthSeparatorListItemWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        self.resize_label(
-            self.value_label,
-            max(14, min(18, int(min(self.width(), self.height()) * 0.3))),
-        )
+        self.value_label.setFont(self.title_label.font())
 
 
 class SensorPairingListItemWidget(SensorActionListItemWidget):
@@ -576,13 +567,14 @@ class SensorConnectionMenuWidget(ListWidget):
     @qasync.asyncSlot()
     async def button_func(self):
         item = self.selected_item
-        if item is None or not item.isEnabled():
+        if not isinstance(item, SensorActionListItemWidget):
+            self.selected_item = None
+            self.list.clearSelection()
             return
-        action = getattr(item, "action", None)
-        if action is None:
+        if not item.isEnabled():
             return
-        result = action()
-        if hasattr(result, "__await__"):
+        result = item.action()
+        if inspect.isawaitable(result):
             await result
 
     def open_sensor_pairing(self):
@@ -641,13 +633,13 @@ class SensorConnectionMenuWidget(ListWidget):
         if protocol == self.config.SENSOR_PROTOCOL_ANT:
             sensor_id = f"{sensor['ID']:05d}" if paired else ""
         elif protocol == self.config.SENSOR_PROTOCOL_BLE:
-            sensor_id = str(sensor["ID"] or "")
+            sensor_id = sensor["ID"] if paired else ""
         else:
             sensor_id = ""
         self.sensor_item.set_pairing(
             protocol=protocol if paired else None,
             sensor_id=sensor_id,
-            sensor_name=str(sensor["NAME"] or ""),
+            sensor_name=sensor["NAME"],
         )
         ant_pairing_available = (
             self.sensor_ant.is_transport_available()

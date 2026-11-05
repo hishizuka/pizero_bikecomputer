@@ -9,8 +9,9 @@ from .pyqt_item import AscDescItem, BatteryItem, Item, WindItem
 class ScreenWidget(QtWidgets.QWidget):
     layout_class = QtWidgets.QGridLayout
 
-    def __init__(self, parent, config, item_layout=None):
+    def __init__(self, parent, config, item_layout=None, *, unit_wrap=False):
         self.config = config
+        self.unit_wrap = unit_wrap
         self.items = []
         self.item_layout = {}
         self.max_width = self.max_height = 0
@@ -47,6 +48,17 @@ class ScreenWidget(QtWidgets.QWidget):
         self.set_font_size(min(self.size().height(), self.size().width()))
         for i in self.items:
             i.update_font_size(self.font_size)
+        self.layout.activate()
+        self.update_unit_positions()
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QtCore.QEvent.Type.FontChange:
+            QtCore.QTimer.singleShot(0, self.refresh_fonts)
+
+    def refresh_fonts(self):
+        self.resizeEvent(None)
+        self.update_display()
 
     def setup_ui(self):
         self.setSizePolicy(QT_EXPANDING, QT_EXPANDING)
@@ -104,64 +116,53 @@ class ScreenWidget(QtWidgets.QWidget):
             self.layout.setRowStretch(i, 1)
 
     def add_items(self):
-        if self.item_layout:
-            # set borders
-            for key, pos in self.item_layout.items():
-                if pos[0] > self.max_height:
-                    self.max_height = pos[0]
-                if pos[1] > self.max_width:
-                    self.max_width = pos[1]
-                if len(pos) == 4:
-                    if pos[2] - 1 > self.max_height:
-                        self.max_height = pos[2]
-                    if pos[3] - 1 > self.max_width:
-                        self.max_width = pos[3]
+        # set borders
+        for pos in self.item_layout.values():
+            self.max_height = max(self.max_height, pos[0])
+            self.max_width = max(self.max_width, pos[1])
+            if len(pos) == 4:
+                self.max_height = max(self.max_height, pos[2] - 1)
+                self.max_width = max(self.max_width, pos[3] - 1)
 
-            for key, pos in self.item_layout.items():
-                bottom_flag = False
-                right_flag = False
-                if pos[0] == self.max_height:
-                    bottom_flag = True
-                if pos[1] == self.max_width:
-                    right_flag = True
-                if len(pos) == 4:
-                    if pos[2] in [-1, self.max_height + 1]:
-                        bottom_flag = True
-                    if pos[3] in [-1, self.max_width + 1]:
-                        right_flag = True
+        for key, pos in self.item_layout.items():
+            bottom_flag = pos[0] == self.max_height
+            right_flag = pos[1] == self.max_width
+            if len(pos) == 4:
+                bottom_flag |= pos[2] in (-1, self.max_height + 1)
+                right_flag |= pos[3] in (-1, self.max_width + 1)
 
-                if key.endswith("GraphWidget"):
-                    continue
+            if key.endswith("GraphWidget"):
+                continue
 
-                getter = self.config.gui.gui_config.G_ITEM_DEF[key][1]
-                item_class = {
-                    "Asc. / Dsc.": AscDescItem,
-                    "Battery": BatteryItem,
-                    "Wind": WindItem,
-                }.get(key, Item)
-                item = item_class(
-                    config=self.config,
-                    name=key,
-                    font_size=self.font_size,
-                    bottom_flag=bottom_flag,
-                    right_flag=right_flag,
+            getter = self.config.gui.gui_config.G_ITEM_DEF[key][1]
+            item_class = {
+                "Asc. / Dsc.": AscDescItem,
+                "Battery": BatteryItem,
+                "Wind": WindItem,
+            }.get(key, Item)
+            item = item_class(
+                config=self.config,
+                name=key,
+                font_size=self.font_size,
+                bottom_flag=bottom_flag,
+                right_flag=right_flag,
+            )
+            item.value_getter = partial(getter, self)
+
+            self.items.append(item)
+
+            if len(pos) == 4:
+                bottom = self.max_height + 1 if pos[2] == -1 else pos[2]
+                right = self.max_width + 1 if pos[3] == -1 else pos[3]
+                self.layout.addLayout(
+                    item,
+                    pos[0],
+                    pos[1],
+                    bottom - pos[0],
+                    right - pos[1],
                 )
-                item.value_getter = partial(getter, self)
-
-                self.items.append(item)
-
-                if len(pos) == 4:
-                    bottom = self.max_height + 1 if pos[2] == -1 else pos[2]
-                    right = self.max_width + 1 if pos[3] == -1 else pos[3]
-                    self.layout.addLayout(
-                        item,
-                        pos[0],
-                        pos[1],
-                        bottom - pos[0],
-                        right - pos[1],
-                    )
-                else:
-                    self.layout.addLayout(item, pos[0], pos[1])
+            else:
+                self.layout.addLayout(item, pos[0], pos[1])
 
     # This handles by default items displays, but each screen can implement its own logic
     def update_display(self):
@@ -178,3 +179,15 @@ class ScreenWidget(QtWidgets.QWidget):
                 continue
 
             item.update_value(value)
+
+    def update_unit_positions(self):
+        if not self.unit_wrap:
+            return
+        rows = {}
+        for item in self.items:
+            row, _, _, _ = self.layout.getItemPosition(self.layout.indexOf(item))
+            rows.setdefault(row, []).append(item)
+        for items in rows.values():
+            below = any(item.needs_unit_wrap() for item in items)
+            for item in items:
+                item.set_unit_below(below)

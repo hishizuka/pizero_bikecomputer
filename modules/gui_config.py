@@ -29,6 +29,9 @@ class GUI_Config:
         "Heading": ("heading", ""),
         "Percent": (".0f", "%"),
         "Int": (".0f", ""),
+        "Angle": (".1f", "°"),
+        "Acceleration": (".2f", "g"),
+        "AngularVelocity": (".3f", "rad/s"),
     }
 
     # Per-item font scale for value text in PyQt item widgets.
@@ -40,6 +43,10 @@ class GUI_Config:
         "Wind Work (C/T)": 0.8,
         "Wind Asc. (C/T)": 0.8,
         "CPU_MEM": 0.8,
+        "GYRO_X": 0.7,
+        "GYRO_Y": 0.7,
+        "GYRO_Z": 0.7,
+        "Heading (S)": 0.5,
     }
 
     G_ITEM_DEF = {
@@ -422,7 +429,7 @@ class GUI_Config:
                 self.sensor.values["I2C"]["total_descent"],
             ),
         ),
-        "Light": (G_UNIT["Int"], lambda self: self.sensor.values["I2C"]["light"]),
+        "Light": ((".0f", "lx"), lambda self: self.sensor.values["I2C"]["light"]),
         "Infrared": (G_UNIT["Int"], lambda self: self.sensor.values["I2C"]["infrared"]),
         "UVI": (G_UNIT["Int"], lambda self: self.sensor.values["I2C"]["uvi"]),
         "VOC_Index": (
@@ -439,15 +446,52 @@ class GUI_Config:
         ),
         "Motion": (("1.1f", ""), lambda self: self.sensor.values["I2C"]["motion"]),
         "M_Stat": (("1.1f", ""), lambda self: self.sensor.values["I2C"]["m_stat"]),
-        "ACC_X": (("1.1f", ""), lambda self: self.sensor.values["I2C"]["acc"][0]),
-        "ACC_Y": (("1.1f", ""), lambda self: self.sensor.values["I2C"]["acc"][1]),
-        "ACC_Z": (("1.1f", ""), lambda self: self.sensor.values["I2C"]["acc"][2]),
+        "ACC_X": (
+            G_UNIT["Acceleration"],
+            lambda self: self.sensor.values["I2C"]["acc"][0],
+        ),
+        "ACC_Y": (
+            G_UNIT["Acceleration"],
+            lambda self: self.sensor.values["I2C"]["acc"][1],
+        ),
+        "ACC_Z": (
+            G_UNIT["Acceleration"],
+            lambda self: self.sensor.values["I2C"]["acc"][2],
+        ),
+        "ACC_RAW_X": (
+            G_UNIT["Acceleration"],
+            lambda self: self.sensor.values["I2C"]["acc_raw"][0],
+        ),
+        "ACC_RAW_Y": (
+            G_UNIT["Acceleration"],
+            lambda self: self.sensor.values["I2C"]["acc_raw"][1],
+        ),
+        "ACC_RAW_Z": (
+            G_UNIT["Acceleration"],
+            lambda self: self.sensor.values["I2C"]["acc_raw"][2],
+        ),
+        "GYRO_X": (
+            G_UNIT["AngularVelocity"],
+            lambda self: self.sensor.values["I2C"]["gyro_raw"][0],
+        ),
+        "GYRO_Y": (
+            G_UNIT["AngularVelocity"],
+            lambda self: self.sensor.values["I2C"]["gyro_raw"][1],
+        ),
+        "GYRO_Z": (
+            G_UNIT["AngularVelocity"],
+            lambda self: self.sensor.values["I2C"]["gyro_raw"][2],
+        ),
         "MAG_X": (("1.1f", ""), lambda self: self.sensor.values["I2C"]["mag"][0]),
         "MAG_Y": (("1.1f", ""), lambda self: self.sensor.values["I2C"]["mag"][1]),
         "MAG_Z": (("1.1f", ""), lambda self: self.sensor.values["I2C"]["mag"][2]),
         "Heading": (
             G_UNIT["Heading"],
             lambda self: self.sensor.values["integrated"]["heading_deg"],
+        ),
+        "Heading (S)": (
+            G_UNIT["String"],
+            lambda self: self.sensor.values["integrated"]["heading_source"],
         ),
         "Heading_Raw(I2C)": (
             G_UNIT["Int"],
@@ -457,7 +501,16 @@ class GUI_Config:
             G_UNIT["Int"],
             lambda self: self.sensor.values["I2C"]["heading_magnetic_deg"],
         ),
-        "Pitch": (G_UNIT["Int"], lambda self: self.sensor.values["I2C"]["grade_pitch"]),
+        "Heading (C)": (
+            G_UNIT["Angle"],
+            lambda self: self.sensor.values["integrated"][
+                "heading_magnetic_corrected_deg"
+            ],
+        ),
+        "Pitch": (
+            G_UNIT["Percent"],
+            lambda self: self.sensor.values["I2C"]["grade_pitch"],
+        ),
         "Pitch_Fixed": (
             G_UNIT["Int"],
             lambda self: int(180 / 3.1415 * self.sensor.values["I2C"]["fixed_pitch"]),
@@ -467,12 +520,12 @@ class GUI_Config:
             lambda self: int(180 / 3.1415 * self.sensor.values["I2C"]["fixed_roll"]),
         ),
         "Pitch_Raw": (
-            G_UNIT["Int"],
-            lambda self: int(180 / 3.1415 * self.sensor.values["I2C"]["pitch"]),
+            G_UNIT["Angle"],
+            lambda self: np.degrees(self.sensor.values["I2C"]["pitch"]),
         ),
         "Roll_Raw": (
-            G_UNIT["Int"],
-            lambda self: int(180 / 3.1415 * self.sensor.values["I2C"]["roll"]),
+            G_UNIT["Angle"],
+            lambda self: np.degrees(self.sensor.values["I2C"]["roll"]),
         ),
         "Grade(pitch)": (
             G_UNIT["Percent"],

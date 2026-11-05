@@ -18,7 +18,19 @@ def build_item_layout(elements, cols, widget_name):
     return item_layout, plot_y
 
 
-class PerformanceGraphWidget(ScreenWidget):
+class ValueGraphWidget(ScreenWidget):
+    def set_font_size(self, length):
+        self.font_size = int(length / 7)
+        self.set_minimum_size()
+
+    def set_minimum_size(self):
+        # Keep numeric rows at their size hints and let the plot use the remaining height.
+        w = int(self.width() / (self.max_width + 1))
+        for i in range(self.max_width + 1):
+            self.layout.setColumnMinimumWidth(i, w)
+
+
+class PerformanceGraphWidget(ValueGraphWidget):
     elements = ("Power", "HR", "W'bal(Norm)", "LapTime")
     item_layout = {}
 
@@ -130,10 +142,6 @@ class PerformanceGraphWidget(ScreenWidget):
         self.p2.setGeometry(scene_rect)
         self.p2.linkedViewChanged(self.p1.vb, self.p2.XAxis)
 
-    def set_font_size(self, length):
-        self.font_size = int(length / 7)
-        self.set_minimum_size()
-
     @qasync.asyncSlot()
     async def update_display(self):
         super().update_display()
@@ -190,7 +198,7 @@ class PerformanceGraphWidget(ScreenWidget):
             self.secondary_curve.setData([])
 
 
-class AccelerationGraphWidget(ScreenWidget):
+class AccelerationGraphWidget(ValueGraphWidget):
     elements = ("Motion", "M_Stat")
     item_layout = {}
 
@@ -255,10 +263,6 @@ class AccelerationGraphWidget(ScreenWidget):
     def start(self):
         self.timer.start(self.config.G_REALTIME_GRAPH_INTERVAL)
 
-    def set_font_size(self, length):
-        self.font_size = int(length / 7)
-        self.set_minimum_size()
-
     @qasync.asyncSlot()
     async def update_display(self):
         super().update_display()
@@ -299,7 +303,7 @@ class AccelerationGraphWidget(ScreenWidget):
             self.acc_curve_z.setData([])
 
 
-class AltitudeGraphWidget(ScreenWidget):
+class AltitudeGraphWidget(ValueGraphWidget):
     elements = ("Grade", "Grade(spd)", "Altitude", "Alt.(GPS)")
     item_layout = {}
 
@@ -351,10 +355,6 @@ class AltitudeGraphWidget(ScreenWidget):
         scene_rect = self.p1.vb.sceneBoundingRect()
         self.p2.setGeometry(scene_rect)
         self.p2.linkedViewChanged(self.p1.vb, self.p2.XAxis)
-
-    def set_font_size(self, length):
-        self.font_size = int(length / 7)
-        self.set_minimum_size()
 
     @qasync.asyncSlot()
     async def update_display(self):
