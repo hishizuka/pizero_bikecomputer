@@ -144,6 +144,12 @@ class ANT_Device:
         ):
             self.config.loop.call_soon_threadsafe(self._start_battery_request)
 
+    def invalidate_values(self):
+        try:
+            self.reset_value()
+        finally:
+            self.set_null_value()
+
     def _start_battery_request(self):
         if self._closing or self.channel is None or not self.is_transport_available():
             return

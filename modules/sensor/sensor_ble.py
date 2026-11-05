@@ -115,6 +115,11 @@ class SensorBLE(Sensor):
         self.connect_cycling_sensors()
         self.connect_zwift_click_v2()
 
+    def pause_recording(self):
+        for processor in (self._csc_speed_processor, self._cps_power_processor):
+            if processor is not None:
+                processor.pause_recording()
+
     def quit(self):
         self.disconnect_cycling_sensors()
         self.disconnect_zwift_click_v2()

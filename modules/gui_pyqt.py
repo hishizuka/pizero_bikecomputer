@@ -649,9 +649,11 @@ class GUI_PyQt(GUI_Qt_Base):
         self.signal_reset_count.emit()
 
     def reset_count_internal(self):
+        had_record = self.logger.values["count"] > 0
         res = super().reset_count_internal()
         if (
             res
+            and had_record
             and self.config.G_AUTO_UPLOAD
             and any(self.config.G_AUTO_UPLOAD_SERVICE.values())
         ):

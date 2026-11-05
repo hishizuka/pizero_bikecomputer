@@ -26,6 +26,7 @@ from typing import Callable, Dict, Iterable, List, Optional, Protocol
 
 if __package__:
     from modules.app_logger import app_logger
+    from modules.button_config import ButtonPress
 
     from .health import BleSessionHealth
     from .identity import format_ble_identity
@@ -1048,7 +1049,7 @@ class ZwiftClickV2Session:
                 self.config.button_config.press_button,
                 self.CONTROL_BUTTON_PROFILE,
                 button_key,
-                1 if kind == "long" else 0,
+                ButtonPress.LONG if kind == "long" else ButtonPress.SHORT,
             )
 
     def _on_connected(self, _side: str, address: str, name: Optional[str]) -> None:

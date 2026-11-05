@@ -3,6 +3,7 @@ import asyncio
 from datetime import timedelta
 
 from modules.app_logger import app_logger
+from modules.button_config import ButtonPress
 from .sensor import Sensor
 
 # GPIO Button (gpiod v2)
@@ -304,7 +305,7 @@ class SensorGPIO(Sensor):
                 # Button released
                 if not state["long_press_fired"]:
                     # Short press
-                    self._press_button(pin, 0)
+                    self._press_button(pin, ButtonPress.SHORT)
                 state["pressed"] = False
                 state["press_time"] = None
                 state["long_press_fired"] = False
@@ -317,7 +318,7 @@ class SensorGPIO(Sensor):
                 if elapsed >= long_press_threshold:
                     # Long press detected
                     state["long_press_fired"] = True
-                    self._press_button(pin, 1)
+                    self._press_button(pin, ButtonPress.LONG)
                     state["last_action_time"] = time.time()
 
             await asyncio.sleep(poll_interval)
@@ -337,7 +338,7 @@ class SensorGPIO(Sensor):
                 if elapsed >= long_press_threshold:
                     # Long press detected
                     state["long_press_fired"] = True
-                    self._press_button(pin, 1)
+                    self._press_button(pin, ButtonPress.LONG)
                     state["last_action_time"] = current_time
 
     async def quit(self):

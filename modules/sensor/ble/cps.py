@@ -74,6 +74,9 @@ class CpsPowerProcessor(BleMeasurementProcessor):
         self.accumulated_power = 0.0
         self._last_work_received_at = None
 
+    def pause_recording(self) -> None:
+        self._last_work_received_at = None
+
     def handle_measurement(
         self,
         measurement: CpsMeasurementLike,
@@ -85,15 +88,9 @@ class CpsPowerProcessor(BleMeasurementProcessor):
         self._record_notification(timestamp)
 
         power = float(signed_instantaneous_power(measurement.instantaneous_power))
-        if power > MAX_POWER_WATTS:
-            self._mark_work_boundary(timestamp, accumulate_work)
-            return
-        if self.power.is_available:
-            if power - self.power.value >= self.spike_threshold:
-                self._mark_work_boundary(timestamp, accumulate_work)
-                return
-        elif power >= self.spike_threshold:
-            self._mark_work_boundary(timestamp, accumulate_work)
+        previous_power = self.power.value if self.power.is_available else 0.0
+        if power > MAX_POWER_WATTS or power - previous_power >= self.spike_threshold:
+            self._last_work_received_at = timestamp if accumulate_work else None
             return
 
         self.status = SensorConnectionStatus.CONNECTED
@@ -114,9 +111,6 @@ class CpsPowerProcessor(BleMeasurementProcessor):
             return
         self.power = MetricReading()
         self._last_work_received_at = None
-
-    def _mark_work_boundary(self, timestamp: float, accumulate_work: bool) -> None:
-        self._last_work_received_at = timestamp if accumulate_work else None
 
 
 async def _run_cli(args: argparse.Namespace) -> None:

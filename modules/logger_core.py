@@ -565,6 +565,15 @@ class LoggerCore:
         asyncio.create_task(self.record_log())
         self.count_up_lock = False
 
+    def get_recording_control_action(self, press):
+        """Select one action using the existing manual state and ride start time."""
+        if self.config.G_MANUAL_STATUS == "START":
+            return {"short": "count_laps", "long": "start_and_stop_manual"}[press]
+        return {
+            "short": "start_and_stop_manual",
+            "long": "reset_count" if self.values["start_time"] is not None else None,
+        }[press]
+
     def start_and_stop_manual(self):
         popup_extra = ""
         pre_status = self.config.G_MANUAL_STATUS
@@ -587,11 +596,13 @@ class LoggerCore:
                         self.sensor.values["integrated"]["dem_altitude"]
                     )
                 )
-                popup_extra = "<br /><font size=small>altitude corrected: {}m</font>".format(
-                    int(self.sensor.values["integrated"]["dem_altitude"])
+                popup_extra = (
+                    "<br /><font size=small>altitude corrected: {}m</font>".format(
+                        int(self.sensor.values["integrated"]["dem_altitude"])
+                    )
                 )
 
-        elif self.config.G_MANUAL_STATUS == "START":
+        else:
             display_flash_short = False
             app_logger.info(f"->M STOP")
             self.start_and_stop("START", play_buzzer=False)
@@ -620,8 +631,7 @@ class LoggerCore:
             )
 
         # send online
-        api_helper = getattr(self.config, "api", None)
-        if api_helper is not None and api_helper.livetrack_enabled():
+        if self.config.api is not None and self.config.api.livetrack_enabled():
             self.config.api.send_livetrack_data(quick_send=True)
 
         if self.config.G_AUTO_WIFI_OFF and self.config.G_MANUAL_STATUS == "START":
@@ -635,18 +645,18 @@ class LoggerCore:
         if self.config.G_STOPWATCH_STATUS != "START":
             self.config.G_STOPWATCH_STATUS = "START"
             app_logger.info(f"->START")
-            if play_buzzer:
-                buzzer = getattr(self.config, "buzzer", None)
-                if buzzer is not None:
-                    buzzer.play("sgx-ca600-start")
-        elif self.config.G_STOPWATCH_STATUS == "START":
+        else:
             self.config.G_STOPWATCH_STATUS = "STOP"
+            if self.sensor is not None:
+                self.sensor.pause_recording()
             self._flush_sql_queue_sync()
             app_logger.info(f"->STOP")
-            if play_buzzer:
-                buzzer = getattr(self.config, "buzzer", None)
-                if buzzer is not None:
-                    buzzer.play("sgx-ca600-stop")
+        if play_buzzer and self.config.buzzer is not None:
+            self.config.buzzer.play(
+                "sgx-ca600-start"
+                if self.config.G_STOPWATCH_STATUS == "START"
+                else "sgx-ca600-stop"
+            )
 
     def sync_stopwatch_status_to_manual(self):
         stopwatch_status = self.config.G_STOPWATCH_STATUS
@@ -680,9 +690,8 @@ class LoggerCore:
         asyncio.create_task(self._record_log_and_flush())
         app_logger.info(f"->LAP:{self.values['lap']}")
 
-        buzzer = getattr(self.config, "buzzer", None)
-        if buzzer is not None:
-            buzzer.play("sgx-ca600-lap")
+        if self.config.buzzer is not None:
+            self.config.buzzer.play("sgx-ca600-lap")
 
         # show message
         newline = "<br />" if not self.config.gui.horizontal else ""
@@ -691,10 +700,14 @@ class LoggerCore:
         hour_sec = divmod(lap_time, 3600)
         min_sec = divmod(hour_sec[1], 60)
         lap_time_str = f"{hour_sec[0]}:{min_sec[0]:02}"
-        lap_message = f"LAP {self.values['lap']} {newline}({dist_str} km, {lap_time_str})"
+        lap_message = (
+            f"LAP {self.values['lap']} {newline}({dist_str} km, {lap_time_str})"
+        )
 
         u = self.config.gui.gui_config.G_UNIT
-        value_message = f"{(pre_lap_avg['speed'] * 3.6):{u['Speed'][0]}} {u['Speed'][1]}"
+        value_message = (
+            f"{(pre_lap_avg['speed'] * 3.6):{u['Speed'][0]}} {u['Speed'][1]}"
+        )
         sensor_items = []
         if self.config.is_sensor_configured("HR"):
             sensor_items.append(
@@ -746,81 +759,69 @@ class LoggerCore:
         if self.config.G_MANUAL_STATUS == "START":
             return False
 
-        api_helper = getattr(self.config, "api", None)
-        if api_helper is not None:
-            stop_garmin_livetrack = getattr(
-                api_helper,
-                "send_garmin_livetrack_stop",
-                None,
-            )
-            if callable(stop_garmin_livetrack):
-                stop_garmin_livetrack()
+        if self.config.api is not None:
+            self.config.api.send_garmin_livetrack_stop()
 
-        if self.values["count"] == 0:
-            return False
+        if self.values["count"] > 0:
+            # reset
+            if self.config.buzzer is not None:
+                self.config.buzzer.play("sgx-ca600-save")
+            self.config.display.screen_flash_long()
 
-        # reset
-        buzzer = getattr(self.config, "buzzer", None)
-        if buzzer is not None:
-            buzzer.play("sgx-ca600-save")
-        self.config.display.screen_flash_long()
+            self._flush_sql_queue_sync()
 
-        self._flush_sql_queue_sync()
+            # get start date and end_date of the current log
+            start_date, end_date = self.get_start_end_dates()
 
-        # close db connect
-        self.cur.close()
-        self.con.close()
+            if start_date is None and end_date is None:
+                app_logger.info("No log found, nothing to write")
+                return False
 
-        # get start date and end_date of the current log
-        start_date, end_date = self.get_start_end_dates()
+            start_date_local = start_date.astimezone().strftime("%Y-%m-%d_%H-%M-%S")
 
-        if start_date is None and end_date is None:
-            app_logger.info("No log found, nothing to write")
-            return False
+            filename = os.path.join(self.config.G_LOG_DIR, start_date_local)
+            fit_text = f"Write fit({self.logger_fit.mode}):"
+            csv_text = f"Write csv{' ' * (len(self.logger_fit.mode) + 2)}:"
 
-        start_date_local = start_date.astimezone().strftime("%Y-%m-%d_%H-%M-%S")
+            timers = [
+                Timer(auto_start=False, auto_log=True, text=f"{csv_text} {{:0.4f}} sec"),
+                Timer(auto_start=False, auto_log=True, text=f"{fit_text} {{:0.4f}} sec"),
+                Timer(auto_start=False, auto_log=True, text="DELETE : {:0.4f} sec"),
+            ]
 
-        filename = os.path.join(self.config.G_LOG_DIR, start_date_local)
-        fit_text = f"Write fit({self.logger_fit.mode}):"
-        csv_text = f"Write csv{' ' * (len(self.logger_fit.mode) + 2)}:"
+            if self.config.G_LOG_WRITE_CSV:
+                with timers[0]:
+                    csv_filename = f"{filename}.csv"
+                    if not self.logger_csv.write_log(csv_filename):
+                        app_logger.warning(f"Failed to write csv: {csv_filename}")
+                        return False
 
-        timers = [
-            Timer(auto_start=False, auto_log=True, text=f"{csv_text} {{:0.4f}} sec"),
-            Timer(auto_start=False, auto_log=True, text=f"{fit_text} {{:0.4f}} sec"),
-            Timer(auto_start=False, auto_log=True, text="DELETE : {:0.4f} sec"),
-        ]
+            if self.config.G_LOG_WRITE_FIT:
+                with timers[1]:
+                    fit_filename = f"{filename}.fit"
+                    if not self.logger_fit.write_log(fit_filename, start_date, end_date):
+                        app_logger.warning(f"Failed to write fit: {fit_filename}")
+                        return False
 
-        if self.config.G_LOG_WRITE_CSV:
-            with timers[0]:
-                csv_filename = f"{filename}.csv"
-                if not self.logger_csv.write_log(csv_filename):
-                    app_logger.warning(f"Failed to write csv: {csv_filename}")
-                    return False
+            # Close only after exports succeed so a failed save remains usable.
+            self.cur.close()
+            self.con.close()
 
-        if self.config.G_LOG_WRITE_FIT:
-            with timers[1]:
-                fit_filename = f"{filename}.fit"
-                if not self.logger_fit.write_log(
-                    fit_filename, start_date, end_date
-                ):
-                    app_logger.warning(f"Failed to write fit: {fit_filename}")
-                    return False
+            # backup and reset database
+            with timers[2]:
+                shutil.move(
+                    self.config.G_LOG_DB,
+                    f"{self.config.G_LOG_DB}-{start_date_local}",
+                )
 
-        # backup and reset database
-        with timers[2]:
-            shutil.move(
-                self.config.G_LOG_DB,
-                f"{self.config.G_LOG_DB}-{start_date_local}",
-            )
+                # restart db connect
+                # usage of sqlite3 is "insert" only, so check_same_thread=False
+                self.con = sqlite3.connect(self.config.G_LOG_DB, check_same_thread=False)
+                self.cur = self.con.cursor()
+                self._reset_sql_batch_state()
+                self.init_db()
 
-            self.reset()
-
-            # restart db connect
-            # usage of sqlite3 is "insert" only, so check_same_thread=False
-            self.con = sqlite3.connect(self.config.G_LOG_DB, check_same_thread=False)
-            self.cur = self.con.cursor()
-            self._reset_sql_batch_state()
-            self.init_db()
+        self.reset()
 
         # reset temporary values
         self.config.state.reset()

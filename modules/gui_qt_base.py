@@ -82,6 +82,11 @@ class GUI_Qt_Base(QtCore.QObject):
     def current_map_page(self):
         return None
 
+    def recording_control(self, press):
+        action = self.logger.get_recording_control_action(press)
+        if action is not None:
+            getattr(self, action)()
+
     def reset_count_internal(self):
         result = self.logger.reset_count()
         if result:

@@ -54,6 +54,7 @@ class CscSpeedProcessor(BleMeasurementProcessor):
         super().__init__(health)
         self.speed = MetricReading()
         self.distance = 0.0
+        self._recording_boundary = False
         self._previous_wheel: tuple[int, int] | None = None
         self._last_wheel_change_received_at: float | None = None
         self._last_event_interval: float | None = None
@@ -76,6 +77,10 @@ class CscSpeedProcessor(BleMeasurementProcessor):
     def reset_distance(self) -> None:
         self.distance = 0.0
 
+    def pause_recording(self) -> None:
+        # Keep live speed; the next counter cannot span a recording pause.
+        self._recording_boundary = True
+
     def handle_measurement(
         self,
         measurement: CscMeasurementLike,
@@ -90,6 +95,9 @@ class CscSpeedProcessor(BleMeasurementProcessor):
         wheel_event_time = measurement.last_wheel_event_time
         if wheel_revs is None or wheel_event_time is None:
             return
+
+        accumulate_distance = accumulate_distance and not self._recording_boundary
+        self._recording_boundary = False
 
         self.status = SensorConnectionStatus.CONNECTED
         previous = self._previous_wheel

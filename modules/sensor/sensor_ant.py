@@ -218,6 +218,9 @@ class SensorANT(Sensor):
         for dv in self.device.values():
             dv.reset_value()
 
+    def pause_recording(self):
+        pass
+
     def _create_node(self):
         try:
             self.node = Node()
@@ -347,11 +350,7 @@ class SensorANT(Sensor):
 
         for dv in devices:
             try:
-                dv.reset_value()
-            except Exception:
-                pass
-            try:
-                dv.set_null_value()
+                dv.invalidate_values()
             except Exception:
                 pass
 

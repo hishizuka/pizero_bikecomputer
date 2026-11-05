@@ -1,7 +1,13 @@
 import copy
+from enum import IntEnum
 
 from modules.app_logger import app_logger
 from modules.board_config import ButtonTemplate
+
+
+class ButtonPress(IntEnum):
+    SHORT = 0
+    LONG = 1
 
 
 def _button_key_map(*button_names):
@@ -150,7 +156,7 @@ class Button_Config:
         ButtonTemplate.THREE_BUTTON: {
             "MAIN": {
                 "A": ("scroll_prev", "get_screenshot"),
-                "B": ("start_and_stop_manual", "count_laps"),
+                "B": ("recording_control:short", "recording_control:long"),
                 "C": ("scroll_next", "enter_menu"),
             },
             "MENU": {
@@ -159,9 +165,9 @@ class Button_Config:
                 "C": ("press_tab", ""),
             },
             "MAP": {
-                "A": ("map_zoom_minus", "map_overlay_prev_time"),
+                "A": ("scroll_prev", "map_overlay_prev_time"),
                 "B": ("change_map_overlays", "change_mode"),
-                "C": ("map_zoom_plus", "map_overlay_next_time"),
+                "C": ("scroll_next", "map_overlay_next_time"),
             },
             "MAP_1": {
                 "A": ("map_move_x_minus", "map_zoom_minus"),
@@ -169,9 +175,9 @@ class Button_Config:
                 "C": ("map_move_x_plus", "map_zoom_plus"),
             },
             "COURSE_PROFILE": {
-                "A": ("map_zoom_minus", ""),
+                "A": ("scroll_prev", ""),
                 "B": ("change_mode", ""),
-                "C": ("map_zoom_plus", ""),
+                "C": ("scroll_next", ""),
             },
             "COURSE_PROFILE_1": {
                 "A": ("map_move_x_minus", ""),
@@ -181,7 +187,7 @@ class Button_Config:
         },
         ButtonTemplate.TWO_BUTTON: {
             "MAIN": {
-                "A": ("start_and_stop_manual", "reset_count"),
+                "A": ("recording_control:short", "recording_control:long"),
                 "B": ("scroll_next", "enter_menu"),
             },
             "MENU": {

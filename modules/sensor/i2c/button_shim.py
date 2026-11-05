@@ -1,5 +1,7 @@
 import buttonshim
 
+from modules.button_config import ButtonPress
+
 
 # buttonshim.FPS = 20
 
@@ -51,34 +53,34 @@ class ButtonShim:
         self.button_config.press_button("Button_Shim", button, index)
 
     def press_A(self):
-        self.press_button("A", 0)
+        self.press_button("A", ButtonPress.SHORT)
 
     def press_A_LONG(self):
-        self.press_button("A", 1)
+        self.press_button("A", ButtonPress.LONG)
 
     def press_B(self):
-        self.press_button("B", 0)
+        self.press_button("B", ButtonPress.SHORT)
 
     def press_B_LONG(self):
-        self.press_button("B", 1)
+        self.press_button("B", ButtonPress.LONG)
 
     def press_C(self):
-        self.press_button("C", 0)
+        self.press_button("C", ButtonPress.SHORT)
 
     def press_C_LONG(self):
-        self.press_button("C", 1)
+        self.press_button("C", ButtonPress.LONG)
 
     def press_D(self):
-        self.press_button("D", 0)
+        self.press_button("D", ButtonPress.SHORT)
 
     def press_D_LONG(self):
-        self.press_button("D", 1)
+        self.press_button("D", ButtonPress.LONG)
 
     def press_E(self):
-        self.press_button("E", 0)
+        self.press_button("E", ButtonPress.SHORT)
 
     def press_E_LONG(self):
-        self.press_button("E", 1)
+        self.press_button("E", ButtonPress.LONG)
 
     @staticmethod
     def set_pixel(r, g, b):

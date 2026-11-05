@@ -476,6 +476,10 @@ class SensorCore:
         if self.sensor_cardputerzero is not None:
             await self.sensor_cardputerzero.quit()
 
+    def pause_recording(self):
+        self.sensor_ant.pause_recording()
+        self.sensor_ble.pause_recording()
+
     # reset accumulated values
     def reset(self):
         self.sensor_gps.reset()
@@ -949,6 +953,10 @@ class SensorCore:
                         cdc = v["CDC"]["cadence"]
                 # get from powermeter
                 elif ant_type["CDC"] == 0x0B:
+                    if all(
+                        np.isnan(v["CDC"][page]["cadence"]) for page in (0x12, 0x10)
+                    ):
+                        cdc = self.config.G_SENSOR_NULLVALUE
                     for page in [0x12, 0x10]:
                         if not "timestamp" in v["CDC"][page]:
                             continue
@@ -964,7 +972,13 @@ class SensorCore:
 
             # Power : ANT+(assumed crank type > wheel type)
             if ant_use["PWR"]:
-                pwr = 0
+                pwr = (
+                    self.config.G_SENSOR_NULLVALUE
+                    if all(
+                        np.isnan(v["PWR"][page]["power"]) for page in (0x12, 0x11, 0x10)
+                    )
+                    else 0
+                )
                 # page18 > 17 > 16, 16simple is not used
                 for page in [0x12, 0x11, 0x10]:
                     if delta["PWR"][page] < self.time_threshold["PWR"]:
