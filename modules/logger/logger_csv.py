@@ -1,7 +1,9 @@
 import argparse
+import csv
 import shlex
 import sqlite3
 import shutil
+from contextlib import closing
 from pathlib import Path
 
 if __name__ == "__main__" and __package__ is None:
@@ -11,8 +13,11 @@ if __name__ == "__main__" and __package__ is None:
     sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from modules.utils.cmd import exec_cmd
-from modules.logger import G_LEGACY_HEADING_COLUMNS, G_MAGNETIC_HEADING_COLUMNS
+from modules.logger import (
+    G_MAGNETIC_HEADING_COLUMNS,
+)
 from modules.logger.logger import Logger
+
 
 class LoggerCsv(Logger):
     def write_log(self, filename):
@@ -28,61 +33,40 @@ class LoggerCsv(Logger):
             "wind_speed,wind_direction,headwind,"
             "motion,acc_x,acc_y,acc_z,gyro_x,gyro_y,gyro_z,cpu_percent,system_cpu_percent,light"
         )
-        columns = r.split(",") + [name for name, _ in G_MAGNETIC_HEADING_COLUMNS]
-
-        # if sqlite3 command exists, use this command (much faster)
-        con = sqlite3.connect(
-            self.config.G_LOG_DB,
-            detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES,
-        )
-        sqlite3.dbapi2.converters["DATETIME"] = sqlite3.dbapi2.converters["TIMESTAMP"]
-        cur = con.cursor()
-        table_columns = [
-            row[1]
-            for row in cur.execute("PRAGMA table_info(BIKECOMPUTER_LOG)")
+        columns = r.split(",") + [
+            name for name, _ in G_MAGNETIC_HEADING_COLUMNS
         ]
-        legacy_columns = {
-            current: legacy for legacy, current in G_LEGACY_HEADING_COLUMNS.items()
-        }
-        selected = []
-        for column in columns:
-            source = column if column in table_columns else legacy_columns.get(column)
-            if source in table_columns:
-                selected.append((column, source))
-        if not selected:
-            cur.close()
-            con.close()
-            return False
 
-        select_cols = ",".join(
-            source if source == column else f"{source} AS {column}"
-            for column, source in selected
-        )
-        header = ",".join(column for column, _ in selected)
-        if shutil.which("sh") is not None and shutil.which("sqlite3"):
-            sql_cmd = (
-                "sqlite3 -csv -header "
-                + shlex.quote(self.config.G_LOG_DB)
-                + " 'SELECT "
-                + select_cols
-                + " FROM BIKECOMPUTER_LOG;' > "
-                + shlex.quote(filename)
+        with closing(
+            sqlite3.connect(
+                self.config.G_LOG_DB,
+                detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES,
             )
-            sqlite3_cmd = ["sh", "-c", sql_cmd]
-            result = exec_cmd(sqlite3_cmd, cmd_print=False)
-            if result == 0:
-                cur.close()
-                con.close()
-                return True
+        ) as con:
+            sqlite3.dbapi2.converters["DATETIME"] = sqlite3.dbapi2.converters[
+                "TIMESTAMP"
+            ]
+            table_columns = {
+                row[1] for row in con.execute("PRAGMA table_info(BIKECOMPUTER_LOG)")
+            }
+            selected = [column for column in columns if column in table_columns]
+            if not selected:
+                return False
 
-        with open(filename, "w", encoding="UTF-8") as o:
-            o.write(header + "\n")
-            for row in cur.execute("SELECT %s FROM BIKECOMPUTER_LOG" % select_cols):
-                o.write(",".join(map(str, row)) + "\n")
+            query = f"SELECT {','.join(selected)} FROM BIKECOMPUTER_LOG;"
+            # Prefer the sqlite3 command when available; it is much faster.
+            if shutil.which("sh") is not None and shutil.which("sqlite3"):
+                sql_cmd = (
+                    f"sqlite3 -csv -header {shlex.quote(self.config.G_LOG_DB)} "
+                    f"{shlex.quote(query)} > {shlex.quote(filename)}"
+                )
+                if exec_cmd(["sh", "-c", sql_cmd], cmd_print=False) == 0:
+                    return True
 
-        cur.close()
-        con.close()
-
+            with open(filename, "w", encoding="UTF-8", newline="") as o:
+                writer = csv.writer(o, lineterminator="\n")
+                writer.writerow(selected)
+                writer.writerows(con.execute(query))
         return True
 
 

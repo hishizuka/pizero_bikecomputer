@@ -277,8 +277,6 @@ class Setting:
                 assistnow["STATUS"] = c.getboolean("ASSISTNOW_STATUS")
             if "ASSISTNOW_ZTP_TOKEN" in c:
                 assistnow["ZTP_TOKEN"] = c["ASSISTNOW_ZTP_TOKEN"]
-            elif "ASSISTNOW_TOKEN" in c:
-                assistnow["ZTP_TOKEN"] = c["ASSISTNOW_TOKEN"]
             if "USE_POWER_SAVE" in c:
                 self.config.G_GPS_UBLOX["POWER_SAVE"] = c.getboolean("USE_POWER_SAVE")
 
@@ -528,14 +526,24 @@ class Setting:
         existing = os.stat(path) if os.path.exists(path) else None
         temporary = None
         try:
-            with tempfile.NamedTemporaryFile(mode="w", dir=os.path.dirname(path), delete=False) as file:
+            with tempfile.NamedTemporaryFile(
+                mode="w", dir=os.path.dirname(path), delete=False
+            ) as file:
                 temporary = file.name
                 if existing is not None:
                     os.chmod(temporary, existing.st_mode & 0o777)
                     if hasattr(os, "fchown"):
                         os.fchown(file.fileno(), existing.st_uid, existing.st_gid)
                 self.config_parser.write(file)
+                file.flush()
+                os.fsync(file.fileno())
             os.replace(temporary, path)
+            if os.name == "posix":
+                directory_fd = os.open(os.path.dirname(path), os.O_RDONLY)
+                try:
+                    os.fsync(directory_fd)
+                finally:
+                    os.close(directory_fd)
         finally:
             if temporary is not None and os.path.exists(temporary):
                 os.unlink(temporary)

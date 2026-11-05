@@ -4,7 +4,6 @@ from pyubx2.ubxhelpers import calc_checksum
 
 _STATE_CHIPCODE = "ublox_assistnow_chipcode"
 _STATE_ZTP_TOKEN_ID = "ublox_assistnow_ztp_token_id"
-_STATE_LEGACY_TOKEN_ID = "ublox_assistnow_token_id"
 _STATE_UNIQUE_ID = "ublox_assistnow_unique_id"
 
 
@@ -63,7 +62,7 @@ class AssistNowClient:
     def _chipcode(self, unique_id, ztp_token_id):
         if self.state.get_value(_STATE_UNIQUE_ID, "") != unique_id:
             return ""
-        if self._cached_ztp_token_id() != ztp_token_id:
+        if self.state.get_value(_STATE_ZTP_TOKEN_ID, "") != ztp_token_id:
             return ""
         return self.state.get_value(_STATE_CHIPCODE, "")
 
@@ -72,15 +71,9 @@ class AssistNowClient:
         if not ztp_token:
             return ""
         ztp_token_id = _ztp_token_id(ztp_token)
-        if self._cached_ztp_token_id() != ztp_token_id:
+        if self.state.get_value(_STATE_ZTP_TOKEN_ID, "") != ztp_token_id:
             return ""
         return self.state.get_value(_STATE_CHIPCODE, "")
-
-    def _cached_ztp_token_id(self):
-        return self.state.get_value(
-            _STATE_ZTP_TOKEN_ID,
-            self.state.get_value(_STATE_LEGACY_TOKEN_ID, ""),
-        )
 
     def _ztp_token(self):
         return self.config["ZTP_TOKEN"].strip()

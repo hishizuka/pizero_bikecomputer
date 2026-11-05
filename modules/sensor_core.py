@@ -213,10 +213,8 @@ class SensorCore:
         integrated.update(self.heading_value_defaults)
         self.reset_internal()
         wind_accumulated_values = self.config.state.get_value(
-            self.WIND_ACCUMULATED_STATE_KEY, (0.0, 0.0)
+            self.WIND_ACCUMULATED_STATE_KEY, (0.0, 0.0, 0.0)
         )
-        if len(wind_accumulated_values) == 2:
-            wind_accumulated_values = (*wind_accumulated_values, 0.0)
         wind_work, wind_time, wind_cost_work = wind_accumulated_values
         integrated["wind_work"] = wind_work
         integrated["wind_elevation"] = get_wind_elevation(

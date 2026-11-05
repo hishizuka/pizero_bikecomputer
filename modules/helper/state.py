@@ -85,7 +85,6 @@ class AppState:
 
     # stored variables:
     #  G_MANUAL_STATUS
-    #  garmin_session
     #  mag_min, mag_max, sealevel_pa, sealevel_temp, magnetic_heading_correction
     #  pos_lon, pos_lat, wind_accumulated_values
     #  ant+_sc_values, ant+_spd_values, ant+_power_values_16, ant+_power_values_17, ant+_power_values_18

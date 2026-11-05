@@ -11,7 +11,7 @@ from threading import RLock
 import numpy as np
 
 from modules.app_logger import app_logger
-from modules.logger import G_LEGACY_HEADING_COLUMNS, G_MAGNETIC_HEADING_COLUMNS
+from modules.logger import G_MAGNETIC_HEADING_COLUMNS
 from modules.utils.crdp import rdp
 from modules.utils.cmd import exec_cmd
 from modules.utils.date import datetime_myparser
@@ -510,32 +510,6 @@ class LoggerCore:
         ]
         if current_columns == expected_columns:
             return
-        base_columns = expected_columns[: -len(G_MAGNETIC_HEADING_COLUMNS)]
-        normalized_columns = [
-            (G_LEGACY_HEADING_COLUMNS.get(name, name), sql_type)
-            for name, sql_type in current_columns
-        ]
-        if normalized_columns in (expected_columns, base_columns):
-            # Rename and append heading fields atomically, preserving the current ride.
-            self.cur.execute("BEGIN")
-            try:
-                for name, _ in current_columns:
-                    if name in G_LEGACY_HEADING_COLUMNS:
-                        self.cur.execute(
-                            f"ALTER TABLE BIKECOMPUTER_LOG RENAME COLUMN {name} "
-                            f"TO {G_LEGACY_HEADING_COLUMNS[name]}"
-                        )
-                if normalized_columns == base_columns:
-                    for name, sql_type in G_MAGNETIC_HEADING_COLUMNS:
-                        self.cur.execute(
-                            f"ALTER TABLE BIKECOMPUTER_LOG ADD COLUMN {name} {sql_type}"
-                        )
-                self.con.commit()
-            except sqlite3.Error:
-                self.con.rollback()
-                raise
-            app_logger.info("Migrated heading columns in the current log DB")
-            return
         if current_columns:
             log_db_moved = self.config.G_LOG_DB + datetime.now().strftime(
                 "-old_layout-%Y%m%d%H%M%S%f"
@@ -732,32 +706,6 @@ class LoggerCore:
         )
         self.config.display.screen_flash_short()
 
-    def get_start_end_dates(self):
-        # get start date and end_date of the current log
-        start_date = end_date = None  # UTC time
-
-        con = sqlite3.connect(
-            self.config.G_LOG_DB,
-            detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES,
-        )
-        sqlite3.dbapi2.converters["DATETIME"] = sqlite3.dbapi2.converters["TIMESTAMP"]
-        cur = con.cursor()
-        cur.execute(
-            'SELECT MIN(timestamp) as "ts [timestamp]", MAX(timestamp) as "ts [timestamp]" FROM BIKECOMPUTER_LOG'
-        )
-        first_row = cur.fetchone()
-
-        if first_row is not None:
-            start_date, end_date = first_row
-
-            start_date = start_date.replace(tzinfo=timezone.utc)
-            end_date = end_date.replace(tzinfo=timezone.utc)
-
-        cur.close()
-        con.close()
-
-        return start_date, end_date
-
     def reset_count(self):
         if self.config.G_MANUAL_STATUS == "START":
             return False
@@ -774,7 +722,7 @@ class LoggerCore:
             self._flush_sql_queue_sync()
 
             # get start date and end_date of the current log
-            start_date, end_date = self.get_start_end_dates()
+            start_date, end_date = self.logger_fit.get_db_start_end_dates()
 
             if start_date is None and end_date is None:
                 app_logger.info("No log found, nothing to write")

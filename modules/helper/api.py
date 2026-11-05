@@ -620,8 +620,6 @@ class api:
                         "[Garmin] cleared Garmin Connect email/password "
                         "after tokenstore login"
                     )
-            if self.config.state.get_value("garmin_session", ""):
-                self.config.state.set_value("garmin_session", "", force_apply=True)
         except (
             GarminConnectConnectionError,
             GarminConnectAuthenticationError,

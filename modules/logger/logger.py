@@ -1,5 +1,6 @@
 import re
 import sqlite3
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -71,21 +72,16 @@ class Logger:
         raise TypeError(f"Unsupported datetime value type: {type(value)}")
 
     def get_db_start_end_dates(self):
-        con = sqlite3.connect(
-            self.config.G_LOG_DB,
-            detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES,
-        )
-        sqlite3.dbapi2.converters["DATETIME"] = sqlite3.dbapi2.converters["TIMESTAMP"]
-        cur = con.cursor()
-        cur.execute(
-            'SELECT MIN(timestamp) as "ts [timestamp]", MAX(timestamp) as "ts [timestamp]" FROM BIKECOMPUTER_LOG'
-        )
-        first_row = cur.fetchone()
-        cur.close()
-        con.close()
-
-        if first_row is None:
-            return None, None
-
-        start_date, end_date = first_row
+        with closing(
+            sqlite3.connect(
+                self.config.G_LOG_DB,
+                detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES,
+            )
+        ) as con:
+            sqlite3.dbapi2.converters["DATETIME"] = sqlite3.dbapi2.converters[
+                "TIMESTAMP"
+            ]
+            start_date, end_date = con.execute(
+                'SELECT MIN(timestamp) as "ts [timestamp]", MAX(timestamp) as "ts [timestamp]" FROM BIKECOMPUTER_LOG'
+            ).fetchone()
         return self._to_utc_datetime(start_date), self._to_utc_datetime(end_date)

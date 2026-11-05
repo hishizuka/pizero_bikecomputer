@@ -339,7 +339,6 @@ class ANT_Device_Power(ant_device.ANT_Device):
             pre_pwr_value = self.config.state.get_value(
                 "ant+_power_values_17", pre_values
             )
-            self.extend_list(pre_pwr_value, self.page_value_lengths[0x11])
             pwr_diff = counter_delta(pre_values[1], pre_pwr_value[1], 65536)
             spd_diff = counter_delta(pre_values[3], pre_pwr_value[3], 256)
             if pwr_diff > 0:
@@ -456,9 +455,6 @@ class ANT_Device_Power(ant_device.ANT_Device):
             pre_pwr_value = self.config.state.get_value(
                 "ant+_power_values_18", pre_values
             )
-            if not isinstance(pre_pwr_value, list):
-                pre_pwr_value = [-1, pre_pwr_value, -1, -1, -1]
-            self.extend_list(pre_pwr_value, self.page_value_lengths[0x12])
             diff = counter_delta(pre_values[1], pre_pwr_value[1], 65536)
             if diff > 0:
                 recovered_work = 128 * math.pi * diff / self.torque_time_base
