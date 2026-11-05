@@ -13,6 +13,7 @@ from modules.qt._qt_qtwidgets import (
     QtCore,
     QtGui,
     QtWidgets,
+    Signal,
 )
 
 
@@ -134,7 +135,7 @@ class RainBannerContent(QtWidgets.QWidget):
             x += width + 6
 
 
-class CachedDialog:
+class CachedDialog(QtCore.QObject):
     """
     Manages a reusable dialog instance with four layout modes:
     - icon: title with left icon
@@ -147,6 +148,8 @@ class CachedDialog:
     Buttons (up to 2) are pre-created and shown/hidden as needed.
     """
 
+    changed = Signal()
+
     MAX_BUTTONS = 2
     ALERT_COLORS = {
         "urgent": ("black", "#FF0000"),
@@ -154,30 +157,13 @@ class CachedDialog:
     }
 
     def __init__(self, stack_widget, main_window, pe_widget, dual_mode=False):
+        super().__init__(stack_widget)
         self._stack_widget = stack_widget
         self._main_window = main_window
         self._pe_widget = pe_widget
         self._dual_mode = dual_mode
 
-        self._background = None
-        self._container = None
-        self._back_layout = None
-        self._content_layout = None
-
-        # Three layout modes
-        self._icon_widget = None
-        self._icon_label = None
-        self._icon_title_label = None
-
-        self._message_widget = None
-        self._message_icon_label = None
-        self._message_title_label = None
-        self._message_label = None
-
-        self._simple_title_label = None
-
         # Buttons
-        self._button_widget = None
         self._buttons = []
 
         # State
@@ -282,6 +268,7 @@ class CachedDialog:
 
         for _ in range(self.MAX_BUTTONS):
             btn = DialogButton(parent=self._button_widget)
+            btn.installEventFilter(self)
             btn.setFixedWidth(70)
             button_layout.addWidget(btn)
             self._buttons.append(btn)
@@ -295,6 +282,14 @@ class CachedDialog:
 
         # Initially hide all
         self._hide_all()
+
+    def eventFilter(self, obj, event):
+        if event.type() in (
+            QtCore.QEvent.Type.FocusIn,
+            QtCore.QEvent.Type.FocusOut,
+        ):
+            self.changed.emit()
+        return False
 
     def _hide_all(self):
         """Hide all layout variants."""
@@ -461,9 +456,12 @@ class CachedDialog:
             self._container.hide()
             if self._qzss_widget is None:
                 self._qzss_widget = QzssAlertWidget(self._background, self.trigger_back)
+                self._qzss_widget.close_button.installEventFilter(self)
+                self._qzss_widget.next_button.installEventFilter(self)
                 self._qzss_widget.next_button.clicked.connect(
                     lambda: self._timeout_timer.start(10_000)
                 )
+                self._qzss_widget.next_button.clicked.connect(self.changed)
             self._qzss_widget.set_event(
                 msg["event"], msg["weather_pairs"]
             )
@@ -503,6 +501,7 @@ class CachedDialog:
         self._background.raise_()
         self._background.show()
         QtCore.QTimer.singleShot(0, self._apply_focus)
+        self.changed.emit()
 
     def _apply_focus(self):
         """Focus the first visible button when dialog is shown."""
@@ -520,6 +519,7 @@ class CachedDialog:
         self._timeout_timer.stop()
         self._disconnect_buttons()
         self._background.hide()
+        self.changed.emit()
 
     def trigger_ok(self):
         """Run OK callback then close dialog."""
@@ -552,11 +552,13 @@ class CachedDialog:
             self._message_title_label.setText(title)
         else:
             self._simple_title_label.setText(title)
+        self.changed.emit()
 
     def change_button_label(self, label):
         """Update first button label."""
-        if self._buttons and self._buttons[0].isVisible():
+        if self._buttons[0].isVisible():
             self._buttons[0].setText(label)
+            self.changed.emit()
 
     @property
     def background(self):

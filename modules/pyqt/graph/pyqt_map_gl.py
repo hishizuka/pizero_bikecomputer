@@ -24,6 +24,9 @@ class GpuMapWidget(QtWidgets.QWidget):
         self.presenter_failed = False
         self.render_pending = False
         self.capturing_overlay = False
+        self._overlay_timer = QtCore.QTimer(self)
+        self._overlay_timer.setSingleShot(True)
+        self._overlay_timer.timeout.connect(self._render)
         self.use_presenter = (
             config.G_USE_PYQT_GPU_MAP_PRESENTER
             and config.G_IS_RASPI
@@ -63,8 +66,10 @@ class GpuMapWidget(QtWidgets.QWidget):
         self.controller.errorChanged.connect(self.update)
         self._update_lock()
         config.map.register(self.controller)
-        if self.use_presenter and config.gui.status_bar is not None:
-            config.gui.status_bar.changed.connect(self._render)
+        if self.use_presenter:
+            if config.gui.status_bar is not None:
+                config.gui.status_bar.changed.connect(self._render)
+            config.gui._dialog.changed.connect(self._overlay_timer.start)
 
     @property
     def lock_status(self):
@@ -84,6 +89,7 @@ class GpuMapWidget(QtWidgets.QWidget):
 
     def stop(self):
         self._drag = None
+        self._overlay_timer.stop()
         self.render_pending = False
         self.controller.setActive(False)
         if self.presenter is not None:
@@ -223,11 +229,12 @@ class GpuMapWidget(QtWidgets.QWidget):
 
     def _overlay_image(self):
         ratio = self.devicePixelRatioF()
-        root = self
-        status_bar = None
+        root, status_bar, background = self, None, None
         if self.presenter is not None:
             gui = self.controller.session.config.gui
             root, status_bar = gui.root_widget, gui.status_bar
+            if gui._dialog is not None:
+                background = gui._dialog.background
         image = QtGui.QImage(
             round(root.width() * ratio),
             round(root.height() * ratio),
@@ -241,6 +248,14 @@ class GpuMapWidget(QtWidgets.QWidget):
             self.render(painter, self.mapTo(root, QtCore.QPoint()))
             if status_bar is not None:
                 status_bar.render(painter, status_bar.mapTo(root, QtCore.QPoint()))
+            if background is not None and background.isVisible():
+                # Draw sibling popup children without filling the map background.
+                background.render(
+                    painter,
+                    background.mapTo(root, QtCore.QPoint()),
+                    QtGui.QRegion(),
+                    QtWidgets.QWidget.RenderFlag.DrawChildren,
+                )
         finally:
             self.capturing_overlay = False
             painter.end()
