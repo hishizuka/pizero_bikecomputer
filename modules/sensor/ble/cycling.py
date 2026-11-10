@@ -12,9 +12,14 @@ from .health import BleSessionHealth
 from .hrs import HRS_SERVICE_UUID, HrsHeartRateProcessor
 from .identity import format_ble_identity
 from .pycycling_adapter import PycyclingValidationClient
-from .session import GATT_SETUP_TIMEOUT, BleSetupDeadline
+from .session import (
+    GATT_SETUP_TIMEOUT,
+    BleGattLink,
+    BleSetupDeadline,
+    wait_for_any_event,
+    wait_for_stop,
+)
 from .transport import (
-    BleakTransport,
     BleSensorCandidate,
     BleTransportProtocol,
     format_ble_error,
@@ -108,7 +113,7 @@ class BleCyclingSession:
         should_accumulate: Callable[[], bool] | None = None,
         log: Callable[[str], None] | None = None,
         debug_log: Callable[[str], None] | None = None,
-        transport: BleTransportProtocol | None = None,
+        transport: BleTransportProtocol,
     ):
         if not identifier.strip():
             raise ValueError("identifier must not be empty")
@@ -148,9 +153,8 @@ class BleCyclingSession:
         self.should_accumulate = should_accumulate or (lambda: True)
         self.log = log or (lambda _message: None)
         self.debug_log = debug_log or (lambda _message: None)
-        self._expected_disconnect = False
         self._attempt_started_at = 0.0
-        self.transport = transport or BleakTransport()
+        self.transport = transport
 
     @property
     def processors(self) -> tuple[CyclingProcessor, ...]:
@@ -245,27 +249,19 @@ class BleCyclingSession:
         )
         from pycycling.heart_rate_service import HeartRateService
 
-        disconnected_event = asyncio.Event()
-        link_established = False
+        def on_unexpected_disconnect() -> None:
+            for processor in self.processors:
+                processor.on_disconnected()
+            for health in self.health_records:
+                health.record_unexpected_disconnect()
 
-        def on_disconnected(_client) -> None:
-            # BlueZ retries a failed LE connection inside connect() and bleak reports
-            # each failure here, so only a drop after connect() ends the session.
-            if not link_established:
-                return
-            if not self._expected_disconnect:
-                for processor in self.processors:
-                    processor.on_disconnected()
-                for health in self.health_records:
-                    health.record_unexpected_disconnect()
-            disconnected_event.set()
-
-        client = self.transport.client(
+        link = BleGattLink(
+            self.transport,
             device,
             adapter=self.adapter,
-            disconnected_callback=on_disconnected,
+            on_unexpected_disconnect=on_unexpected_disconnect,
         )
-        self._expected_disconnect = False
+        client = link.client
         pycycling_client = PycyclingValidationClient(
             client,
             on_invalid_payload=lambda uuid, actual, expected: self.log(
@@ -279,12 +275,9 @@ class BleCyclingSession:
         hrs_notifications_enabled = False
         csc_notifications_enabled = False
         cps_notifications_enabled = False
-        stop_task = None
-        disconnect_task = None
         feature_task = None
         first_notification_profiles = set()
         confirmed_cadence_profiles = set()
-        setup_guard = contextlib.AsyncExitStack()
         stage = "gatt_connect"
 
         def confirm_cadence_profile(profile: str) -> None:
@@ -303,12 +296,8 @@ class BleCyclingSession:
             )
 
         try:
-            await setup_guard.enter_async_context(
-                self.transport.connection_setup(self.adapter, device)
-            )
             connect_started_at = time.monotonic()
-            await client.connect()
-            link_established = True
+            await link.connect()
             setup_deadline = BleSetupDeadline(GATT_SETUP_TIMEOUT)
 
             self.debug_log(
@@ -465,7 +454,7 @@ class BleCyclingSession:
                 f"{time.monotonic() - self._attempt_started_at:.3f}s"
             )
             self.log(f"connected to {format_ble_identity(self.name, self.identifier)}")
-            await setup_guard.aclose()
+            await link.mark_ready()
 
             async def refine_profile_features() -> None:
                 nonlocal csc_wheel_supported
@@ -516,54 +505,26 @@ class BleCyclingSession:
 
             stage = "feature_read"
             feature_task = asyncio.create_task(refine_profile_features())
-            stop_task = asyncio.create_task(stop_event.wait())
-            disconnect_task = asyncio.create_task(disconnected_event.wait())
             stage = "connected_wait"
-            done, _pending = await asyncio.wait(
-                (stop_task, disconnect_task, feature_task),
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-            if feature_task not in done:
-                await asyncio.sleep(0)
-            if feature_task.done():
-                await feature_task
-                feature_task = None
-            if not stop_task.done() and not disconnect_task.done():
-                await asyncio.wait(
-                    (stop_task, disconnect_task),
-                    return_when=asyncio.FIRST_COMPLETED,
-                )
+            await wait_for_any_event(stop_event, link.disconnected)
         except Exception as exc:
             raise RuntimeError(f"{stage}: {format_ble_error(exc)}") from exc
         finally:
-            try:
-                # Release discovery before potentially slow GATT cleanup.
-                await setup_guard.aclose()
-            finally:
-                pending_tasks = [
-                    task
-                    for task in (stop_task, disconnect_task, feature_task)
-                    if task is not None
-                ]
-                for task in pending_tasks:
-                    task.cancel()
-                if pending_tasks:
-                    await asyncio.gather(*pending_tasks, return_exceptions=True)
-                self._expected_disconnect = True
-                if client.is_connected:
-                    if hrs_notifications_enabled:
-                        with contextlib.suppress(Exception):
-                            await hrs_service.disable_hr_measurement_notifications()
-                    if csc_notifications_enabled:
-                        with contextlib.suppress(Exception):
-                            await csc_service.disable_csc_measurement_notifications()
-                    if cps_notifications_enabled:
-                        with contextlib.suppress(Exception):
-                            await (
-                                cps_service.disable_cycling_power_measurement_notifications()
-                            )
+            if feature_task is not None:
+                feature_task.cancel()
+                await asyncio.gather(feature_task, return_exceptions=True)
+            link.expect_disconnect()
+            if client.is_connected:
+                if hrs_notifications_enabled:
                     with contextlib.suppress(Exception):
-                        await client.disconnect()
+                        await hrs_service.disable_hr_measurement_notifications()
+                if csc_notifications_enabled:
+                    with contextlib.suppress(Exception):
+                        await csc_service.disable_csc_measurement_notifications()
+                if cps_notifications_enabled:
+                    with contextlib.suppress(Exception):
+                        await cps_service.disable_cycling_power_measurement_notifications()
+            await link.close()
 
     def _profile_available(self, client, profile: str) -> bool:
         if profile not in self.requested_profiles:
@@ -629,6 +590,5 @@ class BleCyclingSession:
     async def _wait_retry(self, stop_event: asyncio.Event) -> None:
         delay = self._next_retry_delay
         self.debug_log(f"retrying after {delay:.1f}s")
-        with contextlib.suppress(asyncio.TimeoutError):
-            await asyncio.wait_for(stop_event.wait(), timeout=delay)
+        await wait_for_stop(stop_event, delay)
         self._next_retry_delay = min(self.max_reconnect_delay, delay * 2.0)

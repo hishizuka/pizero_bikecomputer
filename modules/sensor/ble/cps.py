@@ -119,6 +119,7 @@ async def _run_cli(args: argparse.Namespace) -> None:
         PROFILE_CPS,
         discover_cycling_devices,
     )
+    from .transport import BleakTransport
 
     if not args.device:
         print("Scanning for Cycling Power Service devices...")
@@ -147,6 +148,7 @@ async def _run_cli(args: argparse.Namespace) -> None:
         scan_timeout=args.scan_seconds,
         should_accumulate=lambda: True,
         log=lambda message: print(f"[CPS] {message}"),
+        transport=BleakTransport(),
     )
     stop_event = asyncio.Event()
     session_task = asyncio.create_task(session.run(stop_event))

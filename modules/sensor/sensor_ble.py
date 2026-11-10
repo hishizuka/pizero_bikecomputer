@@ -44,7 +44,6 @@ try:
         BleCyclingSession,
         PROFILE_CPS,
         PROFILE_CSCS,
-        PROFILE_HRS,
         discover_cycling_devices,
     )
     from .ble.hrs import HrsHeartRateProcessor
@@ -448,15 +447,7 @@ class SensorBLE(Sensor):
         return list(candidates.values())
 
     def _scan_profiles_for_role(self, role: str) -> tuple[str, ...]:
-        if role == "HR":
-            return (PROFILE_HRS,)
-        if role == "SPD":
-            return (PROFILE_CSCS,)
-        if role == "PWR":
-            return (PROFILE_CPS,)
-        if role == "CDC":
-            return (PROFILE_CSCS, PROFILE_CPS)
-        return ()
+        return self.config.G_BLE_SENSOR_TYPES[role]
 
     async def discover_cycling_sensors(
         self,
@@ -548,12 +539,9 @@ class SensorBLE(Sensor):
         identifier: str,
         profile: str | None,
     ) -> str | None:
-        if role == "HR":
-            return PROFILE_HRS
-        if role == "SPD":
-            return PROFILE_CSCS
-        if role == "PWR":
-            return PROFILE_CPS
+        supported_profiles = self.config.G_BLE_SENSOR_TYPES[role]
+        if len(supported_profiles) == 1:
+            return supported_profiles[0]
         if profile in (PROFILE_CSCS, PROFILE_CPS):
             return profile
         profiles = self._cycling_discovered_profiles.get(identifier, ())
@@ -641,9 +629,9 @@ class SensorBLE(Sensor):
             for identifier, task in self._cycling_tasks.items()
         )
         if requires_cleanup:
-            self._cycling_reconcile_task = asyncio.create_task(
-                self._reconcile_cycling_sessions()
-            )
+            task = asyncio.create_task(self._reconcile_cycling_sessions())
+            task.add_done_callback(self._cycling_reconcile_done)
+            self._cycling_reconcile_task = task
             return
 
         for identifier, spec in desired_specs.items():
@@ -662,13 +650,18 @@ class SensorBLE(Sensor):
                 )
                 if revision == self._cycling_reconcile_revision:
                     return
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            app_logger.error(f"BLE cycling session reconciliation failed: {exc}")
         finally:
             if self._cycling_reconcile_task is current_task:
                 self._cycling_reconcile_task = None
+
+    @staticmethod
+    def _cycling_reconcile_done(task: asyncio.Task) -> None:
+        try:
+            task.result()
+        except asyncio.CancelledError:
+            pass
+        except Exception as exc:
+            app_logger.error(f"BLE cycling session reconciliation failed: {exc}")
 
     async def _reconcile_cycling_sessions_once(
         self,

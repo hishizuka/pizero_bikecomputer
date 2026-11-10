@@ -96,6 +96,7 @@ async def _run_cli(args: argparse.Namespace) -> None:
         PROFILE_HRS,
         discover_cycling_devices,
     )
+    from .transport import BleakTransport
 
     if not args.device:
         print("Scanning for Heart Rate Service devices...")
@@ -123,6 +124,7 @@ async def _run_cli(args: argparse.Namespace) -> None:
         adapter=args.adapter,
         scan_timeout=args.scan_seconds,
         log=lambda message: print(f"[HRS] {message}"),
+        transport=BleakTransport(),
     )
     stop_event = asyncio.Event()
     session_task = asyncio.create_task(session.run(stop_event))

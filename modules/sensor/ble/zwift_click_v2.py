@@ -20,7 +20,7 @@ import re
 import signal
 import sys
 import time
-from contextlib import asynccontextmanager, suppress
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Callable, Dict, Iterable, List, Optional, Protocol
 
@@ -30,7 +30,7 @@ if __package__:
 
     from .health import BleSessionHealth
     from .identity import format_ble_identity
-    from .session import GATT_SETUP_TIMEOUT, BleSetupDeadline
+    from .session import GATT_SETUP_TIMEOUT, BleGattLink, BleSetupDeadline
     from .transport import BleakTransport, BleTransportProtocol, format_ble_error
 else:
     # Allow running this file directly for hardware diagnostics.
@@ -38,7 +38,11 @@ else:
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
     from modules.sensor.ble.identity import format_ble_identity
-    from modules.sensor.ble.session import GATT_SETUP_TIMEOUT, BleSetupDeadline
+    from modules.sensor.ble.session import (
+        GATT_SETUP_TIMEOUT,
+        BleGattLink,
+        BleSetupDeadline,
+    )
     from modules.sensor.ble.transport import (
         BleakTransport,
         BleTransportProtocol,
@@ -561,10 +565,9 @@ async def connect_and_listen(
     on_button_notification: Optional[Callable[[str, bytes], None]] = None,
     adapter: Optional[str] = None,
     health: Optional[BleHealthRecorder] = None,
-    transport: BleTransportProtocol | None = None,
+    transport: BleTransportProtocol,
 ) -> bool:
     """Connect to a single Click V2 and feed button events to callback."""
-    transport = transport or BleakTransport()
     address = device.address
     attempt_started_at = time.monotonic()
     stage = "gatt_connect"
@@ -573,11 +576,6 @@ async def connect_and_listen(
     stopped_notice_sent = False
     stopped_event = asyncio.Event()
     previous_debug_packets: Dict[int, bytes] = {}
-
-    client = transport.client(
-        device,
-        adapter=adapter,
-    )
 
     if health is not None:
         health.record_connect_attempt()
@@ -624,42 +622,44 @@ async def connect_and_listen(
             on_stopped(side, packet)
         stopped_event.set()
 
+    link = BleGattLink(transport, device, adapter=adapter)
+    client = link.client
     try:
-        async with transport.connection_setup(adapter, device):
-            await client.connect()
-            setup_deadline = BleSetupDeadline(GATT_SETUP_TIMEOUT)
+        await link.connect()
+        setup_deadline = BleSetupDeadline(GATT_SETUP_TIMEOUT)
 
-            if debug_log is not None:
-                debug_log(
-                    f"[{side}] GATT connected after "
-                    f"{time.monotonic() - attempt_started_at:.3f}s"
-                )
-
-            stage = "start_notify:async"
-            await setup_deadline.wait(client.start_notify(ASYNC_CHAR, handle_data))
-            stage = "start_notify:sync"
-            await setup_deadline.wait(client.start_notify(SYNC_TX_CHAR, handle_data))
-            stage = "ride_on"
-            await setup_deadline.wait(
-                client.write_gatt_char(
-                    SYNC_RX_CHAR,
-                    START_COMMAND,
-                    response=False,
-                )
+        if debug_log is not None:
+            debug_log(
+                f"[{side}] GATT connected after "
+                f"{time.monotonic() - attempt_started_at:.3f}s"
             )
 
-            ready = True
-            if health is not None:
-                health.record_connected()
-            log(f"[{side}] connected to {format_ble_identity(name, address)}")
-            if on_connected is not None:
-                on_connected(side, address, name)
+        stage = "start_notify:async"
+        await setup_deadline.wait(client.start_notify(ASYNC_CHAR, handle_data))
+        stage = "start_notify:sync"
+        await setup_deadline.wait(client.start_notify(SYNC_TX_CHAR, handle_data))
+        stage = "ride_on"
+        await setup_deadline.wait(
+            client.write_gatt_char(
+                SYNC_RX_CHAR,
+                START_COMMAND,
+                response=False,
+            )
+        )
 
-            if debug_log is not None:
-                debug_log(
-                    f"[{side}] notifications enabled and RideOn sent after "
-                    f"{time.monotonic() - attempt_started_at:.3f}s"
-                )
+        ready = True
+        if health is not None:
+            health.record_connected()
+        log(f"[{side}] connected to {format_ble_identity(name, address)}")
+        if on_connected is not None:
+            on_connected(side, address, name)
+
+        if debug_log is not None:
+            debug_log(
+                f"[{side}] notifications enabled and RideOn sent after "
+                f"{time.monotonic() - attempt_started_at:.3f}s"
+            )
+        await link.mark_ready()
 
         stage = "connected_wait"
         while (
@@ -689,9 +689,7 @@ async def connect_and_listen(
             f"{time.monotonic() - attempt_started_at:.3f}s: {format_ble_error(exc)}"
         )
     finally:
-        if client.is_connected:
-            with suppress(Exception):
-                await client.disconnect()
+        await link.close()
         if ready and on_disconnected is not None:
             on_disconnected(side, address)
     return ready
@@ -1145,7 +1143,8 @@ class ZwiftClickV2Session:
         sensor["NAME"] = str(name or "").strip()
         self.connection_status = "connected"
         self.auth_status = self.CLICK_AUTH_UNKNOWN
-        self.input_status = self.CLICK_INPUT_WAITING
+        if self.input_status != self.CLICK_INPUT_OPERATIONAL:
+            self.input_status = self.CLICK_INPUT_WAITING
 
     def _on_disconnected(self, _side: str, _address: str) -> None:
         if not self._desired_running:

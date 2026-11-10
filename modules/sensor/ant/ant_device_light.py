@@ -1,17 +1,11 @@
-from datetime import datetime
 import array
 import asyncio
 import threading
-from enum import StrEnum
+from datetime import datetime
 
 from modules.app_logger import app_logger
+from modules.sensor.light_control import LightControlState, LightState
 from . import ant_device
-
-
-class LightState(StrEnum):
-    OFF = "OFF"
-    ON = "ON"
-    AUTO = "AUTO"
 
 
 class ANT_Device_Light(ant_device.ANT_Device):
@@ -61,6 +55,11 @@ class ANT_Device_Light(ant_device.ANT_Device):
 
     def init_value(self):
         self.state_lock = threading.RLock()
+        self.light_control = LightControlState(
+            self.light_modes[self.light_name],
+            self.default_on_mode,
+            auto_min_duration=self.auto_light_min_duration,
+        )
         self._pending_light_setting = None
         self.page_34_count = 0
         self._light_index = 0
@@ -159,20 +158,12 @@ class ANT_Device_Light(ant_device.ANT_Device):
 
     def reset_value(self):
         with self.state_lock:
+            self.light_control.reset(self.config.G_AUTO_LIGHT)
             self.values["pre_light_mode"] = None
-            self.values["light_mode"] = None
-            self.values["light_state"] = (
-                LightState.AUTO if self.config.G_AUTO_LIGHT else LightState.OFF
-            )
-            self.values["button_state"] = False
-            self.values["auto_state"] = self.values["light_state"] == LightState.AUTO
             self.values["changed_timestamp"] = None
-            self.values["auto_on_timestamp"] = None
+            self._sync_light_control_values()
             self._finish_pending_setting("idle")
             self.values["actual_light_mode"] = None
-            self._auto_requested_on = False
-            self._manual_on_mode = self.default_on_mode
-            self._auto_on_mode = self.default_on_mode
         super().reset_value()
 
     def close_extra(self):
@@ -305,66 +296,32 @@ class ANT_Device_Light(ant_device.ANT_Device):
         self._queue_send(payload, pending)
 
     def send_light_mode(self, mode, auto=False):
-        if auto:
-            with self.state_lock:
-                self._auto_requested_on = mode != "OFF"
-                if self._auto_requested_on:
-                    self.values["auto_on_timestamp"] = datetime.now()
-                    if mode in self.light_modes[self.light_name]:
-                        self._auto_on_mode = mode
-            self._apply_light_state()
-        elif mode == "ON_OFF_FLASH_LOW":
-            with self.state_lock:
-                current = self.values["light_state"]
-            if current == LightState.OFF:
-                self._manual_on_mode = self.default_on_mode
-                next_state = LightState.ON
-            elif current == LightState.ON and self.config.G_AUTO_LIGHT:
-                next_state = LightState.AUTO
-            else:
-                next_state = LightState.OFF
-            self.set_light_state(next_state)
-        elif mode == "OFF":
-            self.set_light_state(LightState.OFF)
-        else:
-            self._manual_on_mode = (
-                mode
-                if mode in self.light_modes[self.light_name]
-                else self.default_on_mode
+        with self.state_lock:
+            changed = self.light_control.request_mode(
+                mode,
+                auto=auto,
+                auto_enabled=self.config.G_AUTO_LIGHT,
             )
-            self.set_light_state(LightState.ON)
+            self._sync_light_control_values()
+        if changed:
+            self.change_light_mode()
 
     def set_light_state(self, state):
-        try:
-            state = LightState(state)
-        except (ValueError, TypeError):
-            return
         with self.state_lock:
-            if self.values["light_state"] == state:
-                return
-            self.values["light_state"] = state
-            self.values["auto_state"] = state == LightState.AUTO
-            self.values["button_state"] = state == LightState.ON
-        self._apply_light_state()
+            changed = self.light_control.set_state(
+                state,
+                auto_enabled=self.config.G_AUTO_LIGHT,
+            )
+            self._sync_light_control_values()
+        if changed:
+            self.change_light_mode()
 
-    def _apply_light_state(self):
-        with self.state_lock:
-            state = self.values["light_state"]
-            desired_mode = "OFF"
-            if state == LightState.ON:
-                desired_mode = self._manual_on_mode
-            elif state == LightState.AUTO and self.config.G_AUTO_LIGHT:
-                last_on = self.values["auto_on_timestamp"]
-                if self._auto_requested_on or (
-                    last_on is not None
-                    and (datetime.now() - last_on).total_seconds()
-                    < self.auto_light_min_duration
-                ):
-                    desired_mode = self._auto_on_mode
-            if desired_mode not in self.light_modes[self.light_name]:
-                desired_mode = "OFF"
-            self.values["light_mode"] = desired_mode
-        self.change_light_mode()
+    def _sync_light_control_values(self):
+        self.values["light_mode"] = self.light_control.desired_mode
+        self.values["light_state"] = self.light_control.state
+        self.values["button_state"] = self.light_control.button_state
+        self.values["auto_state"] = self.light_control.auto_state
+        self.values["auto_on_timestamp"] = self.light_control.auto_on_timestamp
 
     def change_light_mode(self):
         with self.state_lock:

@@ -1,15 +1,20 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import time
 from typing import Callable
 
+from .discovery import discover_ble_devices
 from .health import BleSessionHealth
 from .identity import format_ble_identity
-from .session import GATT_SETUP_TIMEOUT, BleSetupDeadline
+from .session import (
+    GATT_SETUP_TIMEOUT,
+    BleGattLink,
+    BleSetupDeadline,
+    wait_for_any_event,
+    wait_for_stop,
+)
 from .transport import (
-    BleakTransport,
     BleSensorCandidate,
     BleTransportProtocol,
     format_ble_error,
@@ -51,7 +56,7 @@ async def discover_bontrager_lights(
     adapter: str | None = None,
     discoverer=None,
 ) -> list[tuple[object, BleSensorCandidate]]:
-    discovered = await (discoverer or BleakTransport().discover)(
+    discovered = await (discoverer or discover_ble_devices)(
         adapter=adapter,
         timeout=timeout,
         predicate=_matches_bontrager_light,
@@ -94,7 +99,7 @@ class BontragerLightSession:
         health: BleSessionHealth | None = None,
         log: Callable[[str], None] | None = None,
         debug_log: Callable[[str], None] | None = None,
-        transport: BleTransportProtocol | None = None,
+        transport: BleTransportProtocol,
     ):
         if not identifier.strip():
             raise ValueError("identifier must not be empty")
@@ -113,10 +118,9 @@ class BontragerLightSession:
         self.health = health or BleSessionHealth()
         self.log = log or (lambda _message: None)
         self.debug_log = debug_log or (lambda _message: None)
-        self.transport = transport or BleakTransport()
+        self.transport = transport
         self._command_event = asyncio.Event()
         self._requested_mode: str | None = None
-        self._expected_disconnect = False
 
     def request_mode(self, mode: str) -> None:
         if mode not in MODE_VALUES:
@@ -165,31 +169,16 @@ class BontragerLightSession:
         )
 
     async def _connect_once(self, device, stop_event: asyncio.Event) -> None:
-        disconnected_event = asyncio.Event()
-        link_established = False
-
-        def on_disconnected(_client) -> None:
-            if not link_established:
-                return
-            if not self._expected_disconnect:
-                self.health.record_unexpected_disconnect()
-            disconnected_event.set()
-
-        client = self.transport.client(
+        link = BleGattLink(
+            self.transport,
             device,
             adapter=self.adapter,
-            disconnected_callback=on_disconnected,
+            on_unexpected_disconnect=self.health.record_unexpected_disconnect,
         )
-        self._expected_disconnect = False
-        setup_guard = contextlib.AsyncExitStack()
-        activity_tasks: set[asyncio.Task] = set()
+        client = link.client
         try:
-            await setup_guard.enter_async_context(
-                self.transport.connection_setup(self.adapter, device)
-            )
             connected_started_at = time.monotonic()
-            await client.connect()
-            link_established = True
+            await link.connect()
             self.debug_log(
                 f"GATT connected after {time.monotonic() - connected_started_at:.3f}s"
             )
@@ -213,37 +202,21 @@ class BontragerLightSession:
             self.health.record_connected()
             self.on_status("connected")
             self.log(f"connected to {format_ble_identity(self.name, self.identifier)}")
-            await setup_guard.aclose()
+            await link.mark_ready()
 
-            while not stop_event.is_set() and not disconnected_event.is_set():
+            while not stop_event.is_set() and not link.disconnected.is_set():
                 if self._command_event.is_set():
                     await self._write_requested_mode(client)
                     continue
-                activity_tasks = {
-                    asyncio.create_task(stop_event.wait()),
-                    asyncio.create_task(disconnected_event.wait()),
-                    asyncio.create_task(self._command_event.wait()),
-                }
-                _done, pending = await asyncio.wait(
-                    activity_tasks,
-                    return_when=asyncio.FIRST_COMPLETED,
+                await wait_for_any_event(
+                    stop_event,
+                    link.disconnected,
+                    self._command_event,
                 )
-                for task in pending:
-                    task.cancel()
-                await asyncio.gather(*pending, return_exceptions=True)
-                activity_tasks.clear()
-            if disconnected_event.is_set() and not stop_event.is_set():
+            if link.disconnected.is_set() and not stop_event.is_set():
                 self.on_status("disconnected")
         finally:
-            for task in activity_tasks:
-                task.cancel()
-            if activity_tasks:
-                await asyncio.gather(*activity_tasks, return_exceptions=True)
-            self._expected_disconnect = True
-            await setup_guard.aclose()
-            if client.is_connected:
-                with contextlib.suppress(Exception):
-                    await client.disconnect()
+            await link.close()
 
     async def _write_requested_mode(self, client) -> None:
         self._command_event.clear()
@@ -272,7 +245,4 @@ class BontragerLightSession:
 
     @staticmethod
     async def _wait_retry(stop_event: asyncio.Event, delay: float) -> None:
-        try:
-            await asyncio.wait_for(stop_event.wait(), timeout=delay)
-        except TimeoutError:
-            pass
+        await wait_for_stop(stop_event, delay)
