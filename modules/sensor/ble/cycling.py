@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import sys
 import time
-from dataclasses import dataclass
 from typing import Callable
 
 from .cps import CPS_SERVICE_UUID, CpsPowerProcessor
@@ -14,11 +12,17 @@ from .health import BleSessionHealth
 from .hrs import HRS_SERVICE_UUID, HrsHeartRateProcessor
 from .identity import format_ble_identity
 from .pycycling_adapter import PycyclingValidationClient
+from .session import GATT_SETUP_TIMEOUT, BleSetupDeadline
+from .transport import (
+    BleakTransport,
+    BleSensorCandidate,
+    BleTransportProtocol,
+    format_ble_error,
+)
 
 PROFILE_CSCS = "CSCS"
 PROFILE_CPS = "CPS"
 PROFILE_HRS = "HRS"
-FEATURE_READ_TIMEOUT = 2.0
 MAX_RECONNECT_DELAY = 30.0
 PROFILE_SERVICE_UUIDS = {
     PROFILE_HRS: HRS_SERVICE_UUID,
@@ -28,20 +32,6 @@ PROFILE_SERVICE_UUIDS = {
 CyclingProcessor = (
     HrsHeartRateProcessor | CscSpeedProcessor | CscCadenceProcessor | CpsPowerProcessor
 )
-
-
-@dataclass(frozen=True, slots=True)
-class BleCyclingCandidate:
-    identifier: str
-    name: str | None
-    rssi: int | None
-    profiles: tuple[str, ...]
-
-
-def _bleak_kwargs(adapter: str | None) -> dict:
-    if adapter is None or not sys.platform.startswith("linux"):
-        return {}
-    return {"bluez": {"adapter": adapter}}
 
 
 def _advertised_profiles(advertisement) -> tuple[str, ...]:
@@ -58,7 +48,8 @@ async def discover_cycling_devices(
     *,
     adapter: str | None = None,
     profiles: tuple[str, ...] = (PROFILE_CSCS, PROFILE_CPS),
-) -> list[tuple[object, BleCyclingCandidate]]:
+    discoverer=None,
+) -> list[tuple[object, BleSensorCandidate]]:
     """Discover standard cycling sensors across the requested GATT profiles."""
     unknown_profiles = set(profiles) - set(PROFILE_SERVICE_UUIDS)
     if unknown_profiles:
@@ -70,7 +61,7 @@ async def discover_cycling_devices(
             requested_profiles.intersection(_advertised_profiles(advertisement))
         )
 
-    discovered = await discover_ble_devices(
+    discovered = await (discoverer or discover_ble_devices)(
         adapter=adapter,
         timeout=timeout,
         predicate=matches_profile,
@@ -82,7 +73,7 @@ async def discover_cycling_devices(
         candidates.append(
             (
                 device,
-                BleCyclingCandidate(
+                BleSensorCandidate(
                     identifier=str(device.address),
                     name=device.name or advertisement.local_name,
                     rssi=advertisement.rssi,
@@ -92,41 +83,6 @@ async def discover_cycling_devices(
         )
     candidates.sort(key=lambda item: item[1].identifier)
     return candidates
-
-
-async def find_cycling_device(
-    identifier: str,
-    timeout: float = 10.0,
-    *,
-    adapter: str | None = None,
-    profiles: tuple[str, ...] = (PROFILE_CSCS, PROFILE_CPS),
-    debug_log: Callable[[str], None] | None = None,
-):
-    """Stop scanning as soon as the configured cycling sensor is found."""
-    debug_log = debug_log or (lambda _message: None)
-    unknown_profiles = set(profiles) - set(PROFILE_SERVICE_UUIDS)
-    if unknown_profiles:
-        raise ValueError(f"Unknown BLE cycling profiles: {sorted(unknown_profiles)}")
-    normalized_identifier = identifier.casefold()
-
-    def matches_identifier(device, _advertisement) -> bool:
-        return str(device.address).casefold() == normalized_identifier
-
-    scan_started_at = time.monotonic()
-    devices = await discover_ble_devices(
-        adapter=adapter,
-        timeout=timeout,
-        predicate=matches_identifier,
-        stop_when=matches_identifier,
-    )
-    debug_log(f"scanner finished after {time.monotonic() - scan_started_at:.3f}s")
-    if not devices:
-        return None
-    return devices[0][0]
-
-
-def _client_has_service(client, service_uuid: str) -> bool:
-    return client.services.get_service(service_uuid) is not None
 
 
 class BleCyclingSession:
@@ -145,12 +101,14 @@ class BleCyclingSession:
         initial_device: object | None = None,
         name: str | None = None,
         on_name: Callable[[str | None], None] | None = None,
+        on_cadence_profile: Callable[[str], None] | None = None,
         scan_timeout: float = 10.0,
         reconnect_delay: float = 2.0,
         max_reconnect_delay: float = MAX_RECONNECT_DELAY,
         should_accumulate: Callable[[], bool] | None = None,
         log: Callable[[str], None] | None = None,
         debug_log: Callable[[str], None] | None = None,
+        transport: BleTransportProtocol | None = None,
     ):
         if not identifier.strip():
             raise ValueError("identifier must not be empty")
@@ -182,6 +140,7 @@ class BleCyclingSession:
         self._initial_device = initial_device
         self.name = str(name or "").strip() or None
         self.on_name = on_name or (lambda _name: None)
+        self.on_cadence_profile = on_cadence_profile or (lambda _profile: None)
         self.scan_timeout = scan_timeout
         self.reconnect_delay = reconnect_delay
         self.max_reconnect_delay = max_reconnect_delay
@@ -191,6 +150,7 @@ class BleCyclingSession:
         self.debug_log = debug_log or (lambda _message: None)
         self._expected_disconnect = False
         self._attempt_started_at = 0.0
+        self.transport = transport or BleakTransport()
 
     @property
     def processors(self) -> tuple[CyclingProcessor, ...]:
@@ -246,8 +206,7 @@ class BleCyclingSession:
                     health.record_connect_failure()
                 for processor in self.processors:
                     processor.on_disconnected()
-                error = " ".join(str(exc).splitlines())
-                self.log(f"{stage} failed: {error}")
+                self.log(f"{stage} failed: {format_ble_error(exc)}")
             if not stop_event.is_set():
                 await self._wait_retry(stop_event)
 
@@ -264,12 +223,10 @@ class BleCyclingSession:
     async def _find_device(self):
         scan_started_at = time.monotonic()
         self.debug_log(f"scan waiting on {self.adapter or 'platform default'}")
-        device = await find_cycling_device(
+        device = await self.transport.find_device(
             self.identifier,
-            self.scan_timeout,
+            timeout=self.scan_timeout,
             adapter=self.adapter,
-            profiles=self.requested_profiles,
-            debug_log=self.debug_log,
         )
         scan_elapsed = time.monotonic() - scan_started_at
         if device is not None:
@@ -282,7 +239,6 @@ class BleCyclingSession:
         return None
 
     async def _connect_once(self, device, stop_event: asyncio.Event) -> None:
-        from bleak import BleakClient
         from pycycling.cycling_power_service import CyclingPowerService
         from pycycling.cycling_speed_cadence_service import (
             CyclingSpeedCadenceService,
@@ -290,8 +246,13 @@ class BleCyclingSession:
         from pycycling.heart_rate_service import HeartRateService
 
         disconnected_event = asyncio.Event()
+        link_established = False
 
         def on_disconnected(_client) -> None:
+            # BlueZ retries a failed LE connection inside connect() and bleak reports
+            # each failure here, so only a drop after connect() ends the session.
+            if not link_established:
+                return
             if not self._expected_disconnect:
                 for processor in self.processors:
                     processor.on_disconnected()
@@ -299,10 +260,10 @@ class BleCyclingSession:
                     health.record_unexpected_disconnect()
             disconnected_event.set()
 
-        client = BleakClient(
+        client = self.transport.client(
             device,
+            adapter=self.adapter,
             disconnected_callback=on_disconnected,
-            **_bleak_kwargs(self.adapter),
         )
         self._expected_disconnect = False
         pycycling_client = PycyclingValidationClient(
@@ -322,7 +283,15 @@ class BleCyclingSession:
         disconnect_task = None
         feature_task = None
         first_notification_profiles = set()
+        confirmed_cadence_profiles = set()
+        setup_guard = contextlib.AsyncExitStack()
         stage = "gatt_connect"
+
+        def confirm_cadence_profile(profile: str) -> None:
+            if profile in confirmed_cadence_profiles:
+                return
+            confirmed_cadence_profiles.add(profile)
+            self.on_cadence_profile(profile)
 
         def log_first_notification(profile: str, received_at: float) -> None:
             if profile in first_notification_profiles:
@@ -334,8 +303,14 @@ class BleCyclingSession:
             )
 
         try:
+            await setup_guard.enter_async_context(
+                self.transport.connection_setup(self.adapter, device)
+            )
             connect_started_at = time.monotonic()
             await client.connect()
+            link_established = True
+            setup_deadline = BleSetupDeadline(GATT_SETUP_TIMEOUT)
+
             self.debug_log(
                 f"GATT connected after {time.monotonic() - connect_started_at:.3f}s"
             )
@@ -390,6 +365,11 @@ class BleCyclingSession:
             def on_cps_measurement(measurement) -> None:
                 received_at = time.monotonic()
                 log_first_notification(PROFILE_CPS, received_at)
+                if (
+                    measurement.cumulative_crank_revs is not None
+                    and measurement.last_crank_event_time is not None
+                ):
+                    confirm_cadence_profile(PROFILE_CPS)
                 if cps_available and self.power_processor is not None:
                     self.power_processor.handle_measurement(
                         measurement,
@@ -405,7 +385,9 @@ class BleCyclingSession:
             stage = "start_notify:HRS"
             if hrs_available and self.heart_rate_processor is not None:
                 hrs_service.set_hr_measurement_handler(on_hrs_measurement)
-                await hrs_service.enable_hr_measurement_notifications()
+                await setup_deadline.wait(
+                    hrs_service.enable_hr_measurement_notifications()
+                )
                 hrs_notifications_enabled = True
             stage = "start_notify:CSCS"
             if csc_available and (
@@ -416,7 +398,9 @@ class BleCyclingSession:
                 )
             ):
                 csc_service.set_csc_measurement_handler(on_csc_measurement)
-                await csc_service.enable_csc_measurement_notifications()
+                await setup_deadline.wait(
+                    csc_service.enable_csc_measurement_notifications()
+                )
                 csc_notifications_enabled = True
             stage = "start_notify:CPS"
             if cps_available and (
@@ -427,7 +411,9 @@ class BleCyclingSession:
                 )
             ):
                 cps_service.set_cycling_power_measurement_handler(on_cps_measurement)
-                await cps_service.enable_cycling_power_measurement_notifications()
+                await setup_deadline.wait(
+                    cps_service.enable_cycling_power_measurement_notifications()
+                )
                 cps_notifications_enabled = True
 
             cadence_notifications_enabled = self._cadence_notifications_enabled(
@@ -479,6 +465,7 @@ class BleCyclingSession:
                 f"{time.monotonic() - self._attempt_started_at:.3f}s"
             )
             self.log(f"connected to {format_ble_identity(self.name, self.identifier)}")
+            await setup_guard.aclose()
 
             async def refine_profile_features() -> None:
                 nonlocal csc_wheel_supported
@@ -501,6 +488,8 @@ class BleCyclingSession:
                         csc_crank_supported = bool(csc_feature.crank_rev_supported)
                     if cps_feature is not None:
                         cps_crank_supported = bool(cps_feature.crank_rev_supported)
+                        if cps_crank_supported:
+                            confirm_cadence_profile(PROFILE_CPS)
                     selected_cadence_source = self._select_cadence_source(
                         csc_crank_supported,
                         cps_crank_supported,
@@ -523,8 +512,7 @@ class BleCyclingSession:
                             "crank revolution data is not supported",
                         )
                 except Exception as exc:
-                    error = " ".join(str(exc).splitlines())
-                    self.log(f"Feature processing failed: {error}")
+                    self.log(f"Feature processing failed: {format_ble_error(exc)}")
 
             stage = "feature_read"
             feature_task = asyncio.create_task(refine_profile_features())
@@ -546,39 +534,41 @@ class BleCyclingSession:
                     return_when=asyncio.FIRST_COMPLETED,
                 )
         except Exception as exc:
-            error = " ".join(str(exc).splitlines())
-            raise RuntimeError(f"{stage}: {error}") from exc
+            raise RuntimeError(f"{stage}: {format_ble_error(exc)}") from exc
         finally:
-            pending_tasks = [
-                task
-                for task in (stop_task, disconnect_task, feature_task)
-                if task is not None
-            ]
-            for task in pending_tasks:
-                task.cancel()
-            if pending_tasks:
-                await asyncio.gather(*pending_tasks, return_exceptions=True)
-            self._expected_disconnect = True
-            if client.is_connected:
-                if hrs_notifications_enabled:
+            try:
+                # Release discovery before potentially slow GATT cleanup.
+                await setup_guard.aclose()
+            finally:
+                pending_tasks = [
+                    task
+                    for task in (stop_task, disconnect_task, feature_task)
+                    if task is not None
+                ]
+                for task in pending_tasks:
+                    task.cancel()
+                if pending_tasks:
+                    await asyncio.gather(*pending_tasks, return_exceptions=True)
+                self._expected_disconnect = True
+                if client.is_connected:
+                    if hrs_notifications_enabled:
+                        with contextlib.suppress(Exception):
+                            await hrs_service.disable_hr_measurement_notifications()
+                    if csc_notifications_enabled:
+                        with contextlib.suppress(Exception):
+                            await csc_service.disable_csc_measurement_notifications()
+                    if cps_notifications_enabled:
+                        with contextlib.suppress(Exception):
+                            await (
+                                cps_service.disable_cycling_power_measurement_notifications()
+                            )
                     with contextlib.suppress(Exception):
-                        await hrs_service.disable_hr_measurement_notifications()
-                if csc_notifications_enabled:
-                    with contextlib.suppress(Exception):
-                        await csc_service.disable_csc_measurement_notifications()
-                if cps_notifications_enabled:
-                    with contextlib.suppress(Exception):
-                        await cps_service.disable_cycling_power_measurement_notifications()
-                with contextlib.suppress(Exception):
-                    await client.disconnect()
+                        await client.disconnect()
 
     def _profile_available(self, client, profile: str) -> bool:
         if profile not in self.requested_profiles:
             return False
-        return _client_has_service(
-            client,
-            PROFILE_SERVICE_UUIDS[profile],
-        )
+        return client.services.get_service(PROFILE_SERVICE_UUIDS[profile]) is not None
 
     def _set_processor_availability(
         self,
@@ -598,17 +588,9 @@ class BleCyclingSession:
         if not available:
             return None
         try:
-            async with asyncio.timeout(FEATURE_READ_TIMEOUT):
-                return await read_feature()
-        except TimeoutError:
-            self.log(
-                f"{profile} Feature read timed out after "
-                f"{FEATURE_READ_TIMEOUT:.1f}s"
-            )
-            return None
+            return await read_feature()
         except Exception as exc:
-            error = " ".join(str(exc).splitlines())
-            self.log(f"{profile} Feature read failed: {error}")
+            self.log(f"{profile} Feature read failed: {format_ble_error(exc)}")
             return None
 
     @staticmethod

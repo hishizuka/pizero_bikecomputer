@@ -129,6 +129,64 @@ $ pip install gadgetbridge-rpi-link
 $ pip install garminconnect tb-mqtt-client mmh3 timezonefinder
 ```
 
+`install.sh` sets the BlueZ discovery scan to a 60 ms interval with a 30 ms
+window and limits the ATT MTU for compatibility with the CA600 power-meter
+relay. For a manual installation, edit `/etc/bluetooth/main.conf` and set these
+values in the existing sections:
+
+```ini
+[LE]
+ScanIntervalDiscovery = 96
+ScanWindowDiscovery = 48
+
+[GATT]
+ExchangeMTU = 247
+```
+
+The discovery values use BlueZ's 0.625 ms units. Compared with the controller's
+11.25/11.25 ms discovery defaults on the tested CM0, the 60/30 ms setting reduced
+scan radio duty and improved Wi-Fi throughput during repeated BLE discovery.
+The 247-byte ATT MTU avoids a CA600 service-discovery response ending partway
+through a characteristic entry at BlueZ's 517-byte default. The application
+still uses standard HRS, CSCS and CPS profiles without device-name or
+address-specific handling.
+
+Reboot after changing the discovery values. Restarting `bluetooth.service` is
+not sufficient on the tested controller because it can retain the previously
+loaded interval and window until the next reboot. The MTU can be applied by
+restarting Bluetooth, but make sure the current network connection does not use
+Bluetooth PAN before running `sudo systemctl restart bluetooth`.
+
+BlueZ stores the last connection parameters a sensor requested and uses them for
+its next connection. To start every connection at 30-50 ms with a 5-second
+supervision timeout, the application loads these values per device, which requires
+`CAP_NET_ADMIN`. The installed service grants it with
+`AmbientCapabilities=CAP_NET_ADMIN`. Without this capability BLE sensors still work,
+but reconnecting can take about three times longer.
+
+On Raspberry Pi Compute Module 0, `install.sh` also sets `btc_mode=1` in the
+board-specific CYW43439 NVRAM. The packaged file sets `btc_mode=0`, and BLE sensor
+connections failed with that value while Wi-Fi was connected. Other Raspberry Pi
+Wi-Fi chips already use `btc_mode=1`. For a manual installation, run the following
+commands and reboot:
+
+```bash
+sudo dpkg-divert --local --rename --divert '/usr/lib/firmware/brcm/brcmfmac43439-sdio.raspberrypi,0-compute-module.txt.distrib' --add '/usr/lib/firmware/brcm/brcmfmac43439-sdio.raspberrypi,0-compute-module.txt'
+```
+
+```bash
+sed -E 's/^btc_mode=0$/btc_mode=1/' /usr/lib/firmware/cypress/cyfmac43439-sdio.txt | sudo tee '/usr/lib/firmware/brcm/brcmfmac43439-sdio.raspberrypi,0-compute-module.txt' > /dev/null
+```
+
+To restore the packaged CM0 NVRAM, remove the generated file and remove the
+diversion. The diverted symbolic link is then restored automatically:
+
+```bash
+sudo rm -f '/usr/lib/firmware/brcm/brcmfmac43439-sdio.raspberrypi,0-compute-module.txt'
+sudo dpkg-divert --local --rename --divert '/usr/lib/firmware/brcm/brcmfmac43439-sdio.raspberrypi,0-compute-module.txt.distrib' --remove '/usr/lib/firmware/brcm/brcmfmac43439-sdio.raspberrypi,0-compute-module.txt'
+sudo reboot
+```
+
 ### GPS module
 
 `install.sh` displays a GPS menu. Choose one option by number:

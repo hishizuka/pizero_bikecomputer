@@ -435,6 +435,7 @@ class SensorCore:
             self.sensor_ant.invalidate_sensor_values()
             self.sensor_ant.transport_disconnected = True
             self.sensor_ble.disconnect_cycling_sensors()
+            self.sensor_ble.disconnect_light()
             self.sensor_ble.disconnect_zwift_click_v2()
 
         loop = asyncio.get_running_loop()
@@ -445,6 +446,7 @@ class SensorCore:
                 if os.path.exists("/dev/ttyANT"):
                     self.sensor_ant.reconnect_if_requested()
                     self.sensor_ble.connect_cycling_sensors()
+                    self.sensor_ble.connect_light()
                     self.sensor_ble.connect_zwift_click_v2()
                     app_logger.info(
                         "bridge USB recovery attempted (ant_available=%s)",
@@ -468,7 +470,7 @@ class SensorCore:
         if self.control_uart is not None:
             await self.control_uart.quit()
         self.sensor_ant.quit()
-        self.sensor_ble.quit()
+        await self.sensor_ble.close()
         await self.sensor_gps.quit()
         await self.sensor_gpio.quit()
         if self.sensor_cardputerzero is not None:
@@ -477,6 +479,23 @@ class SensorCore:
     def pause_recording(self):
         self.sensor_ant.pause_recording()
         self.sensor_ble.pause_recording()
+
+    def is_light_available(self):
+        if self.config.sensor_uses("LGT", self.config.SENSOR_PROTOCOL_BLE):
+            return self.sensor_ble.is_sensor_available("LGT")
+        return self.sensor_ant.is_sensor_available("LGT")
+
+    def set_light_mode(self, mode, auto=False):
+        if self.config.sensor_uses("LGT", self.config.SENSOR_PROTOCOL_BLE):
+            self.sensor_ble.set_light_mode(mode, auto)
+        else:
+            self.sensor_ant.set_light_mode(mode, auto)
+
+    def set_auto_light_enabled(self, enabled):
+        if self.config.sensor_uses("LGT", self.config.SENSOR_PROTOCOL_BLE):
+            self.sensor_ble.set_auto_light_enabled(enabled)
+        else:
+            self.sensor_ant.set_auto_light_enabled(enabled)
 
     # reset accumulated values
     def reset(self):
@@ -1425,16 +1444,16 @@ class SensorCore:
 
             if (
                 self.config.G_AUTO_LIGHT
-                and ant_use["LGT"]
+                and self.is_light_available()
                 and self.config.G_MANUAL_STATUS == "START"
             ):
                 auto_light = is_dark
                 if speed_brake_hint or cadence_brake_hint or power_brake_hint:
                     auto_light = True
                 if auto_light:
-                    self.sensor_ant.set_light_mode("FLASH_LOW", auto=True)
+                    self.set_light_mode("FLASH_LOW", auto=True)
                 else:
-                    self.sensor_ant.set_light_mode("OFF", auto=True)
+                    self.set_light_mode("OFF", auto=True)
 
             # cpu and memory
             self.values["integrated"]["system_cpu_percent"] = int(

@@ -752,7 +752,7 @@ class LightMenuWidget(SensorConnectionMenuWidget):
         if change:
             enabled = not self.config.G_AUTO_LIGHT
             self.config.G_AUTO_LIGHT = enabled
-            self.sensor_ant.set_auto_light_enabled(enabled)
+            self.sensor.set_auto_light_enabled(enabled)
             self.config.setting.write_config()
         self.buttons[self.AUTO_CONTROL_BUTTON].change_toggle(self.config.G_AUTO_LIGHT)
 
@@ -763,7 +763,7 @@ class LightMenuWidget(SensorConnectionMenuWidget):
     def update_connection_status(self):
         super().update_connection_status()
         self.buttons[self.AUTO_CONTROL_BUTTON].onoff_button(
-            self.sensor_ant.is_sensor_available("LGT")
+            self.sensor.is_light_available()
         )
 
 
@@ -981,6 +981,8 @@ class BLEListWidget(SensorPairingListWidget):
     def preprocess_extra(self):
         self.cancel_scan()
         self.candidates.clear()
+        for candidate in self.sensor_ble.known_sensor_candidates(self.list_type):
+            self.add_candidate(candidate)
         self.scan_generation += 1
         generation = self.scan_generation
         self.search_indicator.set_status(STATUS_CONNECTING)
@@ -1000,21 +1002,14 @@ class BLEListWidget(SensorPairingListWidget):
         if generation != self.scan_generation:
             return
         self.search_indicator.set_status(None)
-        if not candidates:
+        if not candidates and not self.candidates:
             item = FullWidthSeparatorListItemWidget(self, "No sensors found")
             item.setEnabled(False)
             self.add_list_item(item)
             return
 
         for candidate in candidates:
-            if candidate.identifier in self.candidates:
-                continue
-            self.candidates[candidate.identifier] = candidate
-            item = BLEListItemWidget(self, candidate)
-            self.add_list_item(item)
-            app_logger.debug(
-                f"Adding BLE sensor: {candidate.identifier} " f"{candidate.name or ''}"
-            )
+            self.add_candidate(candidate)
 
         if self.config.uses_keyboard_navigation and self.list.count():
             self.list.setCurrentRow(0)
@@ -1025,6 +1020,9 @@ class BLEListWidget(SensorPairingListWidget):
     async def button_func_extra(self):
         if self.selected_item is None:
             return
+        self.scan_generation += 1
+        self.cancel_scan()
+        self.search_indicator.set_status(None)
         candidate = self.selected_item.candidate
         profiles = candidate.profiles
         profile = profiles[0] if len(profiles) == 1 else None
@@ -1038,6 +1036,16 @@ class BLEListWidget(SensorPairingListWidget):
         )
         if self.paired_return_page is not None:
             self.back_index_key = self.paired_return_page
+
+    def add_candidate(self, candidate):
+        if candidate.identifier in self.candidates:
+            return
+        self.candidates[candidate.identifier] = candidate
+        item = BLEListItemWidget(self, candidate)
+        self.add_list_item(item)
+        app_logger.debug(
+            f"Adding BLE sensor: {candidate.identifier} {candidate.name or ''}"
+        )
 
     def cancel_scan(self):
         if self.scan_task is not None and not self.scan_task.done():

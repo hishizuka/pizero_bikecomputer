@@ -14,6 +14,8 @@ ExecStopPost=
 
 User=
 Group=
+# Loads per-device BLE connection parameters through the BlueZ MGMT interface.
+AmbientCapabilities=CAP_NET_ADMIN
 Type=simple
 Restart=no
 #Restart=on-failure

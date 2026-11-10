@@ -20,7 +20,7 @@ import re
 import signal
 import sys
 import time
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from typing import Callable, Dict, Iterable, List, Optional, Protocol
 
@@ -30,9 +30,20 @@ if __package__:
 
     from .health import BleSessionHealth
     from .identity import format_ble_identity
+    from .session import GATT_SETUP_TIMEOUT, BleSetupDeadline
+    from .transport import BleakTransport, BleTransportProtocol, format_ble_error
 else:
     # Allow running this file directly for hardware diagnostics.
-    from identity import format_ble_identity
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+    from modules.sensor.ble.identity import format_ble_identity
+    from modules.sensor.ble.session import GATT_SETUP_TIMEOUT, BleSetupDeadline
+    from modules.sensor.ble.transport import (
+        BleakTransport,
+        BleTransportProtocol,
+        format_ble_error,
+    )
 
 try:
     from bleak import BleakClient
@@ -42,7 +53,7 @@ try:
     if __package__:
         from .discovery import discover_ble_devices
     else:
-        from discovery import discover_ble_devices
+        from modules.sensor.ble.discovery import discover_ble_devices
 except ImportError:
     BleakClient = None
     discover_ble_devices = None
@@ -102,12 +113,6 @@ DEFAULT_RECONNECT_DELAY_SECONDS = 3.0
 STOPPED_PACKET_WARNING = (
     "Zwift Click V2 may be locked. Connect it once in the Zwift app, " "then reconnect."
 )
-
-
-def _bluez_args(adapter: Optional[str]) -> dict:
-    if not adapter:
-        return {}
-    return {"bluez": {"adapter": adapter}}
 
 
 class BleHealthRecorder(Protocol):
@@ -470,7 +475,7 @@ def _is_duplicate_debug_packet(packet: bytes, previous: Dict[int, bytes]) -> boo
     return old_packet == packet
 
 
-def _read_varint(data: bytes, index: int) -> tuple[Optional[int], int]:
+def _read_optional_varint(data: bytes, index: int) -> tuple[Optional[int], int]:
     value = 0
     shift = 0
     while index < len(data):
@@ -499,20 +504,20 @@ def _extract_click_v2_vendor_status(data: bytes) -> Optional[int]:
 
     index = 0
     while index < len(payload):
-        tag, index = _read_varint(payload, index)
+        tag, index = _read_optional_varint(payload, index)
         if tag is None:
             return None
         field_number = tag >> 3
         wire_type = tag & 0x07
 
         if wire_type == 0:
-            value, index = _read_varint(payload, index)
+            value, index = _read_optional_varint(payload, index)
             if value is None:
                 return None
             if field_number == 2:
                 return value
         elif wire_type == 2:
-            length, index = _read_varint(payload, index)
+            length, index = _read_optional_varint(payload, index)
             if length is None:
                 return None
             index += length
@@ -541,7 +546,7 @@ def _is_button_notification_packet(data: bytes) -> bool:
 
 
 async def connect_and_listen(
-    device: str | BLEDevice,
+    device: BLEDevice,
     side: str,
     classifier: PressDurationClassifier,
     stop_event: asyncio.Event,
@@ -556,105 +561,140 @@ async def connect_and_listen(
     on_button_notification: Optional[Callable[[str, bytes], None]] = None,
     adapter: Optional[str] = None,
     health: Optional[BleHealthRecorder] = None,
+    transport: BleTransportProtocol | None = None,
 ) -> bool:
     """Connect to a single Click V2 and feed button events to callback."""
-    connected = False
-    address = device if isinstance(device, str) else device.address
+    transport = transport or BleakTransport()
+    address = device.address
+    attempt_started_at = time.monotonic()
+    stage = "gatt_connect"
+    ready = False
+    last_rx_mono: Optional[float] = None
+    stopped_notice_sent = False
+    stopped_event = asyncio.Event()
+    previous_debug_packets: Dict[int, bytes] = {}
+
+    client = transport.client(
+        device,
+        adapter=adapter,
+    )
+
     if health is not None:
         health.record_connect_attempt()
+
+    def mark_rx() -> None:
+        nonlocal last_rx_mono
+        last_rx_mono = time.monotonic()
+        if health is not None:
+            health.record_notification(last_rx_mono)
+
+    def handle_data(_sender, data: bytes) -> None:
+        nonlocal stopped_notice_sent
+        packet = bytes(data)
+        if debug_log is not None and not _is_duplicate_debug_packet(
+            packet,
+            previous_debug_packets,
+        ):
+            sender_uuid = getattr(_sender, "uuid", _sender)
+            debug_log(
+                f"[{side}] rx char={sender_uuid} len={len(packet)} "
+                f"packet={_format_packet_hex(packet)}"
+            )
+        vendor_status = _extract_click_v2_vendor_status(packet)
+        if vendor_status is not None and on_vendor_status is not None:
+            on_vendor_status(side, vendor_status, packet)
+        stopped = handle_notification(
+            side,
+            packet,
+            classifier,
+            log=log,
+            on_rx=mark_rx,
+        )
+        if on_button_notification is not None and _is_button_notification_packet(
+            packet
+        ):
+            on_button_notification(side, packet)
+        if not stopped or stopped_notice_sent:
+            return
+        stopped_notice_sent = True
+        log(
+            f"[{side}] {STOPPED_PACKET_WARNING} " f"packet={_format_packet_hex(packet)}"
+        )
+        if on_stopped is not None:
+            on_stopped(side, packet)
+        stopped_event.set()
+
     try:
-        async with BleakClient(device, **_bluez_args(adapter)) as client:
-            connected = True
+        async with transport.connection_setup(adapter, device):
+            await client.connect()
+            setup_deadline = BleSetupDeadline(GATT_SETUP_TIMEOUT)
+
+            if debug_log is not None:
+                debug_log(
+                    f"[{side}] GATT connected after "
+                    f"{time.monotonic() - attempt_started_at:.3f}s"
+                )
+
+            stage = "start_notify:async"
+            await setup_deadline.wait(client.start_notify(ASYNC_CHAR, handle_data))
+            stage = "start_notify:sync"
+            await setup_deadline.wait(client.start_notify(SYNC_TX_CHAR, handle_data))
+            stage = "ride_on"
+            await setup_deadline.wait(
+                client.write_gatt_char(
+                    SYNC_RX_CHAR,
+                    START_COMMAND,
+                    response=False,
+                )
+            )
+
+            ready = True
             if health is not None:
                 health.record_connected()
             log(f"[{side}] connected to {format_ble_identity(name, address)}")
-            last_rx_mono: Optional[float] = None
-            stopped_notice_sent = False
-            previous_debug_packets: Dict[int, bytes] = {}
-
-            def mark_rx() -> None:
-                nonlocal last_rx_mono
-                last_rx_mono = time.monotonic()
-                if health is not None:
-                    health.record_notification(last_rx_mono)
-
-            def handle_data(_sender, data: bytes) -> None:
-                nonlocal stopped_notice_sent
-                packet = bytes(data)
-                if debug_log is not None and not _is_duplicate_debug_packet(
-                    packet,
-                    previous_debug_packets,
-                ):
-                    sender_uuid = getattr(_sender, "uuid", _sender)
-                    debug_log(
-                        f"[{side}] rx char={sender_uuid} len={len(packet)} "
-                        f"packet={_format_packet_hex(packet)}"
-                    )
-                vendor_status = _extract_click_v2_vendor_status(packet)
-                if vendor_status is not None and on_vendor_status is not None:
-                    on_vendor_status(side, vendor_status, packet)
-                stopped = handle_notification(
-                    side,
-                    packet,
-                    classifier,
-                    log=log,
-                    on_rx=mark_rx,
-                )
-                if (
-                    on_button_notification is not None
-                    and _is_button_notification_packet(packet)
-                ):
-                    on_button_notification(side, packet)
-                if not stopped or stopped_notice_sent:
-                    return
-                stopped_notice_sent = True
-                log(
-                    f"[{side}] {STOPPED_PACKET_WARNING} "
-                    f"packet={_format_packet_hex(packet)}"
-                )
-                if on_stopped is not None:
-                    on_stopped(side, packet)
-
             if on_connected is not None:
                 on_connected(side, address, name)
-            await client.start_notify(ASYNC_CHAR, handle_data)
-            await client.start_notify(SYNC_TX_CHAR, handle_data)
 
-            # Send the Click V2 session-start command as one BLE write.
-            await client.write_gatt_char(
-                SYNC_RX_CHAR,
-                START_COMMAND,
-                response=False,
-            )
+            if debug_log is not None:
+                debug_log(
+                    f"[{side}] notifications enabled and RideOn sent after "
+                    f"{time.monotonic() - attempt_started_at:.3f}s"
+                )
 
-            # Wait until disconnected or requested to stop.
-            while client.is_connected and not stop_event.is_set():
-                await asyncio.sleep(0.2)
-            if not stop_event.is_set() and not client.is_connected:
-                if health is not None:
-                    health.record_unexpected_disconnect()
-                if last_rx_mono is None:
-                    log(f"[{side}] disconnected (no notifications received)")
-                else:
-                    since_last = time.monotonic() - last_rx_mono
-                    log(
-                        f"[{side}] disconnected (last notification {since_last:.1f}s ago)"
-                    )
-    except asyncio.CancelledError:
-        if connected:
-            stop_event.set()
-        return connected
+        stage = "connected_wait"
+        while (
+            client.is_connected
+            and not stop_event.is_set()
+            and not stopped_event.is_set()
+        ):
+            await asyncio.sleep(0.2)
+        if stopped_event.is_set() and not stop_event.is_set():
+            log(f"[{side}] stopped/locked; disconnecting")
+        if not stop_event.is_set() and not client.is_connected:
+            if health is not None:
+                health.record_unexpected_disconnect()
+            if last_rx_mono is None:
+                log(f"[{side}] disconnected (no notifications received)")
+            else:
+                since_last = time.monotonic() - last_rx_mono
+                log(f"[{side}] disconnected (last notification {since_last:.1f}s ago)")
     except Exception as exc:  # noqa: BLE errors are runtime
         if health is not None:
-            if connected:
+            if ready:
                 health.record_unexpected_disconnect()
             else:
                 health.record_connect_failure()
-        log(f"[{side}] error: {exc}")
+        log(
+            f"[{side}] {stage} failed after "
+            f"{time.monotonic() - attempt_started_at:.3f}s: {format_ble_error(exc)}"
+        )
     finally:
-        if connected and on_disconnected is not None:
+        if client.is_connected:
+            with suppress(Exception):
+                await client.disconnect()
+        if ready and on_disconnected is not None:
             on_disconnected(side, address)
-    return connected
+    return ready
 
 
 def handle_notification(
@@ -729,6 +769,7 @@ async def listen(
     on_button_notification: Optional[Callable[[str, bytes], None]] = None,
     log: Callable[[str], None] = print,
     debug_log: Optional[Callable[[str], None]] = None,
+    transport: BleTransportProtocol | None = None,
 ) -> None:
     """Scan, connect, and dispatch button presses (short/long) via callback.
 
@@ -741,19 +782,26 @@ async def listen(
         default_repeat_interval_seconds=repeat_interval_seconds,
         on_classified=on_classified,
     )
+    transport = transport or BleakTransport()
+    not_found_logged = False
 
     timeout_task = asyncio.create_task(_press_timeout_poller(classifier, stop_event))
     try:
         while not stop_event.is_set():
+            scan_started_at = time.monotonic()
             try:
                 devices = await scan_for_click_v2(
                     timeout=scan_timeout_seconds,
                     prefer_left=prefer_left,
                     preferred_address=preferred_address,
                     adapter=adapter,
+                    discoverer=transport.discover,
                 )
             except Exception as exc:  # noqa: BlueZ discovery errors are runtime
-                log(f"scan failed: {exc}")
+                log(
+                    f"scan failed after {time.monotonic() - scan_started_at:.3f}s: "
+                    f"{format_ble_error(exc)}"
+                )
                 if not scan_forever:
                     return
                 await asyncio.sleep(reconnect_delay_seconds)
@@ -771,6 +819,12 @@ async def listen(
                 else [d for d in devices if d.side == "left"]
             )
             if not selected:
+                if not not_found_logged:
+                    log(
+                        "configured controller was not found after "
+                        f"{time.monotonic() - scan_started_at:.3f}s"
+                    )
+                    not_found_logged = True
                 if not scan_forever:
                     log(
                         "Zwift Click V2 not found. Ensure the device is awake and advertising."
@@ -778,6 +832,13 @@ async def listen(
                     return
                 await asyncio.sleep(scan_interval_seconds)
                 continue
+            not_found_logged = False
+            stopped_connection = asyncio.Event()
+
+            def handle_stopped(side: str, packet: bytes) -> None:
+                stopped_connection.set()
+                if on_stopped is not None:
+                    on_stopped(side, packet)
 
             tasks = [
                 asyncio.create_task(
@@ -791,11 +852,12 @@ async def listen(
                         debug_log=debug_log,
                         on_connected=on_connected,
                         on_disconnected=on_disconnected,
-                        on_stopped=on_stopped,
+                        on_stopped=handle_stopped,
                         on_vendor_status=on_vendor_status,
                         on_button_notification=on_button_notification,
                         adapter=adapter,
                         health=health,
+                        transport=transport,
                     )
                 )
                 for d in selected
@@ -817,7 +879,12 @@ async def listen(
             if not scan_forever:
                 return
 
-            await asyncio.sleep(reconnect_delay_seconds)
+            retry_delay = (
+                scan_interval_seconds
+                if stopped_connection.is_set()
+                else reconnect_delay_seconds
+            )
+            await asyncio.sleep(retry_delay)
     finally:
         timeout_task.cancel()
         await asyncio.gather(timeout_task, return_exceptions=True)
@@ -828,6 +895,7 @@ async def scan_for_click_v2(
     prefer_left: bool = True,
     preferred_address: Optional[str] = None,
     adapter: Optional[str] = None,
+    discoverer=None,
 ) -> List[ZwiftClickSide]:
     """Scan for Click V2 left/right units using manufacturer data."""
 
@@ -851,7 +919,7 @@ async def scan_for_click_v2(
             return device.address.casefold() == preferred_address.casefold()
         return prefer_left and side == "left"
 
-    devices = await discover_ble_devices(
+    devices = await (discoverer or discover_ble_devices)(
         adapter=adapter,
         timeout=timeout,
         predicate=matches_click,
@@ -902,7 +970,14 @@ class ZwiftClickV2Session:
     CLICK_INPUT_OPERATIONAL = "operational"
     CLICK_INPUT_INACTIVE = "inactive"
 
-    def __init__(self, config, resolve_adapter):
+    def __init__(
+        self,
+        config,
+        resolve_adapter,
+        *,
+        transport: BleTransportProtocol,
+    ):
+        self.transport = transport
         self.config = config
         self.resolve_adapter = resolve_adapter
         self.health = BleSessionHealth()
@@ -941,12 +1016,19 @@ class ZwiftClickV2Session:
         """Stop Zwift Click V2 listener if running."""
         self._desired_running = False
         self.connection_status = self._control_idle_status()
+        self.auth_status = self.CLICK_AUTH_UNKNOWN
+        self.input_status = self.CLICK_INPUT_UNKNOWN
         stop_event = self._stop_event
         if stop_event is not None:
             stop_event.set()
         task = self._task
         if task is not None and not task.done():
             task.cancel()
+
+    async def close(self):
+        self.disconnect()
+        if self._task is not None:
+            await asyncio.gather(self._task, return_exceptions=True)
 
     @asynccontextmanager
     async def paused(self):
@@ -966,6 +1048,7 @@ class ZwiftClickV2Session:
             ZWIFT_CLICK_AVAILABLE
             and self.config.ble_sensor_enabled()
             and self.is_configured()
+            and self.transport.supports_control
         )
 
     def is_configured(self) -> bool:
@@ -1002,7 +1085,7 @@ class ZwiftClickV2Session:
             self.connect()
 
     async def _run_listener(self, stop_event: asyncio.Event) -> None:
-        preferred_address = str(self.config.G_SENSORS[self.CONTROL_ROLE]["ID"]).strip()
+        preferred_address = self.config.G_SENSORS[self.CONTROL_ROLE]["ID"]
 
         def log(msg: str) -> None:
             app_logger.info(f"[ZwiftClickV2] {msg}")
@@ -1012,7 +1095,7 @@ class ZwiftClickV2Session:
 
         adapter = None
         try:
-            if sys.platform.startswith("linux"):
+            if sys.platform.startswith("linux") and not self.transport.remote:
                 adapter = self.resolve_adapter()
                 if adapter is None:
                     return
@@ -1031,6 +1114,7 @@ class ZwiftClickV2Session:
                 debug_log=debug_log,
                 adapter=adapter,
                 health=self.health,
+                transport=self.transport,
             )
         except asyncio.CancelledError:
             return
@@ -1038,6 +1122,8 @@ class ZwiftClickV2Session:
             log(f"listener crashed: {exc}")
         finally:
             self.connection_status = self._control_idle_status()
+            self.auth_status = self.CLICK_AUTH_UNKNOWN
+            self.input_status = self.CLICK_INPUT_UNKNOWN
 
     def _on_classified(
         self, _side: str, button: str, kind: str, _duration: float
@@ -1065,6 +1151,7 @@ class ZwiftClickV2Session:
         if not self._desired_running:
             return
         self.connection_status = "connecting"
+        self.auth_status = self.CLICK_AUTH_UNKNOWN
         self.input_status = self.CLICK_INPUT_UNKNOWN
 
     def _handle_vendor_status(

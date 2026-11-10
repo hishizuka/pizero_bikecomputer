@@ -12,6 +12,8 @@ from bleak import BleakScanner
 from bleak.backends.device import BLEDevice
 from bleak.backends.scanner import AdvertisementData
 
+from modules.app_logger import app_logger
+
 BleAdvertisement = tuple[BLEDevice, AdvertisementData]
 BleAdvertisementPredicate = Callable[[BLEDevice, AdvertisementData], bool]
 
@@ -42,6 +44,7 @@ class BleDiscoveryCoordinator:
     def __init__(self, adapter: str | None):
         self.adapter = adapter
         self._scanner: BleakScanner | None = None
+        self._scanner_started = False
         self._requests: set[_DiscoveryRequest] = set()
         self._recent_advertisements: dict[
             str,
@@ -87,11 +90,12 @@ class BleDiscoveryCoordinator:
 
     async def _stop_scanner(self) -> None:
         scanner = self._scanner
-        self._scanner = None
-        if scanner is not None:
-            await asyncio.wait_for(
-                scanner.stop(), timeout=self.SCANNER_OPERATION_TIMEOUT
-            )
+        if scanner is None:
+            return
+        await asyncio.wait_for(scanner.stop(), timeout=self.SCANNER_OPERATION_TIMEOUT)
+        if self._scanner is scanner:
+            self._scanner = None
+            self._scanner_started = False
 
     @asynccontextmanager
     async def paused(self):
@@ -105,21 +109,52 @@ class BleDiscoveryCoordinator:
             yield
         finally:
             if entered:
-                async with self._lock:
-                    self._pause_depth -= 1
-                    if self._pause_depth == 0 and self._requests:
-                        await self._start_scanner()
+                # Update the counter before awaiting so repeated cancellation cannot
+                # leave discovery permanently paused.
+                self._pause_depth -= 1
+                resume_task = asyncio.create_task(self._resume_scanner())
+                await asyncio.shield(resume_task)
 
     async def _start_scanner(self) -> None:
+        if self._scanner is not None:
+            await self._stop_scanner()
         self._recent_advertisements.clear()
         scanner = BleakScanner(
             detection_callback=self._on_advertisement,
             **_scanner_kwargs(self.adapter),
         )
-        await asyncio.wait_for(
-            scanner.start(), timeout=self.SCANNER_OPERATION_TIMEOUT
-        )
         self._scanner = scanner
+        self._scanner_started = False
+        try:
+            await asyncio.wait_for(
+                scanner.start(), timeout=self.SCANNER_OPERATION_TIMEOUT
+            )
+        except BaseException:
+            try:
+                await asyncio.wait_for(
+                    scanner.stop(), timeout=self.SCANNER_OPERATION_TIMEOUT
+                )
+            except BaseException as cleanup_error:
+                app_logger.warning(
+                    "[BLE-SENSOR] failed to stop scanner after start failure: "
+                    f"{cleanup_error!r}"
+                )
+            else:
+                if self._scanner is scanner:
+                    self._scanner = None
+            raise
+        self._scanner_started = True
+
+    async def _resume_scanner(self) -> None:
+        async with self._lock:
+            if self._pause_depth or not self._requests or self._scanner_started:
+                return
+            try:
+                await self._start_scanner()
+            except Exception as exc:
+                # A failed discovery restart must not tear down an established link.
+                # Pending requests retry when their next discovery cycle subscribes.
+                app_logger.warning(f"[BLE-SENSOR] scanner restart failed: {exc!r}")
 
     async def _subscribe(self, request: _DiscoveryRequest) -> None:
         async with self._lock:
@@ -129,7 +164,7 @@ class BleDiscoveryCoordinator:
             self._requests.add(request)
             if self._pause_depth:
                 return
-            if self._scanner is not None:
+            if self._scanner_started:
                 self._deliver_recent_advertisements(request)
                 return
             try:
@@ -155,6 +190,8 @@ class BleDiscoveryCoordinator:
                 await self._stop_scanner()
         except asyncio.CancelledError:
             return
+        except Exception as exc:
+            app_logger.warning(f"[BLE-SENSOR] idle scanner stop failed: {exc!r}")
         finally:
             if self._idle_stop_task is current_task:
                 self._idle_stop_task = None

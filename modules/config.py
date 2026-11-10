@@ -211,7 +211,7 @@ class Config:
         "SPD": ("CSCS",),
         "CDC": ("CSCS", "CPS"),
         "PWR": ("CPS",),
-        "LGT": (),
+        "LGT": ("BONTRAGER_FLARE_RT",),
         "CTRL": ("ZWIFT_CLICK_V2",),
         "TEMP": (),
     }

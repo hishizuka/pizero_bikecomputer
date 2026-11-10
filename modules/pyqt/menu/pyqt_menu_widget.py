@@ -30,20 +30,24 @@ class MenuWidget(QtWidgets.QWidget):
     icon_y = 32
 
     @property
+    def sensor(self):
+        return self.config.logger.sensor
+
+    @property
     def sensor_i2c(self):
-        return self.config.logger.sensor.sensor_i2c
+        return self.sensor.sensor_i2c
 
     @property
     def sensor_ant(self):
-        return self.config.logger.sensor.sensor_ant
+        return self.sensor.sensor_ant
 
     @property
     def sensor_ble(self):
-        return self.config.logger.sensor.sensor_ble
+        return self.sensor.sensor_ble
 
     @property
     def sensor_gps(self):
-        return self.config.logger.sensor.sensor_gps
+        return self.sensor.sensor_gps
 
     def __init__(self, parent, page_name, config):
         QtWidgets.QWidget.__init__(self, parent=parent)

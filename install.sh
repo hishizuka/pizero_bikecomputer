@@ -177,6 +177,48 @@ install_memory_lcd_support() {
     fi
 }
 
+set_bluez_config_value() {
+    local bluez_config="$1"
+    local section="$2"
+    local key="$3"
+    local value="$4"
+
+    if grep -Eq "^[#[:space:]]*${key}[[:space:]]*=" "$bluez_config"; then
+        sudo sed -i -E \
+            "s|^[#[:space:]]*${key}[[:space:]]*=.*|${key} = ${value}|" \
+            "$bluez_config"
+    elif grep -Fxq "[$section]" "$bluez_config"; then
+        sudo sed -i "/^\[$section\]$/a${key} = ${value}" "$bluez_config"
+    else
+        printf '\n[%s]\n%s = %s\n' "$section" "$key" "$value" |
+            sudo tee -a "$bluez_config" >/dev/null
+    fi
+    grep -Fxq "${key} = ${value}" "$bluez_config"
+}
+
+configure_bluez_ble_compatibility() {
+    local bluez_config=/etc/bluetooth/main.conf
+
+    # Insert in reverse order so missing keys retain the documented order.
+    set_bluez_config_value "$bluez_config" LE ScanWindowDiscovery 48
+    set_bluez_config_value "$bluez_config" LE ScanIntervalDiscovery 96
+    set_bluez_config_value "$bluez_config" GATT ExchangeMTU 247
+}
+
+configure_cm0_bt_coexistence() {
+    # firmware-brcm80211 ships the CYW43439 NVRAM with btc_mode=0, while other Raspberry
+    # Pi Wi-Fi chips use btc_mode=1. With btc_mode=0, BLE sensor connections failed on
+    # CM0 while Wi-Fi was associated in power save. The diversion survives package updates.
+    local base_nvram=/usr/lib/firmware/cypress/cyfmac43439-sdio.txt
+    local board_nvram=/usr/lib/firmware/brcm/brcmfmac43439-sdio.raspberrypi,0-compute-module.txt
+    [[ -r /proc/device-tree/compatible ]] || return 0
+    tr '\0' '\n' < /proc/device-tree/compatible | grep -Fxq 'raspberrypi,0-compute-module' || return 0
+    [[ -f "$base_nvram" ]] || return 1
+    sudo dpkg-divert --local --rename --divert "${board_nvram}.distrib" --add "$board_nvram"
+    sed -E 's/^btc_mode=0$/btc_mode=1/' "$base_nvram" | sudo tee "$board_nvram" > /dev/null
+    grep -Fxq 'btc_mode=1' "$board_nvram"
+}
+
 #############################################################
 # get user input
 #############################################################
@@ -379,6 +421,8 @@ if [[ "$install_bluetooth" == "true" ]]; then
     sudo apt install -y bluez-obexd libffi-dev
     # for raspberry pi zero (building with pip is extremely heavy.)
     sudo apt install -y python3-pydantic python3-orjson
+    configure_bluez_ble_compatibility
+    configure_cm0_bt_coexistence
     pip install bleak pycycling
     pip install gadgetbridge-rpi-link
     pip install garminconnect tb-mqtt-client mmh3
