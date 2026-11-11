@@ -990,7 +990,7 @@ class Config:
                     self.gui.show_dialog(
                         fn=self.display.screen_flash_long, title="test"
                     )
-        except asyncio.CancelledError:
+        except (asyncio.CancelledError, EOFError):
             pass
 
     def set_logger(self, logger):

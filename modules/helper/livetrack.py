@@ -221,7 +221,6 @@ class LiveTrackSample:
     ascent_m: float | None
     heading_gps_deg: int | None
     heading_magnetic_deg: int | None
-    accuracy_m: int | None
     satellite_count: int | None
     temperature_c: float | None
     activity_start_timestamp: int | None = None
@@ -273,11 +272,6 @@ def build_livetrack_sample(config):
 
     heading_gps_deg = _finite_int(gps.get("heading_gps_deg"))
     heading_magnetic_deg = _finite_int(i2c.get("heading_magnetic_deg"))
-    epx = _finite_number(gps.get("epx"))
-    epy = _finite_number(gps.get("epy"))
-    accuracy = None
-    if epx is not None or epy is not None:
-        accuracy = int(max(value for value in (epx, epy) if value is not None))
 
     position_valid = _finite_number(gps["position_basic_valid"]) == 1
 
@@ -299,7 +293,6 @@ def build_livetrack_sample(config):
         ascent_m=_finite_number(i2c.get("total_ascent")),
         heading_gps_deg=heading_gps_deg,
         heading_magnetic_deg=heading_magnetic_deg,
-        accuracy_m=accuracy,
         satellite_count=_finite_int(gps.get("used_sats")),
         temperature_c=_finite_number(integrated.get("temperature")),
         activity_start_timestamp=_finite_int(logger_values.get("start_time")),

@@ -102,7 +102,7 @@ BOARD_PRESETS: dict[BoardType, BoardPreset] = {
             pins={"A": 4, "B": 27, "C": 5, "D": 6, "E": 26},
             overrides={
                 "MAIN": {
-                    "C": ("bhi3_raw_log", "toggle_fake_trainer"),
+                    "C": ("bhi3_raw_log", ""),
                 },
             },
         ),

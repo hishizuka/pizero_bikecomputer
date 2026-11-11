@@ -975,7 +975,7 @@ class GUI_PyQt(GUI_Qt_Base):
         self.show_message(name, body, limit)
 
     def turn_on_off_light_internal(self):
-        self.sensor.sensor_ant.set_light_mode("ON_OFF_FLASH_LOW")
+        self.sensor.set_light_mode("ON_OFF_FLASH_LOW")
 
     def change_menu_page(self, page, focus_reset=True):
         self.stack_widget.setCurrentIndex(page)
