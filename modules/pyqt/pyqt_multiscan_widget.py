@@ -73,14 +73,12 @@ class MultiScanWidget(ScreenWidget):
 
     # call from on_change_main_page in gui_pyqt.py
     def start(self):
-        if self.sensor_ant.is_transport_available() and not self.scanner.isUse:
-            self.sensor_ant.continuous_scan()
+        self.sensor_ant.continuous_scan()
         self.timer.start(self.config.G_DRAW_INTERVAL)
 
     # call from on_change_main_page in gui_pyqt.py
     def stop(self):
-        if self.sensor_ant.is_transport_available() and self.scanner.isUse:
-            self.sensor_ant.stop_continuous_scan()
+        self.sensor_ant.stop_continuous_scan()
         self.timer.stop()
 
     def update_display(self):

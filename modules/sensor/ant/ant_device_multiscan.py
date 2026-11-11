@@ -25,8 +25,14 @@ class ANT_Device_MultiScan(ant_device.ANT_Device):
         self.node = node
         self.config = config
         self.reset_value()
-        self.make_channel(self.ant_config["channel_type"])
-        self.ready_scan()
+        # Older OpenANT builds leave the RX scan capability unknown.
+        if getattr(node, "supports_rx_scan", None) is not False:
+            self.make_channel(self.ant_config["channel_type"])
+            if self.channel is not None:
+                self.channel.set_rf_freq(57)
+                self.channel.set_id(
+                    0, self.ant_config["type"], self.ant_config["transmission_type"]
+                )
         self.dummyPowerDevice = ant_device_power.ANT_Device_Power(
             node=None, config=config, values={}, name="PWR"
         )
@@ -41,13 +47,6 @@ class ANT_Device_MultiScan(ant_device.ANT_Device):
         self.pre_power_meter_value = {}
         self.pre_power_meter_delta = {}
 
-    def ready_scan(self):
-        if self.config.G_ANT["STATUS"]:
-            self.channel.set_rf_freq(57)
-            self.channel.set_id(
-                0, self.ant_config["type"], self.ant_config["transmission_type"]
-            )
-
     def scan(self):
         if self.config.G_ANT["STATUS"]:
             self.channel.enable_extended_messages(1)
@@ -56,9 +55,6 @@ class ANT_Device_MultiScan(ant_device.ANT_Device):
                 self.isUse = True
             except:
                 pass
-
-    def stop_scan(self):
-        self.disconnect()
 
     def stop(self):
         return self.disconnect()

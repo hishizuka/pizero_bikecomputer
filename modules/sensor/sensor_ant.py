@@ -117,7 +117,7 @@ class SensorANT(Sensor):
         if self.config.G_ANT["STATUS"]:
             self._create_node()
 
-        # initialize scan channel (reserve ch0)
+        # Initialize ANT search and optional continuous scan.
         self._create_scan_search_devices()
 
         # auto connect ANT+ sensor from setting.conf
@@ -596,9 +596,12 @@ class SensorANT(Sensor):
     def disconnect_ant_sensor(self, ant_name):
         return self.remove_ant_sensor(ant_name)
 
+    def can_start_multiscan(self):
+        return self.is_transport_available() and self.scanner.channel is not None
+
     def continuous_scan(self):
-        if not self.is_transport_available():
-            return
+        if not self.can_start_multiscan() or self.scanner.isUse:
+            return False
         self.scanner.set_wait_quick_mode()
         for dv in self.device.values():
             dv.ant_state = "continuous_scan"
@@ -608,10 +611,10 @@ class SensorANT(Sensor):
         app_logger.info("START ANT+ multiscan")
 
     def stop_continuous_scan(self):
-        if not self.is_transport_available():
+        if not self.can_start_multiscan() or not self.scanner.isUse:
             return
         self.scanner.set_wait_quick_mode()
-        self.scanner.stop_scan()
+        self.scanner.stop()
         antIDTypes = set()
         for k in self.config.G_SENSORS:
             antIDType = self.config.get_ant_id_type(k)

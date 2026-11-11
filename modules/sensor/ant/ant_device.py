@@ -14,6 +14,29 @@ from modules.utils.cycling_sensor import (
 from . import ant_code
 
 
+def allocate_background_search_channel(node, channel_type, network=0):
+    channel = node.new_channel(channel_type, network, ext_assign=0x01)
+    if (
+        getattr(node, "supports_rx_scan", None) is not False
+        or channel.id != 0
+        or len(node.channels) >= node._max_channels
+    ):
+        return channel
+
+    # Channel zero may miss background search packets while other channels are open.
+    replacement = None
+    try:
+        try:
+            replacement = node.new_channel(channel_type, network, ext_assign=0x01)
+        finally:
+            node.delete_channel(channel)
+    except BaseException:
+        if replacement is not None:
+            node.delete_channel(replacement)
+        raise
+    return replacement
+
+
 class ANT_Device:
     config = None
     node = None
@@ -200,7 +223,10 @@ class ANT_Device:
 
     def make_channel(self, c_type, ext_assign=None):
         if self.config.G_ANT["STATUS"] and self.channel is None:
-            self.channel = self.node.new_channel(c_type, ext_assign=ext_assign)
+            if ext_assign == 0x01:
+                self.channel = allocate_background_search_channel(self.node, c_type)
+            else:
+                self.channel = self.node.new_channel(c_type, ext_assign=ext_assign)
             self.channel.on_broadcast_data = self._on_data
             self.channel.on_burst_data = self._on_data
             self.channel.on_acknowledge_data = self._on_data

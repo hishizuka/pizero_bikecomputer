@@ -128,7 +128,7 @@ class GUI_PyQt(GUI_Qt_Base):
     status_bar = None
     button_box_widget = None
     main_page = None
-    main_page_index = 0
+    main_page_index = -1
     altitude_graph_widget = None
     acc_graph_widget = None
     performance_graph_widget = None
@@ -380,7 +380,6 @@ class GUI_PyQt(GUI_Qt_Base):
                 AdjustWPrimeBalanceWidget,
             )
             from modules.pyqt.pyqt_cuesheet_widget import CueSheetWidget
-            from modules.pyqt.pyqt_multiscan_widget import MultiScanWidget
 
             if qzss_dcr_supported:
                 from modules.pyqt.menu.pyqt_qzss_menu import (
@@ -598,12 +597,6 @@ class GUI_PyQt(GUI_Qt_Base):
                         )
                         self.main_page.addWidget(self.cuesheet_widget)
 
-            if self.config.G_ANT["STATUS"]:
-                self.multi_scan_widget = MultiScanWidget(self.main_page, self.config)
-                self.main_page.addWidget(self.multi_scan_widget)
-                self.multiscan_index = self.main_page.count() - 1
-                self.multiscan_back_index = self.multiscan_index
-
             # integrate main_layout
             if not self.dual_mode:
                 main_layout.addWidget(self.main_page)
@@ -625,7 +618,7 @@ class GUI_PyQt(GUI_Qt_Base):
             if self.config.G_FULLSCREEN:
                 self.main_window.showFullScreen()
 
-            self.on_change_main_page(self.main_page_index)
+            self.refresh_main_page()
             if self.dual_mode and self.map_widget is not None:
                 self.map_widget.start()
 
@@ -645,9 +638,20 @@ class GUI_PyQt(GUI_Qt_Base):
 
     # for main_page page transition
     def on_change_main_page(self, index):
-        self.main_page.widget(self.main_page_index).stop()
-        self.main_page.widget(index).start()
+        if self.main_page_index >= 0:
+            self.main_page.widget(self.main_page_index).stop()
         self.main_page_index = index
+        if index >= 0:
+            self.main_page.setCurrentIndex(index)
+            self.main_page.widget(index).start()
+        self.main_page.setVisible(index >= 0)
+
+    def refresh_main_page(self):
+        page = self.main_page.currentWidget()
+        if page is None or not self._is_main_page_available(page):
+            self.scroll(1)
+        elif self.main_page_index < 0:
+            self.on_change_main_page(self.main_page.currentIndex())
 
     async def quit_internal(self):
         if self.gpu_map_widget is not None:
@@ -819,53 +823,54 @@ class GUI_PyQt(GUI_Qt_Base):
     def map_overlay_next_time_internal(self):
         self.call_map("update_overlay_time", True)
 
+    def _is_main_page_available(self, page):
+        if page is self.course_profile_graph_widget:
+            return (
+                self.course.is_set
+                and self.course.has_altitude
+                and self.config.G_COURSE_INDEXING
+            )
+        if page is self.cuesheet_widget:
+            return (
+                self.course.course_points.is_set
+                and self.config.G_COURSE_INDEXING
+                and self.config.G_CUESHEET_DISPLAY_NUM
+            )
+        return True
+
     def scroll(self, delta):
-        n = self.main_page.count()
-        d = delta
-        mod_index = self.main_page.currentIndex()
-        while d != 0:
-            mod_index = (mod_index + d + n) % n
-            w = self.main_page.widget(mod_index)
-
-            if (
-                (
-                    w == self.course_profile_graph_widget
-                    and (
-                        not self.course.is_set
-                        or not self.course.has_altitude
-                        or not self.config.G_COURSE_INDEXING
-                    )
-                )
-                or (
-                    w == self.cuesheet_widget
-                    and (
-                        not self.course.course_points.is_set
-                        or not self.config.G_COURSE_INDEXING
-                        or not self.config.G_CUESHEET_DISPLAY_NUM
-                    )
-                )
-                or (w == self.multi_scan_widget)
+        count = self.main_page.count()
+        index = self.main_page.currentIndex()
+        for _ in range(count):
+            index = (index + delta) % count
+            page = self.main_page.widget(index)
+            if page is not self.multi_scan_widget and self._is_main_page_available(
+                page
             ):
-                d = delta
-            else:
-                d = 0
-
-        self.on_change_main_page(mod_index)
-        self.main_page.setCurrentIndex(mod_index)
+                self.on_change_main_page(index)
+                return
+        self.on_change_main_page(-1)
 
     def multiscan(self):
         self.signal_multiscan.emit()
 
     def multiscan_internal(self):
-        if self.multi_scan_widget is None:
-            return
-        if self.main_page.currentWidget() != self.multi_scan_widget:
-            self.multiscan_back_index = self.main_page.currentIndex()
+        if self.multi_scan_widget is None or self.main_page_index != self.multiscan_index:
+            if self.main_page is None or not self.sensor.sensor_ant.can_start_multiscan():
+                return
+            if self.multi_scan_widget is None:
+                from modules.pyqt.pyqt_multiscan_widget import MultiScanWidget
+
+                self.multi_scan_widget = MultiScanWidget(self.main_page, self.config)
+                self.multiscan_index = self.main_page.addWidget(self.multi_scan_widget)
+            self.multiscan_back_index = self.main_page_index
             self.on_change_main_page(self.multiscan_index)
-            self.main_page.setCurrentIndex(self.multiscan_index)
+        elif self.multiscan_back_index < 0 or not self._is_main_page_available(
+            self.main_page.widget(self.multiscan_back_index)
+        ):
+            self.scroll(1)
         else:
             self.on_change_main_page(self.multiscan_back_index)
-            self.main_page.setCurrentIndex(self.multiscan_back_index)
 
     def bhi3_raw_log(self):
         self.signal_bhi3_raw_log.emit()
@@ -986,6 +991,8 @@ class GUI_PyQt(GUI_Qt_Base):
                 focus_widget.clearFocus()
 
     def on_change_stack_widget(self, index):
+        if self.main_page is not None and index == self.gui_config.G_GUI_INDEX["Main"]:
+            self.refresh_main_page()
         if self.status_bar is None:
             return
         self.status_bar.setVisible(True)
