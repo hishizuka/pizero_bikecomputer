@@ -232,6 +232,8 @@ class Config:
         # initialized by G_ANT_INTERVAL in __init()__
         "INTERVAL": 2,
         "STATUS": True,
+        "NETWORK_KEY": b"",
+        "PUBLIC_NETWORK_KEY": b"",
     }
 
     # BLE cycling sensor setting (overwritten with setting.conf)

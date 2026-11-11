@@ -26,15 +26,9 @@ CONNECTION_STATUS_INACTIVE = "inactive"
 
 try:
     from ant.easy.node import Node
-    from ant.base.driver import find_driver, DriverNotFound
 
-    # device test
-    _driver = find_driver()
+    # Hardware discovery belongs to Node construction, after board selection.
     _SENSOR_ANT = True
-except ImportError:
-    pass
-except DriverNotFound:
-    pass
 except Exception:
     pass
 
@@ -45,7 +39,6 @@ if _SENSOR_ANT:
 class SensorANT(Sensor):
     # for openant
     node = None
-    NETWORK_KEY = [0xB9, 0xA5, 0x21, 0xFB, 0xBD, 0x72, 0xC3, 0x45]
     NETWORK_NUM = 0x00
     scanner = None
     searcher = None
@@ -222,12 +215,17 @@ class SensorANT(Sensor):
         pass
 
     def _create_node(self):
+        network_key = self.config.G_ANT["NETWORK_KEY"]
+        if not network_key:
+            app_logger.warning("ANT+ unavailable: set [SENSOR_ANT] ant_network_key")
+            self.config.G_ANT["STATUS"] = False
+            return False
         try:
             self.node = Node()
             if self.config.board_preset.uart_sensor_bridge:
                 self.node.ant.reset_system()
             self._register_transport_disconnect_callback()
-            self.node.set_network_key(self.NETWORK_NUM, self.NETWORK_KEY)
+            self.node.set_network_key(self.NETWORK_NUM, list(network_key))
             return True
         except Exception as e:
             app_logger.warning(f"ANT+ init failed: {e}")

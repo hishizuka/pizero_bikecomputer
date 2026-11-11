@@ -1169,7 +1169,7 @@ When unlocked, you can drag the profile horizontally.
 - Temperature
   - Pair or disconnect an ANT+ temperature sensor.
 - ANT+ pairing
-  - You need to install the ANT+ library and to set [ANT section](#ant-section) of setting.conf with `status = True`.
+  - For a USB ANT+ adapter, install the ANT+ library and configure the [SENSOR_ANT section](#sensor_ant-section) of `setting.conf`.
   - The pairing setting is saved in setting.conf when a sensor is connected, so it will be automatically connected next time you start the program.
 - ANT+ ON/OFF
   - The global ANT+ transport switch is under **Connectivity**, separate from sensor roles.
@@ -1563,11 +1563,25 @@ map.yaml entry
 - `use_dem_tile`, `dem_map`
   - Enable DEM tile usage and select the source.
 
-#### ANT+ section
+#### SENSOR_ANT section
 
-- Enable ANT+ with `status = True`.
-- Additional setting is not necessary because the settings are written when pairing ANT+ sensors.
-- If there are some settings, the program will connect at startup.
+- For an OpenANT adapter such as a USB dongle, stop the application and set
+  `ant_network_key` in `setting.conf`. Copy the eight comma-separated `0xNN`
+  values from the 64-bit **ANT+ Network Key** entry as shown in
+  [Garmin Network Keys](https://developer.garmin.com/ant-program/ant-ant-plus/network-keys/)
+  and paste them after `ant_network_key =`, replacing the eight placeholders below.
+
+  ```ini
+  [SENSOR_ANT]
+  status = True
+  ant_network_key = 0xXX, 0xXX, 0xXX, 0xXX, 0xXX, 0xXX, 0xXX, 0xXX
+  ```
+
+  The setting also accepts 16 hexadecimal digits with optional spaces between bytes.
+- Set `status = True` in the same section and restart. If the key is missing or
+  malformed, the OpenANT adapter stays disabled.
+- Pair sensors from the Sensors menu. The application saves the pairing settings
+  and reconnects to paired sensors at startup.
 
 #### PROFILE section
 

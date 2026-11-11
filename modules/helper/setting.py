@@ -16,6 +16,7 @@ class Setting:
 
     # config file (store user specified values. readable and editable.)
     config_file = "setting.conf"
+    G_ANT_NETWORK_KEY_FIELDS = ("NETWORK_KEY", "PUBLIC_NETWORK_KEY")
 
     def __init__(self, config):
         self.config = config
@@ -148,6 +149,27 @@ class Setting:
             c = self.config_parser["SENSOR_ANT"]
             if "STATUS" in c:
                 self.config.G_ANT["STATUS"] = c.getboolean("STATUS")
+            for name in self.G_ANT_NETWORK_KEY_FIELDS:
+                raw_key = c.get(f"ANT_{name}", "", raw=True)
+                try:
+                    if "," in raw_key:
+                        parts = [part.strip().lower() for part in raw_key.split(",")]
+                        if any(
+                            len(part) != 4 or not part.startswith("0x")
+                            for part in parts
+                        ):
+                            raise ValueError
+                        raw_key = " ".join(part[2:] for part in parts)
+                    network_key = bytes.fromhex(raw_key)
+                    if len(network_key) not in (0, 8):
+                        raise ValueError
+                except ValueError:
+                    app_logger.warning(
+                        "Invalid [SENSOR_ANT] ant_%s: expected 8 hexadecimal bytes",
+                        name.lower(),
+                    )
+                    network_key = b""
+                self.config.G_ANT[name] = network_key
 
         if "SENSOR_BLE" in self.config_parser:
             c = self.config_parser["SENSOR_BLE"]
@@ -362,10 +384,14 @@ class Setting:
             c["FONT_WEIGHT"] = str(self.config.G_FONT_WEIGHT)
         c["AUTO_WIFI_OFF"] = str(self.config.G_AUTO_WIFI_OFF)
 
+        self.config_parser["SENSOR_ANT"] = {
+            f"ANT_{name}": ", ".join(
+                f"0x{byte:02X}" for byte in self.config.G_ANT[name]
+            )
+            for name in self.G_ANT_NETWORK_KEY_FIELDS
+        }
         if not self.config.G_DUMMY_OUTPUT:
-            self.config_parser["SENSOR_ANT"] = {}
-            c = self.config_parser["SENSOR_ANT"]
-            c["STATUS"] = str(self.config.G_ANT["STATUS"])
+            self.config_parser["SENSOR_ANT"]["STATUS"] = str(self.config.G_ANT["STATUS"])
 
             self.config_parser["SENSOR_BLE"] = {}
             c = self.config_parser["SENSOR_BLE"]

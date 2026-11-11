@@ -6,6 +6,14 @@ An open-source bike computer with GPS and ANT+ capabilities, based on the Raspbe
 https://github.com/hishizuka/pizero_bikecomputer
 
 # News
+- 2026/11/7 **ANT+ setup change.** OpenANT users now need to set the 64-bit ANT+ network key in `setting.conf`. Replace each `0xXX` below with the corresponding byte of your key. See the [ANT+ setup instructions](doc/software_installation.md#sensor_ant-section).
+
+  ```ini
+  [SENSOR_ANT]
+  status = True
+  ant_network_key = 0xXX, 0xXX, 0xXX, 0xXX, 0xXX, 0xXX, 0xXX, 0xXX
+  ```
+
 - 2026/10/20 Bryton Rider S800 and Wahoo ELEMNT ACE compatibility is currently in progress. For the former, a custom PCB was created and installed; for the latter, successful operation on Android has been achieved.
 <img src="https://pbs.twimg.com/media/HVBw1QDbkAACbF_?format=jpg" width=480 />
 - 2026/10/2 [Memory LCD DRM Driver](https://github.com/hishizuka/memory-lcd-drm) is now public. `install.sh` can install the MIP driver and the optional DMA-BUF presenter for PyQt GPU maps. See the [display setup guide](doc/software_installation.md#jdi--sharp-mip-display) and [GPU map presenter guide](doc/gpu_map_presenter.md).
