@@ -1,4 +1,5 @@
-# from FitSDK
+# Garmin FIT SDK 21.221.0, Profile.xlsx, Types sheet, manufacturer section.
+# https://github.com/garmin/fit-sdk-tools/releases/tag/21.221.0
 
 
 class AntCode:
@@ -151,6 +152,9 @@ class AntCode:
         148: "ezon",
         149: "laisi",
         150: "myzone",
+        151: "abawo",
+        152: "bafang",
+        153: "luhong_technology",
         255: "development",
         257: "healthandlife",
         258: "lezyne",
@@ -225,5 +229,30 @@ class AntCode:
         327: "magicshine",
         328: "ictrainer",
         329: "absolute_cycling",
+        330: "eo_swimbetter",
+        331: "mywhoosh",
+        332: "ravemen",
+        333: "tektro_racing_products",
+        334: "darad_innovation_corporation",
+        335: "cycloptim",
+        337: "runna",
+        339: "zepp",
+        340: "peloton",
+        341: "carv",
+        342: "tissot",
+        345: "real_velo",
+        346: "wetech",
+        347: "jespr",
+        348: "huawei",
+        349: "gotoes",
+        350: "cadence_app",
+        351: "una_watch",
+        352: "tymewear",
+        353: "exposure_lights",
+        354: "forto_cycling",
+        356: "fair_weather_athletics",
+        357: "hatch_factory",
+        358: "torqano",
+        359: "rockbros",
         5759: "actigraphcorp",
     }
