@@ -13,6 +13,7 @@ import oyaml as yaml
 
 from modules.app_logger import app_logger
 from modules.board_config import BoardType, get_board_preset
+from modules.sensor.bridge import Bridge, create_bridge
 from modules.map_config import add_map_config
 from modules.helper.setting import Setting
 from modules.button_config import Button_Config
@@ -502,6 +503,7 @@ class Config:
     buzzer = None
     boot_time = 0
     qt_platform = None
+    bridge: Bridge | None = None
 
     def __init__(self):
         self._quit_task = None
@@ -652,6 +654,7 @@ class Config:
         from modules.map.application import MapApplication
 
         self.map = MapApplication(self)
+        self.bridge = create_bridge(self)
 
     def sensor_uses(self, role, protocol):
         return self.G_SENSORS[role]["PROTOCOL"] == protocol
@@ -876,6 +879,8 @@ class Config:
         # logger, sensor
         await self.gui.set_boot_status("initialize sensor...")
         self.logger.delay_init()
+        if self.bridge is not None:
+            self.bridge.start_coroutine()
         # Persist discarded/validated correction state before recording can resume.
         await asyncio.to_thread(self.state.write)
 
@@ -1104,6 +1109,8 @@ class Config:
             app_logger.info(" 2: logger & state")
 
             self.display.quit()
+            if self.bridge is not None:
+                await self.bridge.quit()
             app_logger.info(" 3: display")
             await self.kill_tasks()
             app_logger.info("########## QUIT END   ##########")

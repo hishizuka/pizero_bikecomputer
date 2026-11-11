@@ -2,9 +2,12 @@ import asyncio
 import os
 import struct
 import sys
+from pathlib import Path
 
 from modules.app_logger import app_logger
-from .sensor import Sensor
+from modules.button_config import ButtonPress
+
+from .bridge_core import Bridge
 
 G_BUTTON_PROFILE = "CardputerZero_Keyboard"
 
@@ -52,11 +55,31 @@ def _set_grab(fd, grab):
     fcntl.ioctl(fd, _EVIOCGRAB, int(grab))
 
 
-class SensorCardputerZero(Sensor):
+class CardputerZeroBridge(Bridge):
     """Handle CardputerZero-specific hardware and input."""
 
-    def sensor_init(self):
-        self.device_path = self.config.board_preset.keyboard_device
+    backlight_path = Path("/sys/class/backlight/backlight")
+
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
+        self.device_path = config.board_preset.keyboard_device
+        self.has_backlight = False
+        self.backlight_max_brightness = 0
+        self._backlight_task = None
+        self._backlight_value = None
+        if config.G_DISPLAY_PARAM["USE_BACKLIGHT"]:
+            try:
+                self.backlight_max_brightness = int(
+                    (self.backlight_path / "max_brightness").read_text().strip()
+                )
+            except (OSError, ValueError):
+                pass
+            self.has_backlight = self.backlight_max_brightness > 0 and os.access(
+                self.backlight_path / "brightness", os.W_OK
+            )
+            if not self.has_backlight:
+                app_logger.warning("CardputerZero backlight is unavailable")
         self._fd = None
         self._reader_added = False
         self._scan_code = None
@@ -80,14 +103,44 @@ class SensorCardputerZero(Sensor):
             self._fd = None
 
     @property
-    def has_buttons(self):
+    def has_buttons(self) -> bool:
         return self._fd is not None
 
-    def start_coroutine(self):
+    def _start(self) -> None:
         if self._fd is None:
             return
         asyncio.get_running_loop().add_reader(self._fd, self._read_events)
         self._reader_added = True
+
+    def set_backlight(self, brightness):
+        if self._quit_task is not None or not self.has_backlight:
+            return False
+        value = round(
+            max(0, min(100, brightness)) * self.backlight_max_brightness / 100
+        )
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # Display initialization runs before the application event loop.
+            return self._write_backlight(value)
+        self._backlight_value = value
+        if self._backlight_task is None or self._backlight_task.done():
+            self._backlight_task = loop.create_task(self._update_backlight())
+        return True
+
+    def _write_backlight(self, value):
+        try:
+            (self.backlight_path / "brightness").write_text(f"{value}\n")
+        except OSError as error:
+            app_logger.warning("Failed to set CardputerZero backlight: %s", error)
+            return False
+        return True
+
+    async def _update_backlight(self):
+        # Serialize writes and retain only the latest requested brightness.
+        while self._backlight_value is not None:
+            value, self._backlight_value = self._backlight_value, None
+            await asyncio.to_thread(self._write_backlight, value)
 
     def _read_events(self):
         try:
@@ -138,12 +191,12 @@ class SensorCardputerZero(Sensor):
             # A pending timer means the long press has not fired yet.
             if not timer.cancelled():
                 timer.cancel()
-                self._press_button(button, 0)
+                self._press_button(button, ButtonPress.SHORT)
 
     def _press_long(self, button):
         # Keep the cancelled handle until key up so the release is ignored.
         self._long_press_timers[button].cancel()
-        self._press_button(button, 1)
+        self._press_button(button, ButtonPress.LONG)
 
     def _press_button(self, button, index):
         self.config.button_config.press_button(G_BUTTON_PROFILE, button, index)
@@ -168,5 +221,7 @@ class SensorCardputerZero(Sensor):
         os.close(self._fd)
         self._fd = None
 
-    async def quit(self):
+    async def _quit(self) -> None:
         self._close()
+        if self._backlight_task is not None:
+            await self._backlight_task

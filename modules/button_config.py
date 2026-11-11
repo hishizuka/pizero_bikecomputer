@@ -441,7 +441,7 @@ class Button_Config:
                 "Z": ("change_map_overlays", ""),
             },
         },
-        # CardputerZero built-in keyboard (sensor_cardputerzero)
+        # CardputerZero built-in keyboard (bridge_cardputerzero)
         # 4-8 sit below the display: 4 back, 5/7 previous/next, 6 select, 8 menu.
         "CardputerZero_Keyboard": _build_key_profile(
             CARDPUTERZERO_KEYS,
