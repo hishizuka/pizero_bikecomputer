@@ -148,6 +148,9 @@ class UBlox(QzssDcrSupport, AbstractSensorGPS):
         self._bridge_needs_detect = self._bridge_gps
         self.transport = None
         self.transport_type = None
+        # Serialize transport state and queue admission, without holding the lock for I/O.
+        self._transport_lock = threading.Lock()
+        self._transport_closing = False
         self._reader = None
         self._write_queue = queue.Queue()
         self._read_loop_active = False
@@ -251,6 +254,8 @@ class UBlox(QzssDcrSupport, AbstractSensorGPS):
             await self.stop_qzss_dcr()
 
     def _open_transport(self):
+        if self._transport_closing:
+            raise ConnectionError("receiver transport is closing")
         if self.transport is not None:
             return
 
@@ -280,33 +285,47 @@ class UBlox(QzssDcrSupport, AbstractSensorGPS):
             self._close_transport()
             raise
 
-    def _close_transport(self):
-        self._qzss_dcr_active = False
-        reply = self._configuration_reply
-        if reply is not None:
-            reply["error"] = ConnectionError("receiver transport closed")
-            reply["done"].set()
-        if self.transport is None:
-            return
+    def _close_transport(self, expected_transport=None):
+        with self._transport_lock:
+            transport = self.transport
+            if (
+                transport is None
+                or self._transport_closing
+                or (
+                    expected_transport is not None and transport is not expected_transport
+                )
+            ):
+                return
+            self._transport_closing = True
+            self._qzss_dcr_active = False
+            error = ConnectionError("receiver transport closed")
+            reply = self._configuration_reply
+            if reply is not None:
+                reply["error"] = error
+                reply["done"].set()
+            self._clear_write_queue(error)
         try:
             self._restore_i2c_tx_ready()
-            self.transport.close()
+            transport.close()
         except Exception:
             app_logger.exception("[UBlox] failed to close transport")
         finally:
-            self._close_tx_ready_line()
-            self._reader = None
-            self.transport = None
-            self.transport_type = None
-            self.receiver_info["transport"] = None
-            self._transport_open_time = None
-            self._last_ubx_receive_time = None
-            self._clear_write_queue(RuntimeError("receiver transport is closed"))
-            self._reset_receiver_state()
-            if self._bridge_gps:
-                self._bridge_needs_detect = True
-                self.init_values()
-                self.values["heading_gps_timestamp"] = None
+            try:
+                self._close_tx_ready_line()
+            finally:
+                self._reader = None
+                self.transport = None
+                self.transport_type = None
+                self.receiver_info["transport"] = None
+                self._transport_open_time = None
+                self._last_ubx_receive_time = None
+                self._reset_receiver_state()
+                if self._bridge_gps:
+                    self._bridge_needs_detect = True
+                    self.init_values()
+                    self.values["heading_gps_timestamp"] = None
+                with self._transport_lock:
+                    self._transport_closing = False
 
     def _reset_receiver_state(self):
         self._raw_mon_ver = None
@@ -330,31 +349,37 @@ class UBlox(QzssDcrSupport, AbstractSensorGPS):
             raise
 
     def _write_transport_now(self, data):
-        if self.transport is None:
-            raise RuntimeError("receiver transport is closed")
-        _retry_interrupted_system_call(self.transport.write, data)
-        flush = getattr(self.transport, "flush", None)
+        transport = self.transport
+        if transport is None:
+            raise ConnectionError("receiver transport is closed")
+        _retry_interrupted_system_call(transport.write, data)
+        flush = getattr(transport, "flush", None)
         if flush is not None:
             _retry_interrupted_system_call(flush)
 
-    def _write_transport(self, data, delay=0.0, wait=False, direct=False):
-        if self.transport is None:
-            raise RuntimeError("receiver transport is closed")
-        if direct or not self._read_loop_active:
+    def _write_transport(
+        self, data, delay=0.0, wait=False, direct=False, expected_transport=None
+    ):
+        with self._transport_lock:
+            use_queue = not direct and self._read_loop_active
+            if (
+                self.transport is None
+                or (self._transport_closing and not direct)
+                or (
+                    expected_transport is not None
+                    and (self.transport is not expected_transport or not use_queue)
+                )
+            ):
+                raise ConnectionError("receiver transport is closed")
+            if use_queue:
+                done = threading.Event() if wait else None
+                item = self._enqueue_write(data, delay, done=done)
+        if not use_queue:
             self._write_transport_now(data)
             if delay:
                 time.sleep(delay)
             return
 
-        done = threading.Event() if wait else None
-        item = {
-            "data": bytes(data),
-            "delay": delay,
-            "done": done,
-            "future": None,
-            "error": None,
-        }
-        self._write_queue.put(item)
         if not wait:
             return
         if not done.wait(_WRITE_QUEUE_WAIT_TIMEOUT):
@@ -362,28 +387,24 @@ class UBlox(QzssDcrSupport, AbstractSensorGPS):
         if item["error"] is not None:
             raise item["error"]
 
-    def _queue_write_future(self, data, delay=0.0):
-        if self.transport is None:
-            raise RuntimeError("receiver transport is closed")
-        future = asyncio.get_running_loop().create_future()
-        self._write_queue.put(
-            {
-                "data": bytes(data),
-                "delay": delay,
-                "done": None,
-                "future": future,
-                "error": None,
-            }
-        )
-        return future
+    def _enqueue_write(self, data, delay, *, done=None, future=None):
+        item = {
+            "data": bytes(data),
+            "delay": delay,
+            "done": done,
+            "future": future,
+            "error": None,
+        }
+        self._write_queue.put(item)
+        return item
 
-    async def _write_transport_async(self, data, delay=0.0):
-        if not self._read_loop_active:
-            await asyncio.to_thread(self._write_transport_now, data)
-            if delay:
-                await asyncio.sleep(delay)
-            return
-        await self._queue_write_future(data, delay)
+    def _queue_write_future(self, data, delay=0.0):
+        with self._transport_lock:
+            if self.transport is None or self._transport_closing:
+                raise ConnectionError("receiver transport is closed")
+            future = asyncio.get_running_loop().create_future()
+            self._enqueue_write(data, delay, future=future)
+        return future
 
     def _complete_write_item(self, item, error=None):
         item["error"] = error
@@ -704,8 +725,16 @@ class UBlox(QzssDcrSupport, AbstractSensorGPS):
     def _qzss_dcr_cfg_data(self, enabled):
         return qzss_dcr_cfg_data(self.transport_type, enabled)
 
+    def _configuration_transport_active(self, transport):
+        return (
+            transport is not None
+            and self.transport is transport
+            and not self._transport_closing
+            and self._read_loop_active
+        )
+
     def _confirmed_configuration_exchange(
-        self, message, identity, values=None, verify=True
+        self, transport, message, identity, values=None, verify=True
     ):
         reply = {
             "done": threading.Event(),
@@ -714,18 +743,22 @@ class UBlox(QzssDcrSupport, AbstractSensorGPS):
             "verify": verify,
             "error": None,
         }
-        self._configuration_reply = reply
+        with self._transport_lock:
+            if not self._configuration_transport_active(transport):
+                raise ConnectionError("receiver transport closed")
+            self._configuration_reply = reply
         try:
-            self._write_transport(message, wait=True)
+            self._write_transport(message, wait=True, expected_transport=transport)
             if not reply["done"].wait(self._DCR_CONFIG_TIMEOUT):
                 raise TimeoutError(f"u-blox {identity} confirmation timed out")
             if reply["error"] is not None:
                 raise reply["error"]
             return reply["values"]
         finally:
-            self._configuration_reply = None
+            with self._transport_lock:
+                self._configuration_reply = None
 
-    def _read_dcr_config(self, enabled):
+    def _read_dcr_config(self, enabled, transport):
         values = {}
         for chunk in self._config_chunks_for_transport(
             self._qzss_dcr_cfg_data(enabled)
@@ -734,67 +767,75 @@ class UBlox(QzssDcrSupport, AbstractSensorGPS):
             poll = UBXMessage.config_poll(POLL_LAYER_RAM, 0, keys)
             values.update(
                 self._confirmed_configuration_exchange(
-                    poll.serialize(), "CFG-VALGET", dict.fromkeys(keys), verify=False
+                    transport,
+                    poll.serialize(),
+                    "CFG-VALGET",
+                    dict.fromkeys(keys),
+                    verify=False,
                 )
             )
         return values
 
-    def _write_confirmed_dcr_config(self, cfg_data):
+    def _write_confirmed_dcr_config(self, cfg_data, transport):
         for chunk in self._config_chunks_for_transport(cfg_data):
             self._confirmed_configuration_exchange(
-                self._config_set_message(chunk), "ACK-ACK"
+                transport, self._config_set_message(chunk), "ACK-ACK"
             )
             # Readback prevents an ACK from an earlier VALSET from confirming this change.
             poll = UBXMessage.config_poll(POLL_LAYER_RAM, 0, [key for key, _ in chunk])
             self._confirmed_configuration_exchange(
-                poll.serialize(), "CFG-VALGET", dict(chunk)
+                transport, poll.serialize(), "CFG-VALGET", dict(chunk)
             )
 
     def _handle_configuration_reply(self, parsed):
-        reply = self._configuration_reply
-        if reply is None:
-            return
-        if parsed.identity in ("ACK-ACK", "ACK-NAK"):
-            expected_id = 0x8A if reply["identity"] == "ACK-ACK" else 0x8B
-            if parsed.clsID != 0x06 or parsed.msgID != expected_id:
+        with self._transport_lock:
+            reply = self._configuration_reply
+            if reply is None or reply["done"].is_set():
                 return
-            if parsed.identity == "ACK-NAK":
-                reply["error"] = OSError("u-blox rejected DCR configuration")
-            elif reply["identity"] != "ACK-ACK":
+            if parsed.identity in ("ACK-ACK", "ACK-NAK"):
+                expected_id = 0x8A if reply["identity"] == "ACK-ACK" else 0x8B
+                if parsed.clsID != 0x06 or parsed.msgID != expected_id:
+                    return
+                if parsed.identity == "ACK-NAK":
+                    reply["error"] = OSError("u-blox rejected DCR configuration")
+                elif reply["identity"] != "ACK-ACK":
+                    return
+            elif parsed.identity == "CFG-VALGET" and reply["identity"] == "CFG-VALGET":
+                values = {key: getattr(parsed, key, None) for key in reply["values"]}
+                if any(value is None for value in values.values()):
+                    return
+                if reply["verify"] and values != reply["values"]:
+                    reply["error"] = OSError(
+                        "u-blox DCR readback does not match requested settings"
+                    )
+                reply["values"] = values
+            else:
                 return
-        elif parsed.identity == "CFG-VALGET" and reply["identity"] == "CFG-VALGET":
-            values = {key: getattr(parsed, key, None) for key in reply["values"]}
-            if any(value is None for value in values.values()):
-                return
-            if reply["verify"] and values != reply["values"]:
-                reply["error"] = OSError(
-                    "u-blox DCR readback does not match requested settings"
-                )
-            reply["values"] = values
-        else:
-            return
-        reply["done"].set()
+            reply["done"].set()
 
     async def set_qzss_dcr_enabled(self, enabled):
         async with self._qzss_dcr_lock:
             self.qzss_dcr_changing = True
             self._qzss_dcr_target = bool(enabled)
+            transport = None
             try:
                 if enabled and not self._qzss_dcr_decoder_available:
                     await self.start_qzss_dcr()
+                transport = self.transport
                 return await self.device_call(
-                    self._set_qzss_dcr_enabled, enabled, "menu"
+                    self._set_qzss_dcr_enabled, enabled, "menu", transport
                 )
             except asyncio.CancelledError:
                 # Reopen using the saved setting if confirmation outlives its caller.
-                self._close_transport()
+                if transport is not None:
+                    self._close_transport(transport)
                 raise
             finally:
                 self._qzss_dcr_target = None
                 self.qzss_dcr_changing = False
 
-    def _set_qzss_dcr_enabled(self, enabled, reason):
-        if self.transport is None or not self._read_loop_active:
+    def _set_qzss_dcr_enabled(self, enabled, reason, transport):
+        if not self._configuration_transport_active(transport):
             self.qzss_dcr_status["status"] = "pending"
             return False
         if enabled and self._power_save_enabled():
@@ -803,22 +844,30 @@ class UBlox(QzssDcrSupport, AbstractSensorGPS):
             return False
         with self._configuration_lock:
             try:
-                previous = self._read_dcr_config(enabled)
+                previous = self._read_dcr_config(enabled, transport)
             except OSError as exc:
                 self.qzss_dcr_status.update(status="error", error=str(exc))
                 app_logger.warning(f"[UBlox] QZSS DCR readback failed: {exc}")
                 return False
             try:
-                self._write_confirmed_dcr_config(self._qzss_dcr_cfg_data(enabled))
+                self._write_confirmed_dcr_config(
+                    self._qzss_dcr_cfg_data(enabled), transport
+                )
             except OSError as exc:
-                try:
-                    self._write_confirmed_dcr_config(list(previous.items()))
-                except OSError:
-                    self._close_transport()
+                if self._configuration_transport_active(transport):
+                    try:
+                        self._write_confirmed_dcr_config(
+                            list(previous.items()), transport
+                        )
+                    except OSError:
+                        self._close_transport(transport)
                 self.qzss_dcr_status.update(status="error", error=str(exc))
                 app_logger.warning(f"[UBlox] QZSS DCR change failed: {exc}")
                 return False
-        self.finish_qzss_dcr_change(enabled)
+        with self._transport_lock:
+            if not self._configuration_transport_active(transport):
+                return False
+            self.finish_qzss_dcr_change(enabled)
         app_logger.info(f"[UBlox] QZSS DCR confirmed: {enabled} ({reason})")
         return True
 
@@ -1234,7 +1283,8 @@ class UBlox(QzssDcrSupport, AbstractSensorGPS):
             if self._read_loop_active:
                 futures.append(self._queue_write_future(message, delay))
             else:
-                await self._write_transport_async(message, delay)
+                await asyncio.to_thread(self._write_transport_now, message)
+                await asyncio.sleep(delay)
 
         if futures:
             await asyncio.gather(*futures)
