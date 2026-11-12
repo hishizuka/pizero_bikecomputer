@@ -1,0 +1,20 @@
+/dts-v1/;
+/plugin/;
+
+/ {
+    compatible = "brcm,bcm2835";
+
+    fragment@0 {
+        target-path = "/";
+        __overlay__ {
+            backlight {
+                compatible = "pwm-backlight";
+                /* GPIO18 is muxed to PWM0 by pwm or pwm-2chan. */
+                pwms = <&pwm 0 15625000 0>;
+                brightness-levels = <0 255>;
+                num-interpolated-steps = <255>;
+                default-brightness-level = <0>;
+            };
+        };
+    };
+};

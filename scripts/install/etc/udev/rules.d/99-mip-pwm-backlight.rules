@@ -1,0 +1,1 @@
+ACTION=="add", SUBSYSTEM=="backlight", KERNEL=="backlight", DRIVERS=="pwm-backlight", ENV{ID_BACKLIGHT_CLAMP}="false", RUN+="/bin/sh -c 'chgrp video /sys/class/backlight/%k/brightness /sys/class/backlight/%k/bl_power && chmod g+rw /sys/class/backlight/%k/brightness /sys/class/backlight/%k/bl_power'"

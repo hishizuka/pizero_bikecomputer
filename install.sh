@@ -21,9 +21,9 @@ set -euo pipefail
 ###
 ask_user() {
     local prompt="$1"
+    local answer
     while true; do
-        read -rp "$prompt [y/n/q(uit)]: " answer
-        #answer="${answer,,}"  # lowercase
+        read -rp "$prompt [y/n/q(uit)]: " answer || return 2
         answer="$(echo "$answer" | tr 'A-Z' 'a-z')"
 
         case "$answer" in
@@ -35,14 +35,36 @@ ask_user() {
     done
 }
 
+choose_number() {
+    local prompt="$1" maximum="$2" default="$3" target="$4"
+    local choice
+    while true; do
+        if ! read -rp "$prompt: " choice; then
+            echo "Input closed. Exiting installer."
+            exit 1
+        fi
+        choice="${choice:-$default}"
+        case "$choice" in
+            [0-9])
+                if (( choice <= maximum )); then
+                    printf -v "$target" '%s' "$choice"
+                    return 0
+                fi
+                ;;
+            q|Q|quit|QUIT) echo "👋 Quitting...bye!"; exit 0 ;;
+        esac
+        echo "Invalid input. Choose one of the displayed options."
+    done
+}
+
 prompt_and_store() {
     local prompt="$1"
     local var_name="$2"
     local task_prompt_result=0
     ask_user "$prompt" || task_prompt_result=$?
     case "$task_prompt_result" in
-        0) eval "$var_name=true" ;;
-        1) eval "$var_name=false" ;;
+        0) printf -v "$var_name" '%s' true ;;
+        1) printf -v "$var_name" '%s' false ;;
         2) echo "👋 Quitting...bye!"; exit 0 ;;
     esac
 }
@@ -104,41 +126,18 @@ enable_uart_interface() {
     ENABLE_UART_DONE=true
 }
 
-configure_pwm_overlay() {
-    local overlay="$1"
-    local active='^[[:space:]]*dtoverlay=pwm(-2chan)?([,[:space:]]|$)'
-    local known='^[[:space:]]*dtoverlay=(pwm,pin=18,func=2|pwm,pin=13,func=4|pwm-2chan,pin=18,func=2,pin2=13,func2=4)[[:space:]]*(#.*)?$'
-
-    if [[ ! -f "$BOOT_CONFIG_FILE" ]]; then
-        echo "❌ $BOOT_CONFIG_FILE was not found."
-        return 1
-    fi
-    if [[ -n "$overlay" ]] && grep -E "$active" "$BOOT_CONFIG_FILE" | grep -Ev "$known" >/dev/null; then
-        echo "❌ Existing custom PWM overlay in $BOOT_CONFIG_FILE; resolve it before installing."
-        return 1
-    fi
-    if [[ -n "$overlay" ]] && [[ "$(grep -Ec "$active" "$BOOT_CONFIG_FILE")" == 1 ]] &&
-        grep -Fxq "$overlay" "$BOOT_CONFIG_FILE"; then
-        echo "ℹ️ PWM overlay is already configured."
-        return 0
-    fi
-
-    if grep -Eq "$known" "$BOOT_CONFIG_FILE"; then
-        sudo sed -i -E "/$known/d" "$BOOT_CONFIG_FILE"
-    fi
-    if [[ -n "$overlay" ]]; then
-        if [[ "$(awk '/^\[/{section=$0} END{print section}' "$BOOT_CONFIG_FILE")" != '[all]' ]]; then
-            printf '\n[all]\n' | sudo tee -a "$BOOT_CONFIG_FILE" >/dev/null
-        fi
-        printf '\n%s\n' "$overlay" | sudo tee -a "$BOOT_CONFIG_FILE" >/dev/null
-        echo "✅ PWM overlay configured: $overlay"
-    fi
+install_mip_pwm_backlight() {
+    sudo apt install -y device-tree-compiler
+    sudo dtc -@ -I dts -O dtb -o "${BOOT_CONFIG_FILE%/*}/overlays/mip-pwm-backlight.dtbo" \
+        scripts/install/boot/overlays/mip-pwm-backlight.dts
+    sudo install -m 644 scripts/install/etc/udev/rules.d/99-mip-pwm-backlight.rules /etc/udev/rules.d/
+    sudo usermod -aG video "$TARGET_USER"
 }
 
 install_memory_lcd_support() {
     local driver_dir="$HOME/memory-lcd-drm"
     sudo apt install -y build-essential
-    if [[ "$install_memory_lcd_drm" == "true" ]]; then
+    if [[ "$display_profile" == "drm" ]]; then
         local kernel_release kernel_flavour
         kernel_release="$(uname -r)"
         case "$kernel_release" in
@@ -160,12 +159,10 @@ install_memory_lcd_support() {
     if [[ ! -d "$driver_dir" ]]; then
         git clone https://github.com/hishizuka/memory-lcd-drm.git "$driver_dir"
     fi
-    if [[ "$install_memory_lcd_drm" == "true" ]]; then
+    if [[ "$display_profile" == "drm" ]]; then
         sudo make -C "$driver_dir" install_dkms
         sudo usermod -aG video "$TARGET_USER"
         echo "✅ memory-lcd-drm installed (module and overlay: sharp-drm)."
-        echo "   Select your panel's dtoverlay=sharp-drm settings before rebooting:"
-        echo "   https://github.com/hishizuka/memory-lcd-drm#panel-configuration-examples"
     fi
     if [[ "$install_dmabuf_presenter" == "true" ]]; then
         sudo apt install -y pkg-config libdrm-dev libgbm-dev libegl-dev libgles-dev
@@ -239,20 +236,9 @@ echo "  1) u-blox direct UBX (pyubx2; MAX-M10S/N etc., UART or I2C)"
 echo "  2) UART GPS through GPSD (NMEA receivers)"
 echo "  3) Sony CXD56xx GNSS over I2C"
 echo "  q) Quit installer"
-while true; do
-    if ! read -rp "Choose GPS [0/1/2/3/q]: " gps_choice; then
-        echo "Input closed. Exiting installer."
-        exit 1
-    fi
-    case "$gps_choice" in
-        0) gps_backend=none; break ;;
-        1) gps_backend=ublox; break ;;
-        2) gps_backend=gpsd; break ;;
-        3) gps_backend=cxd56xx; break ;;
-        q|Q|quit|QUIT) echo "👋 Quitting...bye!"; exit 0 ;;
-        *) echo "Invalid input. Please choose 0, 1, 2, 3, or q." ;;
-    esac
-done
+choose_number "Choose GPS [0/1/2/3/q]" 3 "" gps_choice
+gps_backends=(none ublox gpsd cxd56xx)
+gps_backend="${gps_backends[gps_choice]}"
 prompt_and_store "Install Bluetooth packages?" install_bluetooth
 prompt_and_store "Install rpi-ble-tunnel integration?" install_rpi_ble_tunnel
 prompt_and_store "Enable I2C?" enable_i2c
@@ -264,20 +250,63 @@ elif [[ "$enable_i2c" == "true" ]]; then
     echo "ℹ️ BHI360/BHI385 require I2C at 400kHz."
     prompt_and_store "Configure I2C at 400kHz?" use_i2c_400khz
 fi
-prompt_and_store "Enable SPI?" enable_spi
+echo "Select display boot settings:"
+echo "  0) Keep existing display settings (including non-MIP displays)"
+echo "  1) MIP with Memory LCD DRM (recommended)"
+echo "  2) MIP with spidev (active-high SPI0 CE0; CE1 unused)"
+echo "  3) PWM1 buzzer only (no installer-managed MIP display)"
+echo "  q) Quit installer"
+choose_number "Choose display settings [0-3/q, default 0]" 3 0 display_choice
+enable_spi=false
 use_bryton_rider_s800_display=false
 use_pwm_backlight=false
-install_memory_lcd_drm=false
+use_pwm_buzzer=false
+mip_only_framebuffer=false
 install_dmabuf_presenter=false
-if [[ "$enable_spi" == "true" ]]; then
-    prompt_and_store "Install memory-lcd-drm for a JDI/Sharp/AUO MIP display (DKMS)?" install_memory_lcd_drm
-    if [[ "$install_pyqt6" == "true" ]]; then
-        prompt_and_store "Install optional memory-lcd-drm DMA-BUF presenter (experimental; GUI unchanged)?" install_dmabuf_presenter
+display_name=""
+service_display_default=""
+case "$display_choice" in
+    0) display_profile=existing ;;
+    1) display_profile=drm; service_display_default=0 ;;
+    2) display_profile=spidev; service_display_default=1 ;;
+    3) display_profile=buzzer; use_pwm_buzzer=true ;;
+esac
+if [[ "$display_profile" == "drm" || "$display_profile" == "spidev" ]]; then
+    enable_spi=true
+    echo "Select MIP panel:"
+    echo "  1) JDI 400x240, 8 colors (LPM027M128B/C)"
+    echo "  2) JDI 640x480, 8 colors (LPM044M141A)"
+    echo "  3) AUO/Azumo 272x451, 64 colors"
+    echo "  4) Sharp 400x240 monochrome (LS027B7DH01)"
+    echo "  5) Sharp 320x240 monochrome (LS044Q7DH01)"
+    last_panel=5
+    if [[ "$display_profile" == "drm" ]]; then
+        echo "  6) Two AUO/Azumo 272x451 panels, 64 colors (CE0 and CE1)"
+        last_panel=6
     fi
-    prompt_and_store "Use Bryton Rider S800 display?" use_bryton_rider_s800_display
-    prompt_and_store "Use PWM0 (GPIO18) for the backlight?" use_pwm_backlight
+    echo "  0/q) Quit installer"
+    choose_number "Choose panel [0-$last_panel/q]" "$last_panel" "" panel_choice
+    case "$panel_choice" in
+        0) echo "👋 Quitting...bye!"; exit 0 ;;
+        1) display_name=MIP_JDI_color_400x240; panel_params=width=400,height=240,colors=8 ;;
+        2) display_name=MIP_JDI_color_640x480; panel_params=width=640,height=480,colors=8 ;;
+        3) display_name=MIP_Azumo_color_272x451; panel_params=width=272,height=451,colors=64 ;;
+        4) display_name=MIP_Sharp_mono_400x240; panel_params=panel_type=sharp_mono,width=400,height=240,colors=2 ;;
+        5) display_name=MIP_Sharp_mono_320x240; panel_params=panel_type=sharp_mono,width=320,height=240,colors=2 ;;
+        6) display_name=MIP_Azumo_color_272x451; panel_params=width=272,height=451,colors=64,dual_panel=1 ;;
+    esac
+    prompt_and_store "Use the Bryton Rider S800 Sitronix touchscreen?" use_bryton_rider_s800_display
+    prompt_and_store "Use PWM0 (GPIO18) for the MIP backlight?" use_pwm_backlight
+    prompt_and_store "Use PWM1 (GPIO13) for the buzzer?" use_pwm_buzzer
+    if [[ "$display_profile" == "drm" ]]; then
+        prompt_and_store "Disable the firmware framebuffer for MIP (max_framebuffers=0)?" mip_only_framebuffer
+    fi
+else
+    prompt_and_store "Enable SPI for other hardware?" enable_spi
 fi
-prompt_and_store "Use PWM1 (GPIO13) for the buzzer?" use_pwm_buzzer
+if [[ "$install_pyqt6" == "true" && "$display_profile" != "spidev" ]]; then
+    prompt_and_store "Install optional memory-lcd-drm DMA-BUF presenter (experimental; GUI unchanged)?" install_dmabuf_presenter
+fi
 prompt_and_store "Install services?" install_services
 if [[ "$install_services" == "true" ]]; then
     echo "Select service display:"
@@ -285,21 +314,55 @@ if [[ "$install_services" == "true" ]]; then
     echo "  1) Offscreen"
     echo "  2) X Window (xcb)"
     echo "  q) Quit installer"
-    while true; do
-        if ! read -rp "Choose display [0/1/2/q]: " service_display; then
-            echo "Input closed. Exiting installer."
-            exit 1
-        fi
-        case "$service_display" in
-            0|1|2) break ;;
-            q|Q|quit|QUIT) echo "👋 Quitting...bye!"; exit 0 ;;
-            *) echo "Invalid input. Please choose 0, 1, 2, or q." ;;
-        esac
-    done
+    service_display_prompt="Choose service display [0/1/2/q"
+    if [[ -n "$service_display_default" ]]; then
+        service_display_prompt+=", default $service_display_default"
+    fi
+    choose_number "$service_display_prompt]" 2 "$service_display_default" service_display
 fi
 set -e
 TARGET_USER="${SUDO_USER:-${LOGNAME:-$USER}}"
 BOOT_CONFIG_FILE="/boot/firmware/config.txt"
+DISPLAY_CONFIG_SCRIPT="scripts/install/display_config.py"
+
+pgm_dir="$HOME/pizero_bikecomputer"
+if [[ -f "${BASH_SOURCE[0]:-}" ]] && [[ -f "$(dirname -- "${BASH_SOURCE[0]}")/pizero_bikecomputer.py" ]]; then
+    pgm_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+fi
+
+# Keep the order required by the SPI and PWM consumers.
+boot_display_options=()
+if [[ "$enable_spi" == "true" ]]; then
+    boot_display_options+=(dtparam=spi=on)
+fi
+if [[ "$display_profile" == "drm" ]]; then
+    if [[ "$use_pwm_backlight" == "true" ]]; then
+        panel_params+=,backlight_pwm
+    fi
+    boot_display_options+=("dtoverlay=sharp-drm,$panel_params")
+elif [[ "$display_profile" == "spidev" ]]; then
+    boot_display_options+=(dtoverlay=spi0-1cs-inverted)
+fi
+if [[ "$use_pwm_backlight" == "true" && "$use_pwm_buzzer" == "true" ]]; then
+    boot_display_options+=(dtoverlay=pwm-2chan,pin=18,func=2,pin2=13,func2=4)
+elif [[ "$use_pwm_buzzer" == "true" ]]; then
+    boot_display_options+=(dtoverlay=pwm,pin=13,func=4)
+elif [[ "$use_pwm_backlight" == "true" && "$display_profile" == "spidev" ]]; then
+    boot_display_options+=(dtoverlay=pwm,pin=18,func=2)
+fi
+if [[ "$use_pwm_backlight" == "true" && "$display_profile" == "spidev" ]]; then
+    boot_display_options+=(dtoverlay=mip-pwm-backlight)
+fi
+if [[ "$use_bryton_rider_s800_display" == "true" ]]; then
+    boot_display_options+=(dtoverlay=sitronix-touch)
+fi
+if [[ "$use_pwm_backlight" == "true" || "$use_pwm_buzzer" == "true" ]]; then
+    # End overlay scope so audio=off applies to the base tree, not VC4 HDMI audio.
+    boot_display_options+=(dtoverlay= dtparam=audio=off)
+fi
+if [[ "$mip_only_framebuffer" == "true" ]]; then
+    boot_display_options+=(max_framebuffers=0)
+fi
 
 #############################################################
 # install packages
@@ -314,6 +377,17 @@ echo "🔧 Installing core packages..."
 # trixie
 sudo apt install -y git cython3 cmake python3-setuptools python3.13-venv python3-numpy sqlite3 libsqlite3-dev python3-pil python3-aiohttp python3-psutil
 echo "✅ Core packages installed."
+
+if [[ ! -d "$pgm_dir" ]]; then
+    git clone https://github.com/hishizuka/pizero_bikecomputer.git "$pgm_dir"
+fi
+if [[ "$display_profile" != "existing" ]]; then
+    if [[ ! -f "$pgm_dir/$DISPLAY_CONFIG_SCRIPT" ]]; then
+        echo "Update the Pi Zero Bikecomputer checkout at $pgm_dir and rerun the installer." >&2
+        exit 1
+    fi
+    python3 "$pgm_dir/$DISPLAY_CONFIG_SCRIPT" boot "$BOOT_CONFIG_FILE" "$display_profile" "${boot_display_options[@]}"
+fi
 
 cd
 
@@ -447,28 +521,15 @@ fi
 
 # Enable SPI
 if [[ "$enable_spi" == "true" ]]; then
-sudo apt install -y libgpiod3 libgpiod-dev python3-libgpiod
-    # Enable SPI on Raspberry Pi
-    echo "🔧 Enabling spi on Raspberry Pi..."
-    if [[ "$has_raspi_config" == "true" ]]; then
+    sudo apt install -y libgpiod3 libgpiod-dev python3-libgpiod python3-spidev
+    sudo usermod -aG spi,gpio "$TARGET_USER"
+    if [[ "$display_profile" == "existing" && "$has_raspi_config" == "true" ]] &&
+        [[ "$(raspi-config nonint get_spi)" != "0" ]]; then
         sudo raspi-config nonint do_spi 0
     fi
-    # add pi to i2c if not already a member
-    #if ! groups "$TARGET_USER" | grep -qw spi; then
-    #  sudo adduser "$TARGET_USER" spi
-    #fi
-    
-    # pigpio for trixie (To be deprecated)
-    # sudo apt install -y pigpio python3-pigpio
-    # or manually install
-    
-    # sudo systemctl enable pigpiod
-    #echo "ℹ️ pigpio enabled  successfully."
-
-    echo "✅ SPI enabled successfully"
 fi
 
-if [[ "$install_memory_lcd_drm" == "true" || "$install_dmabuf_presenter" == "true" ]]; then
+if [[ "$display_profile" == "drm" || "$install_dmabuf_presenter" == "true" ]]; then
     install_memory_lcd_support
 fi
 
@@ -476,50 +537,15 @@ fi
 # disable raspberry pi specific hardware
 #############################################################
 
-pwm_overlay=""
-if [[ "$use_pwm_backlight" == "true" && "$use_pwm_buzzer" == "true" ]]; then
-    pwm_overlay="dtoverlay=pwm-2chan,pin=18,func=2,pin2=13,func2=4"
-elif [[ "$use_pwm_backlight" == "true" && "$install_memory_lcd_drm" == "false" && "$install_dmabuf_presenter" == "false" ]]; then
-    pwm_overlay="dtoverlay=pwm,pin=18,func=2"
-elif [[ "$use_pwm_buzzer" == "true" ]]; then
-    pwm_overlay="dtoverlay=pwm,pin=13,func=4"
-fi
-configure_pwm_overlay "$pwm_overlay"
+cd "$pgm_dir"
 
-# Enable Bryton Rider S800 touchscreen
+if [[ "$display_profile" == "spidev" && "$use_pwm_backlight" == "true" ]]; then
+    install_mip_pwm_backlight
+fi
+
 if [[ "$use_bryton_rider_s800_display" == "true" ]]; then
-    SITRONIX_TOUCH_OVERLAY="dtoverlay=sitronix-touch"
-    echo "🔧 Enabling Sitronix touchscreen..."
-    if [ -f "$BOOT_CONFIG_FILE" ]; then
-        if grep -Eq "^[[:space:]]*$SITRONIX_TOUCH_OVERLAY[[:space:]]*$" "$BOOT_CONFIG_FILE"; then
-            echo "ℹ️ Sitronix touchscreen overlay is already enabled."
-        elif grep -Eq "^[[:space:]]*#[[:space:]]*$SITRONIX_TOUCH_OVERLAY[[:space:]]*$" "$BOOT_CONFIG_FILE"; then
-            sudo sed -i -E \
-                "s|^[[:space:]]*#[[:space:]]*$SITRONIX_TOUCH_OVERLAY[[:space:]]*$|$SITRONIX_TOUCH_OVERLAY|" \
-                "$BOOT_CONFIG_FILE"
-        else
-            echo "$SITRONIX_TOUCH_OVERLAY" | sudo tee -a "$BOOT_CONFIG_FILE" >/dev/null
-        fi
-    else
-        echo "❌ $BOOT_CONFIG_FILE was not found."
-        exit 1
-    fi
     sudo usermod -aG input "$TARGET_USER"
     sudo install -m 644 scripts/install/etc/udev/rules.d/99-sitronix-touch.rules /etc/udev/rules.d/
-    echo "✅ Sitronix touchscreen enabled successfully in $BOOT_CONFIG_FILE."
-fi
-
-# Disable audio on Raspberry Pi
-if [ -f "$BOOT_CONFIG_FILE" ]; then
-    AUDIO_PARAM="dtparam=audio=on"
-    # Disable audio on Raspberry Pi
-    echo "🔧 Disabling the Raspberry Pi audio..."
-    if grep -q "^[^#]*$AUDIO_PARAM" "$BOOT_CONFIG_FILE"; then
-        sudo sed -i "/^[^#]*$AUDIO_PARAM/s/^/#/" "$BOOT_CONFIG_FILE"
-    else
-        echo "ℹ️ Audio is already disabled or line is commented out."
-    fi
-    echo "✅ Audio disabled successfully in $BOOT_CONFIG_FILE (or already disabled)"
 fi
 
 # Disable LED
@@ -543,14 +569,6 @@ fi
 # test run
 #############################################################
 
-echo "🔧 Starting pizero_bikecomputer.py for initialize..."
-pgm_dir=~/pizero_bikecomputer
-if [ ! -d "$pgm_dir" ]; then
-    git clone https://github.com/hishizuka/pizero_bikecomputer.git
-fi
-
-cd "$pgm_dir"
-
 if [[ "$install_rpi_ble_tunnel" == "true" ]]; then
     bash scripts/install/install-rpi-ble-tunnel.sh
 fi
@@ -567,50 +585,27 @@ if [[ "$install_ant_plus" == "true" ]] && \
     echo "   The application uses (ANT+) text until both files are installed."
 fi
 
-# Create a named pipe (FIFO) to monitor output
-OUT_PIPE=$(mktemp -u)
-mkfifo "$OUT_PIPE"
-
-cleanup() {
-    rm -f "$OUT_PIPE"
-    kill "$APP_PID" 2>/dev/null || true
-}
-trap cleanup EXIT
-
-# Start the app and tee its output to both screen and PIPE
-export QT_QPA_PLATFORM=offscreen
-stdbuf -oL python3 pizero_bikecomputer.py --init "${gui_option[@]}" 2>&1 | tee "$OUT_PIPE" &
-APP_PID=$!
-
-# Monitor the output for readiness
-ready=0
-while IFS= read -r line; do
-    if [ "$ready" -eq 0 ]; then
-        case "$line" in
-            quit)
-                echo "ℹ️ 'quit' detected. Waiting 10s..."
-                ready=1
-            ;;
-        esac
+# A configured MIP display may be unavailable until the new boot settings take effect.
+if [[ -z "$display_name" || ! -f setting.conf ]]; then
+    echo "🔧 Initializing pizero_bikecomputer.py..."
+    if QT_QPA_PLATFORM=offscreen python3 -u pizero_bikecomputer.py --init "${gui_option[@]}" &&
+        [[ -f setting.conf ]]; then
+        echo "✅ Startup test completed successfully."
+    else
+        echo "❌ Application did not start correctly. Check logs or errors."
     fi
+fi
 
-    if [ "$ready" -eq 1 ]; then
-        case "$line" in
-            *"quit done"*)
-                echo "✅ 'quit done' detected. Stopping app..."
-                kill "$APP_PID" 2>/dev/null || true
-                wait "$APP_PID" 2>/dev/null || true
-                break
-            ;;
-        esac
+if [[ -n "$display_name" ]]; then
+    # A running service saves its old settings when stopped.
+    if systemctl is-active --quiet pizero_bikecomputer.service; then
+        sudo systemctl stop pizero_bikecomputer.service
+        echo "The bike computer service was stopped. Reboot to use the new display settings."
     fi
-done < "$OUT_PIPE"
-
-# check setting.conf
-if [ -f setting.conf ]; then
-    echo "✅ Startup test completed successfully."
-else
-    echo "❌ Application did not start correctly. Check logs or errors."
+    python3 "$DISPLAY_CONFIG_SCRIPT" settings setting.conf "$display_name" "$use_pwm_backlight"
+fi
+if [[ "$display_profile" != "existing" ]]; then
+    sudo python3 "$DISPLAY_CONFIG_SCRIPT" boot --apply "$BOOT_CONFIG_FILE" "$display_profile" "${boot_display_options[@]}"
 fi
 
 #############################################################
@@ -638,10 +633,10 @@ if [[ "$install_services" == "true" ]]; then
 
     # check if venv is set, in that case default to using venv to run the script
     #read -p "Use current virtualenv? [y/n] (y): " use_venv
-    if [[ -n "$VIRTUAL_ENV" ]]; then
+    if [[ -n "${VIRTUAL_ENV:-}" ]]; then
         script="$VIRTUAL_ENV/bin/python $script"
     else
-    echo "No virtualenv used/activated. Default python will be used"
+        echo "No virtualenv used/activated. Default python will be used"
     fi
 
     after=""
@@ -666,8 +661,11 @@ if [[ "$install_services" == "true" ]]; then
             ;;
     esac
 
-    if [[ "$use_bryton_rider_s800_display" == "true" ]]; then
-        service_envs+=('Environment="QT_QPA_EVDEV_TOUCHSCREEN_PARAMETERS=/dev/input/touchscreen"')
+    touch_env='Environment="QT_QPA_EVDEV_TOUCHSCREEN_PARAMETERS=/dev/input/touchscreen"'
+    if [[ "$use_bryton_rider_s800_display" == "true" ]] ||
+        { [[ "$display_profile" == "existing" ]] &&
+          grep -Fxq "$touch_env" "$o_service_file" 2>/dev/null; }; then
+        service_envs+=("$touch_env")
     fi
     printf -v envs '%s\n' "${service_envs[@]}"
     envs="${envs%$'\n'}"
@@ -699,9 +697,5 @@ if [[ "$install_services" == "true" ]]; then
 
 fi
 
-if [[ "$install_memory_lcd_drm" == "true" || "$install_dmabuf_presenter" == "true" ]]; then
-    echo "ℹ️ Before rebooting, complete the panel, backlight, and boot display settings:"
-    echo "   https://github.com/hishizuka/pizero_bikecomputer/blob/master/doc/software_installation.md#jdi--sharp-mip-display"
-fi
 echo "✅ pizero_bikecomputer initial setup completed successfully! Please reboot."  # or "Now rebooting"
 #sudo reboot

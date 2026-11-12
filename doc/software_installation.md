@@ -432,18 +432,40 @@ The public repository is named `memory-lcd-drm`; the kernel module and device tr
 overlay still use `sharp-drm`, and sysfs uses `/sys/module/sharp_drm/`. Existing
 display detection and `dtoverlay=sharp-drm` settings remain compatible.
 
-When SPI is enabled, `install.sh` offers to install `memory-lcd-drm` with DKMS.
-It clones the source into `~/memory-lcd-drm`, installs the matching kernel image
-and headers metapackages, then runs `sudo make install_dkms`. An existing source
-directory is reused; update it yourself when installing a newer driver version.
-If the running kernel's headers are missing after a kernel update, reboot and
-rerun the installer. DKMS rebuilds the module on later kernel updates when matching
-headers are installed.
+In `install.sh`, select **MIP with Memory LCD DRM** or **MIP with spidev**.
+Choose the panel, then select the GPIO18 backlight, GPIO13 buzzer, and Bryton
+Rider S800 touchscreen as applicable. The DRM profile also offers
+`max_framebuffers=0` for a MIP-only framebuffer. The spidev profile uses
+active-high SPI0 CE0 (GPIO8) and assumes CE1 is unused.
+The two-panel DRM preset uses both CE0 and CE1. Select the
+`pizero_bikecomputer` board in `setting.conf` for that board's dual-screen
+layout and controls.
 
-The installer installs the module, device tree overlay, and udev rules. Select
-your panel's dimensions, color mode, and optional backlight in
-`/boot/firmware/config.txt` before rebooting. It does not select panel settings,
-force HDMI, or change the framebuffer/console boot settings automatically.
+The installer writes these boot settings inside the
+`# BEGIN Pi Zero Bikecomputer display` / `# END Pi Zero Bikecomputer display`
+block in `/boot/firmware/config.txt`. It appends the block under `[all]` on the
+first run and replaces that block on later runs. It keeps the first pre-change
+copy as `/boot/firmware/config.txt.before-pizero-display`. If the installer lists
+conflicting overlay lines from an older installation or an included file, review
+them and comment out the obsolete lines before retrying. Choose **Keep existing
+display settings** to continue using a custom or non-MIP configuration, or
+**PWM1 buzzer only** to set up the GPIO13 PWM output without a managed MIP panel.
+For an existing managed MIP panel, enable the buzzer in its MIP profile.
+
+The installer records the selected MIP panel in `[GENERAL]` in `setting.conf`.
+With `BOARD = auto`, it also sets `USE_BACKLIGHT` in `[DISPLAY_PARAM]`; specific
+board presets supply their own backlight setting. A running bike computer service
+is stopped when applying a MIP profile so it can save its settings first.
+If switching an existing service between DRM and spidev, also select
+**Install services** to apply the new Qt platform. Reboot to apply the boot
+configuration and start the enabled service.
+
+The DRM profile clones the driver source into `~/memory-lcd-drm`, installs the
+matching kernel image and headers metapackages, then runs `sudo make install_dkms`
+to install the module, overlay, and udev rules. An existing source directory is
+reused. If the running kernel's headers are missing after a kernel update, reboot
+and rerun the installer. DKMS rebuilds the module on later kernel updates when
+matching headers are installed.
 
 The separate DMA-BUF presenter option builds `libsharp_presenter.so` from the
 same checkout. It does not change the GUI or service selection; PyQt remains
@@ -508,8 +530,8 @@ that selects the GPS or nRF52840 UART, such as `console=serial0,115200`.
 Run the application with
 `QT_QPA_PLATFORM=linuxfb:fb=/dev/fb0`.
 
-`install.sh` selects `/dev/fb0` for linuxfb services. After installing the driver,
-apply the panel and framebuffer boot settings above before rebooting. The optional
+`install.sh` defaults the DRM service to `linuxfb:fb=/dev/fb0`. Set the console
+options in `cmdline.txt` separately if needed. The optional
 [MIP boot display setup](../scripts/boot/splashasm/SETUP.md) adds an early splash
 image and documents a tested boot configuration.
 Leave HDMI detection automatic and do not add `video=HDMI-A-1:640x480@60D` for
@@ -517,6 +539,52 @@ this software rendering setup. The boot image script activates `/dev/fb0` direct
 with `FBIOBLANK`; no extra framebuffer, udev alias, or `con2fbmap` is needed.
 Verify that `/proc/fb` contains only `0 sharp_drmdrmfb` and
 `/sys/class/graphics/fb0/name` contains `sharp_drmdrmfb`.
+
+##### Hardware PWM backlight with spidev
+
+On Raspberry Pi Zero, Zero W/WH and Zero 2 W, connect the backlight PWM input
+to GPIO18 (header pin 12). The `mip-pwm-backlight` overlay uses Linux's
+`pwm-backlight` driver with PWM channel 0 at 64 Hz and 256 linear brightness
+levels. It works with the Python and C++ paths of the `spidev` display backend.
+
+Run `install.sh`, choose **MIP with spidev**, and select the GPIO18 MIP backlight.
+The installer installs the overlay, configures the PWM pins, and grants the
+`video` group access to `brightness` and `bl_power`. Reboot to apply the boot settings.
+
+For manual installation, run these commands from the repository root:
+
+```bash
+sudo apt install device-tree-compiler python3-spidev python3-libgpiod libgpiod-dev
+sudo dtc -@ -I dts -O dtb -o /boot/firmware/overlays/mip-pwm-backlight.dtbo \
+    scripts/install/boot/overlays/mip-pwm-backlight.dts
+sudo install -m 644 scripts/install/etc/udev/rules.d/99-mip-pwm-backlight.rules /etc/udev/rules.d/
+sudo usermod -aG gpio,spi,video "$USER"
+```
+
+Add the following to `/boot/firmware/config.txt`:
+
+```ini
+[all]
+dtparam=spi=on
+dtoverlay=spi0-1cs-inverted
+dtoverlay=pwm,pin=18,func=2
+dtoverlay=mip-pwm-backlight
+dtoverlay=
+dtparam=audio=off
+```
+
+If the buzzer also uses GPIO13, replace the `pwm` line with
+`dtoverlay=pwm-2chan,pin=18,func=2,pin2=13,func2=4`. Apply the PWM pin overlay
+only once. This example uses active-high CE0 and leaves CE1 unused.
+The empty `dtoverlay=` line ends overlay parameter scope so `audio=off`
+applies to the base device tree.
+
+With `BOARD = auto`, set `USE_BACKLIGHT = True` in `[DISPLAY_PARAM]` in
+`setting.conf`. An explicit board preset supplies its own backlight setting.
+After rebooting, check that
+`/sys/class/backlight/backlight/brightness` and `bl_power` are writable by the
+app's user. If the kernel backlight is unavailable, the panel can still display
+images and the app disables its backlight controls.
 
 #### Display HAT Mini, Pirate Audio
 
@@ -881,34 +949,29 @@ The current service template lives at `scripts/install/etc/systemd/system/pizero
 and the recommended way is to run `install.sh` and answer `Install services? -> y`.
 
 `install.sh` fills the placeholders in the template, installs `rotate_debug_log.sh`,
-and enables `pizero_bikecomputer.service` automatically. The display mode is selected
-once during installation, and its environment variables are written directly to
-`/etc/systemd/system/pizero_bikecomputer.service`.
+and enables `pizero_bikecomputer.service` automatically. Its default Qt platform
+is `linuxfb:fb=/dev/fb0` for the Memory LCD DRM profile and `offscreen` for the
+spidev profile. You can override it at the service prompt. The environment variables
+are written directly to `/etc/systemd/system/pizero_bikecomputer.service`.
 
-When SPI is enabled, the installer asks whether PWM0 (GPIO18) drives the backlight.
-It asks whether PWM1 (GPIO13) drives the buzzer regardless of SPI. It updates
-`/boot/firmware/config.txt` as follows for legacy SPI display backends:
+The [MIP installer profiles](#jdi--sharp-mip-display) set up PWM as follows
+for the spidev display backend:
 
-| Backlight | Buzzer | Overlay |
+| Backlight | Buzzer | Overlays in load order |
 |:-|:-|:-|
-| Yes | Yes | `dtoverlay=pwm-2chan,pin=18,func=2,pin2=13,func2=4` |
-| Yes | No | `dtoverlay=pwm,pin=18,func=2` |
+| Yes | Yes | `dtoverlay=pwm-2chan,pin=18,func=2,pin2=13,func2=4`, then `dtoverlay=mip-pwm-backlight` |
+| Yes | No | `dtoverlay=pwm,pin=18,func=2`, then `dtoverlay=mip-pwm-backlight` |
 | No | Yes | `dtoverlay=pwm,pin=13,func=4` |
 | No | No | No PWM overlay for these outputs |
 
-When the Memory LCD DRM or DMA-BUF presenter option is selected, PWM0-only backlight
-uses the driver's `backlight_pwm` setting instead of a separate `pwm` overlay.
-Add this option to the panel's `sharp-drm` line manually. With a PWM1 buzzer,
-the installer still configures the corresponding PWM overlay from the table;
-keep the `sharp-drm` line before `pwm-2chan` when both channels are used.
-
-Rerunning the installer replaces an earlier overlay from this table instead of
-adding a conflicting one. A custom PWM overlay must be resolved manually before
-selecting either output. Reboot to apply changes to `config.txt`.
+For Memory LCD DRM, the installer adds `backlight_pwm` to the panel's
+`sharp-drm` line to enable PWM0. With both outputs, it loads
+`dtoverlay=pwm-2chan,pin=18,func=2,pin2=13,func2=4` after `sharp-drm`.
+It disables the onboard analog audio when either PWM output is selected.
 
 When the Bryton Rider S800 display is selected, the installer enables its Sitronix
 touch panel, adds a udev rule for the stable `/dev/input/touchscreen` name, and
-uses that name in the same service file. This option is shown only when SPI is enabled.
+uses that name in the same service file.
 
 The `linuxfb` output platform and `USE_DRM` display backend do not imply touch input.
 At display initialization, the application checks whether `/dev/input/touchscreen`
