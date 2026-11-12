@@ -3,12 +3,11 @@
 cimport numpy as cnp
 
 
-cdef extern from "mip_display.hpp":
+cdef extern from "mip_display_spidev.hpp":
   cdef cppclass MipDisplay:
-    MipDisplay(int spi_clock) except +
+    MipDisplay(int spi_clock, const char* gpiochip_path) except +
     void update(unsigned char* image) except +
     void set_screen_size(int w, int h, int c) except +
-    void set_brightness(int b) except +
     void inversion(float sec) except +
     void quit() except +
 
@@ -16,8 +15,8 @@ cdef extern from "mip_display.hpp":
 cdef class MipDisplay_CPP:
   cdef MipDisplay* m
 
-  def __cinit__(self, int spi_clock):
-    self.m = new MipDisplay(spi_clock)
+  def __cinit__(self, int spi_clock, bytes gpiochip_path):
+    self.m = new MipDisplay(spi_clock, gpiochip_path)
 
   def __dealloc__(self):
     del self.m
@@ -28,9 +27,6 @@ cdef class MipDisplay_CPP:
   cpdef update(self, const cnp.uint8_t[:,:,::1] im_array, direct_update):
     self.m.update(<unsigned char*> &im_array[0,0,0])
 
-  cpdef set_brightness(self, b):
-    self.m.set_brightness(b)
-  
   cpdef inversion(self, sec):
     self.m.inversion(sec)
   

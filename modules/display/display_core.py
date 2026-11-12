@@ -225,7 +225,6 @@ def _init_mip_drm_display(config):
         display.size = params["size"]
         display.color = params["color"]
         display.has_color = params["has_color"]
-        display.init_minimum_brightness()
         if detected_name:
             app_logger.info(
                 f"MIP DRM auto-detected: {detected_name} ({_format_fb_info(fb_info)})"
@@ -406,14 +405,10 @@ def init_display(config):
         if bool(config.G_DISPLAY_PARAM["USE_DRM"]):
             display = _init_mip_drm_display(config)
         else:
-            # stop importing when a valid import is found
-            from .mip_display_pigpio import _SENSOR_DISPLAY as _SENSOR_DISPLAY_PIGPIO, MipDisplayPigpio
-            if _SENSOR_DISPLAY_PIGPIO:
-                display = MipDisplayPigpio(config, *SUPPORTED_DISPLAYS[config.G_DISPLAY])
-            else:
-                from .mip_display_spidev import _SENSOR_DISPLAY as _SENSOR_DISPLAY_SPIDEV, MipDisplaySpidev
-                if _SENSOR_DISPLAY_SPIDEV:
-                    display = MipDisplaySpidev(config, *SUPPORTED_DISPLAYS[config.G_DISPLAY])
+            from .mip_display_spidev import _SENSOR_DISPLAY, MipDisplaySpidev
+
+            if _SENSOR_DISPLAY:
+                display = MipDisplaySpidev(config, *SUPPORTED_DISPLAYS[config.G_DISPLAY])
     elif config.G_DISPLAY == "Papirus":
         from .papirus_display import _SENSOR_DISPLAY, PapirusDisplay
 

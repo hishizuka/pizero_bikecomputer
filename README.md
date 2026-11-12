@@ -315,7 +315,7 @@ ANT and ANT+ are trademarks of Garmin Canada Inc. Official ANT+ icon files are n
 
 The code shown below is ported and modified from Azumo's code under the Apache License 2.0 (third_party/apache/LICENSE.Apache2). See the NOTICE file for details.
 - modules/display/mip_display_base.py
-- modules/display/cython/mip_display.cpp
+- modules/display/cython/mip_display_base.cpp
 
 Sony CXD56xx GNSS support uses the separately installed [rpi-cxd56xx-gnss](https://github.com/hishizuka/rpi-cxd56xx-gnss) package (Apache-2.0, including its NuttX-derived portions).
 See the [installation instructions](doc/software_installation.md#sony-cxd56xx-gnss-over-i2c) and the package's `NOTICE` and `THIRD_PARTY.md` for details.

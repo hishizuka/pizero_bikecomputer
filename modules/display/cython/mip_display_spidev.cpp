@@ -1,12 +1,12 @@
-#include "mip_display.hpp"
+#include "mip_display_spidev.hpp"
 
 
-MipDisplay::MipDisplay(int spi_clock) {
+MipDisplay::MipDisplay(int spi_clock, const char* gpiochip_path) {
   try {
     init_spi(spi_clock);
     usleep(6);
 
-    init_gpio();
+    init_gpio(gpiochip_path);
     usleep(6);
 
     init_common();
@@ -84,12 +84,10 @@ void MipDisplay::close_spi() {
   }
 }
 
-void MipDisplay::init_gpio() {
-  const char* chip_path = PIZERO_GPIOCHIP_PATH;
-
-  gpio_chip = gpiod_chip_open(chip_path);
+void MipDisplay::init_gpio(const char* gpiochip_path) {
+  gpio_chip = gpiod_chip_open(gpiochip_path);
   if(gpio_chip == nullptr) {
-    throw std::runtime_error(std::string("Failed to open GPIO chip: ") + chip_path);
+    throw std::runtime_error(std::string("Failed to open GPIO chip: ") + gpiochip_path);
   }
 
   gpiod_request_config* req_cfg = gpiod_request_config_new();
@@ -106,8 +104,8 @@ void MipDisplay::init_gpio() {
   gpiod_line_settings_set_direction(settings, GPIOD_LINE_DIRECTION_OUTPUT);
   gpiod_line_settings_set_output_value(settings, GPIOD_LINE_VALUE_INACTIVE);
 
-  unsigned int offsets[] = {GPIO_DISP, GPIO_VCOMSEL, GPIO_BACKLIGHT};
-  if(gpiod_line_config_add_line_settings(line_cfg, offsets, 3, settings) != 0) {
+  const unsigned int offsets[] = {GPIO_DISP, GPIO_VCOMSEL};
+  if(gpiod_line_config_add_line_settings(line_cfg, offsets, 2, settings) != 0) {
     gpiod_line_settings_free(settings);
     gpiod_line_config_free(line_cfg);
     gpiod_request_config_free(req_cfg);
@@ -157,10 +155,6 @@ void MipDisplay::gpio_write_value(unsigned int offset, bool value) {
   if(gpiod_line_request_set_value(gpio_request, offset, v) != 0) {
     throw std::runtime_error("Failed to set GPIO line value");
   }
-}
-
-void MipDisplay::set_PWM_duty(int duty_percent) {
-  gpio_write_value(GPIO_BACKLIGHT, duty_percent > 0);
 }
 
 void MipDisplay::close_backend() {

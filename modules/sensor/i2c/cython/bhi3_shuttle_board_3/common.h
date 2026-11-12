@@ -55,35 +55,17 @@ extern "C" {
 #include <linux/spi/spidev.h>
 #include <linux/i2c-dev.h>
 
-#if !defined(BHI3_INT_MODE_PIGPIO_POLL) && !defined(BHI3_INT_MODE_PIGPIO_CB) && !defined(BHI3_INT_MODE_GPIOD)
-#define BHI3_INT_MODE_PIGPIO_POLL 1
-#endif
-
-#if defined(BHI3_INT_MODE_PIGPIO_POLL) || defined(BHI3_INT_MODE_PIGPIO_CB)
-#include <pigpiod_if2.h>
-#define BHI3_USE_PIGPIO 1
-#endif
-
-#if defined(BHI3_INT_MODE_GPIOD)
-#include <gpiod.h>
-#define BHI3_USE_GPIOD 1
-#endif
-
 #include "bhi3_compat.h"
 
 #include "intf_codes.h"
 
-#define INT_PIN 22
-
 #define BHI360_RD_WR_LEN           256   /* MCU maximum read write length */
 
-#define SPI_CHANNEL 1
 #define SPI_DEVICE "/dev/spidev0.1"
 #define I2C_DEVICE "/dev/i2c-1"
 //#define I2C_BUS 1
 #define BHI360_I2C_ADDR 0x28
 
-void cb(int pi, unsigned gpio, unsigned level, uint32_t tick);
 char *get_intf_error(int16_t rslt);
 char *get_api_error(int8_t error_code);
 char *get_sensor_error_text(uint8_t sensor_error);
@@ -104,8 +86,6 @@ int8_t bhi360_i2c_write(uint8_t reg_addr, const uint8_t *reg_data, uint32_t leng
 void bhi360_delay_us(uint32_t us, void *private_data);
 bool get_interrupt_status(void);
 bool bhi3_wait_for_interrupt(uint32_t timeout_ms);
-void bhi3_interrupt_init(void);
-void bhi3_interrupt_deinit(void);
 
 #ifdef __cplusplus
 }

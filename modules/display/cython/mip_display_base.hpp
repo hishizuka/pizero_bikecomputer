@@ -17,14 +17,11 @@
 // GPIO.BCM
 #define GPIO_DISP 25  // 22pin
 #define GPIO_VCOMSEL 24  // 18pin
-#define GPIO_BACKLIGHT 18  // 12pin (backend may treat as on/off)
-#define GPIO_BACKLIGHT_FREQ 64
 
 class MipDisplayBase {
   protected:
     virtual void spi_write_bytes(const char* data, std::size_t length) = 0;
     virtual void gpio_write_value(unsigned int offset, bool value) = 0;
-    virtual void set_PWM_duty(int duty_percent) = 0;
     virtual void close_backend() = 0;
 
     void init_common();
@@ -66,8 +63,6 @@ class MipDisplayBase {
     int SPI_MAX_BUF_SIZE = 65536;
     int SPI_MAX_ROWS = 0;
 
-    int pre_brightness = 0;
-
     std::queue<std::vector<char> > queue_;
     std::mutex mutex_;
     std::mutex update_mutex_;
@@ -97,8 +92,6 @@ class MipDisplayBase {
     int log2int(int value);
     void riemersma_dithering(unsigned char *image);
 
-    void set_PWM(int b);
-
     void draw_worker();
     void draw(std::vector<char>& buf_queue);
     bool get_status_quit();
@@ -109,7 +102,6 @@ class MipDisplayBase {
 
     void update(unsigned char* image);
     void set_screen_size(int w, int h, int c);
-    void set_brightness(int brightness);
     void inversion(float sec);
     void quit();
 };

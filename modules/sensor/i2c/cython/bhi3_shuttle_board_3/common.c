@@ -35,9 +35,10 @@
  *
  */
 
- #include "common.h"
+#include "common.h"
 
 #include <errno.h>
+#include <gpiod.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -57,35 +58,16 @@ static uint8_t bits_per_word = 8;
 static uint32_t spi_speed = 1000000; // 1MHz
 //static uint32_t spi_speed = 10000000; // 10MHz
 
-#define BHI3_INT_POLL_INTERVAL_US 2000U
-
-#if defined(BHI3_INT_MODE_GPIOD) && !defined(BHI3_GPIOD_DEVICE)
+#ifndef BHI3_GPIOD_DEVICE
 #define BHI3_GPIOD_DEVICE "/dev/gpiochip4"
 #endif
+#define BHI3_INT_PIN 22
 
 static int fd = -1;
-#if !defined(BHI3_USE_PIGPIO)
 static int spi_fd = -1;
-#endif
 
-#if defined(BHI3_USE_PIGPIO)
-static int pigpio = PI_INIT_FAILED;
-static int spi;
-#endif
-
-#if defined(BHI3_INT_MODE_PIGPIO_CB)
-static int callback_id = -1;
-static pthread_mutex_t interrupt_mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t interrupt_cond = PTHREAD_COND_INITIALIZER;
-static bool interrupt_flag = false;
-#endif
-
-#if defined(BHI3_USE_GPIOD)
-static struct gpiod_chip *gchip = NULL;
 static struct gpiod_line_request *gpiod_request = NULL;
 static struct gpiod_edge_event_buffer *gpiod_event_buffer = NULL;
-static unsigned int gpiod_offsets[1] = { INT_PIN };
-#endif
 
 static int bhi3_spi_transfer(uint8_t reg_addr, const uint8_t *tx_data, uint8_t *rx_data, uint32_t length, bool is_read);
 
@@ -140,67 +122,12 @@ static void bhi3_common_log_errno(const char *message)
 
 bool get_interrupt_status(void)
 {
-#if defined(BHI3_USE_GPIOD)
-    if (!gpiod_request)
-    {
-        return false;
-    }
-
-    int value = gpiod_line_request_get_value(gpiod_request, gpiod_offsets[0]);
-    return value > 0;
-#elif defined(BHI3_USE_PIGPIO)
-    if (pigpio < 0)
-    {
-        return false;
-    }
-
-    return gpio_read(pigpio, INT_PIN) == 1;
-#else
-    return false;
-#endif
+    return gpiod_request &&
+           gpiod_line_request_get_value(gpiod_request, BHI3_INT_PIN) == GPIOD_LINE_VALUE_ACTIVE;
 }
 
 bool bhi3_wait_for_interrupt(uint32_t timeout_ms)
 {
-#if defined(BHI3_INT_MODE_PIGPIO_CB)
-    bool triggered = false;
-    int rc = 0;
-    struct timespec ts;
-
-    pthread_mutex_lock(&interrupt_mutex);
-    if (!interrupt_flag)
-    {
-        if (timeout_ms == 0)
-        {
-            while (!interrupt_flag)
-            {
-                pthread_cond_wait(&interrupt_cond, &interrupt_mutex);
-            }
-        }
-        else
-        {
-            clock_gettime(CLOCK_REALTIME, &ts);
-            ts.tv_sec += timeout_ms / 1000U;
-            ts.tv_nsec += (timeout_ms % 1000U) * 1000000UL;
-            ts.tv_sec += ts.tv_nsec / 1000000000UL;
-            ts.tv_nsec %= 1000000000UL;
-
-            while (!interrupt_flag && rc == 0)
-            {
-                rc = pthread_cond_timedwait(&interrupt_cond, &interrupt_mutex, &ts);
-            }
-        }
-    }
-
-    if (interrupt_flag)
-    {
-        triggered = true;
-        interrupt_flag = false;
-    }
-    pthread_mutex_unlock(&interrupt_mutex);
-
-    return triggered;
-#elif defined(BHI3_INT_MODE_GPIOD)
     if (!gpiod_request)
     {
         return false;
@@ -212,143 +139,50 @@ bool bhi3_wait_for_interrupt(uint32_t timeout_ms)
         return true;
     }
 
-    int64_t timeout_ns = -1;
-
-    if (timeout_ms > 0U)
-    {
-        timeout_ns = (int64_t)timeout_ms * 1000000LL;
-    }
-
-    int ret = gpiod_line_request_wait_edge_events(gpiod_request, timeout_ns);
-    if (ret <= 0)
-    {
-        return false;
-    }
-
-    if (!gpiod_event_buffer)
-    {
-        return true;
-    }
-
-    int events = gpiod_line_request_read_edge_events(gpiod_request, gpiod_event_buffer, 1);
-    if (events <= 0)
-    {
-        return false;
-    }
-
-    struct gpiod_edge_event *event = gpiod_edge_event_buffer_get_event(gpiod_event_buffer, 0);
-    if (!event)
-    {
-        return false;
-    }
-
-    return (gpiod_edge_event_get_event_type(event) == GPIOD_EDGE_EVENT_RISING_EDGE) || get_interrupt_status();
-#else
-    uint32_t waited_us = 0;
-    uint32_t timeout_us = timeout_ms * 1000U;
-
-    while (true)
-    {
-        if (get_interrupt_status())
-        {
-            return true;
-        }
-
-        if ((timeout_ms > 0U) && (waited_us >= timeout_us))
-        {
-            return false;
-        }
-
-        usleep(BHI3_INT_POLL_INTERVAL_US);
-        if (timeout_ms > 0U)
-        {
-            waited_us += BHI3_INT_POLL_INTERVAL_US;
-        }
-    }
-#endif
+    int64_t timeout_ns = timeout_ms ? (int64_t)timeout_ms * 1000000LL : -1;
+    /* The request only queues rising edges. Consume one before waiting again. */
+    return gpiod_line_request_wait_edge_events(gpiod_request, timeout_ns) > 0 &&
+           gpiod_line_request_read_edge_events(gpiod_request, gpiod_event_buffer, 1) > 0;
 }
 
-void bhi3_interrupt_init(void)
+static void bhi3_interrupt_deinit(void)
 {
-#if defined(BHI3_INT_MODE_PIGPIO_CB)
-    if (pigpio < 0)
-    {
-        bhi3_common_log_error("[BHI3] pigpio not initialized; cannot register callback.\n");
-        return;
-    }
+    gpiod_line_request_release(gpiod_request);
+    gpiod_request = NULL;
+    gpiod_edge_event_buffer_free(gpiod_event_buffer);
+    gpiod_event_buffer = NULL;
+}
 
-    set_mode(pigpio, INT_PIN, PI_INPUT);
-    pthread_mutex_lock(&interrupt_mutex);
-    interrupt_flag = get_interrupt_status();
-    pthread_mutex_unlock(&interrupt_mutex);
-
-    callback_id = callback(pigpio, INT_PIN, RISING_EDGE, cb);
-    if (callback_id < 0)
-    {
-        bhi3_common_log_error("[BHI3] Failed to register pigpio callback (err=%d).\n", callback_id);
-    }
-#elif defined(BHI3_USE_PIGPIO)
-    if (pigpio >= 0)
-    {
-        set_mode(pigpio, INT_PIN, PI_INPUT);
-    }
-#endif
-
-#if defined(BHI3_INT_MODE_GPIOD)
-    struct gpiod_line_settings *settings = NULL;
-    struct gpiod_line_config *line_cfg = NULL;
-    struct gpiod_request_config *request_cfg = NULL;
-    bool success = false;
-
-    gchip = gpiod_chip_open(BHI3_GPIOD_DEVICE);
-    if (!gchip)
+static void bhi3_interrupt_init(void)
+{
+    struct gpiod_chip *chip = gpiod_chip_open(BHI3_GPIOD_DEVICE);
+    if (!chip)
     {
         bhi3_common_log_errno("gpiod_chip_open");
         return;
     }
 
-    settings = gpiod_line_settings_new();
-    if (!settings)
+    struct gpiod_line_settings *settings = gpiod_line_settings_new();
+    struct gpiod_line_config *line_cfg = gpiod_line_config_new();
+    struct gpiod_request_config *request_cfg = gpiod_request_config_new();
+    const unsigned int offset = BHI3_INT_PIN;
+    if (!settings || !line_cfg || !request_cfg)
     {
-        bhi3_common_log_error("[BHI3] Failed to allocate gpiod line settings.\n");
+        bhi3_common_log_error("[BHI3] Failed to allocate gpiod configuration.\n");
         goto cleanup_gpiod_init;
     }
 
-    if (gpiod_line_settings_set_direction(settings, GPIOD_LINE_DIRECTION_INPUT) < 0)
-    {
-        bhi3_common_log_errno("gpiod_line_settings_set_direction");
-        goto cleanup_gpiod_init;
-    }
-
-    if (gpiod_line_settings_set_edge_detection(settings, GPIOD_LINE_EDGE_RISING) < 0)
-    {
-        bhi3_common_log_errno("gpiod_line_settings_set_edge_detection");
-        goto cleanup_gpiod_init;
-    }
-
-    line_cfg = gpiod_line_config_new();
-    if (!line_cfg)
-    {
-        bhi3_common_log_error("[BHI3] Failed to allocate gpiod line config.\n");
-        goto cleanup_gpiod_init;
-    }
-
-    if (gpiod_line_config_add_line_settings(line_cfg, gpiod_offsets, 1, settings) < 0)
+    gpiod_line_settings_set_direction(settings, GPIOD_LINE_DIRECTION_INPUT);
+    gpiod_line_settings_set_edge_detection(settings, GPIOD_LINE_EDGE_RISING);
+    if (gpiod_line_config_add_line_settings(line_cfg, &offset, 1, settings) < 0)
     {
         bhi3_common_log_errno("gpiod_line_config_add_line_settings");
         goto cleanup_gpiod_init;
     }
 
-    request_cfg = gpiod_request_config_new();
-    if (!request_cfg)
-    {
-        bhi3_common_log_error("[BHI3] Failed to allocate gpiod request config.\n");
-        goto cleanup_gpiod_init;
-    }
-
     gpiod_request_config_set_consumer(request_cfg, "bhi3_int");
 
-    gpiod_request = gpiod_chip_request_lines(gchip, request_cfg, line_cfg);
+    gpiod_request = gpiod_chip_request_lines(chip, request_cfg, line_cfg);
     if (!gpiod_request)
     {
         bhi3_common_log_errno("gpiod_chip_request_lines");
@@ -358,77 +192,16 @@ void bhi3_interrupt_init(void)
     gpiod_event_buffer = gpiod_edge_event_buffer_new(1);
     if (!gpiod_event_buffer)
     {
-        bhi3_common_log_warning("[BHI3] gpiod edge event buffer allocation failed; proceeding without buffer.\n");
+        bhi3_common_log_error("[BHI3] Failed to allocate gpiod edge event buffer.\n");
+        bhi3_interrupt_deinit();
     }
-
-    success = true;
 
 cleanup_gpiod_init:
-    if (request_cfg)
-    {
-        gpiod_request_config_free(request_cfg);
-    }
-    if (line_cfg)
-    {
-        gpiod_line_config_free(line_cfg);
-    }
-    if (settings)
-    {
-        gpiod_line_settings_free(settings);
-    }
-
-    if (!success)
-    {
-        if (gpiod_event_buffer)
-        {
-            gpiod_edge_event_buffer_free(gpiod_event_buffer);
-            gpiod_event_buffer = NULL;
-        }
-        if (gpiod_request)
-        {
-            gpiod_line_request_release(gpiod_request);
-            gpiod_request = NULL;
-        }
-        if (gchip)
-        {
-            gpiod_chip_close(gchip);
-            gchip = NULL;
-        }
-    }
-#endif
-}
-
-void bhi3_interrupt_deinit(void)
-{
-#if defined(BHI3_INT_MODE_PIGPIO_CB)
-    if (callback_id >= 0)
-    {
-        callback_cancel((unsigned)callback_id);
-        callback_id = -1;
-    }
-
-    pthread_mutex_lock(&interrupt_mutex);
-    interrupt_flag = false;
-    pthread_mutex_unlock(&interrupt_mutex);
-#endif
-
-#if defined(BHI3_INT_MODE_GPIOD)
-    if (gpiod_event_buffer)
-    {
-        gpiod_edge_event_buffer_free(gpiod_event_buffer);
-        gpiod_event_buffer = NULL;
-    }
-    if (gpiod_request)
-    {
-        gpiod_line_request_release(gpiod_request);
-        gpiod_request = NULL;
-    }
-    if (gchip)
-    {
-        gpiod_chip_close(gchip);
-        gchip = NULL;
-    }
-#endif
+    gpiod_request_config_free(request_cfg);
+    gpiod_line_config_free(line_cfg);
+    gpiod_line_settings_free(settings);
+    /* The line request owns a separate file descriptor. */
+    gpiod_chip_close(chip);
 }
 
 char *get_intf_error(int16_t rslt)
@@ -551,36 +324,8 @@ char *get_api_error(int8_t error_code)
     return ret;
 }
 
-void cb(int pi, unsigned gpio, unsigned level, uint32_t tick)
-{
-    (void)pi;
-    (void)gpio;
-    (void)tick;
-
-#if defined(BHI3_INT_MODE_PIGPIO_CB)
-    if (level == 1)
-    {
-        pthread_mutex_lock(&interrupt_mutex);
-        interrupt_flag = true;
-        pthread_cond_signal(&interrupt_cond);
-        pthread_mutex_unlock(&interrupt_mutex);
-    }
-#else
-    (void)level;
-#endif
-}
-
 void setup_interfaces(bool reset_power, enum bhi360_intf intf)
 {
-#if defined(BHI3_USE_PIGPIO)
-    pigpio = pigpio_start(NULL, NULL);
-    if (pigpio < 0)
-    {
-        bhi3_common_log_error("[BHI3] Failed to start pigpiod interface (err=%d).\n", pigpio);
-        return;
-    }
-#endif
-
 #ifdef BHI3_USE_I2C
     my_i2c_open(I2C_DEVICE, BHI360_I2C_ADDR);
 #else
@@ -593,11 +338,6 @@ void setup_interfaces(bool reset_power, enum bhi360_intf intf)
 #ifndef BHI3_USE_I2C
 void my_spi_open(const char *device)
 {
-#ifdef BHI3_USE_PIGPIO
-    bhi3_common_log_info("setup SPI...\n");
-
-    spi = spi_open(pigpio, SPI_CHANNEL, spi_speed, 0);
-#else
     bhi3_common_log_info("setup SPI via spidev...\n");
 
     spi_fd = open(device, O_RDWR);
@@ -649,7 +389,6 @@ void my_spi_open(const char *device)
         spi_fd = -1;
         return;
     }
-#endif
 }
 #endif
 
@@ -680,22 +419,10 @@ void close_interfaces(enum bhi360_intf intf)
         fd = -1;
     }
 #else
-    #ifdef BHI3_USE_PIGPIO
-    spi_close(pigpio, spi);
-    #else
     if (spi_fd >= 0)
     {
         close(spi_fd);
         spi_fd = -1;
-    }
-    #endif
-#endif
-
-#if defined(BHI3_USE_PIGPIO)
-    if (pigpio >= 0)
-    {
-        pigpio_stop(pigpio);
-        pigpio = PI_INIT_FAILED;
     }
 #endif
 }
@@ -720,14 +447,6 @@ static int bhi3_spi_transfer(uint8_t reg_addr, const uint8_t *tx_data, uint8_t *
         memcpy(&tx_buf[1], tx_data, length);
     }
 
-#ifdef BHI3_USE_PIGPIO
-
-    if (spi_xfer(pigpio, spi, (char *)tx_buf, (char *)rx_buf, length + 1) < 0)
-    {
-        bhi3_common_log_errno("SPI transfer failed");
-        return -1;
-    }
-#else
     if (spi_fd < 0)
     {
         return -1;
@@ -747,8 +466,6 @@ static int bhi3_spi_transfer(uint8_t reg_addr, const uint8_t *tx_data, uint8_t *
         bhi3_common_log_errno("SPI transfer failed");
         return -1;
     }
-#endif
-
     if (is_read && rx_data)
     {
         memcpy(rx_data, &rx_buf[1], length);

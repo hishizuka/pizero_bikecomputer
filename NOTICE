@@ -5,7 +5,7 @@ adapted from code originally developed by Azumo (Copyright 2024)
 and licensed under the Apache License, Version 2.0:
 
 - modules/display/mip_display_base.py
-- modules/display/cython/mip_display.cpp
+- modules/display/cython/mip_display_base.cpp
 
 Optional Sony CXD56xx GNSS support uses the separately installed
 rpi-cxd56xx-gnss package (https://github.com/hishizuka/rpi-cxd56xx-gnss).

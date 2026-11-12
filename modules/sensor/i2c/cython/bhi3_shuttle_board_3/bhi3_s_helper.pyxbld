@@ -1,81 +1,38 @@
 def make_ext(modname, pyxfilename):
-    """Build Extension for BHI3 shuttle boards (I2C)."""
-
-    from distutils.extension import Extension
     import os
+    from pathlib import Path
 
-    base_dir = os.path.dirname(os.path.abspath(pyxfilename))
+    from setuptools import Extension
 
-    i2c_sensors = {
-        'bhi385': {
-            'src': os.path.join(base_dir, 'bhi3_s.c'),
-            'lib': 'libbhi385.so',
-            #'macro': [('USE_BHI3_S', '1'), ('USE_BHI385', '1')],  # for SPI
-            'macro': [('USE_BHI3_S', '1'), ('USE_BHI385', '1'), ('BHI3_USE_I2C', '1')],  # for I2C
-        },
-        'bhi360': {
-            'src': os.path.join(base_dir, 'bhi3_s.c'),
-            'lib': 'libbhi360.so',
-            #'macro': [('USE_BHI3_S', '1')],  # for SPI
-            'macro': [('USE_BHI3_S', '1'), ('BHI3_USE_I2C', '1')],  # for I2C
-        },
-    }
+    base = Path(pyxfilename).resolve().parent
+    library_dirs = [
+        directory for directory in os.environ.get("LD_LIBRARY_PATH", "").split(":")
+        if directory
+    ] + ["/usr/lib", "/usr/local/lib", str(base)]
 
-    def _interrupt_settings(mode: str):
-        """Return macros and libs for a given interrupt mode."""
-        settings = {
-            'pigpio_cb': ([('BHI3_INT_MODE_PIGPIO_CB', '1')], ['-lpigpiod_if2']),
-            'pigpio_poll': ([('BHI3_INT_MODE_PIGPIO_POLL', '1')], ['-lpigpiod_if2']),
-            'gpiod': ([('BHI3_INT_MODE_GPIOD', '1')], ['-lgpiod']),
-        }
-        return settings.get(mode, ([], ['-lpigpiod_if2']))
+    target = os.environ.get("BHI3_TARGET", "").strip().lower().removeprefix("bhi")
+    targets = (f"bhi{target}",) if target in ("360", "385") else ("bhi360", "bhi385")
+    library = next(
+        (
+            name for name in targets
+            if any((Path(directory) / f"lib{name}.so").is_file() for directory in library_dirs)
+        ),
+        None,
+    )
+    if library is None:
+        raise ImportError(f"SensorAPI library unavailable for {', '.join(targets)}")
 
-    def _check_lib_exists(lib_name: str, search_paths):
-        return any(os.path.exists(os.path.join(p, lib_name)) for p in search_paths)
-
-    include_dirs = [base_dir]
-    define_macros = [('NOUSE_MAIN', '1')]
-    extra_link_args = []
-
-    int_mode = os.environ.get("BHI3_INT_MODE", "gpiod").lower()
-    int_macros, interrupt_libs = _interrupt_settings(int_mode)
-    define_macros.extend(int_macros)
-
-    env_paths = [p for p in os.environ.get("LD_LIBRARY_PATH", "").split(":") if p]
-    lib_paths = env_paths + ["/usr/lib", "/usr/local/lib", base_dir]
-
-    target = os.environ.get("BHI3_TARGET", "").strip().lower()
-    if target in ("385", "bhi385"):
-        sensor_order = [i2c_sensors['bhi385']]
-    elif target in ("360", "bhi360"):
-        sensor_order = [i2c_sensors['bhi360']]
-    else:
-        sensor_order = [i2c_sensors['bhi360'], i2c_sensors['bhi385']]
-
-    sources = []
-    for sensor in sensor_order:
-        if _check_lib_exists(sensor['lib'], lib_paths):
-            sources = [pyxfilename, os.path.join(base_dir, 'common.c'), sensor['src']]
-            extra_link_args.append('-l' + os.path.splitext(sensor['lib'])[0][3:])
-            extra_link_args.extend(interrupt_libs)
-            define_macros.extend(sensor['macro'])
-            break
-
-    if not sources:
-        return None
-
-    extra_link_args.append('-lpthread')
-    extra_link_args.append('-lm')
+    macros = [(name, "1") for name in ("NOUSE_MAIN", "USE_BHI3_S", "BHI3_USE_I2C")]
+    if library == "bhi385":
+        macros.append(("USE_BHI385", "1"))
 
     return Extension(
         name=modname,
-        sources=sources,
-        include_dirs=include_dirs,
-        extra_link_args=extra_link_args,
-        define_macros=define_macros,
+        sources=[pyxfilename, str(base / "common.c"), str(base / "bhi3_s.c")],
+        include_dirs=[str(base)],
+        library_dirs=library_dirs,
+        libraries=[library, "gpiod", "pthread", "m"],
+        define_macros=macros,
+        depends=[str(header) for header in base.glob("*.h")]
+        + [__file__],
     )
-
-
-# for print
-def make_setup_args():
-    return dict(script_args=['--verbose'])

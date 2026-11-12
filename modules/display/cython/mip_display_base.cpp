@@ -9,7 +9,6 @@ void MipDisplayBase::init_common() {
   usleep(6);
 
   clear();
-  set_brightness(0);
   usleep(6);
 
   threads_.push_back(std::thread(&MipDisplayBase::draw_worker, this));
@@ -36,7 +35,6 @@ void MipDisplayBase::quit() {
     std::lock_guard<std::mutex> guard(update_mutex_);
 
     clear();
-    set_brightness(0);
     gpio_write_value(GPIO_DISP, false); //OFF
     usleep(100000);
 
@@ -138,26 +136,6 @@ void MipDisplayBase::clear() {
 
 void MipDisplayBase::no_update() {
   spi_write_bytes(buf_no_update, 2);
-}
-
-void MipDisplayBase::set_PWM(int b) {
-  set_PWM_duty(b);
-}
-
-void MipDisplayBase::set_brightness(int brightness) {
-  if(pre_brightness == brightness) {
-    return;
-  }
-
-  int b = brightness;
-  if(b >= 100) {
-    b = 100;
-  } else if (b <= 0) {
-    b = 0;
-  }
-  set_PWM(b);
-  pre_brightness = b;
-  usleep(50000);
 }
 
 void MipDisplayBase::inversion(float sec) {

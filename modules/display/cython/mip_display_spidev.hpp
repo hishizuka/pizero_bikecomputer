@@ -19,10 +19,6 @@
 #define PIZERO_SPI_DEVICE_PATH "/dev/spidev0.0"
 #endif
 
-#ifndef PIZERO_GPIOCHIP_PATH
-#define PIZERO_GPIOCHIP_PATH "/dev/gpiochip4"
-#endif
-
 #ifndef PIZERO_GPIO_CONSUMER
 #define PIZERO_GPIO_CONSUMER "pizero_bikecomputer"
 #endif
@@ -38,17 +34,16 @@ class MipDisplay final : public MipDisplayBase {
     void init_spi(int spi_clock);
     void close_spi();
 
-    void init_gpio();
+    void init_gpio(const char* gpiochip_path);
     void close_gpio();
 
   protected:
     void spi_write_bytes(const char* data, std::size_t length) override;
     void gpio_write_value(unsigned int offset, bool value) override;
-    void set_PWM_duty(int duty_percent) override;
     void close_backend() override;
 
   public:
-    explicit MipDisplay(int spi_clock);
+    MipDisplay(int spi_clock, const char* gpiochip_path);
     ~MipDisplay() override;
 };
 

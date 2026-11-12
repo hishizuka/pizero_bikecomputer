@@ -418,12 +418,15 @@ Assume SPI interface is on in raspi-config.
 
 #### JDI & SHARP MIP display
 
-For `MIP_*` displays there are currently three practical paths:
+For `MIP_*` displays, select one of these paths:
 
 - [Memory LCD DRM Driver](https://github.com/hishizuka/memory-lcd-drm), the recommended
   kernel driver (`QT_QPA_PLATFORM=linuxfb:fb=/dev/fb0`)
-- legacy pigpio backend
-- legacy spidev + libgpiod backend
+- `spidev` + `libgpiod` (`QT_QPA_PLATFORM=offscreen`)
+
+Both paths use the Linux backlight class at `/sys/class/backlight/backlight/`.
+The kernel generates the hardware PWM, and the app uses the same manual and
+automatic brightness controls with either display backend.
 
 The public repository is named `memory-lcd-drm`; the kernel module and device tree
 overlay still use `sharp-drm`, and sysfs uses `/sys/module/sharp_drm/`. Existing
@@ -496,22 +499,6 @@ PWM0 alone needs no separate `pwm` overlay. When also using a PWM1 buzzer, place
 as described in the driver's
 [backlight guide](https://github.com/hishizuka/memory-lcd-drm#backlight-pwm).
 
-`install.sh` also enables SPI and installs libgpiod packages, but it does not install pigpio automatically.
-If you want to keep using the legacy pigpio backend on Raspberry Pi OS Trixie, install pigpio manually:
-
-```
-$ cd
-$ wget https://github.com/joan2937/pigpio/archive/master.zip
-$ unzip master.zip
-$ cd pigpio-master
-$ make
-$ sudo make install
-
-$ sudo systemctl enable pigpiod
-$ sudo systemctl start pigpiod
-```
-
-If you use `memory-lcd-drm`, pigpio is not needed.
 The recommended PyQt/linuxfb setup uses one MIP framebuffer, `/dev/fb0`.
 Set `max_framebuffers=0` in `/boot/firmware/config.txt` to omit the firmware
 framebuffer, and keep `enable_uart=1` when UART hardware is used. In the single-line
@@ -873,7 +860,7 @@ For JDI MIP Reflective color LCD module and Adafruit SHARP Memory Display Breako
 Before running the program, choose one of the following platform plugins:
 
 ```
-# legacy pigpio / spidev backend
+# spidev backend
 $ QT_QPA_PLATFORM=offscreen python3 pizero_bikecomputer.py
 
 # sharp-drm framebuffer driver

@@ -38,13 +38,20 @@ def prepare_bhi3_target():
     TARGET_MARKER.write_text(f"{target}\n")
 
 
-def remove_helper_extensions():
+def remove_helper_extensions(*, older_than_ns=None):
     for path in BASE_DIR.glob(f"{MODULE_NAME}*.so"):
-        path.unlink(missing_ok=True)
+        if older_than_ns is None or path.stat().st_mtime_ns < older_than_ns:
+            path.unlink(missing_ok=True)
 
 
 # Prefer a prebuilt extension if present, otherwise build in-place.
 prepare_bhi3_target()
+remove_helper_extensions(
+    older_than_ns=max(
+        (BASE_DIR / f"{MODULE_NAME}{suffix}").stat().st_mtime_ns
+        for suffix in (".pyx", ".pyxbld")
+    )
+)
 try:
     from bhi3_s_helper import BHI3_S
 except ImportError:

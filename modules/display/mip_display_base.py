@@ -3,18 +3,16 @@ import time
 import asyncio
 import numpy as np
 
-from .display_core import Display
+from .mip_backlight import MipBacklitDisplay
 
 
-class MipDisplayBase(Display):
+class MipDisplayBase(MipBacklitDisplay):
     # https://qiita.com/hishi/items/669ce474fcd76bdce1f1
     # LPM027M128C, LPM027M128B,
 
     # GPIO.BCM
     DISP = 25  # 22pin
     VCOMSEL = 24  # 18pin
-    #'''
-    BACKLIGHT = 18  # 12pin with hardware PWM in pigpio
 
     # update mode
     # https://www.j-display.com/product/pdf/Datasheet/3LPM027M128C_specification_ver02.pdf
@@ -23,20 +21,10 @@ class MipDisplayBase(Display):
     # 0x88 1bit update mode (most fast, but 2-color)
     UPDATE_MODE = 0x80
 
-    # BACKLIGHT frequency
-    BACKLIGHT_FREQ = 64
-
-    pi = None
-    spi = None
     interval = 0.25
-    mip_display_cpp = None
 
     has_touch = False
     send = True
-
-    brightness_table = [0, 1, 2, 3, 5, 7, 10, 25, 50, 100]
-    brightness = 0
-    minimum_brightness = 0
 
     size = (400, 240)
     bpp = 3 # 1/3/6
@@ -45,15 +33,12 @@ class MipDisplayBase(Display):
     spi_max_buf_size = 65536
     spi_max_rows = 0
 
-    quit_status = False
-    use_cpp = False
-
     def __init__(self, config, size=None, color=None):
         super().__init__(config)
 
-        self.has_backlight = config.G_DISPLAY_PARAM["USE_BACKLIGHT"]
-        self.allow_auto_backlight = self.has_backlight
-        self.use_auto_backlight = False
+        self.draw_queue = None
+        self.quit_status = False
+        self.mip_display_cpp = None
 
         if size:
             self.size = size
@@ -69,33 +54,18 @@ class MipDisplayBase(Display):
             if color == 64:
                 self.bpp = 6
 
-        self.init_minimum_brightness()
+        self.init_cython()
+        if self.mip_display_cpp is None:
+            self.init_spi()
+            self.init_gpio()
+            self.init_gpio_write()
+            self.clear()
+            self.init_buffer()
 
-        if self.init_cython():
-            # switch to cython
-            self.restore_backlight_state()
-            return
-
-        # init spi/gpio/backlight
-        self.init_spi()
-        self.init_gpio()
-        self.init_gpio_write()
         self.init_backlight()
-        self.clear()
-        self.restore_backlight_state()
-
-        self.init_buffer()
-
-    def init_minimum_brightness(self):
-        if self.config.G_DISPLAY == "MIP_JDI_color_400x240":
-            self.minimum_brightness = 3
-        elif self.config.G_DISPLAY == "MIP_JDI_color_640x480":
-            self.minimum_brightness = 10
-        elif self.config.G_DISPLAY == "MIP_Azumo_color_272x451":
-            self.minimum_brightness = 10
 
     def start_coroutine(self):
-        if not self.use_cpp:
+        if self.mip_display_cpp is None:
             self.draw_queue = asyncio.Queue()
             asyncio.create_task(self.draw_worker())
 
@@ -103,9 +73,6 @@ class MipDisplayBase(Display):
         pass
 
     def init_gpio(self):
-        pass
-
-    def init_backlight(self):
         pass
 
     def init_buffer(self):
@@ -153,7 +120,6 @@ class MipDisplayBase(Display):
 
     def clear(self):
         self.spi_write([0b00100000, 0])  # ALL CLEAR MODE
-        self.set_brightness(0)
 
     def no_update(self):
         self.spi_write([0b00000000, 0])  # NO UPDATE MODE
@@ -211,7 +177,7 @@ class MipDisplayBase(Display):
     async def draw_worker(self):
         while True:
             img_bytes = await self.draw_queue.get()
-            if img_bytes is None:
+            if img_bytes is None or self.quit_status:
                 break
             # self.config.check_time("mip_draw_worker start")
             # t = datetime.now()
@@ -323,30 +289,19 @@ class MipDisplayBase(Display):
         )
         return im_array_u8[:, 2:]
 
-    def set_brightness(self, b):
-        if b == self.brightness or self.quit_status:
-            return
-        self.set_PWM(b)
-        self.brightness = b
-
-    def set_minimum_brightness(self):
-        self.set_brightness(self.minimum_brightness)
-
-    def backlight_blink(self):
-        for x in range(2):
-            for pw in range(0, 100, 1):
-                self.set_PWM(pw)
-                time.sleep(0.05)
-            for pw in range(100, 0, -1):
-                self.set_PWM(pw)
-                time.sleep(0.05)
-
     def quit(self):
+        if self.quit_status:
+            return
         self.quit_status = True
-        asyncio.create_task(self.draw_queue.put(None))
+        super().quit()
+        if self.mip_display_cpp is not None:
+            self.mip_display_cpp.quit()
+            return
+
+        if self.draw_queue is not None:
+            self.draw_queue.put_nowait(None)
         self.clear()
         self.gpio_write(self.DISP, 0)
-        self.set_brightness(0)
         self.spi_close()
 
     def screen_flash_long(self):
